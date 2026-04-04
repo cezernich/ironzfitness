@@ -1,0 +1,4683 @@
+// calendar.js — Calendar (week + month views) + day detail panel
+
+let currentYear      = new Date().getFullYear();
+let currentMonth     = new Date().getMonth(); // 0-indexed
+let selectedDate     = null;
+let calendarMode     = "week";               // "week" | "month"
+let currentWeekStart = getWeekStart(new Date());
+let _dragActive      = false;               // prevents stray selectDay during drag
+
+const MONTH_NAMES = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December"
+];
+const DAY_LABELS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+const DISCIPLINE_COLORS = {
+  swim:         "var(--color-cyan)",
+  bike:         "var(--color-teal)",
+  run:          "var(--color-amber)",
+  brick:        "var(--color-accent)",
+  race:         "var(--color-danger)",
+  weightlifting:"var(--color-violet)",
+  cycling:      "var(--color-teal)",
+  running:      "var(--color-amber)",
+  swimming:     "var(--color-cyan)",
+  triathlon:    "var(--color-cyan)",
+  general:      "var(--color-success)",
+  yoga:         "var(--color-violet)",
+};
+
+const RESTRICTION_LABELS = {
+  injury:  "Injury / Pain",
+  sick:    "Sick / Low Energy",
+  fatigue: "Fatigue / Overtraining",
+  travel:  "Traveling",
+  time:    "Time Limited",
+  rest:    "Full Rest Day",
+};
+
+const RESTRICTION_ICONS = {
+  injury:  ICONS.alertCircle,
+  sick:    ICONS.thermometer,
+  fatigue: ICONS.warning,
+  travel:  ICONS.plane,
+  time:    ICONS.clock,
+  rest:    ICONS.moon,
+};
+
+const RESTRICTION_SUGGESTIONS = {
+  rest:    "Full rest recommended — skip today's session.",
+  injury:  "Reduce intensity or substitute with a low-impact alternative.",
+  sick:    "Rest or very easy activity only — recovery is the priority.",
+  fatigue: "Deload — fewer sets, lighter weight, lower intensity.",
+  travel:  "Hotel-friendly options: bodyweight circuits or an easy run.",
+  time:    "Condense to ~30 min — keep key intervals, skip extra sets.",
+};
+
+const EQUIPMENT_OPTIONS = [
+  { value: "dumbbells", label: "Dumbbells" },
+  { value: "barbell",   label: "Barbell & Rack" },
+  { value: "cables",    label: "Cables / Machines" },
+];
+
+const CABLE_MACHINE_TYPES = [
+  "Cable Crossover", "Lat Pulldown", "Seated Row",
+  "Chest Fly Machine", "Chest Press Machine",
+  "Shoulder Press Machine", "Leg Press",
+  "Leg Extension", "Leg Curl", "Hip Abductor/Adductor",
+  "Smith Machine", "Functional Trainer",
+];
+
+// Populate the cables detail checklist on load
+document.addEventListener("DOMContentLoaded", () => {
+  const container = document.getElementById("qe-cables-detail");
+  if (!container) return;
+  container.innerHTML = CABLE_MACHINE_TYPES.map((name, i) =>
+    `<label><input type="checkbox" data-machine="${name}" id="qe-machine-${i}" />${name}</label>`
+  ).join("");
+});
+
+function _equipmentLabel(restriction) {
+  if (!restriction) return "";
+  const available = restriction.available || [];
+  const base = available.length === 0 ? "Bodyweight only" : available.map(v => {
+    const label = (EQUIPMENT_OPTIONS.find(o => o.value === v) || {}).label || v;
+    if (v === "dumbbells" && restriction.dumbbellMaxWeight) return `${label} (up to ${restriction.dumbbellMaxWeight}lb)`;
+    if (v === "cables" && restriction.cablesMachineTypes && restriction.cablesMachineTypes.length) {
+      return `${label} (${restriction.cablesMachineTypes.join(", ")})`;
+    }
+    return label;
+  }).join(", ");
+  return restriction.permanent ? `${base} · Permanent` : base;
+}
+
+// ─── Week helpers ─────────────────────────────────────────────────────────────
+
+function getWeekStart(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day; // shift back to Monday
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+
+function getWeekDates(weekStart) {
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    dates.push(d);
+  }
+  return dates;
+}
+
+function formatWeekLabel(weekStart) {
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  const sStr = weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const eStr = weekEnd.getMonth() === weekStart.getMonth()
+    ? weekEnd.toLocaleDateString("en-US", { day: "numeric" })
+    : weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${sStr} – ${eStr}, ${weekEnd.getFullYear()}`;
+}
+
+function toggleCalHelp() {
+  const tip = document.getElementById("cal-help-tooltip");
+  if (tip) tip.classList.toggle("is-visible");
+}
+// Close on outside click
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#cal-help-btn") && !e.target.closest("#cal-help-tooltip")) {
+    const tip = document.getElementById("cal-help-tooltip");
+    if (tip) tip.classList.remove("is-visible");
+  }
+});
+
+// ─── Main dispatch ────────────────────────────────────────────────────────────
+
+function renderCalendar() {
+  const label       = document.getElementById("calendar-month-label");
+  const zoomBtn     = document.getElementById("cal-zoom-btn");
+  const thisWeekBtn = document.getElementById("cal-this-week-btn");
+  if (!label) return;
+
+  if (calendarMode === "week") {
+    if (zoomBtn) zoomBtn.textContent = "Month view";
+    label.textContent = formatWeekLabel(currentWeekStart);
+    renderWeekView();
+    renderWeekOverview();
+  } else {
+    if (zoomBtn) zoomBtn.textContent = "Week view";
+    label.textContent = `${MONTH_NAMES[currentMonth]} ${currentYear}`;
+    renderMonthView();
+    renderWeekOverview(); // clears the bar in month mode
+  }
+
+  // Show "This Week" button only when the current week isn't visible
+  if (thisWeekBtn) {
+    const todayWeekStart = getWeekStart(new Date());
+    const onThisWeek = calendarMode === "week" &&
+      currentWeekStart.getTime() === todayWeekStart.getTime();
+    thisWeekBtn.style.display = onThisWeek ? "none" : "";
+  }
+}
+
+function goToThisWeek() {
+  calendarMode = "week";
+  currentWeekStart = getWeekStart(new Date());
+  renderCalendar();
+}
+
+function toggleCalendarMode() {
+  calendarMode = calendarMode === "week" ? "month" : "week";
+  if (calendarMode === "week") {
+    const anchor = selectedDate ? new Date(selectedDate + "T00:00:00") : new Date();
+    currentWeekStart = getWeekStart(anchor);
+  }
+  renderCalendar();
+}
+
+// ─── Navigation (mode-aware) ──────────────────────────────────────────────────
+
+function calPrev() {
+  if (calendarMode === "week") {
+    currentWeekStart = new Date(currentWeekStart);
+    currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+  } else {
+    currentMonth--;
+    if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+  }
+  renderCalendar();
+}
+
+function calNext() {
+  if (calendarMode === "week") {
+    currentWeekStart = new Date(currentWeekStart);
+    currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+  } else {
+    currentMonth++;
+    if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+  }
+  renderCalendar();
+}
+
+// Legacy aliases
+function prevMonth() { calPrev(); }
+function nextMonth() { calNext(); }
+
+// ─── Weekly overview bar ──────────────────────────────────────────────────────
+
+function renderWeekOverview() {
+  const el = document.getElementById("week-overview-bar");
+  if (!el || calendarMode !== "week") { if (el) el.innerHTML = ""; return; }
+
+  const weekDates = getWeekDates(currentWeekStart).map(d => d.toISOString().slice(0, 10));
+  let totalMin = 0, totalKm = 0;
+  const bySportKm = {};  // sport → total km for the week
+  const byType = {};     // type → session count
+
+  weekDates.forEach(dateStr => {
+    const t = getDayTotals(dateStr);
+    totalMin += t.totalMin;
+    totalKm  += t.totalKm;
+    for (const [sport, km] of Object.entries(t.sportKm || {})) {
+      bySportKm[sport] = (bySportKm[sport] || 0) + km;
+    }
+    const data = getDataForDate(dateStr);
+    const sessionRemoved = data.restriction && data.restriction.action === "remove";
+    if (!sessionRemoved) {
+      const addType = (type) => { const k = type || "general"; byType[k] = (byType[k] || 0) + 1; };
+      if (data.planEntry) addType(data.planEntry.discipline || "run");
+      data.scheduledWorkouts.forEach(w => addType(w.discipline || w.type));
+      data.loggedWorkouts.forEach(w => addType(w.type));
+    }
+  });
+
+  if (totalMin === 0 && totalKm === 0 && Object.keys(byType).length === 0) { el.innerHTML = ""; return; }
+
+  const unit = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
+
+  let timeStr = "";
+  if (totalMin >= 60) {
+    const h = Math.floor(totalMin / 60), m = Math.round(totalMin % 60);
+    timeStr = m > 0 ? `${h}h ${m}m` : `${h}h`;
+  } else if (totalMin > 0) {
+    timeStr = `${Math.round(totalMin)}m`;
+  }
+
+  const SPORT_ICON_MAP = { run: ICONS.run, bike: ICONS.bike, swim: ICONS.swim };
+
+  const distItems = Object.entries(bySportKm).map(([sport, km]) => {
+    const icon = SPORT_ICON_MAP[sport] || ICONS.activity;
+    const ds = unit === "km" ? `${km.toFixed(1)} km` : `${(km / 1.60934).toFixed(1)} mi`;
+    return `<span class="week-overview-time">${icon} ${ds} est.</span>`;
+  });
+  if (distItems.length === 0 && totalKm > 0) {
+    const ds = unit === "km" ? `${totalKm.toFixed(1)} km` : `${(totalKm / 1.60934).toFixed(1)} mi`;
+    distItems.push(`<span class="week-overview-time">${ICONS.activity} ${ds} est.</span>`);
+  }
+
+  const TYPE_ICON_MAP = {
+    run: ICONS.run, running: ICONS.run,
+    swim: ICONS.swim, swimming: ICONS.swim,
+    bike: ICONS.bike, cycling: ICONS.bike,
+    weightlifting: ICONS.weights,
+    triathlon: ICONS.swim, brick: ICONS.zap,
+    general: ICONS.activity, yoga: ICONS.yoga,
+  };
+
+  const pills = Object.entries(byType).map(([type, count]) => {
+    const icon  = TYPE_ICON_MAP[type] || ICONS.activity;
+    const color = DISCIPLINE_COLORS[type] || "var(--color-accent)";
+    return `<span class="week-overview-pill" style="color:${color}">${icon} ${count}</span>`;
+  }).join("");
+
+  el.innerHTML = `
+    <div class="week-overview-bar">
+      <span class="week-overview-label">This week</span>
+      <div class="week-overview-right">
+        ${timeStr ? `<span class="week-overview-time">${ICONS.clock} ${timeStr} est.</span>` : ""}
+        ${distItems.join("")}
+        ${pills}
+      </div>
+    </div>`;
+}
+
+// ─── Week view ────────────────────────────────────────────────────────────────
+
+function renderWeekView() {
+  const grid = document.getElementById("calendar-grid");
+  if (!grid) return;
+  const todayStr  = getTodayString();
+  const weekDates = getWeekDates(currentWeekStart);
+  grid.className  = "calendar-grid calendar-grid--week";
+  grid.innerHTML  = weekDates.map(d => buildWeekCell(d.toISOString().slice(0, 10), d, todayStr)).join("");
+}
+
+function buildWeekCell(dateStr, dateObj, todayStr) {
+  const data       = getDataForDate(dateStr);
+  const isToday    = dateStr === todayStr;
+  const isSelected = dateStr === selectedDate;
+  const p          = data.planEntry;
+  const sw         = data.scheduledWorkouts;
+
+  // Collect all sessions into a flat list — each gets an equal bubble
+  const sessionRemoved = data.restriction && data.restriction.action === "remove";
+  const sessions = [];
+  if (data.event && !p) {
+    sessions.push({ icon: ICONS.flag, label: "Race Day", color: "var(--color-danger)", badge: null, drag: "" });
+  }
+  if (p && !sessionRemoved) {
+    const icon         = DISCIPLINE_ICONS[p.discipline] || ICONS.weights;
+    const color        = DISCIPLINE_COLORS[p.discipline] || "var(--color-accent)";
+    const effectLoad   = getEffectiveLoad(p.load, data.restriction);
+    const isReduced    = effectLoad !== p.load;
+    sessions.push({
+      icon, label: capitalize(p.discipline), color,
+      intensity: getIntensityLabel(effectLoad), intensityClass: getIntensityClass(effectLoad), isReduced,
+      drag: `draggable="true" data-drag-type="plan" data-drag-source="${dateStr}" data-drag-raceid="${p.raceId}" data-drag-discipline="${p.discipline}" ondragstart="onSessionDragStart(event)" ondragend="onSessionDragEnd(event)"`,
+    });
+  }
+  if (!sessionRemoved) sw.forEach(w => {
+    const icon  = DISCIPLINE_ICONS[w.type] || ICONS.weights;
+    const color = DISCIPLINE_COLORS[w.type] || "var(--color-accent)";
+    sessions.push({
+      icon, label: w.sessionName, color, badge: null,
+      drag: `draggable="true" data-drag-type="scheduled" data-drag-source="${dateStr}" data-drag-id="${w.id}" ondragstart="onSessionDragStart(event)" ondragend="onSessionDragEnd(event)"`,
+    });
+  });
+
+  // Manually-added sessions get bubbles too
+  data.loggedWorkouts.forEach(w => {
+    const icon  = DISCIPLINE_ICONS[w.type] || ICONS.weights;
+    const color = DISCIPLINE_COLORS[w.type] || "var(--color-accent)";
+    const label = w.generatedSession ? w.generatedSession.name : _wTypeLabel(w.type);
+    sessions.push({
+      icon, label, color,
+      drag: `draggable="true" data-drag-type="logged" data-drag-source="${dateStr}" data-drag-id="${w.id}" ondragstart="onSessionDragStart(event)" ondragend="onSessionDragEnd(event)"`,
+    });
+  });
+
+  // Primary discipline drives the cell's top-border accent color
+  const primaryDisc = sessionRemoved ? "rest"
+    : p ? p.discipline
+    : (data.event ? "race" : (sw.length > 0 ? sw[0].type : "rest"));
+  let classes = `week-cell week-cell--${primaryDisc}`;
+  if (isToday)    classes += " week-cell--today";
+  if (isSelected) classes += " week-cell--selected";
+  if (data.restriction && data.restriction.action === "remove") classes += " week-cell--restricted-out";
+  if (hasAnyCompletedSession(dateStr)) classes += " week-cell--completed";
+
+  const dowLabel = DAY_LABELS[dateObj.getDay()].slice(0, 3);
+  const dayNum   = dateObj.getDate();
+
+  // Build session bubbles — or Rest/Removed label
+  let body = "";
+  if (sessions.length === 0) {
+    body = sessionRemoved
+      ? `<div class="week-cell-rest-label" style="color:var(--color-danger);opacity:0.7">${ICONS.ban} Removed</div>`
+      : `<div class="week-cell-rest-label">Rest</div>`;
+  } else {
+    body = sessions.map(s => `
+      <div class="session-bubble" style="border-left-color:${s.color}" ${s.drag}>
+        <span class="session-bubble-icon">${s.icon}</span>
+        <span class="session-bubble-label">${s.label}</span>
+      </div>`).join("");
+  }
+
+  // Determine day intensity from plan entry (or scheduled workout) effective load
+  let dayIntensLabel = "";
+  let dayIntensClass = "";
+  if (!sessionRemoved) {
+    const dayLoad = p ? getEffectiveLoad(p.load, data.restriction)
+                  : data.event ? "race"
+                  : null;
+    if (dayLoad && dayLoad !== "rest") {
+      dayIntensLabel = getIntensityLabel(dayLoad);
+      dayIntensClass = getIntensityClass(dayLoad);
+    }
+  }
+
+  return `
+    <div class="${classes}"
+      onclick="selectDay('${dateStr}')"
+      ondblclick="openQuickEntry('${dateStr}')"
+      ondragover="onCellDragOver(event,'${dateStr}')"
+      ondragleave="onCellDragLeave(event)"
+      ondrop="onCellDrop(event,'${dateStr}')">
+      <div class="week-cell-header">
+        <span class="week-cell-dow">${dowLabel}</span>
+        <span class="week-cell-date">${dayNum}</span>
+      </div>
+      <div class="week-cell-sessions">${body}</div>
+      ${dayIntensLabel ? `<div class="week-cell-intensity ${dayIntensClass}">${dayIntensLabel}</div>` : ""}
+    </div>`;
+}
+
+// ─── Month view ───────────────────────────────────────────────────────────────
+
+function renderMonthView() {
+  const grid = document.getElementById("calendar-grid");
+  if (!grid) return;
+  grid.className = "calendar-grid calendar-grid--month";
+
+  const firstDay    = new Date(currentYear, currentMonth, 1).getDay();
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const todayStr    = getTodayString();
+
+  const headers = DAY_LABELS.map(d => `<div class="calendar-dow">${d}</div>`).join("");
+  let cells = "";
+  for (let i = 0; i < firstDay; i++) cells += `<div class="calendar-cell empty"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = formatDateStr(currentYear, currentMonth, d);
+    cells += buildDayCell(dateStr, d, todayStr);
+  }
+  grid.innerHTML = headers + cells;
+}
+
+function formatDateStr(year, month, day) {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function buildDayCell(dateStr, dayNum, todayStr) {
+  const data       = getDataForDate(dateStr);
+  const isToday    = dateStr === todayStr;
+  const isSelected = dateStr === selectedDate;
+  const isRace     = !!data.event;
+  const removed    = data.restriction && data.restriction.action === "remove";
+
+  let classes = "calendar-cell";
+  if (isToday)    classes += " today";
+  if (isSelected) classes += " selected";
+  if (isRace)     classes += " has-race";
+  if (removed)    classes += " day-restricted-out";
+  if (hasAnyCompletedSession(dateStr)) classes += " day-completed";
+
+  // Collect discipline icons for all sessions that day
+  const icons = [];
+  if (isRace) {
+    icons.push({ icon: ICONS.flag, color: "var(--color-danger)" });
+  } else if (!removed) {
+    if (data.planEntry) {
+      const disc = data.planEntry.discipline;
+      icons.push({ icon: DISCIPLINE_ICONS[disc] || ICONS.weights, color: DISCIPLINE_COLORS[disc] || "var(--color-accent)" });
+    }
+    data.scheduledWorkouts.forEach(w => {
+      icons.push({ icon: DISCIPLINE_ICONS[w.type] || ICONS.weights, color: DISCIPLINE_COLORS[w.type] || "var(--color-accent)" });
+    });
+    data.loggedWorkouts.forEach(w => {
+      icons.push({ icon: DISCIPLINE_ICONS[w.type] || ICONS.weights, color: DISCIPLINE_COLORS[w.type] || "var(--color-accent)" });
+    });
+  }
+
+  let cellBody = "";
+  if (removed) {
+    cellBody = `<span class="cell-removed-icon">${ICONS.ban}</span>`;
+  } else if (icons.length > 0) {
+    cellBody = icons.map(s =>
+      `<span class="cell-session-icon" style="color:${s.color}">${s.icon}</span>`
+    ).join("");
+  }
+
+  return `
+    <div class="${classes}" onclick="selectDay('${dateStr}')" ondblclick="openQuickEntry('${dateStr}')">
+      <span class="cell-day-num">${dayNum}</span>
+      <div class="cell-icons">${cellBody}</div>
+    </div>`;
+}
+
+// ─── Data aggregation ─────────────────────────────────────────────────────────
+
+function getDataForDate(dateStr) {
+  const plan      = loadTrainingPlan();
+  const planEntry = plan.find(e => e.date === dateStr) || null;
+
+  let scheduledWorkouts = [];
+  try { scheduledWorkouts = (JSON.parse(localStorage.getItem("workoutSchedule")) || []).filter(w => w.date === dateStr && !/^rest$/i.test((w.sessionName || "").trim())); } catch {}
+
+  let loggedWorkouts = [];
+  try { loggedWorkouts = (JSON.parse(localStorage.getItem("workouts")) || []).filter(w => w.date === dateStr && !w.isCompletion); } catch {}
+
+  let loggedMeals = [];
+  try { loggedMeals = (JSON.parse(localStorage.getItem("meals")) || []).filter(m => m.date === dateStr); } catch {}
+
+  let event = null;
+  try { event = (JSON.parse(localStorage.getItem("events")) || []).find(e => e.date === dateStr) || null; } catch {}
+
+  let restriction = null;
+  try { restriction = (JSON.parse(localStorage.getItem("dayRestrictions")) || {})[dateStr] || null; } catch {}
+
+  let equipmentRestriction = null;
+  try { const _er = JSON.parse(localStorage.getItem("equipmentRestrictions")) || {}; equipmentRestriction = _er[dateStr] || _er["permanent"] || null; } catch {}
+
+  return { planEntry, scheduledWorkouts, loggedWorkouts, loggedMeals, event, restriction, equipmentRestriction };
+}
+
+// ─── Day selection ────────────────────────────────────────────────────────────
+
+function selectDay(dateStr) {
+  if (_dragActive) return;
+  selectedDate = dateStr;
+  renderCalendar();
+  renderDayDetail(dateStr);
+}
+
+// ─── Scheduled workout CRUD ───────────────────────────────────────────────────
+
+function _cleanupCompletionRecord(sessionId) {
+  try {
+    const meta = JSON.parse(localStorage.getItem("completedSessions") || "{}");
+    const entry = meta[sessionId];
+    if (entry) {
+      delete meta[sessionId];
+      localStorage.setItem("completedSessions", JSON.stringify(meta));
+      // Remove the isCompletion workout record
+      let workouts = JSON.parse(localStorage.getItem("workouts") || "[]");
+      workouts = workouts.filter(w => String(w.id) !== String(entry.workoutId));
+      localStorage.setItem("workouts", JSON.stringify(workouts));
+    }
+  } catch {}
+}
+
+function deleteScheduledWorkout(id, dateStr) {
+  if (!confirm("Remove this session from your plan?")) return;
+  let schedule = [];
+  try { schedule = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
+  schedule = schedule.filter(w => String(w.id) !== String(id));
+  localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+  _cleanupCompletionRecord(`session-sw-${id}`);
+  try { const r = JSON.parse(localStorage.getItem("workoutRatings") || "{}"); if (r[String(id)]) { delete r[String(id)]; localStorage.setItem("workoutRatings", JSON.stringify(r)); } } catch {}
+  renderCalendar();
+  if (typeof selectedDate !== "undefined" && selectedDate) renderDayDetail(selectedDate);
+  if (typeof renderStats === "function") renderStats();
+}
+
+function deletePlanEntry(raceId, discipline, dateStr) {
+  if (!confirm("Remove this session from your training plan?")) return;
+  const plan = loadTrainingPlan().filter(e => !(e.date === dateStr && e.raceId === raceId && e.discipline === discipline));
+  saveTrainingPlanData(plan);
+  _cleanupCompletionRecord(`session-plan-${dateStr}-${raceId}`);
+  renderCalendar();
+  if (typeof selectedDate !== "undefined" && selectedDate) renderDayDetail(selectedDate);
+  if (typeof renderStats === "function") renderStats();
+}
+
+// Inline exercise editor for scheduled strength sessions
+function buildScheduledEditPanel(cardId, workoutId) {
+  return `<div class="session-move-panel" id="swedit-${cardId}">
+    <div id="swedit-rows-${cardId}"></div>
+    <button class="btn-secondary" style="width:100%;margin-top:6px" onclick="swEditAddRow('${cardId}')">+ Add exercise</button>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn-primary" style="flex:1" onclick="swEditSave('${cardId}','${workoutId}')">Save</button>
+      <button class="btn-secondary" style="flex:1" onclick="toggleSwEdit('${cardId}')">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function toggleSwEdit(cardId) {
+  const panel = document.getElementById(`swedit-${cardId}`);
+  if (!panel) return;
+  const opening = !panel.classList.contains("is-open");
+  panel.classList.toggle("is-open");
+  if (opening) {
+    const card = document.getElementById(cardId);
+    if (card && card.classList.contains("is-collapsed")) card.classList.remove("is-collapsed");
+  }
+}
+
+function swEditPopulate(cardId, exercises) {
+  const container = document.getElementById(`swedit-rows-${cardId}`);
+  if (!container) return;
+  container.innerHTML = "";
+  _swEditRowCount[cardId] = 0;
+  (exercises || []).forEach((ex, i) => swEditAddRow(cardId, ex));
+}
+
+let _swEditRowCount = {};
+function swEditAddRow(cardId, ex) {
+  if (!_swEditRowCount[cardId]) _swEditRowCount[cardId] = 0;
+  const i = _swEditRowCount[cardId]++;
+  const container = document.getElementById(`swedit-rows-${cardId}`);
+  if (!container) return;
+  const div = document.createElement("div");
+  div.className = "qe-manual-row";
+  div.id = `swedit-row-${cardId}-${i}`;
+  div.innerHTML = `
+    <div style="flex:3"><input type="text" id="swe-name-${cardId}-${i}" value="${(ex && ex.name) || ""}" placeholder="Exercise name" /></div>
+    <div><label style="font-size:0.75rem;color:var(--color-text-muted)">Sets</label><input type="number" id="swe-sets-${cardId}-${i}" value="${(ex && ex.sets) || 3}" min="1" max="20" style="width:54px" /></div>
+    <div><label style="font-size:0.75rem;color:var(--color-text-muted)">Reps</label><input type="text" id="swe-reps-${cardId}-${i}" value="${(ex && ex.reps) || ""}" placeholder="e.g. 10" style="width:70px" /></div>
+    <div><label style="font-size:0.75rem;color:var(--color-text-muted)">Weight</label><input type="text" id="swe-weight-${cardId}-${i}" value="${(ex && ex.weight) || ""}" placeholder="lbs / BW" style="width:90px" /></div>
+    <button class="remove-exercise-btn" onclick="document.getElementById('swedit-row-${cardId}-${i}').remove()">✕</button>`;
+  container.appendChild(div);
+}
+
+function swEditSave(cardId, workoutId) {
+  const exercises = [];
+  document.querySelectorAll(`[id^="swedit-row-${cardId}-"]`).forEach(row => {
+    const idx = row.id.replace(`swedit-row-${cardId}-`, "");
+    const name = document.getElementById(`swe-name-${cardId}-${idx}`)?.value.trim();
+    if (!name) return;
+    exercises.push({
+      name,
+      sets:   document.getElementById(`swe-sets-${cardId}-${idx}`)?.value   || "3",
+      reps:   document.getElementById(`swe-reps-${cardId}-${idx}`)?.value   || "",
+      weight: document.getElementById(`swe-weight-${cardId}-${idx}`)?.value || "",
+    });
+  });
+  let schedule = [];
+  try { schedule = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
+  schedule = schedule.map(w => String(w.id) === String(workoutId) ? { ...w, exercises } : w);
+  localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+  if (typeof selectedDate !== "undefined" && selectedDate) renderDayDetail(selectedDate);
+}
+
+// ─── Move / Duplicate session ─────────────────────────────────────────────────
+
+function buildSessionMovePanel(cardId, sourceType, sourceId, dateStr) {
+  return `
+    <div class="session-move-panel" id="movepanel-${cardId}">
+      <label>Select date</label>
+      <input type="date" id="movedate-${cardId}" value="${dateStr}" />
+      <div class="session-move-actions">
+        <button class="btn-secondary" onclick="doMoveSession('${cardId}','${sourceType}','${sourceId}','${dateStr}')">Move</button>
+        <button class="btn-primary"   onclick="doDuplicateSession('${cardId}','${sourceType}','${sourceId}','${dateStr}')">Duplicate</button>
+      </div>
+    </div>`;
+}
+
+function toggleMovePanel(cardId) {
+  const panel = document.getElementById(`movepanel-${cardId}`);
+  if (panel) panel.classList.toggle("is-open");
+  // ensure card is expanded
+  const card = document.getElementById(cardId);
+  if (card && card.classList.contains("is-collapsed")) {
+    card.classList.remove("is-collapsed");
+  }
+}
+
+function doMoveSession(cardId, sourceType, sourceId, _origDate) {
+  const newDate = document.getElementById(`movedate-${cardId}`)?.value;
+  if (!newDate) return;
+  if (sourceType === "logged") {
+    let workouts = [];
+    try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
+    workouts = workouts.map(w => String(w.id) === String(sourceId) ? { ...w, date: newDate } : w);
+    localStorage.setItem("workouts", JSON.stringify(workouts));
+  } else if (sourceType === "scheduled") {
+    let schedule = [];
+    try { schedule = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
+    schedule = schedule.map(w => String(w.id) === String(sourceId) ? { ...w, date: newDate } : w);
+    localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+  }
+  renderCalendar();
+  if (typeof selectedDate !== "undefined" && selectedDate) renderDayDetail(selectedDate);
+  if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
+}
+
+function doDuplicateSession(cardId, sourceType, sourceId, _origDate) {
+  const newDate = document.getElementById(`movedate-${cardId}`)?.value;
+  if (!newDate) return;
+  if (sourceType === "logged") {
+    let workouts = [];
+    try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
+    const orig = workouts.find(w => String(w.id) === String(sourceId));
+    if (orig) {
+      workouts.unshift({ ...orig, id: generateId(), date: newDate, completedSessionId: undefined, isCompletion: undefined });
+      localStorage.setItem("workouts", JSON.stringify(workouts));
+    }
+  } else if (sourceType === "scheduled") {
+    let schedule = [];
+    try { schedule = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
+    const orig = schedule.find(w => String(w.id) === String(sourceId));
+    if (orig) {
+      schedule.push({ ...orig, id: generateId(), date: newDate });
+      localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+    }
+  }
+  renderCalendar();
+  if (typeof selectedDate !== "undefined" && selectedDate) renderDayDetail(selectedDate);
+  if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
+}
+
+// ─── Logged workout session card ─────────────────────────────────────────────
+
+function buildLoggedWorkoutCard(w, dateStr, restriction) {
+  const icon    = DISCIPLINE_ICONS[w.type] || ICONS.weights;
+  const color   = DISCIPLINE_COLORS[w.type] || "var(--color-accent)";
+  const cardId  = `session-log-${w.id}`;
+  const _logComplete = isSessionComplete(cardId);
+  const _logCompleteCls = _logComplete ? " session-card--completed" : "";
+  const delBtn  = `<button class="delete-btn" title="Remove"
+    onclick="event.stopPropagation(); deleteWorkout('${w.id}'); renderDayDetail('${dateStr}')">✕</button>`;
+  const editBtn = `<button class="edit-workout-btn" title="Edit"
+    onclick="event.stopPropagation(); openEditWorkout('${w.id}')">Edit</button>`;
+
+  if (w.aiSession) {
+    const s = w.aiSession;
+    // Map effort label → zone CSS class (supports both old Easy/Moderate/Hard and new Z1-Z6)
+    const effortToZone = {
+      RW: "rw", Z1: "z1", Z2: "z2", Z3: "z3", Z4: "z4", Z5: "z5", Z6: "z6",
+      Easy: "z2", Moderate: "z3", Hard: "z4", Max: "z5", T1: "z-transition",
+    };
+    const intervals = s.intervals || [];
+    const parseDur = str => { const s = String(str || "").toLowerCase(); const m = s.match(/([\d.]+)/); if (!m) return 1; const v = parseFloat(m[1]); return /sec/.test(s) ? v / 60 : v; };
+
+    // Expand intervals with reps into alternating work/rest segments for the strip
+    const allSegs = [];
+    intervals.forEach(iv => {
+      const reps     = iv.reps || 1;
+      const mainDur  = parseDur(iv.duration);
+      const restDur  = iv.restDuration ? parseDur(iv.restDuration) : 0;
+      const mainCls  = effortToZone[iv.effort] || "z2";
+      const restCls  = iv.restEffort ? (effortToZone[iv.restEffort] || "z2") : "z-rest";
+      for (let i = 0; i < reps; i++) {
+        allSegs.push({ dur: mainDur, cls: mainCls, effort: iv.effort, name: iv.name });
+        if (i < reps - 1 && restDur > 0) {
+          allSegs.push({ dur: restDur, cls: restCls, effort: iv.restEffort || "Z2", name: "Recovery" });
+        }
+      }
+    });
+
+    const totalDur = allSegs.reduce((sum, seg) => sum + seg.dur, 0) || 1;
+    const stripSegs = allSegs.map(seg => {
+      const pct    = (seg.dur / totalDur * 100).toFixed(2);
+      const zNum   = String(seg.effort || "").replace(/[Zz]/, "");
+      const zLabel = zNum ? _getZoneLabel(w.type, zNum) : "";
+      const tip    = `${seg.name || seg.effort}${zLabel ? ` · ${zLabel}` : ""}`;
+      return `<div class="intensity-seg ${seg.cls}" style="width:${pct}%" title="${tip}"></div>`;
+    }).join("");
+    const strip = stripSegs ? `<div class="session-intensity-strip" onclick="event.stopPropagation();toggleSection('${cardId}')">${stripSegs}</div>` : "";
+
+    const totalDurMin = Math.round(totalDur) || null;
+    const isReduced   = restriction && restriction.action === "reduce";
+    const displayDur  = (totalDurMin && isReduced) ? getRestrictedDuration(totalDurMin, "moderate", restriction) : totalDurMin;
+    const movePanel = buildSessionMovePanel(cardId, "logged", w.id, dateStr);
+    const moveBtn = `<button class="btn-move-session" title="Move / Duplicate" onclick="event.stopPropagation();toggleMovePanel('${cardId}')">⇄</button>`;
+    const _aiCompletion = buildCompletionSection(cardId, w.type, null, dateStr, displayDur);
+    const _restrictNote = isReduced ? `<div class="restriction-session-note" style="margin-bottom:8px">${ICONS.lightbulb} Reduce intensity and duration per your restriction</div>` : "";
+    return `
+      <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
+        <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
+          <span class="session-icon" style="color:${color}">${icon}</span>
+          <div class="session-meta">
+            <div class="session-name">${s.title || _wTypeLabel(w.type)}</div>
+            <div class="session-phase">Logged · ${_wTypeLabel(w.type)}</div>
+          </div>
+          <div class="session-header-right">
+            ${_buildUndoHeaderBtn(cardId, dateStr)}${moveBtn}${editBtn}${delBtn}
+            ${displayDur ? `<span class="session-duration-badge">${isReduced ? "⬇ " : ""}${displayDur} min</span>` : ""}
+            <span class="card-chevron">▾</span>
+          </div>
+        </div>
+        ${strip}
+        <div class="card-body">
+          ${_restrictNote}
+          ${buildAiIntervalsList(s, w.type) || '<p style="color:var(--color-text-muted);font-style:italic;margin:0">No intervals logged</p>'}
+          ${movePanel}
+          ${_aiCompletion}
+        </div>
+      </div>`;
+  }
+
+  if (w.generatedSession && typeof w.generatedSession === "object") {
+    const s = w.generatedSession;
+    const _genCompletion = buildCompletionSection(cardId, w.type, null, dateStr, s.duration || null, s.steps);
+    return `
+      <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
+        <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
+          <span class="session-icon" style="color:${color}">${icon}</span>
+          <div class="session-meta">
+            <div class="session-name">${s.name || _wTypeLabel(w.type)}</div>
+            <div class="session-phase">Planned · ${_wTypeLabel(w.type)}</div>
+          </div>
+          <div class="session-header-right">
+            ${_buildUndoHeaderBtn(cardId, dateStr)}
+            <span class="session-duration-badge">${s.duration} min</span>
+            ${delBtn}
+            <span class="card-chevron">▾</span>
+          </div>
+        </div>
+        ${buildIntensityStrip(s, cardId, w.type)}
+        <div class="card-body">${buildStepsList(s, w.type)}${_genCompletion}</div>
+      </div>`;
+  }
+
+  if (w.exercises && w.exercises.length > 0) {
+    let hiitHeader = "";
+    if (w.hiitMeta) {
+      const fmtLabels = { circuit: "Circuit", tabata: "Tabata", emom: "EMOM", amrap: "AMRAP", "for-time": "For Time" };
+      const m = w.hiitMeta;
+      hiitHeader = `<div class="qe-hiit-summary">${fmtLabels[m.format] || m.format || "HIIT"}`;
+      if (m.rounds > 1) hiitHeader += ` &mdash; ${m.rounds} rounds`;
+      if (m.restBetweenRounds && m.restBetweenRounds !== "0s") hiitHeader += `, ${m.restBetweenRounds} rest between rounds`;
+      hiitHeader += `</div>`;
+    }
+    const _logCompEx = isSessionComplete(cardId) ? _getCompletionExercises(cardId) : null;
+    const exTable    = hiitHeader + buildExerciseTableHTML(_logCompEx || w.exercises, { hiit: w.type === "hiit" || !!w.hiitMeta });
+    const _completion = buildCompletionSection(cardId, w.type, _logCompEx || w.exercises, dateStr, w.duration || null);
+    const movePanel = buildSessionMovePanel(cardId, "logged", w.id, dateStr);
+    const moveBtn = `<button class="btn-move-session" title="Move / Duplicate" onclick="event.stopPropagation();toggleMovePanel('${cardId}')">⇄</button>`;
+    return `
+      <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
+        <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
+          <span class="session-icon" style="color:${color}">${icon}</span>
+          <div class="session-meta">
+            <div class="session-name">${w.fromSaved || _wTypeLabel(w.type)}</div>
+            <div class="session-phase">${w.fromSaved ? "Logged · " + _wTypeLabel(w.type) : "Planned"}${(!w.fromSaved && w.notes) ? " · " + w.notes : ""}</div>
+          </div>
+          <div class="session-header-right">
+            ${moveBtn}${editBtn}${delBtn}
+            <span class="card-chevron">▾</span>
+          </div>
+        </div>
+        ${w.generatedSession && w.generatedSession.steps ? buildIntensityStrip(w.generatedSession, cardId, w.type) : ""}
+        <div class="card-body">
+          ${exTable}
+          ${movePanel}
+          ${_completion}
+        </div>
+      </div>`;
+  }
+
+  // Minimal card (no exercises, no generated session)
+  const _minCompletion = buildCompletionSection(cardId, w.type, null, dateStr, w.duration || null);
+  return `
+    <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
+      <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
+        <span class="session-icon" style="color:${color}">${icon}</span>
+        <div class="session-meta">
+          <div class="session-name">${w.fromSaved || _wTypeLabel(w.type)}</div>
+          ${w.fromSaved ? `<div class="session-phase">Logged · ${_wTypeLabel(w.type)}</div>` : (w.notes ? `<div class="session-phase">${escHtml(w.notes)}</div>` : "")}
+        </div>
+        <div class="session-header-right">${_buildUndoHeaderBtn(cardId, dateStr)}${editBtn}${delBtn}<span class="card-chevron">▾</span></div>
+      </div>
+      <div class="card-body">${_minCompletion}</div>
+    </div>`;
+}
+
+// ─── Session rendering helpers (TriDot-style) ────────────────────────────────
+
+const SESSION_TYPE_LABELS = { warmup: "WARMUP", main: "MAIN SET", cooldown: "COOLDOWN" };
+
+function _getZoneLabel(sport, zoneNum) {
+  try {
+    const all = JSON.parse(localStorage.getItem("trainingZones")) || {};
+    if (!all.running) {
+      const old = JSON.parse(localStorage.getItem("runningZones"));
+      if (old) all.running = old;
+    }
+    const key = sport === "bike" || sport === "cycling" || sport === "brick" ? "biking"
+              : sport === "swim" || sport === "swimming" ? "swimming"
+              : "running";
+    const zData = ((all[key] || {}).zones || {})[`z${zoneNum}`];
+    return zData ? (zData.paceRange || zData.wattRange || "") : "";
+  } catch { return ""; }
+}
+
+function buildIntensityStrip(session, cardId, discipline) {
+  // Expand steps with reps into alternating work/rest segments
+  const segments = [];
+  session.steps.forEach(step => {
+    if (step.reps && step.rest != null) {
+      for (let i = 0; i < step.reps; i++) {
+        segments.push({ duration: step.duration, zone: step.zone });
+        if (i < step.reps - 1) segments.push({ duration: step.rest, zone: 1, isRest: true });
+      }
+    } else {
+      segments.push({ duration: step.duration, zone: step.zone });
+    }
+  });
+
+  const total = segments.reduce((s, seg) => s + seg.duration, 0);
+  const bars  = segments.map(seg => {
+    const pct = (seg.duration / total * 100).toFixed(2);
+    const cls = seg.isRest ? "z-rest" : `z${seg.zone}`;
+    let tip = seg.isRest ? "Rest" : `Z${seg.zone}`;
+    if (!seg.isRest && discipline) {
+      const label = _getZoneLabel(discipline, seg.zone);
+      if (label) tip += `: ${label}`;
+    }
+    return `<div class="intensity-seg ${cls}" style="width:${pct}%" title="${tip}"></div>`;
+  }).join("");
+
+  return `<div class="session-intensity-strip" onclick="event.stopPropagation(); toggleSection('${cardId}')">${bars}</div>`;
+}
+
+/**
+ * Returns a copy of session with all step durations scaled to match targetDuration.
+ * Used to apply progressive run durations stored on plan entries.
+ */
+function scaleSessionDuration(session, targetDuration) {
+  if (!targetDuration || !session || session.duration === targetDuration) return session;
+  const scale = targetDuration / session.duration;
+  return {
+    ...session,
+    duration: targetDuration,
+    steps: session.steps.map(s => ({
+      ...s,
+      duration: Math.max(1, Math.round(s.duration * scale)),
+      ...(s.rest != null ? { rest: Math.max(1, Math.round(s.rest * scale)) } : {}),
+    })),
+  };
+}
+
+function buildStepsList(session, discipline) {
+  // Load zones for the relevant sport from the unified trainingZones key
+  let zones = null;
+  try {
+    const all = JSON.parse(localStorage.getItem("trainingZones")) || {};
+    // Migrate legacy runningZones if needed
+    if (!all.running) {
+      const old = JSON.parse(localStorage.getItem("runningZones"));
+      if (old) all.running = old;
+    }
+    const sport = discipline === "bike" || discipline === "cycling" || discipline === "brick" ? "biking"
+                : discipline === "swim" || discipline === "swimming" ? "swimming"
+                : discipline === "run"  || discipline === "running" ? "running"
+                : null;
+    if (sport) zones = (all[sport] || {}).zones || null;
+  } catch {}
+
+  return session.steps.map(step => {
+    const isT1      = step.note === "T1";
+    const typeLabel = isT1 ? "TRANSITION" : (SESSION_TYPE_LABELS[step.type] || step.type.toUpperCase());
+    let durationText;
+    if (step.reps) {
+      durationText = `${step.reps} × ${step.duration} min`;
+      if (step.rest) durationText += ` (${step.rest} min rest)`;
+    } else {
+      durationText = isT1 ? "~3 min" : `${step.duration} min`;
+    }
+    const zData     = zones ? zones[`z${step.zone}`] : null;
+    const zoneLabel = zData ? (zData.paceRange || zData.wattRange || null) : null;
+    return `
+      <div class="session-step session-step--z${step.zone}">
+        <div class="session-step-meta">
+          <span class="session-step-type">${typeLabel}</span>
+          ${!isT1 ? `<span class="session-step-zone">Z${step.zone}${zoneLabel ? `<span class="session-step-pace">${zoneLabel}</span>` : ""}</span>` : ""}
+          <span class="session-step-duration">${durationText}</span>
+        </div>
+        <div class="session-step-label">${step.label}</div>
+      </div>`;
+  }).join("");
+}
+
+// Renders AI session intervals using the same session-step structure as buildStepsList
+function buildAiIntervalsList(session, type) {
+  const effortToZone = {
+    RW: 0, Z1: 1, Z2: 2, Z3: 3, Z4: 4, Z5: 5, Z6: 6,
+    Easy: 2, Moderate: 3, Hard: 4, Max: 5,
+  };
+  let allZones = null;
+  try {
+    allZones = JSON.parse(localStorage.getItem("trainingZones")) || {};
+    if (!allZones.running) { const old = JSON.parse(localStorage.getItem("runningZones")); if (old) allZones.running = old; }
+  } catch {}
+
+  function _getIntervalZones(ivSport) {
+    if (!allZones) return null;
+    const key = ivSport === "bike" || ivSport === "cycling" ? "biking"
+              : ivSport === "run" || ivSport === "running" ? "running"
+              : ivSport === "swim" || ivSport === "swimming" ? "swimming"
+              : type === "bike" || type === "cycling" || type === "brick" ? "biking"
+              : type === "swim" || type === "swimming" ? "swimming"
+              : "running";
+    return (allZones[key] || {}).zones || null;
+  }
+
+  return (session.intervals || []).map(iv => {
+    const isTransition = iv.effort === "T1";
+    const isRestWalk   = iv.effort === "RW";
+    const zone  = (isTransition || isRestWalk) ? null : (effortToZone[iv.effort] || 2);
+    const zones = _getIntervalZones(iv.sport);
+    const zData = zone && zones ? zones[`z${zone}`] : null;
+    const zoneLabel = zData ? (zData.paceRange || zData.wattRange || null) : null;
+    const reps  = iv.reps || 1;
+    let durText = reps > 1 ? `${reps} × ${iv.duration}` : iv.duration;
+    if (reps > 1 && iv.restDuration) durText += ` (${iv.restDuration} rest)`;
+    const nameLow   = (iv.name || "").toLowerCase();
+    const sportTag  = iv.sport ? `<span class="qe-brick-sport qe-brick-${iv.sport}">${iv.sport === "bike" ? "Bike" : "Run"}</span> ` : "";
+    const typeLabel = isTransition ? "TRANSITION"
+                    : /warm/i.test(nameLow) ? "WARMUP"
+                    : /cool/i.test(nameLow) ? "COOLDOWN"
+                    : /recov/i.test(nameLow) ? "RECOVERY"
+                    : iv.name ? iv.name.toUpperCase() : "INTERVAL";
+    const stepCls   = isTransition ? "session-step--transition" : isRestWalk ? "session-step--rw" : `session-step--z${zone}`;
+    const zoneBadge = isTransition ? "T1" : isRestWalk ? "RW" : `Z${zone}${zoneLabel ? `<span class="session-step-pace">${zoneLabel}</span>` : ""}`;
+    return `
+      <div class="session-step ${stepCls}">
+        <div class="session-step-meta">
+          <span class="session-step-type">${sportTag}${typeLabel}</span>
+          <span class="session-step-zone">${zoneBadge}</span>
+          <span class="session-step-duration">${durText}</span>
+        </div>
+        ${iv.details ? `<div class="session-step-label">${escHtml(iv.details)}</div>` : ""}
+      </div>`;
+  }).join("");
+}
+
+// ─── Workout completion ───────────────────────────────────────────────────────
+
+const DISCIPLINE_TO_WORKOUT_TYPE = {
+  swim: "triathlon", bike: "cycling", run: "running", brick: "triathlon", race: "triathlon",
+  weightlifting: "weightlifting", cycling: "cycling", running: "running",
+  triathlon: "triathlon", general: "general", yoga: "general",
+};
+
+// In-memory map of exercises for each completion form (populated during renderDayDetail)
+const _completionExerciseMap = {};
+
+function loadCompletionMeta() {
+  try { return JSON.parse(localStorage.getItem("completedSessions")) || {}; } catch { return {}; }
+}
+
+
+function isSessionComplete(sessionId) {
+  return !!loadCompletionMeta()[sessionId];
+}
+
+function _getCompletionExercises(sessionId) {
+  try {
+    const workouts = JSON.parse(localStorage.getItem("workouts")) || [];
+    const rec = workouts.find(w => w.isCompletion && w.completedSessionId === sessionId);
+    return rec && rec.exercises && rec.exercises.length > 0 ? rec.exercises : null;
+  } catch { return null; }
+}
+
+function hasAnyCompletedSession(dateStr) {
+  if (dateStr > getTodayString()) return false;
+  try {
+    const workouts = JSON.parse(localStorage.getItem("workouts")) || [];
+    return workouts.some(w => w.date === dateStr && w.isCompletion);
+  } catch { return false; }
+}
+
+function undoSessionCompletion(sessionId, dateStr) {
+  // Remove from completedSessions
+  const meta = loadCompletionMeta();
+  const entry = meta[sessionId];
+  delete meta[sessionId];
+  localStorage.setItem("completedSessions", JSON.stringify(meta));
+
+  // Remove the matching isCompletion workout record
+  if (entry?.workoutId) {
+    let workouts = [];
+    try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
+    workouts = workouts.filter(w => String(w.id) !== String(entry.workoutId));
+    localStorage.setItem("workouts", JSON.stringify(workouts));
+
+    // Clean up associated rating
+    if (typeof loadWorkoutRatings === "function") {
+      const ratings = loadWorkoutRatings();
+      delete ratings[String(entry.workoutId)];
+      localStorage.setItem("workoutRatings", JSON.stringify(ratings));
+    }
+  }
+
+  renderCalendar();
+  if (typeof selectedDate !== "undefined" && selectedDate) renderDayDetail(selectedDate);
+  if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
+}
+
+// Returns header-level undo button shown in collapsed view when session is complete
+function _buildUndoHeaderBtn(sessionId, dateStr) {
+  if (!isSessionComplete(sessionId)) return "";
+  let durBadge = "";
+  try {
+    const _m = loadCompletionMeta()[sessionId];
+    if (_m?.workoutId) {
+      const _w = (JSON.parse(localStorage.getItem("workouts") || "[]")).find(w => w.id === _m.workoutId);
+      if (_w?.duration) durBadge = `<span class="session-duration-badge">${_w.duration} min</span>`;
+    }
+  } catch {}
+  return `<button class="undo-complete-btn-header" title="Undo completion" onclick="event.stopPropagation();undoSessionCompletion('${sessionId}','${dateStr}')">↩ Undo</button>${durBadge}`;
+}
+
+const _ENDURANCE_TYPES = new Set(["running", "cycling", "swimming", "triathlon"]);
+
+function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDuration, steps) {
+  // No completion UI for future dates
+  if (dateStr > getTodayString()) return "";
+
+  if (isSessionComplete(sessionId)) {
+    // Pull duration/distance from the completion workout record
+    let _compSummary = "";
+    try {
+      const _cMeta = loadCompletionMeta()[sessionId];
+      if (_cMeta?.workoutId) {
+        const _cW = (JSON.parse(localStorage.getItem("workouts") || "[]")).find(w => w.id === _cMeta.workoutId);
+        if (_cW) {
+          const _parts = [];
+          if (_cW.duration) _parts.push(`${_cW.duration} min`);
+          if (_cW.distance) {
+            const _u = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
+            _parts.push(`${_cW.distance} ${_u}`);
+          }
+          if (_parts.length) _compSummary = ` · ${_parts.join(" · ")}`;
+        }
+      }
+    } catch {}
+    // Check for rating and share on the completion workout
+    let _ratingHtml = "";
+    let _shareBtn = "";
+    try {
+      const _cMeta2 = loadCompletionMeta()[sessionId];
+      if (_cMeta2?.workoutId) {
+        _ratingHtml = buildRatingDisplay(String(_cMeta2.workoutId));
+        if (typeof buildShareButton === "function") _shareBtn = buildShareButton(String(_cMeta2.workoutId), dateStr);
+      }
+    } catch {}
+    return `<div class="session-completed-badge">
+      ${ICONS.check} Completed${_compSummary}
+      ${_ratingHtml}
+      ${_shareBtn}
+      <button class="undo-complete-btn" onclick="undoSessionCompletion('${sessionId}','${dateStr}')">Undo</button>
+    </div>`;
+  }
+
+  // Store exercises so saveSessionCompletion can access them by sessionId
+  _completionExerciseMap[sessionId] = exercises || [];
+
+  const hasExercises = !!(exercises && exercises.length > 0);
+  let formBody = "";
+
+  if (hasExercises) {
+    const rows = exercises.map((ex, i) => {
+      // For sets: extract leading number (e.g. "3 sets" → 3, "3-4" → 3)
+      const setsVal = ex.sets ? (String(ex.sets).match(/^\d+/) || ["3"])[0] : "3";
+      // For reps: use lower end of range (e.g. "6-8" → 6, "12" → 12)
+      const repsVal = ex.reps ? String(ex.reps).split(/[-–]/)[0].trim() : "";
+      // For weight: extract total numeric weight, or keep descriptive text
+      let weightVal = String(ex.weight || "").trim();
+      if (/bodyweight/i.test(weightVal)) {
+        weightVal = "BW";
+      } else if (/bar\s*\+\s*([\d.]+)/i.test(weightVal)) {
+        const m = weightVal.match(/bar\s*\+\s*([\d.]+)/i);
+        weightVal = String(Math.round((45 + parseFloat(m[1])) / 5) * 5);
+      } else if (/^([\d.]+)\s*[x×]\s*([\d.]+)/i.test(weightVal)) {
+        const m = weightVal.match(/^([\d.]+)\s*[x×]\s*([\d.]+)/i);
+        weightVal = String(Math.round(parseFloat(m[2]) / 5) * 5);
+      } else {
+        const wNum = weightVal.match(/^[\d.]+/);
+        if (wNum) weightVal = String(Math.round(parseFloat(wNum[0]) / 5) * 5);
+      }
+      return `
+      <div class="completion-ex-row" id="cex-row-${sessionId}-${i}">
+        <span class="completion-ex-name">${escHtml(ex.name)}</span>
+        <input class="qe-edit-sets" type="text" inputmode="numeric" id="cex-sets-${sessionId}-${i}"
+          value="${setsVal}" onchange="cexCollapseSets('${sessionId}',${i})" />
+        <span class="completion-x">×</span>
+        <input class="qe-edit-reps" id="cex-reps-${sessionId}-${i}"
+          value="${repsVal}" placeholder="reps" />
+        <input class="qe-weight-input" id="cex-weight-${sessionId}-${i}"
+          value="${weightVal}" placeholder="lbs / BW" />
+      </div>
+      <div class="completion-expand-wrap" id="cex-expand-wrap-${sessionId}-${i}">
+        <button class="completion-expand-btn" onclick="cexExpandSets('${sessionId}',${i})">Log per set</button>
+        <div class="completion-set-details" id="cex-details-${sessionId}-${i}" style="display:none"></div>
+      </div>`;
+    }).join("");
+    const exDurVal = suggestedDuration ? ` value="${suggestedDuration}"` : "";
+    const _unit = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
+    formBody = `
+      <div class="completion-ex-header">
+        <span></span><span>Sets</span><span></span><span>Reps</span><span>Weight</span>
+      </div>
+      ${rows}
+      <div class="completion-dur-row" style="margin-top:10px">
+        <label class="completion-field-label">Duration (min)</label>
+        <input type="number" id="cdur-${sessionId}" class="completion-dur-input"
+          placeholder="e.g. 45" min="1"${exDurVal} />
+      </div>
+      ${_ENDURANCE_TYPES.has(type) ? `<div class="completion-dur-row">
+        <label class="completion-field-label">Distance (${_unit})</label>
+        <input type="number" id="cdist-${sessionId}" class="completion-dur-input"
+          placeholder="e.g. 3.1" min="0" step="0.1" />
+      </div>` : ""}
+      <textarea id="cnotes-${sessionId}" class="completion-notes"
+        placeholder="Notes (optional)"></textarea>`;
+  } else {
+    const durVal = suggestedDuration ? ` value="${suggestedDuration}"` : "";
+    const _cUnit = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
+    formBody = `
+      <div class="completion-cardio-fields">
+        <div class="completion-dur-row">
+          <label class="completion-field-label">Duration (min)</label>
+          <input type="number" id="cdur-${sessionId}" class="completion-dur-input"
+            placeholder="e.g. 45" min="1"${durVal} />
+        </div>
+        ${_ENDURANCE_TYPES.has(type) ? `<div class="completion-dur-row">
+          <label class="completion-field-label">Distance (${_cUnit})</label>
+          <input type="number" id="cdist-${sessionId}" class="completion-dur-input"
+            placeholder="e.g. 3.1" min="0" step="0.1" />
+        </div>` : ""}
+        <textarea id="cnotes-${sessionId}" class="completion-notes"
+          placeholder="Notes (optional)"></textarea>
+      </div>`;
+  }
+
+  // Live Tracker button
+  const _liveBtn = typeof buildLiveTrackerButton === "function"
+    ? buildLiveTrackerButton(sessionId, type, dateStr, steps || null, exercises || null)
+    : "";
+
+  return `
+    <div class="session-complete-section">
+      <div class="session-complete-btns">
+        ${_liveBtn}
+        <button class="btn-complete-toggle" id="cbtn-${sessionId}"
+          onclick="toggleCompletionForm('${sessionId}')">${ICONS.check} Mark as Complete</button>
+      </div>
+      <div class="completion-form" id="cform-${sessionId}" style="display:none">
+        ${formBody}
+        <button class="btn-complete-save"
+          onclick="saveSessionCompletion('${sessionId}','${type}','${dateStr}',${hasExercises})">
+          Save
+        </button>
+      </div>
+    </div>`;
+}
+
+function toggleCompletionForm(sessionId) {
+  const form = document.getElementById(`cform-${sessionId}`);
+  const btn  = document.getElementById(`cbtn-${sessionId}`);
+  if (!form) return;
+  const opening = form.style.display === "none";
+  form.style.display = opening ? "" : "none";
+  if (btn) btn.innerHTML = opening
+    ? `${ICONS.ban} Cancel`
+    : `${ICONS.check} Mark as Complete`;
+}
+
+// ── Per-set expansion for completion form ────────────────────────────────────
+
+function cexExpandSets(sessionId, exIdx) {
+  const setsInput  = document.getElementById(`cex-sets-${sessionId}-${exIdx}`);
+  const repsInput  = document.getElementById(`cex-reps-${sessionId}-${exIdx}`);
+  const weightInput = document.getElementById(`cex-weight-${sessionId}-${exIdx}`);
+  const detailsEl  = document.getElementById(`cex-details-${sessionId}-${exIdx}`);
+  const btnEl      = detailsEl?.previousElementSibling || detailsEl?.parentElement?.querySelector(".completion-expand-btn");
+  if (!detailsEl) return;
+
+  const numSets = parseInt(setsInput?.value) || 3;
+  const reps    = repsInput?.value || "";
+  const weight  = weightInput?.value || "";
+
+  // Hide the summary row's sets/reps/weight inputs (keep name visible)
+  const row = document.getElementById(`cex-row-${sessionId}-${exIdx}`);
+  if (row) {
+    row.querySelectorAll("input, .completion-x").forEach(el => el.style.display = "none");
+  }
+
+  let html = `<div class="completion-set-header">
+    <span></span><span>Reps</span><span>Weight</span>
+  </div>`;
+  for (let s = 0; s < numSets; s++) {
+    html += `<div class="completion-set-row">
+      <span class="completion-set-label">Set ${s + 1}</span>
+      <input class="qe-edit-reps" id="cex-sd-reps-${sessionId}-${exIdx}-${s}" value="${reps}" placeholder="reps" />
+      <input class="qe-weight-input" id="cex-sd-wt-${sessionId}-${exIdx}-${s}" value="${weight}" placeholder="lbs" />
+    </div>`;
+  }
+  html += `<button class="completion-collapse-btn" onclick="cexCollapseSets('${sessionId}',${exIdx})">Collapse</button>`;
+  detailsEl.innerHTML = html;
+  detailsEl.style.display = "";
+  if (btnEl?.classList.contains("completion-expand-btn")) btnEl.style.display = "none";
+}
+
+function cexCollapseSets(sessionId, exIdx) {
+  const detailsEl = document.getElementById(`cex-details-${sessionId}-${exIdx}`);
+  const btnEl     = detailsEl?.parentElement?.querySelector(".completion-expand-btn");
+  if (detailsEl) { detailsEl.style.display = "none"; detailsEl.innerHTML = ""; }
+  if (btnEl) btnEl.style.display = "";
+
+  // Restore summary row inputs
+  const row = document.getElementById(`cex-row-${sessionId}-${exIdx}`);
+  if (row) {
+    row.querySelectorAll("input, .completion-x").forEach(el => el.style.display = "");
+  }
+}
+
+function _cexReadSetDetails(sessionId, exIdx) {
+  // Returns setDetails array if expanded, or null if collapsed
+  const detailsEl = document.getElementById(`cex-details-${sessionId}-${exIdx}`);
+  if (!detailsEl || detailsEl.style.display === "none" || !detailsEl.innerHTML) return null;
+
+  const setsInput = document.getElementById(`cex-sets-${sessionId}-${exIdx}`);
+  const numSets = parseInt(setsInput?.value) || 3;
+  const details = [];
+  for (let s = 0; s < numSets; s++) {
+    details.push({
+      reps:   document.getElementById(`cex-sd-reps-${sessionId}-${exIdx}-${s}`)?.value || "",
+      weight: document.getElementById(`cex-sd-wt-${sessionId}-${exIdx}-${s}`)?.value   || "",
+    });
+  }
+  // Only return if at least one set differs from the others
+  const allSame = details.every(d => d.reps === details[0].reps && d.weight === details[0].weight);
+  return allSame ? null : details;
+}
+
+let _lastCompletionSaveTime = 0;
+function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
+  const now = Date.now();
+  if (now - _lastCompletionSaveTime < 2000) return;
+  _lastCompletionSaveTime = now;
+  // Don't save again if already completed
+  if (isSessionComplete(sessionId)) return;
+  const notes    = (document.getElementById(`cnotes-${sessionId}`)?.value || "").trim();
+  const duration = document.getElementById(`cdur-${sessionId}`)?.value || "";
+  const distance = document.getElementById(`cdist-${sessionId}`)?.value || "";
+
+  let exercises = [];
+  if (hasExercises) {
+    ((_completionExerciseMap[sessionId]) || []).forEach((ex, i) => {
+      const entry = {
+        name:   ex.name,
+        sets:   parseInt(document.getElementById(`cex-sets-${sessionId}-${i}`)?.value)   || ex.sets,
+        reps:   document.getElementById(`cex-reps-${sessionId}-${i}`)?.value             || ex.reps   || "",
+        weight: document.getElementById(`cex-weight-${sessionId}-${i}`)?.value           || ex.weight || "",
+      };
+      const setDetails = _cexReadSetDetails(sessionId, i);
+      if (setDetails) entry.setDetails = setDetails;
+      exercises.push(entry);
+    });
+  }
+
+  // Save to workout history
+  let workouts = [];
+  try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
+  const workoutId = Date.now();
+  workouts.unshift({
+    id:                 workoutId,
+    date:               dateStr,
+    type,
+    notes:              notes || (duration ? `${duration} min` : ""),
+    exercises:          exercises.length ? exercises : undefined,
+    duration:           duration || null,
+    distance:           distance || null,
+    completedSessionId: sessionId,
+    isCompletion:       true,
+  });
+  localStorage.setItem("workouts", JSON.stringify(workouts));
+
+  // Mark session as completed
+  const meta = loadCompletionMeta();
+  meta[sessionId] = { workoutId, completedAt: new Date().toISOString() };
+  localStorage.setItem("completedSessions", JSON.stringify(meta));
+
+  // Refresh views
+  renderCalendar();
+  renderDayDetail(dateStr);
+  if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
+  if (typeof renderStats          === "function") renderStats();
+
+  // Collapse the card after save and mark header with checkmark
+  setTimeout(() => {
+    const card = document.getElementById(sessionId);
+    if (card) {
+      if (!card.classList.contains("is-collapsed")) card.classList.add("is-collapsed");
+      const nameEl = card.querySelector(".session-name");
+      if (nameEl && !nameEl.querySelector(".session-complete-indicator")) {
+        nameEl.insertAdjacentHTML("beforeend", `<span class="session-complete-indicator">${ICONS.check}</span>`);
+      }
+    }
+  }, 0);
+
+  // Show rating modal after completion
+  setTimeout(() => showRatingModal(String(workoutId), dateStr), 400);
+
+  // Show stretch suggestion after completion
+  if (typeof renderStretchSuggestion === "function") {
+    const stretchContainer = document.getElementById(`stretch-${sessionId}`);
+    if (!stretchContainer) {
+      const card = document.getElementById(sessionId);
+      if (card) {
+        const div = document.createElement("div");
+        div.id = `stretch-${sessionId}`;
+        card.appendChild(div);
+        renderStretchSuggestion({ type, exercises }, div);
+      }
+    }
+  }
+}
+
+// ─── Day totals helpers ───────────────────────────────────────────────────────
+
+function _parseDurMin(str) {
+  const s = String(str || "").toLowerCase();
+  const m = s.match(/([\d.]+)/);
+  if (!m) return 0;
+  const v = parseFloat(m[1]);
+  return /sec/.test(s) ? v / 60 : v;
+}
+
+function _parseDistKm(str) {
+  const s = String(str || "");
+  const val = parseFloat(s.match(/[\d.]+/)?.[0] || 0);
+  if (!val) return 0;
+  if (/\bkm\b/i.test(s))          return val;
+  if (/\bmi(?:les?)?\b/i.test(s)) return val * 1.60934;   // "mi", "mile", "miles" — NOT "min"
+  if (/\byd\b/i.test(s))          return val * 0.0009144;
+  if (/\bm\b/.test(s))            return val / 1000;      // standalone "m" = meters
+  return 0;
+}
+
+/**
+ * Estimates distance in km for a time-based running interval using stored zone paces.
+ * Returns 0 if zones aren't set or sport isn't running.
+ */
+function _estimateRunKm(effortKey, durationMin) {
+  try {
+    const all = JSON.parse(localStorage.getItem("trainingZones")) || {};
+    if (!all.running) {
+      const old = JSON.parse(localStorage.getItem("runningZones"));
+      if (old) all.running = old;
+    }
+    const zones = (all.running || {}).zones;
+    if (!zones) return 0;
+    const zNum  = String(effortKey || "").replace(/[Zz]/, "");
+    const zData = zones[`z${zNum}`];
+    if (!zData?.paceRange) return 0;
+    // paceRange format: "7:30–8:15 /mi" (fast–slow)
+    const m = zData.paceRange.match(/(\d+):(\d+)[^0-9]+(\d+):(\d+)/);
+    if (!m) return 0;
+    const fast = parseInt(m[1]) + parseInt(m[2]) / 60;
+    const slow = parseInt(m[3]) + parseInt(m[4]) / 60;
+    const midPace = (fast + slow) / 2;  // min/mile
+    const miles = durationMin / midPace;
+    return miles * 1.60934;
+  } catch { return 0; }
+}
+
+function getDayTotals(dateStr) {
+  const data = getDataForDate(dateStr);
+  const restriction = data.restriction;
+  const sessionRemoved = restriction && restriction.action === "remove";
+  let totalMin = 0, totalKm = 0;
+  const sportKm = {};   // { run, bike, swim } → km
+  const _addKm = (sport, km) => {
+    if (km <= 0) return;
+    const key = (sport === "running" || sport === "run") ? "run"
+              : (sport === "bike" || sport === "cycling" || sport === "brick") ? "bike"
+              : (sport === "swim" || sport === "swimming") ? "swim" : null;
+    if (key) sportKm[key] = (sportKm[key] || 0) + km;
+    totalKm += km;
+  };
+  if (sessionRemoved) return { totalMin, totalKm, sportKm };
+
+  if (data.planEntry) {
+    const p = data.planEntry;
+    const effectLoad    = getEffectiveLoad(p.load, restriction);
+    const targetDur     = getRestrictedDuration(p.duration, p.load, restriction);
+    const rawSession    = (SESSION_DESCRIPTIONS[p.discipline] || {})[effectLoad]
+                       || (SESSION_DESCRIPTIONS[p.discipline] || {})[p.load];
+    const scaledSession = rawSession ? scaleSessionDuration(rawSession, targetDur) : rawSession;
+    if (scaledSession?.duration) totalMin += _parseDurMin(scaledSession.duration);
+    else if (targetDur)          totalMin += _parseDurMin(targetDur);
+  }
+
+  data.scheduledWorkouts.forEach(w => {
+    if (w.discipline && w.load) {
+      const session = (SESSION_DESCRIPTIONS[w.discipline] || {})[w.load];
+      if (session?.duration) totalMin += _parseDurMin(session.duration);
+    } else if (w.exercises && w.exercises.length > 0) {
+      // Estimate strength session: ~3 min per exercise (sets + rest)
+      totalMin += w.exercises.length * 3;
+    }
+  });
+
+  data.loggedWorkouts.forEach(w => {
+    const sport = w.type || "";
+    const isRun = sport === "running" || sport === "run";
+    if (w.aiSession?.intervals) {
+      w.aiSession.intervals.forEach(iv => {
+        const reps       = iv.reps || 1;
+        const mainDur    = _parseDurMin(String(iv.duration || ""));
+        const restDur    = iv.restDuration ? _parseDurMin(String(iv.restDuration)) : 0;
+        const mainDistKm = _parseDistKm(String(iv.duration || ""));
+
+        // Always count time
+        totalMin += mainDur * reps + restDur * Math.max(0, reps - 1);
+
+        // Also track distance if available
+        if (mainDistKm > 0) {
+          _addKm(sport, mainDistKm * reps);
+        } else if (isRun) {
+          const mainKm = _estimateRunKm(iv.effort, mainDur);
+          if (mainKm > 0) {
+            _addKm(sport, mainKm * reps);
+            if (iv.restEffort && restDur > 0) {
+              _addKm(sport, _estimateRunKm(iv.restEffort, restDur) * Math.max(0, reps - 1));
+            }
+          }
+        }
+      });
+    } else if (w.generatedSession?.duration) {
+      totalMin += _parseDurMin(w.generatedSession.duration);
+    } else if (w.duration) {
+      totalMin += _parseDurMin(String(w.duration));
+    }
+  });
+
+  return { totalMin, totalKm, sportKm };
+}
+
+// ─── Day detail panel ─────────────────────────────────────────────────────────
+
+const _WORKOUT_TYPE_LABELS = { hiit: "HIIT", weightlifting: "Weightlifting", running: "Running", cycling: "Cycling", swimming: "Swimming", yoga: "Yoga", general: "General Fitness", bodyweight: "Bodyweight", brick: "Brick (Bike + Run)" };
+function _wTypeLabel(type) { return _WORKOUT_TYPE_LABELS[type] || capitalize(type); }
+
+/**
+ * Unified Today Dashboard — quick-glance card showing workout + nutrition + hydration
+ * in one place with quick-action buttons. Only shown for today.
+ */
+function buildTodayDashboard(dateStr, data, nutrition) {
+  const allSessions = (data.planEntry ? 1 : 0) + data.scheduledWorkouts.length;
+  const loggedCount = data.loggedWorkouts.length;
+  const completedCount = (() => {
+    let count = 0;
+    if (data.planEntry) {
+      const cardId = `session-plan-${dateStr}-${data.planEntry.raceId}`;
+      if (isSessionComplete(cardId)) count++;
+    }
+    data.scheduledWorkouts.forEach(w => {
+      if (isSessionComplete(`session-sw-${w.id}`)) count++;
+    });
+    data.loggedWorkouts.forEach(w => {
+      if (w.fromSaved || isSessionComplete(`session-log-${w.id}`)) count++;
+    });
+    return count;
+  })();
+
+  const isRestDay = allSessions === 0 && loggedCount === 0;
+  const sessionRemoved = data.restriction && data.restriction.action === "remove";
+
+  // Workout status
+  let workoutHtml = "";
+  if (sessionRemoved) {
+    workoutHtml = `<div class="td-pill td-pill--rest">${ICONS.moon} Rest day (restriction active)</div>`;
+  } else if (isRestDay) {
+    workoutHtml = `<div class="td-pill td-pill--rest">${ICONS.moon} Rest day — focus on recovery</div>`;
+  } else {
+    const totalSessions = allSessions + loggedCount;
+    const sessionNames = [];
+    if (data.planEntry) sessionNames.push(data.planEntry.sessionName);
+    data.scheduledWorkouts.forEach(w => sessionNames.push(w.sessionName));
+    const label = sessionNames.slice(0, 2).join(", ") + (sessionNames.length > 2 ? ` +${sessionNames.length - 2} more` : "");
+    const allDone = completedCount >= totalSessions && totalSessions > 0;
+    workoutHtml = `<div class="td-pill ${allDone ? "td-pill--done" : "td-pill--active"}">
+      ${allDone ? ICONS.check : ICONS.weights} ${allDone ? "All sessions complete!" : label}
+      <span class="td-pill-count">${completedCount}/${totalSessions}</span>
+    </div>`;
+  }
+
+  // Nutrition status (if enabled)
+  let nutritionHtml = "";
+  if (typeof isNutritionEnabled === "function" && isNutritionEnabled()) {
+    let loggedMeals = [];
+    try { loggedMeals = (JSON.parse(localStorage.getItem("meals")) || []).filter(m => m.date === dateStr); } catch {}
+    const eaten = loggedMeals.reduce((sum, m) => sum + (m.calories || 0), 0);
+    const proteinEaten = loggedMeals.reduce((sum, m) => sum + (m.protein || 0), 0);
+    const calPct = nutrition.calories > 0 ? Math.min(Math.round(eaten / nutrition.calories * 100), 100) : 0;
+    const protPct = nutrition.protein > 0 ? Math.min(Math.round(proteinEaten / nutrition.protein * 100), 100) : 0;
+
+    nutritionHtml = `
+      <div class="td-section">
+        <div class="td-section-header">
+          <span class="td-section-label">${ICONS.utensils} Nutrition</span>
+          <span class="td-section-stat">${Math.round(eaten)} / ${nutrition.calories} cal</span>
+        </div>
+        <div class="td-progress-row">
+          <div class="td-progress-track"><div class="td-progress-fill" style="width:${calPct}%"></div></div>
+        </div>
+        <div class="td-mini-stats">
+          <span>Protein: ${Math.round(proteinEaten)}/${nutrition.protein}g (${protPct}%)</span>
+        </div>
+      </div>`;
+  }
+
+  // Hydration status (if enabled)
+  let hydrationHtml = "";
+  if (typeof isHydrationEnabled === "function" && isHydrationEnabled()) {
+    const targetOz = typeof getHydrationTarget === "function" ? getHydrationTarget() : 96;
+    const bottleSize = typeof getBottleSize === "function" ? getBottleSize() : 12;
+    const bottles = typeof getTodayHydration === "function" ? getTodayHydration() : 0;
+    const currentOz = bottles * bottleSize;
+    const pct = targetOz > 0 ? Math.min(Math.round(currentOz / targetOz * 100), 100) : 0;
+    hydrationHtml = `
+      <div class="td-section">
+        <div class="td-section-header">
+          <span class="td-section-label">${ICONS.droplet} Hydration</span>
+          <span class="td-section-stat">${currentOz} / ${targetOz} oz</span>
+        </div>
+        <div class="td-progress-row">
+          <div class="td-progress-track td-progress-track--water"><div class="td-progress-fill td-progress-fill--water" style="width:${pct}%"></div></div>
+        </div>
+      </div>`;
+  }
+
+  // Quick actions
+  const actions = [];
+  if (!isRestDay && !sessionRemoved) {
+    actions.push(`<button class="td-action-btn" onclick="document.querySelector('#day-detail-content .session-card')?.scrollIntoView({behavior:'smooth'})">${ICONS.weights} Workouts</button>`);
+  }
+  if (typeof isNutritionEnabled === "function" && isNutritionEnabled()) {
+    actions.push(`<button class="td-action-btn" onclick="showTab('nutrition')">${ICONS.utensils || "&#127860;"} Log Meal</button>`);
+  }
+  if (typeof isHydrationEnabled === "function" && isHydrationEnabled()) {
+    actions.push(`<button class="td-action-btn" onclick="if(typeof logWater==='function') logWater()">${ICONS.droplet} Log Water</button>`);
+  }
+
+  return `
+    <div class="today-dashboard">
+      ${workoutHtml}
+      ${nutritionHtml}
+      ${hydrationHtml}
+      ${actions.length ? `<div class="td-actions">${actions.join("")}</div>` : ""}
+    </div>`;
+}
+
+function renderDayDetail(dateStr) {
+  const content = document.getElementById("day-detail-content");
+  if (!content) return;
+
+  const data        = getDataForDate(dateStr);
+  const displayDate = formatDisplayDate(dateStr);
+  const isToday     = dateStr === getTodayString();
+  const nutrition   = getDailyNutritionTarget(dateStr);
+
+  let adjustments = {};
+  try { adjustments = JSON.parse(localStorage.getItem("nutritionAdjustments")) || {}; } catch {}
+  const isAdjusted = !!adjustments[dateStr];
+
+  // Compute totals up front so we can show them inline with the date header
+  const _totals = getDayTotals(dateStr);
+  const _unit   = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
+  const _SPORT_ICONS = { run: ICONS.run, bike: ICONS.bike, swim: ICONS.swim };
+  let _timeStr = "";
+  if (_totals.totalMin >= 60) {
+    const h = Math.floor(_totals.totalMin / 60), m = Math.round(_totals.totalMin % 60);
+    _timeStr = m > 0 ? `${h}h ${m}m` : `${h}h`;
+  } else if (_totals.totalMin > 0) {
+    _timeStr = `${Math.round(_totals.totalMin)}m`;
+  }
+  const _distItems = [];
+  if (Object.keys(_totals.sportKm).length > 0) {
+    for (const [sport, km] of Object.entries(_totals.sportKm)) {
+      const icon = _SPORT_ICONS[sport] || ICONS.activity;
+      const ds = _unit === "km" ? `${km.toFixed(1)} km` : `${(km / 1.60934).toFixed(1)} mi`;
+      _distItems.push(`<span class="day-totals-item">${icon} ${ds}</span>`);
+    }
+  } else if (_totals.totalKm > 0) {
+    const ds = _unit === "km" ? `${_totals.totalKm.toFixed(1)} km` : `${(_totals.totalKm / 1.60934).toFixed(1)} mi`;
+    _distItems.push(`<span class="day-totals-item">${ICONS.activity} ${ds}</span>`);
+  }
+  const _totalsHtml = (_timeStr || _distItems.length > 0) ? `
+    <div class="day-totals-inline">
+      ${_timeStr ? `<span class="day-totals-item">${ICONS.clock} ${_timeStr}</span>` : ""}
+      ${_distItems.join("")}
+    </div>` : "";
+
+  let html = `<div class="day-detail-date-row">
+    <div class="day-detail-date">${isToday ? "Today · " : ""}${displayDate}</div>
+    ${_totalsHtml}
+  </div>`;
+
+  // ── Unified Today Dashboard (today only) ──────────────────────────────────
+  if (isToday) {
+    html += buildTodayDashboard(dateStr, data, nutrition);
+  }
+
+  // ── Adherence prompt (today only, if not dismissed) ────────────────────────
+  if (isToday && typeof buildAdherencePrompt === "function" && !isAdherenceDismissedToday()) {
+    html += buildAdherencePrompt();
+  }
+
+  // ── Coaching insights (today only) ──────────────────────────────────────────
+  if (isToday && typeof buildCoachingInsights === "function") {
+    html += buildCoachingInsights();
+  }
+
+  // ── Rating smart alert (shown on today only) ───────────────────────────────
+  if (isToday && typeof getRatingSmartAlert === "function") {
+    const _rAlert = getRatingSmartAlert();
+    if (_rAlert) {
+      const _rIcon = _rAlert.type === "easy" ? ICONS.zap : ICONS.warning;
+      html += `<div class="rating-smart-alert rating-alert-${_rAlert.type}">${_rIcon} ${_rAlert.message}</div>`;
+    }
+  }
+
+  // ── Goal progress summary (today only) ──────────────────────────────────
+  if (isToday && typeof buildGoalsSummaryForHome === "function") {
+    html += buildGoalsSummaryForHome();
+  }
+
+  // ── Rest day intelligence banner ──────────────────────────────────────────
+  if ((isToday || dateStr === localDateStr((() => { const t = new Date(); t.setDate(t.getDate() + 1); return t; })())) && typeof buildRestDayBanner === "function") {
+    html += buildRestDayBanner(dateStr);
+  }
+
+  // ── Restriction banner ────────────────────────────────────────────────────
+  if (data.restriction) {
+    const r     = data.restriction;
+    const label = RESTRICTION_LABELS[r.type] || r.type;
+    const icon  = RESTRICTION_ICONS[r.type]  || ICONS.warning;
+    const isRestType = r.type === "rest";
+    html += `
+      <div class="restriction-banner${isRestType ? " restriction-banner--rest" : ""}">
+        <div class="restriction-banner-content">
+          <span class="restriction-icon">${icon}</span>
+          <div>
+            <div class="restriction-label">${label}</div>
+            ${r.note ? `<div class="restriction-note">${r.note}</div>` : ""}
+          </div>
+        </div>
+        <button class="restriction-remove-btn" onclick="removeRestriction('${dateStr}')">Remove</button>
+      </div>`;
+  }
+
+  // ── Equipment restriction banner ─────────────────────────────────────────
+  if (data.equipmentRestriction) {
+    const eqLabel    = _equipmentLabel(data.equipmentRestriction);
+    const eqNote     = data.equipmentRestriction.note;
+    const removeKey  = data.equipmentRestriction.permanent ? "permanent" : dateStr;
+    html += `
+      <div class="equipment-banner">
+        <div class="restriction-banner-content">
+          <span class="restriction-icon">${ICONS.weights}</span>
+          <div>
+            <div class="restriction-label">Equipment: ${eqLabel}</div>
+            ${eqNote ? `<div class="restriction-note">${eqNote}</div>` : ""}
+          </div>
+        </div>
+        <button class="restriction-remove-btn" onclick="removeEquipmentRestriction('${removeKey}')">Remove</button>
+      </div>`;
+  }
+
+  // ── All sessions (race plan + generated plan + manually added) ───────────
+  const sessionRemoved = data.restriction && data.restriction.action === "remove";
+  const allSessionsCount = (data.planEntry ? 1 : 0) + data.scheduledWorkouts.length + data.loggedWorkouts.length;
+
+  if (sessionRemoved && allSessionsCount > 0) {
+    const rLabel = RESTRICTION_LABELS[data.restriction.type] || data.restriction.type;
+    html += `<div class="restriction-removed-notice">${ICONS.ban} Session removed — ${rLabel}</div>`;
+  } else if (data.event) {
+    html += `
+      <div class="session-card race-day-card">
+        <div class="session-card-header">
+          <span class="session-icon">${ICONS.flag}</span>
+          <div class="session-meta">
+            <div class="session-name">RACE DAY — ${data.event.name}</div>
+            <div class="session-phase">${(RACE_CONFIGS[data.event.type] || {}).label || data.event.type}</div>
+          </div>
+        </div>
+      </div>`;
+  } else {
+    // Race-plan session
+    if (data.planEntry) {
+      const p           = data.planEntry;
+      const icon        = DISCIPLINE_ICONS[p.discipline] || ICONS.weights;
+      const color       = DISCIPLINE_COLORS[p.discipline] || "var(--color-accent)";
+      const cardId      = `session-plan-${dateStr}-${p.raceId}`;
+      const effectLoad     = getEffectiveLoad(p.load, data.restriction);
+      const targetDuration = getRestrictedDuration(p.duration, p.load, data.restriction);
+      const isReduced      = effectLoad !== p.load || targetDuration !== p.duration;
+      const rawSession     = (SESSION_DESCRIPTIONS[p.discipline] || {})[effectLoad]
+                          || (SESSION_DESCRIPTIONS[p.discipline] || {})[p.load];
+      const session        = rawSession ? scaleSessionDuration(rawSession, targetDuration) : rawSession;
+      const intensLabel = getIntensityLabel(effectLoad);
+      const intensClass = getIntensityClass(effectLoad);
+
+      const _planCompType = DISCIPLINE_TO_WORKOUT_TYPE[p.discipline] || "general";
+      const _planSugDur   = session?.duration || null;
+      const _planCompletion = buildCompletionSection(cardId, _planCompType, null, dateStr, _planSugDur, session?.steps);
+      const _planDelBtn = `<button class="delete-btn" title="Remove" onclick="event.stopPropagation();deletePlanEntry('${p.raceId}','${p.discipline}','${dateStr}')">✕</button>`;
+      const _planIsComplete    = isSessionComplete(cardId);
+      const _planDoneIndicator = _planIsComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
+      const _planUndoBtn       = _buildUndoHeaderBtn(cardId, dateStr);
+      if (session) {
+        html += `
+          <div class="session-card collapsible${_planIsComplete ? " session-card--completed is-collapsed" : ""}" id="${cardId}">
+            <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
+              <span class="session-icon" style="color:${color}">${icon}</span>
+              <div class="session-meta">
+                <div class="session-name">${p.sessionName}${_planDoneIndicator}</div>
+                <div class="session-phase">${p.phase} · Week ${p.weekNumber}</div>
+              </div>
+              <div class="session-header-right">
+                ${_planUndoBtn}${_planDelBtn}
+                <span class="session-duration-badge">${session.duration} min</span>
+                <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
+                <span class="card-chevron">▾</span>
+              </div>
+            </div>
+            ${buildIntensityStrip(session, cardId, p.discipline)}
+            <div class="card-body">${buildStepsList(session, p.discipline)}${buildWorkoutExplanation(session, dateStr, p.discipline, effectLoad, p.sessionName)}${_planCompletion}</div>
+          </div>`;
+      } else {
+        html += `
+          <div class="session-card collapsible${_planIsComplete ? " session-card--completed is-collapsed" : ""}" id="${cardId}">
+            <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
+              <span class="session-icon" style="color:${color}">${icon}</span>
+              <div class="session-meta">
+                <div class="session-name">${p.sessionName}${_planDoneIndicator}</div>
+                <div class="session-phase">${p.phase} · Week ${p.weekNumber}</div>
+              </div>
+              <div class="session-header-right">
+                ${_planUndoBtn}${_planDelBtn}
+                <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
+                <span class="card-chevron">▾</span>
+              </div>
+            </div>
+            <div class="card-body"><p class="session-details">${p.details || ""}</p>${buildWorkoutExplanation(null, dateStr, p.discipline, effectLoad, p.sessionName)}${_planCompletion}</div>
+          </div>`;
+      }
+    }
+
+    // Generated plan sessions
+    data.scheduledWorkouts.forEach(w => {
+      const icon   = DISCIPLINE_ICONS[w.discipline || w.type] || ICONS.weights;
+      const color  = DISCIPLINE_COLORS[w.discipline || w.type] || "var(--color-accent)";
+      const cardId = `session-sw-${w.id}`;
+
+      // Rich rendering for sessions with discipline + load (running philosophy)
+      if (w.discipline && w.load) {
+        const effectLoad     = getEffectiveLoad(w.load, data.restriction);
+        const session        = (SESSION_DESCRIPTIONS[w.discipline] || {})[effectLoad];
+        const intensLabel    = getIntensityLabel(effectLoad);
+        const intensClass    = getIntensityClass(effectLoad);
+        if (session) {
+          const targetDuration = getRestrictedDuration(session.duration, w.load, data.restriction);
+          const isReduced      = effectLoad !== w.load || targetDuration !== session.duration;
+          const _swCompletion = buildCompletionSection(cardId, DISCIPLINE_TO_WORKOUT_TYPE[w.discipline] || "running", null, dateStr, targetDuration, session?.steps);
+          const _swMovePanel = buildSessionMovePanel(cardId, "scheduled", w.id, dateStr);
+          const _swMoveBtn = `<button class="btn-move-session" title="Move / Duplicate" onclick="event.stopPropagation();toggleMovePanel('${cardId}')">⇄</button>`;
+          const _swDelBtn  = `<button class="delete-btn" title="Remove" onclick="event.stopPropagation();deleteScheduledWorkout('${w.id}','${dateStr}')">✕</button>`;
+          const _swIsComplete    = isSessionComplete(cardId);
+          const _swDoneIndicator = _swIsComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
+          const _swUndoBtn       = _buildUndoHeaderBtn(cardId, dateStr);
+          html += `
+            <div class="session-card collapsible${_swIsComplete ? " session-card--completed is-collapsed" : ""}" id="${cardId}">
+              <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
+                <span class="session-icon" style="color:${color}">${icon}</span>
+                <div class="session-meta">
+                  <div class="session-name">${w.sessionName}${_swDoneIndicator}</div>
+                  <div class="session-phase">${({ run: "Running", bike: "Cycling", swim: "Swimming", brick: "Brick" })[w.discipline] || capitalize(w.discipline || "")}</div>
+                </div>
+                <div class="session-header-right">
+                  ${_swUndoBtn}${_swMoveBtn}${_swDelBtn}
+                  <span class="session-duration-badge">${targetDuration} min</span>
+                  <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
+                  <span class="card-chevron">▾</span>
+                </div>
+              </div>
+              ${buildIntensityStrip(session, cardId, w.discipline)}
+              <div class="card-body">${buildStepsList(session, w.discipline)}${buildWorkoutExplanation(session, dateStr, w.discipline, effectLoad, w.sessionName)}${_swMovePanel}${_swCompletion}</div>
+            </div>`;
+          return;
+        }
+      }
+
+      // Generic rendering for weightlifting, cycling, yoga, etc.
+      let body = "";
+      if (w.exercises && w.exercises.length > 0) {
+        // If session is completed, show only the exercises that were actually done
+        const _compExercises = isSessionComplete(cardId) ? _getCompletionExercises(cardId) : null;
+        let displayExercises = _compExercises || w.exercises;
+        if (!_compExercises && data.equipmentRestriction && w.type === "weightlifting" && typeof getEquipmentAdjustedExercises === "function") {
+          const focusMatch = String(w.id).match(/weightlifting-(\w+)-b/);
+          const focus = focusMatch ? focusMatch[1] : null;
+          if (focus) displayExercises = getEquipmentAdjustedExercises(w.exercises, focus, w.level || "intermediate", data.equipmentRestriction);
+        }
+        if (!_compExercises && data.restriction && data.restriction.action === "reduce" && w.type === "weightlifting") {
+          displayExercises = getRestrictedExercises(displayExercises, data.restriction);
+        }
+        let _swHiitHeader = "";
+        if (w.hiitMeta) {
+          const _fmtLabels = { circuit: "Circuit", tabata: "Tabata", emom: "EMOM", amrap: "AMRAP", "for-time": "For Time" };
+          const _m = w.hiitMeta;
+          _swHiitHeader = `<div class="qe-hiit-summary">${_fmtLabels[_m.format] || _m.format || "HIIT"}`;
+          if (_m.rounds > 1) _swHiitHeader += ` &mdash; ${_m.rounds} rounds`;
+          if (_m.restBetweenRounds && _m.restBetweenRounds !== "0s") _swHiitHeader += `, ${_m.restBetweenRounds} rest between rounds`;
+          _swHiitHeader += `</div>`;
+        }
+        const _liftRestricted = data.restriction && data.restriction.action === "reduce" && w.type === "weightlifting";
+        const _liftRestrictNote = _liftRestricted ? `<div class="restriction-session-note" style="margin-bottom:8px">${ICONS.lightbulb} Reduced sets & weight per your ${data.restriction.type || ""} restriction</div>` : "";
+        body = _liftRestrictNote + _swHiitHeader + buildExerciseTableHTML(displayExercises, { hiit: w.type === "hiit" || !!w.hiitMeta });
+      } else if (w.details) {
+        body = `<p class="session-details">${w.details}</p>`;
+      }
+
+      // Build zone strip + interval body for imported sessions with aiSession intervals
+      let _swGenStrip = "";
+      let _swGenDurMin = w.duration || null;
+      if (w.aiSession && w.aiSession.intervals && w.aiSession.intervals.length) {
+        const _effortToZone = { RW:"rw",Z1:"z1",Z2:"z2",Z3:"z3",Z4:"z4",Z5:"z5",Z6:"z6", Easy:"z2",Moderate:"z3",Hard:"z4",Max:"z5",T1:"z-transition" };
+        const _parseDur = str => { const s = String(str||"").toLowerCase(); const m = s.match(/([\d.]+)/); if(!m) return 1; const v = parseFloat(m[1]); return /sec/.test(s) ? v/60 : v; };
+        const _allSegs = [];
+        w.aiSession.intervals.forEach(iv => {
+          const reps = iv.reps || 1;
+          const mainDur = _parseDur(iv.duration);
+          const restDur = iv.restDuration ? _parseDur(iv.restDuration) : 0;
+          const mainCls = _effortToZone[iv.effort] || "z2";
+          const restCls = iv.restEffort ? (_effortToZone[iv.restEffort] || "z2") : "z-rest";
+          for (let i = 0; i < reps; i++) {
+            _allSegs.push({ dur: mainDur, cls: mainCls, effort: iv.effort, name: iv.name });
+            if (i < reps - 1 && restDur > 0) {
+              _allSegs.push({ dur: restDur, cls: restCls, effort: iv.restEffort || "Z2", name: "Recovery" });
+            }
+          }
+        });
+        const _totalDur = _allSegs.reduce((sum, seg) => sum + seg.dur, 0) || 1;
+        _swGenDurMin = Math.round(_totalDur) || _swGenDurMin;
+        const _stripSegs = _allSegs.map(seg => {
+          const pct = (seg.dur / _totalDur * 100).toFixed(2);
+          const zNum = String(seg.effort || "").replace(/[Zz]/, "");
+          const zLabel = zNum ? _getZoneLabel(w.type, zNum) : "";
+          const tip = `${seg.name || seg.effort}${zLabel ? ` \u00b7 ${zLabel}` : ""}`;
+          return `<div class="intensity-seg ${seg.cls}" style="width:${pct}%" title="${tip}"></div>`;
+        }).join("");
+        if (_stripSegs) _swGenStrip = `<div class="session-intensity-strip" onclick="event.stopPropagation();toggleSection('${cardId}')">${_stripSegs}</div>`;
+        if (!body) body = buildAiIntervalsList(w.aiSession, w.type) || '';
+      }
+
+      const _swGenCompletion = buildCompletionSection(cardId, w.type, w.exercises || null, dateStr, _swGenDurMin);
+      const _swGenMovePanel  = buildSessionMovePanel(cardId, "scheduled", w.id, dateStr);
+      const _swGenEditPanel  = "";
+      const _swGenMoveBtn    = `<button class="btn-move-session" title="Move / Duplicate" onclick="event.stopPropagation();toggleMovePanel('${cardId}')">⇄</button>`;
+      const _swGenDelBtn     = `<button class="delete-btn" title="Remove" onclick="event.stopPropagation();deleteScheduledWorkout('${w.id}','${dateStr}')">✕</button>`;
+      const _swGenEditBtn    = w.exercises?.length
+        ? `<button class="edit-workout-btn" title="Edit" onclick="event.stopPropagation();openEditWorkout('${w.id}','workoutSchedule')">Edit</button>`
+        : "";
+      const _swGenCompleted  = isSessionComplete(cardId);
+      const _swGenDoneInd    = _swGenCompleted ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
+      const _swGenUndoBtn    = _buildUndoHeaderBtn(cardId, dateStr);
+      html += `
+        <div class="session-card collapsible${_swGenCompleted ? " session-card--completed is-collapsed" : ""}" id="${cardId}">
+          <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
+            <span class="session-icon" style="color:${color}">${icon}</span>
+            <div class="session-meta">
+              <div class="session-name">${w.sessionName}${_swGenDoneInd}</div>
+              <div class="session-phase">${_wTypeLabel(w.type)}</div>
+            </div>
+            <div class="session-header-right">${_swGenUndoBtn}${_swGenMoveBtn}${_swGenEditBtn}${_swGenDelBtn}${_swGenDurMin ? `<span class="session-duration-badge">${_swGenDurMin} min</span>` : ""}<span class="card-chevron">▾</span></div>
+          </div>
+          ${_swGenStrip}
+          <div class="card-body">${body}${buildWorkoutExplanation(null, dateStr, w.discipline || w.type, w.load || "moderate", w.sessionName)}${_swGenEditPanel}${_swGenMovePanel}${_swGenCompletion}</div>
+        </div>`;
+    });
+
+    // Manually-added sessions (same position as everything else)
+    data.loggedWorkouts.forEach(w => {
+      html += buildLoggedWorkoutCard(w, dateStr, data.restriction);
+    });
+
+    // Rest day — only if truly nothing planned
+    if (allSessionsCount === 0) {
+      html += `<div class="rest-day-badge">${ICONS.moon} Rest Day</div>`;
+    }
+  }
+
+  // Restriction suggestion note (only for "reduce", not "remove")
+  if (data.restriction && data.restriction.action !== "remove" && allSessionsCount > 0) {
+    const suggestion = RESTRICTION_SUGGESTIONS[data.restriction.type];
+    if (suggestion) {
+      html += `<div class="restriction-session-note">${ICONS.lightbulb} ${suggestion}</div>`;
+    }
+  }
+
+  // ── Safety warning (today only) ─────────────────────────────────────────────
+  if (isToday && typeof renderSafetyWarning === "function") {
+    html += renderSafetyWarning();
+  }
+
+  // ── Nutrition sections (hidden when nutrition tracking is disabled) ────────
+  if (typeof isNutritionEnabled === "function" && isNutritionEnabled()) {
+    const nutritionTitle = isToday ? "Nutrition Targets Today" : "Nutrition Targets";
+    html += `
+      <div class="nutrition-target-section">
+        <div class="section-label">
+          <span>${nutritionTitle}</span>
+          <button class="nutrition-reset-btn" id="nutrition-reset-btn-${dateStr}"
+            onclick="resetNutritionTargets('${dateStr}')"
+            style="${isAdjusted ? '' : 'display:none'}">↺ Reset to plan</button>
+        </div>
+        <p class="nutrition-hint">Tap a target to adjust it with a slider.</p>
+        <div class="macro-summary">
+          ${buildMacroBox("calories", "Calories", nutrition.calories, dateStr, 1200, 5000,  50, "")}
+          ${buildMacroBox("protein",  "Protein",  nutrition.protein,  dateStr,   50,  300,   5, "g")}
+          ${buildMacroBox("carbs",    "Carbs",    nutrition.carbs,    dateStr,   50,  600,  10, "g")}
+          ${buildMacroBox("fat",      "Fat",      nutrition.fat,      dateStr,   20,  200,   5, "g")}
+        </div>
+      </div>`;
+
+    if (data.loggedMeals.length > 0) {
+      html += `<div class="section-label"><span>Nutrition Progress</span></div>
+        <div id="nutrition-progress-bars-${dateStr}"></div>`;
+    }
+
+    html += `
+      <div class="section-label"><span>Suggested Meals</span></div>
+      <div id="meal-plan-${dateStr}"></div>
+      ${typeof getAIDisclaimer === "function" ? getAIDisclaimer() : ""}`;
+  }
+
+  content.innerHTML = html;
+  if (typeof isNutritionEnabled === "function" && isNutritionEnabled()) {
+    renderMealPlan(dateStr);
+    renderNutritionProgressBars(dateStr);
+  }
+  // Render NL input for today
+  if (isToday && typeof renderNLInput === "function") renderNLInput(dateStr);
+}
+
+// ─── Nutrition progress bars (updates with sliders) ──────────────────────────
+
+function renderNutritionProgressBars(dateStr) {
+  const container = document.getElementById(`nutrition-progress-bars-${dateStr}`);
+  if (!container) return;
+
+  let loggedMeals = [];
+  try { loggedMeals = (JSON.parse(localStorage.getItem("meals")) || []).filter(m => m.date === dateStr); } catch {}
+  if (!loggedMeals.length) return;
+
+  const nutrition = getDailyNutritionTarget(dateStr);
+  const totals    = loggedMeals.reduce((acc, m) => ({
+    calories: acc.calories + (m.calories || 0),
+    protein:  acc.protein  + (m.protein  || 0),
+    carbs:    acc.carbs    + (m.carbs    || 0),
+    fat:      acc.fat      + (m.fat      || 0),
+  }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+  const macros = [
+    { label: "Calories", unit: "",  consumed: totals.calories, target: nutrition.calories },
+    { label: "Protein",  unit: "g", consumed: totals.protein,  target: nutrition.protein  },
+    { label: "Carbs",    unit: "g", consumed: totals.carbs,    target: nutrition.carbs    },
+    { label: "Fat",      unit: "g", consumed: totals.fat,      target: nutrition.fat      },
+  ];
+
+  let html = `<div class="nutrition-progress">`;
+  macros.forEach(({ label, unit, consumed, target }) => {
+    const rawPct = target > 0 ? Math.round(consumed / target * 100) : 0;
+    const pct    = Math.min(rawPct, 100);
+    const color  = rawPct > 120 ? "var(--color-danger)"
+                 : rawPct >= 85 ? "var(--color-success)"
+                 : "var(--color-accent)";
+    html += `
+      <div class="nutrition-progress-row">
+        <div class="nutrition-progress-header">
+          <span class="nutrition-progress-name">${label}</span>
+          <span class="nutrition-progress-values">${Math.round(consumed)}${unit} <span class="nutrition-progress-sep">/ ${Math.round(target)}${unit}</span></span>
+        </div>
+        <div class="nutrition-progress-track">
+          <div class="nutrition-progress-fill" style="width:${pct}%;background:${color}"></div>
+        </div>
+      </div>`;
+  });
+  html += `<div class="nutrition-meal-list">`;
+  loggedMeals.forEach(m => {
+    html += `
+      <div class="nutrition-meal-item">
+        <span class="nutrition-meal-name">${escHtml(m.name)}</span>
+        <span class="nutrition-meal-cals">${Math.round(m.calories || 0)} cal</span>
+      </div>`;
+  });
+  html += `</div></div>`;
+  container.innerHTML = html;
+}
+
+// ─── Meal plan renderer (called on load + after every slider adjustment) ──────
+
+function getEffectiveLoad(load, restriction) {
+  if (!restriction) return load;
+  if (restriction.action === "remove") return "rest";
+  if (restriction.action !== "reduce") return load;
+  switch (restriction.type) {
+    case "rest":    return "rest";
+    case "injury":
+    case "sick":    return (load === "hard" || load === "long" || load === "moderate") ? "easy" : load;
+    case "fatigue": return (load === "hard" || load === "long") ? "moderate" : (load === "moderate" ? "easy" : load);
+    case "time":    return (load === "hard" || load === "long") ? "moderate" : load;
+    default:        return load;
+  }
+}
+
+/** Returns a shortened duration when a "reduce" restriction is active. */
+function getRestrictedDuration(duration, originalLoad, restriction) {
+  if (!duration || !restriction || restriction.action !== "reduce") return duration;
+  const multipliers = { long: 0.60, hard: 0.65, moderate: 0.70, strides: 0.75, easy: 0.65 };
+  return Math.max(15, Math.round(duration * (multipliers[originalLoad] || 0.70)));
+}
+
+/** Returns exercises with reduced sets/weight for fatigue/injury/sick restrictions. */
+function getRestrictedExercises(exercises, restriction) {
+  if (!restriction || restriction.action !== "reduce" || !exercises) return exercises;
+  const t = restriction.type;
+  if (t === "time") return exercises; // time only affects duration, not load
+  // fatigue: drop 1 set, reduce weight ~15%. injury/sick: drop 1 set, reduce weight ~25%, cap reps.
+  const weightMult = (t === "injury" || t === "sick") ? 0.75 : 0.85;
+  const repsCap    = (t === "injury" || t === "sick") ? 8 : null;
+  return exercises.map(ex => {
+    const sets = Math.max(1, (parseInt(ex.sets) || 3) - 1);
+    let reps = ex.reps;
+    if (repsCap && parseInt(reps) > repsCap) reps = String(repsCap);
+    let weight = ex.weight || "";
+    const wMatch = weight.match(/([\d.]+)/);
+    if (wMatch) {
+      const reduced = Math.round(parseFloat(wMatch[1]) * weightMult);
+      weight = weight.replace(wMatch[1], reduced);
+    }
+    return { ...ex, sets: String(sets), reps, weight };
+  });
+}
+
+// ─── Transparency layer — "Why this?" explanations ──────────────────────────
+
+function buildWorkoutExplanation(session, dateStr, discipline, load, sessionName) {
+  let profile = {};
+  let onboarding = {};
+  try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
+  try { onboarding = JSON.parse(localStorage.getItem("onboardingData")) || {}; } catch {}
+
+  const goal = profile.goal || onboarding.goal || "";
+  const level = onboarding.level || "intermediate";
+
+  const discLabel = ({ run: "running", bike: "cycling", swim: "swimming", brick: "brick", weightlifting: "strength", yoga: "mobility", hiit: "HIIT" })[discipline] || discipline || "training";
+  const loadLabel = ({ easy: "easy", moderate: "moderate", hard: "hard", long: "long", race: "race-pace", rest: "recovery" })[load] || load || "";
+
+  const points = [];
+
+  // Progressive overload / load reasoning
+  if (loadLabel && load !== "rest") {
+    if (load === "easy") {
+      points.push("Scheduled as a lighter session to support recovery between harder efforts.");
+    } else if (load === "hard") {
+      points.push("High-intensity session to push your fitness forward. Hard days are balanced by easier days around them.");
+    } else if (load === "long") {
+      points.push("Long sessions build aerobic endurance and are placed to allow recovery afterward.");
+    } else if (load === "moderate") {
+      points.push("Moderate intensity develops your aerobic base without excessive fatigue.");
+    }
+  }
+
+  // Goal alignment
+  if (goal) {
+    const goalLabel = escHtml(goal).replace(/([A-Z])/g, " $1").trim().toLowerCase();
+    points.push(`Aligned with your ${goalLabel} goal${discLabel !== "training" ? `, using ${discLabel} to build the fitness you need` : ""}.`);
+  }
+
+  // Level consideration
+  const levelLabels = { beginner: "beginner", intermediate: "intermediate", advanced: "advanced" };
+  if (levelLabels[level]) {
+    points.push(`Volume and intensity calibrated for a${level === "advanced" ? "n" : ""} ${levelLabels[level]} athlete.`);
+  }
+
+  // Recovery consideration — check yesterday and tomorrow
+  const dayMs = 86400000;
+  const d = new Date(dateStr + "T12:00:00");
+  const yesterday = new Date(d.getTime() - dayMs).toISOString().slice(0, 10);
+  const tomorrow  = new Date(d.getTime() + dayMs).toISOString().slice(0, 10);
+  let schedule = [];
+  try { schedule = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
+  const plan = typeof loadTrainingPlan === "function" ? loadTrainingPlan() : [];
+  const yEntry = plan.find(e => e.date === yesterday) || schedule.find(s => s.date === yesterday);
+  const tEntry = plan.find(e => e.date === tomorrow)  || schedule.find(s => s.date === tomorrow);
+  if (yEntry && (yEntry.load === "hard" || yEntry.load === "long")) {
+    points.push("Yesterday was a hard effort, so today is programmed to allow partial recovery.");
+  }
+  if (tEntry && (tEntry.load === "hard" || tEntry.load === "long")) {
+    points.push("Tomorrow has a demanding session, so today stays controlled.");
+  }
+
+  if (points.length === 0) return "";
+
+  const id = "why-" + (sessionName || "s").replace(/\W+/g, "-").slice(0, 30) + "-" + dateStr + "-" + Math.random().toString(36).slice(2, 6);
+  return `
+    <button class="transparency-toggle" onclick="this.classList.toggle('is-open');document.getElementById('${id}').classList.toggle('is-open')">
+      ${ICONS.lightbulb} Why this workout? <span class="chevron-why">&#9662;</span>
+    </button>
+    <div class="transparency-section" id="${id}">
+      <ul>${points.map(p => `<li>${p}</li>`).join("")}</ul>
+    </div>`;
+}
+
+function buildMealExplanation(dateStr, nutrition) {
+  let profile = {};
+  let foodPrefs = {};
+  try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
+  try { foodPrefs = JSON.parse(localStorage.getItem("foodPreferences")) || {}; } catch {}
+
+  const proteinTarget = nutrition.protein || 0;
+
+  // Determine today's workout type
+  let workoutType = "";
+  const _mePlanEntry = typeof loadTrainingPlan === "function" ? loadTrainingPlan().find(e => e.date === dateStr) : null;
+  let _meSchedule = [];
+  try { _meSchedule = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
+  const _meTodaySessions = _meSchedule.filter(s => s.date === dateStr);
+
+  if (_mePlanEntry) {
+    workoutType = _mePlanEntry.discipline || _mePlanEntry.load || "";
+  } else if (_meTodaySessions.length > 0) {
+    workoutType = _meTodaySessions[0].type || _meTodaySessions[0].discipline || "";
+  }
+
+  const parts = [];
+  if (proteinTarget > 0) parts.push(`your protein target of ${proteinTarget}g`);
+  const likes = (foodPrefs.likes || []).filter(f => f);
+  if (likes.length > 0) parts.push(`preference for ${likes.slice(0, 3).map(f => escHtml(f)).join(", ")}`);
+  if (workoutType) {
+    const wLabel = ({ run: "running", bike: "cycling", swim: "swimming", weightlifting: "strength", yoga: "yoga", hiit: "HIIT", rest: "rest day" })[workoutType] || workoutType;
+    parts.push(`today's ${wLabel} session`);
+  } else {
+    parts.push("today being a rest day");
+  }
+
+  if (parts.length === 0) return "";
+  return `<div class="meal-transparency-note">${ICONS.lightbulb} Based on ${parts.join(", ")}.</div>`;
+}
+
+function renderMealPlan(dateStr) {
+  const container = document.getElementById(`meal-plan-${dateStr}`);
+  if (!container) return;
+
+  const nutrition   = getDailyNutritionTarget(dateStr);
+  const planEntry   = loadTrainingPlan().find(e => e.date === dateStr);
+  const baseLoad    = planEntry ? planEntry.load : "rest";
+  let   restriction = null;
+  try { restriction = (JSON.parse(localStorage.getItem("dayRestrictions")) || {})[dateStr] || null; } catch {}
+  const load = getEffectiveLoad(baseLoad, restriction);
+  const meals     = generateDayMeals(nutrition, load);
+  const totalCals = meals.reduce((s, m) => s + m.calories, 0);
+
+  const _mealExplanation = buildMealExplanation(dateStr, nutrition);
+  let html = `<div class="meal-plan-preview">
+    <div class="meal-plan-preview-header">Suggested Plan — ${totalCals} cal total</div>
+    ${_mealExplanation}`;
+  meals.forEach(m => {
+    html += `
+      <div class="meal-plan-row">
+        <div class="meal-plan-slot">${m.slot}</div>
+        <div class="meal-plan-name">${typeof filterAIClaims === "function" ? filterAIClaims(m.name) : m.name}</div>
+        <div class="meal-plan-macros">${m.calories} cal · ${m.protein}g P · ${m.carbs}g C · ${m.fat}g F</div>
+      </div>`;
+  });
+  html += `
+    <button class="btn-primary" style="margin-top:10px"
+      onclick="savePlanMeals('${dateStr}', ${JSON.stringify(meals).replace(/'/g, "\\'")})">
+      Save This Meal Plan
+    </button>
+  </div>`;
+  container.innerHTML = html;
+}
+
+let _mealRefreshTimer = null;
+
+// ─── Macro box + slider ───────────────────────────────────────────────────────
+
+function buildMacroBox(key, label, value, dateStr, min, max, step, suffix) {
+  return `
+    <div class="macro-box macro-box--interactive" onclick="toggleMacroSlider('${key}')">
+      <div class="macro-value" id="nt-${key}">${value}${suffix}</div>
+      <div class="macro-label">${label}</div>
+      <div class="macro-slider-wrap" id="slider-wrap-${key}">
+        <input type="range" class="macro-slider"
+          min="${min}" max="${max}" step="${step}" value="${value}"
+          oninput="handleMacroSlider(event,'${dateStr}','${key}','${suffix}')"
+          onclick="event.stopPropagation()" />
+        <div class="macro-slider-range">
+          <span>${min}${suffix}</span><span>${max}${suffix}</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+function toggleMacroSlider(key) {
+  const wrap = document.getElementById(`slider-wrap-${key}`);
+  if (!wrap) return;
+  const isOpen = wrap.classList.contains("is-open");
+  // Close all open sliders
+  document.querySelectorAll(".macro-slider-wrap.is-open")
+    .forEach(el => el.classList.remove("is-open"));
+  // Open this one if it wasn't already open
+  if (!isOpen) wrap.classList.add("is-open");
+}
+
+function handleMacroSlider(event, dateStr, key, suffix) {
+  const value     = parseInt(event.target.value);
+  const displayEl = document.getElementById(`nt-${key}`);
+  if (displayEl) displayEl.textContent = `${value}${suffix}`;
+
+  // Safety check — warn if calories set below floor
+  if (key === "calories" && typeof checkCalorieFloor === "function") {
+    const warning = checkCalorieFloor(value);
+    let warnEl = document.getElementById("calorie-floor-warning");
+    if (warning) {
+      if (!warnEl) {
+        warnEl = document.createElement("div");
+        warnEl.id = "calorie-floor-warning";
+        warnEl.className = "safety-floor-warning";
+        const sliderParent = event.target.closest(".macro-box");
+        if (sliderParent) sliderParent.appendChild(warnEl);
+      }
+      warnEl.innerHTML = `${ICONS.warning} ${warning.message}`;
+      warnEl.style.display = "";
+    } else if (warnEl) {
+      warnEl.style.display = "none";
+    }
+  }
+
+  saveNutritionAdjustment(dateStr, key, value);
+
+  // Show reset button as soon as any value diverges from the plan
+  const resetBtn = document.getElementById(`nutrition-reset-btn-${dateStr}`);
+  if (resetBtn) {
+    const base     = getBaseNutritionTarget(dateStr);
+    const adjusted = getDailyNutritionTarget(dateStr);
+    const differs  = base.calories !== adjusted.calories || base.protein !== adjusted.protein
+                  || base.carbs    !== adjusted.carbs    || base.fat     !== adjusted.fat;
+    resetBtn.style.display = differs ? "" : "none";
+  }
+
+  // Debounce both meal plan and progress bars refresh
+  clearTimeout(_mealRefreshTimer);
+  _mealRefreshTimer = setTimeout(() => {
+    renderMealPlan(dateStr);
+    renderNutritionProgressBars(dateStr);
+  }, 250);
+}
+
+function saveNutritionAdjustment(dateStr, key, value) {
+  let adjustments = {};
+  try { adjustments = JSON.parse(localStorage.getItem("nutritionAdjustments")) || {}; } catch {}
+  if (!adjustments[dateStr]) {
+    adjustments[dateStr] = { ...getBaseNutritionTarget(dateStr) };
+  }
+  adjustments[dateStr][key] = value;
+  localStorage.setItem("nutritionAdjustments", JSON.stringify(adjustments));
+}
+
+function resetNutritionTargets(dateStr) {
+  let adjustments = {};
+  try { adjustments = JSON.parse(localStorage.getItem("nutritionAdjustments")) || {}; } catch {}
+  delete adjustments[dateStr];
+  localStorage.setItem("nutritionAdjustments", JSON.stringify(adjustments));
+  renderDayDetail(dateStr); // re-renders targets and refreshes meal plan
+}
+
+// ─── Meal generation ──────────────────────────────────────────────────────────
+
+function handleGenerateMeals(dateStr) {
+  const nutrition = getDailyNutritionTarget(dateStr);
+  const planEntry = loadTrainingPlan().find(e => e.date === dateStr);
+  const load      = planEntry ? planEntry.load : "rest";
+  const meals     = generateDayMeals(nutrition, load);
+  const previewEl = document.getElementById(`meal-preview-${dateStr}`);
+  if (!previewEl) return;
+
+  const totalCals = meals.reduce((s, m) => s + m.calories, 0);
+  let html = `
+    <div class="meal-plan-preview">
+      <div class="meal-plan-preview-header">Generated Meal Plan — ${totalCals} cal total</div>`;
+  meals.forEach(m => {
+    html += `
+      <div class="meal-plan-row">
+        <div class="meal-plan-slot">${m.slot}</div>
+        <div class="meal-plan-name">${typeof filterAIClaims === "function" ? filterAIClaims(m.name) : m.name}</div>
+        <div class="meal-plan-macros">${m.calories} cal · ${m.protein}g P · ${m.carbs}g C · ${m.fat}g F</div>
+      </div>`;
+  });
+  html += `
+      <button class="btn-primary" onclick="savePlanMeals('${dateStr}', ${JSON.stringify(meals).replace(/'/g, "\\'")})">
+        Save This Meal Plan
+      </button>
+    </div>`;
+  previewEl.innerHTML = html;
+}
+
+function savePlanMeals(dateStr, meals) {
+  let all = [];
+  try { all = JSON.parse(localStorage.getItem("meals")) || []; } catch {}
+  all = all.filter(m => !(m.date === dateStr && m.source === "generated"));
+  meals.forEach(m => {
+    all.push({
+      id:       generateId("meal"),
+      date:     dateStr,
+      name:     `${m.slot}: ${m.name}`,
+      calories: m.calories,
+      protein:  m.protein,
+      carbs:    m.carbs,
+      fat:      m.fat,
+      source:   "generated",
+    });
+  });
+  localStorage.setItem("meals", JSON.stringify(all));
+  if (typeof renderNutritionHistory === "function") renderNutritionHistory();
+  if (typeof renderTodaysSummary   === "function") renderTodaysSummary();
+  renderDayDetail(dateStr);
+  renderCalendar();
+}
+
+// ─── Zone helpers ─────────────────────────────────────────────────────────────
+
+function loadToZone(load) {
+  return { rest: 1, easy: 2, moderate: 3, hard: 4, long: 2, race: 5 }[load] || 2;
+}
+
+function getZoneText(load) {
+  return { rest: "Rest", easy: "Z1–2", moderate: "Z2–3", hard: "Z3–4", long: "Z2 Long", race: "Race" }[load] || "Z2";
+}
+
+function getIntensityLabel(load) {
+  return { rest: "Rest", easy: "Low", moderate: "Medium", hard: "High", long: "Endurance", race: "Race" }[load] || "";
+}
+
+function getIntensityClass(load) {
+  return { easy: "intensity-low", moderate: "intensity-med", hard: "intensity-high", long: "intensity-long", race: "intensity-race" }[load] || "intensity-low";
+}
+
+// ─── Drag and Drop ────────────────────────────────────────────────────────────
+
+function onSessionDragStart(event) {
+  _dragActive = true;
+  const el         = event.currentTarget;
+  const dragType   = el.dataset.dragType;
+  const sourceDate = el.dataset.dragSource;
+
+  let payload;
+  if (dragType === "scheduled") {
+    payload = { id: el.dataset.dragId, sourceDate };
+  } else if (dragType === "plan") {
+    payload = { sourceDate, raceId: el.dataset.dragRaceid, discipline: el.dataset.dragDiscipline };
+  } else if (dragType === "logged") {
+    payload = { id: el.dataset.dragId, sourceDate };
+  } else {
+    event.preventDefault();
+    return;
+  }
+
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", JSON.stringify({ type: dragType, payload }));
+  // Defer adding class so the drag ghost shows the normal appearance
+  setTimeout(() => el.classList.add("dragging"), 0);
+}
+
+function onSessionDragEnd(event) {
+  _dragActive = false;
+  event.currentTarget.classList.remove("dragging");
+  document.querySelectorAll(".week-cell.drag-over").forEach(el => el.classList.remove("drag-over"));
+}
+
+function onCellDragOver(event, dateStr) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  event.currentTarget.classList.add("drag-over");
+}
+
+function onCellDragLeave(event) {
+  // Only remove highlight when leaving the cell entirely, not when crossing child elements
+  if (!event.currentTarget.contains(event.relatedTarget)) {
+    event.currentTarget.classList.remove("drag-over");
+  }
+}
+
+function onCellDrop(event, targetDate) {
+  _dragActive = false;
+  event.preventDefault();
+  event.currentTarget.classList.remove("drag-over");
+
+  let dragData;
+  try { dragData = JSON.parse(event.dataTransfer.getData("text/plain")); }
+  catch { return; }
+  if (!dragData || !dragData.payload) return;
+
+  const sourceDate = dragData.payload.sourceDate;
+  if (sourceDate === targetDate) return;
+
+  if (dragData.type === "scheduled") {
+    const schedule = loadWorkoutSchedule();
+    const idx = schedule.findIndex(e => String(e.id) === String(dragData.payload.id) && e.date === sourceDate);
+    if (idx === -1) return;
+    const entry  = { ...schedule[idx], date: targetDate };
+    if (typeof entry.id === "string") entry.id = entry.id.replace(sourceDate, targetDate);
+    schedule.splice(idx, 1, entry);
+    localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+
+  } else if (dragData.type === "plan") {
+    const plan = loadTrainingPlan();
+    const idx  = plan.findIndex(e =>
+      e.date === sourceDate &&
+      e.raceId === dragData.payload.raceId &&
+      e.discipline === dragData.payload.discipline
+    );
+    if (idx === -1) return;
+    plan[idx] = { ...plan[idx], date: targetDate };
+    saveTrainingPlanData(plan);
+
+  } else if (dragData.type === "logged") {
+    let workouts = [];
+    try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
+    const idx = workouts.findIndex(w => String(w.id) === String(dragData.payload.id));
+    if (idx === -1) return;
+    workouts[idx] = { ...workouts[idx], date: targetDate };
+    localStorage.setItem("workouts", JSON.stringify(workouts));
+  }
+
+  renderCalendar();
+  // Refresh day detail if either affected day is currently open
+  if (selectedDate === sourceDate || selectedDate === targetDate) {
+    renderDayDetail(selectedDate);
+  }
+}
+
+// ─── Quick Entry Modal ────────────────────────────────────────────────────────
+
+let _qeDateStr = null;
+
+function updateQERestrictionWarning(dateStr) {
+  const warn = document.getElementById("qe-restriction-warning");
+  if (!warn) return;
+  let restrictions = {};
+  try { restrictions = JSON.parse(localStorage.getItem("dayRestrictions")) || {}; } catch {}
+  const r = restrictions[dateStr];
+  if (r && r.action === "remove") {
+    const label = RESTRICTION_LABELS[r.type] || r.type;
+    warn.style.display = "";
+    warn.innerHTML = `${ICONS.ban} <strong>${label}</strong> restriction — session removed on this day. Adding a workout will lift the restriction.`;
+  } else if (r) {
+    const label = RESTRICTION_LABELS[r.type] || r.type;
+    warn.style.display = "";
+    warn.innerHTML = `${ICONS.warning} <strong>${label}</strong> restriction is active on this day.`;
+  } else {
+    warn.style.display = "none";
+  }
+}
+
+// ── Quick Entry Wizard state ──────────────────────────────────────────────────
+let _qeSelectedType        = null;
+let _qeSelectedMuscles     = new Set();
+let _qeManualRowCount      = 0;
+let _qeManualDragId        = null;
+let _qeManualSsCount       = 0;
+// _qeManualSsMode and _qeManualSsDragId removed — superset now triggered by drop zone
+let _qeCardioRowCount      = 0;
+let _qeWizardStep          = 0;
+let _qeGeneratedExercises  = [];
+let _qeGeneratedCardioData = null;
+
+// ── openQuickEntry ────────────────────────────────────────────────────────────
+function openQuickEntry(dateStr) {
+  _qeDateStr            = dateStr;
+  _qeSelectedType       = null;
+  _qeSelectedMuscles    = new Set();
+  _qeGeneratedExercises = [];
+
+  // Clear any previously selected muscle buttons
+  document.querySelectorAll(".qe-muscle-btn.selected").forEach(btn => btn.classList.remove("selected"));
+  // Reset equipment step
+  ["qe-equip-dumbbells", "qe-equip-barbell", "qe-equip-cables"].forEach(id => {
+    const el = document.getElementById(id); if (el) el.checked = false;
+  });
+  const _dbWt = document.getElementById("qe-dumbbell-max-weight"); if (_dbWt) _dbWt.value = "";
+  const _dbWtRow = document.getElementById("qe-dumbbell-weight-row"); if (_dbWtRow) _dbWtRow.style.display = "none";
+  const _cablesDetail = document.getElementById("qe-cables-detail"); if (_cablesDetail) { _cablesDetail.style.display = "none"; _cablesDetail.querySelectorAll("input[type=checkbox]").forEach(c => c.checked = false); }
+  const _perm = document.getElementById("qe-equip-permanent"); if (_perm) _perm.checked = false;
+  const _permDateRow = document.getElementById("qe-equip-date-row"); if (_permDateRow) { _permDateRow.style.opacity = ""; _permDateRow.style.pointerEvents = ""; }
+  const _eqEnd = document.getElementById("qe-equip-end-date"); if (_eqEnd) { _eqEnd.disabled = false; }
+  const eqEndDate = document.getElementById("qe-equip-end-date"); if (eqEndDate) eqEndDate.value = "";
+  const eqNote = document.getElementById("qe-equip-note"); if (eqNote) eqNote.value = "";
+  const eqMsg = document.getElementById("qe-equipment-msg"); if (eqMsg) eqMsg.textContent = "";
+  // Reset Ask IronZ panel
+  const askPanel = document.getElementById("qe-ask-ironz-panel");
+  if (askPanel) { askPanel.style.display = "none"; }
+  const askInput = document.getElementById("qe-ask-ironz-input");
+  if (askInput) { askInput.value = ""; }
+  const askCount = document.getElementById("qe-ask-ironz-count");
+  if (askCount) { askCount.textContent = "150 left"; }
+
+  const overlay = document.getElementById("quick-entry-overlay");
+  if (!overlay) return;
+
+  const defaultDate = dateStr || getTodayString();
+  document.getElementById("qe-date").value = defaultDate;
+  updateQERestrictionWarning(defaultDate);
+
+  qeShowStep(0, null);
+  overlay.classList.add("is-open");
+}
+
+function closeQuickEntry() {
+  const overlay = document.getElementById("quick-entry-overlay");
+  if (overlay) overlay.classList.remove("is-open");
+  _qeDateStr = null;
+}
+
+// ── Wizard step navigation ────────────────────────────────────────────────────
+function qeShowStep(step, subType) {
+  _qeWizardStep = step;
+
+  document.querySelectorAll(".qe-step").forEach(el => { el.style.display = "none"; });
+
+  document.querySelectorAll(".qe-dot").forEach((d, i) => d.classList.toggle("active", i === step));
+
+  const backBtn = document.getElementById("qe-back-btn");
+  if (backBtn) backBtn.style.display = step === 0 ? "none" : "";
+
+  const titles = {
+    strength: "Strength Session", running: "Running Session",
+    cycling: "Cycling Session",   swim: "Swimming Session",
+    hiit: "HIIT Session",         brick: "Brick Session",
+    yoga: "Yoga Session",         mobility: "Mobility Session",
+    walking: "Walking Session",   rowing: "Rowing Session",
+    pilates: "Pilates Session",   sport: "Sport Session",
+    restriction: "Rest / Restriction",
+  };
+  const titleEl = document.getElementById("qe-wizard-title");
+  if (titleEl) titleEl.textContent = (subType && titles[subType]) || "Add Session";
+
+  if (step === 0) {
+    document.getElementById("qe-step-0").style.display = "";
+  } else if (step === 1) {
+    if (subType === "strength")          document.getElementById("qe-step-1-strength").style.display    = "";
+    else if (subType === "hiit")         document.getElementById("qe-step-1-hiit").style.display        = "";
+    else if (subType === "restriction")  document.getElementById("qe-step-1-restriction").style.display = "";
+    else if (subType === "equipment")    document.getElementById("qe-step-1-equipment").style.display   = "";
+    else {
+      document.getElementById("qe-step-1-cardio").style.display = "";
+      const isBrick = _qeSelectedType === "brick";
+      document.getElementById("qe-duration-single").style.display = isBrick ? "none" : "";
+      document.getElementById("qe-duration-brick").style.display  = isBrick ? ""     : "none";
+    }
+  } else if (step === 2) {
+    if (subType === "generated" || subType === "cardio-generated") {
+      document.getElementById("qe-step-2-generated").style.display = "";
+    } else if (subType === "cardio-manual") {
+      document.getElementById("qe-step-2-cardio-manual").style.display = "";
+      qeInitCardioRows();
+    } else {
+      document.getElementById("qe-step-2-manual").style.display = "";
+      qeInitManualRows();
+    }
+  }
+}
+
+function toggleMoreTypes(btn) {
+  const panel = document.getElementById("qe-more-types");
+  if (!panel) return;
+  const showing = panel.style.display !== "none";
+  panel.style.display = showing ? "none" : "";
+  const arrow = btn.querySelector(".qe-more-arrow");
+  if (arrow) arrow.style.transform = showing ? "" : "rotate(180deg)";
+}
+
+function qeSelectType(type) {
+  _qeSelectedType = type;
+  if (type === "strength")        qeShowStep(1, "strength");
+  else if (type === "restriction") qeShowStep(1, "restriction");
+  else if (type === "equipment")  qeShowStep(1, "equipment");
+  else                            qeShowStep(1, type);
+}
+
+function qeShowAskIronZ() {
+  const panel = document.getElementById("qe-ask-ironz-panel");
+  const btn   = document.querySelector(".qe-type-card--ask-ironz");
+  if (!panel) return;
+  const isOpen = panel.style.display !== "none";
+  panel.style.display = isOpen ? "none" : "";
+  if (!isOpen) {
+    document.getElementById("qe-ask-ironz-input")?.focus();
+    if (btn) btn.classList.toggle("is-active", true);
+  } else {
+    if (btn) btn.classList.toggle("is-active", false);
+  }
+}
+
+async function qeSubmitAskIronZ() {
+  const input = document.getElementById("qe-ask-ironz-input");
+  const prompt = (input?.value || "").trim();
+  if (!prompt) return;
+
+  qeShowStep(2, "generated");
+  const loadingEl = document.getElementById("qe-ai-loading");
+  const resultEl  = document.getElementById("qe-ai-result");
+  loadingEl.style.display = "";
+  resultEl.innerHTML = "";
+
+  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
+  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
+    loadingEl.style.display = "none";
+    resultEl.innerHTML = `<div class="qe-ai-error">API key not set. Open <strong>config.js</strong> and paste your Anthropic API key.</div>`;
+    return;
+  }
+
+  try {
+    let profile = {};
+    try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
+    let strengthRefs = null;
+    try {
+      const allZones = JSON.parse(localStorage.getItem("trainingZones")) || {};
+      strengthRefs = allZones.strength || null;
+    } catch {}
+
+    const profileCtx = profile.weight
+      ? `Athlete: ${profile.weight} lbs${profile.gender ? `, ${profile.gender}` : ""}.`
+      : "";
+
+    const liftLabels = { bench: "Bench Press", squat: "Back Squat", deadlift: "Deadlift", ohp: "Overhead Press", row: "Barbell Row" };
+    const typeLabels = { "1rm": "1-rep max", "5rm": "5-rep max", "10rm": "10-rep max" };
+    let refCtx = "";
+    if (strengthRefs) {
+      const lines = Object.entries(liftLabels)
+        .filter(([k]) => strengthRefs[k]?.weight)
+        .map(([k, label]) => `${label}: ${strengthRefs[k].weight} lbs (${typeLabels[strengthRefs[k].type] || strengthRefs[k].type})`);
+      if (lines.length) refCtx = ` Reference lifts (use to set weights): ${lines.join(", ")}.`;
+    }
+    let avoidCtx = "";
+    try {
+      const prefs = JSON.parse(localStorage.getItem("trainingPreferences") || "{}");
+      const avoided = prefs.avoidedExercises || [];
+      if (avoided.length) avoidCtx = ` NEVER include these exercises: ${avoided.join(", ")}.`;
+    } catch {}
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1200,
+        messages: [{
+          role: "user",
+          content: `You are a personal trainer. The athlete says: "${prompt}". ${profileCtx}${refCtx}${avoidCtx}
+
+Determine the workout type and generate an appropriate session.
+
+Return ONLY valid JSON, no markdown:
+For strength/HIIT/general workouts:
+{"type":"strength","title":"Workout Name","exercises":[{"name":"Exercise","sets":3,"reps":10,"rest":"60s","weight":"135 lbs"}]}
+
+For running/cycling/swim/cardio workouts:
+{"type":"cardio","sport":"running","title":"Run Name","intervals":[{"name":"Phase","duration":"10 min","effort":"Easy","details":"Keep HR zone 2"}]}
+
+Use "Bodyweight" for bodyweight exercises. Strength exercises must have specific weights in lbs rounded to the nearest 5 (e.g. 135, 185 — NEVER 137, 267). Use reference lifts if provided. Include 5-8 exercises or 3-5 intervals.`
+        }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+
+    const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+    const cleaned = text.replace(/```json|```/g, "").trim();
+    const workout = JSON.parse(cleaned);
+    loadingEl.style.display = "none";
+
+    if (workout.type === "cardio") {
+      // Cardio — reuse the cardio-generated display
+      _qeGeneratedCardioData = { title: workout.title, intervals: workout.intervals || [], sport: workout.sport || "running" };
+      _qeSelectedType = workout.sport || "running";
+      const effortColors = { Easy: "#22c55e", Moderate: "#f59e0b", Hard: "#f97316", Max: "#ef4444" };
+      const intervalsHtml = (workout.intervals || []).map(iv => {
+        const c = effortColors[iv.effort] || "#64748b";
+        return `<div class="qe-cardio-interval">
+          <div class="qe-cardio-interval-header">
+            <span class="qe-cardio-phase">${escHtml(iv.name)}</span>
+            <span class="qe-cardio-meta">${escHtml(iv.duration)} · <span style="color:${c}">${escHtml(iv.effort)}</span></span>
+          </div>
+          ${iv.details ? `<div class="qe-cardio-details">${escHtml(iv.details)}</div>` : ""}
+        </div>`;
+      }).join("");
+      resultEl.innerHTML = `<div class="qe-generated-workout">
+        <div class="qe-generated-title">${ICONS.sparkles} ${escHtml(workout.title)}</div>
+        ${intervalsHtml}
+      </div>`;
+      const btnRow = document.createElement("div");
+      btnRow.style.cssText = "display:flex;gap:10px;margin-top:12px";
+      btnRow.innerHTML = `<button class="btn-primary" style="flex:1" onclick="qeSaveGeneratedCardio()">Save Session</button>`;
+      resultEl.appendChild(btnRow);
+    } else {
+      // Strength/HIIT — use existing strength display
+      _qeGeneratedExercises = (workout.exercises || []).map(ex => ({ ...ex, weight: _roundExWeight(ex.weight) }));
+      _qeEditingExerciseIndex = null;
+      _qeSelectedType = "strength";
+      resultEl.innerHTML = `<div class="qe-generated-workout">
+        <div class="qe-generated-title">${ICONS.sparkles} ${workout.title || "Your Workout"}</div>
+        <div class="form-row" style="margin-bottom:10px">
+          <label for="qe-workout-name">Workout Name (optional)</label>
+          <input type="text" id="qe-workout-name" value="${(workout.title || "").replace(/"/g,"&quot;")}" placeholder="e.g. Leg Day" />
+        </div>
+        <div class="qe-exercise-header"><span></span><span>Sets × Reps</span><span>Weight</span><span></span></div>
+        <div id="qe-exercise-list"></div>
+      </div>`;
+      _qeRenderExerciseList();
+      const btnRow = document.createElement("div");
+      btnRow.style.cssText = "display:flex;gap:10px;margin-top:12px";
+      btnRow.innerHTML = `<button class="btn-primary" style="flex:1" onclick="qeSaveGeneratedStrength()">Save Session</button>`;
+      resultEl.appendChild(btnRow);
+    }
+  } catch (err) {
+    loadingEl.style.display = "none";
+    resultEl.innerHTML = `<div class="qe-ai-error">${ICONS.warning} Could not generate workout. ${err.message || "Try again."}<br><br>
+      <button class="btn-secondary" onclick="qeShowStep(0,null)">← Go back</button>
+    </div>`;
+  }
+}
+
+function qeWizardBack() {
+  _qeSelectedMuscles = new Set();
+  document.querySelectorAll(".qe-muscle-btn.selected").forEach(btn => btn.classList.remove("selected"));
+  if (_qeWizardStep === 2 && _qeSelectedType && _qeSelectedType !== "strength" && _qeSelectedType !== "restriction") {
+    qeShowStep(1, _qeSelectedType);
+  } else {
+    qeShowStep(0, null);
+  }
+}
+
+// ── Muscle toggle ─────────────────────────────────────────────────────────────
+function qeToggleMuscle(btn) {
+  const m = btn.dataset.muscle;
+  if (_qeSelectedMuscles.has(m)) {
+    _qeSelectedMuscles.delete(m);
+    btn.classList.remove("selected");
+  } else {
+    _qeSelectedMuscles.add(m);
+    btn.classList.add("selected");
+  }
+}
+
+// ── Manual strength entry ─────────────────────────────────────────────────────
+function qeGoManual() { qeShowStep(2, "manual"); }
+
+async function qeGenerateHIIT() {
+  const format    = document.getElementById("qe-hiit-format")?.value || "circuit";
+  const focus     = document.getElementById("qe-hiit-focus")?.value || "full body";
+  const intensity = document.getElementById("qe-hiit-intensity")?.value || "moderate";
+  const duration  = document.getElementById("qe-hiit-duration")?.value || "20";
+  const equipment = document.getElementById("qe-hiit-equipment")?.value || "none";
+
+  qeShowStep(2, "generated");
+  const loadingEl = document.getElementById("qe-ai-loading");
+  const resultEl  = document.getElementById("qe-ai-result");
+  loadingEl.style.display = "";
+  resultEl.innerHTML = "";
+
+  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
+  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
+    loadingEl.style.display = "none";
+    resultEl.innerHTML = `<div class="qe-ai-error">API key not set. Open <strong>config.js</strong> and paste your Anthropic API key.</div>`;
+    return;
+  }
+
+  let profile = {};
+  try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
+  const level = profile.fitnessLevel || "intermediate";
+  const profileCtx = profile.weight
+    ? `Athlete: ${profile.weight} lbs${profile.gender ? `, ${profile.gender}` : ""}, ${level} level.`
+    : `Athlete level: ${level}.`;
+
+  let avoidCtx = "";
+  try {
+    const prefs = JSON.parse(localStorage.getItem("trainingPreferences") || "{}");
+    const avoided = prefs.avoidedExercises || [];
+    if (avoided.length) avoidCtx = ` NEVER include these exercises: ${avoided.join(", ")}.`;
+  } catch {}
+
+  const equipmentDesc = {
+    none: "bodyweight only, no equipment",
+    dumbbells: "dumbbells available",
+    kettlebell: "kettlebell available",
+    "full-gym": "full gym with barbell, dumbbells, kettlebells, pull-up bar, boxes",
+  }[equipment] || "bodyweight only";
+
+  const intensityDesc = {
+    light: "Light intensity — longer rest periods, lower-impact movements, focus on form over speed",
+    moderate: "Moderate intensity — balanced work-to-rest ratio, steady effort",
+    intense: "High intensity — shorter rest periods, explosive movements, push hard",
+    max: "Maximum intensity — minimal rest, all-out effort, most demanding variations",
+  }[intensity] || "Moderate intensity";
+
+  const formatDesc = {
+    circuit: "Circuit: multiple exercises done back-to-back for a set number of rounds, with rest between rounds",
+    tabata: "Tabata: 8 rounds of 20 seconds max effort / 10 seconds rest per exercise, cycle through exercises",
+    emom: "EMOM: assign a movement and rep count to each minute, cycle through for the full duration",
+    amrap: "AMRAP: list exercises with rep counts, athlete does as many rounds as possible in the time cap",
+  }[format] || "Circuit";
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1200,
+        messages: [{
+          role: "user",
+          content: `Generate a ${duration}-minute HIIT workout. ${profileCtx}${avoidCtx}
+
+Format: ${formatDesc}
+Intensity: ${intensityDesc}
+Focus: ${focus}
+Equipment: ${equipmentDesc}
+
+Return ONLY valid JSON, no markdown:
+{
+  "title": "Workout title",
+  "format": "${format}",
+  "totalTime": "${duration} min",
+  "rounds": 4,
+  "workTime": "40s",
+  "restTime": "20s",
+  "restBetweenRounds": "60s",
+  "exercises": [
+    { "name": "Exercise Name", "sets": 1, "reps": "12", "rest": "20s", "weight": "Bodyweight" }
+  ]
+}
+
+Rules:
+- exercises: the list of movements in one round/circuit. Each exercise is done once per round.
+- sets: always 1 (the rounds field handles repetition). Sets MUST be 1.
+- reps: rep count OR time (e.g. "12" or "30 sec")
+- rest: rest after this exercise before the next one within a round
+- weight: "Bodyweight" or specific weight if equipment allows
+- rounds: total number of times through the circuit
+- workTime/restTime: for Tabata format timing per exercise
+- restBetweenRounds: rest between complete rounds
+- Include 4-8 exercises appropriate for ${focus} focus
+- For EMOM: reps should be completable well within 60 seconds
+- For Tabata: reps should be "20 sec" (work period)
+- For AMRAP: omit rest between exercises, set restBetweenRounds to "0s"`
+        }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+
+    const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+    const cleaned = text.replace(/```json|```/g, "").trim();
+    const hiit = JSON.parse(cleaned);
+
+    loadingEl.style.display = "none";
+
+    // Calculate rounds from target duration and exercise count
+    const numEx = (hiit.exercises || []).length || 1;
+    const durMin = parseInt(duration) || 20;
+    const fmt = hiit.format || format;
+    let calcRounds;
+    if (fmt === "emom") {
+      // 1 exercise per minute, so 1 round = numEx minutes
+      calcRounds = Math.floor(durMin / numEx);
+    } else if (fmt === "tabata") {
+      // 30s per exercise (20 on + 10 off), 1 round = numEx * 0.5 min
+      calcRounds = Math.floor(durMin / (numEx * 0.5));
+    } else if (fmt === "circuit") {
+      // Estimate ~1 min per exercise + rest between rounds (~1 min)
+      const restMin = parseFloat(String(hiit.restBetweenRounds || "60").match(/[\d.]+/)?.[0] || 60) / 60;
+      calcRounds = Math.floor(durMin / (numEx + restMin));
+    } else {
+      // AMRAP: time cap, rounds not predetermined
+      calcRounds = hiit.rounds || 1;
+    }
+    calcRounds = Math.max(calcRounds, 1);
+
+    // Build header summary
+    const fmtLabels = { circuit: "Circuit", tabata: "Tabata", emom: "EMOM", amrap: "AMRAP" };
+    let summaryHtml = `<div class="qe-hiit-summary">
+      <strong>${fmtLabels[fmt] || fmt}</strong> &mdash; ${durMin} min`;
+    if (fmt === "amrap") {
+      summaryHtml += ` (as many rounds as possible)`;
+    } else {
+      summaryHtml += `, ${calcRounds} round${calcRounds !== 1 ? "s" : ""} of ${numEx} exercises`;
+    }
+    if (fmt === "tabata") summaryHtml += ` (${hiit.workTime || "20s"} on / ${hiit.restTime || "10s"} off)`;
+    else if (fmt !== "amrap" && hiit.restBetweenRounds && hiit.restBetweenRounds !== "0s") summaryHtml += `, ${hiit.restBetweenRounds} rest between rounds`;
+    summaryHtml += `</div>`;
+
+    // Store exercises — sets = calcRounds so user sees total sets needed
+    _qeGeneratedExercises = (hiit.exercises || []).map(ex => ({
+      ...ex,
+      sets: fmt === "amrap" ? 1 : calcRounds,
+      rest: ex.rest || "20s",
+      weight: _roundExWeight(ex.weight) || "Bodyweight",
+    }));
+
+    // Render full structure: summary + name + exercise list
+    resultEl.innerHTML = `<div class="qe-generated-workout">
+      ${summaryHtml}
+      <div class="form-row" style="margin-bottom:10px">
+        <label for="qe-workout-name">Workout Name (optional)</label>
+        <input type="text" id="qe-workout-name" value="${(hiit.title || "HIIT Session").replace(/"/g,"&quot;")}" placeholder="e.g. Full Body HIIT" />
+      </div>
+      <div class="qe-exercise-header">
+        <span></span><span>Sets × Reps</span><span>Weight</span><span></span>
+      </div>
+      <div id="qe-exercise-list"></div>
+    </div>`;
+
+    _qeRenderExerciseList();
+
+    const btnRow = document.createElement("div");
+    btnRow.style.cssText = "display:flex;gap:10px;margin-top:12px";
+    btnRow.innerHTML = `
+      <button class="btn-primary"   style="flex:1" onclick="qeSaveGeneratedStrength()">Save Session</button>
+      <button class="btn-secondary" style="flex:1" onclick="qeGenerateHIIT()">Regenerate</button>`;
+    resultEl.appendChild(btnRow);
+
+  } catch (err) {
+    loadingEl.style.display = "none";
+    resultEl.innerHTML = `<div class="qe-ai-error">Error: ${err.message}</div>`;
+  }
+}
+
+async function qeGenerateStrength() {
+  if (_qeSelectedMuscles.size === 0) {
+    alert("Please select at least one muscle group.");
+    return;
+  }
+
+  const level    = document.getElementById("qe-strength-level").value;
+  const duration = document.getElementById("qe-strength-duration").value;
+  const muscles  = [..._qeSelectedMuscles].join(", ");
+
+  qeShowStep(2, "generated");
+
+  const loadingEl = document.getElementById("qe-ai-loading");
+  const resultEl  = document.getElementById("qe-ai-result");
+  loadingEl.style.display = "";
+  resultEl.innerHTML = "";
+
+  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
+  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
+    loadingEl.style.display = "none";
+    resultEl.innerHTML = `<div class="qe-ai-error">API key not set. Open <strong>config.js</strong> and paste your Anthropic API key.</div>`;
+    return;
+  }
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1200,
+        messages: [{
+          role: "user",
+          content: (() => {
+            let profile = {};
+            try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
+            let strengthRefs = null;
+            try {
+              const allZones = JSON.parse(localStorage.getItem("trainingZones")) || {};
+              strengthRefs = allZones.strength || null;
+            } catch {}
+
+            const profileCtx = profile.weight
+              ? `The athlete weighs ${profile.weight} lbs${profile.gender ? `, ${profile.gender}` : ""}.`
+              : "";
+
+            const liftLabels = { bench: "Bench Press", squat: "Back Squat", deadlift: "Deadlift", ohp: "Overhead Press", row: "Barbell Row" };
+            const typeLabels = { "1rm": "1-rep max", "5rm": "5-rep max", "10rm": "10-rep max" };
+            let refCtx = "";
+            if (strengthRefs) {
+              const lines = Object.entries(liftLabels)
+                .filter(([k]) => strengthRefs[k]?.weight)
+                .map(([k, label]) => `${label}: ${strengthRefs[k].weight} lbs (${typeLabels[strengthRefs[k].type] || strengthRefs[k].type})`);
+              if (lines.length) refCtx = `\nAthlete's reference lifts (MUST use to calculate all exercise weights): ${lines.join(", ")}. Scale working weights from these: ~85% for 5 reps, ~75% for 10 reps, ~65% for 12 reps. For non-reference exercises estimate proportionally.`;
+            }
+            let avoidCtx = "";
+            try {
+              const prefs = JSON.parse(localStorage.getItem("trainingPreferences") || "{}");
+              const avoided = prefs.avoidedExercises || [];
+              if (avoided.length) avoidCtx = `\nNEVER include these exercises: ${avoided.join(", ")}.`;
+            } catch {}
+
+            return `Generate a ${duration}-minute strength workout for a ${level} targeting: ${muscles}. ${profileCtx}${refCtx}${avoidCtx}
+
+Return ONLY valid JSON, no markdown, no explanation:
+{
+  "title": "Workout title",
+  "exercises": [
+    { "name": "Exercise Name", "sets": 3, "reps": 10, "rest": "60s", "weight": "135 lbs" }
+  ]
+}
+
+Include 5-8 exercises. Each exercise MUST have a specific weight in lbs rounded to the nearest 5 (e.g. 135, 185, 225 — NEVER 137, 183, 267). Reps must be a single integer, never a range. Use "Bodyweight" only for true bodyweight exercises. Use common gym exercises.`;
+          })()
+        }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+
+    const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+    const cleaned = text.replace(/```json|```/g, "").trim();
+    const workout = JSON.parse(cleaned);
+
+    _qeGeneratedExercises = (workout.exercises || []).map(ex => ({ ...ex, weight: _roundExWeight(ex.weight) }));
+    _qeEditingExerciseIndex = null;
+    loadingEl.style.display = "none";
+
+    resultEl.innerHTML = `<div class="qe-generated-workout">
+      <div class="qe-generated-title">${ICONS.sparkles} ${workout.title || "Your Workout"}</div>
+      <div class="form-row" style="margin-bottom:10px">
+        <label for="qe-workout-name">Workout Name (optional)</label>
+        <input type="text" id="qe-workout-name" value="${(workout.title || "").replace(/"/g,"&quot;")}" placeholder="e.g. Push Day A" />
+      </div>
+      <div class="qe-exercise-header">
+        <span></span><span>Sets × Reps</span><span>Weight</span><span></span>
+      </div>
+      <div id="qe-exercise-list"></div>
+    </div>`;
+
+    _qeRenderExerciseList();
+
+    const btnRow = document.createElement("div");
+    btnRow.style.cssText = "display:flex;gap:10px;margin-top:12px";
+    btnRow.innerHTML = `
+      <button class="btn-primary"   style="flex:1" onclick="qeSaveGeneratedStrength()">Save Session</button>
+      <button class="btn-secondary" style="flex:1" onclick="qeGenerateStrength()">Regenerate All</button>`;
+    resultEl.appendChild(btnRow);
+
+  } catch (err) {
+    loadingEl.style.display = "none";
+    resultEl.innerHTML = `<div class="qe-ai-error">
+      ${ICONS.warning} Could not generate workout. ${err.message || "Try again."}<br><br>
+      <button class="btn-secondary" onclick="qeGoManual()">Add manually instead</button>
+    </div>`;
+  }
+}
+
+function qeSaveGeneratedStrength() {
+  const dateStr = document.getElementById("qe-date").value;
+  if (!dateStr) return;
+  const muscles  = [..._qeSelectedMuscles].join(", ");
+  const nameEl   = document.getElementById("qe-workout-name");
+  const label    = (nameEl?.value || "").trim() || "Strength Session";
+  // Read any weight edits the user made before saving
+  const exercises = _qeGeneratedExercises.map((ex, i) => ({
+    ...ex,
+    weight: document.getElementById(`qe-weight-${i}`)?.value || ex.weight || "",
+  }));
+  _qeSaveStrengthWorkout(dateStr, label, muscles, exercises);
+}
+
+// ── Per-exercise editing helpers ──────────────────────────────────────────────
+
+let _qeEditingExerciseIndex = null;
+
+function _roundExWeight(w) {
+  const s = String(w || "").trim();
+  if (!s || /bodyweight|bw/i.test(s)) return s;
+  const m = s.match(/^([\d.]+)\s*(.*)/);
+  if (!m) return s;
+  const rounded = Math.round(parseFloat(m[1]) / 5) * 5;
+  return rounded + (m[2] ? " " + m[2] : "");
+}
+let _qeDragIndex    = null;
+let _qeDragSuperset = false;
+
+function _qeRenderExerciseList() {
+  const listEl = document.getElementById("qe-exercise-list");
+  if (!listEl) return;
+
+  // Group exercises into superset groups and singles
+  const rendered = [];
+  let i = 0;
+  while (i < _qeGeneratedExercises.length) {
+    const ex = _qeGeneratedExercises[i];
+    if (ex.supersetId) {
+      // Collect all consecutive exercises in this superset group
+      const groupId = ex.supersetId;
+      const groupIndices = [];
+      let j = i;
+      while (j < _qeGeneratedExercises.length && _qeGeneratedExercises[j].supersetId === groupId) {
+        groupIndices.push(j);
+        j++;
+      }
+      const sharedSets = _qeGeneratedExercises[groupIndices[0]].sets || 3;
+      const groupItems = groupIndices.map(idx => _renderExerciseRow(idx, true)).join("");
+      rendered.push(`
+        <div class="qe-superset-group" data-group="${groupId}">
+          <div class="qe-superset-label">Superset <span class="qe-ss-sets-wrap"><input type="number" class="qe-ss-sets-input" min="1" max="20" value="${sharedSets}" onchange="qeUpdateSupersetSets('${groupId}', this.value)" /> sets</span><button class="qe-unsuperset-btn" onclick="qeUnsuperset('${groupId}')">Remove</button></div>
+          ${groupItems}
+        </div>`);
+      i = j;
+    } else {
+      rendered.push(_renderExerciseRow(i, false));
+      i++;
+    }
+  }
+  listEl.innerHTML = rendered.join("");
+}
+
+function _renderExerciseRow(i, inSuperset) {
+  const ex = _qeGeneratedExercises[i];
+  if (i === _qeEditingExerciseIndex) {
+    return `<div class="qe-exercise-item qe-edit-row" draggable="true" ondragstart="qeDragStart(event,${i})">
+      <input class="qe-edit-name" id="qe-edit-name-${i}" value="${escHtml(ex.name)}" placeholder="Exercise name" />
+      <div class="qe-edit-detail">
+        ${inSuperset ? "" : `<input class="qe-edit-sets" id="qe-edit-sets-${i}" type="number" min="1" max="20" value="${escHtml(ex.sets)}" /><span>×</span>`}
+        <input class="qe-edit-reps" id="qe-edit-reps-${i}" value="${escHtml(ex.reps)}" placeholder="reps" />
+      </div>
+      <input class="qe-weight-input" id="qe-weight-${i}" type="text" value="${escHtml(_roundExWeight(ex.weight) || '')}" placeholder="lbs / BW" />
+      <div class="qe-exercise-actions">
+        <button class="qe-edit-confirm" onclick="qeCommitEditExercise(${i})">Done</button>
+      </div>
+    </div>`;
+  }
+  return `<div class="qe-exercise-item" draggable="true"
+    ondragstart="qeDragStart(event,${i})"
+    ondragover="qeDragOver(event,${i})"
+    ondragleave="qeDragLeave(event)"
+    ondrop="qeDrop(event,${i})">
+    <div class="qe-exercise-name">${escHtml(ex.name)}<div class="qe-exercise-sub">${escHtml(ex.rest)} rest</div></div>
+    <div class="qe-exercise-detail">${inSuperset ? "" : escHtml(ex.sets) + "×"}${escHtml(ex.reps)}</div>
+    <input class="qe-weight-input" id="qe-weight-${i}" type="text" value="${escHtml(_roundExWeight(ex.weight) || '')}" placeholder="lbs / BW" />
+    <div class="qe-exercise-actions">
+      <button class="qe-ex-btn regen" title="Regenerate" onclick="qeRegenExercise(${i})">${ICONS.refreshCw}</button>
+      <button class="qe-ex-btn" title="Edit" onclick="qeEditExercise(${i})">${ICONS.pencil}</button>
+      <button class="qe-ex-btn remove" title="Remove" onclick="qeRemoveExercise(${i})">${ICONS.trash}</button>
+    </div>
+  </div>`;
+}
+
+function qeDragStart(e, i) {
+  _qeDragIndex = i;
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", String(i));
+  e.currentTarget.classList.add("drag-active");
+}
+
+function qeDragOver(e, i) {
+  if (_qeDragIndex === null || _qeDragIndex === i) return;
+  e.preventDefault();
+  const el   = e.currentTarget;
+  const rect = el.getBoundingClientRect();
+  const pct  = (e.clientY - rect.top) / rect.height;
+  el.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target");
+  if (pct > 0.3 && pct < 0.7) {
+    el.classList.add("drag-ss-target");
+  } else {
+    el.classList.add(pct <= 0.3 ? "drag-insert-above" : "drag-insert-below");
+  }
+}
+
+function qeDragLeave(e) {
+  e.currentTarget.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target");
+}
+
+function qeDrop(e, targetIdx) {
+  e.preventDefault();
+  document.querySelectorAll(".qe-exercise-item").forEach(el => el.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target", "drag-active"));
+  if (_qeDragIndex === null || _qeDragIndex === targetIdx) { _qeDragIndex = null; return; }
+
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct  = (e.clientY - rect.top) / rect.height;
+  const isSuperset = pct > 0.3 && pct < 0.7;
+  const insertAbove = pct <= 0.3;
+
+  // Save current weights before restructuring
+  _qeGeneratedExercises.forEach((ex, j) => {
+    const w = document.getElementById(`qe-weight-${j}`);
+    if (w) ex.weight = w.value;
+  });
+
+  const dragged = _qeGeneratedExercises[_qeDragIndex];
+  const target  = _qeGeneratedExercises[targetIdx];
+
+  if (isSuperset) {
+    // Superset: group the two exercises
+    if (dragged.supersetId && dragged.supersetId !== target.supersetId) delete dragged.supersetId;
+    if (target.supersetId) {
+      dragged.supersetId = target.supersetId;
+      const groupSets = _qeGeneratedExercises.find(e => e.supersetId === target.supersetId && e !== dragged)?.sets || target.sets;
+      dragged.sets = groupSets;
+    } else {
+      const gid = `ss-${Date.now()}`;
+      dragged.supersetId = gid;
+      target.supersetId  = gid;
+      dragged.sets = target.sets;
+    }
+  }
+
+  // Reorder: move dragged relative to target
+  const arr = [..._qeGeneratedExercises];
+  arr.splice(_qeDragIndex, 1);
+  const newTargetIdx = arr.indexOf(target);
+  arr.splice(insertAbove ? newTargetIdx : newTargetIdx + 1, 0, dragged);
+  _qeGeneratedExercises = arr;
+
+  _qeDragIndex = null;
+  _qeDragSuperset = false;
+  _qeEditingExerciseIndex = null;
+  _qeRenderExerciseList();
+}
+
+function qeUpdateSupersetSets(groupId, value) {
+  const sets = parseInt(value) || 1;
+  _qeGeneratedExercises.forEach(ex => {
+    if (ex.supersetId === groupId) ex.sets = sets;
+  });
+}
+
+function qeUnsuperset(groupId) {
+  _qeGeneratedExercises.forEach(ex => {
+    if (ex.supersetId === groupId) delete ex.supersetId;
+  });
+  _qeRenderExerciseList();
+}
+
+function qeEditExercise(i) {
+  // Save any weight edits in the current list before switching mode
+  _qeGeneratedExercises.forEach((ex, j) => {
+    const w = document.getElementById(`qe-weight-${j}`);
+    if (w) ex.weight = w.value;
+  });
+  _qeEditingExerciseIndex = i;
+  _qeRenderExerciseList();
+}
+
+function qeCommitEditExercise(i) {
+  const name = document.getElementById(`qe-edit-name-${i}`)?.value.trim();
+  const sets = document.getElementById(`qe-edit-sets-${i}`)?.value;
+  const reps = document.getElementById(`qe-edit-reps-${i}`)?.value.trim();
+  const weight = document.getElementById(`qe-weight-${i}`)?.value;
+  if (name) _qeGeneratedExercises[i] = { ..._qeGeneratedExercises[i], name, sets: parseInt(sets) || _qeGeneratedExercises[i].sets, reps, weight };
+  _qeEditingExerciseIndex = null;
+  _qeRenderExerciseList();
+}
+
+function qeRemoveExercise(i) {
+  // Persist any weight edits before removing
+  _qeGeneratedExercises.forEach((ex, j) => {
+    const w = document.getElementById(`qe-weight-${j}`);
+    if (w) ex.weight = w.value;
+  });
+  _qeGeneratedExercises.splice(i, 1);
+  if (_qeEditingExerciseIndex === i) _qeEditingExerciseIndex = null;
+  else if (_qeEditingExerciseIndex > i) _qeEditingExerciseIndex--;
+  _qeRenderExerciseList();
+}
+
+async function qeRegenExercise(i) {
+  // Persist weight edits
+  _qeGeneratedExercises.forEach((ex, j) => {
+    const w = document.getElementById(`qe-weight-${j}`);
+    if (w) ex.weight = w.value;
+  });
+
+  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
+  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") return;
+
+  const muscles  = [..._qeSelectedMuscles].join(", ");
+  const current  = _qeGeneratedExercises[i].name;
+  const others   = _qeGeneratedExercises.filter((_, j) => j !== i).map(e => e.name).join(", ");
+
+  // Show a spinner in the row while loading
+  const listEl = document.getElementById("qe-exercise-list");
+  const rows = listEl?.querySelectorAll(".qe-exercise-item");
+  if (rows?.[i]) {
+    rows[i].style.opacity = "0.4";
+    rows[i].style.pointerEvents = "none";
+  }
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 200,
+        messages: [{
+          role: "user",
+          content: `Replace "${current}" with ONE different exercise targeting ${muscles}. Already in the workout: ${others || "none"}. Reps must be a single integer, never a range. Return ONLY valid JSON, no markdown:\n{"name":"Exercise Name","sets":3,"reps":10,"rest":"60s","weight":"135 lbs"}`
+        }]
+      })
+    });
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+    const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+    const ex = JSON.parse(text.replace(/```json|```/g, "").trim());
+    _qeGeneratedExercises[i] = { ...ex, weight: _roundExWeight(ex.weight) };
+  } catch (_) {
+    // Silently fail — restore the row
+  }
+
+  _qeRenderExerciseList();
+}
+
+// ── AI Cardio Generation ──────────────────────────────────────────────────────
+
+function qeGoCardioManual() { qeShowStep(2, "cardio-manual"); }
+
+async function qeGenerateCardio() {
+  const type      = _qeSelectedType;
+  const intensity = document.getElementById("qe-activity-intensity")?.value || "moderate";
+  const isBrick   = type === "brick";
+  const bikeDur   = isBrick ? (document.getElementById("qe-brick-bike-duration")?.value || "45") : null;
+  const runDur    = isBrick ? (document.getElementById("qe-brick-run-duration")?.value || "20")  : null;
+  const duration  = isBrick ? String(parseInt(bikeDur) + parseInt(runDur)) : (document.getElementById("qe-cardio-duration")?.value || "45");
+
+  qeShowStep(2, "cardio-generated");
+
+  const loadingEl = document.getElementById("qe-ai-loading");
+  const resultEl  = document.getElementById("qe-ai-result");
+  loadingEl.style.display = "";
+  resultEl.innerHTML = "";
+
+  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
+  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
+    loadingEl.style.display = "none";
+    resultEl.innerHTML = `<div class="qe-ai-error">API key not set. Open <strong>config.js</strong> and paste your Anthropic API key.</div>`;
+    return;
+  }
+
+  try {
+    let profile = {};
+    try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
+    const level = profile.fitnessLevel || "intermediate";
+
+    const typeLabels = { running: "runner", cycling: "cyclist", swim: "swimmer", hiit: "athlete", brick: "triathlete" };
+    const sportName  = { running: "running", cycling: "cycling", swim: "swimming", hiit: "HIIT", brick: "brick (bike + run)" };
+    const sportLabel = typeLabels[type] || "athlete";
+    const sport      = sportName[type] || type;
+
+    let zonesCtx = "";
+    try {
+      const zones = JSON.parse(localStorage.getItem("trainingZones")) || {};
+      if ((type === "running" || type === "brick") && zones.running) {
+        const r = zones.running;
+        if (r.easyPaceMin) zonesCtx = `Run easy pace: ${r.easyPaceMin}:${(r.easyPaceSec || "00").toString().padStart(2,"0")}/mile. `;
+        if (r.thresholdPaceMin) zonesCtx += `Run threshold: ${r.thresholdPaceMin}:${(r.thresholdPaceSec || "00").toString().padStart(2,"0")}/mile. `;
+      }
+      if ((type === "cycling" || type === "brick") && zones.cycling) {
+        if (zones.cycling.ftp) zonesCtx += `FTP: ${zones.cycling.ftp}W. `;
+      }
+      if (type === "swim" && zones.swimming) {
+        if (zones.swimming.css) zonesCtx = `CSS: ${zones.swimming.css}/100m. `;
+      }
+    } catch {}
+
+    let prompt;
+    if (type === "brick") {
+      prompt = `Generate a ${duration}-minute ${intensity} brick workout (bike then run) for a ${level} triathlete. The bike portion should be ${bikeDur} minutes and the run portion should be ${runDur} minutes. ${zonesCtx}
+
+A brick workout is a cycling session immediately followed by a run — the purpose is to train the bike-to-run transition. Structure the workout as: bike warm-up, bike main set, quick transition, run segments.
+
+Return ONLY valid JSON, no markdown, no explanation:
+{
+  "title": "Workout title",
+  "intervals": [
+    { "name": "Phase name", "duration": "X min", "effort": "Z1-Z6", "details": "Specific instructions", "sport": "bike|run" }
+  ]
+}
+
+For phases with repeated intervals (e.g. 4×7 min tempo with recovery), use these optional fields on that interval object instead of bundling into one duration:
+  "reps": 4, "duration": "7 min", "effort": "Z3", "restDuration": "1 min", "restEffort": "Z2"
+
+Each interval MUST include a "sport" field set to "bike" or "run". The bike phases should total ${bikeDur} minutes and the run phases should total ${runDur} minutes. The transition phase between bike and run MUST use effort "T1" (not Z1 or Z2) and sport "run". Include 5-8 phases. Effort must be one of: RW, Z1, Z2, Z3, Z4, Z5, Z6, T1 (RW=Rest/Walk, Z1=Recovery, Z2=Aerobic Base, Z3=Tempo, Z4=Threshold, Z5=VO2 Max, Z6=Max Sprint, T1=Transition). Bike zones should reference power/wattage. Run zones should reference pace (min/mile), NOT watts. Be specific with targets.`;
+    } else {
+      prompt = `Generate a ${duration}-minute ${intensity} ${sport} workout for a ${level} ${sportLabel}. ${zonesCtx}
+
+Return ONLY valid JSON, no markdown, no explanation:
+{
+  "title": "Workout title",
+  "intervals": [
+    { "name": "Phase name", "duration": "X min", "effort": "Z1-Z6", "details": "Specific instructions" }
+  ]
+}
+
+For phases with repeated intervals (e.g. 3×8 min tempo with recovery jogs), use these optional fields on that interval object instead of bundling into one duration:
+  "reps": 3, "duration": "8 min", "effort": "Z3", "restDuration": "2 min", "restEffort": "Z2"
+
+Include 3-6 phases (warm-up, main set(s), cool-down). Do NOT include static stretching — that is done separately outside the timed workout. Effort must be one of: RW, Z1, Z2, Z3, Z4, Z5, Z6 (RW=Rest/Walk, Z1=Recovery, Z2=Aerobic Base, Z3=Tempo, Z4=Threshold, Z5=VO2 Max, Z6=Max Sprint). Be specific with paces, distances, or power targets where relevant.`;
+    }
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 800,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+
+    const text    = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+    const cleaned = text.replace(/```json|```/g, "").trim();
+    const workout = JSON.parse(cleaned);
+
+    _qeGeneratedCardioData = workout;
+    loadingEl.style.display = "none";
+
+    const effortToZone = { RW:"rw",Z1:"z1",Z2:"z2",Z3:"z3",Z4:"z4",Z5:"z5",Z6:"z6", Easy:"z2",Moderate:"z3",Hard:"z4",Max:"z5", T1:"z-transition" };
+    let html = `<div class="qe-generated-workout"><div class="qe-generated-title">${workout.title || "Your Workout"}</div>`;
+    (workout.intervals || []).forEach(iv => {
+      const zCls = effortToZone[iv.effort] || "z2";
+      const sportTag = iv.sport ? `<span class="qe-brick-sport qe-brick-${iv.sport}">${iv.sport === "bike" ? "Bike" : "Run"}</span> ` : "";
+      html += `<div class="qe-cardio-interval">
+        <div class="qe-cardio-interval-header">
+          <span class="qe-cardio-phase">${sportTag}${escHtml(iv.name)}</span>
+          <span class="qe-cardio-meta">${escHtml(iv.duration)}&ensp;<span class="zone-badge ${zCls}">${escHtml(iv.effort)}</span></span>
+        </div>
+        <div class="qe-cardio-details">${escHtml(iv.details)}</div>
+      </div>`;
+    });
+    html += `</div>`;
+    resultEl.innerHTML = html;
+
+    const btnRow = document.createElement("div");
+    btnRow.style.cssText = "display:flex;gap:10px;margin-top:12px";
+    btnRow.innerHTML = `
+      <button class="btn-primary"   style="flex:1" onclick="qeSaveGeneratedCardio()">Save Session</button>
+      <button class="btn-secondary" style="flex:1" onclick="qeGenerateCardio()">Regenerate</button>`;
+    resultEl.appendChild(btnRow);
+
+  } catch (err) {
+    loadingEl.style.display = "none";
+    resultEl.innerHTML = `<div class="qe-ai-error">
+      ${ICONS.warning} Could not generate workout. ${err.message || "Try again."}<br><br>
+      <button class="btn-secondary" onclick="qeGoCardioManual()">Add manually instead</button>
+    </div>`;
+  }
+}
+
+let _lastCardioSaveTime = 0;
+function qeSaveGeneratedCardio() {
+  // Prevent double-save within 2 seconds
+  const now = Date.now();
+  if (now - _lastCardioSaveTime < 2000) return;
+  _lastCardioSaveTime = now;
+  const dateStr = document.getElementById("qe-date").value;
+  if (!dateStr || !_qeGeneratedCardioData) return;
+
+  const typeMap = { running: "running", cycling: "cycling", swim: "swimming", hiit: "general", brick: "brick" };
+  const type    = typeMap[_qeSelectedType] || _qeSelectedType || "general";
+
+  let restrictions = {};
+  try { restrictions = JSON.parse(localStorage.getItem("dayRestrictions")) || {}; } catch {}
+  const existingR = restrictions[dateStr];
+  if (existingR && existingR.action === "remove") {
+    if (!confirm("This day has a restriction that removes all sessions.\n\nRemove the restriction and add this workout?")) return;
+    delete restrictions[dateStr];
+    localStorage.setItem("dayRestrictions", JSON.stringify(restrictions));
+  }
+
+  let workouts = [];
+  try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
+  workouts.unshift({
+    id: generateId(), date: dateStr, type,
+    notes: _qeGeneratedCardioData.title || "",
+    exercises: [],
+    aiSession: _qeGeneratedCardioData,
+  });
+  localStorage.setItem("workouts", JSON.stringify(workouts));
+
+  renderCalendar();
+  if (selectedDate === dateStr) renderDayDetail(dateStr);
+  if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
+  setTimeout(() => closeQuickEntry(), 700);
+}
+
+// ── Cardio manual rows ────────────────────────────────────────────────────────
+
+function qeInitCardioRows() {
+  _qeCardioRowCount = 0;
+  document.getElementById("qe-cardio-interval-rows").innerHTML = "";
+  qeAddCardioRow();
+}
+
+function _qeCardioRowDuration(id) {
+  const row = document.getElementById(`qe-crow-${id}`);
+  const mode = row?.dataset.durMode || "time";
+  if (mode === "distance") {
+    const val  = document.getElementById(`qe-cdist-${id}`)?.value || "";
+    const unit = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
+    return val ? `${val} ${unit}` : "";
+  }
+  const val = document.getElementById(`qe-cmin-${id}`)?.value || "";
+  return val ? `${val} min` : "";
+}
+
+function setQEIntervalMode(id, mode) {
+  const row = document.getElementById(`qe-crow-${id}`);
+  if (!row) return;
+  row.dataset.durMode = mode;
+  document.getElementById(`qe-dist-wrap-${id}`).style.display = mode === "distance" ? "" : "none";
+  document.getElementById(`qe-time-wrap-${id}`).style.display = mode === "time"     ? "" : "none";
+  row.querySelectorAll(".qe-dur-mode-btn").forEach(btn =>
+    btn.classList.toggle("active", btn.dataset.mode === mode));
+}
+
+function qeAddCardioRow(iv) {
+  _qeCardioRowCount++;
+  const id   = _qeCardioRowCount;
+  const unit = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
+  const isBrick = _qeSelectedType === "brick";
+  const disc = iv?.discipline || "";
+  // Parse existing duration if populating from saved data
+  let initMode = "time", initDist = "", initMin = "";
+  if (iv?.duration) {
+    const durStr = String(iv.duration);
+    if (/mi|km|m\b|yd/i.test(durStr)) {
+      initMode = "distance";
+      initDist = durStr.match(/[\d.]+/)?.[0] || "";
+    } else {
+      initMin = durStr.match(/[\d.]+/)?.[0] || "";
+    }
+  }
+  const eff = iv?.effort || "Z2";
+  const div = document.createElement("div");
+  div.className = "qe-manual-row qe-cardio-row";
+  div.id = `qe-crow-${id}`;
+  div.dataset.durMode = initMode;
+  const _dsel = v => disc === v ? " selected" : "";
+  div.innerHTML = `
+    ${isBrick ? `<div class="seg-discipline-wrap"><label>Leg</label>
+      <select id="qe-cdisc-${id}" class="seg-discipline">
+        <option value="bike"${_dsel("bike")}>Bike</option>
+        <option value="transition"${_dsel("transition")}>Transition</option>
+        <option value="run"${_dsel("run")}>Run</option>
+      </select></div>` : ""}
+    <div><label>Phase</label>
+      <input type="text" id="qe-cphase-${id}" value="${iv?.name || ""}" placeholder="${isBrick ? "e.g. Steady Ride" : "e.g. Warm-up"}" /></div>
+    <div class="qe-dur-col">
+      <div class="qe-dur-toggle">
+        <button class="qe-dur-mode-btn${initMode==="distance"?" active":""}" data-mode="distance"
+          onclick="setQEIntervalMode(${id},'distance')">Distance</button>
+        <button class="qe-dur-mode-btn${initMode==="time"?" active":""}" data-mode="time"
+          onclick="setQEIntervalMode(${id},'time')">Time</button>
+      </div>
+      <div id="qe-dist-wrap-${id}" style="${initMode==="distance"?"":"display:none"}">
+        <input type="number" id="qe-cdist-${id}" value="${initDist}" placeholder="e.g. 5" min="0" step="0.1" style="width:70px" />
+        <span class="qe-unit-label">${unit}</span>
+      </div>
+      <div id="qe-time-wrap-${id}" style="${initMode==="time"?"":"display:none"}">
+        <input type="number" id="qe-cmin-${id}" value="${initMin}" placeholder="e.g. 10" min="0" style="width:70px" />
+        <span class="qe-unit-label">min</span>
+      </div>
+    </div>
+    <div><label>Zone</label>
+      <select id="qe-ceffort-${id}">
+        <option value="RW" ${eff==="RW"?"selected":""}>Rest / Walk</option>
+        <option value="Z1" ${eff==="Z1"||eff==="Easy"?"selected":""}>Z1 Recovery</option>
+        <option value="Z2" ${eff==="Z2"||eff==="Moderate"?"selected":""}>Z2 Aerobic</option>
+        <option value="Z3" ${eff==="Z3"?"selected":""}>Z3 Tempo</option>
+        <option value="Z4" ${eff==="Z4"||eff==="Hard"?"selected":""}>Z4 Threshold</option>
+        <option value="Z5" ${eff==="Z5"||eff==="Max"?"selected":""}>Z5 VO2 Max</option>
+        <option value="Z6" ${eff==="Z6"?"selected":""}>Z6 Max Sprint</option>
+      </select></div>
+    <div style="flex:2"><label>Details</label>
+      <input type="text" id="qe-cdetails-${id}" value="${iv?.details || ""}" placeholder="e.g. 5:30/km, keep HR under 145" /></div>
+    <button class="remove-exercise-btn" onclick="qeRemoveCardioRow(${id})">✕</button>`;
+  document.getElementById("qe-cardio-interval-rows").appendChild(div);
+}
+
+function qeRemoveCardioRow(id) {
+  const el = document.getElementById(`qe-crow-${id}`);
+  if (el) el.remove();
+}
+
+function qeSaveCardioManual() {
+  // Prevent double-save within 2 seconds
+  const now = Date.now();
+  if (now - _lastCardioSaveTime < 2000) return;
+  _lastCardioSaveTime = now;
+  const dateStr = document.getElementById("qe-date").value;
+  const msgEl   = document.getElementById("qe-cardio-manual-msg");
+  if (!dateStr) { if (msgEl) msgEl.textContent = "Please select a date."; return; }
+
+  const notes     = document.getElementById("qe-cardio-manual-notes")?.value.trim() || "";
+  const intervals = [];
+  document.querySelectorAll("[id^='qe-cphase-']").forEach(inp => {
+    const idx      = inp.id.replace("qe-cphase-", "");
+    const duration = _qeCardioRowDuration(idx);
+    if (!duration) return;   // skip rows with no duration at all
+    const name = inp.value.trim() || `Interval ${intervals.length + 1}`;
+    const interval = {
+      name,
+      duration,
+      effort:   document.getElementById(`qe-ceffort-${idx}`)?.value  || "Z2",
+      details:  document.getElementById(`qe-cdetails-${idx}`)?.value || "",
+    };
+    const discEl = document.getElementById(`qe-cdisc-${idx}`);
+    if (discEl) interval.discipline = discEl.value || "bike";
+    intervals.push(interval);
+  });
+
+  const typeMap = { running: "running", cycling: "cycling", swim: "swimming", hiit: "general", brick: "brick" };
+  const type    = typeMap[_qeSelectedType] || _qeSelectedType || "general";
+
+  let restrictions = {};
+  try { restrictions = JSON.parse(localStorage.getItem("dayRestrictions")) || {}; } catch {}
+  const existingR = restrictions[dateStr];
+  if (existingR && existingR.action === "remove") {
+    if (!confirm("This day has a restriction that removes all sessions.\n\nRemove the restriction and add this workout?")) return;
+    delete restrictions[dateStr];
+    localStorage.setItem("dayRestrictions", JSON.stringify(restrictions));
+  }
+
+  let workouts = [];
+  try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
+  workouts.unshift({
+    id: generateId(), date: dateStr, type, notes, exercises: [],
+    ...(intervals.length ? { aiSession: { title: notes || capitalize(type) + " Session", intervals } } : {})
+  });
+  localStorage.setItem("workouts", JSON.stringify(workouts));
+
+  renderCalendar();
+  if (selectedDate === dateStr) renderDayDetail(dateStr);
+  if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
+
+  if (msgEl) { msgEl.style.color = "var(--color-success)"; msgEl.innerHTML = `Session saved! ${ICONS.activity}`; }
+  setTimeout(() => closeQuickEntry(), 700);
+}
+
+// ── Manual strength entry ─────────────────────────────────────────────────────
+
+function qeInitManualRows() {
+  _qeManualRowCount = 0;
+  document.getElementById("qe-exercise-rows").innerHTML = "";
+  // Show/hide HIIT metadata
+  const hiitMeta = document.getElementById("qe-hiit-meta");
+  if (hiitMeta) hiitMeta.style.display = _qeSelectedType === "hiit" ? "" : "none";
+  // Update default name placeholder
+  const nameInput = document.getElementById("qe-manual-workout-name");
+  if (nameInput && _qeSelectedType === "hiit") nameInput.placeholder = "e.g. Tabata Burner";
+  qeAddExerciseRow();
+  qeAddExerciseRow();
+  qeAddExerciseRow();
+}
+
+function qeAddExerciseRow() {
+  _qeManualRowCount++;
+  const id  = _qeManualRowCount;
+  const div = document.createElement("div");
+  const isHiit = _qeSelectedType === "hiit";
+  div.className = "qe-manual-row" + (isHiit ? " hiit-row" : "");
+  div.id = `qe-mrow-${id}`;
+  div.draggable = true;
+  if (isHiit) {
+    div.innerHTML = `
+      <div><label>Exercise</label>
+        <input type="text" id="qe-mex-${id}" placeholder="e.g. Burpees, Row 500m" /></div>
+      <div><label>Reps / Time / Distance</label>
+        <input type="text" id="qe-mreps-${id}" placeholder="e.g. 10, 45s, 500m" /></div>
+      <div><label>Weight</label>
+        <input type="text" id="qe-mwt-${id}" placeholder="optional" /></div>
+      <button class="remove-exercise-btn" onclick="qeRemoveRow(${id})">✕</button>`;
+  } else {
+    div.innerHTML = `
+      <div><label>Exercise</label>
+        <input type="text"   id="qe-mex-${id}"   placeholder="e.g. Bench Press" /></div>
+      <div><label>Sets</label>
+        <input type="number" id="qe-msets-${id}" placeholder="3" min="1" max="20" /></div>
+      <div><label>Reps</label>
+        <input type="text"   id="qe-mreps-${id}" placeholder="10" /></div>
+      <div><label>Weight</label>
+        <input type="text"   id="qe-mwt-${id}"   placeholder="lbs/kg" /></div>
+      <button class="remove-exercise-btn" onclick="qeRemoveRow(${id})">✕</button>`;
+  }
+  let _qeHoverTimer = null;
+  div.addEventListener("dragstart", (e) => { _qeManualDragId = id; div.classList.add("drag-active"); e.dataTransfer.effectAllowed = "move"; });
+  div.addEventListener("dragend",   ()  => { div.classList.remove("drag-active"); _qeManualDragId = null; _qeClearAllHints(); });
+  div.addEventListener("dragover",  (e) => {
+    if (_qeManualDragId == null || _qeManualDragId === id) return;
+    e.preventDefault();
+    const rect = div.getBoundingClientRect();
+    const pct  = (e.clientY - rect.top) / rect.height;
+    div.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target");
+    if (pct > 0.3 && pct < 0.7) {
+      div.classList.add("drag-ss-target");
+      if (!_qeHoverTimer) _qeHoverTimer = setTimeout(() => {}, 600);
+    } else {
+      clearTimeout(_qeHoverTimer); _qeHoverTimer = null;
+      div.classList.add(pct <= 0.3 ? "drag-insert-above" : "drag-insert-below");
+    }
+  });
+  div.addEventListener("dragleave", () => { clearTimeout(_qeHoverTimer); _qeHoverTimer = null; div.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target"); });
+  div.addEventListener("drop", (e) => {
+    e.preventDefault();
+    const rect = div.getBoundingClientRect();
+    const pct  = (e.clientY - rect.top) / rect.height;
+    clearTimeout(_qeHoverTimer); _qeHoverTimer = null;
+    _qeClearAllHints();
+    if (pct > 0.3 && pct < 0.7) {
+      _qeManualGroupSuperset(_qeManualDragId, id);
+    } else {
+      _qeManualReorder(_qeManualDragId, id, pct <= 0.3);
+    }
+    _qeManualDragId = null;
+  });
+  document.getElementById("qe-exercise-rows").appendChild(div);
+}
+
+function _qeClearAllHints() {
+  document.querySelectorAll(".qe-manual-row").forEach(el => {
+    el.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target", "drag-active");
+  });
+}
+
+function _qeManualReorder(fromId, toId, insertAbove) {
+  const fromEl = document.getElementById(`qe-mrow-${fromId}`);
+  const toEl   = document.getElementById(`qe-mrow-${toId}`);
+  if (!fromEl || !toEl) return;
+  const container = toEl.parentNode;
+  if (insertAbove) container.insertBefore(fromEl, toEl);
+  else             toEl.after(fromEl);
+}
+
+function _qeManualGroupSuperset(fromId, toId) {
+  const fromEl = document.getElementById(`qe-mrow-${fromId}`);
+  const toEl   = document.getElementById(`qe-mrow-${toId}`);
+  if (!fromEl || !toEl) return;
+
+  toEl.after(fromEl);
+
+  let gid = toEl.dataset.ssId;
+  if (!gid) {
+    _qeManualSsCount++;
+    gid = `mss-${_qeManualSsCount}`;
+    toEl.dataset.ssId = gid;
+    _qeManualAddSupersetLabel(toEl, gid);
+  }
+  fromEl.dataset.ssId = gid;
+  fromEl.classList.add("qe-manual-ss-member");
+  toEl.classList.add("qe-manual-ss-member");
+  _qeManualUpdateSupersetWrap(gid);
+  // Sync sets from group input and hide member sets inputs
+  const wrap = document.getElementById(`qe-ss-wrap-${gid}`);
+  const groupSets = wrap?.querySelector(".qe-ss-sets-input")?.value || "3";
+  [fromEl, toEl].forEach(el => {
+    const inp = el.querySelector(`[id^="qe-msets-"]`);
+    if (inp) inp.value = groupSets;
+    _qeManualHideSetsInput(el);
+  });
+}
+
+function _qeManualAddSupersetLabel(anchorEl, gid) {
+  // Wrap in a superset group if not already
+  const container = document.getElementById("qe-exercise-rows");
+  let wrap = document.getElementById(`qe-ss-wrap-${gid}`);
+  if (!wrap) {
+    const setsVal = anchorEl.querySelector(`[id^="qe-msets-"]`)?.value || "3";
+    wrap = document.createElement("div");
+    wrap.className = "qe-superset-group";
+    wrap.id = `qe-ss-wrap-${gid}`;
+    wrap.innerHTML = `<div class="qe-superset-label">Superset <span class="qe-ss-sets-wrap"><input type="number" class="qe-ss-sets-input" min="1" max="20" value="${setsVal}" onchange="_qeManualSupersetSetsChange('${gid}', this.value)" /> sets</span><button class="qe-unsuperset-btn" onclick="_qeManualUnsuperset('${gid}')">Remove</button></div>`;
+    anchorEl.parentNode.insertBefore(wrap, anchorEl);
+    wrap.appendChild(anchorEl);
+    // Hide anchor's individual sets input
+    _qeManualHideSetsInput(anchorEl);
+  }
+}
+
+function _qeManualUpdateSupersetWrap(gid) {
+  const wrap = document.getElementById(`qe-ss-wrap-${gid}`);
+  if (!wrap) return;
+  // Move all rows with this gid into the wrap (they may have been moved by drop)
+  document.querySelectorAll(`[data-ss-id="${gid}"]`).forEach(el => {
+    if (!wrap.contains(el)) wrap.appendChild(el);
+  });
+}
+
+function _qeManualUnsuperset(gid) {
+  const wrap = document.getElementById(`qe-ss-wrap-${gid}`);
+  if (!wrap) return;
+  const container = document.getElementById("qe-exercise-rows");
+  wrap.querySelectorAll(".qe-manual-row").forEach(el => {
+    // Restore sets input visibility
+    _qeManualShowSetsInput(el);
+    el.classList.remove("qe-manual-ss-member");
+    delete el.dataset.ssId;
+    container.appendChild(el);
+  });
+  wrap.remove();
+}
+
+function toggleManualSupersetMode(btn) {
+  const rows = document.getElementById("qe-exercise-rows");
+  if (!rows) return;
+  const btns = rows.querySelectorAll(".qe-manual-ss-btn");
+  const showing = btns[0]?.style.display !== "none";
+  btns.forEach(b => b.style.display = showing ? "none" : "");
+  btn.classList.toggle("is-active", !showing);
+}
+
+function _qeManualHideSetsInput(rowEl) {
+  const inp = rowEl.querySelector(`[id^="qe-msets-"]`);
+  if (inp) { const w = inp.closest("div"); if (w) w.style.display = "none"; }
+}
+function _qeManualShowSetsInput(rowEl) {
+  const inp = rowEl.querySelector(`[id^="qe-msets-"]`);
+  if (inp) { const w = inp.closest("div"); if (w) w.style.display = ""; }
+}
+function _qeManualSupersetSetsChange(gid, value) {
+  const wrap = document.getElementById(`qe-ss-wrap-${gid}`);
+  if (!wrap) return;
+  wrap.querySelectorAll(`[id^="qe-msets-"]`).forEach(inp => { inp.value = value; });
+}
+
+function qeRemoveRow(id) {
+  const el = document.getElementById(`qe-mrow-${id}`);
+  if (el) el.remove();
+}
+
+function qeSaveManual() {
+  const dateStr = document.getElementById("qe-date").value;
+  if (!dateStr) { document.getElementById("qe-manual-msg").textContent = "Please select a date."; return; }
+
+  const isHiit = _qeSelectedType === "hiit";
+  const notes     = (document.getElementById("qe-manual-notes").value || "").trim();
+  const exercises = [];
+  document.querySelectorAll("[id^='qe-mex-']").forEach(inp => {
+    const idx  = inp.id.replace("qe-mex-", "");
+    const name = inp.value.trim();
+    if (!name) return;
+    const row = document.getElementById(`qe-mrow-${idx}`);
+    const ex = {
+      name,
+      reps:   document.getElementById(`qe-mreps-${idx}`)?.value || "",
+      weight: document.getElementById(`qe-mwt-${idx}`)?.value   || "",
+    };
+    if (!isHiit) ex.sets = document.getElementById(`qe-msets-${idx}`)?.value || "";
+    if (row?.dataset.ssId) ex.supersetId = row.dataset.ssId;
+    exercises.push(ex);
+  });
+
+  if (!exercises.length) { document.getElementById("qe-manual-msg").textContent = "Add at least one exercise."; return; }
+  const defaultName = isHiit ? "HIIT Session" : "Strength Session";
+  const manualName = (document.getElementById("qe-manual-workout-name")?.value || "").trim() || defaultName;
+
+  let hiitMeta = null;
+  if (isHiit) {
+    hiitMeta = {
+      format: document.getElementById("qe-manual-hiit-format")?.value || "circuit",
+      rounds: parseInt(document.getElementById("qe-manual-hiit-rounds")?.value) || 1,
+      restBetweenExercises: (document.getElementById("qe-manual-hiit-rest-ex")?.value || "").trim() || undefined,
+      restBetweenRounds: (document.getElementById("qe-manual-hiit-rest-rnd")?.value || "").trim() || undefined,
+    };
+  }
+  _qeSaveStrengthWorkout(dateStr, manualName, notes, exercises, hiitMeta);
+}
+
+function _qeSaveStrengthWorkout(dateStr, label, notes, exercises, hiitMeta) {
+  let restrictions = {};
+  try { restrictions = JSON.parse(localStorage.getItem("dayRestrictions")) || {}; } catch {}
+  const existingR = restrictions[dateStr];
+  if (existingR && existingR.action === "remove") {
+    if (!confirm("This day has a restriction that removes all sessions.\n\nRemove the restriction and add this workout?")) return;
+    delete restrictions[dateStr];
+    localStorage.setItem("dayRestrictions", JSON.stringify(restrictions));
+  }
+
+  let workouts = [];
+  try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
+  const _saveType = (_qeSelectedType === "hiit") ? "hiit" : "weightlifting";
+  const entry = { id: generateId(), date: dateStr, type: _saveType, name: label, notes, exercises };
+  if (hiitMeta) entry.hiitMeta = hiitMeta;
+  workouts.unshift(entry);
+  localStorage.setItem("workouts", JSON.stringify(workouts));
+
+  renderCalendar();
+  if (selectedDate === dateStr) renderDayDetail(dateStr);
+  if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
+
+  const msgEl = document.getElementById("qe-manual-msg");
+  if (msgEl) { msgEl.style.color = "var(--color-success)"; msgEl.innerHTML = `Session saved! ${ICONS.activity}`; }
+  setTimeout(() => closeQuickEntry(), 700);
+}
+
+// ── Cardio save ───────────────────────────────────────────────────────────────
+function saveQuickActivity() {
+  const dateStr = document.getElementById("qe-date").value;
+  if (!dateStr) { document.getElementById("qe-activity-msg").textContent = "Please select a date."; return; }
+
+  const typeMap = { running: "running", cycling: "cycling", swim: "swimming", hiit: "general", brick: "brick" };
+  const type    = typeMap[_qeSelectedType] || _qeSelectedType || "general";
+  const notes   = document.getElementById("qe-activity-notes").value.trim();
+  const msg     = document.getElementById("qe-activity-msg");
+
+  let restrictions = {};
+  try { restrictions = JSON.parse(localStorage.getItem("dayRestrictions")) || {}; } catch {}
+  const existingR = restrictions[dateStr];
+  if (existingR && existingR.action === "remove") {
+    const label = RESTRICTION_LABELS[existingR.type] || existingR.type;
+    if (!confirm(`This day has a "${label}" restriction.\n\nRemove the restriction and add this workout?`)) return;
+    delete restrictions[dateStr];
+    localStorage.setItem("dayRestrictions", JSON.stringify(restrictions));
+  }
+
+  const intensity  = document.getElementById("qe-activity-intensity")?.value || "moderate";
+  const generateCb = document.getElementById("qe-generate-workout");
+  let generatedSession = null;
+  if (generateCb?.checked && typeof SESSION_DESCRIPTIONS !== "undefined") {
+    const typeToDisc = { running: "run", cycling: "bike", triathlon: "brick", swim: "swim" };
+    const disc = typeToDisc[type];
+    if (disc) {
+      const sessionDef = (SESSION_DESCRIPTIONS[disc] || {})[intensity];
+      if (sessionDef) generatedSession = { ...sessionDef, name: `${capitalize(intensity === "long" ? "Long" : intensity)} ${capitalize(disc)}` };
+    }
+  }
+
+  let workouts = [];
+  try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
+  workouts.unshift({ id: generateId(), date: dateStr, type, notes, exercises: [], ...(generatedSession ? { generatedSession } : {}) });
+  localStorage.setItem("workouts", JSON.stringify(workouts));
+
+  renderCalendar();
+  if (selectedDate === dateStr) renderDayDetail(dateStr);
+  if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
+
+  msg.style.color = "var(--color-success)";
+  msg.textContent = "Activity logged!";
+  setTimeout(() => closeQuickEntry(), 700);
+}
+
+// ── Restriction save ──────────────────────────────────────────────────────────
+function saveQuickRestriction() {
+  const dateStr = document.getElementById("qe-date").value;
+  if (!dateStr) { document.getElementById("qe-restriction-msg").textContent = "Please select a date."; return; }
+  const type   = document.getElementById("qe-restriction-type").value;
+  const note   = document.getElementById("qe-restriction-note").value.trim();
+  const action = document.querySelector('input[name="qe-session-action"]:checked')?.value || "reduce";
+  const msg    = document.getElementById("qe-restriction-msg");
+
+  let restrictions = {};
+  try { restrictions = JSON.parse(localStorage.getItem("dayRestrictions")) || {}; } catch {}
+  restrictions[dateStr] = { type, note, action, createdAt: new Date().toISOString() };
+  localStorage.setItem("dayRestrictions", JSON.stringify(restrictions));
+
+  renderCalendar();
+  if (selectedDate === dateStr) renderDayDetail(dateStr);
+
+  msg.style.color = "var(--color-success)";
+  msg.textContent = "Restriction saved!";
+  setTimeout(() => closeQuickEntry(), 700);
+}
+
+function toggleQEGenerate() {}
+function switchQETab() {}
+
+function removeRestriction(dateStr) {
+  let restrictions = {};
+  try { restrictions = JSON.parse(localStorage.getItem("dayRestrictions")) || {}; } catch {}
+  delete restrictions[dateStr];
+  localStorage.setItem("dayRestrictions", JSON.stringify(restrictions));
+  renderCalendar();
+  renderDayDetail(dateStr);
+}
+
+// ── Equipment restriction save / remove ───────────────────────────────────────
+function saveQuickEquipmentRestriction() {
+  const startStr  = document.getElementById("qe-date").value;
+  const endStr    = document.getElementById("qe-equip-end-date").value || startStr;
+  const isPermanent = document.getElementById("qe-equip-permanent")?.checked || false;
+  if (!startStr && !isPermanent) { document.getElementById("qe-equipment-msg").textContent = "Please select a date."; return; }
+
+  const available = EQUIPMENT_OPTIONS
+    .filter(o => document.getElementById(`qe-equip-${o.value}`)?.checked)
+    .map(o => o.value);
+  const note = document.getElementById("qe-equip-note").value.trim();
+  const dumbbellMaxWeightRaw = document.getElementById("qe-dumbbell-max-weight")?.value;
+  const dumbbellMaxWeight = dumbbellMaxWeightRaw ? parseInt(dumbbellMaxWeightRaw, 10) : null;
+  const cablesMachineTypes = available.includes("cables")
+    ? Array.from(document.querySelectorAll("#qe-cables-detail input[type=checkbox]:checked")).map(c => c.dataset.machine)
+    : [];
+  const entry = { available, note, ...(dumbbellMaxWeight ? { dumbbellMaxWeight } : {}), ...(cablesMachineTypes.length ? { cablesMachineTypes } : {}), createdAt: new Date().toISOString() };
+
+  let restrictions = {};
+  try { restrictions = JSON.parse(localStorage.getItem("equipmentRestrictions")) || {}; } catch {}
+
+  if (isPermanent) {
+    restrictions["permanent"] = { ...entry, permanent: true };
+  } else {
+    // Apply to every date in the range
+    const start = new Date(startStr + "T00:00:00");
+    const end   = new Date(endStr   + "T00:00:00");
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      restrictions[d.toISOString().slice(0, 10)] = entry;
+    }
+  }
+  localStorage.setItem("equipmentRestrictions", JSON.stringify(restrictions));
+
+  if (typeof refreshGeneratedWorkouts === "function") refreshGeneratedWorkouts();
+  renderCalendar();
+  if (selectedDate) renderDayDetail(selectedDate);
+
+  const msg = document.getElementById("qe-equipment-msg");
+  msg.style.color = "var(--color-success)";
+  msg.textContent = "Equipment restriction saved!";
+  setTimeout(() => closeQuickEntry(), 700);
+}
+
+function removeEquipmentRestriction(dateStr, scope) {
+  let restrictions = {};
+  try { restrictions = JSON.parse(localStorage.getItem("equipmentRestrictions")) || {}; } catch {}
+
+  const isPermKey = dateStr === "permanent";
+  const thisEntry = restrictions[dateStr];
+  if (!thisEntry) { renderCalendar(); renderDayDetail(dateStr); return; }
+
+  // If no scope yet and this date is part of a multi-date series, show inline choice
+  if (!scope && !isPermKey) {
+    const createdAt = thisEntry.createdAt;
+    const seriesDates = createdAt
+      ? Object.keys(restrictions).filter(k => k !== "permanent" && restrictions[k].createdAt === createdAt)
+      : [dateStr];
+    if (seriesDates.length > 1) {
+      const banner = document.querySelector(".equipment-banner");
+      if (banner) {
+        const btn = banner.querySelector(".restriction-remove-btn");
+        if (btn) btn.outerHTML = `
+          <div class="equip-remove-choice">
+            <button class="restriction-remove-btn" onclick="removeEquipmentRestriction('${dateStr}','day')">This day</button>
+            <button class="restriction-remove-btn equip-remove-series" onclick="removeEquipmentRestriction('${dateStr}','series')">Entire series</button>
+          </div>`;
+      }
+      return;
+    }
+  }
+
+  if (scope === "series" && !isPermKey) {
+    const createdAt = thisEntry.createdAt;
+    Object.keys(restrictions).forEach(k => {
+      if (k !== "permanent" && restrictions[k].createdAt === createdAt) delete restrictions[k];
+    });
+  } else {
+    delete restrictions[dateStr];
+  }
+
+  localStorage.setItem("equipmentRestrictions", JSON.stringify(restrictions));
+  if (typeof refreshGeneratedWorkouts === "function") refreshGeneratedWorkouts();
+  renderCalendar();
+  renderDayDetail(dateStr);
+}
+
+
+// ── Import a Training Plan ────────────────────────────────────────────────────
+
+async function importTrainingPlan() {
+  const text = (document.getElementById("import-plan-text")?.value || "").trim();
+  const msg  = document.getElementById("import-plan-msg");
+  const preview = document.getElementById("import-plan-preview");
+  if (!text) { msg.textContent = "Please paste a training plan."; msg.style.color = "var(--color-error)"; return; }
+
+  const startDate = document.getElementById("custom-plan-start")?.value || document.getElementById("import-start-date")?.value || getTodayString();
+  const repeat    = parseInt(document.getElementById("import-repeat")?.value) || 1;
+
+  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
+  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
+    msg.textContent = "API key not set. Open config.js and paste your Anthropic API key.";
+    msg.style.color = "var(--color-error)";
+    return;
+  }
+
+  msg.textContent = "Parsing your plan...";
+  msg.style.color = "var(--color-text-muted)";
+
+  let profile = {};
+  try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
+  const profileCtx = profile.weight
+    ? `Athlete: ${profile.weight} lbs${profile.gender ? `, ${profile.gender}` : ""}, ${profile.fitnessLevel || "intermediate"} level.`
+    : "";
+
+  let refCtx = "";
+  try {
+    const allZones = JSON.parse(localStorage.getItem("trainingZones")) || {};
+    const refs = allZones.strength || null;
+    if (refs) {
+      const liftLabels = { bench: "Bench Press", squat: "Back Squat", deadlift: "Deadlift", ohp: "Overhead Press", row: "Barbell Row" };
+      const lines = Object.entries(liftLabels)
+        .filter(([k]) => refs[k]?.weight)
+        .map(([k, label]) => `${label}: ${refs[k].weight} lbs`);
+      if (lines.length) refCtx = ` Reference lifts: ${lines.join(", ")}.`;
+    }
+  } catch {}
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 4096,
+        messages: [{
+          role: "user",
+          content: `Parse this training plan into structured JSON. ${profileCtx}${refCtx}
+
+The plan text:
+"""
+${text}
+"""
+
+Return ONLY valid JSON, no markdown. The format must be:
+{
+  "planName": "Plan title",
+  "weekCount": 1,
+  "sessions": [
+    {
+      "weekDay": 1,
+      "weekNumber": 1,
+      "type": "running|cycling|swimming|weightlifting|general|yoga|rest",
+      "sessionName": "Session title",
+      "exercises": [{"name":"Exercise","sets":3,"reps":"10","weight":"135 lbs","rest":"60s"}],
+      "intervals": [{"name":"Phase","duration":"10 min","effort":"Z2","details":"description"}],
+      "details": "Plain text description if not exercises/intervals"
+    }
+  ]
+}
+
+Rules:
+- weekDay: 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri,6=Sat
+- weekNumber: starts at 1, increment for multi-week plans
+- For strength sessions: use "exercises" array with specific weights in lbs. Scale from reference lifts if provided.
+- For cardio sessions: use "intervals" array with duration, effort zone, and details.
+- For simple sessions (yoga, rest, cross-train): use "details" string.
+- Omit rest days entirely — do not include them.
+- If the plan doesn't specify weeks, treat it as 1 week.
+- Every session MUST have a type and sessionName.`
+        }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+
+    const raw = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+    const cleaned = raw.replace(/```json|```/g, "").trim();
+    const plan = JSON.parse(cleaned);
+
+    if (!plan.sessions || !plan.sessions.length) {
+      msg.textContent = "Couldn't parse any sessions from that text. Try adding more detail.";
+      msg.style.color = "var(--color-error)";
+      return;
+    }
+
+    // Build schedule entries
+    const start = new Date(startDate + "T00:00:00");
+    const startDow = start.getDay();
+    const weekCount = plan.weekCount || 1;
+    const schedule = [];
+
+    for (let cycle = 0; cycle < repeat; cycle++) {
+      for (const s of plan.sessions) {
+        const weekOffset = ((s.weekNumber || 1) - 1) + cycle * weekCount;
+        const dow = s.weekDay ?? 1;
+        let delta = (dow - startDow + 7) % 7 + weekOffset * 7;
+        const date = new Date(start);
+        date.setDate(date.getDate() + delta);
+        const dateStr = date.toISOString().slice(0, 10);
+
+        const entry = {
+          id: `import-${dateStr}-${s.type}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          date: dateStr,
+          type: s.type || "general",
+          level: profile.fitnessLevel || "intermediate",
+          sessionName: s.sessionName || "Session",
+          source: "imported",
+        };
+
+        if (s.exercises && s.exercises.length) {
+          entry.exercises = s.exercises;
+        }
+        if (s.intervals && s.intervals.length) {
+          entry.aiSession = { title: s.sessionName, intervals: s.intervals };
+        }
+        if (s.details) {
+          entry.details = s.details;
+        }
+
+        // For cardio types without intervals, map to discipline/load for rich rendering
+        const _discMap = { running: "run", cycling: "bike", swimming: "swim" };
+        if (_discMap[entry.type] && !entry.aiSession) {
+          entry.discipline = _discMap[entry.type];
+          const nm = (entry.sessionName + " " + (entry.details || "")).toLowerCase();
+          if (/interval|speed|vo2|fartlek|repeat/i.test(nm)) entry.load = "hard";
+          else if (/tempo|threshold|sweetspot|race.?pace/i.test(nm)) entry.load = "moderate";
+          else if (/long|endurance|distance/i.test(nm)) entry.load = "long";
+          else entry.load = "easy";
+        }
+
+        schedule.push(entry);
+      }
+    }
+
+    // Tag every entry with a planId so we can remove them as a group
+    const planId = `imported-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    schedule.forEach(e => { e.planId = planId; });
+
+    // Save to workoutSchedule
+    const existing = typeof loadWorkoutSchedule === "function" ? loadWorkoutSchedule() : [];
+    const merged = [...existing, ...schedule];
+    localStorage.setItem("workoutSchedule", JSON.stringify(merged));
+
+    // Save imported plan metadata for Active Training Plans display
+    const planMeta = {
+      id: planId,
+      name: plan.planName || "Imported Plan",
+      createdAt: new Date().toISOString().slice(0, 10),
+      startDate: startDate,
+      weekCount: repeat * weekCount,
+      sessions: schedule.map(s => ({
+        date: s.date,
+        type: s.type,
+        sessionName: s.sessionName,
+        exerciseCount: s.exercises ? s.exercises.length : 0,
+        intervalCount: s.aiSession?.intervals ? s.aiSession.intervals.length : 0,
+        details: s.details || "",
+      })),
+    };
+    const importedPlans = (() => { try { return JSON.parse(localStorage.getItem("importedPlans")) || []; } catch { return []; } })();
+    importedPlans.push(planMeta);
+    localStorage.setItem("importedPlans", JSON.stringify(importedPlans));
+
+    // Show success
+    const totalSessions = schedule.length;
+    const weeks = repeat * weekCount;
+    msg.style.color = "var(--color-success)";
+    msg.textContent = `Imported ${totalSessions} sessions across ${weeks} week${weeks > 1 ? "s" : ""}!`;
+
+    // Show preview
+    preview.style.display = "";
+    const grouped = {};
+    schedule.forEach(s => {
+      const wk = Math.floor((new Date(s.date + "T00:00:00") - start) / (7 * 864e5)) + 1;
+      if (!grouped[wk]) grouped[wk] = [];
+      grouped[wk].push(s);
+    });
+    preview.innerHTML = Object.entries(grouped).map(([wk, sessions]) => {
+      const dayNames = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+      const rows = sessions.map(s => {
+        const d = new Date(s.date + "T00:00:00");
+        const dayName = dayNames[d.getDay()];
+        const exCount = s.exercises ? `${s.exercises.length} exercises` : "";
+        const ivCount = s.aiSession?.intervals ? `${s.aiSession.intervals.length} intervals` : "";
+        const detail = exCount || ivCount || s.details || "";
+        return `<tr><td>${dayName}</td><td><span class="workout-tag tag-${s.type}">${s.type}</span></td><td>${s.sessionName}</td><td class="import-detail-cell">${detail}</td></tr>`;
+      }).join("");
+      return `<div class="import-week-group"><h4>Week ${wk}</h4><table class="exercise-table"><thead><tr><th>Day</th><th>Type</th><th>Session</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    }).join("");
+
+    // Refresh calendar
+    if (typeof renderCalendar === "function") renderCalendar();
+
+  } catch (err) {
+    msg.textContent = `Error: ${err.message}`;
+    msg.style.color = "var(--color-error)";
+  }
+}
+
+// Set default import start date on load
+document.addEventListener("DOMContentLoaded", () => {
+  const el = document.getElementById("import-start-date");
+  if (el && !el.value) el.value = getTodayString();
+});
+
+// ── Workout Rating & Feedback Loop ──────────────────────────────────────────
+
+const RATING_LABELS = ["", "Too Easy", "Easy", "Just Right", "Hard", "Crushed Me"];
+const RATING_EMOJIS = ["", "\u{1F971}", "\u{1F60C}", "\u{1F44C}", "\u{1F4AA}", "\u{1F635}"];
+
+function loadWorkoutRatings() {
+  try { return JSON.parse(localStorage.getItem("workoutRatings")) || {}; } catch { return {}; }
+}
+
+function saveWorkoutRating(workoutId, rating, note) {
+  const ratings = loadWorkoutRatings();
+  ratings[workoutId] = { rating, note: note || "", date: new Date().toISOString() };
+  localStorage.setItem("workoutRatings", JSON.stringify(ratings));
+}
+
+function getWorkoutRating(workoutId) {
+  return loadWorkoutRatings()[workoutId] || null;
+}
+
+function showRatingModal(workoutId, dateStr) {
+  // Remove existing modal if any
+  const existing = document.getElementById("rating-modal-overlay");
+  if (existing) existing.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "rating-modal-overlay";
+  overlay.className = "rating-modal-overlay";
+  overlay.onclick = e => { if (e.target === overlay) dismissRatingModal(); };
+  overlay.innerHTML = `
+    <div class="rating-modal">
+      <div class="rating-modal-title">How did that feel?</div>
+      <div class="rating-scale" id="rating-scale">
+        ${[1,2,3,4,5].map(n => `
+          <button class="rating-btn" data-rating="${n}" onclick="selectRating(${n})">
+            <span class="rating-emoji">${RATING_EMOJIS[n]}</span>
+            <span class="rating-label">${RATING_LABELS[n]}</span>
+          </button>
+        `).join("")}
+      </div>
+      <textarea id="rating-note" class="rating-note" placeholder="Quick note (optional) — e.g. 'Shoulders felt tight'"></textarea>
+      <div class="rating-modal-actions">
+        <button class="rating-skip-btn" onclick="dismissRatingModal()">Skip</button>
+        <button class="rating-save-btn" id="rating-save-btn" disabled onclick="confirmRating('${workoutId}','${dateStr}')">Save</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  // Animate in
+  requestAnimationFrame(() => overlay.classList.add("visible"));
+}
+
+let _selectedRating = 0;
+
+function selectRating(n) {
+  _selectedRating = n;
+  document.querySelectorAll("#rating-scale .rating-btn").forEach(btn => {
+    btn.classList.toggle("selected", parseInt(btn.dataset.rating) === n);
+  });
+  const saveBtn = document.getElementById("rating-save-btn");
+  if (saveBtn) saveBtn.disabled = false;
+}
+
+function confirmRating(workoutId, dateStr) {
+  if (!_selectedRating) return;
+  const note = (document.getElementById("rating-note")?.value || "").trim();
+  saveWorkoutRating(workoutId, _selectedRating, note);
+  _selectedRating = 0;
+  dismissRatingModal();
+  // Re-render to show rating on badge
+  if (dateStr && typeof renderDayDetail === "function") renderDayDetail(dateStr);
+  if (typeof renderStats === "function") renderStats();
+}
+
+function dismissRatingModal() {
+  const overlay = document.getElementById("rating-modal-overlay");
+  if (overlay) {
+    overlay.classList.remove("visible");
+    setTimeout(() => overlay.remove(), 200);
+  }
+  _selectedRating = 0;
+}
+
+function buildRatingDisplay(workoutId) {
+  const r = getWorkoutRating(workoutId);
+  if (!r) return "";
+  const emoji = RATING_EMOJIS[r.rating] || "";
+  const label = RATING_LABELS[r.rating] || "";
+  const noteHtml = r.note ? `<span class="rating-display-note">${_escRatingHtml(r.note)}</span>` : "";
+  return `<span class="rating-display">${emoji} ${label}${noteHtml}</span>`;
+}
+
+function _escRatingHtml(str) {
+  const d = document.createElement("div");
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function getRatingSmartAlert() {
+  const ratings = loadWorkoutRatings();
+  const entries = Object.values(ratings).sort((a, b) => b.date.localeCompare(a.date));
+  if (entries.length < 3) return null;
+
+  const recent = entries.slice(0, 5);
+  const tooEasy = recent.filter(r => r.rating <= 1).length;
+  const tooHard = recent.filter(r => r.rating >= 5).length;
+
+  if (tooEasy >= 3) return { type: "easy", message: "Your last few workouts felt too easy. Consider increasing intensity or leveling up your plan." };
+  if (tooHard >= 3) return { type: "hard", message: "Your last few workouts have been very tough. Consider dialing back intensity or taking a rest day." };
+  return null;
+}
+
+// ── Rest Day Intelligence ───────────────────────────────────────────────────
+
+function _getTrainingDaysAround(dateStr) {
+  const plan = [];
+  try { plan.push(...(JSON.parse(localStorage.getItem("trainingPlan")) || [])); } catch {}
+  const schedule = [];
+  try { schedule.push(...(JSON.parse(localStorage.getItem("workoutSchedule")) || [])); } catch {}
+  const logged = [];
+  try { logged.push(...(JSON.parse(localStorage.getItem("workouts")) || [])); } catch {}
+
+  // Build set of dates that have a workout (past 14 days, future 2 days)
+  const ref = new Date(dateStr + "T00:00:00");
+  const trainingDates = new Set();
+  const typesByDate = {};
+
+  const addDate = (d, type) => {
+    trainingDates.add(d);
+    if (!typesByDate[d]) typesByDate[d] = [];
+    if (type && !typesByDate[d].includes(type)) typesByDate[d].push(type);
+  };
+
+  plan.forEach(p => addDate(p.date, p.discipline));
+  schedule.forEach(w => {
+    if (!/^rest$/i.test((w.sessionName || "").trim())) {
+      addDate(w.date, w.discipline || w.type);
+    }
+  });
+  logged.forEach(w => {
+    if (!w.isCompletion) addDate(w.date, w.type);
+  });
+  // Also count completion records as training
+  logged.forEach(w => {
+    if (w.isCompletion) addDate(w.date, w.type);
+  });
+
+  return { trainingDates, typesByDate };
+}
+
+function getRestDayRecommendation(dateStr) {
+  const { trainingDates, typesByDate } = _getTrainingDaysAround(dateStr);
+  const recommendations = [];
+
+  // 1. Consecutive training days — count streak ending at yesterday
+  const today = new Date(dateStr + "T00:00:00");
+  let streak = 0;
+  const d = new Date(today);
+  d.setDate(d.getDate() - 1); // start from yesterday
+  while (trainingDates.has(localDateStr(d))) {
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  // Also count today if it has training
+  if (trainingDates.has(dateStr)) streak++;
+
+  if (streak >= 7) {
+    recommendations.push({
+      type: "streak",
+      icon: "warning",
+      message: `You've trained ${streak} days straight. Consider a rest or active recovery day.`
+    });
+  } else if (streak >= 5) {
+    recommendations.push({
+      type: "streak",
+      icon: "lightbulb",
+      message: `${streak} consecutive training days. A rest day soon could help recovery.`
+    });
+  }
+
+  // 2. Same discipline overlap — check if yesterday and today have the same high-impact type
+  //    Use getDataForDate to match what's actually shown on the calendar
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yStr = localDateStr(yesterday);
+  const _visibleTypes = (data) => {
+    if (data.restriction && data.restriction.action === "remove") return [];
+    const types = [];
+    if (data.planEntry) types.push(data.planEntry.discipline);
+    data.scheduledWorkouts.forEach(w => { if (w.type) types.push(w.type); if (w.discipline) types.push(w.discipline); });
+    data.loggedWorkouts.forEach(w => { if (w.type) types.push(w.type); });
+    return [...new Set(types)];
+  };
+  const _getMuscleGroups = (data) => {
+    const groups = new Set();
+    const focusMap = { chest:"push", shoulders:"push", triceps:"push", back:"pull", biceps:"pull", quads:"legs", hamstrings:"legs", glutes:"legs", calves:"legs", core:"legs" };
+    const all = [...data.scheduledWorkouts, ...data.loggedWorkouts];
+    all.forEach(w => {
+      if (w.type !== "weightlifting") return;
+      // Extract from sessionName (e.g. "Push", "Pull", "Legs", "Quads / Hamstrings")
+      const name = (w.sessionName || "").toLowerCase();
+      const idMatch = String(w.id).match(/weightlifting-(\w+)-b/);
+      const idFocus = idMatch ? idMatch[1] : null;
+      if (idFocus) { groups.add(idFocus); return; }
+      // Check sessionName for known focus keywords
+      if (/push/.test(name)) { groups.add("push"); return; }
+      if (/pull/.test(name)) { groups.add("pull"); return; }
+      if (/leg|quad|hamstring|glute|calv/.test(name)) { groups.add("legs"); return; }
+      if (/upper/.test(name)) { groups.add("push"); groups.add("pull"); return; }
+      if (/lower/.test(name)) { groups.add("legs"); return; }
+      if (/full/.test(name)) { groups.add("push"); groups.add("pull"); groups.add("legs"); return; }
+      if (/chest/.test(name)) { groups.add("push"); return; }
+      if (/back/.test(name)) { groups.add("pull"); return; }
+      if (/shoulder|arm|bicep|tricep/.test(name)) { groups.add(focusMap[name] || "push"); return; }
+    });
+    return groups;
+  };
+  const todayData = getDataForDate(dateStr);
+  const yData = getDataForDate(yStr);
+  const todayTypes = _visibleTypes(todayData);
+  const yTypes = _visibleTypes(yData);
+  const HIGH_IMPACT = ["running", "weightlifting", "run"];
+  const overlap = todayTypes.filter(t => yTypes.includes(t) && HIGH_IMPACT.includes(t));
+  if (overlap.length > 0) {
+    // For weightlifting, only warn if same muscle groups are targeted
+    if (overlap[0] === "weightlifting") {
+      const todayMuscles = _getMuscleGroups(todayData);
+      const yMuscles = _getMuscleGroups(yData);
+      const muscleOverlap = [...todayMuscles].some(m => yMuscles.has(m));
+      if (muscleOverlap) {
+        const shared = [...todayMuscles].filter(m => yMuscles.has(m));
+        const label = shared.map(m => m.charAt(0).toUpperCase() + m.slice(1)).join(" / ");
+        recommendations.push({
+          type: "overlap",
+          icon: "alertCircle",
+          message: `Back-to-back ${label.toLowerCase()} sessions. Consider alternating muscle groups or adding recovery.`
+        });
+      }
+    } else {
+      const label = overlap[0] === "run" ? "running" : overlap[0];
+      recommendations.push({
+        type: "overlap",
+        icon: "alertCircle",
+        message: `Back-to-back ${label} sessions. Consider adding recovery.`
+      });
+    }
+  }
+
+  // 3. Rating-based: if recent ratings are mostly hard/crushed
+  if (typeof loadWorkoutRatings === "function") {
+    const ratings = loadWorkoutRatings();
+    const recentRatings = Object.values(ratings)
+      .filter(r => r.date)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 5);
+    const hardCount = recentRatings.filter(r => r.rating >= 4).length;
+    if (recentRatings.length >= 3 && hardCount >= 3) {
+      recommendations.push({
+        type: "fatigue",
+        icon: "thermometer",
+        message: "Recent workouts have been tough. A deload or rest day may help you recover."
+      });
+    }
+  }
+
+  // 4. Tomorrow check — if tomorrow has a hard session scheduled and today is also hard
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tStr = localDateStr(tomorrow);
+  const tomorrowTypes = typesByDate[tStr] || [];
+  if (todayTypes.length > 0 && tomorrowTypes.length > 0 && streak >= 4) {
+    recommendations.push({
+      type: "upcoming",
+      icon: "lightbulb",
+      message: "Training scheduled tomorrow too. Listen to your body and rest if needed."
+    });
+  }
+
+  return recommendations;
+}
+
+function buildRestDayBanner(dateStr) {
+  const recs = getRestDayRecommendation(dateStr);
+  if (!recs.length) return "";
+
+  // Show the most important recommendation only (avoid banner overload)
+  const rec = recs[0];
+  const icon = ICONS[rec.icon] || ICONS.lightbulb;
+  return `<div class="rest-intel-banner rest-intel-${rec.type}">
+    <span class="rest-intel-icon">${icon}</span>
+    <span class="rest-intel-msg">${rec.message}</span>
+  </div>`;
+}

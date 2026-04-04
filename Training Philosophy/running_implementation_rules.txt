@@ -1,0 +1,138 @@
+RUNNING IMPLEMENTATION RULES
+Supplement to: Foundational Running Philosophy PRD
+Last updated: 2026-03-05
+---------------------------------------------------------
+
+This document captures the specific rules encoded in the IronZ app
+derived from the coaching philosophy. Update this file whenever
+implementation rules change.
+
+
+1. ATHLETE TYPE DETERMINATION
+------------------------------
+The app computes an effective pattern key from survey inputs:
+
+  Base level:          beginner | intermediate | advanced (self-reported)
+  runGoal = "finish"   -> step down one level (durability over optimization)
+  runGoal = "compete"  -> step up one level if beginner (beginner -> intermediate)
+  returningFromInjury  -> step down one level (tissue tolerance first)
+
+  Minimum: beginner. Maximum: advanced.
+
+
+2. WEEKLY SESSION PATTERNS BY LEVEL
+-------------------------------------
+Sessions per week (approximate):
+  Beginner:     3-4 sessions  (base: 3, build: 4, peak: 4, taper: 2)
+  Intermediate: 4-5 sessions  (base: 4, build: 5, peak: 4, taper: 3)
+  Advanced:     5 sessions    (base: 5, build: 5, peak: 5, taper: 3)
+
+Hard session cap: max 2 per week (advanced). Beginner: 0 hard sessions.
+Hard sessions are never placed on adjacent days. A buffer easy day is
+enforced between quality sessions at all levels.
+
+Quality session types by level:
+  Beginner:     Strides (20-sec accelerations at ~85% effort) in Build
+                Tempo (RPE 6-7) introduced in Peak only
+  Intermediate: Tempo (RPE 6-7) in Base/Build, one Threshold in Peak
+  Advanced:     Tempo in Base, Threshold in Build/Peak, buffer day between
+
+
+3. SESSION DURATION PROGRESSION
+---------------------------------
+Durations are NOT static. They progress linearly from start to peak
+across all non-taper weeks, then drop to 62% of peak during taper.
+
+  Formula:
+    progress = (weekNumber - 1) / (totalWeeks - taperWeeks - 1), clamped 0-1
+    duration = startMin + (peakMin - startMin) * progress
+    taper duration = round(peakMin * 0.62)
+
+  Step-level durations in the session breakdown are scaled proportionally.
+
+LONG RUN [startMin, peakMin]:
+  Distance        | Beginner   | Intermediate | Advanced
+  ----------------|------------|--------------|----------
+  5K              | [20, 40]   | [25, 55]     | [30, 65]
+  10K             | [25, 55]   | [35, 70]     | [45, 85]
+  Half Marathon   | [30, 90]   | [45, 120]    | [60, 135]
+  Marathon        | [40, 120]  | [60, 160]    | [75, 180]
+
+EASY RUN [startMin, peakMin]:
+  Distance        | Beginner   | Intermediate | Advanced
+  ----------------|------------|--------------|----------
+  5K              | [18, 28]   | [22, 35]     | [28, 42]
+  10K             | [18, 30]   | [28, 40]     | [35, 48]
+  Half Marathon   | [20, 35]   | [30, 45]     | [35, 50]
+  Marathon        | [25, 40]   | [35, 50]     | [45, 60]
+
+STRIDES [startMin, peakMin]:
+  Distance        | Beginner   | Intermediate | Advanced
+  ----------------|------------|--------------|----------
+  5K              | [22, 30]   | [25, 35]     | [28, 38]
+  10K             | [24, 32]   | [28, 38]     | [32, 42]
+  Half Marathon   | [26, 34]   | [32, 42]     | [35, 45]
+  Marathon        | [28, 38]   | [35, 45]     | [40, 50]
+
+TEMPO (moderate) [startMin, peakMin]:
+  Distance        | Beginner   | Intermediate | Advanced
+  ----------------|------------|--------------|----------
+  5K              | [25, 35]   | [28, 42]     | [32, 48]
+  10K             | [28, 40]   | [35, 48]     | [40, 55]
+  Half Marathon   | [30, 45]   | [40, 55]     | [45, 60]
+  Marathon        | [35, 50]   | [45, 60]     | [50, 65]
+
+THRESHOLD (hard) [startMin, peakMin]:
+  Distance        | Beginner   | Intermediate | Advanced
+  ----------------|------------|--------------|----------
+  5K              | [28, 38]   | [32, 48]     | [38, 55]
+  10K             | [30, 45]   | [38, 52]     | [45, 58]
+  Half Marathon   | [35, 50]   | [45, 60]     | [50, 65]
+  Marathon        | [40, 55]   | [50, 65]     | [55, 70]
+
+
+4. TRAINING ZONES (Jack Daniels VDOT)
+---------------------------------------
+Zones are calculated from a recent race performance using the VDOT method:
+
+  VDOT = VO2(v) / p(T)
+    where VO2(v) = -4.60 + 0.182258v + 0.000104v²  (v in m/min)
+          p(T)   = 0.8 + 0.1894393·e^(-0.012778T) + 0.2989558·e^(-0.1932605T)
+
+  Zone % VO2max ranges -> pace per mile:
+    Z1 Recovery:  59-64%   Warmup / cooldown / very easy miles
+    Z2 Easy:      65-74%   Base miles / aerobic development
+    Z3 Tempo:     83-88%   Comfortably hard / RPE 6-7
+    Z4 Threshold: 95-100%  Hard intervals / RPE 8
+    Z5 Speed:     105-115% Short reps / race-specific
+
+  Supported input distances: Mile, 5K, 10K, Half Marathon, Marathon
+  Zones are displayed on each running session step in the calendar.
+
+
+5. DAYS PER WEEK (running plans only)
+---------------------------------------
+Recommended days are computed from athlete type, not user preference:
+
+  Level       | Goal    | Returning | Recommended
+  ------------|---------|-----------|------------
+  Beginner    | any     | no        | 3
+  Beginner    | any     | yes       | 3
+  Beginner    | finish  | -         | 3
+  Intermediate| any     | no        | 4
+  Intermediate| compete | no        | 5
+  Intermediate| any     | yes       | 3
+  Advanced    | any     | no        | 5
+  Advanced    | compete | no        | 6
+  Advanced    | any     | yes       | 4
+
+  User sees a slider (range 3-6) with the recommended value pre-selected
+  and highlighted. They may adjust. Non-running sports use card selection.
+
+
+6. STRENGTH INTEGRATION (per philosophy section 11.6)
+-------------------------------------------------------
+  - 1-3 strength days/week depending on phase and athlete type
+  - Strength schedule cleared and regenerated (not stacked) on each plan build
+  - Deduplication by session ID prevents duplicate sessions from multiple
+    plan generations

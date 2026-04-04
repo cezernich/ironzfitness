@@ -1,0 +1,2150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IronZ</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet" />
+  <!-- Apply saved theme immediately to prevent flash -->
+  <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'stone');</script>
+  <!-- Supabase JS SDK (must load before supabase-init.js) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="supabase-init.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+
+  <!-- ===== AUTH SCREEN ===== -->
+  <div id="auth-screen" class="auth-screen">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <span class="logo-mark"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+        <span class="logo-text">IronZ</span>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="auth-tab-login" onclick="switchAuthTab('login')">Log In</button>
+        <button class="auth-tab" id="auth-tab-signup" onclick="switchAuthTab('signup')">Sign Up</button>
+      </div>
+
+      <!-- Login panel -->
+      <div id="auth-panel-login">
+        <div class="form-row">
+          <label for="auth-email">Email</label>
+          <input type="email" id="auth-email" placeholder="you@example.com"
+            onkeydown="if(event.key==='Enter') handleLogin()" />
+        </div>
+        <div class="form-row">
+          <label for="auth-password">Password</label>
+          <input type="password" id="auth-password" placeholder="••••••••"
+            onkeydown="if(event.key==='Enter') handleLogin()" />
+        </div>
+        <button class="btn-primary auth-submit-btn" onclick="handleLogin()">Log In</button>
+        <p id="auth-msg" class="auth-msg"></p>
+      </div>
+
+      <!-- Signup panel -->
+      <div id="auth-panel-signup" style="display:none">
+        <div class="form-row">
+          <label for="auth-signup-name">Full Name</label>
+          <input type="text" id="auth-signup-name" placeholder="Your name" />
+        </div>
+        <div class="form-row">
+          <label for="auth-signup-email">Email</label>
+          <input type="email" id="auth-signup-email" placeholder="you@example.com" />
+        </div>
+        <div class="form-row">
+          <label for="auth-signup-password">Password</label>
+          <input type="password" id="auth-signup-password" placeholder="Min 6 characters"
+            onkeydown="if(event.key==='Enter') handleSignup()" />
+        </div>
+        <button class="btn-primary auth-submit-btn" onclick="handleSignup()">Create Account</button>
+        <p id="auth-signup-msg" class="auth-msg"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== HEADER ===== -->
+  <header id="app-header" style="display:none">
+    <div class="header-left">
+      <div class="logo" onclick="showTab('home')" title="Go home">
+        <span class="logo-mark"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+        <span class="logo-text">IronZ</span>
+      </div>
+      <button class="sv-open-btn" onclick="openSurvey()"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Build Plan</button>
+    </div>
+    <nav>
+      <!-- Home -->
+      <button class="nav-circle" data-tab="home" onclick="showTab('home')" title="Home">
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </button>
+      <!-- Training -->
+      <button class="nav-circle" data-tab="training" onclick="showTab('training')" title="Training">
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v16"/><path d="M18 4v16"/><path d="M4 7.5h4"/><path d="M4 16.5h4"/><path d="M16 7.5h4"/><path d="M16 16.5h4"/></svg>
+      </button>
+      <!-- Nutrition (shown only when nutrition is enabled) -->
+      <button class="nav-circle" id="nav-nutrition-btn" data-tab="nutrition" onclick="showTab('nutrition')" title="Nutrition" style="display:none">
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>
+      </button>
+      <!-- Stats -->
+      <button class="nav-circle" data-tab="stats" onclick="showTab('stats')" title="Stats">
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16v-5"/><path d="M11 16v-9"/><path d="M15 16v-3"/><path d="M19 16v-7"/></svg>
+      </button>
+      <!-- Profile -->
+      <div class="nav-profile-wrap">
+        <button class="nav-circle nav-profile-circle" id="nav-profile-btn" onclick="toggleProfileDropdown()" title="Profile">
+          <span id="nav-initials">?</span>
+        </button>
+        <div class="nav-dropdown" id="nav-profile-dropdown">
+          <button onclick="closeProfileDropdown(); showTab('settings')">Settings</button>
+          <button onclick="closeProfileDropdown(); showTab('saved-workouts')">Saved Workouts</button>
+          <button onclick="closeProfileDropdown(); showTab('community')">Community</button>
+          <button onclick="closeProfileDropdown(); openSupportEmail()">Contact Support</button>
+          <button class="nav-dropdown-logout" onclick="handleLogout()">Log Out</button>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <main id="app-main" style="display:none">
+
+    <!-- ===================================================
+         TRAINING TAB
+    ===================================================== -->
+    <div id="tab-training" class="tab-content">
+
+      <!-- Training conflict banner -->
+      <div id="training-conflict-banner" style="display:none"></div>
+
+      <!-- Goals Section -->
+      <section class="card collapsible is-collapsed" id="goals-section">
+        <div class="card-toggle" onclick="toggleSection('goals-section')">
+          <h2>Goals</h2>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body">
+          <div id="goals-content"></div>
+        </div>
+      </section>
+
+      <!-- Race Events -->
+      <section class="card collapsible is-collapsed" id="section-race-events">
+        <div class="card-toggle" onclick="toggleSection('section-race-events')">
+          <h2>Build a Plan</h2>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body">
+          <div id="race-form-container"></div>
+          <p id="race-save-msg" class="save-msg"></p>
+          <div id="race-events-list">
+            <p class="empty-msg">No races added yet.</p>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- Gym & Strength Plan -->
+      <section class="card collapsible is-collapsed" id="section-generate-plan">
+        <div class="card-toggle" onclick="toggleSection('section-generate-plan')">
+          <h2>Gym &amp; Strength</h2>
+          <div class="card-toggle-end">
+            <label class="gym-toggle" onclick="event.stopPropagation()" title="Enable / disable gym & strength sessions">
+              <input type="checkbox" id="gym-strength-toggle" onchange="setGymStrengthEnabled(this.checked)" />
+              <span class="gym-toggle-track"></span>
+            </label>
+            <span class="card-chevron">▾</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <p class="hint">Build a gym or strength training plan. For endurance events use Race Events above.</p>
+
+          <div class="form-row">
+            <label for="workout-type">Training Style</label>
+            <select id="workout-type" onchange="onPlanTypeChange()">
+              <option value="weightlifting">Strength Training</option>
+              <option value="bodyweight">Bodyweight</option>
+              <option value="hiit">HIIT</option>
+              <option value="yoga">Yoga / Mobility</option>
+            </select>
+          </div>
+
+          <!-- Strength-specific: Goal -->
+          <div id="plan-strength-options">
+            <div class="form-row">
+              <label>What's your goal?</label>
+              <div class="plan-goal-grid">
+                <button class="plan-goal-btn is-active" data-goal="maintain" onclick="selectPlanGoal(this)">
+                  <strong>Maintain</strong><span class="plan-goal-desc">Stay where you are</span>
+                </button>
+                <button class="plan-goal-btn" data-goal="bulk" onclick="selectPlanGoal(this)">
+                  <strong>Bulk</strong><span class="plan-goal-desc">Build muscle & size</span>
+                </button>
+                <button class="plan-goal-btn" data-goal="cut" onclick="selectPlanGoal(this)">
+                  <strong>Cut</strong><span class="plan-goal-desc">Lean out, keep muscle</span>
+                </button>
+                <button class="plan-goal-btn" data-goal="lose" onclick="selectPlanGoal(this)">
+                  <strong>Lose Weight</strong><span class="plan-goal-desc">Fat loss focused</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label>Training Days</label>
+              <div class="day-picker" id="plan-day-picker" onchange="updateDayPickerHint(); updateSplitPreview()">
+                <input type="checkbox" id="plan-day-1" value="1" checked /><label for="plan-day-1" class="day-chip">Mon</label>
+                <input type="checkbox" id="plan-day-2" value="2" /><label for="plan-day-2" class="day-chip">Tue</label>
+                <input type="checkbox" id="plan-day-3" value="3" checked /><label for="plan-day-3" class="day-chip">Wed</label>
+                <input type="checkbox" id="plan-day-4" value="4" /><label for="plan-day-4" class="day-chip">Thu</label>
+                <input type="checkbox" id="plan-day-5" value="5" checked /><label for="plan-day-5" class="day-chip">Fri</label>
+                <input type="checkbox" id="plan-day-6" value="6" /><label for="plan-day-6" class="day-chip">Sat</label>
+                <input type="checkbox" id="plan-day-0" value="0" /><label for="plan-day-0" class="day-chip">Sun</label>
+              </div>
+              <p class="hint" id="day-picker-hint" style="margin-top:6px">3 days selected</p>
+            </div>
+
+            <div class="form-row">
+              <label>Weekly Split</label>
+              <select id="plan-split-preset" onchange="updateSplitPreview()">
+                <option value="ppl">Push / Pull / Legs (recommended)</option>
+                <option value="upper-lower">Upper / Lower</option>
+                <option value="full-body">Full Body</option>
+                <option value="bro">Body Part Split (Chest, Back, Shoulders, Arms, Legs)</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+
+            <div id="plan-split-preview" class="plan-split-preview"></div>
+          </div>
+
+          <!-- Non-strength: simple day picker -->
+          <div id="plan-other-options" style="display:none">
+            <div class="form-row">
+              <label>Training Days</label>
+              <div class="day-picker" id="plan-day-picker-other" onchange="updateDayPickerHint()">
+                <input type="checkbox" id="plan-day-other-1" value="1" checked /><label for="plan-day-other-1" class="day-chip">Mon</label>
+                <input type="checkbox" id="plan-day-other-2" value="2" /><label for="plan-day-other-2" class="day-chip">Tue</label>
+                <input type="checkbox" id="plan-day-other-3" value="3" checked /><label for="plan-day-other-3" class="day-chip">Wed</label>
+                <input type="checkbox" id="plan-day-other-4" value="4" /><label for="plan-day-other-4" class="day-chip">Thu</label>
+                <input type="checkbox" id="plan-day-other-5" value="5" checked /><label for="plan-day-other-5" class="day-chip">Fri</label>
+                <input type="checkbox" id="plan-day-other-6" value="6" /><label for="plan-day-other-6" class="day-chip">Sat</label>
+                <input type="checkbox" id="plan-day-other-0" value="0" /><label for="plan-day-other-0" class="day-chip">Sun</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Common options -->
+          <div class="form-row">
+            <label for="fitness-level">Fitness Level</label>
+            <select id="fitness-level">
+              <option value="beginner">Beginner</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-row">
+              <label for="plan-start-date">Start Date</label>
+              <input type="date" id="plan-start-date" />
+            </div>
+            <div class="form-row">
+              <label for="plan-weeks">Program Length</label>
+              <select id="plan-weeks" onchange="updateWeeksDurationHint()">
+                <option value="4">4 weeks</option>
+                <option value="8">8 weeks</option>
+                <option value="12" selected>12 weeks</option>
+                <option value="indefinite">Indefinite</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="plan-refresh">Refresh Every</label>
+            <select id="plan-refresh" onchange="updateWeeksDurationHint()">
+              <option value="2">2 weeks</option>
+              <option value="4" selected>4 weeks</option>
+              <option value="6">6 weeks</option>
+              <option value="8">8 weeks</option>
+            </select>
+          </div>
+          <p class="hint" id="plan-weeks-hint" style="margin-top:-8px">12 weeks of sessions, exercises refresh every 4 weeks (3 blocks).</p>
+
+          <button class="btn-primary" onclick="generatePlan()">Generate & Schedule Plan</button>
+          <p id="plan-save-msg" class="save-msg"></p>
+          <div id="generated-plan"></div>
+        </div>
+      </section>
+
+      <!-- Athlete's Zones -->
+      <section class="card collapsible is-collapsed" id="section-running-zones">
+        <div class="card-toggle" onclick="toggleSection('section-running-zones')">
+          <h2>Athlete's Zones</h2>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body">
+          <div id="zones-content"></div>
+        </div>
+      </section>
+
+      <!-- Create Your Own Plan -->
+      <section class="card collapsible is-collapsed" id="section-custom-plan">
+        <div class="card-toggle" onclick="toggleSection('section-custom-plan')">
+          <h2>Create Your Own Plan</h2>
+          <span class="card-chevron">&#9662;</span>
+        </div>
+        <div class="card-body">
+          <p class="hint">Build your own weekly training schedule. Mix AI-generated sessions with your own workouts.</p>
+
+          <!-- Import a Plan toggle -->
+          <div style="margin-bottom:16px;text-align:center">
+            <button class="btn-secondary" style="width:100%" onclick="var b=document.getElementById('import-plan-body');var open=b.style.display!=='none';b.style.display=open?'none':'';this.innerHTML=open?'Hide Import':'+ Import a Plan'">+ Import a Plan</button>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-row">
+              <label for="custom-plan-start">Start Date</label>
+              <input type="date" id="custom-plan-start" />
+            </div>
+            <div class="form-row">
+              <label for="custom-plan-weeks">Duration</label>
+              <select id="custom-plan-weeks">
+                <option value="1">1 week</option>
+                <option value="2">2 weeks</option>
+                <option value="4" selected>4 weeks</option>
+                <option value="8">8 weeks</option>
+                <option value="12">12 weeks</option>
+              </select>
+            </div>
+          </div>
+          <div id="import-plan-body" style="display:none;margin-bottom:16px">
+            <p class="hint">Paste a training plan from a coach, spreadsheet, email, or anywhere else. Uses the start date below.</p>
+            <div class="form-row">
+              <label for="import-plan-text">Training Plan</label>
+              <textarea id="import-plan-text" rows="8" placeholder="Paste your training plan here...&#10;&#10;Example:&#10;Week 1&#10;Mon: 4mi easy run&#10;Tue: Bench 4x8 @ 155, Squat 4x6 @ 225&#10;Wed: Rest&#10;Thu: 6x800m intervals @ 5K pace&#10;Fri: Pull day - rows, pullups, curls&#10;Sat: Long run 8mi&#10;Sun: Rest" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>
+            </div>
+            <div class="form-row">
+              <label for="import-repeat">Repeat</label>
+              <select id="import-repeat">
+                <option value="1">Once (no repeat)</option>
+                <option value="2">2 cycles</option>
+                <option value="4">4 cycles</option>
+                <option value="8">8 cycles</option>
+              </select>
+            </div>
+            <button class="btn-primary" style="width:100%" onclick="importTrainingPlan()">Import Plan</button>
+            <p id="import-plan-msg" class="save-msg"></p>
+            <div id="import-plan-preview" style="display:none"></div>
+          </div>
+
+          <!-- Weekly template builder -->
+          <div class="custom-plan-week" id="custom-plan-builder">
+            <!-- Rendered by custom-plan.js -->
+          </div>
+
+          <div style="display:flex;gap:8px;margin-top:16px">
+            <button class="btn-secondary" onclick="customPlanCopyWeek()">Copy Week Template</button>
+            <button class="btn-primary" style="flex:1" onclick="saveCustomPlan()">Save &amp; Schedule Plan</button>
+          </div>
+          <p id="custom-plan-msg" class="save-msg"></p>
+        </div>
+      </section>
+
+      <!-- Log a Workout -->
+      <section class="card collapsible is-collapsed" id="section-log-workout">
+        <div class="card-toggle" onclick="toggleSection('section-log-workout')">
+          <h2>Log a Workout</h2>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body">
+          <p class="hint">Record what you actually did today.</p>
+
+          <div class="form-row">
+            <label for="log-date">Date</label>
+            <input type="date" id="log-date" />
+          </div>
+
+          <div class="form-row">
+            <label for="log-workout-name">Workout Name (optional)</label>
+            <input type="text" id="log-workout-name" placeholder="e.g. Push Day A" />
+          </div>
+
+          <div class="form-row">
+            <label for="log-workout-type">Workout Type</label>
+            <select id="log-workout-type" onchange="logTypeChanged()">
+              <option value="weightlifting">Strength / Lifting</option>
+              <option value="bodyweight">Bodyweight</option>
+              <option value="hiit">HIIT</option>
+              <option value="running">Running</option>
+              <option value="swimming">Swimming</option>
+              <option value="triathlon">Triathlon / Brick</option>
+              <option value="cycling">Cycling</option>
+              <option value="yoga">Yoga</option>
+              <option value="mobility">Mobility</option>
+              <option value="walking">Walking</option>
+              <option value="rowing">Rowing</option>
+              <option value="pilates">Pilates</option>
+              <option value="sport">Sport-Specific</option>
+              <option value="general">General Fitness</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <label for="log-notes">Notes (optional)</label>
+            <input type="text" id="log-notes" placeholder="e.g. Felt strong today, ran 3 miles" />
+          </div>
+
+          <div id="log-strength-section">
+            <div id="exercise-entries"></div>
+            <button class="btn-secondary" onclick="addExerciseRow()">+ Add Exercise</button>
+          </div>
+          <div id="log-endurance-section" style="display:none">
+            <div id="log-segment-entries"></div>
+            <button class="btn-secondary" onclick="addLogSegmentRow()">+ Add Segment</button>
+          </div>
+
+          <button class="btn-primary" onclick="saveWorkout()">Save Workout</button>
+          <p id="workout-save-msg" class="save-msg"></p>
+        </div>
+      </section>
+
+      <!-- Training Preferences -->
+      <section class="card collapsible is-collapsed" id="section-training-prefs">
+        <div class="card-toggle" onclick="toggleSection('section-training-prefs')">
+          <h2>Training Preferences</h2>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body">
+          <p class="hint">Exercises listed here will never be included in generated or AI workouts.</p>
+          <h3 class="pref-section-label">Exercises to Avoid</h3>
+          <div class="pref-tag-list" id="avoided-exercises-list"></div>
+          <div class="pref-add-row">
+            <input type="text" id="avoided-exercise-input" class="pref-input"
+              placeholder="e.g. Barbell Squat"
+              onkeydown="if(event.key==='Enter') addAvoidedExercise()" />
+            <button class="ti-add-btn" onclick="addAvoidedExercise()">Add</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Active Training Inputs -->
+      <section class="card collapsible is-collapsed" id="section-training-inputs">
+        <div class="card-toggle" onclick="toggleSection('section-training-inputs')">
+          <h2>Active Training Inputs</h2>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body">
+          <p class="hint">Everything currently shaping your plan — races, scheduled workouts, and custom notes.</p>
+          <div id="training-inputs-list"></div>
+        </div>
+      </section>
+
+    </div><!-- end #tab-training -->
+
+    <!-- Goal Form Modal -->
+    <div id="goal-form-modal" class="quick-entry-overlay" style="display:none" onclick="if(event.target===this) closeGoalForm()">
+      <div class="quick-entry-modal" style="max-width:400px">
+        <div class="quick-entry-header">
+          <span class="qe-date-label" id="goal-form-title">New Goal</span>
+          <button class="qe-close-btn" onclick="closeGoalForm()">&#10005;</button>
+        </div>
+        <div style="padding:12px 16px 16px">
+          <input type="hidden" id="goal-form-id" />
+          <div class="form-row">
+            <label for="goal-form-name">Goal Name</label>
+            <input type="text" id="goal-form-name" placeholder="e.g. Run a 5K" />
+          </div>
+          <div class="form-row">
+            <label for="goal-form-type">Type</label>
+            <select id="goal-form-type">
+              <option value="performance">Performance</option>
+              <option value="habit">Habit</option>
+              <option value="body">Body Composition</option>
+              <option value="nutrition">Nutrition</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="goal-form-target">Target Value</label>
+            <input type="number" id="goal-form-target" placeholder="e.g. 25" />
+          </div>
+          <div class="form-row">
+            <label for="goal-form-unit">Unit</label>
+            <input type="text" id="goal-form-unit" placeholder="e.g. minutes, lbs, days" />
+          </div>
+          <div class="form-row">
+            <label for="goal-form-deadline">Target Date (optional)</label>
+            <input type="date" id="goal-form-deadline" />
+          </div>
+          <button class="btn-primary" style="width:100%;margin-top:12px" onclick="saveGoalForm()">Save Goal</button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ===================================================
+         NUTRITION TAB
+    ===================================================== -->
+    <div id="tab-nutrition" class="tab-content">
+
+      <!-- Nutrition Dashboard -->
+      <section class="card" id="section-nutrition-dashboard">
+        <h2 style="margin:0 0 12px">Today's Nutrition</h2>
+        <div class="nutrition-dashboard">
+          <!-- Calorie budget bar -->
+          <div class="nutri-budget-bar">
+            <div class="nutri-budget-label">
+              <span id="nutri-calories-eaten">0</span> / <span id="nutri-calories-target">2,200</span> cal
+            </div>
+            <div class="nutri-progress-track">
+              <div class="nutri-progress-fill" id="nutri-progress-fill" style="width:0%"></div>
+            </div>
+          </div>
+          <!-- Macro rings -->
+          <div class="nutri-macro-rings">
+            <div class="nutri-ring-item">
+              <canvas id="nutri-ring-protein" width="80" height="80"></canvas>
+              <div class="nutri-ring-label">Protein</div>
+              <div class="nutri-ring-value" id="nutri-protein-value">0g</div>
+            </div>
+            <div class="nutri-ring-item">
+              <canvas id="nutri-ring-carbs" width="80" height="80"></canvas>
+              <div class="nutri-ring-label">Carbs</div>
+              <div class="nutri-ring-value" id="nutri-carbs-value">0g</div>
+            </div>
+            <div class="nutri-ring-item">
+              <canvas id="nutri-ring-fat" width="80" height="80"></canvas>
+              <div class="nutri-ring-label">Fat</div>
+              <div class="nutri-ring-value" id="nutri-fat-value">0g</div>
+            </div>
+          </div>
+          <!-- Training context -->
+          <div class="nutri-training-context" id="nutri-training-context" style="display:none">
+            <p class="nutri-context-label" style="margin:0 0 4px;font-size:0.78rem;color:var(--color-text-muted)">Based on today's workout:</p>
+            <p class="nutri-context-text" id="nutri-context-text" style="margin:0;font-size:0.85rem;font-weight:600"></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Quick Log Options -->
+      <section class="card">
+        <h2 style="margin:0 0 12px">Log a Meal</h2>
+        <div class="nutri-log-options">
+          <button class="nutri-log-btn" onclick="openPhotoMealLog()">
+            <span class="nutri-log-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
+            <span>Photo Log</span>
+            <span class="nutri-log-desc">Snap &amp; auto-detect</span>
+          </button>
+          <button class="nutri-log-btn" onclick="openManualMealLog()">
+            <span class="nutri-log-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>
+            <span>Manual Entry</span>
+            <span class="nutri-log-desc">Enter details yourself</span>
+          </button>
+          <button class="nutri-log-btn" onclick="openQuickAddMeal()">
+            <span class="nutri-log-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+            <span>Quick Add</span>
+            <span class="nutri-log-desc">Recent &amp; favorites</span>
+          </button>
+          <button class="nutri-log-btn" onclick="openBarcodeScanner()">
+            <span class="nutri-log-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6" y2="16"/><line x1="9" y1="8" x2="9" y2="16"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="15" y1="8" x2="15" y2="16"/><line x1="18" y1="8" x2="18" y2="16"/></svg></span>
+            <span>Scan Barcode</span>
+            <span class="nutri-log-desc">Camera scan &amp; log</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Photo Meal Log Modal -->
+      <div id="photo-meal-modal" style="display:none">
+        <section class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <h2 style="margin:0">Photo Log</h2>
+            <button class="btn-secondary" onclick="closePhotoMealLog()">Back</button>
+          </div>
+          <p class="hint">Take a photo of your meal and AI will estimate the nutritional content.</p>
+          <div class="photo-upload-area" id="photo-upload-area">
+            <input type="file" id="meal-photo-input" accept="image/*" capture="environment" onchange="handleMealPhoto(this)" style="display:none" />
+            <button class="btn-primary" onclick="document.getElementById('meal-photo-input').click()" style="width:100%;padding:20px">
+              Take Photo or Upload
+            </button>
+          </div>
+          <div id="photo-preview-area" style="display:none">
+            <img id="meal-photo-preview" style="width:100%;border-radius:8px;margin:12px 0" />
+            <div id="photo-ai-loading" style="display:none;text-align:center;padding:16px">
+              <div class="qe-spinner"></div>
+              <p style="color:var(--color-text-muted);margin-top:8px">Analyzing your meal...</p>
+            </div>
+            <div id="photo-ai-result" style="display:none">
+              <h3 style="margin:0 0 8px">Detected Meal</h3>
+              <div id="photo-detected-foods"></div>
+              <div class="form-grid" style="margin-top:12px">
+                <div class="form-row">
+                  <label>Calories</label>
+                  <input type="number" id="photo-calories" />
+                </div>
+                <div class="form-row">
+                  <label>Protein (g)</label>
+                  <input type="number" id="photo-protein" />
+                </div>
+                <div class="form-row">
+                  <label>Carbs (g)</label>
+                  <input type="number" id="photo-carbs" />
+                </div>
+                <div class="form-row">
+                  <label>Fat (g)</label>
+                  <input type="number" id="photo-fat" />
+                </div>
+              </div>
+              <p class="hint">AI estimates -- feel free to adjust before saving.</p>
+              <button class="btn-primary" style="width:100%;margin-top:12px" onclick="savePhotoMeal()">Log This Meal</button>
+            </div>
+          </div>
+          <p id="photo-meal-msg" class="save-msg"></p>
+        </section>
+      </div>
+
+      <!-- Quick Add Meal Modal -->
+      <div id="quick-add-meal-modal" class="survey-overlay" onclick="if(event.target===this) closeQuickAddMeal()">
+        <div class="quick-entry-modal" style="max-width:400px">
+          <div class="quick-entry-header">
+            <span class="qe-date-label">Quick Add</span>
+            <button class="qe-close-btn" onclick="closeQuickAddMeal()">&#10005;</button>
+          </div>
+          <p class="hint" style="padding:0 16px">Tap a recent meal to log it again.</p>
+          <div id="quick-add-meal-list" style="padding:8px 16px 16px"></div>
+        </div>
+      </div>
+
+      <!-- Manual Meal Log Modal -->
+      <div id="manual-meal-modal" class="survey-overlay" onclick="if(event.target===this) closeManualMealLog()">
+        <div class="quick-entry-modal" style="max-width:400px">
+          <div class="quick-entry-header">
+            <span class="qe-date-label">Log a Meal</span>
+            <button class="qe-close-btn" onclick="closeManualMealLog()">&#10005;</button>
+          </div>
+          <div style="padding:0 16px 16px">
+            <div class="form-row">
+              <label for="meal-date">Date</label>
+              <input type="date" id="meal-date" />
+            </div>
+
+            <div class="form-row">
+              <label for="meal-name">Food / Meal Name</label>
+              <input type="text" id="meal-name" placeholder="e.g. Chicken breast + rice" />
+            </div>
+
+            <div class="form-grid">
+              <div class="form-row">
+                <label for="meal-calories">Calories</label>
+                <input type="number" id="meal-calories" placeholder="e.g. 450" min="0" />
+              </div>
+              <div class="form-row">
+                <label for="meal-protein">Protein (g)</label>
+                <input type="number" id="meal-protein" placeholder="e.g. 40" min="0" />
+              </div>
+              <div class="form-row">
+                <label for="meal-carbs">Carbs (g)</label>
+                <input type="number" id="meal-carbs" placeholder="e.g. 55" min="0" />
+              </div>
+              <div class="form-row">
+                <label for="meal-fat">Fat (g)</label>
+                <input type="number" id="meal-fat" placeholder="e.g. 12" min="0" />
+              </div>
+            </div>
+
+            <button class="btn-primary" style="width:100%" onclick="saveMealAndClose()">Log Meal</button>
+            <p id="meal-save-msg" class="save-msg"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Today's Summary (legacy, hidden — dashboard replaces it) -->
+      <section class="card" id="section-todays-summary" style="display:none">
+        <div id="todays-summary"></div>
+      </section>
+
+      <!-- Weekly Grocery List -->
+      <section class="card collapsible is-collapsed" id="section-grocery-list">
+        <div class="card-toggle" onclick="toggleSection('section-grocery-list')">
+          <h2>Grocery List</h2>
+          <span class="card-chevron">&#9662;</span>
+        </div>
+        <div class="card-body">
+          <p class="hint">Auto-generated shopping list based on your nutrition goals and preferences.</p>
+          <button class="btn-primary" onclick="generateGroceryList()" style="width:100%;margin-bottom:12px">
+            Generate Grocery List
+          </button>
+          <div id="grocery-list-content">
+            <p class="empty-msg">Generate a grocery list based on your nutrition targets.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Food Preferences -->
+      <section class="card collapsible is-collapsed" id="section-food-prefs">
+        <div class="card-toggle" onclick="toggleSection('section-food-prefs')">
+          <h2>Food Preferences</h2>
+          <span class="card-chevron">&#9662;</span>
+        </div>
+        <div class="card-body">
+          <p class="hint">Tell the meal generator what you like and what to avoid. Separate multiple items with commas.</p>
+
+          <div class="pref-section">
+            <div class="pref-section-label pref-section-label--like">Foods I Love</div>
+            <div id="likes-chips" class="pref-chips"></div>
+            <div class="pref-input-row">
+              <input type="text" id="like-input" placeholder="e.g. chicken, oatmeal, banana"
+                onkeydown="if(event.key==='Enter') addPreference('like')" />
+              <button class="btn-pref-add btn-pref-add--like" onclick="addPreference('like')">Add</button>
+            </div>
+          </div>
+
+          <div class="pref-section">
+            <div class="pref-section-label pref-section-label--dislike">Foods to Avoid</div>
+            <div id="dislikes-chips" class="pref-chips"></div>
+            <div class="pref-input-row">
+              <input type="text" id="dislike-input" placeholder="e.g. salmon, nuts, eggs"
+                onkeydown="if(event.key==='Enter') addPreference('dislike')" />
+              <button class="btn-pref-add btn-pref-add--dislike" onclick="addPreference('dislike')">Add</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Week Meal Planner -->
+      <section class="card collapsible is-collapsed" id="section-week-meal-planner">
+        <div class="card-toggle" onclick="toggleSection('section-week-meal-planner')">
+          <h2>Week Meal Planner</h2>
+          <span class="card-chevron">&#9662;</span>
+        </div>
+        <div class="card-body">
+          <div id="meal-planner-content"></div>
+        </div>
+      </section>
+
+      <!-- AI Meal Suggestions -->
+      <section class="card collapsible is-collapsed" id="section-meal-suggestions">
+        <div class="card-toggle" onclick="toggleSection('section-meal-suggestions')">
+          <h2>Meal Ideas</h2>
+          <span class="card-chevron">&#9662;</span>
+        </div>
+        <div class="card-body">
+          <p class="hint">AI-generated meal suggestions based on your preferences, goals, and training schedule.</p>
+          <div class="nutri-meal-plan" id="nutri-meal-suggestions">
+            <button class="btn-primary" onclick="generateMealSuggestions()" style="width:100%">
+              Generate Today's Meal Ideas
+            </button>
+          </div>
+          <div id="meal-suggestions-result" style="display:none"></div>
+        </div>
+      </section>
+
+      <!-- Meal History -->
+      <section class="card collapsible is-collapsed" id="section-meal-history">
+        <div class="card-toggle" onclick="toggleSection('section-meal-history')">
+          <h2>Meal History</h2>
+          <span class="card-chevron">&#9662;</span>
+        </div>
+        <div class="card-body">
+          <div id="nutrition-history">
+            <p class="empty-msg">No meals logged yet. Add your first one above!</p>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- end #tab-nutrition -->
+
+
+    <!-- ===================================================
+         HOME TAB (Calendar + Today's Plan)
+    ===================================================== -->
+    <div id="tab-home" class="tab-content active">
+
+      <!-- Daily greeting -->
+      <div id="home-greeting" class="home-greeting"></div>
+
+      <!-- Calendar -->
+      <section class="card" style="position:relative">
+        <button class="cal-help-btn" id="cal-help-btn" onclick="toggleCalHelp()" title="Help">?</button>
+        <div class="cal-help-tooltip" id="cal-help-tooltip">To edit or remove training plans, go to <strong>Training</strong> tab &rarr; <strong>Active Training Inputs</strong>.</div>
+        <div class="calendar-header">
+          <button class="cal-nav-btn" onclick="calPrev()">&#8592;</button>
+          <button class="cal-this-week-btn" id="cal-this-week-btn" onclick="goToThisWeek()" style="display:none">This Week</button>
+          <span id="calendar-month-label" class="calendar-month-label"></span>
+          <button class="cal-nav-btn" onclick="calNext()">&#8594;</button>
+          <button class="cal-add-header-btn" onclick="openQuickEntry(selectedDate)" title="Plan activity or restriction">+</button>
+          <button class="cal-zoom-btn" id="cal-zoom-btn" onclick="toggleCalendarMode()">Month view</button>
+        </div>
+
+
+        <div id="calendar-grid" class="calendar-grid"></div>
+        <div id="week-overview-bar"></div>
+      </section>
+
+      <!-- Natural Language Training Input -->
+      <section id="nl-input-container"></section>
+
+      <!-- Day Detail — always visible, defaults to today -->
+      <section class="card" id="day-detail-card">
+        <div id="day-detail-content"></div>
+      </section>
+
+      <!-- Hydration Tracker -->
+      <section class="card" id="hydration-card" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h2 style="margin:0">Hydration</h2>
+          <button class="btn-secondary btn-sm" onclick="openHydrationSettings()">Settings</button>
+        </div>
+        <div class="hydration-tracker">
+          <div class="hydration-visual">
+            <svg viewBox="0 0 80 160" width="80" height="160" id="hydration-bottle-svg">
+              <defs>
+                <clipPath id="bottle-clip">
+                  <path d="M25,30 L25,140 Q25,155 40,155 Q55,155 55,140 L55,30 Q55,20 40,20 Q25,20 25,30Z"/>
+                </clipPath>
+              </defs>
+              <path d="M25,30 L25,140 Q25,155 40,155 Q55,155 55,140 L55,30 Q55,20 40,20 Q25,20 25,30Z" fill="none" stroke="var(--color-border)" stroke-width="2"/>
+              <rect id="hydration-fill-rect" x="20" y="155" width="40" height="0" fill="var(--color-accent)" opacity="0.3" clip-path="url(#bottle-clip)" style="transition: y 0.5s, height 0.5s"/>
+            </svg>
+          </div>
+          <div class="hydration-info">
+            <div class="hydration-count">
+              <span id="hydration-current">0</span> / <span id="hydration-target-display">8</span> bottles
+            </div>
+            <div class="hydration-oz" id="hydration-oz-display">0 / 96 oz</div>
+            <button class="btn-primary hydration-log-btn" onclick="logWater()">
+              + 1 Bottle
+            </button>
+            <button class="btn-secondary hydration-undo-btn" onclick="undoWater()" id="hydration-undo-btn" style="display:none">
+              Undo
+            </button>
+          </div>
+        </div>
+        <div class="hydration-tip" id="hydration-tip" style="display:none;margin-top:10px">
+          <p id="hydration-tip-text" style="margin:0;font-size:0.82rem;color:var(--color-text-muted)"></p>
+        </div>
+      </section>
+
+      <!-- Hydration Settings Modal -->
+      <div id="hydration-settings-modal" class="quick-entry-overlay" style="display:none" onclick="if(event.target===this) closeHydrationSettings()">
+        <div class="quick-entry-modal" style="max-width:340px">
+          <div class="quick-entry-header">
+            <span class="qe-date-label">Hydration Settings</span>
+            <button class="qe-close-btn" onclick="closeHydrationSettings()">&#10005;</button>
+          </div>
+          <div style="padding:8px 16px 16px">
+            <div class="form-row">
+              <label for="hydration-bottle-size">Bottle Size (oz)</label>
+              <input type="number" id="hydration-bottle-size" value="12" min="4" max="64" />
+            </div>
+            <div class="form-row">
+              <label for="hydration-daily-target-oz">Daily Target (oz)</label>
+              <input type="number" id="hydration-daily-target-oz" min="20" max="300" />
+              <p class="hint" style="margin:4px 0 0">Auto-calculated from body weight if left empty</p>
+            </div>
+            <button class="btn-primary" style="width:100%;margin-top:12px" onclick="saveHydrationSettings()">Save</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- end #tab-home -->
+
+
+    <!-- ===================================================
+         STATS TAB
+    ===================================================== -->
+    <div id="tab-stats" class="tab-content">
+
+      <!-- View switcher -->
+      <div class="stats-view-seg-wrap">
+        <div class="stats-view-seg">
+          <button class="stats-view-btn is-active" id="stats-view-btn-stats" onclick="selectStatsView('stats')">Stats</button>
+          <button class="stats-view-btn" id="stats-view-btn-history" onclick="selectStatsView('history')">Workout History</button>
+        </div>
+      </div>
+
+      <!-- Stats view -->
+      <div id="stats-view-stats">
+
+        <!-- Level & Progress -->
+        <section class="card collapsible is-collapsed" id="section-level-progress">
+          <div class="card-toggle" onclick="toggleSection('section-level-progress')" style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <h2 style="margin:0">Your Level</h2>
+              <p class="hint" style="margin:4px 0 0">Based on consistency, volume, and progression</p>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="level-badge" id="level-badge">
+                <span class="level-badge-icon" id="level-badge-icon">&#9733;</span>
+                <span class="level-badge-text" id="level-badge-text">Beginner</span>
+              </div>
+              <span class="card-chevron">&#9662;</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="level-progress-bar" style="margin-top:12px">
+              <div class="level-progress-label">
+                <span id="level-progress-text">Progress to Intermediate</span>
+                <span id="level-progress-pct">0%</span>
+              </div>
+              <div class="nutri-progress-track">
+                <div class="nutri-progress-fill" id="level-progress-fill" style="width:0%"></div>
+              </div>
+            </div>
+            <div style="margin-top:12px;display:flex;align-items:center;gap:8px">
+              <span class="hint" style="margin:0">Progress Score:</span>
+              <span id="progress-score-value" style="font-weight:700;font-size:1.1rem">0</span>
+              <span class="hint" style="margin:0">/ 100</span>
+            </div>
+            <!-- Achievement badges -->
+            <div class="achievements-grid" id="achievements-grid" style="margin-top:16px">
+            </div>
+          </div>
+        </section>
+
+        <div id="stats-content">
+          <p class="empty-msg" style="padding:24px 0">Loading stats...</p>
+        </div>
+      </div>
+
+      <!-- Workout History view -->
+      <div id="stats-view-history" style="display:none">
+        <div class="sw-search-wrap">
+          <input type="text" id="workout-history-search" class="sw-search-input" placeholder="Search workout history..." oninput="filterWorkoutHistory(this.value)" />
+        </div>
+        <div id="workout-history">
+          <p class="empty-msg">No workouts logged yet.</p>
+        </div>
+      </div>
+
+    </div>
+
+
+    <!-- ===================================================
+         SAVED WORKOUTS TAB
+    ===================================================== -->
+    <div id="tab-saved-workouts" class="tab-content">
+      <section class="card" id="section-saved-workouts-header">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div>
+            <h2 style="margin:0">Saved Workouts <span id="sw-counter" class="sw-counter"></span></h2>
+            <p class="hint" style="margin:4px 0 0">Up to 20 reusable workout templates. Assign any to a specific day.</p>
+          </div>
+          <button class="btn-primary" onclick="openSaveWorkoutModal()">+ New</button>
+        </div>
+      </section>
+      <div class="sw-search-wrap">
+        <input type="text" id="sw-search" class="sw-search-input" placeholder="Search saved workouts..." oninput="filterSavedWorkouts(this.value)" />
+      </div>
+      <div id="saved-workouts-list">
+        <p class="empty-msg">No saved workouts yet. Create one to get started.</p>
+      </div>
+
+      <!-- Save Workout Modal -->
+      <div id="saved-workout-modal" style="display:none" class="sw-modal-overlay" onclick="if(event.target===this)closeSaveWorkoutModal()">
+        <div class="sw-modal">
+          <div class="sw-modal-header">
+            <h3 id="sw-modal-title">New Saved Workout</h3>
+            <button class="sw-modal-close" onclick="closeSaveWorkoutModal()">×</button>
+          </div>
+          <div class="form-row">
+            <label for="sw-name">Workout Name</label>
+            <input type="text" id="sw-name" placeholder="e.g. Push Day A" />
+          </div>
+          <div class="form-row">
+            <label for="sw-type">Type</label>
+            <select id="sw-type" onchange="swTypeChanged()">
+              <option value="weightlifting">Strength / Lifting</option>
+              <option value="bodyweight">Bodyweight</option>
+              <option value="hiit">HIIT</option>
+              <option value="running">Running</option>
+              <option value="cycling">Cycling</option>
+              <option value="swimming">Swimming</option>
+              <option value="triathlon">Triathlon / Brick</option>
+              <option value="general">General Fitness</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="sw-notes">Notes (optional)</label>
+            <input type="text" id="sw-notes" placeholder="e.g. 4 sets, focus on form" />
+          </div>
+          <div id="sw-strength-section">
+            <div id="sw-hiit-meta" style="display:none;margin-bottom:12px">
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <div style="flex:1;min-width:120px">
+                  <label for="sw-hiit-format">Format</label>
+                  <select id="sw-hiit-format">
+                    <option value="circuit">Circuit</option>
+                    <option value="tabata">Tabata</option>
+                    <option value="emom">EMOM</option>
+                    <option value="amrap">AMRAP</option>
+                    <option value="for-time">For Time</option>
+                  </select>
+                </div>
+                <div style="flex:1;min-width:70px">
+                  <label for="sw-hiit-rounds">Rounds</label>
+                  <input type="number" id="sw-hiit-rounds" value="3" min="1" max="50" />
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:8px">
+                <div style="flex:1">
+                  <label for="sw-hiit-rest-ex">Rest b/w exercises</label>
+                  <input type="text" id="sw-hiit-rest-ex" placeholder="e.g. 15s" />
+                </div>
+                <div style="flex:1">
+                  <label for="sw-hiit-rest-rnd">Rest b/w rounds</label>
+                  <input type="text" id="sw-hiit-rest-rnd" placeholder="e.g. 60s" />
+                </div>
+              </div>
+            </div>
+            <div id="sw-exercise-entries"></div>
+            <button class="btn-secondary" onclick="addSwExerciseRow()" style="margin-bottom:8px">+ Add Exercise</button>
+          </div>
+          <div id="sw-endurance-section" style="display:none">
+            <p class="sw-section-label">Workout Structure</p>
+            <div id="sw-segment-entries"></div>
+            <button class="btn-secondary" onclick="addSwSegmentRow()" style="margin-bottom:8px">+ Add Segment</button>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <button class="btn-primary" style="flex:1" onclick="saveSavedWorkout()">Save</button>
+            <button class="btn-secondary" style="flex:1" onclick="closeSaveWorkoutModal()">Cancel</button>
+          </div>
+          <p id="sw-save-msg" class="save-msg"></p>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ===================================================
+         COMMUNITY TAB
+    ===================================================== -->
+    <div id="tab-community" class="tab-content">
+      <section class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <h2 style="margin:0">Community Workouts</h2>
+          <button class="btn-primary btn-sm" onclick="openCreateCommunityWorkout()">+ Create Workout</button>
+        </div>
+        <p class="hint" style="margin:0 0 12px">Browse popular workouts by category. Save any to your library.</p>
+        <div class="comm-filter-row" id="comm-filter-row"></div>
+      </section>
+      <div id="community-workouts-list"></div>
+
+      <!-- Challenges Section -->
+      <section class="card" style="margin-top:12px">
+        <h2 style="margin:0 0 4px">Challenges</h2>
+        <p class="hint" style="margin:0 0 12px">Join time-boxed challenges, track daily progress, and compete on the leaderboard.</p>
+        <div id="challenges-content"></div>
+      </section>
+    </div>
+
+    <!-- Share to Community Modal -->
+    <div id="share-workout-modal" class="quick-entry-overlay" style="display:none" onclick="if(event.target===this) closeShareWorkout()">
+      <div class="quick-entry-modal" style="max-width:380px">
+        <div class="quick-entry-header">
+          <span class="qe-date-label">Share to Community</span>
+          <button class="qe-close-btn" onclick="closeShareWorkout()">&#10005;</button>
+        </div>
+        <div style="padding:8px 16px 16px">
+          <input type="hidden" id="share-workout-id" value="" />
+          <div class="form-row">
+            <label for="share-workout-name">Workout Name</label>
+            <input type="text" id="share-workout-name" placeholder="e.g. Upper Body Blast" />
+          </div>
+          <div class="form-row">
+            <label for="share-workout-category">Category</label>
+            <select id="share-workout-category">
+              <option value="Strength">Strength</option>
+              <option value="Bodyweight">Bodyweight</option>
+              <option value="Cardio">Cardio</option>
+              <option value="Flexibility">Flexibility</option>
+              <option value="Fun">Fun</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="share-workout-difficulty">Difficulty</label>
+            <select id="share-workout-difficulty">
+              <option value="Beginner">Beginner</option>
+              <option value="Intermediate" selected>Intermediate</option>
+              <option value="Advanced">Advanced</option>
+            </select>
+          </div>
+          <div id="share-workout-preview" style="margin-top:8px"></div>
+          <button class="btn-primary" style="width:100%;margin-top:12px" onclick="submitShareWorkout()">Share</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Community Workout Modal -->
+    <div id="create-comm-modal" class="quick-entry-overlay" style="display:none" onclick="if(event.target===this) closeCreateCommunityWorkout()">
+      <div class="quick-entry-modal" style="max-width:440px;max-height:85vh;overflow-y:auto">
+        <div class="quick-entry-header">
+          <span class="qe-date-label">Create Workout</span>
+          <button class="qe-close-btn" onclick="closeCreateCommunityWorkout()">&#10005;</button>
+        </div>
+        <div style="padding:8px 16px 16px">
+          <div class="form-row">
+            <label for="cc-name">Workout Name</label>
+            <input type="text" id="cc-name" placeholder="e.g. Upper Body Blast" />
+          </div>
+          <div class="form-row">
+            <label for="cc-type">Type</label>
+            <select id="cc-type" onchange="_ccTypeChanged()">
+              <option value="weightlifting">Strength / Lifting</option>
+              <option value="bodyweight">Bodyweight</option>
+              <option value="hiit">HIIT</option>
+              <option value="running">Running</option>
+              <option value="cycling">Cycling</option>
+              <option value="yoga">Yoga</option>
+              <option value="general">General</option>
+            </select>
+          </div>
+          <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div>
+              <label for="cc-category">Category</label>
+              <select id="cc-category">
+                <option value="Strength">Strength</option>
+                <option value="Bodyweight">Bodyweight</option>
+                <option value="Cardio">Cardio</option>
+                <option value="Flexibility">Flexibility</option>
+                <option value="Fun">Fun</option>
+              </select>
+            </div>
+            <div>
+              <label for="cc-difficulty">Difficulty</label>
+              <select id="cc-difficulty">
+                <option value="Beginner">Beginner</option>
+                <option value="Intermediate" selected>Intermediate</option>
+                <option value="Advanced">Advanced</option>
+              </select>
+            </div>
+          </div>
+          <div id="cc-hiit-format-row" class="form-row" style="display:none">
+            <label for="cc-hiit-format">HIIT Format</label>
+            <select id="cc-hiit-format">
+              <option value="circuit">Circuit (rounds of exercises)</option>
+              <option value="tabata">Tabata (20s on / 10s off)</option>
+              <option value="emom">EMOM (every minute on the minute)</option>
+              <option value="amrap">AMRAP (as many rounds as possible)</option>
+            </select>
+          </div>
+
+          <div id="cc-exercises-section">
+            <p style="margin:8px 0 4px;font-weight:600;font-size:0.82rem">Exercises</p>
+            <div id="cc-exercise-rows"></div>
+            <button class="btn-secondary" onclick="_ccAddExRow()" style="margin-bottom:8px">+ Add Exercise</button>
+          </div>
+
+          <div id="cc-segments-section" style="display:none">
+            <p style="margin:8px 0 4px;font-weight:600;font-size:0.82rem">Segments</p>
+            <div id="cc-segment-rows"></div>
+            <button class="btn-secondary" onclick="_ccAddSegRow()" style="margin-bottom:8px">+ Add Segment</button>
+          </div>
+
+          <p id="cc-msg" class="save-msg" style="margin-top:6px"></p>
+          <button class="btn-primary" style="width:100%;margin-top:8px" onclick="saveCreateCommunityWorkout()">Create &amp; Share</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================================================
+         SETTINGS TAB
+    ===================================================== -->
+    <div id="tab-settings" class="tab-content">
+
+      <!-- Athlete Profile -->
+      <section class="card collapsible is-collapsed" id="section-profile">
+        <div class="card-toggle" onclick="toggleSection('section-profile')">
+          <h2>Athlete Profile</h2>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body">
+          <p class="hint">Your info is stored locally and used to personalise training targets.</p>
+
+          <div class="form-grid">
+            <div class="form-row">
+              <label for="profile-name">Name</label>
+              <input type="text" id="profile-name" placeholder="e.g. Alex Johnson" />
+            </div>
+            <div class="form-row">
+              <label for="profile-age">Age</label>
+              <input type="number" id="profile-age" placeholder="e.g. 32" min="10" max="100" />
+            </div>
+            <div class="form-row">
+              <label for="profile-weight">Weight (lbs)</label>
+              <input type="number" id="profile-weight" placeholder="e.g. 165" min="50" />
+            </div>
+            <div class="form-row">
+              <label for="profile-height">Height (in)</label>
+              <input type="number" id="profile-height" placeholder="e.g. 70" min="40" />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label for="profile-gender">Gender</label>
+            <select id="profile-gender">
+              <option value="">Prefer not to say</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="nonbinary">Non-binary</option>
+            </select>
+          </div>
+
+          <div class="form-row">
+            <label for="profile-goal">Primary Goal</label>
+            <select id="profile-goal">
+              <option value="endurance">Endurance (triathlon / marathon)</option>
+              <option value="speed">Speed &amp; Performance</option>
+              <option value="weight">Weight Management</option>
+              <option value="strength">Strength &amp; Power</option>
+              <option value="general">General Fitness</option>
+            </select>
+          </div>
+
+          <button class="btn-primary" onclick="saveProfile()">Save Profile</button>
+          <p id="profile-save-msg" class="save-msg"></p>
+        </div>
+      </section>
+
+      <!-- Theme -->
+      <section class="card collapsible is-collapsed" id="section-theme">
+        <div class="card-toggle" onclick="toggleSection('section-theme')">
+          <h2>Appearance</h2>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body">
+          <div class="theme-grid" id="theme-picker-grid"></div>
+        </div>
+      </section>
+
+      <!-- Subscription -->
+      <section class="card collapsible is-collapsed" id="section-subscription">
+        <div class="card-toggle" onclick="toggleSection('section-subscription')">
+          <h2>Subscription</h2>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body">
+          <div id="subscription-status"></div>
+        </div>
+      </section>
+
+      <!-- Notifications -->
+      <section class="card collapsible is-collapsed" id="section-notifications">
+        <div class="card-toggle" onclick="toggleSection('section-notifications')">
+          <h2>Notifications</h2>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body">
+          <div id="notif-settings-content"></div>
+        </div>
+      </section>
+
+      <!-- Preferences -->
+      <section class="card collapsible is-collapsed" id="section-preferences">
+        <div class="card-toggle" onclick="toggleSection('section-preferences')">
+          <h2>Preferences</h2>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body">
+          <div class="pref-row">
+            <div>
+              <div class="pref-label">Nutrition Tracking</div>
+              <div class="pref-desc">Show the Nutrition tab, meal logging, and dietary targets</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="pref-nutrition-toggle" onchange="setNutritionEnabled(this.checked)" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="pref-row">
+            <div>
+              <div class="pref-label">Hydration Tracking</div>
+              <div class="pref-desc">Show the hydration tracker on your Home screen</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="pref-hydration-toggle" onchange="setHydrationEnabled(this.checked)" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="pref-row">
+            <div>
+              <div class="pref-label">Measurement System</div>
+              <div class="pref-desc">Default unit for distances in workouts</div>
+            </div>
+            <select id="pref-measurement-select" onchange="setMeasurementSystem(this.value)" style="width:auto;padding:6px 32px 6px 10px">
+              <option value="imperial">Imperial (mi)</option>
+              <option value="metric">Metric (km)</option>
+            </select>
+          </div>
+          <div class="pref-row">
+            <div>
+              <div class="pref-label">Interface Complexity</div>
+              <div class="pref-desc">Adjust how much detail the app shows. Auto follows your level.</div>
+            </div>
+            <select id="ux-level-select" onchange="setUXLevelOverride(this.value)" style="width:auto;padding:6px 32px 6px 10px">
+              <option value="auto">Auto (follow level)</option>
+              <option value="beginner">Beginner</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- Connected Apps -->
+      <section class="card collapsible is-collapsed" id="section-connected-apps">
+        <div class="card-toggle" onclick="toggleSection('section-connected-apps')">
+          <h2>Connected Apps</h2>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body">
+          <p class="hint">Sync your training data with third-party platforms.</p>
+
+          <!-- Outlook Calendar Sync -->
+          <div class="app-row app-row--featured">
+            <div class="app-logo app-logo--outlook">O</div>
+            <div class="app-info">
+              <div class="app-name">Outlook Calendar</div>
+              <div class="app-desc">Sync workouts to your calendar and import busy times</div>
+            </div>
+          </div>
+          <div id="cal-sync-section" style="margin-bottom:16px"></div>
+
+          <div class="connected-apps-list">
+
+            <!-- Strava -->
+            <div class="app-row">
+              <div class="app-logo app-logo--strava">S</div>
+              <div class="app-info">
+                <div class="app-name">Strava</div>
+                <div class="app-desc">Import runs, rides, and swims automatically</div>
+              </div>
+            </div>
+            <div id="strava-status"></div>
+
+            <!-- Garmin -->
+            <div class="app-row">
+              <div class="app-logo app-logo--garmin">G</div>
+              <div class="app-info">
+                <div class="app-name">Garmin Connect</div>
+                <div class="app-desc">Sync workouts and health metrics from your device</div>
+              </div>
+              <span class="app-status app-status--unavailable">Not Available</span>
+              <button class="btn-app-connect" disabled>Connect</button>
+            </div>
+
+            <!-- Apple Health -->
+            <div class="app-row">
+              <div class="app-logo app-logo--apple">♥</div>
+              <div class="app-info">
+                <div class="app-name">Apple Health</div>
+                <div class="app-desc">Requires a native iOS app — not supported in browser</div>
+              </div>
+              <span class="app-status app-status--unavailable">iOS Only</span>
+              <button class="btn-app-connect" disabled>Connect</button>
+            </div>
+
+            <!-- Google Fit -->
+            <div class="app-row">
+              <div class="app-logo app-logo--google">G</div>
+              <div class="app-info">
+                <div class="app-name">Google Fit</div>
+                <div class="app-desc">Requires a native Android app — not supported in browser</div>
+              </div>
+              <span class="app-status app-status--unavailable">Android Only</span>
+              <button class="btn-app-connect" disabled>Connect</button>
+            </div>
+
+            <!-- Wahoo -->
+            <div class="app-row">
+              <div class="app-logo app-logo--wahoo">W</div>
+              <div class="app-info">
+                <div class="app-name">Wahoo SYSTM</div>
+                <div class="app-desc">Import structured cycling and running workouts</div>
+              </div>
+              <span class="app-status app-status--soon">Coming Soon</span>
+              <button class="btn-app-connect" disabled>Connect</button>
+            </div>
+
+            <!-- Whoop -->
+            <div class="app-row">
+              <div class="app-logo app-logo--whoop">W</div>
+              <div class="app-info">
+                <div class="app-name">WHOOP</div>
+                <div class="app-desc">Pull recovery scores and strain data into your plan</div>
+              </div>
+              <span class="app-status app-status--soon">Coming Soon</span>
+              <button class="btn-app-connect" disabled>Connect</button>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- Trust Center -->
+      <section class="card collapsible is-collapsed" id="section-trust-center">
+        <div class="card-toggle" onclick="toggleSection('section-trust-center')">
+          <h2>Privacy &amp; Trust Center</h2>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body" id="trust-center-content"></div>
+      </section>
+
+      <!-- Data Management -->
+      <section class="card collapsible is-collapsed" id="section-data-mgmt">
+        <div class="card-toggle" onclick="toggleSection('section-data-mgmt')">
+          <h2>Data Management</h2>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body">
+          <p class="hint">Permanently delete stored data. This cannot be undone.</p>
+
+          <div class="settings-danger-grid">
+            <div class="settings-danger-row">
+              <div>
+                <div class="settings-danger-label">Workout History</div>
+                <div class="settings-danger-desc">Delete all logged workouts</div>
+              </div>
+              <button class="btn-danger" onclick="clearWorkouts()">Clear</button>
+            </div>
+            <div class="settings-danger-row">
+              <div>
+                <div class="settings-danger-label">Meal History</div>
+                <div class="settings-danger-desc">Delete all logged meals</div>
+              </div>
+              <button class="btn-danger" onclick="clearNutrition()">Clear</button>
+            </div>
+            <div class="settings-danger-row">
+              <div>
+                <div class="settings-danger-label">Future Workouts</div>
+                <div class="settings-danger-desc">Remove all upcoming scheduled workouts (keeps completed sessions)</div>
+              </div>
+              <button class="btn-danger" onclick="clearFutureWorkouts()">Clear</button>
+            </div>
+            <div class="settings-danger-row">
+              <div>
+                <div class="settings-danger-label">Race Events &amp; Training Plan</div>
+                <div class="settings-danger-desc">Delete all races and generated schedules</div>
+              </div>
+              <button class="btn-danger" onclick="clearRacesAndPlan()">Clear</button>
+            </div>
+            <div class="settings-danger-row">
+              <div>
+                <div class="settings-danger-label">All Data</div>
+                <div class="settings-danger-desc">Wipe everything and start fresh</div>
+              </div>
+              <button class="btn-danger" onclick="clearAllData()">Clear All</button>
+            </div>
+          </div>
+          <p id="settings-clear-msg" class="save-msg"></p>
+        </div>
+      </section>
+
+      <!-- App Info -->
+      <section class="card collapsible is-collapsed" id="section-about">
+        <div class="card-toggle" onclick="toggleSection('section-about')">
+          <h2>About IronZ</h2>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body">
+          <div class="about-grid">
+            <div class="about-row"><span class="about-label">Version</span><span class="about-value">1.0.0</span></div>
+            <div class="about-row"><span class="about-label">Storage</span><span class="about-value" id="storage-size">—</span></div>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- end #tab-settings -->
+
+  </main>
+
+  <!-- Quick Entry Modal — Multi-step Wizard -->
+  <div id="quick-entry-overlay" class="quick-entry-overlay" onclick="if(event.target===this) closeQuickEntry()">
+    <div class="quick-entry-modal qe-wizard">
+
+      <div class="quick-entry-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="qe-back-btn" id="qe-back-btn" onclick="qeWizardBack()" style="display:none">← Back</button>
+          <span class="qe-date-label" id="qe-wizard-title">Add Session</span>
+        </div>
+        <button class="qe-close-btn" onclick="closeQuickEntry()">✕</button>
+      </div>
+
+      <div class="qe-step-dots" id="qe-step-dots">
+        <div class="qe-dot active" id="qe-dot-0"></div>
+        <div class="qe-dot" id="qe-dot-1"></div>
+        <div class="qe-dot" id="qe-dot-2"></div>
+      </div>
+
+      <!-- STEP 0: Date + session type chooser -->
+      <div class="qe-step" id="qe-step-0">
+        <div class="form-row" style="margin-bottom:16px">
+          <label for="qe-date">Date</label>
+          <input type="date" id="qe-date" onchange="updateQERestrictionWarning(this.value)" />
+        </div>
+        <div id="qe-restriction-warning" class="qe-restriction-warning" style="display:none"></div>
+        <p class="qe-section-label">What type of session?</p>
+        <div class="qe-type-grid">
+          <button class="qe-type-card" onclick="qeSelectType('strength')">
+            <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v16"/><path d="M18 4v16"/><path d="M4 7.5h4"/><path d="M4 16.5h4"/><path d="M16 7.5h4"/><path d="M16 16.5h4"/></svg></span>
+            <span class="qe-type-label">Strength</span>
+          </button>
+          <button class="qe-type-card" onclick="qeSelectType('running')">
+            <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 464 560" fill="currentColor" stroke="none"><path d="M254.414337,450.417847 C264.585602,438.958893 274.519226,427.760132 284.494202,416.514801 C282.890778,412.431519 279.107025,410.818787 276.327911,408.408752 C258.480591,392.931610 240.382355,377.744232 222.446304,362.368622 C218.727127,359.180328 216.994171,361.297699 215.156006,364.390839 C204.874634,381.691528 194.471390,398.920258 184.271774,416.268768 C180.958664,421.904053 176.830124,426.884399 172.800217,431.958344 C170.586838,434.745148 167.728973,436.502869 164.252136,437.684692 C130.215012,449.254242 96.224602,460.961426 62.239544,472.683502 C60.215141,473.381744 58.320770,474.486755 56.415760,475.496552 C43.434551,482.377594 29.852015,479.683319 20.520323,468.348877 C12.464171,458.563721 12.762745,443.885498 21.249231,433.234344 C23.484812,430.428497 26.305176,428.634064 29.777689,427.481689 C61.840385,416.841644 93.833740,405.991699 125.929192,395.452301 C130.835129,393.841309 134.200912,391.273041 136.813385,386.849030 C156.170242,354.069611 175.971710,321.548920 194.996353,288.579285 C201.203110,277.822937 205.507126,265.969971 210.701508,254.627792 C217.561661,239.648346 224.423340,224.669525 231.318359,209.706100 C237.934372,195.348114 244.522675,180.976456 251.285294,166.687546 C252.931870,163.208466 252.169876,161.611862 248.515854,160.643753 C238.551132,158.003616 228.605865,155.276184 218.725235,152.339905 C215.070419,151.253815 213.442062,152.244110 212.085190,155.802536 C203.552536,178.179520 194.766769,200.459854 186.116058,222.792038 C181.259918,235.328400 169.136902,240.018219 157.807770,233.655640 C150.207382,229.387177 146.685593,219.682999 150.061157,210.605423 C155.684814,195.482391 161.694870,180.503021 167.545181,165.464325 C172.732452,152.130020 177.951752,138.808090 183.104828,125.460594 C187.536896,113.980621 199.392426,107.650970 211.315277,110.911873 C240.514984,118.898033 269.750336,126.778572 298.777374,135.357849 C308.682068,138.285324 319.215820,139.954208 327.794647,146.718674 C340.052246,156.383896 346.692810,169.611526 352.294250,183.630600 C357.785004,197.372482 363.406860,211.061935 368.947449,224.783981 C369.569397,226.324219 369.957062,227.977112 371.903198,229.122086 C377.145233,226.227661 381.422485,221.766754 386.113098,217.923630 C397.704498,208.426529 409.040527,198.618118 420.499573,188.959030 C427.423035,183.123047 435.075592,181.811859 443.250732,185.912918 C450.234314,189.416245 456.035736,200.436462 455.254364,208.090637 C454.844666,212.103546 452.930756,215.325058 449.880463,217.908966 C427.017365,237.276413 404.177246,256.671143 381.271637,275.988190 C376.763550,279.790009 372.991302,284.529022 366.456512,285.594208 C357.050323,287.127441 348.182617,282.647675 344.855652,273.799042 C341.400818,264.610413 338.074463,255.373444 334.696167,246.156052 C333.961212,244.150803 333.470062,242.001434 331.395416,240.679001 C328.567322,241.867172 328.005920,244.703094 326.940704,247.003876 C315.547028,271.614166 304.260040,296.273865 292.919922,320.908997 C290.830139,325.448792 288.716949,330.037933 285.244720,333.698792 C281.744751,337.388885 282.544983,340.209778 286.138428,343.225983 C296.203583,351.674530 306.167053,360.244598 316.141174,368.801086 C324.977875,376.381805 333.993073,383.772705 342.537750,391.671173 C354.983246,403.175385 355.389282,421.056274 344.142487,433.706757 C318.383087,462.681030 292.737793,491.756683 267.010559,520.759521 C262.704865,525.613464 258.341187,530.427612 253.794189,535.053589 C243.197510,545.834229 226.319305,546.385071 215.488449,536.448547 C203.835632,525.757935 202.735397,508.756226 213.083679,497.004486 C226.725159,481.512878 240.474030,466.115784 254.414337,450.417847z"/><path d="M406.416687,85.881599 C412.035858,111.274323 393.239441,139.681412 367.465576,145.256546 C334.405823,152.407654 304.292755,129.931549 303.013611,96.106865 C301.865631,65.750664 326.652557,43.222263 353.498535,42.525784 C379.585571,41.848984 402.341370,60.563522 406.416687,85.881599z"/></svg></span>
+            <span class="qe-type-label">Running</span>
+          </button>
+          <button class="qe-type-card" onclick="qeSelectType('cycling')">
+            <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg></span>
+            <span class="qe-type-label">Cycling</span>
+          </button>
+          <button class="qe-type-card" onclick="qeSelectType('swim')">
+            <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/></svg></span>
+            <span class="qe-type-label">Swimming</span>
+          </button>
+          <button class="qe-type-card" onclick="qeSelectType('hiit')">
+            <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg></span>
+            <span class="qe-type-label">HIIT</span>
+          </button>
+          <button class="qe-type-card" onclick="qeSelectType('yoga')">
+            <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg></span>
+            <span class="qe-type-label">Yoga</span>
+          </button>
+        </div>
+        <button class="qe-more-types-toggle" onclick="toggleMoreTypes(this)">
+          Don't see your workout type? <span class="qe-more-arrow">&#9662;</span>
+        </button>
+        <div class="qe-more-types" id="qe-more-types" style="display:none">
+          <div class="qe-type-grid">
+            <button class="qe-type-card" onclick="qeSelectType('brick')">
+              <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+              <span class="qe-type-label">Brick</span>
+            </button>
+            <button class="qe-type-card" onclick="qeSelectType('mobility')">
+              <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
+              <span class="qe-type-label">Mobility</span>
+            </button>
+            <button class="qe-type-card" onclick="qeSelectType('walking')">
+              <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><path d="m9 20 3-6 3 6"/><path d="m6 8 6 2 6-2"/></svg></span>
+              <span class="qe-type-label">Walking</span>
+            </button>
+            <button class="qe-type-card" onclick="qeSelectType('rowing')">
+              <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/></svg></span>
+              <span class="qe-type-label">Rowing</span>
+            </button>
+            <button class="qe-type-card" onclick="qeSelectType('pilates')">
+              <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><path d="M6 20h12"/><path d="M12 6v8"/><path d="m8 10 4 4 4-4"/></svg></span>
+              <span class="qe-type-label">Pilates</span>
+            </button>
+            <button class="qe-type-card" onclick="qeSelectType('sport')">
+              <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></span>
+              <span class="qe-type-label">Sport</span>
+            </button>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--color-border);margin:18px 0 14px"></div>
+        <button class="qe-type-card qe-type-card--ask-ironz" onclick="qeShowAskIronZ()">
+          <span class="logo-mark" style="font-size:1.2rem"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+          <span class="qe-type-label" style="font-size:1rem;font-weight:700;letter-spacing:0.02em">Ask IronZ</span>
+        </button>
+        <div id="qe-ask-ironz-panel" style="display:none;margin-top:12px">
+          <textarea id="qe-ask-ironz-input" class="qe-ask-ironz-input" maxlength="150"
+            placeholder="Describe what you want, e.g. &quot;hard leg day&quot; or &quot;easy 30 min run to shake out&quot;"
+            oninput="document.getElementById('qe-ask-ironz-count').textContent=(150-this.value.length)+' left'"
+          ></textarea>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+            <span id="qe-ask-ironz-count" style="font-size:0.75rem;color:var(--color-text-muted)">150 left</span>
+            <button class="btn-primary" style="padding:8px 20px" onclick="qeSubmitAskIronZ()">Generate →</button>
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--color-border);margin:14px 0"></div>
+        <div style="display:flex;gap:8px">
+          <button class="qe-type-card qe-type-card--restriction" onclick="qeSelectType('restriction')" style="flex:1">
+            <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg></span>
+            <span class="qe-type-label">Restriction / Rest Day</span>
+          </button>
+          <button class="qe-type-card qe-type-card--equipment" onclick="qeSelectType('equipment')" style="flex:1">
+            <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v16"/><path d="M18 4v16"/><path d="M4 7.5h4"/><path d="M4 16.5h4"/><path d="M16 7.5h4"/><path d="M16 16.5h4"/></svg></span>
+            <span class="qe-type-label">Equipment Available</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- STEP 1a: Strength -->
+      <div class="qe-step" id="qe-step-1-strength" style="display:none">
+        <p class="qe-section-label">Which muscles are you targeting?</p>
+        <div class="qe-muscle-grid">
+          <button class="qe-muscle-btn" data-muscle="chest"       onclick="qeToggleMuscle(this)">Chest</button>
+          <button class="qe-muscle-btn" data-muscle="back"        onclick="qeToggleMuscle(this)">Back</button>
+          <button class="qe-muscle-btn" data-muscle="shoulders"   onclick="qeToggleMuscle(this)">Shoulders</button>
+          <button class="qe-muscle-btn" data-muscle="biceps"      onclick="qeToggleMuscle(this)">Biceps</button>
+          <button class="qe-muscle-btn" data-muscle="triceps"     onclick="qeToggleMuscle(this)">Triceps</button>
+          <button class="qe-muscle-btn" data-muscle="quads"       onclick="qeToggleMuscle(this)">Quads</button>
+          <button class="qe-muscle-btn" data-muscle="hamstrings"  onclick="qeToggleMuscle(this)">Hamstrings</button>
+          <button class="qe-muscle-btn" data-muscle="glutes"      onclick="qeToggleMuscle(this)">Glutes</button>
+          <button class="qe-muscle-btn" data-muscle="core"        onclick="qeToggleMuscle(this)">Core</button>
+          <button class="qe-muscle-btn" data-muscle="calves"      onclick="qeToggleMuscle(this)">Calves</button>
+          <button class="qe-muscle-btn" data-muscle="full body"   onclick="qeToggleMuscle(this)">Full Body</button>
+        </div>
+        <div class="form-row" style="margin-top:14px">
+          <label for="qe-strength-level">Your Level</label>
+          <select id="qe-strength-level">
+            <option value="beginner">Beginner</option>
+            <option value="intermediate" selected>Intermediate</option>
+            <option value="advanced">Advanced</option>
+          </select>
+        </div>
+        <div class="form-row" style="margin-top:12px">
+          <label for="qe-strength-duration">Session Length</label>
+          <select id="qe-strength-duration">
+            <option value="15">15 min</option>
+            <option value="30">30 min</option>
+            <option value="45" selected>45 min</option>
+            <option value="60">60 min</option>
+            <option value="75">75+ min</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:18px">
+          <button class="btn-primary"   style="flex:1" onclick="qeGenerateStrength()">Generate Workout</button>
+          <button class="btn-secondary" style="flex:1" onclick="qeGoManual()">Add Manually</button>
+        </div>
+      </div>
+
+      <!-- STEP 1b: HIIT -->
+      <div class="qe-step" id="qe-step-1-hiit" style="display:none">
+        <div class="form-row">
+          <label for="qe-hiit-format">Format</label>
+          <select id="qe-hiit-format">
+            <option value="circuit">Circuit (rounds of exercises)</option>
+            <option value="tabata">Tabata (20s on / 10s off)</option>
+            <option value="emom">EMOM (every minute on the minute)</option>
+            <option value="amrap">AMRAP (as many rounds as possible)</option>
+          </select>
+        </div>
+        <div class="form-row" style="margin-top:12px">
+          <label for="qe-hiit-focus">Focus</label>
+          <select id="qe-hiit-focus">
+            <option value="full body" selected>Full Body</option>
+            <option value="upper body">Upper Body</option>
+            <option value="lower body">Lower Body</option>
+            <option value="core">Core</option>
+            <option value="cardio">Cardio-Heavy</option>
+          </select>
+        </div>
+        <div class="form-row" style="margin-top:12px">
+          <label for="qe-hiit-intensity">Intensity</label>
+          <select id="qe-hiit-intensity">
+            <option value="light">Light (longer rest, lower impact)</option>
+            <option value="moderate" selected>Moderate</option>
+            <option value="intense">Intense (shorter rest, explosive)</option>
+            <option value="max">All-out (minimal rest, max effort)</option>
+          </select>
+        </div>
+        <div class="form-row" style="margin-top:12px">
+          <label for="qe-hiit-duration">Duration</label>
+          <select id="qe-hiit-duration">
+            <option value="15">15 min</option>
+            <option value="20" selected>20 min</option>
+            <option value="30">30 min</option>
+            <option value="45">45 min</option>
+            <option value="60">60 min</option>
+          </select>
+        </div>
+        <div class="form-row" style="margin-top:12px">
+          <label for="qe-hiit-equipment">Equipment</label>
+          <select id="qe-hiit-equipment">
+            <option value="none" selected>No equipment (bodyweight)</option>
+            <option value="dumbbells">Dumbbells</option>
+            <option value="kettlebell">Kettlebell</option>
+            <option value="full-gym">Full gym</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:18px">
+          <button class="btn-primary"   style="flex:1" onclick="qeGenerateHIIT()">Generate Workout</button>
+          <button class="btn-secondary" style="flex:1" onclick="qeGoManual()">Add Manually</button>
+        </div>
+      </div>
+
+      <!-- STEP 1c: Cardio / General -->
+      <div class="qe-step" id="qe-step-1-cardio" style="display:none">
+        <div class="form-row">
+          <label for="qe-activity-intensity">Intensity</label>
+          <select id="qe-activity-intensity">
+            <option value="easy">Easy</option>
+            <option value="moderate" selected>Moderate</option>
+            <option value="hard">Hard</option>
+            <option value="long">Long / Endurance</option>
+          </select>
+        </div>
+        <div class="form-row" style="margin-top:12px" id="qe-duration-single">
+          <label for="qe-cardio-duration">Duration</label>
+          <select id="qe-cardio-duration">
+            <option value="20">20 min</option>
+            <option value="30">30 min</option>
+            <option value="45" selected>45 min</option>
+            <option value="60">60 min</option>
+            <option value="90">90 min</option>
+            <option value="120">120 min</option>
+            <option value="150">150 min</option>
+          </select>
+        </div>
+        <div id="qe-duration-brick" style="display:none;margin-top:12px">
+          <div style="display:flex;gap:10px">
+            <div class="form-row" style="flex:1">
+              <label for="qe-brick-bike-duration">Bike Duration</label>
+              <select id="qe-brick-bike-duration">
+                <option value="20">20 min</option>
+                <option value="30">30 min</option>
+                <option value="45" selected>45 min</option>
+                <option value="60">60 min</option>
+                <option value="75">75 min</option>
+                <option value="90">90 min</option>
+                <option value="120">120 min</option>
+              </select>
+            </div>
+            <div class="form-row" style="flex:1">
+              <label for="qe-brick-run-duration">Run Duration</label>
+              <select id="qe-brick-run-duration">
+                <option value="10">10 min</option>
+                <option value="15">15 min</option>
+                <option value="20" selected>20 min</option>
+                <option value="30">30 min</option>
+                <option value="45">45 min</option>
+                <option value="60">60 min</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:12px">
+          <label for="qe-activity-notes">Notes (optional)</label>
+          <input type="text" id="qe-activity-notes" placeholder="e.g. Easy 5km, recovery ride" />
+        </div>
+        <div class="qe-cardio-actions">
+          <button class="btn-primary" onclick="qeGenerateCardio()">Generate Workout</button>
+          <button class="btn-secondary" onclick="qeGoCardioManual()">Log Manually</button>
+        </div>
+        <p id="qe-activity-msg" class="save-msg"></p>
+      </div>
+
+      <!-- STEP 1c: Restriction -->
+      <div class="qe-step" id="qe-step-1-restriction" style="display:none">
+        <div class="form-row">
+          <label for="qe-restriction-type">Restriction Type</label>
+          <select id="qe-restriction-type">
+            <option value="injury">Injury / Pain</option>
+            <option value="sick">Sick / Low Energy</option>
+            <option value="travel">Traveling</option>
+            <option value="time">Time Limited</option>
+            <option value="rest">Full Rest Day</option>
+          </select>
+        </div>
+        <div class="form-row" style="margin-top:12px">
+          <label>Session Action</label>
+          <div class="restriction-action-group">
+            <label class="restriction-action-option">
+              <input type="radio" name="qe-session-action" value="reduce" checked />
+              <div>
+                <div class="restriction-action-label">Reduce intensity</div>
+                <div class="restriction-action-desc">Keep session but modify based on restriction</div>
+              </div>
+            </label>
+            <label class="restriction-action-option">
+              <input type="radio" name="qe-session-action" value="remove" />
+              <div>
+                <div class="restriction-action-label">Remove session</div>
+                <div class="restriction-action-desc">Skip this day's workout entirely</div>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:12px">
+          <label for="qe-restriction-note">Note (optional)</label>
+          <input type="text" id="qe-restriction-note" placeholder="e.g. sore left knee, business trip" />
+        </div>
+        <button class="btn-primary" style="margin-top:14px;width:100%" onclick="saveQuickRestriction()">Save Restriction</button>
+        <p id="qe-restriction-msg" class="save-msg"></p>
+      </div>
+
+      <!-- STEP 1d: Equipment restriction -->
+      <div class="qe-step" id="qe-step-1-equipment" style="display:none">
+        <p class="qe-section-label" style="margin-bottom:10px">What equipment is available?</p>
+        <p style="font-size:0.8rem;color:var(--color-text-muted);margin-bottom:14px">Bodyweight is always available. Check anything else you have access to.</p>
+        <div class="equipment-check-list">
+          <label class="equipment-check-option">
+            <input type="checkbox" id="qe-equip-dumbbells" onchange="document.getElementById('qe-dumbbell-weight-row').style.display=this.checked?'flex':'none'" />
+            <span>Dumbbells</span>
+          </label>
+          <div id="qe-dumbbell-weight-row" style="display:none;align-items:center;gap:8px;margin:4px 0 8px 24px">
+            <label for="qe-dumbbell-max-weight" style="font-size:0.8rem;color:var(--color-text-muted);white-space:nowrap">Max weight per dumbbell:</label>
+            <input type="number" id="qe-dumbbell-max-weight" min="1" max="300" placeholder="No limit" style="width:90px" />
+            <span style="font-size:0.8rem;color:var(--color-text-muted)">lbs</span>
+          </div>
+          <label class="equipment-check-option">
+            <input type="checkbox" id="qe-equip-barbell" />
+            <span>Barbell &amp; Rack</span>
+          </label>
+          <label class="equipment-check-option" style="position:relative">
+            <input type="checkbox" id="qe-equip-cables" onchange="if(!this.checked){document.getElementById('qe-cables-detail').style.display='none';document.querySelectorAll('#qe-cables-detail input[type=checkbox]').forEach(c=>c.checked=false)}else{document.querySelectorAll('#qe-cables-detail input[type=checkbox]').forEach(c=>c.checked=true)}" />
+            <span style="flex:1">Cables / Machines</span>
+            <button type="button" id="qe-cables-specify-btn" class="equip-specify-btn" onclick="event.preventDefault();event.stopPropagation();var d=document.getElementById('qe-cables-detail');var cb=document.getElementById('qe-equip-cables');if(!cb.checked){cb.checked=true;cb.dispatchEvent(new Event('change'))}d.style.display=d.style.display==='none'?'':'none'">Specify</button>
+          </label>
+          <div id="qe-cables-detail" class="cables-detail-list" style="display:none"></div>
+        </div>
+        <div class="form-row" style="margin-top:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+            <label for="qe-equip-end-date" style="margin:0">Apply through (optional end date)</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--color-text-muted);cursor:pointer;white-space:nowrap">
+              <input type="checkbox" id="qe-equip-permanent" onchange="(function(c){var r=document.getElementById('qe-equip-date-row');r.style.opacity=c.checked?'0.4':'1';r.style.pointerEvents=c.checked?'none':'';document.getElementById('qe-equip-end-date').disabled=c.checked;})(this)" />
+              Permanent
+            </label>
+          </div>
+          <div id="qe-equip-date-row">
+            <input type="date" id="qe-equip-end-date" style="margin-top:6px" />
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:12px">
+          <label for="qe-equip-note">Note (optional)</label>
+          <input type="text" id="qe-equip-note" placeholder="e.g. Hotel gym, traveling for work" />
+        </div>
+        <button class="btn-primary" style="margin-top:14px;width:100%" onclick="saveQuickEquipmentRestriction()">Save</button>
+        <p id="qe-equipment-msg" class="save-msg"></p>
+      </div>
+
+      <!-- STEP 2a: AI-generated workout preview -->
+      <div class="qe-step" id="qe-step-2-generated" style="display:none">
+        <div id="qe-ai-loading" style="text-align:center;padding:24px 0;display:none">
+          <div class="qe-spinner"></div>
+          <p style="color:var(--color-text-muted);font-size:0.9rem;margin-top:12px">Building your workout…</p>
+        </div>
+        <div id="qe-ai-result"></div>
+        <p id="qe-activity-msg-generated" class="save-msg"></p>
+      </div>
+
+      <!-- STEP 2b: Manual strength entry -->
+      <div class="qe-step" id="qe-step-2-manual" style="display:none">
+        <div class="form-row" style="margin-bottom:10px">
+          <label for="qe-manual-workout-name">Workout Name (optional)</label>
+          <input type="text" id="qe-manual-workout-name" placeholder="e.g. Push Day A" />
+        </div>
+        <div class="form-row" style="margin-bottom:10px">
+          <label for="qe-manual-notes">Session Notes (optional)</label>
+          <input type="text" id="qe-manual-notes" placeholder="e.g. Upper body focus, felt strong" />
+        </div>
+        <div id="qe-hiit-meta" style="display:none;margin-bottom:12px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <div style="flex:1;min-width:120px">
+              <label class="qe-section-label" for="qe-manual-hiit-format">Format</label>
+              <select id="qe-manual-hiit-format">
+                <option value="circuit">Circuit</option>
+                <option value="tabata">Tabata</option>
+                <option value="emom">EMOM</option>
+                <option value="amrap">AMRAP</option>
+                <option value="for-time">For Time</option>
+              </select>
+            </div>
+            <div style="flex:1;min-width:70px">
+              <label class="qe-section-label" for="qe-manual-hiit-rounds">Rounds</label>
+              <input type="number" id="qe-manual-hiit-rounds" value="3" min="1" max="50" />
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <div style="flex:1">
+              <label class="qe-section-label" for="qe-manual-hiit-rest-ex">Rest b/w exercises</label>
+              <input type="text" id="qe-manual-hiit-rest-ex" placeholder="e.g. 15s" />
+            </div>
+            <div style="flex:1">
+              <label class="qe-section-label" for="qe-manual-hiit-rest-rnd">Rest b/w rounds</label>
+              <input type="text" id="qe-manual-hiit-rest-rnd" placeholder="e.g. 60s" />
+            </div>
+          </div>
+        </div>
+        <div id="qe-exercise-rows"></div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button class="btn-secondary" style="flex:1" onclick="qeAddExerciseRow()">+ Add Exercise</button>
+        </div>
+        <button class="btn-primary"   style="width:100%;margin-top:14px" onclick="qeSaveManual()">Save Session</button>
+        <p id="qe-manual-msg" class="save-msg"></p>
+      </div>
+
+      <!-- STEP 2c: Cardio manual entry -->
+      <div class="qe-step" id="qe-step-2-cardio-manual" style="display:none">
+        <div class="form-row" style="margin-bottom:10px">
+          <label for="qe-cardio-manual-notes">Session Title / Notes (optional)</label>
+          <input type="text" id="qe-cardio-manual-notes" placeholder="e.g. Easy 5K, Recovery Ride" />
+        </div>
+        <div id="qe-cardio-interval-rows"></div>
+        <button class="btn-secondary" style="width:100%;margin-top:6px"  onclick="qeAddCardioRow()">+ Add Interval / Phase</button>
+        <button class="btn-primary"   style="width:100%;margin-top:14px" onclick="qeSaveCardioManual()">Save Session</button>
+        <p id="qe-cardio-manual-msg" class="save-msg"></p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Edit Workout Modal -->
+  <div id="edit-workout-overlay" class="quick-entry-overlay" onclick="if(event.target===this) closeEditWorkout()">
+    <div class="quick-entry-modal">
+      <div class="quick-entry-header">
+        <div>
+          <div class="qe-date-label">Edit Workout</div>
+          <div id="edit-workout-date" style="font-size:0.8rem;color:var(--color-text-muted);margin-top:2px"></div>
+        </div>
+        <button class="qe-close-btn" onclick="closeEditWorkout()">✕</button>
+      </div>
+
+      <div class="form-row">
+        <label for="edit-workout-notes">Notes</label>
+        <input type="text" id="edit-workout-notes" placeholder="e.g. Felt strong, increased weight" />
+      </div>
+
+      <!-- Strength: exercise rows -->
+      <div id="edit-exercise-section">
+        <div id="edit-exercise-rows"></div>
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <button class="btn-secondary" style="flex:1" onclick="addEditExerciseRow()">+ Add Exercise</button>
+        </div>
+      </div>
+
+      <!-- Cardio: interval rows -->
+      <div id="edit-interval-section" style="display:none">
+        <div id="edit-interval-rows"></div>
+        <button class="btn-secondary" style="width:100%;margin-top:4px" onclick="addEditIntervalRow()">+ Add Interval / Phase</button>
+      </div>
+
+      <button class="btn-primary" style="width:100%;margin-top:10px" onclick="saveEditedWorkout()">Save Changes</button>
+      <p id="edit-workout-msg" class="save-msg"></p>
+    </div>
+  </div>
+
+  <!-- Exercise Info Modal -->
+  <div id="exercise-info-modal" class="quick-entry-overlay" style="display:none" onclick="if(event.target===this) closeExerciseInfo()">
+    <div class="quick-entry-modal" style="max-width:380px">
+      <div id="exercise-info-content" style="padding:20px"></div>
+    </div>
+  </div>
+
+  <!-- Level Up Celebration Modal -->
+  <div id="level-up-modal" class="quick-entry-overlay" style="display:none" onclick="if(event.target===this) closeLevelUpModal()">
+    <div class="quick-entry-modal" style="max-width:360px">
+      <div id="level-up-content"></div>
+    </div>
+  </div>
+
+  <!-- Custom Plan — AI Type Picker Modal -->
+  <div id="cp-ai-modal" class="quick-entry-overlay" onclick="if(event.target===this) closeCustomPlanAIModal()">
+    <div class="quick-entry-modal" style="max-width:340px">
+      <div class="quick-entry-header">
+        <span class="qe-date-label" id="cp-ai-modal-title">AI Session</span>
+        <button class="qe-close-btn" onclick="closeCustomPlanAIModal()">&#10005;</button>
+      </div>
+      <p class="hint" style="padding:0 16px">Choose a workout type to generate:</p>
+      <div id="cp-ai-type-list" style="padding:8px 16px 16px;display:flex;flex-direction:column;gap:6px"></div>
+      <div id="cp-ai-detail" style="display:none"></div>
+      <div style="border-top:1px solid var(--color-border);margin:0 16px"></div>
+      <div style="padding:8px 16px 16px">
+        <button class="qe-type-card qe-type-card--ask-ironz" style="width:100%" onclick="cpShowAskIronZ()">
+          <span class="logo-mark" style="font-size:1.2rem"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+          <span class="qe-type-label" style="font-size:1rem;font-weight:700;letter-spacing:0.02em">Ask IronZ</span>
+        </button>
+        <div id="cp-ask-ironz-panel" style="display:none;margin-top:10px">
+          <textarea id="cp-ask-ironz-input" rows="2" placeholder="e.g. Upper body push day, 45 min, intermediate" style="width:100%;box-sizing:border-box;resize:vertical;margin-bottom:8px"></textarea>
+          <button class="btn-primary" style="width:100%" onclick="cpSubmitAskIronZ()">Generate</button>
+          <p id="cp-ask-ironz-msg" class="save-msg"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Plan — Saved Workout Picker Modal -->
+  <div id="cp-saved-modal" class="quick-entry-overlay" onclick="if(event.target===this) closeCustomPlanSavedModal()">
+    <div class="quick-entry-modal" style="max-width:400px">
+      <div class="quick-entry-header">
+        <span class="qe-date-label">Pick a Saved Workout</span>
+        <button class="qe-close-btn" onclick="closeCustomPlanSavedModal()">&#10005;</button>
+      </div>
+      <div id="cp-saved-list" style="padding:8px 16px 16px;display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+  </div>
+
+  <!-- Custom Plan — Manual Entry Modal -->
+  <div id="cp-manual-modal" class="quick-entry-overlay" onclick="if(event.target===this) closeCustomPlanManualModal()">
+    <div class="quick-entry-modal" style="max-width:440px">
+      <div class="quick-entry-header">
+        <span id="cp-manual-back" style="display:none;cursor:pointer;color:var(--color-accent);font-size:0.9rem" onclick="cpManualShowStep(1)">&#8592; Back</span>
+        <span class="qe-date-label" id="cp-manual-title">Add Session</span>
+        <button class="qe-close-btn" onclick="closeCustomPlanManualModal()">&#10005;</button>
+      </div>
+      <div id="cp-manual-dots" class="qe-step-dots">
+        <span class="qe-dot active"></span><span class="qe-dot"></span>
+      </div>
+      <!-- Step 1: Type selection -->
+      <div id="cp-manual-step-1" style="padding:8px 16px 16px">
+        <p class="qe-section-label">What type of session?</p>
+        <div class="qe-type-grid">
+          <button class="qe-type-card" onclick="cpManualSelectType('strength')">
+            <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v16"/><path d="M18 4v16"/><path d="M4 7.5h4"/><path d="M4 16.5h4"/><path d="M16 7.5h4"/><path d="M16 16.5h4"/></svg></span>
+            <span class="qe-type-label">Strength</span>
+          </button>
+          <button class="qe-type-card" onclick="cpManualSelectType('running')">
+            <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 464 560" fill="currentColor" stroke="none"><path d="M254.414337,450.417847 C264.585602,438.958893 274.519226,427.760132 284.494202,416.514801 C282.890778,412.431519 279.107025,410.818787 276.327911,408.408752 C258.480591,392.931610 240.382355,377.744232 222.446304,362.368622 C218.727127,359.180328 216.994171,361.297699 215.156006,364.390839 C204.874634,381.691528 194.471390,398.920258 184.271774,416.268768 C180.958664,421.904053 176.830124,426.884399 172.800217,431.958344 C170.586838,434.745148 167.728973,436.502869 164.252136,437.684692 C130.215012,449.254242 96.224602,460.961426 62.239544,472.683502 C60.215141,473.381744 58.320770,474.486755 56.415760,475.496552 C43.434551,482.377594 29.852015,479.683319 20.520323,468.348877 C12.464171,458.563721 12.762745,443.885498 21.249231,433.234344 C23.484812,430.428497 26.305176,428.634064 29.777689,427.481689 C61.840385,416.841644 93.833740,405.991699 125.929192,395.452301 C130.835129,393.841309 134.200912,391.273041 136.813385,386.849030 C156.170242,354.069611 175.971710,321.548920 194.996353,288.579285 C201.203110,277.822937 205.507126,265.969971 210.701508,254.627792 C217.561661,239.648346 224.423340,224.669525 231.318359,209.706100 C237.934372,195.348114 244.522675,180.976456 251.285294,166.687546 C252.931870,163.208466 252.169876,161.611862 248.515854,160.643753 C238.551132,158.003616 228.605865,155.276184 218.725235,152.339905 C215.070419,151.253815 213.442062,152.244110 212.085190,155.802536 C203.552536,178.179520 194.766769,200.459854 186.116058,222.792038 C181.259918,235.328400 169.136902,240.018219 157.807770,233.655640 C150.207382,229.387177 146.685593,219.682999 150.061157,210.605423 C155.684814,195.482391 161.694870,180.503021 167.545181,165.464325 C172.732452,152.130020 177.951752,138.808090 183.104828,125.460594 C187.536896,113.980621 199.392426,107.650970 211.315277,110.911873 C240.514984,118.898033 269.750336,126.778572 298.777374,135.357849 C308.682068,138.285324 319.215820,139.954208 327.794647,146.718674 C340.052246,156.383896 346.692810,169.611526 352.294250,183.630600 C357.785004,197.372482 363.406860,211.061935 368.947449,224.783981 C369.569397,226.324219 369.957062,227.977112 371.903198,229.122086 C377.145233,226.227661 381.422485,221.766754 386.113098,217.923630 C397.704498,208.426529 409.040527,198.618118 420.499573,188.959030 C427.423035,183.123047 435.075592,181.811859 443.250732,185.912918 C450.234314,189.416245 456.035736,200.436462 455.254364,208.090637 C454.844666,212.103546 452.930756,215.325058 449.880463,217.908966 C427.017365,237.276413 404.177246,256.671143 381.271637,275.988190 C376.763550,279.790009 372.991302,284.529022 366.456512,285.594208 C357.050323,287.127441 348.182617,282.647675 344.855652,273.799042 C341.400818,264.610413 338.074463,255.373444 334.696167,246.156052 C333.961212,244.150803 333.470062,242.001434 331.395416,240.679001 C328.567322,241.867172 328.005920,244.703094 326.940704,247.003876 C315.547028,271.614166 304.260040,296.273865 292.919922,320.908997 C290.830139,325.448792 288.716949,330.037933 285.244720,333.698792 C281.744751,337.388885 282.544983,340.209778 286.138428,343.225983 C296.203583,351.674530 306.167053,360.244598 316.141174,368.801086 C324.977875,376.381805 333.993073,383.772705 342.537750,391.671173 C354.983246,403.175385 355.389282,421.056274 344.142487,433.706757 C318.383087,462.681030 292.737793,491.756683 267.010559,520.759521 C262.704865,525.613464 258.341187,530.427612 253.794189,535.053589 C243.197510,545.834229 226.319305,546.385071 215.488449,536.448547 C203.835632,525.757935 202.735397,508.756226 213.083679,497.004486 C226.725159,481.512878 240.474030,466.115784 254.414337,450.417847z"/><path d="M406.416687,85.881599 C412.035858,111.274323 393.239441,139.681412 367.465576,145.256546 C334.405823,152.407654 304.292755,129.931549 303.013611,96.106865 C301.865631,65.750664 326.652557,43.222263 353.498535,42.525784 C379.585571,41.848984 402.341370,60.563522 406.416687,85.881599z"/></svg></span>
+            <span class="qe-type-label">Running</span>
+          </button>
+          <button class="qe-type-card" onclick="cpManualSelectType('cycling')">
+            <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg></span>
+            <span class="qe-type-label">Cycling</span>
+          </button>
+          <button class="qe-type-card" onclick="cpManualSelectType('swimming')">
+            <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/></svg></span>
+            <span class="qe-type-label">Swimming</span>
+          </button>
+          <button class="qe-type-card" onclick="cpManualSelectType('hiit')">
+            <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg></span>
+            <span class="qe-type-label">HIIT</span>
+          </button>
+          <button class="qe-type-card" onclick="cpManualSelectType('yoga')">
+            <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg></span>
+            <span class="qe-type-label">Yoga</span>
+          </button>
+        </div>
+      </div>
+      <!-- Step 2: Name & notes for selected type -->
+      <div id="cp-manual-step-2" style="display:none;padding:8px 16px 16px">
+        <div class="form-row">
+          <label for="cp-manual-name">Workout Name (optional)</label>
+          <input type="text" id="cp-manual-name" placeholder="e.g. Push Day A" />
+        </div>
+        <div class="form-row">
+          <label for="cp-manual-notes">Session Notes (optional)</label>
+          <textarea id="cp-manual-notes" rows="2" placeholder="e.g. Upper body focus, felt strong"></textarea>
+        </div>
+        <div id="cp-manual-exercises">
+          <div id="cp-manual-exercise-rows"></div>
+          <button class="btn-secondary" style="width:100%;margin-top:8px" onclick="cpManualAddExRow()">+ Add Exercise</button>
+        </div>
+        <div id="cp-manual-cardio" style="display:none">
+          <div id="cp-manual-cardio-rows"></div>
+          <button class="btn-secondary" style="width:100%;margin-top:8px" onclick="cpManualAddCardioRow()">+ Add Interval / Phase</button>
+        </div>
+        <button class="btn-primary" style="width:100%;margin-top:12px" onclick="customPlanSaveManual()">Save Session</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Survey Overlay -->
+  <div id="survey-overlay" class="survey-overlay" onclick="if(event.target===this) closeSurvey()">
+    <div class="survey-modal">
+      <div class="sv-progress-bar">
+        <div class="sv-progress-fill" id="survey-progress-fill"></div>
+      </div>
+      <div class="sv-modal-nav">
+        <button class="sv-back-btn" id="survey-back-btn" onclick="surveyBack()">← Back</button>
+        <button class="sv-close-btn" onclick="closeSurvey()">✕</button>
+      </div>
+      <div class="sv-step-content" id="survey-step-content"></div>
+      <div class="sv-modal-footer">
+        <p class="sv-val-msg" id="survey-val-msg"></p>
+        <button class="sv-next-btn" id="survey-next-btn" onclick="surveyNext()">Continue →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Onboarding Overlay (first-time users only) -->
+  <div id="onboarding-overlay" class="survey-overlay">
+    <div class="survey-modal">
+      <div class="sv-progress-bar">
+        <div class="sv-progress-fill" id="onboarding-progress-fill"></div>
+      </div>
+      <div class="sv-step-content" id="onboarding-step-content"></div>
+      <div class="sv-modal-footer">
+        <p class="sv-val-msg" id="onboarding-val-msg"></p>
+        <div style="display:flex;gap:8px">
+          <button class="btn-secondary" id="onboarding-back-btn" onclick="onboardingBack()" style="display:none">&larr; Back</button>
+          <button class="sv-next-btn" id="onboarding-next-btn" onclick="onboardingNext()" style="flex:1">Continue &rarr;</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Paywall Modal -->
+  <div id="paywall-overlay" class="quick-entry-overlay" style="display:none" onclick="if(event.target===this) closePaywall()">
+    <div class="quick-entry-modal" style="max-width:440px">
+      <div class="quick-entry-header">
+        <span class="qe-date-label">IronZ Premium</span>
+        <button class="qe-close-btn" onclick="closePaywall()">&#10005;</button>
+      </div>
+      <div id="paywall-content" style="padding:16px"></div>
+    </div>
+  </div>
+
+  <!-- Weekly Check-In Overlay -->
+  <div id="weekly-checkin-overlay" class="quick-entry-overlay" style="display:none" onclick="if(event.target===this) closeWeeklyCheckin()">
+    <div class="quick-entry-modal" style="max-width:440px">
+      <div class="quick-entry-header">
+        <span class="qe-date-label">Weekly Check-In</span>
+        <button class="qe-close-btn" onclick="closeWeeklyCheckin()">&#10005;</button>
+      </div>
+      <div id="weekly-checkin-content" style="padding:16px"></div>
+    </div>
+  </div>
+
+  <!-- Barcode Scanner Modal -->
+  <div id="barcode-scanner-modal" class="survey-overlay" style="display:none" onclick="if(event.target===this) closeBarcodeScanner()">
+    <div class="survey-panel" style="max-width:440px">
+      <div class="qe-header">
+        <span class="qe-date-label">Scan Barcode</span>
+        <button class="qe-close-btn" onclick="closeBarcodeScanner()">&#10005;</button>
+      </div>
+      <div style="padding:16px">
+        <p id="barcode-status" class="hint" style="text-align:center;margin:0 0 12px"></p>
+        <div id="barcode-camera-panel">
+          <div id="barcode-reader" style="width:100%;border-radius:8px;overflow:hidden"></div>
+        </div>
+        <div id="barcode-result-panel" style="display:none"></div>
+        <div id="barcode-recent-panel" style="display:none;margin-top:16px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts — order matters -->
+  <script src="config.js"></script>
+  <script src="icons.js"></script>
+  <script src="themes.js"></script>
+  <script src="stats.js"></script>
+  <script src="workouts.js"></script>
+  <script src="nutrition.js"></script>
+  <script src="meals-data.js"></script>
+  <script src="planner.js"></script>
+  <script src="survey.js"></script>
+  <script src="exercise-library.js"></script>
+  <script src="calendar.js"></script>
+  <script src="live-tracker.js"></script>
+  <script src="nl-input.js"></script>
+
+  <script src="share.js"></script>
+  <script src="calendar-sync.js"></script>
+  <script src="app.js"></script>
+  <script src="workout-editor.js"></script>
+  <script src="nutrition-v2.js"></script>
+  <script src="meal-planner.js"></script>
+  <script src="custom-plan.js"></script>
+  <script src="leveling.js"></script>
+  <script src="challenges.js"></script>
+  <script src="ux-level.js"></script>
+  <script src="hydration.js"></script>
+  <script src="goals.js"></script>
+  <script src="life-training.js"></script>
+  <script src="strava-integration.js"></script>
+  <script src="adaptive-coach.js"></script>
+  <script src="subscription.js"></script>
+  <script src="trust-center.js"></script>
+  <script src="adherence.js"></script>
+  <script src="notifications.js"></script>
+  <script src="claims-filter.js"></script>
+  <script src="safety-guardrails.js"></script>
+  <script src="weekly-checkin.js"></script>
+  <script src="barcode-scanner.js"></script>
+  <script src="onboarding.js"></script>
+  <!-- auth.js last — overrides window.onload to gate app behind login -->
+  <script src="auth.js"></script>
+
+</body>
+</html>
