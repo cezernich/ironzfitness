@@ -42,6 +42,7 @@ const SURVEY_STEPS = [
   "plan-length",      // only shown for strength / effectively-strength
   "activity-days",    // only shown for just-training with 2+ activities
   "gym-strength",     // only shown for race types
+  "zones",            // optional: add reference times / weights for athlete zones
   "summary",
 ];
 
@@ -50,7 +51,7 @@ const SURVEY_ACTIVITY_OPTIONS = [
   { value: "lifting",    icon: ICONS.weights,  label: "Strength",       type: "weightlifting" },
   { value: "cycling",    icon: ICONS.bike,     label: "Cycling",         type: "cycling" },
   { value: "swimming",   icon: ICONS.swim,     label: "Swimming",        type: "swimming" },
-  { value: "hiit",       icon: ICONS.flame,    label: "HIIT",            type: "general" },
+  { value: "hiit",       icon: ICONS.flame,    label: "HIIT",            type: "hiit" },
   { value: "yoga",       icon: ICONS.yoga,     label: "Yoga / Mobility", type: "yoga" },
   { value: "bodyweight", icon: ICONS.activity, label: "Bodyweight",      type: "weightlifting" },
   { value: "general",    icon: ICONS.star,     label: "General Fitness", type: "general" },
@@ -76,6 +77,7 @@ let surveyData = {
   strengthSplitDays:   null,   // array of { label, muscles[] }
   yogaTypes:           [],     // selected yoga style preferences (empty = all)
   planLength:          null,   // weeks (e.g. 8, 12, 16, 26, 52) or 0 = indefinite
+  zones:               {},     // { running: {dist, h, m, s}, biking: {ftp}, swimming: {m, s}, strength: {bench, squat, ...} }
 };
 
 // Non-race types skip the race-date step entirely
@@ -100,13 +102,34 @@ function _isMixedFlow() {
 
 // Custom step order for mixed / multi-activity plans:
 // activities → days-per-week → activity-days → [yoga-types] → [strength-goal] → fitness-level → [strength-split] → plan-length → summary
+function _getSurveyZoneSports() {
+  const sports = [];
+  const s = surveyData.sport;
+  if (s === "running" || s === "triathlon") sports.push("running");
+  if (s === "cycling" || s === "triathlon") sports.push("biking");
+  if (s === "triathlon") sports.push("swimming");
+  if (s === "strength" || isEffectivelyStrength()) sports.push("strength");
+  // Just-training: check individual activities
+  if (s === "just-training") {
+    if (surveyData.activities.includes("running") && !sports.includes("running")) sports.push("running");
+    if (surveyData.activities.includes("cycling") && !sports.includes("biking")) sports.push("biking");
+    if (surveyData.activities.includes("swimming") && !sports.includes("swimming")) sports.push("swimming");
+    if ((surveyData.activities.includes("lifting") || surveyData.activities.includes("bodyweight")) && !sports.includes("strength")) sports.push("strength");
+  }
+  // Gym strength add-on for race types
+  if (surveyData.gymStrength && !sports.includes("strength")) sports.push("strength");
+  return sports;
+}
+
 function _getMixedFlowSteps() {
   const steps = ["activities", "days-per-week", "activity-days"];
   if (surveyData.activities.includes("yoga")) steps.push("yoga-types");
   if (isEffectivelyStrength()) steps.push("strength-goal");
   steps.push("fitness-level");
   if (isEffectivelyStrength()) steps.push("strength-split");
-  steps.push("plan-length", "summary");
+  steps.push("plan-length");
+  if (_getSurveyZoneSports().length > 0) steps.push("zones");
+  steps.push("summary");
   return steps;
 }
 
@@ -114,7 +137,7 @@ function _getMixedFlowSteps() {
 
 function openSurvey() {
   surveyStep = 0;
-  surveyData = { sport: null, raceType: null, raceDate: null, raceName: "", longDay: null, level: null, daysPerWeek: null, preferredDays: null, activityDayMap: {}, activities: [], gymStrength: null, gymDays: 2, runGoal: null, returningFromInjury: null, strengthGoal: null, strengthSplit: null, strengthSplitDays: null, planLength: null, yogaTypes: [] };
+  surveyData = { sport: null, raceType: null, raceDate: null, raceName: "", longDay: null, level: null, daysPerWeek: null, preferredDays: null, activityDayMap: {}, activities: [], gymStrength: null, gymDays: 2, runGoal: null, returningFromInjury: null, strengthGoal: null, strengthSplit: null, strengthSplitDays: null, planLength: null, yogaTypes: [], zones: {} };
   const overlay = document.getElementById("survey-overlay");
   if (overlay) {
     overlay.classList.add("is-open");
@@ -205,15 +228,50 @@ function _renderCustomPlanStep() {
       startEl.value = d.toISOString().slice(0, 10);
     }
   } else if (_customPlanMode === "ironz") {
-    content.innerHTML = `
-      <div class="sv-welcome" style="padding-top:30px">
-        <h1 class="sv-welcome-title" style="font-size:1.6rem">Create on IronZ</h1>
-        <p class="sv-welcome-sub">Describe the plan you want and IronZ will generate it.</p>
-        <div style="max-width:420px;margin:20px auto 0;text-align:left">
-          <div class="form-row">
-            <label for="sv-ironz-prompt">What kind of plan do you want?</label>
-            <textarea id="sv-ironz-prompt" rows="3" placeholder="e.g. 8-week half marathon plan, 4 days/week, intermediate level&#10;&#10;or: 4-week upper/lower strength split, focus on hypertrophy" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>
+    // Initialize week builder state
+    if (!_ironzWeekPlan) {
+      _ironzWeekPlan = {};
+      for (let i = 0; i < 7; i++) _ironzWeekPlan[i] = null; // null = no session
+    }
+
+    const DOW_FULL = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+    let daysHtml = "";
+    DOW_FULL.forEach((dayName, i) => {
+      const session = _ironzWeekPlan[i];
+      let sessionBody = `<div class="ironz-day-empty" id="ironz-day-body-${i}">No session planned</div>`;
+      if (session) {
+        if (session.type === "rest") {
+          sessionBody = `<div class="ironz-day-session" id="ironz-day-body-${i}"><span class="ironz-day-rest-label">Rest Day</span></div>`;
+        } else {
+          const typeLabel = session.sessionType ? (session.sessionType.charAt(0).toUpperCase() + session.sessionType.slice(1)) : "";
+          sessionBody = `<div class="ironz-day-session" id="ironz-day-body-${i}">
+            <span class="workout-tag tag-${session.sessionType || 'general'}">${typeLabel}</span>
+            <span class="ironz-day-session-name">${typeof _escapeHtml === "function" ? _escapeHtml(session.name) : session.name}</span>
+            ${session.exercises ? `<span class="ironz-day-ex-count">${session.exercises.length} exercises</span>` : ""}
+            <button class="delete-btn" onclick="_ironzClearDay(${i})" title="Remove" style="margin-left:auto"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
+          </div>`;
+        }
+      }
+      daysHtml += `
+        <div class="ironz-day-card">
+          <div class="ironz-day-header">
+            <strong class="ironz-day-name">${dayName}</strong>
+            <div class="ironz-day-actions">
+              <button class="ironz-action-btn" onclick="_ironzAiGenerate(${i})">AI Generate</button>
+              <button class="ironz-action-btn" onclick="_ironzFromSaved(${i})">From Saved</button>
+              <button class="ironz-action-btn" onclick="_ironzManual(${i})">Manual</button>
+              <button class="ironz-action-btn" onclick="_ironzSetRest(${i})">Rest</button>
+            </div>
           </div>
+          ${sessionBody}
+        </div>`;
+    });
+
+    content.innerHTML = `
+      <div class="sv-welcome" style="padding-top:20px">
+        <h1 class="sv-welcome-title" style="font-size:1.6rem">Create on IronZ</h1>
+        <p class="sv-welcome-sub">Build your weekly template day by day.</p>
+        <div style="max-width:540px;margin:16px auto 0;text-align:left">
           <div class="form-grid">
             <div class="form-row">
               <label for="sv-ironz-start">Start Date</label>
@@ -222,16 +280,18 @@ function _renderCustomPlanStep() {
             <div class="form-row">
               <label for="sv-ironz-weeks">Duration</label>
               <select id="sv-ironz-weeks">
-                <option value="4">4 weeks</option>
-                <option value="8" selected>8 weeks</option>
+                <option value="4" selected>4 weeks</option>
+                <option value="8">8 weeks</option>
                 <option value="12">12 weeks</option>
                 <option value="16">16 weeks</option>
               </select>
             </div>
           </div>
-          <button class="sv-cta" style="width:100%;margin-top:12px" onclick="_customPlanIronZ()">Generate Plan</button>
+          <div id="ironz-week-builder" style="margin-top:16px">
+            ${daysHtml}
+          </div>
+          <button class="sv-cta" style="width:100%;margin-top:16px" onclick="_ironzSavePlan()">Save Plan to Calendar</button>
           <p id="sv-ironz-msg" class="save-msg"></p>
-          <div id="sv-ironz-result" style="display:none"></div>
         </div>
       </div>`;
     const startEl = document.getElementById("sv-ironz-start");
@@ -276,6 +336,240 @@ function _customPlanImport() {
   }
 }
 
+// ── IronZ Week Builder state & actions ────────────────────────────────────────
+
+let _ironzWeekPlan = null; // { 0: null|{type,name,...}, 1: ..., 6: ... }
+
+function _ironzSetRest(dayIdx) {
+  _ironzWeekPlan[dayIdx] = { type: "rest", name: "Rest" };
+  _renderCustomPlanStep();
+}
+
+function _ironzClearDay(dayIdx) {
+  _ironzWeekPlan[dayIdx] = null;
+  _renderCustomPlanStep();
+}
+
+function _ironzFromSaved(dayIdx) {
+  const saved = typeof loadSavedWorkouts === "function" ? loadSavedWorkouts() : [];
+  if (!saved.length) { alert("No saved workouts yet. Star a workout from your history to save it."); return; }
+
+  const bodyEl = document.getElementById(`ironz-day-body-${dayIdx}`);
+  if (!bodyEl) return;
+
+  bodyEl.innerHTML = `<div class="ironz-saved-picker">
+    <select id="ironz-saved-select-${dayIdx}" class="form-input" style="width:100%;margin-bottom:8px">
+      ${saved.map((s, i) => `<option value="${i}">${s.name || "Unnamed"} (${s.type || "general"})</option>`).join("")}
+    </select>
+    <div style="display:flex;gap:6px">
+      <button class="btn-primary" style="flex:1;padding:6px" onclick="_ironzPickSaved(${dayIdx})">Add</button>
+      <button class="btn-secondary" style="padding:6px" onclick="_ironzClearDay(${dayIdx});_renderCustomPlanStep()">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function _ironzPickSaved(dayIdx) {
+  const saved = typeof loadSavedWorkouts === "function" ? loadSavedWorkouts() : [];
+  const idx = parseInt(document.getElementById(`ironz-saved-select-${dayIdx}`)?.value) || 0;
+  const sw = saved[idx];
+  if (!sw) return;
+  _ironzWeekPlan[dayIdx] = {
+    type: "saved",
+    sessionType: sw.type || "general",
+    name: sw.name || "Saved Workout",
+    exercises: sw.exercises || null,
+    details: sw.notes || null,
+  };
+  _renderCustomPlanStep();
+}
+
+function _ironzManual(dayIdx) {
+  const bodyEl = document.getElementById(`ironz-day-body-${dayIdx}`);
+  if (!bodyEl) return;
+
+  bodyEl.innerHTML = `<div class="ironz-manual-entry">
+    <div class="form-grid" style="gap:6px;margin-bottom:6px">
+      <input type="text" id="ironz-manual-name-${dayIdx}" class="form-input" placeholder="Session name (e.g. Upper Body)" style="width:100%" />
+      <select id="ironz-manual-type-${dayIdx}" class="form-input">
+        <option value="weightlifting">Strength</option>
+        <option value="running">Running</option>
+        <option value="cycling">Cycling</option>
+        <option value="swimming">Swimming</option>
+        <option value="hiit">HIIT</option>
+        <option value="yoga">Yoga</option>
+        <option value="general">General</option>
+      </select>
+    </div>
+    <textarea id="ironz-manual-details-${dayIdx}" class="form-input" rows="2" placeholder="Details (optional)" style="width:100%;box-sizing:border-box;resize:vertical;margin-bottom:6px"></textarea>
+    <div style="display:flex;gap:6px">
+      <button class="btn-primary" style="flex:1;padding:6px" onclick="_ironzSaveManual(${dayIdx})">Add</button>
+      <button class="btn-secondary" style="padding:6px" onclick="_renderCustomPlanStep()">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function _ironzSaveManual(dayIdx) {
+  const name = (document.getElementById(`ironz-manual-name-${dayIdx}`)?.value || "").trim();
+  const type = document.getElementById(`ironz-manual-type-${dayIdx}`)?.value || "general";
+  const details = (document.getElementById(`ironz-manual-details-${dayIdx}`)?.value || "").trim();
+  if (!name) { alert("Please enter a session name."); return; }
+  _ironzWeekPlan[dayIdx] = { type: "manual", sessionType: type, name, details: details || null };
+  _renderCustomPlanStep();
+}
+
+async function _ironzAiGenerate(dayIdx) {
+  const DOW_FULL = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+  const bodyEl = document.getElementById(`ironz-day-body-${dayIdx}`);
+  if (!bodyEl) return;
+
+  bodyEl.innerHTML = `<div class="ironz-ai-prompt">
+    <input type="text" id="ironz-ai-desc-${dayIdx}" class="form-input" placeholder="e.g. upper body hypertrophy, easy 5k run, yoga flow" style="width:100%;margin-bottom:6px" />
+    <div style="display:flex;gap:6px">
+      <button class="btn-primary" style="flex:1;padding:6px" onclick="_ironzRunAi(${dayIdx})">Generate</button>
+      <button class="btn-secondary" style="padding:6px" onclick="_renderCustomPlanStep()">Cancel</button>
+    </div>
+    <p id="ironz-ai-msg-${dayIdx}" class="save-msg"></p>
+  </div>`;
+}
+
+async function _ironzRunAi(dayIdx) {
+  const desc = (document.getElementById(`ironz-ai-desc-${dayIdx}`)?.value || "").trim();
+  const msg = document.getElementById(`ironz-ai-msg-${dayIdx}`);
+  if (!desc) { if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = "Describe the session."; } return; }
+
+  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
+  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
+    if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = "API key not set in config.js."; }
+    return;
+  }
+
+  if (msg) { msg.style.color = "var(--color-text-muted)"; msg.textContent = "Generating..."; }
+
+  let profileCtx = "";
+  try {
+    const p = JSON.parse(localStorage.getItem("profile") || "{}");
+    if (p.age) profileCtx += `Age: ${p.age}. `;
+    if (p.weight) profileCtx += `Weight: ${p.weight} lbs. `;
+    if (p.goal) profileCtx += `Goal: ${p.goal}. `;
+  } catch {}
+
+  let avoidCtx = "";
+  try {
+    const prefs = JSON.parse(localStorage.getItem("trainingPreferences") || "{}");
+    const avoided = prefs.avoidedExercises || [];
+    if (avoided.length) avoidCtx = `NEVER include these exercises: ${avoided.join(", ")}. `;
+  } catch {}
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1024,
+        messages: [{ role: "user", content: `You are a personal trainer. Generate a single workout session. ${profileCtx}${avoidCtx}
+
+The athlete wants: "${desc}"
+
+Return ONLY valid JSON (no markdown):
+{
+  "name": "Session Name",
+  "type": "weightlifting|running|cycling|swimming|hiit|yoga|general",
+  "exercises": [{"name":"Exercise","sets":3,"reps":"10","weight":"135 lbs"}]
+}
+
+For cardio, use: {"name":"Session Name","type":"running","details":"description of the run/ride/swim"}
+Be specific with sets, reps, and weights.` }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+
+    const rawText = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+    const session = JSON.parse(rawText.replace(/```json|```/g, "").trim());
+
+    _ironzWeekPlan[dayIdx] = {
+      type: "ai",
+      sessionType: session.type || "general",
+      name: session.name || desc,
+      exercises: session.exercises || null,
+      details: session.details || null,
+    };
+    _renderCustomPlanStep();
+  } catch (err) {
+    if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = "Error: " + err.message; }
+  }
+}
+
+function _ironzSavePlan() {
+  const startDate = document.getElementById("sv-ironz-start")?.value;
+  const weeks = parseInt(document.getElementById("sv-ironz-weeks")?.value) || 4;
+  const msg = document.getElementById("sv-ironz-msg");
+
+  if (!startDate) { if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = "Please select a start date."; } return; }
+
+  // Check if any days have sessions
+  const hasSessions = Object.values(_ironzWeekPlan).some(s => s && s.type !== "rest");
+  if (!hasSessions) { if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = "Add at least one session to your plan."; } return; }
+
+  const planId = (typeof generateId === "function") ? generateId("plan") : "plan_" + Date.now();
+  const planName = "Custom Plan";
+  const start = new Date(startDate + "T00:00:00");
+  const schedule = [];
+  const DOW_MAP = [1, 2, 3, 4, 5, 6, 0]; // Mon=1 ... Sun=0
+
+  for (let week = 0; week < weeks; week++) {
+    for (let d = 0; d < 7; d++) {
+      const session = _ironzWeekPlan[d];
+      if (!session || session.type === "rest") continue;
+
+      const dow = DOW_MAP[d];
+      const startDow = start.getDay();
+      let delta = (dow - startDow + 7) % 7 + week * 7;
+      const date = new Date(start);
+      date.setDate(date.getDate() + delta);
+      const dateStr = date.toISOString().slice(0, 10);
+
+      schedule.push({
+        id: `ws-${dateStr}-${session.sessionType}-${d}-custom`,
+        date: dateStr,
+        type: session.sessionType || "general",
+        level: "intermediate",
+        sessionName: session.name,
+        exercises: session.exercises || null,
+        details: session.details || null,
+        source: "generated",
+        planId: planId,
+      });
+    }
+  }
+
+  // Save to workoutSchedule
+  let existing = [];
+  try { existing = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
+  const merged = [...existing, ...schedule];
+  localStorage.setItem("workoutSchedule", JSON.stringify(merged));
+
+  // Save plan metadata
+  let plans = [];
+  try { plans = JSON.parse(localStorage.getItem("importedPlans")) || []; } catch {}
+  plans.push({ id: planId, name: planName, startDate, weeks, createdAt: new Date().toISOString() });
+  localStorage.setItem("importedPlans", JSON.stringify(plans));
+
+  if (msg) { msg.style.color = "var(--color-success, #22c55e)"; msg.textContent = `${schedule.length} sessions saved to calendar!`; }
+  _ironzWeekPlan = null;
+
+  if (typeof renderCalendar === "function") renderCalendar();
+  setTimeout(() => closeSurvey(), 1500);
+}
+
+// Keep the old AI full-plan generation as a separate function
 async function _customPlanIronZ() {
   const prompt = (document.getElementById("sv-ironz-prompt")?.value || "").trim();
   const msg = document.getElementById("sv-ironz-msg");
@@ -538,6 +832,7 @@ function surveyNext() {
   if (SURVEY_STEPS[next] === "plan-length"   && !isEffectivelyStrength()) next++;
   if (SURVEY_STEPS[next] === "activity-days" && !(isNonRaceType() && surveyData.activities.length > 1)) next++;
   if (SURVEY_STEPS[next] === "gym-strength"  && isNonRaceType())  next++;
+  if (SURVEY_STEPS[next] === "zones"        && _getSurveyZoneSports().length === 0) next++;
   if (next < SURVEY_STEPS.length) { surveyStep = next; renderSurveyStep(); }
 }
 
@@ -554,6 +849,7 @@ function _shouldSkipStep(step) {
   if (step === "strength-goal"  && !isEffectivelyStrength())    return true;
   if (step === "yoga-types"     && !surveyData.activities.includes("yoga")) return true;
   if (step === "injury-history" && surveyData.sport !== "running") return true;
+  if (step === "zones"          && _getSurveyZoneSports().length === 0) return true;
   if (step === "run-goal"       && surveyData.sport !== "running") return true;
   return false;
 }
@@ -664,6 +960,7 @@ function renderSurveyStep() {
     "activity-days":  buildSurveyActivityDays,
     "yoga-types":     buildSurveyYogaTypes,
     "gym-strength":   buildSurveyGymStrength,
+    "zones":          buildSurveyZones,
     "summary":        buildSurveySummary,
   };
 
@@ -1470,6 +1767,156 @@ function buildSurveyInjuryHistory() {
     </div>`;
 }
 
+// ── Zones step ───────────────────────────────────────────────────────────────
+
+function buildSurveyZones() {
+  const sports = _getSurveyZoneSports();
+  const z = surveyData.zones || {};
+
+  let sections = "";
+
+  if (sports.includes("running")) {
+    const distOpts = typeof ZONE_DISTANCES !== "undefined"
+      ? Object.keys(ZONE_DISTANCES).map(d => `<option value="${d}" ${(z.running?.dist === d) ? "selected" : ""}>${d}</option>`).join("")
+      : '<option value="5K">5K</option>';
+    const needsH = (z.running?.dist === "Half Marathon" || z.running?.dist === "Marathon");
+    sections += `
+      <div class="sv-zone-section">
+        <h3 class="sv-zone-title">${ICONS.run} Running</h3>
+        <p class="sv-hint">Enter a recent race or time trial result to set your pace zones.</p>
+        <div class="sv-zone-row">
+          <label class="sv-zone-label">Distance</label>
+          <select id="sv-zone-run-dist" class="sv-zone-input" onchange="svZonesRunDistChanged()">${distOpts}</select>
+        </div>
+        <div class="sv-zone-row">
+          <label class="sv-zone-label">Time</label>
+          <div class="sv-zone-time">
+            <input type="number" id="sv-zone-run-h" min="0" max="9" placeholder="h" class="sv-zone-time-field sv-zone-time-h" style="display:${needsH ? 'inline-block' : 'none'}" value="${z.running?.h || ''}" />
+            <input type="number" id="sv-zone-run-m" min="0" max="59" placeholder="mm" class="sv-zone-time-field" value="${z.running?.m || ''}" />
+            <span class="sv-zone-sep">:</span>
+            <input type="number" id="sv-zone-run-s" min="0" max="59" placeholder="ss" class="sv-zone-time-field" value="${z.running?.s || ''}" />
+          </div>
+        </div>
+      </div>`;
+  }
+
+  if (sports.includes("biking")) {
+    sections += `
+      <div class="sv-zone-section">
+        <h3 class="sv-zone-title">${ICONS.bike} Cycling</h3>
+        <p class="sv-hint">FTP = average power you can sustain for ~1 hour. Use a 20-min test x 0.95 if needed.</p>
+        <div class="sv-zone-row">
+          <label class="sv-zone-label">FTP</label>
+          <div class="sv-zone-time">
+            <input type="number" id="sv-zone-bike-ftp" min="50" max="600" placeholder="e.g. 250" class="sv-zone-time-field" style="width:100px" value="${z.biking?.ftp || ''}" />
+            <span class="sv-zone-sep" style="margin-left:6px">W</span>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  if (sports.includes("swimming")) {
+    sections += `
+      <div class="sv-zone-section">
+        <h3 class="sv-zone-title">${ICONS.swim} Swimming</h3>
+        <p class="sv-hint">Swim 400m at a strong, sustained effort. T-pace is derived automatically.</p>
+        <div class="sv-zone-row">
+          <label class="sv-zone-label">400m time</label>
+          <div class="sv-zone-time">
+            <input type="number" id="sv-zone-swim-m" min="0" max="59" placeholder="mm" class="sv-zone-time-field" value="${z.swimming?.m || ''}" />
+            <span class="sv-zone-sep">:</span>
+            <input type="number" id="sv-zone-swim-s" min="0" max="59" placeholder="ss" class="sv-zone-time-field" value="${z.swimming?.s || ''}" />
+          </div>
+        </div>
+      </div>`;
+  }
+
+  if (sports.includes("strength")) {
+    const lifts = [
+      { key: "bench",    label: "Bench Press" },
+      { key: "squat",    label: "Back Squat" },
+      { key: "deadlift", label: "Deadlift" },
+      { key: "ohp",      label: "Overhead Press" },
+      { key: "row",      label: "Barbell Row" },
+    ];
+    const typeOpts = (sel) => ["1rm","5rm","10rm"].map(v =>
+      `<option value="${v}" ${sel === v ? "selected" : ""}>${v === "1rm" ? "1-rep max" : v === "5rm" ? "5-rep max" : "10-rep max"}</option>`
+    ).join("");
+
+    const rows = lifts.map(l => {
+      const d = z.strength?.[l.key] || {};
+      return `<div class="sv-zone-lift-row">
+        <span class="sv-zone-lift-label">${l.label}</span>
+        <input type="number" id="sv-zone-str-${l.key}" placeholder="lbs" min="0" max="2000" value="${d.weight || ''}" class="sv-zone-time-field" style="width:80px" />
+        <select id="sv-zone-str-type-${l.key}" class="sv-zone-input" style="width:110px">${typeOpts(d.type || "1rm")}</select>
+      </div>`;
+    }).join("");
+
+    sections += `
+      <div class="sv-zone-section">
+        <h3 class="sv-zone-title">${ICONS.weights} Strength</h3>
+        <p class="sv-hint">Reference lifts help us recommend accurate weights. Leave blank any you don't track.</p>
+        ${rows}
+      </div>`;
+  }
+
+  return `
+    <div class="sv-question-wrap">
+      <h2 class="sv-question">Do you have any reference times or weights?</h2>
+      <p class="sv-hint">This is optional. It helps us set accurate training zones and intensities for your plan.</p>
+      ${sections}
+      <div class="sv-zone-actions">
+        <button class="sv-cta" onclick="svSaveZonesAndNext()">Continue</button>
+        <button class="sv-skip-btn" onclick="surveyData.zones={};surveyNext()">Skip for now</button>
+      </div>
+    </div>`;
+}
+
+function svZonesRunDistChanged() {
+  const dist = document.getElementById("sv-zone-run-dist")?.value;
+  const hEl = document.getElementById("sv-zone-run-h");
+  if (hEl) hEl.style.display = (dist === "Half Marathon" || dist === "Marathon") ? "inline-block" : "none";
+}
+
+function svSaveZonesAndNext() {
+  const sports = _getSurveyZoneSports();
+  const z = {};
+
+  if (sports.includes("running")) {
+    const dist = document.getElementById("sv-zone-run-dist")?.value;
+    const h = parseInt(document.getElementById("sv-zone-run-h")?.value) || 0;
+    const m = parseInt(document.getElementById("sv-zone-run-m")?.value) || 0;
+    const s = parseInt(document.getElementById("sv-zone-run-s")?.value) || 0;
+    if (m > 0 || s > 0) z.running = { dist, h, m, s };
+  }
+
+  if (sports.includes("biking")) {
+    const ftp = parseInt(document.getElementById("sv-zone-bike-ftp")?.value) || 0;
+    if (ftp > 0) z.biking = { ftp };
+  }
+
+  if (sports.includes("swimming")) {
+    const m = parseInt(document.getElementById("sv-zone-swim-m")?.value) || 0;
+    const s = parseInt(document.getElementById("sv-zone-swim-s")?.value) || 0;
+    if (m > 0 || s > 0) z.swimming = { m, s };
+  }
+
+  if (sports.includes("strength")) {
+    const lifts = ["bench", "squat", "deadlift", "ohp", "row"];
+    const str = {};
+    let hasAny = false;
+    lifts.forEach(key => {
+      const w = parseInt(document.getElementById(`sv-zone-str-${key}`)?.value) || 0;
+      const t = document.getElementById(`sv-zone-str-type-${key}`)?.value || "1rm";
+      if (w > 0) { str[key] = { weight: w, type: t }; hasAny = true; }
+    });
+    if (hasAny) z.strength = str;
+  }
+
+  surveyData.zones = z;
+  surveyNext();
+}
+
 function buildSurveySummary() {
   const race     = SURVEY_RACE_OPTIONS.find(r => r.value === surveyData.raceType);
   const levelMap = { beginner: `Beginner ${ICONS.sprout}`, intermediate: `Intermediate ${ICONS.activity}`, advanced: `Advanced ${ICONS.flame}` };
@@ -1530,6 +1977,14 @@ function buildSurveySummary() {
       ${svSummaryRow("Plan length",    `${planWks} week${planWks !== 1 ? "s" : ""}`)}`;
   }
 
+  // Zones summary
+  const zKeys = Object.keys(surveyData.zones || {});
+  if (zKeys.length > 0) {
+    const zLabels = { running: "Running", biking: "Cycling", swimming: "Swimming", strength: "Strength" };
+    const zSummary = zKeys.map(k => zLabels[k] || k).join(", ");
+    rows += svSummaryRow("Zones set", zSummary);
+  }
+
   return `
     <div class="sv-question-wrap">
       <h2 class="sv-question">${greeting}</h2>
@@ -1569,6 +2024,37 @@ function submitSurveyPlan() {
     } catch { /* ignore */ }
 
     localStorage.setItem("surveyComplete", "1");
+
+    // Save athlete zones from survey
+    if (surveyData.zones && Object.keys(surveyData.zones).length > 0) {
+      const z = surveyData.zones;
+      if (z.running && typeof computeRunningZones === "function" && typeof ZONE_DISTANCES !== "undefined") {
+        const totalSec = (z.running.h || 0) * 3600 + (z.running.m || 0) * 60 + (z.running.s || 0);
+        const distM = ZONE_DISTANCES[z.running.dist];
+        if (totalSec > 0 && distM) {
+          const zones = computeRunningZones(distM, totalSec);
+          if (zones) saveTrainingZonesData("running", zones);
+        }
+      }
+      if (z.biking && typeof computeBikingZones === "function") {
+        if (z.biking.ftp > 0) {
+          const zones = computeBikingZones(z.biking.ftp);
+          if (zones) saveTrainingZonesData("biking", zones);
+        }
+      }
+      if (z.swimming && typeof computeSwimmingZones === "function") {
+        const totalSec = (z.swimming.m || 0) * 60 + (z.swimming.s || 0);
+        if (totalSec > 0) {
+          const zones = computeSwimmingZones(totalSec);
+          if (zones) saveTrainingZonesData("swimming", zones);
+        }
+      }
+      if (z.strength && typeof saveTrainingZonesData === "function") {
+        const data = { ...z.strength, updatedAt: new Date().toISOString() };
+        saveTrainingZonesData("strength", data);
+      }
+    }
+
     if (surveyData.yogaTypes.length > 0) {
       localStorage.setItem("yogaTypes", JSON.stringify(surveyData.yogaTypes));
     }
@@ -1584,6 +2070,7 @@ function submitSurveyPlan() {
       if (typeof renderRaceEvents     === "function") renderRaceEvents();
       if (typeof renderTrainingInputs === "function") renderTrainingInputs();
       if (typeof renderGreeting       === "function") renderGreeting();
+      if (typeof renderZones          === "function") renderZones();
     }, 1100);
   };
 

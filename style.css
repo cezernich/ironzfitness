@@ -760,7 +760,7 @@ button:active {
 
 .exercise-row {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr auto;
+  grid-template-columns: 2fr 1fr 1fr 1fr auto auto;
   gap: 8px;
   align-items: end;
   background: var(--color-surface-2);
@@ -827,6 +827,38 @@ button:active {
 .exercise-row input {
   padding: 8px 10px;
   font-size: 0.875rem;
+}
+
+/* Pyramid per-set detail */
+.ex-pyramid-btn {
+  background: none; border: 1px solid var(--color-border); border-radius: 6px;
+  color: var(--color-text-muted); font-size: 0.8rem; cursor: pointer;
+  width: 28px; height: 34px; align-self: end; margin-bottom: 1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.ex-pyramid-btn:hover { color: var(--color-accent); border-color: var(--color-accent); }
+.ex-pyramid-btn.is-active { color: var(--color-accent); border-color: var(--color-accent); background: var(--color-accent-glow); }
+
+.ex-pyramid-detail {
+  grid-column: 1 / -1;
+  padding: 8px 0 0;
+}
+.ex-pyr-header {
+  display: grid; grid-template-columns: 40px 1fr 1fr; gap: 8px;
+  font-size: 0.72rem; font-weight: 600; color: var(--color-text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em; padding-bottom: 4px;
+}
+.ex-pyr-row {
+  display: grid; grid-template-columns: 40px 1fr 1fr; gap: 8px;
+  align-items: center; padding: 3px 0;
+}
+.ex-pyr-label {
+  font-size: 0.82rem; font-weight: 600; color: var(--color-text-muted); text-align: center;
+}
+.ex-pyr-row input {
+  padding: 6px 8px; font-size: 0.85rem; border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-input-bg, var(--color-bg)); color: var(--color-text);
 }
 
 .sw-segment-row {
@@ -1069,6 +1101,30 @@ button:active {
 }
 
 
+/* ===== DAILY PROGRESS RINGS ===== */
+
+.daily-rings {
+  margin-bottom: 12px;
+}
+.dr-rings-row {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+}
+.dr-ring-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.dr-ring-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 /* ===== 9. CALENDAR ===== */
 
 .calendar-header {
@@ -1262,6 +1318,9 @@ button:active {
 .week-cell--running      { border-top-color: var(--color-amber); }
 .week-cell--triathlon    { border-top-color: var(--color-cyan); }
 .week-cell--general      { border-top-color: var(--color-success); }
+.week-cell--hiit         { border-top-color: var(--color-accent); }
+.week-cell--bodyweight   { border-top-color: var(--color-accent); }
+.week-cell--swimming     { border-top-color: var(--color-cyan); }
 
 /* Session bubbles — each session gets its own equal-sized pill */
 .week-cell-sessions {
@@ -1567,6 +1626,7 @@ button:active {
   flex-direction: column;
   gap: 10px;
   transition: border-color 0.2s;
+  margin-bottom: 10px;
 }
 
 .session-card:hover { border-color: rgba(255,255,255,0.15); }
@@ -2317,6 +2377,13 @@ button:active {
   border-bottom: 1px solid var(--color-border);
 }
 
+.meal-plan-load-note {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: 4px 0 6px;
+}
+
 .meal-plan-row {
   display: flex;
   align-items: baseline;
@@ -2377,7 +2444,7 @@ button:active {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .race-card-name {
@@ -2467,10 +2534,10 @@ button:active {
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
   border-radius: 10px;
-  padding: 16px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .ti-card--schedule { border-left: 3px solid var(--color-accent); }
@@ -2510,9 +2577,127 @@ button:active {
   border: 1px solid #a78bfa;
 }
 
+.ti-card--imported { padding: 10px 14px; gap: 2px; }
+.ti-card--imported .race-card-top { margin-bottom: 2px; }
+.ti-card--imported .race-card-name { font-size: 0.95rem; }
+.ti-card--imported .race-card-meta { margin-top: 0; }
+.ti-card--imported .race-card-footer { margin-top: 2px; }
 .ti-card--imported .import-week-group { margin-bottom: 12px; }
 .ti-card--imported .import-week-group h4 { font-size: 0.8rem; color: var(--color-text-muted); margin: 8px 0 4px; }
 .ti-card--imported .import-detail-cell { color: var(--color-text-muted); font-size: 0.8rem; }
+/* ── Imported plan editor modal ── */
+.edit-import-modal {
+  max-width: 500px;
+  padding: 20px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+.edit-import-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.edit-import-fields {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.edit-import-fields .form-label { flex: 1; }
+.edit-import-sessions {
+  flex: 1;
+  overflow-y: auto;
+  border-top: 1px solid var(--color-border);
+  padding-top: 10px;
+}
+.edit-import-session-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+.edit-import-week { margin-bottom: 10px; }
+.edit-import-week-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+}
+.edit-import-session-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--color-surface);
+  margin-bottom: 4px;
+}
+.edit-import-session-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.edit-import-session-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.edit-import-session-day {
+  font-size: 0.8rem;
+  font-weight: 600;
+  min-width: 30px;
+}
+.edit-import-session-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.edit-import-session-detail {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  padding-left: 36px;
+}
+.edit-import-session-detail:empty { display: none; }
+.edit-import-session-row .workout-tag {
+  font-size: 0.6rem;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+.edit-import-session-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.edit-import-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.imported-card-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.imported-card-dates {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+}
 
 .ti-edit-btn {
   font-size: 0.75rem;
@@ -3033,7 +3218,7 @@ button:active {
 /* Manual exercise rows */
 .qe-manual-row {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr auto;
+  grid-template-columns: 2fr 1fr 1fr 1fr auto auto;
   gap: 6px;
   align-items: end;
   background: var(--color-surface-2);
@@ -4149,6 +4334,72 @@ button:active {
   box-shadow: 0 8px 28px var(--color-accent-glow);
 }
 
+/* ── IronZ Week Builder ──────────────────────────────────────────────── */
+.ironz-day-card {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  background: var(--color-surface);
+}
+.ironz-day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ironz-day-name {
+  font-size: 0.95rem;
+}
+.ironz-day-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.ironz-action-btn {
+  font-size: 0.72rem;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ironz-action-btn:hover {
+  background: var(--color-border);
+}
+.ironz-day-empty {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin-top: 6px;
+}
+.ironz-day-session {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 0.85rem;
+}
+.ironz-day-session-name {
+  font-weight: 500;
+}
+.ironz-day-ex-count {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+.ironz-day-rest-label {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+.ironz-saved-picker,
+.ironz-manual-entry,
+.ironz-ai-prompt {
+  margin-top: 8px;
+}
+
 .sv-welcome-divider {
   display: flex;
   align-items: center;
@@ -4684,6 +4935,96 @@ button:active {
   min-height: 1.4em;
 }
 
+/* ===== SURVEY — ZONES STEP ===== */
+
+.sv-zone-section {
+  background: var(--color-card-bg);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 14px;
+  border: 1px solid var(--color-border);
+}
+.sv-zone-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+.sv-zone-section .sv-hint {
+  margin-bottom: 12px;
+}
+.sv-zone-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.sv-zone-row:last-child { margin-bottom: 0; }
+.sv-zone-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  min-width: 70px;
+  color: var(--color-text-muted);
+}
+.sv-zone-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.sv-zone-time-field {
+  width: 56px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-input-bg, var(--color-bg));
+  color: var(--color-text);
+  font-size: 0.9rem;
+  text-align: center;
+}
+.sv-zone-time-h { width: 44px; }
+.sv-zone-sep {
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+.sv-zone-input {
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-input-bg, var(--color-bg));
+  color: var(--color-text);
+  font-size: 0.9rem;
+}
+.sv-zone-lift-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.sv-zone-lift-row:last-child { margin-bottom: 0; }
+.sv-zone-lift-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  min-width: 120px;
+  color: var(--color-text);
+}
+.sv-zone-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+.sv-skip-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 10px;
+  text-decoration: underline;
+}
+.sv-skip-btn:hover {
+  color: var(--color-text);
+}
+
 /* ===== CONNECTED APPS ===== */
 
 .connected-apps-list {
@@ -4976,6 +5317,32 @@ button:active {
   font-size: 1.2rem;
   font-weight: 700;
   margin: 0 0 4px;
+}
+.ob-units-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.ob-units-btn {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: none;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.ob-units-btn.is-active {
+  background: var(--color-accent);
+  color: #fff;
+}
+.ob-units-btn:not(.is-active):hover {
+  background: var(--color-surface-2);
 }
 
 .ob-step-desc {
@@ -5694,9 +6061,38 @@ button:active {
 .mp-meal-macros { font-size: 0.82rem; color: var(--color-text-muted); margin-bottom: 4px; }
 .mp-meal-ingredients { font-size: 0.78rem; color: var(--color-text-muted); line-height: 1.4; }
 
-.mp-grocery-toggle { width: 100%; margin: 10px 0 8px; }
+.mp-day-tab--grocery { font-size: 1.1rem; padding: 6px 10px; }
+
+.mp-load-tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.mp-load-tag--rest           { background: var(--color-bg); color: var(--color-text-muted); }
+.mp-load-tag--light          { background: #e8f5e9; color: #2e7d32; }
+.mp-load-tag--strength       { background: #e3f2fd; color: #1565c0; }
+.mp-load-tag--endurance-easy { background: #fff3e0; color: #e65100; }
+.mp-load-tag--endurance-hard { background: #fce4ec; color: #c62828; }
 
 .mp-grocery-list { margin-bottom: 12px; }
+.mp-grocery-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.mp-grocery-heading {
+  font-size: 0.95rem; font-weight: 700; margin: 0;
+}
+.mp-grocery-days-select {
+  padding: 4px 8px; border-radius: 8px; font-size: 0.82rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-input-bg, var(--color-bg));
+  color: var(--color-text);
+}
 .mp-grocery-cat { margin-bottom: 10px; }
 .mp-grocery-cat-name {
   font-size: 0.82rem; font-weight: 700; text-transform: uppercase;
@@ -5792,8 +6188,9 @@ button:active {
 .hydration-info { display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .hydration-count { font-size: 1.2rem; font-weight: 700; }
 .hydration-oz { font-size: 0.85rem; color: var(--color-text-muted); }
-.hydration-log-btn { padding: 12px; font-size: 0.9rem; }
-.hydration-undo-btn { padding: 8px; font-size: 0.8rem; }
+.hydration-btn-row { display: flex; gap: 8px; align-items: center; }
+.hydration-log-btn { padding: 10px 16px; font-size: 0.9rem; }
+.hydration-undo-btn { padding: 8px 12px; font-size: 0.8rem; }
 .hydration-tip {
   background: var(--color-surface-alt, var(--color-surface-2));
   border-radius: 8px; padding: 10px 12px;
@@ -5895,8 +6292,67 @@ button:active {
 .level-up-text { font-size: 1rem; margin: 0 0 4px; }
 .level-up-sub { font-size: 0.85rem; color: var(--color-text-muted); margin: 0; }
 
+/* ===== BUILD A PLAN — SUB-TABS ===== */
+
+.build-plan-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.build-plan-tab {
+  padding: 12px 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: none;
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.build-plan-tab + .build-plan-tab {
+  border-left: 1px solid var(--color-border);
+}
+.build-plan-tab--active {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+.build-plan-tab:hover:not(.build-plan-tab--active) {
+  background: var(--color-surface);
+}
+
 /* ===== CUSTOM PLAN BUILDER ===== */
 
+.cp-mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.cp-mode-btn {
+  padding: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border: none;
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.cp-mode-btn:first-child { border-right: 1px solid var(--color-border); }
+.cp-mode-btn--active {
+  background: var(--color-text);
+  color: var(--color-bg);
+}
+.cp-mode-btn:hover:not(.cp-mode-btn--active) {
+  background: var(--color-surface);
+}
 .custom-plan-week { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 
 .custom-plan-day { border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; }
@@ -6689,10 +7145,14 @@ button:active {
   background: #fff;
 }
 
-.gym-disabled .card-body {
+#section-generate-plan.gym-disabled {
   opacity: 0.35;
   pointer-events: none;
   user-select: none;
+}
+#section-generate-plan.gym-disabled .gym-toggle {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* ===== RACE FORM (MULTI-STEP) ===== */
@@ -8060,6 +8520,38 @@ button:active {
   background: var(--color-accent);
   color: var(--color-accent-text);
 }
+.live-btn-settings {
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 1rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+.live-settings-panel {
+  padding: 8px 12px;
+  background: var(--color-surface-2);
+  border-radius: 8px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.live-settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.live-settings-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-accent);
+}
 
 .live-progress-bar {
   height: 4px;
@@ -8511,6 +9003,18 @@ button:active {
 }
 .goal-card--complete { border-color: var(--color-success); }
 .goal-card--archived { opacity: 0.6; }
+.goals-empty {
+  text-align: center;
+  padding: 0;
+  margin: -8px 0 -12px;
+}
+.goals-empty .empty-msg {
+  font-size: 0.85rem;
+}
+.goals-empty .btn-primary {
+  padding: 8px 16px;
+  font-size: 0.85rem;
+}
 
 .goal-header {
   display: flex;

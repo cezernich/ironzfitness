@@ -671,7 +671,7 @@ function renderAvoidedExercisesList() {
   container.innerHTML = list.map((name, i) => `
     <span class="pref-tag">
       ${name}
-      <button class="pref-tag-remove" onclick="removeAvoidedExercise(${i})" title="Remove">✕</button>
+      <button class="pref-tag-remove" onclick="removeAvoidedExercise(${i})" title="Remove"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
     </span>`).join("");
 }
 
@@ -1033,7 +1033,7 @@ function generatePlan() {
       if (s.rounds > 1) header += ` · ${s.rounds} rounds`;
       if (s.restBetweenRounds && s.restBetweenRounds !== "0s") header += ` · ${s.restBetweenRounds} rest`;
       header += `</span>`;
-      const previewExercises = s.exercises.map(ex => ({
+      const previewExercises = filterAvoidedExercises(s.exercises).map(ex => ({
         ...ex, sets: s.format === "amrap" ? 1 : (s.rounds || 1),
       }));
       html += buildLiftingDay(header, previewExercises);
@@ -1074,7 +1074,7 @@ function generatePlan() {
     for (let i = 0; i < days; i++) {
       const t = templates[i % templates.length];
       if (t.exercises) {
-        html += buildLiftingDay(`Day ${i + 1}: ${t.name}`, t.exercises);
+        html += buildLiftingDay(`Day ${i + 1}: ${t.name}`, filterAvoidedExercises(t.exercises));
       } else {
         html += buildCardioDay(`Day ${i + 1}: ${t.name}`, t.details);
       }
@@ -1239,7 +1239,7 @@ function addLogSegmentRow(seg) {
         <option value="Z6"${_sel("Z6")}>Z6 Max Sprint</option>
       </select>
     </div>
-    <button class="remove-exercise-btn" onclick="this.parentElement.remove()" style="align-self:flex-end;margin-bottom:2px">×</button>`;
+    <button class="remove-exercise-btn" onclick="this.parentElement.remove()" style="align-self:flex-end;margin-bottom:2px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   _initRowDrag(row, container);
   container.appendChild(row);
 }
@@ -1259,7 +1259,7 @@ function addExerciseRow() {
     </div>
     <div>
       <label>Sets</label>
-      <input type="number" class="ex-sets" placeholder="3" min="1" />
+      <input type="number" class="ex-sets" placeholder="3" min="1" onchange="exPyramidSetsChanged(this)" />
     </div>
     <div>
       <label>Reps</label>
@@ -1269,11 +1269,109 @@ function addExerciseRow() {
       <label>Weight</label>
       <input type="text" class="ex-weight" placeholder="45lbs" />
     </div>
-    <button class="remove-exercise-btn" title="Remove" onclick="removeExerciseRow(this)">×</button>
+    <button class="ex-pyramid-btn" title="Per-set reps & weight" onclick="exTogglePyramid(this)">▾</button>
+    <button class="remove-exercise-btn" title="Remove" onclick="removeExerciseRow(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
+    <div class="ex-pyramid-detail" style="display:none"></div>
   `;
 
   _initRowDrag(row, container);
   container.appendChild(row);
+}
+
+function exTogglePyramid(btn) {
+  const row = btn.closest(".exercise-row");
+  const detail = row.querySelector(".ex-pyramid-detail");
+  const isOpen = detail.style.display !== "none";
+
+  if (isOpen) {
+    detail.style.display = "none";
+    btn.textContent = "▾";
+    btn.classList.remove("is-active");
+    return;
+  }
+
+  // Build per-set rows based on current sets count
+  const setsVal = parseInt(row.querySelector(".ex-sets")?.value) || 3;
+  const defaultReps = row.querySelector(".ex-reps")?.value || "";
+  const defaultWeight = row.querySelector(".ex-weight")?.value || "";
+
+  // Preserve existing values if re-opening
+  const existing = detail.querySelectorAll(".ex-pyr-row");
+  if (existing.length === setsVal) {
+    detail.style.display = "";
+    btn.textContent = "▴";
+    btn.classList.add("is-active");
+    return;
+  }
+
+  let html = '<div class="ex-pyr-header"><span>Set</span><span>Reps</span><span>Weight</span></div>';
+  for (let i = 0; i < setsVal; i++) {
+    html += `<div class="ex-pyr-row">
+      <span class="ex-pyr-label">${i + 1}</span>
+      <input type="text" class="ex-pyr-reps" placeholder="${defaultReps || '10'}" value="${defaultReps}" oninput="_syncPyramidToMain(this)" />
+      <input type="text" class="ex-pyr-weight" placeholder="${defaultWeight || 'lbs'}" value="${defaultWeight}" oninput="_syncPyramidToMain(this)" />
+    </div>`;
+  }
+  detail.innerHTML = html;
+  detail.style.display = "";
+  btn.textContent = "▴";
+  btn.classList.add("is-active");
+}
+
+function exPyramidSetsChanged(input) {
+  const row = input.closest(".exercise-row");
+  const detail = row.querySelector(".ex-pyramid-detail");
+  if (detail.style.display === "none") return;
+  // Re-generate pyramid rows with new set count
+  exTogglePyramid(row.querySelector(".ex-pyramid-btn"));
+  // Force re-open since toggle would have closed it
+  if (detail.style.display === "none") {
+    exTogglePyramid(row.querySelector(".ex-pyramid-btn"));
+  }
+}
+
+/** Syncs pyramid per-set values up to the main reps/weight fields as a range */
+function _syncPyramidToMain(input) {
+  const row = input.closest(".exercise-row");
+  if (!row) return;
+  const pyrRows = row.querySelectorAll(".ex-pyr-row");
+  if (!pyrRows.length) return;
+
+  const repsVals = [];
+  const weightVals = [];
+  pyrRows.forEach(pr => {
+    const r = pr.querySelector(".ex-pyr-reps")?.value.trim();
+    const w = pr.querySelector(".ex-pyr-weight")?.value.trim();
+    if (r) repsVals.push(r);
+    if (w) weightVals.push(w);
+  });
+
+  const mainReps = row.querySelector(".ex-reps");
+  const mainWeight = row.querySelector(".ex-weight");
+
+  if (mainReps && repsVals.length) {
+    const nums = repsVals.map(v => parseInt(v)).filter(n => !isNaN(n));
+    if (nums.length) {
+      const min = Math.min(...nums);
+      const max = Math.max(...nums);
+      mainReps.value = min === max ? String(min) : `${min}-${max}`;
+    }
+  }
+
+  if (mainWeight && weightVals.length) {
+    // Extract numeric portions for range display
+    const nums = weightVals.map(v => {
+      const m = v.match(/([\d.]+)/);
+      return m ? parseFloat(m[1]) : NaN;
+    }).filter(n => !isNaN(n));
+    if (nums.length) {
+      const min = Math.min(...nums);
+      const max = Math.max(...nums);
+      // Preserve the unit suffix from the first value
+      const unit = weightVals[0].replace(/[\d.]+/, "").trim() || "lbs";
+      mainWeight.value = min === max ? `${min} ${unit}` : `${min}-${max} ${unit}`;
+    }
+  }
 }
 
 /** Removes a specific exercise row when the × button is clicked */
@@ -1330,7 +1428,27 @@ function saveWorkout() {
       const sets   = row.querySelector(".ex-sets").value;
       const reps   = row.querySelector(".ex-reps").value;
       const weight = row.querySelector(".ex-weight").value.trim();
-      if (name) exercises.push({ name, sets, reps, weight });
+      if (!name) return;
+      const ex = { name, sets, reps, weight };
+
+      // Collect per-set pyramid details if expanded
+      const detail = row.querySelector(".ex-pyramid-detail");
+      if (detail && detail.style.display !== "none") {
+        const pyrRows = detail.querySelectorAll(".ex-pyr-row");
+        if (pyrRows.length > 0) {
+          const setDetails = [];
+          let hasDiff = false;
+          pyrRows.forEach(pr => {
+            const r = pr.querySelector(".ex-pyr-reps")?.value.trim() || reps;
+            const w = pr.querySelector(".ex-pyr-weight")?.value.trim() || weight;
+            setDetails.push({ reps: r, weight: w });
+            if (r !== reps || w !== weight) hasDiff = true;
+          });
+          // Only save setDetails if values actually differ across sets
+          if (hasDiff) ex.setDetails = setDetails;
+        }
+      }
+      exercises.push(ex);
     });
   }
 
@@ -1530,8 +1648,28 @@ function unstarPlanSession(id) {
 function filterWorkoutHistory(query) {
   const q = (query || "").toLowerCase().trim();
   const today = new Date().toISOString().slice(0, 10);
+  const allWorkouts = loadWorkouts();
+  // Build a map of completion records keyed by the original session they completed
+  const completionMap = {};
+  allWorkouts.forEach(w => {
+    if (w.isCompletion && w.completedSessionId && w.liveTracked) {
+      completionMap[w.completedSessionId] = w;
+    }
+  });
   // Show only past/today workouts, exclude completion records
-  const all = loadWorkouts().filter(w => !w.isCompletion && w.date <= today);
+  // But overlay live-tracked completion data onto the original workout
+  const all = allWorkouts.filter(w => !w.isCompletion && w.date <= today).map(w => {
+    const sessionKey = `session-log-${w.id}`;
+    const comp = completionMap[sessionKey];
+    if (comp && comp.exercises && comp.exercises.length) {
+      return Object.assign({}, w, {
+        exercises: comp.exercises,
+        duration: comp.duration || w.duration,
+        notes: comp.notes || w.notes,
+      });
+    }
+    return w;
+  });
   const filtered = q
     ? all.filter(w => (w.name||"").toLowerCase().includes(q) || (w.type||"").toLowerCase().includes(q) || (w.notes||"").toLowerCase().includes(q))
     : all;
@@ -1566,11 +1704,12 @@ function _renderWorkoutHistoryList(workouts) {
     const nameHtml   = `<span class="history-workout-name">${escHtml(w.name || _fallbackName)}</span>`;
     const starred    = isWorkoutStarred(w.id);
     const hasContent = (w.exercises && w.exercises.length) || (w.segments && w.segments.length);
+    const _eid = escHtml(String(w.id));
     const btnHtml   = `
-      <button class="star-btn ${starred ? "is-starred" : ""}" title="${starred ? "Remove from saved" : "Save workout"}" onclick="toggleWorkoutStar(${w.id})">★</button>
-      ${hasContent ? `<button class="edit-workout-btn" title="Share to Community" onclick="openShareWorkout(${w.id})">Share</button>` : ""}
-      <button class="edit-workout-btn" title="Edit" onclick="openEditWorkout(${w.id})">Edit</button>
-      <button class="delete-btn" title="Delete" onclick="deleteWorkout(${w.id})">${ICONS.trash}</button>
+      <button class="star-btn ${starred ? "is-starred" : ""}" title="${starred ? "Remove from saved" : "Save workout"}" onclick="toggleWorkoutStar('${_eid}')">★</button>
+      ${hasContent ? `<button class="edit-workout-btn" title="Share to Community" onclick="openShareWorkout('${_eid}')">Share</button>` : ""}
+      <button class="edit-workout-btn" title="Edit" onclick="openEditWorkout('${_eid}')">Edit</button>
+      <button class="delete-btn" title="Delete" onclick="deleteWorkout('${_eid}')">${ICONS.trash}</button>
       <span class="card-chevron">▾</span>`;
 
     // Helper: build collapsed-view summary pill
@@ -2206,7 +2345,7 @@ function addSwSegmentRow(seg) {
         <option value="Z6"${_sel("Z6")}>Z6 Max Sprint</option>
       </select>
     </div>
-    <button class="remove-exercise-btn" onclick="this.parentElement.remove()" style="align-self:flex-end;margin-bottom:2px">×</button>`;
+    <button class="remove-exercise-btn" onclick="this.parentElement.remove()" style="align-self:flex-end;margin-bottom:2px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   // Auto-set phase placeholder based on discipline selection
   const discSel = row.querySelector(".seg-discipline");
   const nameInput = row.querySelector(".seg-name");
@@ -2230,14 +2369,14 @@ function addSwExerciseRow() {
       <div><label>Exercise</label><input type="text" class="ex-name" placeholder="e.g. Burpees, Row 500m" /></div>
       <div><label>Reps / Time / Distance</label><input type="text" class="ex-reps" placeholder="e.g. 10, 45s, 500m" /></div>
       <div><label>Weight</label><input type="text" class="ex-weight" placeholder="optional" /></div>
-      <button class="remove-exercise-btn" onclick="this.parentElement.remove()">×</button>`;
+      <button class="remove-exercise-btn" onclick="this.parentElement.remove()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   } else {
     row.innerHTML = `
       <div><label>Exercise Name</label><input type="text" class="ex-name" placeholder="e.g. Bench Press" /></div>
       <div><label>Sets</label><input type="number" class="ex-sets" placeholder="3" min="1" /></div>
       <div><label>Reps</label><input type="number" class="ex-reps" placeholder="10" min="1" /></div>
       <div><label>Weight</label><input type="text" class="ex-weight" placeholder="45lbs" /></div>
-      <button class="remove-exercise-btn" onclick="this.parentElement.remove()">×</button>`;
+      <button class="remove-exercise-btn" onclick="this.parentElement.remove()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   }
   _initRowDrag(row, container);
   container.appendChild(row);
@@ -2774,7 +2913,7 @@ async function renderCommunityWorkouts(filter) {
             ${adminDel}
             ${unshareBtn}
             ${isUserShared ? "" : `<button class="btn-secondary comm-save-btn${isSaved ? " comm-saved" : ""}" onclick="event.stopPropagation(); saveCommunityWorkout('${w.id}')">${isSaved ? "Saved" : "Save"}</button>`}
-            <button class="btn-secondary comm-hide-btn" onclick="event.stopPropagation(); hideCommWorkout('${w.id}')" title="Remove">×</button>
+            <button class="btn-secondary comm-hide-btn" onclick="event.stopPropagation(); hideCommWorkout('${w.id}')" title="Remove"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
           </div>
         </div>
         <div class="comm-card-detail">${detailHTML}</div>
@@ -2974,7 +3113,7 @@ function _ccAddExRow() {
     <div><label>Sets</label><input type="text" id="cc-sets-${id}" placeholder="3" /></div>
     <div><label>Reps</label><input type="text" id="cc-reps-${id}" placeholder="10" /></div>
     <div><label>Weight</label><input type="text" id="cc-wt-${id}" placeholder="lbs / BW" /></div>
-    <button class="remove-exercise-btn" onclick="this.parentElement.remove()">×</button>`;
+    <button class="remove-exercise-btn" onclick="this.parentElement.remove()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   if (typeof _initRowDrag === "function") _initRowDrag(row, container);
   container.appendChild(row);
 }
@@ -3000,7 +3139,7 @@ function _ccAddSegRow() {
         <option value="Z6">Z6 Max Sprint</option>
       </select>
     </div>
-    <button class="remove-exercise-btn" onclick="this.parentElement.remove()">×</button>`;
+    <button class="remove-exercise-btn" onclick="this.parentElement.remove()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   if (typeof _initRowDrag === "function") _initRowDrag(row, container);
   container.appendChild(row);
 }
@@ -3169,7 +3308,7 @@ function _caAddExRow() {
     <div><label>Sets</label><input type="text" id="ca-sets-${id}" placeholder="3" /></div>
     <div><label>Reps</label><input type="text" id="ca-reps-${id}" placeholder="10" /></div>
     <div><label>Weight</label><input type="text" id="ca-wt-${id}" placeholder="lbs / BW" /></div>
-    <button class="remove-exercise-btn" onclick="this.parentElement.remove()">×</button>`;
+    <button class="remove-exercise-btn" onclick="this.parentElement.remove()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   _initRowDrag(row, container);
   container.appendChild(row);
 }
@@ -3195,7 +3334,7 @@ function _caAddSegRow() {
         <option value="Z6">Z6 Max Sprint</option>
       </select>
     </div>
-    <button class="remove-exercise-btn" onclick="this.parentElement.remove()">×</button>`;
+    <button class="remove-exercise-btn" onclick="this.parentElement.remove()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   _initRowDrag(row, container);
   container.appendChild(row);
 }

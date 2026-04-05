@@ -291,13 +291,13 @@ function renderHydrationContext(breakdown) {
 function renderBeveragePicker() {
   let picker = document.getElementById("hydration-beverage-picker");
   if (!picker) {
-    // Insert before the +1 Bottle button
-    const logBtn = document.querySelector(".hydration-log-btn");
-    if (!logBtn) return;
+    // Insert before the button row
+    const btnRow = document.querySelector(".hydration-btn-row");
+    if (!btnRow) return;
     picker = document.createElement("div");
     picker.id = "hydration-beverage-picker";
     picker.className = "hydration-beverage-picker";
-    logBtn.insertAdjacentElement("beforebegin", picker);
+    btnRow.insertAdjacentElement("beforebegin", picker);
   }
 
   let html = "";
@@ -331,7 +331,7 @@ function renderHydrationTimingTip() {
   } else if (hour < 16) {
     tip = `Training day: keep sipping. Consider electrolytes during your ${workoutInfo.sessionName} if it's over 60 min.`;
   } else {
-    tip = `Post-training: rehydrate with ${Math.round(workoutInfo.bonusOz * 0.5)}oz to recover from your ${workoutInfo.sessionName}.`;
+    tip = `Post-training: prioritize ${Math.round(workoutInfo.bonusOz * 0.5)}oz of your remaining target to help recover from your ${workoutInfo.sessionName}.`;
   }
   tipText.textContent = tip;
 }

@@ -58,8 +58,8 @@ async function submitNLInput(dateStr) {
     const context = {
       today: dateStr,
       userProfile: { level: profile.fitnessLevel || "intermediate", goals: profile.goals || "" },
-      upcomingSchedule: schedule.map(w => ({ date: w.date, name: w.sessionName, type: w.type || w.discipline })),
-      upcomingPlan: plan.map(p => ({ date: p.date, name: p.sessionName, discipline: p.discipline, load: p.load })),
+      upcomingSchedule: schedule.map(w => ({ date: w.date, day: new Date(w.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" }), name: w.sessionName, type: w.type || w.discipline })),
+      upcomingPlan: plan.map(p => ({ date: p.date, day: new Date(p.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" }), name: p.sessionName, discipline: p.discipline, load: p.load })),
       currentRestrictions: restrictions,
       recentRatings,
     };
@@ -88,7 +88,8 @@ Action types:
 
 You can include multiple actions. Always include at least one "message" action with helpful advice.
 Be conservative — only add restrictions if the user's message clearly warrants it. For vague fatigue, suggest reducing rather than removing.
-Today is ${dateStr}.`;
+Today is ${dateStr} (${new Date(dateStr + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" })}).
+When referring to dates, use the correct day-of-week name. Do NOT guess day names — derive them from the dates in the schedule context.`;
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",

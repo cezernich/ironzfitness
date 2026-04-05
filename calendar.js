@@ -25,6 +25,8 @@ const DISCIPLINE_COLORS = {
   swimming:     "var(--color-cyan)",
   triathlon:    "var(--color-cyan)",
   general:      "var(--color-success)",
+  hiit:         "var(--color-accent)",
+  bodyweight:   "var(--color-accent)",
   yoga:         "var(--color-violet)",
 };
 
@@ -265,7 +267,7 @@ function renderWeekOverview() {
     bike: ICONS.bike, cycling: ICONS.bike,
     weightlifting: ICONS.weights,
     triathlon: ICONS.swim, brick: ICONS.zap,
-    general: ICONS.activity, yoga: ICONS.yoga,
+    general: ICONS.activity, hiit: ICONS.flame, bodyweight: ICONS.activity, yoga: ICONS.yoga,
   };
 
   const pills = Object.entries(byType).map(([type, count]) => {
@@ -361,7 +363,7 @@ function buildWeekCell(dateStr, dateObj, todayStr) {
       : `<div class="week-cell-rest-label">Rest</div>`;
   } else {
     body = sessions.map(s => `
-      <div class="session-bubble" style="border-left-color:${s.color}" ${s.drag}>
+      <div class="session-bubble" style="border-left-color:${s.color}" ${s.drag} onclick="event.stopPropagation();selectDay('${dateStr}')">
         <span class="session-bubble-icon">${s.icon}</span>
         <span class="session-bubble-label">${s.label}</span>
       </div>`).join("");
@@ -498,7 +500,7 @@ function getDataForDate(dateStr) {
 // ─── Day selection ────────────────────────────────────────────────────────────
 
 function selectDay(dateStr) {
-  if (_dragActive) return;
+  _dragActive = false; // Always reset drag state
   selectedDate = dateStr;
   renderCalendar();
   renderDayDetail(dateStr);
@@ -589,7 +591,7 @@ function swEditAddRow(cardId, ex) {
     <div><label style="font-size:0.75rem;color:var(--color-text-muted)">Sets</label><input type="number" id="swe-sets-${cardId}-${i}" value="${(ex && ex.sets) || 3}" min="1" max="20" style="width:54px" /></div>
     <div><label style="font-size:0.75rem;color:var(--color-text-muted)">Reps</label><input type="text" id="swe-reps-${cardId}-${i}" value="${(ex && ex.reps) || ""}" placeholder="e.g. 10" style="width:70px" /></div>
     <div><label style="font-size:0.75rem;color:var(--color-text-muted)">Weight</label><input type="text" id="swe-weight-${cardId}-${i}" value="${(ex && ex.weight) || ""}" placeholder="lbs / BW" style="width:90px" /></div>
-    <button class="remove-exercise-btn" onclick="document.getElementById('swedit-row-${cardId}-${i}').remove()">✕</button>`;
+    <button class="remove-exercise-btn" onclick="document.getElementById('swedit-row-${cardId}-${i}').remove()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   container.appendChild(div);
 }
 
@@ -690,7 +692,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
   const _logComplete = isSessionComplete(cardId);
   const _logCompleteCls = _logComplete ? " session-card--completed" : "";
   const delBtn  = `<button class="delete-btn" title="Remove"
-    onclick="event.stopPropagation(); deleteWorkout('${w.id}'); renderDayDetail('${dateStr}')">✕</button>`;
+    onclick="event.stopPropagation(); deleteWorkout('${w.id}'); renderDayDetail('${dateStr}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   const editBtn = `<button class="edit-workout-btn" title="Edit"
     onclick="event.stopPropagation(); openEditWorkout('${w.id}')">Edit</button>`;
 
@@ -746,8 +748,8 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
             <div class="session-phase">Logged · ${_wTypeLabel(w.type)}</div>
           </div>
           <div class="session-header-right">
-            ${_buildUndoHeaderBtn(cardId, dateStr)}${moveBtn}${editBtn}${delBtn}
             ${displayDur ? `<span class="session-duration-badge">${isReduced ? "⬇ " : ""}${displayDur} min</span>` : ""}
+            ${_buildUndoHeaderBtn(cardId, dateStr)}${moveBtn}${delBtn}
             <span class="card-chevron">▾</span>
           </div>
         </div>
@@ -773,9 +775,8 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
             <div class="session-phase">Planned · ${_wTypeLabel(w.type)}</div>
           </div>
           <div class="session-header-right">
-            ${_buildUndoHeaderBtn(cardId, dateStr)}
-            <span class="session-duration-badge">${s.duration} min</span>
-            ${delBtn}
+            <span class="session-duration-badge">${_getCompletionDuration(cardId) || s.duration} min</span>
+            ${_buildUndoHeaderBtn(cardId, dateStr)}${delBtn}
             <span class="card-chevron">▾</span>
           </div>
         </div>
@@ -808,7 +809,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
             <div class="session-phase">${w.fromSaved ? "Logged · " + _wTypeLabel(w.type) : "Planned"}${(!w.fromSaved && w.notes) ? " · " + w.notes : ""}</div>
           </div>
           <div class="session-header-right">
-            ${moveBtn}${editBtn}${delBtn}
+            ${_buildUndoHeaderBtn(cardId, dateStr)}${moveBtn}${editBtn}${delBtn}
             <span class="card-chevron">▾</span>
           </div>
         </div>
@@ -1064,15 +1065,19 @@ function undoSessionCompletion(sessionId, dateStr) {
 // Returns header-level undo button shown in collapsed view when session is complete
 function _buildUndoHeaderBtn(sessionId, dateStr) {
   if (!isSessionComplete(sessionId)) return "";
-  let durBadge = "";
+  return `<button class="undo-complete-btn-header" title="Undo completion" onclick="event.stopPropagation();undoSessionCompletion('${sessionId}','${dateStr}')">↩ Undo</button>`;
+}
+
+/** Returns the completed duration for a session, if available */
+function _getCompletionDuration(sessionId) {
   try {
     const _m = loadCompletionMeta()[sessionId];
     if (_m?.workoutId) {
       const _w = (JSON.parse(localStorage.getItem("workouts") || "[]")).find(w => w.id === _m.workoutId);
-      if (_w?.duration) durBadge = `<span class="session-duration-badge">${_w.duration} min</span>`;
+      if (_w?.duration) return _w.duration;
     }
   } catch {}
-  return `<button class="undo-complete-btn-header" title="Undo completion" onclick="event.stopPropagation();undoSessionCompletion('${sessionId}','${dateStr}')">↩ Undo</button>${durBadge}`;
+  return null;
 }
 
 const _ENDURANCE_TYPES = new Set(["running", "cycling", "swimming", "triathlon"]);
@@ -1127,10 +1132,26 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
     const rows = exercises.map((ex, i) => {
       // For sets: extract leading number (e.g. "3 sets" → 3, "3-4" → 3)
       const setsVal = ex.sets ? (String(ex.sets).match(/^\d+/) || ["3"])[0] : "3";
-      // For reps: use lower end of range (e.g. "6-8" → 6, "12" → 12)
-      const repsVal = ex.reps ? String(ex.reps).split(/[-–]/)[0].trim() : "";
+      // For reps: if setDetails exist (pyramid), show range; otherwise use base value
+      let repsVal = ex.reps ? String(ex.reps).split(/[-–]/)[0].trim() : "";
+      if (ex.setDetails && ex.setDetails.length) {
+        const rNums = ex.setDetails.map(sd => parseInt(sd.reps)).filter(n => !isNaN(n));
+        if (rNums.length) {
+          const rMin = Math.min(...rNums), rMax = Math.max(...rNums);
+          repsVal = rMin === rMax ? String(rMin) : `${rMin}-${rMax}`;
+        }
+      }
       // For weight: extract total numeric weight, or keep descriptive text
       let weightVal = String(ex.weight || "").trim();
+      // If setDetails exist, show weight range
+      if (ex.setDetails && ex.setDetails.length) {
+        const wNums = ex.setDetails.map(sd => { const m = String(sd.weight||"").match(/([\d.]+)/); return m ? parseFloat(m[1]) : NaN; }).filter(n => !isNaN(n));
+        if (wNums.length) {
+          const wMin = Math.min(...wNums), wMax = Math.max(...wNums);
+          const unit = String(ex.setDetails[0].weight||"").replace(/[\d.]+/, "").trim() || "lbs";
+          weightVal = wMin === wMax ? `${wMin}` : `${wMin}-${wMax}`;
+        }
+      }
       if (/bodyweight/i.test(weightVal)) {
         weightVal = "BW";
       } else if (/bar\s*\+\s*([\d.]+)/i.test(weightVal)) {
@@ -1251,14 +1272,21 @@ function cexExpandSets(sessionId, exIdx) {
     row.querySelectorAll("input, .completion-x").forEach(el => el.style.display = "none");
   }
 
+  // Check for existing setDetails (pyramid) on the exercise
+  const exData = (_completionExerciseMap[sessionId] || [])[exIdx];
+  const setDetails = exData?.setDetails || null;
+
   let html = `<div class="completion-set-header">
     <span></span><span>Reps</span><span>Weight</span>
   </div>`;
   for (let s = 0; s < numSets; s++) {
+    const sd = setDetails && setDetails[s];
+    const setReps = sd ? sd.reps : reps;
+    const setWeight = sd ? sd.weight : weight;
     html += `<div class="completion-set-row">
       <span class="completion-set-label">Set ${s + 1}</span>
-      <input class="qe-edit-reps" id="cex-sd-reps-${sessionId}-${exIdx}-${s}" value="${reps}" placeholder="reps" />
-      <input class="qe-weight-input" id="cex-sd-wt-${sessionId}-${exIdx}-${s}" value="${weight}" placeholder="lbs" />
+      <input class="qe-edit-reps" id="cex-sd-reps-${sessionId}-${exIdx}-${s}" value="${setReps}" placeholder="reps" />
+      <input class="qe-weight-input" id="cex-sd-wt-${sessionId}-${exIdx}-${s}" value="${setWeight}" placeholder="lbs" />
     </div>`;
   }
   html += `<button class="completion-collapse-btn" onclick="cexCollapseSets('${sessionId}',${exIdx})">Collapse</button>`;
@@ -1320,9 +1348,41 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
         weight: document.getElementById(`cex-weight-${sessionId}-${i}`)?.value           || ex.weight || "",
       };
       const setDetails = _cexReadSetDetails(sessionId, i);
-      if (setDetails) entry.setDetails = setDetails;
+      if (setDetails) {
+        entry.setDetails = setDetails;
+        // Update main line reps/weight to show range from per-set values
+        const rNums = setDetails.map(sd => parseInt(sd.reps)).filter(n => !isNaN(n));
+        const wNums = setDetails.map(sd => { const m = String(sd.weight||"").match(/([\d.]+)/); return m ? parseFloat(m[1]) : NaN; }).filter(n => !isNaN(n));
+        if (rNums.length) {
+          const rMin = Math.min(...rNums), rMax = Math.max(...rNums);
+          entry.reps = rMin === rMax ? String(rMin) : `${rMin}-${rMax}`;
+        }
+        if (wNums.length) {
+          const wMin = Math.min(...wNums), wMax = Math.max(...wNums);
+          const unit = String(setDetails[0].weight||"").replace(/[\d.]+/, "").trim() || "lbs";
+          entry.weight = wMin === wMax ? `${wMin} ${unit}` : `${wMin}-${wMax} ${unit}`;
+        }
+      }
       exercises.push(entry);
     });
+  }
+
+  // Look up session name from the schedule or training plan
+  let sessionName = "";
+  try {
+    const _sched = JSON.parse(localStorage.getItem("workoutSchedule")) || [];
+    const _sw = _sched.find(s => s.id === sessionId || `${s.date}-${s.type}-${s.sessionName}`.replace(/\s/g,"") === sessionId);
+    if (_sw) sessionName = _sw.sessionName || "";
+  } catch {}
+  if (!sessionName) {
+    try {
+      const _plan = typeof loadTrainingPlan === "function" ? loadTrainingPlan() : [];
+      const _pe = _plan.find(p => {
+        const cid = `plan-${p.date}-${p.raceId}-${p.discipline}`;
+        return cid === sessionId;
+      });
+      if (_pe) sessionName = _pe.sessionName || "";
+    } catch {}
   }
 
   // Save to workout history
@@ -1332,6 +1392,7 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   workouts.unshift({
     id:                 workoutId,
     date:               dateStr,
+    name:               sessionName,
     type,
     notes:              notes || (duration ? `${duration} min` : ""),
     exercises:          exercises.length ? exercises : undefined,
@@ -1619,6 +1680,84 @@ function buildTodayDashboard(dateStr, data, nutrition) {
     </div>`;
 }
 
+// ── Daily Progress Rings ──────────────────────────────────────────────────────
+
+function renderDailyRings() {
+  const container = document.getElementById("daily-rings");
+  if (!container) return;
+
+  const dateStr = typeof selectedDate !== "undefined" && selectedDate ? selectedDate : getTodayString();
+  const data = getDataForDate(dateStr);
+
+  // Workout ring
+  const allSessions = (data.planEntry ? 1 : 0) + data.scheduledWorkouts.length;
+  const loggedCount = data.loggedWorkouts.length;
+  let completedCount = 0;
+  if (data.planEntry && isSessionComplete(`session-plan-${dateStr}-${data.planEntry.raceId}`)) completedCount++;
+  data.scheduledWorkouts.forEach(w => { if (isSessionComplete(`session-sw-${w.id}`)) completedCount++; });
+  data.loggedWorkouts.forEach(w => { if (w.fromSaved || isSessionComplete(`session-log-${w.id}`)) completedCount++; });
+  const totalSessions = allSessions + loggedCount;
+  const isRestDay = totalSessions === 0 || (data.restriction && data.restriction.action === "remove");
+  const workoutPct = isRestDay ? 1 : (totalSessions > 0 ? Math.min(completedCount / totalSessions, 1) : 0);
+  const workoutLabel = isRestDay ? "Rest" : `${completedCount}/${totalSessions}`;
+
+  // Nutrition ring
+  const nutritionEnabled = typeof isNutritionEnabled === "function" && isNutritionEnabled();
+  let calPct = 0, calLabel = "";
+  if (nutritionEnabled) {
+    const nutrition = typeof getDailyNutritionTarget === "function" ? getDailyNutritionTarget(dateStr) : { calories: 2200 };
+    let meals = [];
+    try { meals = (JSON.parse(localStorage.getItem("meals")) || []).filter(m => m.date === dateStr); } catch {}
+    const eaten = meals.reduce((s, m) => s + (m.calories || 0), 0);
+    calPct = nutrition.calories > 0 ? Math.min(eaten / nutrition.calories, 1) : 0;
+    calLabel = `${Math.round(eaten / (nutrition.calories || 1) * 100)}%`;
+  }
+
+  // Hydration ring
+  const hydrationEnabled = typeof isHydrationEnabled === "function" && isHydrationEnabled();
+  let hydPct = 0, hydLabel = "";
+  if (hydrationEnabled) {
+    const targetOz = typeof getHydrationTarget === "function" ? getHydrationTarget() : 96;
+    const bottleSize = typeof getBottleSize === "function" ? getBottleSize() : 12;
+    const bottles = typeof getTodayHydration === "function" ? getTodayHydration() : 0;
+    const currentOz = bottles * bottleSize;
+    hydPct = targetOz > 0 ? Math.min(currentOz / targetOz, 1) : 0;
+    hydLabel = `${Math.round(hydPct * 100)}%`;
+  }
+
+  const ringSize = 72;
+  const stroke = 6;
+  const r = (ringSize - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+
+  function buildRing(pct, color, label, title, enabled) {
+    if (!enabled) return "";
+    const done = pct >= 1;
+    const offset = circ * (1 - pct);
+    const ringColor = done ? "var(--color-success, #22c55e)" : color;
+    const center = done
+      ? `<text x="50%" y="52%" text-anchor="middle" dominant-baseline="central" fill="var(--color-success, #22c55e)" font-size="22" font-weight="700">✓</text>`
+      : `<text x="50%" y="48%" text-anchor="middle" dominant-baseline="central" fill="var(--color-text)" font-size="14" font-weight="700">${label}</text>`;
+    return `
+      <div class="dr-ring-wrap">
+        <svg width="${ringSize}" height="${ringSize}" viewBox="0 0 ${ringSize} ${ringSize}">
+          <circle cx="${ringSize/2}" cy="${ringSize/2}" r="${r}" fill="none" stroke="var(--color-border)" stroke-width="${stroke}" opacity="0.3" />
+          <circle cx="${ringSize/2}" cy="${ringSize/2}" r="${r}" fill="none" stroke="${ringColor}" stroke-width="${stroke}"
+            stroke-dasharray="${circ}" stroke-dashoffset="${offset}" stroke-linecap="round"
+            transform="rotate(-90 ${ringSize/2} ${ringSize/2})" style="transition:stroke-dashoffset 0.4s ease" />
+          ${center}
+        </svg>
+        <span class="dr-ring-label">${title}</span>
+      </div>`;
+  }
+
+  container.innerHTML = `<div class="dr-rings-row">
+    ${buildRing(workoutPct, "var(--color-text)", workoutLabel, isRestDay ? "Rest Day" : "Workouts", true)}
+    ${buildRing(calPct, "var(--color-accent, #6366f1)", calLabel, "Nutrition", nutritionEnabled)}
+    ${buildRing(hydPct, "#3b82f6", hydLabel, "Hydration", hydrationEnabled)}
+  </div>`;
+}
+
 function renderDayDetail(dateStr) {
   const content = document.getElementById("day-detail-content");
   if (!content) return;
@@ -1664,11 +1803,6 @@ function renderDayDetail(dateStr) {
     <div class="day-detail-date">${isToday ? "Today · " : ""}${displayDate}</div>
     ${_totalsHtml}
   </div>`;
-
-  // ── Unified Today Dashboard (today only) ──────────────────────────────────
-  if (isToday) {
-    html += buildTodayDashboard(dateStr, data, nutrition);
-  }
 
   // ── Adherence prompt (today only, if not dismissed) ────────────────────────
   if (isToday && typeof buildAdherencePrompt === "function" && !isAdherenceDismissedToday()) {
@@ -1773,7 +1907,7 @@ function renderDayDetail(dateStr) {
       const _planCompType = DISCIPLINE_TO_WORKOUT_TYPE[p.discipline] || "general";
       const _planSugDur   = session?.duration || null;
       const _planCompletion = buildCompletionSection(cardId, _planCompType, null, dateStr, _planSugDur, session?.steps);
-      const _planDelBtn = `<button class="delete-btn" title="Remove" onclick="event.stopPropagation();deletePlanEntry('${p.raceId}','${p.discipline}','${dateStr}')">✕</button>`;
+      const _planDelBtn = `<button class="delete-btn" title="Remove" onclick="event.stopPropagation();deletePlanEntry('${p.raceId}','${p.discipline}','${dateStr}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
       const _planIsComplete    = isSessionComplete(cardId);
       const _planDoneIndicator = _planIsComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
       const _planUndoBtn       = _buildUndoHeaderBtn(cardId, dateStr);
@@ -1787,9 +1921,9 @@ function renderDayDetail(dateStr) {
                 <div class="session-phase">${p.phase} · Week ${p.weekNumber}</div>
               </div>
               <div class="session-header-right">
-                ${_planUndoBtn}${_planDelBtn}
-                <span class="session-duration-badge">${session.duration} min</span>
+                <span class="session-duration-badge">${_getCompletionDuration(cardId) || session.duration} min</span>
                 <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
+                ${_planUndoBtn}${_planDelBtn}
                 <span class="card-chevron">▾</span>
               </div>
             </div>
@@ -1806,8 +1940,8 @@ function renderDayDetail(dateStr) {
                 <div class="session-phase">${p.phase} · Week ${p.weekNumber}</div>
               </div>
               <div class="session-header-right">
-                ${_planUndoBtn}${_planDelBtn}
                 <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
+                ${_planUndoBtn}${_planDelBtn}
                 <span class="card-chevron">▾</span>
               </div>
             </div>
@@ -1834,7 +1968,7 @@ function renderDayDetail(dateStr) {
           const _swCompletion = buildCompletionSection(cardId, DISCIPLINE_TO_WORKOUT_TYPE[w.discipline] || "running", null, dateStr, targetDuration, session?.steps);
           const _swMovePanel = buildSessionMovePanel(cardId, "scheduled", w.id, dateStr);
           const _swMoveBtn = `<button class="btn-move-session" title="Move / Duplicate" onclick="event.stopPropagation();toggleMovePanel('${cardId}')">⇄</button>`;
-          const _swDelBtn  = `<button class="delete-btn" title="Remove" onclick="event.stopPropagation();deleteScheduledWorkout('${w.id}','${dateStr}')">✕</button>`;
+          const _swDelBtn  = `<button class="delete-btn" title="Remove" onclick="event.stopPropagation();deleteScheduledWorkout('${w.id}','${dateStr}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
           const _swIsComplete    = isSessionComplete(cardId);
           const _swDoneIndicator = _swIsComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
           const _swUndoBtn       = _buildUndoHeaderBtn(cardId, dateStr);
@@ -1847,9 +1981,9 @@ function renderDayDetail(dateStr) {
                   <div class="session-phase">${({ run: "Running", bike: "Cycling", swim: "Swimming", brick: "Brick" })[w.discipline] || capitalize(w.discipline || "")}</div>
                 </div>
                 <div class="session-header-right">
-                  ${_swUndoBtn}${_swMoveBtn}${_swDelBtn}
-                  <span class="session-duration-badge">${targetDuration} min</span>
+                  <span class="session-duration-badge">${_getCompletionDuration(cardId) || targetDuration} min</span>
                   <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
+                  ${_swUndoBtn}${_swMoveBtn}${_swDelBtn}
                   <span class="card-chevron">▾</span>
                 </div>
               </div>
@@ -1871,7 +2005,7 @@ function renderDayDetail(dateStr) {
           const focus = focusMatch ? focusMatch[1] : null;
           if (focus) displayExercises = getEquipmentAdjustedExercises(w.exercises, focus, w.level || "intermediate", data.equipmentRestriction);
         }
-        if (!_compExercises && data.restriction && data.restriction.action === "reduce" && w.type === "weightlifting") {
+        if (!_compExercises && data.restriction && data.restriction.action === "reduce" && displayExercises) {
           displayExercises = getRestrictedExercises(displayExercises, data.restriction);
         }
         let _swHiitHeader = "";
@@ -1883,8 +2017,15 @@ function renderDayDetail(dateStr) {
           if (_m.restBetweenRounds && _m.restBetweenRounds !== "0s") _swHiitHeader += `, ${_m.restBetweenRounds} rest between rounds`;
           _swHiitHeader += `</div>`;
         }
-        const _liftRestricted = data.restriction && data.restriction.action === "reduce" && w.type === "weightlifting";
-        const _liftRestrictNote = _liftRestricted ? `<div class="restriction-session-note" style="margin-bottom:8px">${ICONS.lightbulb} Reduced sets & weight per your ${data.restriction.type || ""} restriction</div>` : "";
+        const _liftRestricted = data.restriction && data.restriction.action === "reduce" && displayExercises;
+        let _liftRestrictNote = "";
+        if (_liftRestricted) {
+          const _hasSubstitutions = data.restriction.type === "injury" && data.restriction.note && displayExercises !== w.exercises;
+          const _restrictMsg = _hasSubstitutions
+            ? `${ICONS.lightbulb} Substituted exercises per your injury restriction`
+            : `${ICONS.lightbulb} Reduced sets & weight per your ${data.restriction.type || ""} restriction`;
+          _liftRestrictNote = `<div class="restriction-session-note" style="margin-bottom:8px">${_restrictMsg}</div>`;
+        }
         body = _liftRestrictNote + _swHiitHeader + buildExerciseTableHTML(displayExercises, { hiit: w.type === "hiit" || !!w.hiitMeta });
       } else if (w.details) {
         body = `<p class="session-details">${w.details}</p>`;
@@ -1927,7 +2068,7 @@ function renderDayDetail(dateStr) {
       const _swGenMovePanel  = buildSessionMovePanel(cardId, "scheduled", w.id, dateStr);
       const _swGenEditPanel  = "";
       const _swGenMoveBtn    = `<button class="btn-move-session" title="Move / Duplicate" onclick="event.stopPropagation();toggleMovePanel('${cardId}')">⇄</button>`;
-      const _swGenDelBtn     = `<button class="delete-btn" title="Remove" onclick="event.stopPropagation();deleteScheduledWorkout('${w.id}','${dateStr}')">✕</button>`;
+      const _swGenDelBtn     = `<button class="delete-btn" title="Remove" onclick="event.stopPropagation();deleteScheduledWorkout('${w.id}','${dateStr}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
       const _swGenEditBtn    = w.exercises?.length
         ? `<button class="edit-workout-btn" title="Edit" onclick="event.stopPropagation();openEditWorkout('${w.id}','workoutSchedule')">Edit</button>`
         : "";
@@ -1942,7 +2083,7 @@ function renderDayDetail(dateStr) {
               <div class="session-name">${w.sessionName}${_swGenDoneInd}</div>
               <div class="session-phase">${_wTypeLabel(w.type)}</div>
             </div>
-            <div class="session-header-right">${_swGenUndoBtn}${_swGenMoveBtn}${_swGenEditBtn}${_swGenDelBtn}${_swGenDurMin ? `<span class="session-duration-badge">${_swGenDurMin} min</span>` : ""}<span class="card-chevron">▾</span></div>
+            <div class="session-header-right">${(_getCompletionDuration(cardId) || _swGenDurMin) ? `<span class="session-duration-badge">${_getCompletionDuration(cardId) || _swGenDurMin} min</span>` : ""}${_swGenUndoBtn}${_swGenMoveBtn}${_swGenEditBtn}${_swGenDelBtn}<span class="card-chevron">▾</span></div>
           </div>
           ${_swGenStrip}
           <div class="card-body">${body}${buildWorkoutExplanation(null, dateStr, w.discipline || w.type, w.load || "moderate", w.sessionName)}${_swGenEditPanel}${_swGenMovePanel}${_swGenCompletion}</div>
@@ -2011,6 +2152,8 @@ function renderDayDetail(dateStr) {
   }
   // Render NL input for today
   if (isToday && typeof renderNLInput === "function") renderNLInput(dateStr);
+  // Update daily progress rings
+  renderDailyRings();
 }
 
 // ─── Nutrition progress bars (updates with sliders) ──────────────────────────
@@ -2091,15 +2234,95 @@ function getRestrictedDuration(duration, originalLoad, restriction) {
   return Math.max(15, Math.round(duration * (multipliers[originalLoad] || 0.70)));
 }
 
-/** Returns exercises with reduced sets/weight for fatigue/injury/sick restrictions. */
+/**
+ * Knee-friendly substitutions for exercises that stress the knee joint.
+ * Maps a regex pattern to a replacement exercise object.
+ */
+const INJURY_SUBSTITUTIONS = {
+  knee: [
+    { pattern: /squat/i,            sub: { name: "Glute Bridge",        sets: 3, reps: 12, weight: "Bodyweight" } },
+    { pattern: /lunge/i,            sub: { name: "Hip Hinge",           sets: 3, reps: 12, weight: "Bodyweight" } },
+    { pattern: /leg press/i,        sub: { name: "Hip Thrust",          sets: 3, reps: 10, weight: "Moderate" } },
+    { pattern: /leg extension/i,    sub: { name: "Straight Leg Raise",  sets: 3, reps: 12, weight: "Bodyweight" } },
+    { pattern: /box jump/i,         sub: { name: "Step-ups (low box)",  sets: 3, reps: 10, weight: "Bodyweight" } },
+    { pattern: /jump squat/i,       sub: { name: "Glute Bridge",        sets: 3, reps: 12, weight: "Bodyweight" } },
+  ],
+  shoulder: [
+    { pattern: /overhead press|ohp|military press/i, sub: { name: "Landmine Press",     sets: 3, reps: 10, weight: "Moderate" } },
+    { pattern: /lateral raise/i,                     sub: { name: "Front Raise",         sets: 3, reps: 12, weight: "Light" } },
+    { pattern: /upright row/i,                       sub: { name: "Face Pull",           sets: 3, reps: 15, weight: "Light cable" } },
+  ],
+  back: [
+    { pattern: /deadlift/i, sub: { name: "Hip Thrust",   sets: 3, reps: 10, weight: "Moderate" } },
+    { pattern: /row/i,      sub: { name: "Lat Pulldown",  sets: 3, reps: 10, weight: "Moderate" } },
+  ],
+  wrist: [
+    { pattern: /push.?up/i,   sub: { name: "Chest Press Machine", sets: 3, reps: 10, weight: "Moderate" } },
+    { pattern: /pull.?up/i,   sub: { name: "Lat Pulldown",        sets: 3, reps: 10, weight: "Moderate" } },
+    { pattern: /curl/i,       sub: { name: "Cable Curl",           sets: 3, reps: 12, weight: "Light" } },
+  ],
+};
+
+/** Detects which body area an injury restriction targets based on the note text. */
+function _detectInjuryArea(note) {
+  if (!note) return null;
+  const n = note.toLowerCase();
+  if (/knee|acl|mcl|meniscus|patella/i.test(n)) return "knee";
+  if (/shoulder|rotator|delt/i.test(n)) return "shoulder";
+  if (/back|spine|lumbar|disc/i.test(n)) return "back";
+  if (/wrist|hand|carpal/i.test(n)) return "wrist";
+  return null;
+}
+
+/** Checks if a specific exercise is called out in the restriction note. */
+function _isExerciseCalledOut(exerciseName, note) {
+  if (!note || !exerciseName) return false;
+  const n = note.toLowerCase();
+  const name = exerciseName.toLowerCase();
+  // Check for explicit mention of the exercise name (or key word from it)
+  const words = name.split(/\s+/).filter(w => w.length > 3);
+  return words.some(w => n.includes(w));
+}
+
+/** Returns exercises with reduced sets/weight for fatigue/injury/sick restrictions.
+ *  For injury restrictions, also substitutes exercises mentioned in the note or
+ *  exercises that stress the injured body area. */
 function getRestrictedExercises(exercises, restriction) {
   if (!restriction || restriction.action !== "reduce" || !exercises) return exercises;
   const t = restriction.type;
   if (t === "time") return exercises; // time only affects duration, not load
-  // fatigue: drop 1 set, reduce weight ~15%. injury/sick: drop 1 set, reduce weight ~25%, cap reps.
+
+  // For injury restrictions, substitute exercises that target the injured area
+  let result = exercises;
+  if (t === "injury" && restriction.note) {
+    const area = _detectInjuryArea(restriction.note);
+    const subs = area ? (INJURY_SUBSTITUTIONS[area] || []) : [];
+    const usedSubNames = new Set();
+
+    result = exercises.map(ex => {
+      const name = ex.name || "";
+      // Check if this exercise is explicitly called out in the note
+      const calledOut = _isExerciseCalledOut(name, restriction.note);
+      // Check if this exercise matches an area-based substitution pattern
+      const areaSub = subs.find(s => s.pattern.test(name));
+
+      if (calledOut || areaSub) {
+        if (areaSub && !usedSubNames.has(areaSub.sub.name)) {
+          usedSubNames.add(areaSub.sub.name);
+          return { ...areaSub.sub, _substituted: true };
+        }
+        // If called out but no area sub, or sub already used — remove
+        return null;
+      }
+      return ex;
+    }).filter(Boolean);
+  }
+
+  // Apply general intensity reduction
   const weightMult = (t === "injury" || t === "sick") ? 0.75 : 0.85;
   const repsCap    = (t === "injury" || t === "sick") ? 8 : null;
-  return exercises.map(ex => {
+  return result.map(ex => {
+    if (ex._substituted) { const { _substituted, ...clean } = ex; return clean; }
     const sets = Math.max(1, (parseInt(ex.sets) || 3) - 1);
     let reps = ex.reps;
     if (repsCap && parseInt(reps) > repsCap) reps = String(repsCap);
@@ -2208,6 +2431,14 @@ function buildMealExplanation(dateStr, nutrition) {
   if (proteinTarget > 0) parts.push(`your protein target of ${proteinTarget}g`);
   const likes = (foodPrefs.likes || []).filter(f => f);
   if (likes.length > 0) parts.push(`preference for ${likes.slice(0, 3).map(f => escHtml(f)).join(", ")}`);
+  const dislikes = (foodPrefs.dislikes || []).filter(f => f);
+  if (dislikes.length > 0) parts.push(`avoiding ${dislikes.slice(0, 3).map(f => escHtml(f)).join(", ")}`);
+  // Show dietary restrictions
+  try {
+    const ob = JSON.parse(localStorage.getItem("onboardingData")) || {};
+    const diet = (ob.dietaryRestrictions || []).filter(d => d && d !== "none");
+    if (diet.length > 0) parts.push(`${diet.join(", ")} diet`);
+  } catch {}
   if (workoutType) {
     const wLabel = ({ run: "running", bike: "cycling", swim: "swimming", weightlifting: "strength", yoga: "yoga", hiit: "HIIT", rest: "rest day" })[workoutType] || workoutType;
     parts.push(`today's ${wLabel} session`);
@@ -2219,9 +2450,60 @@ function buildMealExplanation(dateStr, nutrition) {
   return `<div class="meal-transparency-note">${ICONS.lightbulb} Based on ${parts.join(", ")}.</div>`;
 }
 
+function _getWeekMealPlanForDate(dateStr) {
+  // Check if the Week Meal Planner has a plan, and return the day's meals if so
+  try {
+    const plan = JSON.parse(localStorage.getItem("currentWeekMealPlan"));
+    if (!plan || !plan.days || !plan.days.length) return null;
+    const dow = new Date(dateStr + "T00:00:00").getDay(); // 0=Sun..6=Sat
+    // MP_DAY_LABELS order: Mon(0), Tue(1), Wed(2), Thu(3), Fri(4), Sat(5), Sun(6)
+    const mpIdx = dow === 0 ? 6 : dow - 1;
+    const day = plan.days[mpIdx];
+    if (!day || !day.meals) return null;
+    return day;
+  } catch { return null; }
+}
+
 function renderMealPlan(dateStr) {
   const container = document.getElementById(`meal-plan-${dateStr}`);
   if (!container) return;
+
+  // If Week Meal Planner has a plan, use it — scale if sliders have been adjusted since generation
+  const weekMealDay = _getWeekMealPlanForDate(dateStr);
+  if (weekMealDay && weekMealDay.meals.length > 0) {
+    const slotLabels = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snack" };
+
+    // Check if sliders override the targets for this date
+    let sliderAdj = null;
+    try { sliderAdj = (JSON.parse(localStorage.getItem("nutritionAdjustments")) || {})[dateStr]; } catch {}
+    const planCals = weekMealDay.meals.reduce((s, m) => s + m.calories, 0);
+    const ratio = (sliderAdj && sliderAdj.calories && planCals > 0) ? sliderAdj.calories / planCals : 1;
+    const meals = ratio === 1 ? weekMealDay.meals : weekMealDay.meals.map(m => ({
+      ...m,
+      calories: Math.round(m.calories * ratio),
+      protein:  Math.round(m.protein * ratio),
+      carbs:    Math.round(m.carbs * ratio),
+      fat:      Math.round(m.fat * ratio),
+    }));
+    const totalCals = meals.reduce((s, m) => s + m.calories, 0);
+    const _loadLabels = { rest: "Rest Day", light: "Light Activity", strength: "Strength Day", "endurance-easy": "Easy Cardio", "endurance-hard": "Hard / Long Session" };
+    const loadNote = weekMealDay.load ? `<div class="meal-plan-load-note">${_loadLabels[weekMealDay.load] || ""}</div>` : "";
+    let html = `<div class="meal-plan-preview">
+      <div class="meal-plan-preview-header">Meal Plan — ${totalCals} cal total</div>
+      ${loadNote}`;
+    meals.forEach(m => {
+      const slot = slotLabels[m.slot] || m.slot;
+      html += `
+        <div class="meal-plan-row">
+          <div class="meal-plan-slot">${slot}</div>
+          <div class="meal-plan-name">${typeof filterAIClaims === "function" ? filterAIClaims(m.name) : m.name}</div>
+          <div class="meal-plan-macros">${m.calories} cal · ${m.protein}g P · ${m.carbs}g C · ${m.fat}g F</div>
+        </div>`;
+    });
+    html += `</div>`;
+    container.innerHTML = html;
+    return;
+  }
 
   const nutrition   = getDailyNutritionTarget(dateStr);
   const planEntry   = loadTrainingPlan().find(e => e.date === dateStr);
@@ -2229,7 +2511,20 @@ function renderMealPlan(dateStr) {
   let   restriction = null;
   try { restriction = (JSON.parse(localStorage.getItem("dayRestrictions")) || {})[dateStr] || null; } catch {}
   const load = getEffectiveLoad(baseLoad, restriction);
-  const meals     = generateDayMeals(nutrition, load);
+
+  // Determine workout type for macro targeting
+  let _mealWorkoutType = "";
+  if (planEntry) {
+    _mealWorkoutType = planEntry.discipline || "";
+  } else {
+    try {
+      const _mealSched = JSON.parse(localStorage.getItem("workoutSchedule")) || [];
+      const _mealToday = _mealSched.find(s => s.date === dateStr);
+      if (_mealToday) _mealWorkoutType = _mealToday.type || _mealToday.discipline || "";
+    } catch {}
+  }
+
+  const meals     = generateDayMeals(nutrition, load, dateStr, _mealWorkoutType);
   const totalCals = meals.reduce((s, m) => s + m.calories, 0);
 
   const _mealExplanation = buildMealExplanation(dateStr, nutrition);
@@ -2244,12 +2539,7 @@ function renderMealPlan(dateStr) {
         <div class="meal-plan-macros">${m.calories} cal · ${m.protein}g P · ${m.carbs}g C · ${m.fat}g F</div>
       </div>`;
   });
-  html += `
-    <button class="btn-primary" style="margin-top:10px"
-      onclick="savePlanMeals('${dateStr}', ${JSON.stringify(meals).replace(/'/g, "\\'")})">
-      Save This Meal Plan
-    </button>
-  </div>`;
+  html += `</div>`;
   container.innerHTML = html;
 }
 
@@ -2353,7 +2643,15 @@ function handleGenerateMeals(dateStr) {
   const nutrition = getDailyNutritionTarget(dateStr);
   const planEntry = loadTrainingPlan().find(e => e.date === dateStr);
   const load      = planEntry ? planEntry.load : "rest";
-  const meals     = generateDayMeals(nutrition, load);
+  let _genWorkoutType = planEntry ? (planEntry.discipline || "") : "";
+  if (!_genWorkoutType) {
+    try {
+      const _gs = JSON.parse(localStorage.getItem("workoutSchedule")) || [];
+      const _gt = _gs.find(s => s.date === dateStr);
+      if (_gt) _genWorkoutType = _gt.type || _gt.discipline || "";
+    } catch {}
+  }
+  const meals     = generateDayMeals(nutrition, load, dateStr, _genWorkoutType);
   const previewEl = document.getElementById(`meal-preview-${dateStr}`);
   if (!previewEl) return;
 
@@ -2369,11 +2667,7 @@ function handleGenerateMeals(dateStr) {
         <div class="meal-plan-macros">${m.calories} cal · ${m.protein}g P · ${m.carbs}g C · ${m.fat}g F</div>
       </div>`;
   });
-  html += `
-      <button class="btn-primary" onclick="savePlanMeals('${dateStr}', ${JSON.stringify(meals).replace(/'/g, "\\'")})">
-        Save This Meal Plan
-      </button>
-    </div>`;
+  html += `</div>`;
   previewEl.innerHTML = html;
 }
 
@@ -2422,6 +2716,8 @@ function getIntensityClass(load) {
 
 function onSessionDragStart(event) {
   _dragActive = true;
+  // Safety: auto-reset after 5 seconds in case dragend never fires
+  setTimeout(() => { _dragActive = false; }, 5000);
   const el         = event.currentTarget;
   const dragType   = el.dataset.dragType;
   const sourceDate = el.dataset.dragSource;
@@ -3679,7 +3975,7 @@ function qeAddCardioRow(iv) {
       </select></div>
     <div style="flex:2"><label>Details</label>
       <input type="text" id="qe-cdetails-${id}" value="${iv?.details || ""}" placeholder="e.g. 5:30/km, keep HR under 145" /></div>
-    <button class="remove-exercise-btn" onclick="qeRemoveCardioRow(${id})">✕</button>`;
+    <button class="remove-exercise-btn" onclick="qeRemoveCardioRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   document.getElementById("qe-cardio-interval-rows").appendChild(div);
 }
 
@@ -3775,18 +4071,20 @@ function qeAddExerciseRow() {
         <input type="text" id="qe-mreps-${id}" placeholder="e.g. 10, 45s, 500m" /></div>
       <div><label>Weight</label>
         <input type="text" id="qe-mwt-${id}" placeholder="optional" /></div>
-      <button class="remove-exercise-btn" onclick="qeRemoveRow(${id})">✕</button>`;
+      <button class="remove-exercise-btn" onclick="qeRemoveRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   } else {
     div.innerHTML = `
       <div><label>Exercise</label>
         <input type="text"   id="qe-mex-${id}"   placeholder="e.g. Bench Press" /></div>
       <div><label>Sets</label>
-        <input type="number" id="qe-msets-${id}" placeholder="3" min="1" max="20" /></div>
+        <input type="number" id="qe-msets-${id}" placeholder="3" min="1" max="20" onchange="qePyramidSetsChanged(${id})" /></div>
       <div><label>Reps</label>
         <input type="text"   id="qe-mreps-${id}" placeholder="10" /></div>
       <div><label>Weight</label>
         <input type="text"   id="qe-mwt-${id}"   placeholder="lbs/kg" /></div>
-      <button class="remove-exercise-btn" onclick="qeRemoveRow(${id})">✕</button>`;
+      <button class="ex-pyramid-btn" title="Per-set reps &amp; weight" onclick="qeTogglePyramid(${id})">▾</button>
+      <button class="remove-exercise-btn" onclick="qeRemoveRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
+      <div class="ex-pyramid-detail" id="qe-pyr-${id}" style="display:none"></div>`;
   }
   let _qeHoverTimer = null;
   div.addEventListener("dragstart", (e) => { _qeManualDragId = id; div.classList.add("drag-active"); e.dataTransfer.effectAllowed = "move"; });
@@ -3933,6 +4231,45 @@ function qeRemoveRow(id) {
   if (el) el.remove();
 }
 
+function qeTogglePyramid(id) {
+  const detail = document.getElementById(`qe-pyr-${id}`);
+  const btn = detail?.previousElementSibling?.previousElementSibling;
+  if (!detail) return;
+  const isOpen = detail.style.display !== "none";
+  if (isOpen) {
+    detail.style.display = "none";
+    if (btn) { btn.textContent = "▾"; btn.classList.remove("is-active"); }
+    return;
+  }
+  const setsVal = parseInt(document.getElementById(`qe-msets-${id}`)?.value) || 3;
+  const defaultReps = document.getElementById(`qe-mreps-${id}`)?.value || "";
+  const defaultWeight = document.getElementById(`qe-mwt-${id}`)?.value || "";
+  const existing = detail.querySelectorAll(".ex-pyr-row");
+  if (existing.length === setsVal) {
+    detail.style.display = "";
+    if (btn) { btn.textContent = "▴"; btn.classList.add("is-active"); }
+    return;
+  }
+  let html = '<div class="ex-pyr-header"><span>Set</span><span>Reps</span><span>Weight</span></div>';
+  for (let i = 0; i < setsVal; i++) {
+    html += `<div class="ex-pyr-row">
+      <span class="ex-pyr-label">${i + 1}</span>
+      <input type="text" class="ex-pyr-reps" placeholder="${defaultReps || '10'}" value="${defaultReps}" />
+      <input type="text" class="ex-pyr-weight" placeholder="${defaultWeight || 'lbs'}" value="${defaultWeight}" />
+    </div>`;
+  }
+  detail.innerHTML = html;
+  detail.style.display = "";
+  if (btn) { btn.textContent = "▴"; btn.classList.add("is-active"); }
+}
+
+function qePyramidSetsChanged(id) {
+  const detail = document.getElementById(`qe-pyr-${id}`);
+  if (!detail || detail.style.display === "none") return;
+  detail.innerHTML = "";
+  qeTogglePyramid(id);
+}
+
 function qeSaveManual() {
   const dateStr = document.getElementById("qe-date").value;
   if (!dateStr) { document.getElementById("qe-manual-msg").textContent = "Please select a date."; return; }
@@ -3952,6 +4289,23 @@ function qeSaveManual() {
     };
     if (!isHiit) ex.sets = document.getElementById(`qe-msets-${idx}`)?.value || "";
     if (row?.dataset.ssId) ex.supersetId = row.dataset.ssId;
+
+    // Collect per-set pyramid details if expanded
+    const pyrDetail = document.getElementById(`qe-pyr-${idx}`);
+    if (pyrDetail && pyrDetail.style.display !== "none") {
+      const pyrRows = pyrDetail.querySelectorAll(".ex-pyr-row");
+      if (pyrRows.length > 0) {
+        const setDetails = [];
+        let hasDiff = false;
+        pyrRows.forEach(pr => {
+          const r = pr.querySelector(".ex-pyr-reps")?.value.trim() || ex.reps;
+          const w = pr.querySelector(".ex-pyr-weight")?.value.trim() || ex.weight;
+          setDetails.push({ reps: r, weight: w });
+          if (r !== ex.reps || w !== ex.weight) hasDiff = true;
+        });
+        if (hasDiff) ex.setDetails = setDetails;
+      }
+    }
     exercises.push(ex);
   });
 
@@ -4247,7 +4601,10 @@ Rules:
 - weekDay: 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri,6=Sat
 - weekNumber: starts at 1, increment for multi-week plans
 - For strength sessions: use "exercises" array with specific weights in lbs. Scale from reference lifts if provided.
-- For cardio sessions: use "intervals" array with duration, effort zone, and details.
+- For cardio sessions: use "intervals" array with duration, effort zone, and details. Each interval entry is ONE phase — expand repeats into individual entries.
+  - For notation like "3x6 (2 min rest)" meaning 3 sets of 6 minutes with 2 min rest between sets, produce: warmup, then interval 1 (6 min), recovery (2 min), interval 2 (6 min), recovery (2 min), interval 3 (6 min), cooldown. The duration is the WORK duration per set, NOT the rest duration.
+  - Always include a warmup interval at the start and a cooldown interval at the end if specified.
+  - Recovery intervals between sets should have effort "Z1" or "Z2" and name "RECOVERY".
 - For simple sessions (yoga, rest, cross-train): use "details" string.
 - Omit rest days entirely — do not include them.
 - If the plan doesn't specify weeks, treat it as 1 week.

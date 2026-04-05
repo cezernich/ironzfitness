@@ -285,7 +285,7 @@ function buildAdherencePrompt() {
     let onclick = "";
     switch (a.action) {
       case "quickWorkout":
-        onclick = `showTab('training');setTimeout(function(){var s=document.getElementById('section-log-workout');if(s){s.classList.remove('is-collapsed');s.scrollIntoView({behavior:'smooth'})}},100)`;
+        onclick = `generateQuickWorkout(this)`;
         break;
       case "logMeal":
         onclick = `showTab('nutrition')`;
@@ -317,7 +317,7 @@ function buildAdherencePrompt() {
           <div class="adherence-title">${escHtml(prompt.title)}</div>
           <div class="adherence-message">${prompt.message}</div>
         </div>
-        <button class="adherence-dismiss" onclick="dismissAdherencePrompt()" title="Dismiss">&times;</button>
+        <button class="adherence-dismiss" onclick="dismissAdherencePrompt()" title="Dismiss"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
       </div>
       <div class="adherence-actions">${actionsHtml}</div>
     </div>`;
@@ -377,6 +377,125 @@ function moveMissedToToday(sessionId) {
     if (typeof selectDay === "function") selectDay(today);
   }
   dismissAdherencePrompt();
+}
+
+/**
+ * Generate a quick 20-minute workout via Claude API based on user profile and context.
+ */
+async function generateQuickWorkout(btn) {
+  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
+  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
+    alert("Please set your Anthropic API key in Settings first.");
+    return;
+  }
+
+  // Show loading state
+  const origText = btn.textContent;
+  btn.textContent = "Generating...";
+  btn.disabled = true;
+
+  // Gather user context
+  let profile = {};
+  try { profile = JSON.parse(localStorage.getItem("profile") || "{}"); } catch {}
+  let schedule = [];
+  try { schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]"); } catch {}
+  let workouts = [];
+  try { workouts = JSON.parse(localStorage.getItem("workouts") || "[]"); } catch {}
+
+  const daysSince = getDaysSinceLastActivity();
+  const today = getTodayString();
+
+  // Recent workout history (last 5)
+  const recentWorkouts = workouts
+    .filter(w => w.date <= today)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 5)
+    .map(w => `${w.date}: ${w.type || "general"} - ${w.name || w.sessionName || "workout"}`)
+    .join("\n");
+
+  const profileCtx = [
+    profile.sport ? `Sport: ${profile.sport}` : "",
+    profile.level ? `Level: ${profile.level}` : "",
+    profile.age ? `Age: ${profile.age}` : "",
+    profile.weight ? `Weight: ${profile.weight} ${profile.weightUnit || "lbs"}` : "",
+  ].filter(Boolean).join("\n");
+
+  const prompt = `You are a fitness coach. Generate a quick 20-minute comeback workout for someone who hasn't trained in ${daysSince} days.
+
+${profileCtx ? profileCtx + "\n" : ""}${recentWorkouts ? "Recent history:\n" + recentWorkouts + "\n" : ""}
+Requirements:
+- Exactly 20 minutes total
+- Low-to-moderate intensity — this is a comeback session, not a max effort
+- Include warmup and cooldown
+- Keep it simple and achievable
+- If the user's sport is known, make it sport-relevant; otherwise make it a general bodyweight/cardio session
+
+Return ONLY valid JSON, no markdown:
+{"title":"Session Title","type":"easy","intervals":[{"name":"Phase name","duration":"X min","effort":"low|moderate","details":"Brief instruction"}]}`;
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1000,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+
+    const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+    const cleaned = text.replace(/```json|```/g, "").trim();
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("Could not parse AI response");
+
+    const workout = JSON.parse(jsonMatch[0]);
+
+    // Save to workoutSchedule so it appears on today's calendar
+    const entry = {
+      id: generateId("quick"),
+      date: today,
+      type: profile.sport || "general",
+      sessionName: workout.title || "Quick Comeback Workout",
+      source: "generated",
+      level: "easy",
+      details: (workout.intervals || []).map(i =>
+        `${i.name} (${i.duration}, ${i.effort || ""}): ${i.details || ""}`
+      ).join("\n"),
+      aiSession: {
+        title: workout.title || "Quick Comeback Workout",
+        intervals: (workout.intervals || []).map(i => ({
+          name: i.name,
+          duration: i.duration,
+          effort: i.effort || "low",
+          details: i.details || ""
+        }))
+      }
+    };
+
+    schedule.push(entry);
+    localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+
+    // Refresh UI
+    dismissAdherencePrompt();
+    if (typeof renderCalendar === "function") renderCalendar();
+    if (typeof selectDay === "function") selectDay(today);
+    if (typeof showTab === "function") showTab("home");
+
+  } catch (err) {
+    console.error("Quick workout generation failed:", err);
+    alert("Failed to generate workout: " + err.message);
+    btn.textContent = origText;
+    btn.disabled = false;
+  }
 }
 
 /**

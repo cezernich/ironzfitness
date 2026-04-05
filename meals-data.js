@@ -49,6 +49,44 @@ function loadFoodPreferences() {
   }
 }
 
+/** Load dietary restrictions from onboarding data */
+function loadDietaryRestrictions() {
+  try {
+    const ob = JSON.parse(localStorage.getItem("onboardingData")) || {};
+    return ob.dietaryRestrictions || [];
+  } catch { return []; }
+}
+
+/** Maps dietary restriction labels to meal categories that should be excluded */
+const DIETARY_CATEGORY_MAP = {
+  vegetarian:   ["chicken", "poultry", "turkey", "beef", "red meat", "steak", "fish", "seafood", "salmon", "tuna", "cod", "shrimp", "shellfish"],
+  vegan:        ["chicken", "poultry", "turkey", "beef", "red meat", "steak", "fish", "seafood", "salmon", "tuna", "cod", "shrimp", "shellfish", "eggs", "dairy"],
+  "gluten-free":["gluten"],
+  "dairy-free": ["dairy"],
+  keto:         [], // handled via tag preference, not exclusion
+  paleo:        ["gluten", "dairy"],
+};
+
+/** Returns meal names saved in the last N days to avoid repetition */
+function getRecentMealNames(dateStr, lookbackDays) {
+  try {
+    const meals = JSON.parse(localStorage.getItem("meals")) || [];
+    const d = new Date(dateStr + "T12:00:00");
+    const cutoff = new Date(d);
+    cutoff.setDate(cutoff.getDate() - lookbackDays);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    // Collect meal names from recent days (not including today)
+    return meals
+      .filter(m => m.date >= cutoffStr && m.date < dateStr)
+      .map(m => {
+        // Strip slot prefix if present (e.g. "Breakfast: Oatmeal..." → "Oatmeal...")
+        const name = m.name || "";
+        const colonIdx = name.indexOf(": ");
+        return colonIdx > -1 ? name.slice(colonIdx + 2) : name;
+      });
+  } catch { return []; }
+}
+
 /**
  * Returns true if any term in `terms` matches the meal name or its categories.
  * Accepts either a meal object or a plain name string.
@@ -66,68 +104,135 @@ function mealContainsTerm(meal, terms) {
 }
 
 /**
- * pickMeal(options, targetCalories, preferHighCarb, exclude)
+ * pickMeal(options, targetCalories, macroPrefs, exclude, recentNames)
  * Selects the best-fit meal from a category given a calorie target.
- * Respects saved food preferences: avoids disliked foods, boosts liked ones.
- * On intense training days, prefers meals tagged "high-carb".
  *
- * @param {Array}   options        - meal objects from MEAL_LIBRARY
- * @param {number}  targetCalories - target calorie count for this slot
- * @param {boolean} preferHighCarb - true on hard/long training days
- * @param {Array}   exclude        - meal names already chosen (avoid duplicates)
- * @returns {Object} selected meal object
+ * Selection logic (in order):
+ * 1. Exclude same-day duplicates
+ * 2. Filter out dietary restriction violations (vegan, gluten-free, etc.)
+ * 3. Filter out disliked foods from preferences
+ * 4. Penalize meals eaten in the last 3 days (cross-day variety)
+ * 5. Prefer meals matching macro needs (high-protein, high-carb, low-fat)
+ * 6. Boost liked foods — but rotate among them, don't always pick the same one
+ * 7. Final tiebreak by calorie proximity to slot target
  */
-function pickMeal(options, targetCalories, preferHighCarb, preferHighProtein, exclude = []) {
+function pickMeal(options, targetCalories, preferHighCarb, preferHighProtein, exclude = [], recentNames = [], preferLowFat = false) {
   const prefs = loadFoodPreferences();
+  const dietary = loadDietaryRestrictions();
 
-  // Start from non-duplicate meals
+  // 1. Exclude same-day duplicates
   let pool = options.filter(m => !exclude.includes(m.name));
   if (pool.length === 0) pool = [...options];
 
-  // Remove meals containing disliked ingredients (checks name + categories)
+  // 2. Filter out dietary restriction violations
+  if (dietary.length > 0 && !dietary.includes("none")) {
+    const excludedCats = [];
+    dietary.forEach(r => {
+      const cats = DIETARY_CATEGORY_MAP[r];
+      if (cats) excludedCats.push(...cats);
+    });
+    if (excludedCats.length > 0) {
+      const filtered = pool.filter(m =>
+        !(m.categories || []).some(c => excludedCats.includes(c.toLowerCase()))
+      );
+      if (filtered.length > 0) pool = filtered;
+    }
+  }
+
+  // 3. Filter out disliked foods
   if (prefs.dislikes.length > 0) {
     const filtered = pool.filter(m => !mealContainsTerm(m, prefs.dislikes));
     if (filtered.length > 0) pool = filtered;
   }
 
-  // Narrow by macro preference: protein target takes priority over carb preference
-  if (preferHighProtein) {
+  // 4. Narrow by macro preference — filter to matching tags when possible
+  if (preferHighProtein && preferHighCarb) {
+    const both = pool.filter(m => m.tags.includes("high-protein") && m.tags.includes("high-carb"));
+    if (both.length > 0) pool = both;
+    else {
+      const either = pool.filter(m => m.tags.includes("high-protein") || m.tags.includes("high-carb"));
+      if (either.length > 0) pool = either;
+    }
+  } else if (preferHighProtein) {
     const proteinFocused = pool.filter(m => m.tags.includes("high-protein"));
     if (proteinFocused.length > 0) pool = proteinFocused;
   } else if (preferHighCarb) {
     const carbFocused = pool.filter(m => m.tags.includes("high-carb"));
     if (carbFocused.length > 0) pool = carbFocused;
   }
+  // Low-fat preference: deprioritize high-fat meals
+  if (preferLowFat) {
+    const lowFat = pool.filter(m => m.fat <= m.calories * 0.25 / 9);
+    if (lowFat.length > 0) pool = lowFat;
+  }
 
-  // Sort: liked meals first, then by calorie proximity
+  // 5. Score and sort
+  // Count how many times each meal appeared recently — more appearances = higher penalty
+  const recentCounts = {};
+  recentNames.forEach(n => { recentCounts[n] = (recentCounts[n] || 0) + 1; });
+
   pool = [...pool].sort((a, b) => {
+    // Penalize recently eaten meals (0 = not recent, 1-3 = recent frequency)
+    const aRecent = recentCounts[a.name] || 0;
+    const bRecent = recentCounts[b.name] || 0;
+    if (aRecent !== bRecent) return aRecent - bRecent;
+
+    // Boost liked foods, but add randomness so we rotate among them
     const aLiked = prefs.likes.length > 0 && mealContainsTerm(a, prefs.likes) ? 0 : 1;
     const bLiked = prefs.likes.length > 0 && mealContainsTerm(b, prefs.likes) ? 0 : 1;
     if (aLiked !== bLiked) return aLiked - bLiked;
+
+    // Calorie proximity
     return Math.abs(a.calories - targetCalories) - Math.abs(b.calories - targetCalories);
   });
+
+  // Among top candidates (not recently eaten, matching preferences), pick with some variety
+  // Use the date-derived seed so the same day always shows the same plan but different days vary
+  const topTier = pool.filter(m => (recentCounts[m.name] || 0) === (recentCounts[pool[0]?.name] || 0));
+  if (topTier.length > 1) {
+    // Rotate among top candidates using exclude list length as a simple offset
+    const offset = exclude.length % topTier.length;
+    return topTier[offset];
+  }
 
   return pool[0];
 }
 
 /**
- * generateDayMeals(nutrition, trainingLoad)
- * Builds a full day's meal plan split across 5 slots:
- *   breakfast 25%, snack1 10%, lunch 30%, snack2 10%, dinner 25%
+ * generateDayMeals(nutrition, trainingLoad, dateStr, workoutType)
+ * Builds a full day's meal plan based on:
+ *   1. Food preferences (likes/dislikes)
+ *   2. Dietary restrictions (vegan, gluten-free, etc.)
+ *   3. Training context (workout type + load → macro focus)
+ *   4. Cross-day variety (avoids repeating recent meals)
  *
- * @param {Object|number} nutrition   - full nutrition target object {calories,protein,carbs,fat}
- *                                      or a plain calorie number (legacy)
+ * @param {Object|number} nutrition    - full nutrition target {calories,protein,carbs,fat} or calorie number
  * @param {string}        trainingLoad - "rest"|"easy"|"moderate"|"hard"|"long"|"race"
- * @returns {Array} array of 5 meal objects with slot labels
+ * @param {string}        [dateStr]    - "YYYY-MM-DD" for cross-day variety tracking
+ * @param {string}        [workoutType]- "weightlifting"|"running"|"hiit"|etc. for macro targeting
+ * @returns {Array} array of meal objects with slot labels
  */
-function generateDayMeals(nutrition, trainingLoad) {
-  // Accept either a full nutrition object or a plain calorie number (backwards-compat)
+function generateDayMeals(nutrition, trainingLoad, dateStr, workoutType) {
   const calorieTarget   = typeof nutrition === "number" ? nutrition : (nutrition.calories || 2000);
   const proteinTarget   = typeof nutrition === "object" ? (nutrition.protein || 0) : 0;
+  const carbsTarget     = typeof nutrition === "object" ? (nutrition.carbs || 0) : 0;
+  const fatTarget        = typeof nutrition === "object" ? (nutrition.fat || 0) : 0;
 
-  const preferHighCarb    = ["hard", "long", "race"].includes(trainingLoad);
-  // Prefer high-protein meals when protein > 30% of total calories
-  const preferHighProtein = proteinTarget > 0 && (proteinTarget * 4 / calorieTarget) > 0.30;
+  // Macro preferences based on slider values, load, AND workout type
+  const isHighIntensity = ["hard", "long", "race"].includes(trainingLoad);
+  const isStrengthDay   = ["weightlifting", "bodyweight", "hiit"].includes(workoutType);
+  const isEnduranceDay  = ["running", "cycling", "swimming", "triathlon"].includes(workoutType);
+
+  // Derive preference from macro ratios if sliders were adjusted
+  const proteinRatio = proteinTarget > 0 ? (proteinTarget * 4 / calorieTarget) : 0;
+  const carbsRatio   = carbsTarget > 0 ? (carbsTarget * 4 / calorieTarget) : 0;
+
+  const preferHighProtein = proteinRatio > 0.28 || isStrengthDay;
+  const preferHighCarb    = carbsRatio > 0.45 || isEnduranceDay || (isHighIntensity && !isStrengthDay);
+  const preferLowFat      = fatTarget > 0 && (fatTarget * 9 / calorieTarget) < 0.22;
+
+  // Get recently eaten meal names (last 3 days) to avoid repetition
+  const recentNames = dateStr ? getRecentMealNames(dateStr, 3) : [];
 
   const slots = [
     { label: "Breakfast",        key: "breakfast", fraction: 0.25 },
@@ -137,18 +242,49 @@ function generateDayMeals(nutrition, trainingLoad) {
     { label: "Dinner",           key: "dinner",    fraction: 0.25 },
   ];
 
+  // Per-slot macro targets based on the same fraction split
+  const _macroTargets = { protein: proteinTarget, carbs: carbsTarget, fat: fatTarget };
+
+  /** Scale a meal's macros to hit the slot's calorie and macro targets */
+  function _scaleMeal(meal, targetCals, slotFraction) {
+    if (!meal.calories || meal.calories <= 0) return meal;
+    const calRatio = targetCals / meal.calories;
+    // Don't scale if close enough (within 15%) — keeps portions realistic
+    if (calRatio >= 0.85 && calRatio <= 1.15) return meal;
+    // Scale macros: if we have specific macro targets, blend toward them
+    const scaled = {
+      ...meal,
+      calories: Math.round(meal.calories * calRatio),
+      protein:  Math.round(meal.protein * calRatio),
+      carbs:    Math.round(meal.carbs * calRatio),
+      fat:      Math.round(meal.fat * calRatio),
+    };
+    // If macro targets are set, nudge macros toward per-slot targets
+    if (slotFraction && proteinTarget > 0) {
+      const slotP = Math.round(proteinTarget * slotFraction);
+      const slotC = Math.round(carbsTarget * slotFraction);
+      const slotF = Math.round(fatTarget * slotFraction);
+      // Blend 50/50 between calorie-scaled and target-proportioned
+      if (slotP > 0) scaled.protein = Math.round((scaled.protein + slotP) / 2);
+      if (slotC > 0) scaled.carbs = Math.round((scaled.carbs + slotC) / 2);
+      if (slotF > 0) scaled.fat = Math.round((scaled.fat + slotF) / 2);
+      // Recalculate calories from adjusted macros
+      scaled.calories = Math.round(scaled.protein * 4 + scaled.carbs * 4 + scaled.fat * 9);
+    }
+    return scaled;
+  }
+
   const chosen = [];
   const usedNames = [];
 
   for (const slot of slots) {
     const slotTarget = Math.round(calorieTarget * slot.fraction);
-    const meal = pickMeal(MEAL_LIBRARY[slot.key], slotTarget, preferHighCarb, preferHighProtein, usedNames);
+    const meal = pickMeal(MEAL_LIBRARY[slot.key], slotTarget, preferHighCarb, preferHighProtein, usedNames, recentNames, preferLowFat);
     usedNames.push(meal.name);
-    chosen.push({ ...meal, slot: slot.label });
+    chosen.push({ ..._scaleMeal(meal, slotTarget, slot.fraction), slot: slot.label });
   }
 
   // If the total falls short of the target, add extra meals to close the gap.
-  // High-calorie days (hard/long training) regularly need 6–8 meals.
   const extraSlots = [
     { label: "Pre-Workout Snack", key: "snack" },
     { label: "Second Lunch",      key: "lunch" },
@@ -161,10 +297,11 @@ function generateDayMeals(nutrition, trainingLoad) {
   while (totalCals < calorieTarget - 100 && extraIdx < extraSlots.length) {
     const gap     = calorieTarget - totalCals;
     const mealKey = gap >= 400 ? extraSlots[extraIdx].key : "snack";
-    const meal    = pickMeal(MEAL_LIBRARY[mealKey], gap, preferHighCarb, preferHighProtein, usedNames);
+    const meal    = pickMeal(MEAL_LIBRARY[mealKey], gap, preferHighCarb, preferHighProtein, usedNames, recentNames, preferLowFat);
     usedNames.push(meal.name);
-    chosen.push({ ...meal, slot: extraSlots[extraIdx].label });
-    totalCals += meal.calories;
+    const scaled = _scaleMeal(meal, gap, null);
+    chosen.push({ ...scaled, slot: extraSlots[extraIdx].label });
+    totalCals += scaled.calories;
     extraIdx++;
   }
 

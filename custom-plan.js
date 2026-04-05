@@ -1,6 +1,28 @@
 // custom-plan.js — Create Your Own Plan
 // Weekly template builder with AI, saved workout, manual, and rest day options per day.
 
+function cpSwitchMode(mode) {
+  const createBody = document.getElementById("cp-create-body");
+  const importBody = document.getElementById("import-plan-body");
+  const createBtn = document.getElementById("cp-mode-create");
+  const importBtn = document.getElementById("cp-mode-import");
+  if (mode === "import") {
+    if (createBody) createBody.style.display = "none";
+    if (importBody) importBody.style.display = "";
+    if (createBtn) createBtn.classList.remove("cp-mode-btn--active");
+    if (importBtn) importBtn.classList.add("cp-mode-btn--active");
+    // Default import start date to same as create
+    const importStart = document.getElementById("import-start-date");
+    const createStart = document.getElementById("custom-plan-start");
+    if (importStart && createStart && !importStart.value) importStart.value = createStart.value;
+  } else {
+    if (createBody) createBody.style.display = "";
+    if (importBody) importBody.style.display = "none";
+    if (createBtn) createBtn.classList.add("cp-mode-btn--active");
+    if (importBtn) importBtn.classList.remove("cp-mode-btn--active");
+  }
+}
+
 const CP_DAYS = [
   { dow: 1, label: "Monday" },
   { dow: 2, label: "Tuesday" },
@@ -68,7 +90,7 @@ function renderDayContent(dow, entry) {
     return `
       <div class="cp-day-entry cp-day-rest">
         <span>Rest Day</span>
-        <button class="cp-remove-btn" onclick="customPlanClearDay(${dow})" title="Remove">&times;</button>
+        <button class="cp-remove-btn" onclick="customPlanClearDay(${dow})" title="Remove"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
       </div>`;
   }
 
@@ -81,7 +103,7 @@ function renderDayContent(dow, entry) {
           <span class="cp-day-entry-type">${type}</span>
           <span class="cp-day-entry-title">${_cpEsc(title)}</span>
         </div>
-        <button class="cp-remove-btn" onclick="customPlanClearDay(${dow})" title="Remove">&times;</button>
+        <button class="cp-remove-btn" onclick="customPlanClearDay(${dow})" title="Remove"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
       </div>`;
   }
 
@@ -94,7 +116,7 @@ function renderDayContent(dow, entry) {
           <span class="cp-day-entry-type">${type}</span>
           <span class="cp-day-entry-title">${_cpEsc(name)}</span>
         </div>
-        <button class="cp-remove-btn" onclick="customPlanClearDay(${dow})" title="Remove">&times;</button>
+        <button class="cp-remove-btn" onclick="customPlanClearDay(${dow})" title="Remove"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
       </div>`;
   }
 
@@ -110,7 +132,7 @@ function renderDayContent(dow, entry) {
           <span class="cp-day-entry-title">${_cpEsc(name)}</span>
           ${exSummary}
         </div>
-        <button class="cp-remove-btn" onclick="customPlanClearDay(${dow})" title="Remove">&times;</button>
+        <button class="cp-remove-btn" onclick="customPlanClearDay(${dow})" title="Remove"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
       </div>`;
   }
 
@@ -559,18 +581,20 @@ function cpManualAddExRow() {
         <input type="text" id="cp-mreps-${id}" placeholder="e.g. 10, 45s, 500m" /></div>
       <div><label>Weight</label>
         <input type="text" id="cp-mwt-${id}" placeholder="optional" /></div>
-      <button class="remove-exercise-btn" onclick="cpManualRemoveRow(${id})">&#10005;</button>`;
+      <button class="remove-exercise-btn" onclick="cpManualRemoveRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   } else {
     div.innerHTML = `
       <div><label>Exercise</label>
         <input type="text"   id="cp-mex-${id}"   placeholder="e.g. Bench Press" /></div>
       <div><label>Sets</label>
-        <input type="number" id="cp-msets-${id}" placeholder="3" min="1" max="20" /></div>
+        <input type="number" id="cp-msets-${id}" placeholder="3" min="1" max="20" onchange="cpPyramidSetsChanged(${id})" /></div>
       <div><label>Reps</label>
         <input type="text"   id="cp-mreps-${id}" placeholder="10" /></div>
       <div><label>Weight</label>
         <input type="text"   id="cp-mwt-${id}"   placeholder="lbs/kg" /></div>
-      <button class="remove-exercise-btn" onclick="cpManualRemoveRow(${id})">&#10005;</button>`;
+      <button class="ex-pyramid-btn" title="Per-set reps &amp; weight" onclick="cpTogglePyramid(${id})">▾</button>
+      <button class="remove-exercise-btn" onclick="cpManualRemoveRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
+      <div class="ex-pyramid-detail" id="cp-pyr-${id}" style="display:none"></div>`;
   }
   document.getElementById("cp-manual-exercise-rows").appendChild(div);
 }
@@ -578,6 +602,46 @@ function cpManualAddExRow() {
 function cpManualRemoveRow(id) {
   const row = document.getElementById(`cp-mrow-${id}`);
   if (row) row.remove();
+}
+
+function cpTogglePyramid(id) {
+  const detail = document.getElementById(`cp-pyr-${id}`);
+  const row = document.getElementById(`cp-mrow-${id}`);
+  const btn = row?.querySelector(".ex-pyramid-btn");
+  if (!detail) return;
+  const isOpen = detail.style.display !== "none";
+  if (isOpen) {
+    detail.style.display = "none";
+    if (btn) { btn.textContent = "▾"; btn.classList.remove("is-active"); }
+    return;
+  }
+  const setsVal = parseInt(document.getElementById(`cp-msets-${id}`)?.value) || 3;
+  const defaultReps = document.getElementById(`cp-mreps-${id}`)?.value || "";
+  const defaultWeight = document.getElementById(`cp-mwt-${id}`)?.value || "";
+  const existing = detail.querySelectorAll(".ex-pyr-row");
+  if (existing.length === setsVal) {
+    detail.style.display = "";
+    if (btn) { btn.textContent = "▴"; btn.classList.add("is-active"); }
+    return;
+  }
+  let html = '<div class="ex-pyr-header"><span>Set</span><span>Reps</span><span>Weight</span></div>';
+  for (let i = 0; i < setsVal; i++) {
+    html += `<div class="ex-pyr-row">
+      <span class="ex-pyr-label">${i + 1}</span>
+      <input type="text" class="ex-pyr-reps" placeholder="${defaultReps || '10'}" value="${defaultReps}" />
+      <input type="text" class="ex-pyr-weight" placeholder="${defaultWeight || 'lbs'}" value="${defaultWeight}" />
+    </div>`;
+  }
+  detail.innerHTML = html;
+  detail.style.display = "";
+  if (btn) { btn.textContent = "▴"; btn.classList.add("is-active"); }
+}
+
+function cpPyramidSetsChanged(id) {
+  const detail = document.getElementById(`cp-pyr-${id}`);
+  if (!detail || detail.style.display === "none") return;
+  detail.innerHTML = "";
+  cpTogglePyramid(id);
 }
 
 // ── Cardio interval rows for running/cycling/swimming ─────────────────────────
@@ -623,7 +687,7 @@ function cpManualAddCardioRow() {
       </select></div>
     <div style="flex:2"><label>Details</label>
       <input type="text" id="cp-cdetails-${id}" placeholder="e.g. 5:30/km, keep HR under 145" /></div>
-    <button class="remove-exercise-btn" onclick="cpManualRemoveCardioRow(${id})">&#10005;</button>`;
+    <button class="remove-exercise-btn" onclick="cpManualRemoveCardioRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   document.getElementById("cp-manual-cardio-rows").appendChild(div);
 }
 
@@ -707,6 +771,23 @@ function customPlanSaveManual() {
         weight: document.getElementById(`cp-mwt-${id}`)?.value.trim() || "",
       };
       if (!isHiit) ex.sets = document.getElementById(`cp-msets-${id}`)?.value.trim() || "";
+
+      // Collect per-set pyramid details if expanded
+      const pyrDetail = document.getElementById(`cp-pyr-${id}`);
+      if (pyrDetail && pyrDetail.style.display !== "none") {
+        const pyrRows = pyrDetail.querySelectorAll(".ex-pyr-row");
+        if (pyrRows.length > 0) {
+          const setDetails = [];
+          let hasDiff = false;
+          pyrRows.forEach(pr => {
+            const r = pr.querySelector(".ex-pyr-reps")?.value.trim() || ex.reps;
+            const w = pr.querySelector(".ex-pyr-weight")?.value.trim() || ex.weight;
+            setDetails.push({ reps: r, weight: w });
+            if (r !== ex.reps || w !== ex.weight) hasDiff = true;
+          });
+          if (hasDiff) ex.setDetails = setDetails;
+        }
+      }
       exercises.push(ex);
     });
     cpWeekTemplate[dow] = {

@@ -1,6 +1,5 @@
 // config.js — App configuration & shared utilities
-// ⚠️  Copy this file to config.js and add your API key.
-//    Never commit config.js to a public repo.
+// ⚠️  Never commit this file to a public repo or share its contents.
 
 /**
  * Shared HTML escape — use this for ALL user-controlled data injected into innerHTML.
@@ -24,8 +23,8 @@ function generateId(prefix) {
 }
 
 const APP_CONFIG = {
-  // Paste your Anthropic API key here.
-  // Get one at: https://console.anthropic.com/settings/keys
-  // For production, proxy API calls through a backend server instead.
-  anthropicApiKey: 'YOUR_ANTHROPIC_API_KEY',
+  // API key is read from localStorage (set via Settings > API Key).
+  get anthropicApiKey() {
+    return localStorage.getItem('anthropicApiKey') || 'YOUR_ANTHROPIC_API_KEY';
+  },
 };

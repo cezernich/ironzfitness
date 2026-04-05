@@ -880,7 +880,7 @@ const SCHEDULE_TYPE_LABEL = { running: "Running", weightlifting: "Strength", cyc
 function _getScheduleInputs() {
   const schedule = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
   const todayStr = new Date().toISOString().slice(0, 10);
-  const future   = schedule.filter(e => (e.source === "generated" || e.source === "custom" || e.source === "onboarding") && e.date >= todayStr);
+  const future   = schedule.filter(e => (e.source === "generated" || e.source === "custom" || e.source === "onboarding") && e.date >= todayStr && !e.planId);
   const byType   = {};
   future.forEach(e => {
     if (!e.type) return;
@@ -945,7 +945,7 @@ function renderTrainingInputs() {
           <span class="race-priority-badge priority-${priority.toLowerCase()}">${priority} Race</span>
           <div class="ti-card-actions">
             <button class="ti-edit-btn" onclick="tiEditRace('${race.id}')" title="Edit race">Edit</button>
-            <button class="delete-btn" onclick="removeTrainingInput('race','${race.id}')" title="Remove race">✕</button>
+            <button class="delete-btn" onclick="removeTrainingInput('race','${race.id}')" title="Remove race"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
           </div>
         </div>
         <div class="race-card-name">${_escapeHtml(race.name || (cfg ? cfg.label : race.type))}</div>
@@ -966,7 +966,7 @@ function renderTrainingInputs() {
           <span class="ti-card-badge ti-card-badge--schedule">Schedule</span>
           <div class="ti-card-actions">
             <button class="ti-edit-btn" onclick="tiEditSchedule('${s.type}')" title="Edit in Gym &amp; Strength">Edit</button>
-            <button class="delete-btn" onclick="removeTrainingInput('schedule','${s.type}')" title="Remove schedule">✕</button>
+            <button class="delete-btn" onclick="removeTrainingInput('schedule','${s.type}')" title="Remove schedule"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
           </div>
         </div>
         <div class="race-card-name">${s.icon} ${_escapeHtml(s.label)}</div>
@@ -1007,17 +1007,17 @@ function renderTrainingInputs() {
         <div class="race-card-top">
           <span class="ti-card-badge ti-card-badge--imported">Imported</span>
           <div class="ti-card-actions">
-            <button class="delete-btn" onclick="removeTrainingInput('imported','${plan.id}')" title="Remove imported plan">✕</button>
+            <button class="ti-edit-btn" onclick="editImportedPlan('${plan.id}')" title="Edit plan">Edit</button>
+            <button class="delete-btn" onclick="removeTrainingInput('imported','${plan.id}')" title="Remove imported plan"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
           </div>
         </div>
         <div class="race-card-name card-toggle" onclick="toggleSection('ti-import-${plan.id}')" style="cursor:pointer">
-          ${ICONS.calendar} ${_escapeHtml(plan.name)}
+          ${_escapeHtml(plan.name)}
           <span class="card-chevron" style="float:right">▾</span>
         </div>
-        <div class="race-card-meta">${plan.sessions.length} sessions · ${plan.weekCount} week${plan.weekCount !== 1 ? "s" : ""}</div>
-        <div class="race-card-footer">
-          <span class="race-date-badge">${formatDisplayDate(plan.startDate)}</span>
-          <span class="race-countdown">${countdown}</span>
+        <div class="imported-card-info">
+          <span class="race-card-meta">${plan.sessions.length} sessions · ${plan.weekCount} week${plan.weekCount !== 1 ? "s" : ""}</span>
+          <span class="imported-card-dates"><span class="race-date-badge">${formatDisplayDate(plan.startDate)}</span> <span class="race-countdown">${countdown}</span></span>
         </div>
         <div class="card-body" style="padding:0 12px 12px">${weekSummary}</div>
       </div>`;
@@ -1031,7 +1031,7 @@ function renderTrainingInputs() {
           <span class="ti-card-badge ti-card-badge--note">Note</span>
           <div class="ti-card-actions">
             <button class="ti-edit-btn" onclick="editTrainingNote('${note.id}')" title="Edit note">Edit</button>
-            <button class="delete-btn" onclick="removeTrainingInput('note','${note.id}')" title="Remove note">✕</button>
+            <button class="delete-btn" onclick="removeTrainingInput('note','${note.id}')" title="Remove note"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
           </div>
         </div>
         <div class="race-card-name ti-note-text" id="ti-note-text-${note.id}">${_escapeHtml(note.text)}</div>
@@ -1044,19 +1044,207 @@ function renderTrainingInputs() {
 
 /** Open the Race Events section and load the race for editing */
 function tiEditRace(id) {
-  const section = document.getElementById("section-race-events");
-  if (section) section.classList.remove("is-collapsed");
+  openBuildPlanTab('race');
   editEvent(id);
-  if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/** Edit an imported plan — full session editor */
+function editImportedPlan(planId) {
+  const plans = (() => { try { return JSON.parse(localStorage.getItem("importedPlans")) || []; } catch { return []; } })();
+  const plan = plans.find(p => p.id === planId);
+  if (!plan) return;
+
+  let overlay = document.getElementById("edit-imported-overlay");
+  if (overlay) overlay.remove();
+
+  overlay = document.createElement("div");
+  overlay.id = "edit-imported-overlay";
+  overlay.className = "quick-entry-overlay is-open";
+  overlay.style.cssText = "display:flex;z-index:10001";
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+
+  overlay.innerHTML = `
+    <div class="quick-entry-modal edit-import-modal">
+      <div class="edit-import-header">
+        <h3 style="margin:0">Edit Plan</h3>
+        <button class="delete-btn" onclick="document.getElementById('edit-imported-overlay').remove()" title="Close">&#10005;</button>
+      </div>
+      <div class="edit-import-fields">
+        <label class="form-label">
+          Plan Name
+          <input type="text" id="edit-import-name" class="form-input" value="${_escapeHtml(plan.name)}" style="margin-top:4px;width:100%">
+        </label>
+        <label class="form-label">
+          Start Date
+          <input type="date" id="edit-import-start" class="form-input" value="${plan.startDate}" style="margin-top:4px;width:100%">
+        </label>
+      </div>
+      <div class="edit-import-sessions" id="edit-import-sessions"></div>
+      <div class="edit-import-footer">
+        <button class="btn-secondary" onclick="document.getElementById('edit-imported-overlay').remove()">Cancel</button>
+        <button class="btn-primary" onclick="_saveImportedPlanEdits('${planId}')">Save Changes</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  _renderImportedSessions(planId);
+}
+
+function _renderImportedSessions(planId) {
+  const container = document.getElementById("edit-import-sessions");
+  if (!container) return;
+
+  const schedule = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
+  const sessions = schedule.filter(e => e.planId === planId).sort((a, b) => a.date.localeCompare(b.date));
+
+  if (!sessions.length) {
+    container.innerHTML = '<div style="text-align:center;color:var(--color-text-muted);padding:16px">No sessions in this plan.</div>';
+    return;
+  }
+
+  const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const planStart = new Date(sessions[0].date + "T00:00:00");
+
+  // Group by week
+  const weeks = {};
+  sessions.forEach(s => {
+    const wk = Math.floor((new Date(s.date + "T00:00:00") - planStart) / (7 * 864e5)) + 1;
+    if (!weeks[wk]) weeks[wk] = [];
+    weeks[wk].push(s);
+  });
+
+  let html = '<div class="edit-import-session-label">Sessions</div>';
+  Object.entries(weeks).forEach(([wk, wkSessions]) => {
+    html += `<div class="edit-import-week"><div class="edit-import-week-title">Week ${wk}</div>`;
+    wkSessions.forEach(s => {
+      const d = new Date(s.date + "T00:00:00");
+      const dayLabel = DOW[d.getDay()];
+      const typeLabel = SCHEDULE_TYPE_LABEL[s.type] || s.type;
+      const exCount = s.exercises ? s.exercises.length : 0;
+      const ivCount = s.aiSession?.intervals ? s.aiSession.intervals.length : 0;
+      const detail = exCount ? `${exCount} exercises` : ivCount ? `${ivCount} intervals` : s.details || "";
+      html += `
+        <div class="edit-import-session-row">
+          <div class="edit-import-session-info">
+            <div class="edit-import-session-top">
+              <span class="edit-import-session-day">${dayLabel}</span>
+              <span class="workout-tag tag-${s.type}">${typeLabel}</span>
+              <span class="edit-import-session-name">${_escapeHtml(s.sessionName)}</span>
+            </div>
+            <div class="edit-import-session-detail">${_escapeHtml(detail)}</div>
+          </div>
+          <div class="edit-import-session-actions">
+            <button class="ti-edit-btn" onclick="_editImportedSession('${s.id}')" title="Edit session">Edit</button>
+            <button class="delete-btn" onclick="_deleteImportedSession('${planId}','${s.id}')" title="Remove session"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
+          </div>
+        </div>`;
+    });
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+}
+
+function _editImportedSession(sessionId) {
+  // Close the plan editor overlay temporarily
+  const overlay = document.getElementById("edit-imported-overlay");
+  if (overlay) overlay.style.display = "none";
+
+  // Open the existing workout editor on this workoutSchedule entry
+  if (typeof openEditWorkout === "function") {
+    openEditWorkout(sessionId, "workoutSchedule");
+
+    // When the workout editor closes, re-show the plan editor
+    const editOverlay = document.getElementById("edit-workout-overlay");
+    if (editOverlay) {
+      const obs = new MutationObserver(() => {
+        if (!editOverlay.classList.contains("is-open")) {
+          obs.disconnect();
+          if (overlay) {
+            overlay.style.display = "flex";
+            // Re-render sessions in case they changed
+            const planId = overlay.querySelector("[onclick*=_saveImportedPlanEdits]")?.getAttribute("onclick")?.match(/'([^']+)'/)?.[1];
+            if (planId) _renderImportedSessions(planId);
+          }
+        }
+      });
+      obs.observe(editOverlay, { attributes: true, attributeFilter: ["class"] });
+    }
+  }
+}
+
+function _deleteImportedSession(planId, sessionId) {
+  if (!confirm("Remove this session from the plan?")) return;
+
+  // Remove from workoutSchedule
+  const schedule = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
+  localStorage.setItem("workoutSchedule", JSON.stringify(schedule.filter(e => e.id !== sessionId)));
+
+  // Update plan metadata
+  const plans = (() => { try { return JSON.parse(localStorage.getItem("importedPlans")) || []; } catch { return []; } })();
+  const plan = plans.find(p => p.id === planId);
+  if (plan) {
+    // Find the session date to remove from metadata
+    const removed = schedule.find(e => e.id === sessionId);
+    if (removed) {
+      plan.sessions = plan.sessions.filter(s => s.date !== removed.date || s.sessionName !== removed.sessionName);
+    }
+    localStorage.setItem("importedPlans", JSON.stringify(plans));
+  }
+
+  _renderImportedSessions(planId);
+}
+
+function _saveImportedPlanEdits(planId) {
+  const nameInput = document.getElementById("edit-import-name");
+  const startInput = document.getElementById("edit-import-start");
+  if (!nameInput || !startInput) return;
+
+  const newName = nameInput.value.trim();
+  const newStart = startInput.value;
+  if (!newName || !newStart) return;
+
+  const plans = (() => { try { return JSON.parse(localStorage.getItem("importedPlans")) || []; } catch { return []; } })();
+  const plan = plans.find(p => p.id === planId);
+  if (!plan) return;
+
+  const oldStart = plan.startDate;
+  const shiftMs = new Date(newStart + "T00:00:00") - new Date(oldStart + "T00:00:00");
+  const shiftDays = Math.round(shiftMs / 864e5);
+
+  // Update plan metadata
+  plan.name = newName;
+  plan.startDate = newStart;
+  if (shiftDays !== 0) {
+    plan.sessions.forEach(s => {
+      const d = new Date(new Date(s.date + "T00:00:00").getTime() + shiftMs);
+      s.date = d.toISOString().slice(0, 10);
+    });
+  }
+  localStorage.setItem("importedPlans", JSON.stringify(plans));
+
+  // Shift workoutSchedule entries with matching planId
+  if (shiftDays !== 0) {
+    const schedule = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
+    schedule.forEach(e => {
+      if (e.planId === planId) {
+        const d = new Date(new Date(e.date + "T00:00:00").getTime() + shiftMs);
+        e.date = d.toISOString().slice(0, 10);
+      }
+    });
+    localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+  }
+
+  // Close modal, refresh
+  const overlay = document.getElementById("edit-imported-overlay");
+  if (overlay) overlay.remove();
+  renderTrainingInputs();
+  if (typeof renderCalendar === "function") renderCalendar();
 }
 
 /** Open the Gym & Strength section so user can regenerate a schedule */
 function tiEditSchedule(type) {
-  const section = document.getElementById("section-generate-plan");
-  if (section) {
-    section.classList.remove("is-collapsed");
-    section.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+  openBuildPlanTab('gym');
 }
 
 function removeTrainingInput(kind, id) {
@@ -1664,19 +1852,7 @@ function _rfStep1() {
 }
 
 function rfOpenCustomPlan() {
-  // Collapse Build a Plan
-  const buildSection = document.getElementById("section-race-events");
-  if (buildSection && !buildSection.classList.contains("is-collapsed")) {
-    buildSection.classList.add("is-collapsed");
-  }
-  // Open Create Your Own Plan
-  const customSection = document.getElementById("section-custom-plan");
-  if (customSection) {
-    if (customSection.classList.contains("is-collapsed")) {
-      customSection.classList.remove("is-collapsed");
-    }
-    customSection.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+  openBuildPlanTab('custom');
 }
 
 function _rfStep2() {
@@ -2174,10 +2350,8 @@ function editEvent(id) {
     savedDaysPerWeek: race.daysPerWeek ?? null,
   };
 
-  const section = document.getElementById("section-race-events");
-  if (section) section.classList.remove("is-collapsed");
+  openBuildPlanTab('race');
   renderRaceForm();
-  if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function _cancelEditRace() {
@@ -2257,7 +2431,7 @@ function renderRaceEvents() {
           <span class="race-priority-badge priority-${priority.toLowerCase()}">${priority} Race</span>
           <div class="ti-card-actions">
             <button class="ti-edit-btn" onclick="editEvent('${race.id}')" title="Edit race">Edit</button>
-            <button class="delete-btn" onclick="deleteEvent('${race.id}')" title="Delete race">✕</button>
+            <button class="delete-btn" onclick="deleteEvent('${race.id}')" title="Delete race"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
           </div>
         </div>
         <div class="race-card-name">${race.name}</div>

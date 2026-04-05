@@ -91,7 +91,7 @@ function _addEditRow(ex) {
         <input type="text" id="edit-reps-${id}" value="${ex?.reps || ""}" placeholder="e.g. 10, 45s, 500m" /></div>
       <div class="edit-summary-fields" id="edit-summary-wt-${id}"><label>Weight</label>
         <input type="text" id="edit-wt-${id}" value="${weightVal}" placeholder="optional" /></div>
-      <button class="remove-exercise-btn" title="Remove" onclick="removeEditRow(${id})">✕</button>`;
+      <button class="remove-exercise-btn" title="Remove" onclick="removeEditRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   } else {
     div.innerHTML = `
       <div><label>Exercise</label>
@@ -102,7 +102,7 @@ function _addEditRow(ex) {
         <input type="text"   id="edit-reps-${id}"  value="${ex?.reps   || ""}" placeholder="10" /></div>
       <div class="edit-summary-fields" id="edit-summary-wt-${id}"><label>Weight</label>
         <input type="text"   id="edit-wt-${id}"    value="${weightVal}" placeholder="lbs / BW" /></div>
-      <button class="remove-exercise-btn" title="Remove" onclick="removeEditRow(${id})">✕</button>`;
+      <button class="remove-exercise-btn" title="Remove" onclick="removeEditRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   }
   // Per-set detail section (skip for HIIT — rounds are at workout level)
   if (!_editIsHiit) {
@@ -454,7 +454,7 @@ function _addEditIntervalRow(iv) {
       </select></div>
     <div style="flex:2"><label>Details</label>
       <input type="text" id="edit-ivdetails-${id}" value="${iv?.details || ""}" placeholder="e.g. 5:30/km, HR under 145" /></div>
-    <button class="remove-exercise-btn" title="Remove" onclick="removeEditIntervalRow(${id})">✕</button>`;
+    <button class="remove-exercise-btn" title="Remove" onclick="removeEditIntervalRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   document.getElementById("edit-interval-rows").appendChild(div);
 }
 

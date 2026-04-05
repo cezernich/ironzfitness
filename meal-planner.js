@@ -100,12 +100,13 @@ function _categorizeIngredient(name) {
 
 const SLOT_ORDER = ["breakfast","lunch","dinner","snack"];
 const SLOT_CALORIE_SPLITS = { breakfast: 0.25, lunch: 0.35, dinner: 0.30, snack: 0.10 };
-const DAY_LABELS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const MP_DAY_LABELS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
 let _weekPlanState = null;
-let _selectedDayIdx = 0;
+let _selectedDayIdx = (new Date().getDay() + 6) % 7; // Map JS DOW (0=Sun) → planner index (0=Mon)
 let _householdSize = 1;
 let _groceryVisible = false;
+let _groceryDays = 7;
 let _savedPlansVisible = false;
 
 function _getRestrictions() {
@@ -195,46 +196,142 @@ function _pickMeal(slot, targetCalories, restrictions, prefs, usedNames) {
    CORE API
    ===================================================================== */
 
+// Classify a day's training sessions into a load category for nutrition adjustment
+function _classifyDayLoad(sessions) {
+  if (!sessions || sessions.length === 0) return "rest";
+  const types = sessions.map(s => (s.type || s.discipline || "").toLowerCase());
+  const loads = sessions.map(s => (s.load || "").toLowerCase());
+  const names = sessions.map(s => (s.sessionName || "").toLowerCase());
+
+  const isStrength = types.some(t => t === "weightlifting" || t === "bodyweight" || t === "hiit");
+  const isEndurance = types.some(t => t === "running" || t === "run" || t === "cycling" || t === "bike" || t === "swimming" || t === "swim" || t === "triathlon");
+  const isHard = loads.some(l => l === "hard" || l === "long") ||
+    names.some(n => /interval|tempo|threshold|long run|long ride|brick|race/i.test(n));
+
+  if (isEndurance && isHard) return "endurance-hard";
+  if (isEndurance) return "endurance-easy";
+  if (isStrength) return "strength";
+  return "light";
+}
+
+// Day-level calorie/macro multipliers based on training load
+const _DAY_LOAD_ADJUSTMENTS = {
+  "rest":           { calories: 0.90, proteinPct: 0.30, carbsPct: 0.35, fatPct: 0.35 },
+  "light":          { calories: 0.95, proteinPct: 0.30, carbsPct: 0.40, fatPct: 0.30 },
+  "strength":       { calories: 1.05, proteinPct: 0.35, carbsPct: 0.35, fatPct: 0.30 },
+  "endurance-easy": { calories: 1.00, proteinPct: 0.25, carbsPct: 0.50, fatPct: 0.25 },
+  "endurance-hard": { calories: 1.15, proteinPct: 0.25, carbsPct: 0.55, fatPct: 0.20 },
+};
+
+function _getWeekTrainingByDow() {
+  // Map DOW (0=Sun..6=Sat) -> array of sessions for the upcoming week
+  const byDow = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const weekEnd = new Date(today);
+  weekEnd.setDate(weekEnd.getDate() + 7);
+  const todayStr = today.toISOString().slice(0, 10);
+  const endStr = weekEnd.toISOString().slice(0, 10);
+
+  // Gather from workoutSchedule
+  const schedule = typeof loadWorkoutSchedule === "function" ? loadWorkoutSchedule() : [];
+  schedule.forEach(s => {
+    if (s.date >= todayStr && s.date < endStr) {
+      const dow = new Date(s.date + "T00:00:00").getDay();
+      byDow[dow].push(s);
+    }
+  });
+
+  // Gather from trainingPlan (race plans)
+  const plan = typeof loadTrainingPlan === "function" ? loadTrainingPlan() : [];
+  plan.forEach(s => {
+    if (s.date >= todayStr && s.date < endStr) {
+      const dow = new Date(s.date + "T00:00:00").getDay();
+      byDow[dow].push(s);
+    }
+  });
+
+  return byDow;
+}
+
 function generateWeekMealPlan(options) {
   options = options || {};
   const hs = options.householdSize || _householdSize || 1;
-  const targets = (typeof calculateNutritionTargets === "function") ? calculateNutritionTargets() : { calories: 2200, protein: 165, carbs: 220, fat: 73 };
+  const fallbackTargets = { calories: 2200, protein: 165, carbs: 220, fat: 73 };
   const restrictions = _getRestrictions();
   const prefs = _getPreferences();
+
+  // Get training schedule for the week to classify day load labels
+  const trainingByDow = _getWeekTrainingByDow();
+  // MP_DAY_LABELS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"] → DOW mapping
+  const mpDowMap = [1, 2, 3, 4, 5, 6, 0]; // Mon=1, Tue=2, ... Sun=0
+
+  // Build date strings for the upcoming week starting from today
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   const days = [];
   const usedNames = { breakfast: new Set(), lunch: new Set(), dinner: new Set(), snack: new Set() };
 
   for (let d = 0; d < 7; d++) {
+    const dow = mpDowMap[d];
+    const sessions = trainingByDow[dow] || [];
+    const load = _classifyDayLoad(sessions);
+
+    // Find the next occurrence of this DOW from today to get the actual date
+    const daysUntil = (dow - today.getDay() + 7) % 7;
+    const dayDate = new Date(today);
+    dayDate.setDate(dayDate.getDate() + daysUntil);
+    const dateStr = dayDate.toISOString().slice(0, 10);
+
+    // Use the same nutrition target system as the home screen sliders
+    let dayTargets;
+    if (typeof getDailyNutritionTarget === "function") {
+      dayTargets = getDailyNutritionTarget(dateStr);
+    } else if (typeof getBaseNutritionTarget === "function") {
+      dayTargets = getBaseNutritionTarget(dateStr);
+    } else {
+      dayTargets = fallbackTargets;
+    }
+
     const dayMeals = [];
     for (const slot of SLOT_ORDER) {
-      const slotCal = Math.round(targets.calories * SLOT_CALORIE_SPLITS[slot]);
+      const slotCal = Math.round(dayTargets.calories * SLOT_CALORIE_SPLITS[slot]);
       const meal = _pickMeal(slot, slotCal, restrictions, prefs, usedNames[slot]);
       dayMeals.push(meal);
     }
-    days.push({ dayIndex: d, label: DAY_LABELS[d], meals: dayMeals });
+    days.push({ dayIndex: d, label: MP_DAY_LABELS[d], meals: dayMeals, load, dayTargets, date: dateStr });
   }
 
   const plan = {
     id: (typeof generateId === "function") ? generateId("mp") : "mp_" + Date.now(),
     createdAt: new Date().toISOString(),
     householdSize: hs,
-    targets: targets,
+    targets: baseTargets,
     days: days,
   };
 
   localStorage.setItem("currentWeekMealPlan", JSON.stringify(plan));
   _weekPlanState = plan;
   _householdSize = hs;
+  _selectedDayIdx = (new Date().getDay() + 6) % 7; // Reset to today
   return plan;
 }
 
-function generateGroceryList(weekPlan) {
+function generateMealPlanGroceryList(weekPlan, dayCount) {
   if (!weekPlan) return [];
   const hs = weekPlan.householdSize || 1;
+  const numDays = dayCount || 7;
   const agg = {}; // key: ingredient name -> {name, amount, unit, category}
 
-  for (const day of weekPlan.days) {
+  // Start from today's index in the Mon-Sun week, wrapping around
+  const todayIdx = (new Date().getDay() + 6) % 7; // 0=Mon..6=Sun
+  const indices = [];
+  for (let i = 0; i < numDays; i++) {
+    indices.push((todayIdx + i) % 7);
+  }
+  const daysToInclude = indices.map(i => weekPlan.days[i]).filter(Boolean);
+  for (const day of daysToInclude) {
     for (const meal of day.meals) {
       for (const ing of meal.ingredients) {
         const key = ing.name.toLowerCase();
@@ -249,7 +346,7 @@ function generateGroceryList(weekPlan) {
   // Group by category
   const grouped = { produce: [], protein: [], dairy: [], grains: [], pantry: [] };
   for (const item of Object.values(agg)) {
-    item.amount = Math.round(item.amount * 10) / 10;
+    item.amount = Math.ceil(item.amount);
     const cat = grouped[item.category] || grouped.pantry;
     cat.push(item);
   }
@@ -368,9 +465,10 @@ function renderWeekMealPlanner() {
   // Day tabs
   let dayTabsHtml = '<div class="mp-day-tabs">';
   for (let i = 0; i < 7; i++) {
-    const active = i === _selectedDayIdx ? " mp-day-tab--active" : "";
-    dayTabsHtml += `<button class="mp-day-tab${active}" onclick="_selectedDayIdx=${i};renderWeekMealPlanner()">${DAY_LABELS[i]}</button>`;
+    const active = (i === _selectedDayIdx && !_groceryVisible) ? " mp-day-tab--active" : "";
+    dayTabsHtml += `<button class="mp-day-tab${active}" onclick="_selectedDayIdx=${i};_groceryVisible=false;renderWeekMealPlanner()">${MP_DAY_LABELS[i]}</button>`;
   }
+  dayTabsHtml += `<button class="mp-day-tab mp-day-tab--grocery${_groceryVisible ? ' mp-day-tab--active' : ''}" onclick="_groceryVisible=!_groceryVisible;renderWeekMealPlanner()" title="Grocery List">&#x1f6d2;</button>`;
   dayTabsHtml += '</div>';
 
   // Day total
@@ -393,16 +491,30 @@ function renderWeekMealPlanner() {
         </div>
         <div class="mp-meal-name">${esc(meal.name)}</div>
         <div class="mp-meal-macros">${meal.calories} cal &middot; P:${meal.protein}g &middot; C:${meal.carbs}g &middot; F:${meal.fat}g</div>
-        <div class="mp-meal-ingredients">${meal.ingredients.map(i => esc(i.amount + ' ' + i.unit + ' ' + i.name)).join(', ')}</div>
+        <div class="mp-meal-ingredients">${meal.ingredients.map(i => { const a = i.amount % 1 === 0 ? i.amount : (i.amount <= 1 ? Math.round(i.amount * 4) / 4 : Math.ceil(i.amount)); return esc(a + ' ' + i.unit + ' ' + i.name); }).join(', ')}</div>
       </div>`;
   });
 
   // Grocery list
   let groceryHtml = '';
   if (_groceryVisible) {
-    const grouped = generateGroceryList(plan);
+    const grouped = generateMealPlanGroceryList(plan, _groceryDays);
     const catLabels = { produce: "Produce", protein: "Protein", dairy: "Dairy", grains: "Grains", pantry: "Pantry" };
-    groceryHtml = '<div class="mp-grocery-list">';
+    const _todayIdx = (new Date().getDay() + 6) % 7;
+    const dayOpts = [1,2,3,4,5,6,7].map(n => {
+      const startDay = MP_DAY_LABELS[_todayIdx];
+      const endDay = MP_DAY_LABELS[(_todayIdx + n - 1) % 7];
+      let label;
+      if (n === 1) label = `Today (${startDay})`;
+      else if (n === 7) label = 'Full week';
+      else label = `${n} days (${startDay}\u2013${endDay})`;
+      return `<option value="${n}" ${n === _groceryDays ? 'selected' : ''}>${label}</option>`;
+    }).join("");
+    groceryHtml = `<div class="mp-grocery-list">
+      <div class="mp-grocery-header">
+        <h3 class="mp-grocery-heading">Grocery List</h3>
+        <select class="mp-grocery-days-select" onchange="_groceryDays=parseInt(this.value)||7;renderWeekMealPlanner()">${dayOpts}</select>
+      </div>`;
     for (const [cat, items] of Object.entries(grouped)) {
       if (!items.length) continue;
       groceryHtml += `<div class="mp-grocery-cat"><div class="mp-grocery-cat-name">${esc(catLabels[cat] || cat)}</div>`;
@@ -428,14 +540,16 @@ function renderWeekMealPlanner() {
       </div>
     </div>
     ${dayTabsHtml}
+    ${_groceryVisible ? groceryHtml : (() => {
+      const _loadLabels = { rest: "Rest Day", light: "Light Activity", strength: "Strength Day", "endurance-easy": "Easy Cardio", "endurance-hard": "Hard / Long Session" };
+      const _loadTag = day.load ? `<span class="mp-load-tag mp-load-tag--${day.load}">${_loadLabels[day.load] || day.load}</span>` : "";
+      return `
     <div class="mp-day-summary">
-      <strong>${esc(day.label)} Totals:</strong> ${dayTotals.calories} cal &middot; P:${dayTotals.protein}g &middot; C:${dayTotals.carbs}g &middot; F:${dayTotals.fat}g
+      <div><strong>${esc(day.label)} Totals:</strong> ${dayTotals.calories} cal &middot; P:${dayTotals.protein}g &middot; C:${dayTotals.carbs}g &middot; F:${dayTotals.fat}g</div>
+      ${_loadTag}
     </div>
-    ${mealsHtml}
-    <button class="btn-secondary mp-grocery-toggle" onclick="_groceryVisible=!_groceryVisible;renderWeekMealPlanner()">
-      ${_groceryVisible ? 'Hide' : 'Show'} Grocery List
-    </button>
-    ${groceryHtml}
+    ${mealsHtml}`;
+    })()}
     ${_renderSavedPlansSection(esc)}
   `;
 }

@@ -10,6 +10,26 @@ function toggleSection(id) {
 }
 
 /* =====================================================================
+   BUILD-A-PLAN SUB-TABS
+   ===================================================================== */
+
+function switchBuildPlanTab(tabName) {
+  document.querySelectorAll('.build-plan-panel').forEach(p => p.style.display = 'none');
+  document.querySelectorAll('.build-plan-tab').forEach(b => b.classList.remove('build-plan-tab--active'));
+  const panel = document.getElementById('bp-panel-' + tabName);
+  if (panel) panel.style.display = '';
+  const btn = document.querySelector('.build-plan-tab[data-bptab="' + tabName + '"]');
+  if (btn) btn.classList.add('build-plan-tab--active');
+}
+
+function openBuildPlanTab(tabName) {
+  const wrapper = document.getElementById('section-build-plan');
+  if (wrapper) wrapper.classList.remove('is-collapsed');
+  switchBuildPlanTab(tabName);
+  if (wrapper) wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* =====================================================================
    TAB NAVIGATION
    ===================================================================== */
 
@@ -141,7 +161,7 @@ function closeProfileDropdown() {
   if (dd) dd.classList.remove("is-open");
 }
 
-const SUPPORT_EMAIL = "support@ironzfitness.com"; // TODO: replace with real support address
+const SUPPORT_EMAIL = "ironzsupport@gmail.com";
 
 function openSupportEmail() {
   const profile = JSON.parse(localStorage.getItem("profile") || "{}");
@@ -304,6 +324,8 @@ function init() {
     const cpDaysToMon = cpDow === 1 ? 0 : (cpDow === 0 ? 1 : 8 - cpDow);
     cp.setDate(cp.getDate() + cpDaysToMon);
     cpStartEl.value = cp.toISOString().slice(0, 10);
+    const importStartEl = document.getElementById("import-start-date");
+    if (importStartEl) importStartEl.value = cp.toISOString().slice(0, 10);
   }
 
   // Initialize strength plan split preview
@@ -336,6 +358,7 @@ function init() {
   if (typeof renderTrainingConflicts === "function") renderTrainingConflicts();
   if (typeof renderTrainingInputs === "function") renderTrainingInputs();
   if (typeof renderAvoidedExercisesList === "function") renderAvoidedExercisesList();
+  if (typeof renderWeekMealPlanner === "function") renderWeekMealPlanner();
 
   // Home tab: render calendar then auto-show today's plan
   renderCalendar();
@@ -365,6 +388,9 @@ function init() {
 
   // Check for Strava OAuth callback
   if (typeof handleStravaCallback === "function") handleStravaCallback();
+
+  // Show API key status
+  loadApiKeyStatus();
 }
 
 window.onload = init;
@@ -403,6 +429,48 @@ function loadProfileIntoForm() {
     if (profile.gender) document.getElementById("profile-gender").value = profile.gender;
     if (profile.goal)   document.getElementById("profile-goal").value   = profile.goal;
   } catch { /* ignore */ }
+}
+
+
+/* =====================================================================
+   SETTINGS — API KEY
+   ===================================================================== */
+
+function saveApiKey() {
+  const input = document.getElementById("setting-api-key");
+  const msg = document.getElementById("api-key-msg");
+  const key = (input?.value || "").trim();
+  if (!key || !key.startsWith("sk-")) {
+    msg.style.color = "var(--color-danger)";
+    msg.textContent = "Please enter a valid API key (starts with sk-).";
+    setTimeout(() => { msg.textContent = ""; }, 3000);
+    return;
+  }
+  localStorage.setItem("anthropicApiKey", key);
+  input.value = "";
+  msg.style.color = "var(--color-success)";
+  msg.textContent = "API key saved! AI features are now enabled.";
+  setTimeout(() => { msg.textContent = ""; }, 3000);
+}
+
+function clearApiKey() {
+  localStorage.removeItem("anthropicApiKey");
+  document.getElementById("setting-api-key").value = "";
+  const msg = document.getElementById("api-key-msg");
+  msg.style.color = "var(--color-text-muted)";
+  msg.textContent = "API key removed.";
+  setTimeout(() => { msg.textContent = ""; }, 3000);
+}
+
+function loadApiKeyStatus() {
+  const key = localStorage.getItem("anthropicApiKey");
+  if (key) {
+    const msg = document.getElementById("api-key-msg");
+    if (msg) {
+      msg.style.color = "var(--color-success)";
+      msg.textContent = "Key saved (sk-..." + key.slice(-4) + ")";
+    }
+  }
 }
 
 

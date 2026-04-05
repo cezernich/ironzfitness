@@ -893,8 +893,8 @@ function buildStatsHydration() {
   // Helper: extract bottle count from log entry (supports old number & new object format)
   const _hb = (entry) => (typeof getLogBottles === "function") ? getLogBottles(entry) : (typeof entry === "number" ? entry : (entry && entry.total) || 0);
 
-  const dates = Object.keys(log).filter(d => _hb(log[d]) > 0).sort();
-  if (dates.length === 0) {
+  const loggedDates = Object.keys(log).filter(d => _hb(log[d]) > 0).sort();
+  if (loggedDates.length === 0) {
     return `
       <section class="card collapsible" id="section-stats-hydration">
         <div class="card-toggle" onclick="toggleSection('section-stats-hydration')">
@@ -906,17 +906,24 @@ function buildStatsHydration() {
       </section>`;
   }
 
-  // Total oz and average
-  const totalBottles = dates.reduce((s, d) => s + _hb(log[d]), 0);
-  const totalOz = totalBottles * bottleSize;
-  const avgOzPerDay = Math.round(totalOz / dates.length);
+  // "Active" range: first logged date through today — includes 0-oz days in average
+  const firstLogDate = loggedDates[0];
+  const today = getTodayString();
+  const activeDays = [];
+  for (let d = new Date(firstLogDate + "T12:00:00"); d.toISOString().slice(0, 10) <= today; d.setDate(d.getDate() + 1)) {
+    activeDays.push(d.toISOString().slice(0, 10));
+  }
 
-  // Days that met target
-  const metTargetDays = dates.filter(d => _hb(log[d]) >= targetBottles).length;
-  const hitRate = Math.round((metTargetDays / dates.length) * 100);
+  // Total oz and average (denominator = all active days, including 0s)
+  const totalBottles = activeDays.reduce((s, d) => s + _hb(log[d]), 0);
+  const totalOz = totalBottles * bottleSize;
+  const avgOzPerDay = Math.round(totalOz / activeDays.length);
+
+  // Days that met target (out of all active days)
+  const metTargetDays = activeDays.filter(d => _hb(log[d]) >= targetBottles).length;
+  const hitRate = Math.round((metTargetDays / activeDays.length) * 100);
 
   // Current streak (consecutive days meeting target, ending today or yesterday)
-  const today = getTodayString();
   let currentStreak = 0;
   let checkDate = new Date(today + "T12:00:00");
   // Allow starting from today or yesterday
@@ -951,11 +958,7 @@ function buildStatsHydration() {
 
   // Best streak
   let bestStreak = 0, tempStreak = 0;
-  const allDates = [];
-  const firstDate = new Date(dates[0] + "T12:00:00");
-  const lastDate = new Date(dates[dates.length - 1] + "T12:00:00");
-  for (let d = new Date(firstDate); d <= lastDate; d.setDate(d.getDate() + 1)) {
-    const key = d.toISOString().slice(0, 10);
+  for (const key of activeDays) {
     if (_hb(log[key]) >= targetBottles) {
       tempStreak++;
       if (tempStreak > bestStreak) bestStreak = tempStreak;
@@ -973,19 +976,21 @@ function buildStatsHydration() {
     const key = d.toISOString().slice(0, 10);
     const bottles = _hb(log[key]);
     const oz = bottles * bottleSize;
-    last7.push({ label: dayLabels[d.getDay()], oz, bottles, met: bottles >= targetBottles });
+    const active = key >= firstLogDate; // day is within active tracking range
+    last7.push({ label: dayLabels[d.getDay()], oz, bottles, met: bottles >= targetBottles, active });
   }
   const maxOz = Math.max(targetOz, ...last7.map(d => d.oz));
 
   const barChart = last7.map(d => {
     const pct = maxOz > 0 ? Math.round((d.oz / maxOz) * 100) : 0;
-    const color = d.met ? "var(--color-accent)" : "rgba(129, 140, 248, 0.5)";
+    const color = !d.active ? "#555" : d.met ? "var(--color-accent)" : "rgba(129, 140, 248, 0.5)";
+    const countLabel = d.active ? `${d.oz} oz` : "—";
     return `<div class="weekly-col">
-      <div class="weekly-count">${d.oz} oz</div>
+      <div class="weekly-count" style="${!d.active ? 'opacity:0.4' : ''}">${countLabel}</div>
       <div class="weekly-track">
         <div class="weekly-fill" style="height:${pct}%;background:${color}"></div>
       </div>
-      <div class="weekly-label">${d.label}</div>
+      <div class="weekly-label" style="${!d.active ? 'opacity:0.4' : ''}">${d.label}</div>
     </div>`;
   }).join("");
 
@@ -996,7 +1001,7 @@ function buildStatsHydration() {
     { val: currentStreak, label: "Current Streak", sub: "days hitting target" },
     { val: bestStreak,    label: "Best Streak",    sub: "days hitting target" },
     { val: avgOzPerDay,   label: "Avg / Day",      sub: "oz" },
-    { val: hitRate + "%", label: "Goal Hit Rate",   sub: `${metTargetDays} of ${dates.length} days` },
+    { val: hitRate + "%", label: "Goal Hit Rate",   sub: `${metTargetDays} of ${activeDays.length} days` },
   ].map(r => `
     <div class="streak-box">
       <div class="streak-val">${r.val}</div>
@@ -1021,7 +1026,7 @@ function buildStatsHydration() {
         </div>
         <div class="totals-row" style="margin-top:14px">
           <span class="totals-label">Total Logged</span>
-          <span class="totals-value">${totalOz.toLocaleString()} oz over ${dates.length} days</span>
+          <span class="totals-value">${totalOz.toLocaleString()} oz over ${activeDays.length} days</span>
         </div>
       </div>
     </section>`;
@@ -1204,7 +1209,7 @@ function renderSavedPRs() {
         <div class="pr-distance">${PR_LABELS[key] || key}</div>
         <div class="pr-time">${val.time}</div>
         <div class="pr-date">${formatDisplayDate(val.date)}</div>
-        <button class="delete-btn" onclick="deletePR('${key}')">✕</button>
+        <button class="delete-btn" onclick="deletePR('${key}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
       </div>`).join("");
 }
 

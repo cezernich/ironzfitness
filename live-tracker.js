@@ -6,6 +6,15 @@ let _liveTracker = null; // { sessionId, dateStr, type, steps, exercises, curren
 let _liveTimerInterval = null;
 let _liveWakeLock = null;
 
+function _getLivePrefs() {
+  try { return JSON.parse(localStorage.getItem("liveTrackerPrefs")) || {}; } catch { return {}; }
+}
+function _setLivePref(key, val) {
+  const p = _getLivePrefs();
+  p[key] = val;
+  localStorage.setItem("liveTrackerPrefs", JSON.stringify(p));
+}
+
 // ── Launch ───────────────────────────────────────────────────────────────────
 
 function startLiveWorkout(sessionId, dateStr, type, stepsJson, exercisesJson) {
@@ -27,9 +36,13 @@ function startLiveWorkout(sessionId, dateStr, type, stepsJson, exercisesJson) {
     elapsed: 0,
     pausedAt: null,
     // For strength: track completed sets per exercise
+    // If exercise has setDetails (pyramid), pre-fill each set with its specific reps/weight
     sets: isStrength ? exercises.map(ex => {
       const numSets = parseInt(String(ex.sets).match(/^\d+/)?.[0]) || 3;
-      return Array.from({ length: numSets }, () => ({ done: false, reps: ex.reps || "", weight: ex.weight || "" }));
+      return Array.from({ length: numSets }, (_, si) => {
+        const sd = ex.setDetails && ex.setDetails[si];
+        return { done: false, reps: sd ? sd.reps : (ex.reps || ""), weight: sd ? sd.weight : (ex.weight || "") };
+      });
     }) : [],
     currentExercise: 0,
     currentSet: 0,
@@ -138,16 +151,30 @@ function _renderLiveTracker() {
 
   const t = _liveTracker;
   const body = t.isStrength ? _buildStrengthView() : _buildEnduranceView();
+  const prefs = _getLivePrefs();
+  const hideTimer = prefs.hideTimer || false;
+  const hideRest = prefs.hideRestTimer || false;
 
   overlay.innerHTML = `
     <div class="live-tracker">
       <div class="live-tracker-header">
         <div class="live-header-top">
-          <span class="live-timer" id="live-timer">${_formatMs(t.elapsed)}</span>
+          <span class="live-timer" id="live-timer" style="${hideTimer ? "display:none" : ""}">${_formatMs(t.elapsed)}</span>
           <div class="live-header-btns">
+            <button class="live-btn-settings" onclick="_toggleLiveSettings()" title="Settings">${typeof ICONS !== "undefined" && ICONS.settings ? ICONS.settings : "&#9881;"}</button>
             <button class="live-btn-pause" onclick="_toggleLivePause()">${t.paused ? "Resume" : "Pause"}</button>
             <button class="live-btn-finish" onclick="_finishLiveWorkout()">Finish</button>
           </div>
+        </div>
+        <div class="live-settings-panel" id="live-settings-panel" style="display:none">
+          <label class="live-settings-toggle">
+            <input type="checkbox" ${hideTimer ? "checked" : ""} onchange="_setLivePref('hideTimer',this.checked);document.getElementById('live-timer').style.display=this.checked?'none':''">
+            <span>Hide elapsed timer</span>
+          </label>
+          <label class="live-settings-toggle">
+            <input type="checkbox" ${hideRest ? "checked" : ""} onchange="_setLivePref('hideRestTimer',this.checked);_applyRestTimerPref(this.checked)">
+            <span>Disable rest timer</span>
+          </label>
         </div>
         <div class="live-progress-bar">
           <div class="live-progress-fill" id="live-progress-fill" style="width:0%"></div>
@@ -242,6 +269,21 @@ function _buildEnduranceView() {
 
 // ── Interactions ─────────────────────────────────────────────────────────────
 
+function _toggleLiveSettings() {
+  const panel = document.getElementById("live-settings-panel");
+  if (panel) panel.style.display = panel.style.display === "none" ? "" : "none";
+}
+
+function _applyRestTimerPref(disabled) {
+  if (!_liveTracker) return;
+  if (disabled) {
+    _liveTracker.inRest = false;
+    _liveTracker.restCountdown = 0;
+    const restEl = document.getElementById("live-rest-timer");
+    if (restEl) restEl.style.display = "none";
+  }
+}
+
 function _toggleLivePause() {
   if (!_liveTracker) return;
   if (_liveTracker.paused) {
@@ -284,10 +326,12 @@ function _logLiveSet(exIdx, setIdx) {
     set.weight = document.getElementById(`live-wt-${exIdx}-${setIdx}`)?.value || set.weight;
     set.done = true;
 
-    // Start rest timer (90s default for strength)
-    _liveTracker.inRest = true;
-    _liveTracker.restCountdown = 90000;
-    _liveTracker.restEndTime = Date.now() + 90000;
+    // Start rest timer (90s default for strength) unless disabled
+    if (!_getLivePrefs().hideRestTimer) {
+      _liveTracker.inRest = true;
+      _liveTracker.restCountdown = 90000;
+      _liveTracker.restEndTime = Date.now() + 90000;
+    }
   }
 
   // Re-render the body
@@ -390,16 +434,41 @@ function _commitLiveWorkout(logAll) {
       const sets = t.sets[ei] || [];
       const doneSets = sets.filter(s => s.done);
       if (doneSets.length > 0) {
+        const details = doneSets.map(s => ({ reps: s.reps, weight: s.weight }));
+        // Build range for main line reps/weight
+        const rNums = details.map(d => parseInt(d.reps)).filter(n => !isNaN(n));
+        const wNums = details.map(d => { const m = String(d.weight||"").match(/([\d.]+)/); return m ? parseFloat(m[1]) : NaN; }).filter(n => !isNaN(n));
+        let mainReps = doneSets[0].reps || ex.reps || "";
+        let mainWeight = doneSets[0].weight || ex.weight || "";
+        if (rNums.length) {
+          const rMin = Math.min(...rNums), rMax = Math.max(...rNums);
+          mainReps = rMin === rMax ? String(rMin) : `${rMin}-${rMax}`;
+        }
+        if (wNums.length) {
+          const wMin = Math.min(...wNums), wMax = Math.max(...wNums);
+          const unit = String(doneSets[0].weight||"").replace(/[\d.]+/, "").trim() || "lbs";
+          mainWeight = wMin === wMax ? `${wMin} ${unit}` : `${wMin}-${wMax} ${unit}`;
+        }
+        // Only save setDetails if values actually differ across sets
+        const allSame = details.every(d => d.reps === details[0].reps && d.weight === details[0].weight);
         exercises.push({
           name: ex.name,
           sets: String(doneSets.length),
-          reps: doneSets[0].reps || ex.reps || "",
-          weight: doneSets[0].weight || ex.weight || "",
-          setDetails: doneSets.length > 1 ? doneSets.map(s => ({ reps: s.reps, weight: s.weight })) : undefined,
+          reps: mainReps,
+          weight: mainWeight,
+          setDetails: (!allSame && details.length > 1) ? details : undefined,
         });
       }
     });
   }
+
+  // Look up session name
+  let sessionName = "";
+  try {
+    const _sched = JSON.parse(localStorage.getItem("workoutSchedule")) || [];
+    const _sw = _sched.find(s => s.id === t.sessionId);
+    if (_sw) sessionName = _sw.sessionName || "";
+  } catch {}
 
   // Save as completion
   let workouts = [];
@@ -408,6 +477,7 @@ function _commitLiveWorkout(logAll) {
   workouts.unshift({
     id: workoutId,
     date: t.dateStr,
+    name: sessionName,
     type: t.type,
     notes: `Live tracked · ${durationMin} min`,
     exercises: exercises.length ? exercises : undefined,

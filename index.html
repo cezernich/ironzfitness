@@ -130,150 +130,222 @@
         </div>
       </section>
 
-      <!-- Race Events -->
-      <section class="card collapsible is-collapsed" id="section-race-events">
-        <div class="card-toggle" onclick="toggleSection('section-race-events')">
+      <!-- Build a Plan (unified) -->
+      <section class="card collapsible is-collapsed" id="section-build-plan">
+        <div class="card-toggle" onclick="toggleSection('section-build-plan')">
           <h2>Build a Plan</h2>
           <span class="card-chevron">▾</span>
         </div>
         <div class="card-body">
-          <div id="race-form-container"></div>
-          <p id="race-save-msg" class="save-msg"></p>
-          <div id="race-events-list">
-            <p class="empty-msg">No races added yet.</p>
-          </div>
-        </div>
-      </section>
-
-
-      <!-- Gym & Strength Plan -->
-      <section class="card collapsible is-collapsed" id="section-generate-plan">
-        <div class="card-toggle" onclick="toggleSection('section-generate-plan')">
-          <h2>Gym &amp; Strength</h2>
-          <div class="card-toggle-end">
-            <label class="gym-toggle" onclick="event.stopPropagation()" title="Enable / disable gym & strength sessions">
-              <input type="checkbox" id="gym-strength-toggle" onchange="setGymStrengthEnabled(this.checked)" />
-              <span class="gym-toggle-track"></span>
-            </label>
-            <span class="card-chevron">▾</span>
-          </div>
-        </div>
-        <div class="card-body">
-          <p class="hint">Build a gym or strength training plan. For endurance events use Race Events above.</p>
-
-          <div class="form-row">
-            <label for="workout-type">Training Style</label>
-            <select id="workout-type" onchange="onPlanTypeChange()">
-              <option value="weightlifting">Strength Training</option>
-              <option value="bodyweight">Bodyweight</option>
-              <option value="hiit">HIIT</option>
-              <option value="yoga">Yoga / Mobility</option>
-            </select>
+          <!-- Sub-tab picker -->
+          <div class="build-plan-tabs">
+            <button class="build-plan-tab build-plan-tab--active" data-bptab="race" onclick="switchBuildPlanTab('race')">Race &amp; Endurance</button>
+            <button class="build-plan-tab" data-bptab="gym" onclick="switchBuildPlanTab('gym')">Gym &amp; Strength</button>
+            <button class="build-plan-tab" data-bptab="custom" onclick="switchBuildPlanTab('custom')">Create Your Own</button>
           </div>
 
-          <!-- Strength-specific: Goal -->
-          <div id="plan-strength-options">
-            <div class="form-row">
-              <label>What's your goal?</label>
-              <div class="plan-goal-grid">
-                <button class="plan-goal-btn is-active" data-goal="maintain" onclick="selectPlanGoal(this)">
-                  <strong>Maintain</strong><span class="plan-goal-desc">Stay where you are</span>
-                </button>
-                <button class="plan-goal-btn" data-goal="bulk" onclick="selectPlanGoal(this)">
-                  <strong>Bulk</strong><span class="plan-goal-desc">Build muscle & size</span>
-                </button>
-                <button class="plan-goal-btn" data-goal="cut" onclick="selectPlanGoal(this)">
-                  <strong>Cut</strong><span class="plan-goal-desc">Lean out, keep muscle</span>
-                </button>
-                <button class="plan-goal-btn" data-goal="lose" onclick="selectPlanGoal(this)">
-                  <strong>Lose Weight</strong><span class="plan-goal-desc">Fat loss focused</span>
-                </button>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <label>Training Days</label>
-              <div class="day-picker" id="plan-day-picker" onchange="updateDayPickerHint(); updateSplitPreview()">
-                <input type="checkbox" id="plan-day-1" value="1" checked /><label for="plan-day-1" class="day-chip">Mon</label>
-                <input type="checkbox" id="plan-day-2" value="2" /><label for="plan-day-2" class="day-chip">Tue</label>
-                <input type="checkbox" id="plan-day-3" value="3" checked /><label for="plan-day-3" class="day-chip">Wed</label>
-                <input type="checkbox" id="plan-day-4" value="4" /><label for="plan-day-4" class="day-chip">Thu</label>
-                <input type="checkbox" id="plan-day-5" value="5" checked /><label for="plan-day-5" class="day-chip">Fri</label>
-                <input type="checkbox" id="plan-day-6" value="6" /><label for="plan-day-6" class="day-chip">Sat</label>
-                <input type="checkbox" id="plan-day-0" value="0" /><label for="plan-day-0" class="day-chip">Sun</label>
-              </div>
-              <p class="hint" id="day-picker-hint" style="margin-top:6px">3 days selected</p>
-            </div>
-
-            <div class="form-row">
-              <label>Weekly Split</label>
-              <select id="plan-split-preset" onchange="updateSplitPreview()">
-                <option value="ppl">Push / Pull / Legs (recommended)</option>
-                <option value="upper-lower">Upper / Lower</option>
-                <option value="full-body">Full Body</option>
-                <option value="bro">Body Part Split (Chest, Back, Shoulders, Arms, Legs)</option>
-                <option value="custom">Custom</option>
-              </select>
-            </div>
-
-            <div id="plan-split-preview" class="plan-split-preview"></div>
-          </div>
-
-          <!-- Non-strength: simple day picker -->
-          <div id="plan-other-options" style="display:none">
-            <div class="form-row">
-              <label>Training Days</label>
-              <div class="day-picker" id="plan-day-picker-other" onchange="updateDayPickerHint()">
-                <input type="checkbox" id="plan-day-other-1" value="1" checked /><label for="plan-day-other-1" class="day-chip">Mon</label>
-                <input type="checkbox" id="plan-day-other-2" value="2" /><label for="plan-day-other-2" class="day-chip">Tue</label>
-                <input type="checkbox" id="plan-day-other-3" value="3" checked /><label for="plan-day-other-3" class="day-chip">Wed</label>
-                <input type="checkbox" id="plan-day-other-4" value="4" /><label for="plan-day-other-4" class="day-chip">Thu</label>
-                <input type="checkbox" id="plan-day-other-5" value="5" checked /><label for="plan-day-other-5" class="day-chip">Fri</label>
-                <input type="checkbox" id="plan-day-other-6" value="6" /><label for="plan-day-other-6" class="day-chip">Sat</label>
-                <input type="checkbox" id="plan-day-other-0" value="0" /><label for="plan-day-other-0" class="day-chip">Sun</label>
+          <!-- Panel: Race & Endurance -->
+          <div class="build-plan-panel" id="bp-panel-race">
+            <div id="section-race-events">
+              <div id="race-form-container"></div>
+              <p id="race-save-msg" class="save-msg"></p>
+              <div id="race-events-list">
+                <p class="empty-msg">No races added yet.</p>
               </div>
             </div>
           </div>
 
-          <!-- Common options -->
-          <div class="form-row">
-            <label for="fitness-level">Fitness Level</label>
-            <select id="fitness-level">
-              <option value="beginner">Beginner</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="advanced">Advanced</option>
-            </select>
+          <!-- Panel: Gym & Strength -->
+          <div class="build-plan-panel" id="bp-panel-gym" style="display:none">
+            <div id="section-generate-plan">
+              <div style="margin-bottom:8px">
+                <p class="hint" style="margin:0">Build a gym or strength training plan.</p>
+              </div>
+
+              <div class="form-row">
+                <label for="workout-type">Training Style</label>
+                <select id="workout-type" onchange="onPlanTypeChange()">
+                  <option value="weightlifting">Strength Training</option>
+                  <option value="bodyweight">Bodyweight</option>
+                  <option value="hiit">HIIT</option>
+                  <option value="yoga">Yoga / Mobility</option>
+                </select>
+              </div>
+
+              <!-- Strength-specific: Goal -->
+              <div id="plan-strength-options">
+                <div class="form-row">
+                  <label>What's your goal?</label>
+                  <div class="plan-goal-grid">
+                    <button class="plan-goal-btn is-active" data-goal="maintain" onclick="selectPlanGoal(this)">
+                      <strong>Maintain</strong><span class="plan-goal-desc">Stay where you are</span>
+                    </button>
+                    <button class="plan-goal-btn" data-goal="bulk" onclick="selectPlanGoal(this)">
+                      <strong>Bulk</strong><span class="plan-goal-desc">Build muscle & size</span>
+                    </button>
+                    <button class="plan-goal-btn" data-goal="cut" onclick="selectPlanGoal(this)">
+                      <strong>Cut</strong><span class="plan-goal-desc">Lean out, keep muscle</span>
+                    </button>
+                    <button class="plan-goal-btn" data-goal="lose" onclick="selectPlanGoal(this)">
+                      <strong>Lose Weight</strong><span class="plan-goal-desc">Fat loss focused</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <label>Training Days</label>
+                  <div class="day-picker" id="plan-day-picker" onchange="updateDayPickerHint(); updateSplitPreview()">
+                    <input type="checkbox" id="plan-day-1" value="1" checked /><label for="plan-day-1" class="day-chip">Mon</label>
+                    <input type="checkbox" id="plan-day-2" value="2" /><label for="plan-day-2" class="day-chip">Tue</label>
+                    <input type="checkbox" id="plan-day-3" value="3" checked /><label for="plan-day-3" class="day-chip">Wed</label>
+                    <input type="checkbox" id="plan-day-4" value="4" /><label for="plan-day-4" class="day-chip">Thu</label>
+                    <input type="checkbox" id="plan-day-5" value="5" checked /><label for="plan-day-5" class="day-chip">Fri</label>
+                    <input type="checkbox" id="plan-day-6" value="6" /><label for="plan-day-6" class="day-chip">Sat</label>
+                    <input type="checkbox" id="plan-day-0" value="0" /><label for="plan-day-0" class="day-chip">Sun</label>
+                  </div>
+                  <p class="hint" id="day-picker-hint" style="margin-top:6px">3 days selected</p>
+                </div>
+
+                <div class="form-row">
+                  <label>Weekly Split</label>
+                  <select id="plan-split-preset" onchange="updateSplitPreview()">
+                    <option value="ppl">Push / Pull / Legs (recommended)</option>
+                    <option value="upper-lower">Upper / Lower</option>
+                    <option value="full-body">Full Body</option>
+                    <option value="bro">Body Part Split (Chest, Back, Shoulders, Arms, Legs)</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+
+                <div id="plan-split-preview" class="plan-split-preview"></div>
+              </div>
+
+              <!-- Non-strength: simple day picker -->
+              <div id="plan-other-options" style="display:none">
+                <div class="form-row">
+                  <label>Training Days</label>
+                  <div class="day-picker" id="plan-day-picker-other" onchange="updateDayPickerHint()">
+                    <input type="checkbox" id="plan-day-other-1" value="1" checked /><label for="plan-day-other-1" class="day-chip">Mon</label>
+                    <input type="checkbox" id="plan-day-other-2" value="2" /><label for="plan-day-other-2" class="day-chip">Tue</label>
+                    <input type="checkbox" id="plan-day-other-3" value="3" checked /><label for="plan-day-other-3" class="day-chip">Wed</label>
+                    <input type="checkbox" id="plan-day-other-4" value="4" /><label for="plan-day-other-4" class="day-chip">Thu</label>
+                    <input type="checkbox" id="plan-day-other-5" value="5" checked /><label for="plan-day-other-5" class="day-chip">Fri</label>
+                    <input type="checkbox" id="plan-day-other-6" value="6" /><label for="plan-day-other-6" class="day-chip">Sat</label>
+                    <input type="checkbox" id="plan-day-other-0" value="0" /><label for="plan-day-other-0" class="day-chip">Sun</label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Common options -->
+              <div class="form-row">
+                <label for="fitness-level">Fitness Level</label>
+                <select id="fitness-level">
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
+                </select>
+              </div>
+
+              <div class="form-grid">
+                <div class="form-row">
+                  <label for="plan-start-date">Start Date</label>
+                  <input type="date" id="plan-start-date" />
+                </div>
+                <div class="form-row">
+                  <label for="plan-weeks">Program Length</label>
+                  <select id="plan-weeks" onchange="updateWeeksDurationHint()">
+                    <option value="4">4 weeks</option>
+                    <option value="8">8 weeks</option>
+                    <option value="12" selected>12 weeks</option>
+                    <option value="indefinite">Indefinite</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <label for="plan-refresh">Refresh Every</label>
+                <select id="plan-refresh" onchange="updateWeeksDurationHint()">
+                  <option value="2">2 weeks</option>
+                  <option value="4" selected>4 weeks</option>
+                  <option value="6">6 weeks</option>
+                  <option value="8">8 weeks</option>
+                </select>
+              </div>
+              <p class="hint" id="plan-weeks-hint" style="margin-top:-8px">12 weeks of sessions, exercises refresh every 4 weeks (3 blocks).</p>
+
+              <button class="btn-primary" onclick="generatePlan()">Generate & Schedule Plan</button>
+              <p id="plan-save-msg" class="save-msg"></p>
+              <div id="generated-plan"></div>
+            </div>
           </div>
 
-          <div class="form-grid">
-            <div class="form-row">
-              <label for="plan-start-date">Start Date</label>
-              <input type="date" id="plan-start-date" />
-            </div>
-            <div class="form-row">
-              <label for="plan-weeks">Program Length</label>
-              <select id="plan-weeks" onchange="updateWeeksDurationHint()">
-                <option value="4">4 weeks</option>
-                <option value="8">8 weeks</option>
-                <option value="12" selected>12 weeks</option>
-                <option value="indefinite">Indefinite</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-row">
-            <label for="plan-refresh">Refresh Every</label>
-            <select id="plan-refresh" onchange="updateWeeksDurationHint()">
-              <option value="2">2 weeks</option>
-              <option value="4" selected>4 weeks</option>
-              <option value="6">6 weeks</option>
-              <option value="8">8 weeks</option>
-            </select>
-          </div>
-          <p class="hint" id="plan-weeks-hint" style="margin-top:-8px">12 weeks of sessions, exercises refresh every 4 weeks (3 blocks).</p>
+          <!-- Panel: Create Your Own -->
+          <div class="build-plan-panel" id="bp-panel-custom" style="display:none">
+            <div id="section-custom-plan">
+              <!-- Mode toggle -->
+              <div class="cp-mode-toggle">
+                <button class="cp-mode-btn cp-mode-btn--active" id="cp-mode-create" onclick="cpSwitchMode('create')">Create on IronZ</button>
+                <button class="cp-mode-btn" id="cp-mode-import" onclick="cpSwitchMode('import')">Import a Plan</button>
+              </div>
 
-          <button class="btn-primary" onclick="generatePlan()">Generate & Schedule Plan</button>
-          <p id="plan-save-msg" class="save-msg"></p>
-          <div id="generated-plan"></div>
+              <!-- Create on IronZ -->
+              <div id="cp-create-body">
+                <p class="hint">Build your own weekly training schedule. Mix AI-generated sessions with your own workouts.</p>
+                <div class="form-grid">
+                  <div class="form-row">
+                    <label for="custom-plan-start">Start Date</label>
+                    <input type="date" id="custom-plan-start" />
+                  </div>
+                  <div class="form-row">
+                    <label for="custom-plan-weeks">Duration</label>
+                    <select id="custom-plan-weeks">
+                      <option value="1">1 week</option>
+                      <option value="2">2 weeks</option>
+                      <option value="4" selected>4 weeks</option>
+                      <option value="8">8 weeks</option>
+                      <option value="12">12 weeks</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="custom-plan-week" id="custom-plan-builder">
+                  <!-- Rendered by custom-plan.js -->
+                </div>
+
+                <div style="display:flex;gap:8px;margin-top:16px">
+                  <button class="btn-secondary" onclick="customPlanCopyWeek()">Copy Week Template</button>
+                  <button class="btn-primary" style="flex:1" onclick="saveCustomPlan()">Save &amp; Schedule Plan</button>
+                </div>
+              </div>
+
+              <!-- Import a Plan -->
+              <div id="import-plan-body" style="display:none">
+                <p class="hint">Paste a training plan from a coach, spreadsheet, email, or anywhere else.</p>
+                <div class="form-grid">
+                  <div class="form-row">
+                    <label for="import-start-date">Start Date</label>
+                    <input type="date" id="import-start-date" />
+                  </div>
+                  <div class="form-row">
+                    <label for="import-repeat">Repeat</label>
+                    <select id="import-repeat">
+                      <option value="1">Once (no repeat)</option>
+                      <option value="2">2 cycles</option>
+                      <option value="4">4 cycles</option>
+                      <option value="8">8 cycles</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <label for="import-plan-text">Training Plan</label>
+                  <textarea id="import-plan-text" rows="8" placeholder="Paste your training plan here...&#10;&#10;Example:&#10;Week 1&#10;Mon: 4mi easy run&#10;Tue: Bench 4x8 @ 155, Squat 4x6 @ 225&#10;Wed: Rest&#10;Thu: 6x800m intervals @ 5K pace&#10;Fri: Pull day - rows, pullups, curls&#10;Sat: Long run 8mi&#10;Sun: Rest" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>
+                </div>
+                <button class="btn-primary" style="width:100%" onclick="importTrainingPlan()">Import Plan</button>
+                <p id="import-plan-msg" class="save-msg"></p>
+                <div id="import-plan-preview" style="display:none"></div>
+              </div>
+              <p id="custom-plan-msg" class="save-msg"></p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -285,69 +357,6 @@
         </div>
         <div class="card-body">
           <div id="zones-content"></div>
-        </div>
-      </section>
-
-      <!-- Create Your Own Plan -->
-      <section class="card collapsible is-collapsed" id="section-custom-plan">
-        <div class="card-toggle" onclick="toggleSection('section-custom-plan')">
-          <h2>Create Your Own Plan</h2>
-          <span class="card-chevron">&#9662;</span>
-        </div>
-        <div class="card-body">
-          <p class="hint">Build your own weekly training schedule. Mix AI-generated sessions with your own workouts.</p>
-
-          <!-- Import a Plan toggle -->
-          <div style="margin-bottom:16px;text-align:center">
-            <button class="btn-secondary" style="width:100%" onclick="var b=document.getElementById('import-plan-body');var open=b.style.display!=='none';b.style.display=open?'none':'';this.innerHTML=open?'Hide Import':'+ Import a Plan'">+ Import a Plan</button>
-          </div>
-
-          <div class="form-grid">
-            <div class="form-row">
-              <label for="custom-plan-start">Start Date</label>
-              <input type="date" id="custom-plan-start" />
-            </div>
-            <div class="form-row">
-              <label for="custom-plan-weeks">Duration</label>
-              <select id="custom-plan-weeks">
-                <option value="1">1 week</option>
-                <option value="2">2 weeks</option>
-                <option value="4" selected>4 weeks</option>
-                <option value="8">8 weeks</option>
-                <option value="12">12 weeks</option>
-              </select>
-            </div>
-          </div>
-          <div id="import-plan-body" style="display:none;margin-bottom:16px">
-            <p class="hint">Paste a training plan from a coach, spreadsheet, email, or anywhere else. Uses the start date below.</p>
-            <div class="form-row">
-              <label for="import-plan-text">Training Plan</label>
-              <textarea id="import-plan-text" rows="8" placeholder="Paste your training plan here...&#10;&#10;Example:&#10;Week 1&#10;Mon: 4mi easy run&#10;Tue: Bench 4x8 @ 155, Squat 4x6 @ 225&#10;Wed: Rest&#10;Thu: 6x800m intervals @ 5K pace&#10;Fri: Pull day - rows, pullups, curls&#10;Sat: Long run 8mi&#10;Sun: Rest" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>
-            </div>
-            <div class="form-row">
-              <label for="import-repeat">Repeat</label>
-              <select id="import-repeat">
-                <option value="1">Once (no repeat)</option>
-                <option value="2">2 cycles</option>
-                <option value="4">4 cycles</option>
-                <option value="8">8 cycles</option>
-              </select>
-            </div>
-            <button class="btn-primary" style="width:100%" onclick="importTrainingPlan()">Import Plan</button>
-            <p id="import-plan-msg" class="save-msg"></p>
-            <div id="import-plan-preview" style="display:none"></div>
-          </div>
-
-          <!-- Weekly template builder -->
-          <div class="custom-plan-week" id="custom-plan-builder">
-            <!-- Rendered by custom-plan.js -->
-          </div>
-
-          <div style="display:flex;gap:8px;margin-top:16px">
-            <button class="btn-secondary" onclick="customPlanCopyWeek()">Copy Week Template</button>
-            <button class="btn-primary" style="flex:1" onclick="saveCustomPlan()">Save &amp; Schedule Plan</button>
-          </div>
-          <p id="custom-plan-msg" class="save-msg"></p>
         </div>
       </section>
 
@@ -489,8 +498,12 @@
     <div id="tab-nutrition" class="tab-content">
 
       <!-- Nutrition Dashboard -->
-      <section class="card" id="section-nutrition-dashboard">
-        <h2 style="margin:0 0 12px">Today's Nutrition</h2>
+      <section class="card collapsible" id="section-nutrition-dashboard">
+        <div class="card-toggle" onclick="toggleSection('section-nutrition-dashboard')">
+          <h2>Today's Nutrition</h2>
+          <span class="card-chevron">&#9662;</span>
+        </div>
+        <div class="card-body">
         <div class="nutrition-dashboard">
           <!-- Calorie budget bar -->
           <div class="nutri-budget-bar">
@@ -525,11 +538,16 @@
             <p class="nutri-context-text" id="nutri-context-text" style="margin:0;font-size:0.85rem;font-weight:600"></p>
           </div>
         </div>
+        </div>
       </section>
 
       <!-- Quick Log Options -->
-      <section class="card">
-        <h2 style="margin:0 0 12px">Log a Meal</h2>
+      <section class="card collapsible" id="section-log-meal">
+        <div class="card-toggle" onclick="toggleSection('section-log-meal')">
+          <h2>Log a Meal</h2>
+          <span class="card-chevron">&#9662;</span>
+        </div>
+        <div class="card-body">
         <div class="nutri-log-options">
           <button class="nutri-log-btn" onclick="openPhotoMealLog()">
             <span class="nutri-log-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
@@ -551,6 +569,7 @@
             <span>Scan Barcode</span>
             <span class="nutri-log-desc">Camera scan &amp; log</span>
           </button>
+        </div>
         </div>
       </section>
 
@@ -663,23 +682,6 @@
         <div id="todays-summary"></div>
       </section>
 
-      <!-- Weekly Grocery List -->
-      <section class="card collapsible is-collapsed" id="section-grocery-list">
-        <div class="card-toggle" onclick="toggleSection('section-grocery-list')">
-          <h2>Grocery List</h2>
-          <span class="card-chevron">&#9662;</span>
-        </div>
-        <div class="card-body">
-          <p class="hint">Auto-generated shopping list based on your nutrition goals and preferences.</p>
-          <button class="btn-primary" onclick="generateGroceryList()" style="width:100%;margin-bottom:12px">
-            Generate Grocery List
-          </button>
-          <div id="grocery-list-content">
-            <p class="empty-msg">Generate a grocery list based on your nutrition targets.</p>
-          </div>
-        </div>
-      </section>
-
       <!-- Food Preferences -->
       <section class="card collapsible is-collapsed" id="section-food-prefs">
         <div class="card-toggle" onclick="toggleSection('section-food-prefs')">
@@ -713,7 +715,7 @@
 
       <!-- Week Meal Planner -->
       <section class="card collapsible is-collapsed" id="section-week-meal-planner">
-        <div class="card-toggle" onclick="toggleSection('section-week-meal-planner')">
+        <div class="card-toggle" onclick="toggleSection('section-week-meal-planner'); if(typeof renderWeekMealPlanner==='function') renderWeekMealPlanner();">
           <h2>Week Meal Planner</h2>
           <span class="card-chevron">&#9662;</span>
         </div>
@@ -762,6 +764,9 @@
 
       <!-- Daily greeting -->
       <div id="home-greeting" class="home-greeting"></div>
+
+      <!-- Daily Progress Rings -->
+      <div id="daily-rings" class="daily-rings"></div>
 
       <!-- Calendar -->
       <section class="card" style="position:relative">
@@ -812,12 +817,10 @@
               <span id="hydration-current">0</span> / <span id="hydration-target-display">8</span> bottles
             </div>
             <div class="hydration-oz" id="hydration-oz-display">0 / 96 oz</div>
-            <button class="btn-primary hydration-log-btn" onclick="logWater()">
-              + 1 Bottle
-            </button>
-            <button class="btn-secondary hydration-undo-btn" onclick="undoWater()" id="hydration-undo-btn" style="display:none">
-              Undo
-            </button>
+            <div class="hydration-btn-row">
+              <button class="btn-primary hydration-log-btn" onclick="logWater()">+ 1 Bottle</button>
+              <button class="btn-secondary hydration-undo-btn" onclick="undoWater()" id="hydration-undo-btn" style="display:none">Undo</button>
+            </div>
           </div>
         </div>
         <div class="hydration-tip" id="hydration-tip" style="display:none;margin-top:10px">
@@ -1225,6 +1228,27 @@
         </div>
         <div class="card-body">
           <div id="subscription-status"></div>
+        </div>
+      </section>
+
+      <!-- API Key -->
+      <section class="card collapsible is-collapsed" id="section-api-key">
+        <div class="card-toggle" onclick="toggleSection('section-api-key')">
+          <h2>API Key</h2>
+          <span class="card-chevron">&#9662;</span>
+        </div>
+        <div class="card-body">
+          <p class="hint">Enter your Anthropic API key to enable AI features (meal suggestions, workout generation, smart import). Your key is stored locally in your browser — it never leaves your device except to call the API directly.</p>
+          <p class="hint" style="margin-top:4px"><a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get an API key here</a></p>
+          <div class="form-row" style="margin-top:8px">
+            <label for="setting-api-key">API Key</label>
+            <input type="password" id="setting-api-key" placeholder="sk-ant-..." style="font-family:monospace" />
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn-primary" onclick="saveApiKey()">Save Key</button>
+            <button class="btn-secondary" onclick="clearApiKey()">Remove Key</button>
+          </div>
+          <p id="api-key-msg" class="save-msg"></p>
         </div>
       </section>
 

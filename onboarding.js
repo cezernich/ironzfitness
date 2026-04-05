@@ -38,6 +38,7 @@ let obData = {
   weight: "",
   height: "",
   gender: "",
+  units: "imperial",
   goal: null,
   level: null,
   daysPerWeek: 4,
@@ -58,7 +59,7 @@ function showOnboarding() {
   obStep = 0;
   // Full reset
   obData = {
-    name: "", age: "", weight: "", height: "", gender: "",
+    name: "", age: "", weight: "", height: "", gender: "", units: "imperial",
     goal: null, level: null, daysPerWeek: 4, sessionLength: 45,
     workoutInterests: [], hydrationHabit: "sometimes",
     nutritionEnabled: true, hydrationEnabled: true,
@@ -252,9 +253,21 @@ function buildOBWelcome() {
 }
 
 function buildOBProfile() {
+  const isMetric = obData.units === "metric";
+  const weightLabel = isMetric ? "Weight (kg)" : "Weight (lbs)";
+  const heightLabel = isMetric ? "Height (cm)" : "Height (in)";
+  const weightPlaceholder = isMetric ? "e.g. 75" : "e.g. 165";
+  const heightPlaceholder = isMetric ? "e.g. 178" : "e.g. 70";
   return `
     <h2 class="ob-step-title">About You</h2>
     <p class="ob-step-desc">This info helps us calculate accurate training targets and nutrition recommendations.</p>
+    <div class="form-row" style="margin-bottom:16px">
+      <label>Units</label>
+      <div class="ob-units-toggle">
+        <button class="ob-units-btn ${!isMetric ? "is-active" : ""}" onclick="obSetUnits('imperial')">Imperial (lbs, mi)</button>
+        <button class="ob-units-btn ${isMetric ? "is-active" : ""}" onclick="obSetUnits('metric')">Metric (kg, km)</button>
+      </div>
+    </div>
     <div class="form-grid">
       <div class="form-row">
         <label for="ob-name">Name</label>
@@ -265,12 +278,12 @@ function buildOBProfile() {
         <input type="number" id="ob-age" placeholder="e.g. 32" min="10" max="100" value="${escOB(obData.age)}" />
       </div>
       <div class="form-row">
-        <label for="ob-weight">Weight (lbs)</label>
-        <input type="number" id="ob-weight" placeholder="e.g. 165" min="50" value="${escOB(obData.weight)}" />
+        <label for="ob-weight">${weightLabel}</label>
+        <input type="number" id="ob-weight" placeholder="${weightPlaceholder}" min="20" value="${escOB(obData.weight)}" />
       </div>
       <div class="form-row">
-        <label for="ob-height">Height (in)</label>
-        <input type="number" id="ob-height" placeholder="e.g. 70" min="40" value="${escOB(obData.height)}" />
+        <label for="ob-height">${heightLabel}</label>
+        <input type="number" id="ob-height" placeholder="${heightPlaceholder}" min="40" value="${escOB(obData.height)}" />
       </div>
     </div>
     <div class="form-row">
@@ -283,6 +296,30 @@ function buildOBProfile() {
       </select>
     </div>
   `;
+}
+
+function obSetUnits(system) {
+  // Save current values before switching
+  collectOnboardingStep();
+  obData.units = system;
+  // Convert weight/height if values exist
+  if (obData.weight) {
+    const w = parseFloat(obData.weight);
+    if (!isNaN(w)) {
+      obData.weight = system === "metric"
+        ? String(Math.round(w * 0.453592))   // lbs → kg
+        : String(Math.round(w * 2.20462));    // kg → lbs
+    }
+  }
+  if (obData.height) {
+    const h = parseFloat(obData.height);
+    if (!isNaN(h)) {
+      obData.height = system === "metric"
+        ? String(Math.round(h * 2.54))        // in → cm
+        : String(Math.round(h / 2.54));       // cm → in
+    }
+  }
+  renderOnboardingStep();
 }
 
 function buildOBGoals() {
@@ -409,12 +446,12 @@ function buildOBFeatures() {
           <span class="ob-feature-desc">Track daily water intake with smart targets</span>
         </div>
         <label class="toggle-switch">
-          <input type="checkbox" id="ob-feat-hydration" ${obData.hydrationEnabled ? "checked" : ""} />
+          <input type="checkbox" id="ob-feat-hydration" ${obData.hydrationEnabled ? "checked" : ""} onchange="document.getElementById('ob-hydration-habit-section').style.display=this.checked?'':'none'" />
           <span class="toggle-slider"></span>
         </label>
       </div>
     </div>
-    <div class="ob-hydration-habit" style="margin-top:20px">
+    <div class="ob-hydration-habit" id="ob-hydration-habit-section" style="margin-top:20px${obData.hydrationEnabled ? "" : ";display:none"}"
       <label style="display:block;margin-bottom:8px;font-weight:600;font-size:0.9rem">How's your current hydration habit?</label>
       <div class="ob-radio-group">
         <label class="ob-radio-card">
@@ -718,12 +755,25 @@ function getSessionIcon(type) {
 // ── Finish Onboarding ─────────────────────────────────────────────────────────
 
 function finishOnboarding(buildPlan) {
-  // 1. Save profile to localStorage (same format as Settings > Athlete Profile)
+  // 0. Save measurement system preference
+  if (typeof setMeasurementSystem === "function") {
+    setMeasurementSystem(obData.units || "imperial");
+  } else {
+    localStorage.setItem("measurementSystem", obData.units || "imperial");
+  }
+
+  // 1. Save profile to localStorage — always in imperial for internal consistency
+  let profileWeight = obData.weight;
+  let profileHeight = obData.height;
+  if (obData.units === "metric") {
+    if (profileWeight) profileWeight = String(Math.round(parseFloat(profileWeight) * 2.20462));
+    if (profileHeight) profileHeight = String(Math.round(parseFloat(profileHeight) / 2.54));
+  }
   const profile = {
     name: obData.name,
     age: obData.age,
-    weight: obData.weight,
-    height: obData.height,
+    weight: profileWeight,
+    height: profileHeight,
     gender: obData.gender,
     goal: obData.goal,
   };
@@ -782,12 +832,12 @@ function finishOnboarding(buildPlan) {
 
   // 9. Route based on user choice
   if (buildPlan) {
-    // Go to training tab and open the Build a Plan section
-    if (typeof showTab === "function") showTab("training");
-    setTimeout(function() {
-      var s = document.getElementById("section-race-events");
-      if (s) { s.classList.remove("is-collapsed"); s.scrollIntoView({ behavior: "smooth" }); }
-    }, 200);
+    // Open the Build a Plan survey
+    if (typeof openSurvey === "function") {
+      openSurvey();
+    } else {
+      if (typeof showTab === "function") showTab("training");
+    }
   } else {
     // Just explore — land on home tab
     if (typeof showTab === "function") showTab("home");

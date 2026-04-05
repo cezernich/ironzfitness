@@ -45,7 +45,7 @@ function renderGoals() {
             <div class="goal-actions">
               <button class="goal-edit-btn" onclick="openGoalEdit('${g.id}')">Edit</button>
               ${isComplete ? `<button class="goal-archive-btn" onclick="archiveGoal('${g.id}')">Archive</button>` : ""}
-              <button class="delete-btn" title="Delete" onclick="if(confirm('Delete this goal?')) deleteGoal('${g.id}')">✕</button>
+              <button class="delete-btn" title="Delete" onclick="if(confirm('Delete this goal?')) deleteGoal('${g.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
             </div>
           </div>
           <div class="goal-progress-row">
@@ -62,8 +62,10 @@ function renderGoals() {
         </div>`;
     });
   } else {
-    html += `<p class="empty-msg">No active goals. Set a goal to start tracking.</p>
-      <button class="btn-primary" onclick="openGoalForm()">+ Add Goal</button>`;
+    html += `<div class="goals-empty">
+      <p class="empty-msg" style="margin:0">No active goals. Set a goal to start tracking.</p>
+      <button class="btn-primary" onclick="openGoalForm()" style="margin-top:10px">+ Add Goal</button>
+    </div>`;
   }
 
   // Archived goals

@@ -313,7 +313,7 @@ function renderStretchSuggestion(workout, containerEl) {
         <span class="stretch-title">Post-Workout Stretch</span>
         <span style="display:flex;align-items:center;gap:4px">
           <span class="stretch-time">${minutes} min</span>
-          <button class="stretch-dismiss-btn" onclick="this.closest('.stretch-suggestion').remove()" title="Dismiss">&times;</button>
+          <button class="stretch-dismiss-btn" onclick="this.closest('.stretch-suggestion').remove()" title="Dismiss"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
         </span>
       </div>
       <div class="stretch-list">
