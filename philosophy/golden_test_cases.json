@@ -1,0 +1,290 @@
+{
+  "version": "1.0",
+  "description": "Golden test cases from Philosophy Spec Section 9.3. Verify the philosophy engine produces appropriate plans for each.",
+  "test_cases": [
+    {
+      "id": "test_beginner_runner_weight_loss",
+      "name": "Beginner Runner, Weight Loss",
+      "profile": {
+        "fitnessLevel": "beginner",
+        "age": 32,
+        "gender": "female",
+        "workoutTypes": ["running"],
+        "goal": "lose_weight",
+        "availableDaysPerWeek": 3,
+        "sessionLength": 30,
+        "equipment": "none",
+        "injuries": [],
+        "weight": 75,
+        "height": 165,
+        "weightUnit": "kg"
+      },
+      "expected_classification": {
+        "level": "beginner",
+        "ageGroup": "30-39",
+        "gender": "female",
+        "sportProfile": "endurance",
+        "primaryGoal": "fat_loss",
+        "trainingFrequency": "2-3",
+        "sessionDuration": "15-30",
+        "equipmentAccess": "none",
+        "injuryHistory": "none",
+        "recoveryState": "good",
+        "nutritionProfile": "habit_building"
+      },
+      "expected_modules": [
+        "LEVEL_BEGINNER",
+        "AGE_30_39",
+        "GENDER_FEMALE",
+        "SPORT_ENDURANCE_RUNNING",
+        "GOAL_LOSE_WEIGHT",
+        "NUTRITION_ENDURANCE_BY_DISTANCE",
+        "SAFETY_BOUNDARIES",
+        "HYDRATION_UNIVERSAL"
+      ],
+      "expected_plan_characteristics": {
+        "structure": "Simple run/walk progressing to continuous running over 8-10 weeks",
+        "intensity": "All runs at Z1-Z2 (conversational). No intervals for first 4 weeks",
+        "nutrition": "Calorie deficit 20-25%, protein 1.4-2.0 g/kg. Focus on portion awareness",
+        "tone": "Encouraging, celebrate consistency over performance",
+        "must_not_include": ["Advanced periodization", "Complex workout structure", "VO2max work in first 4 weeks"]
+      },
+      "validation_checks": [
+        "max_exercises_per_session <= 5",
+        "training_days <= 3",
+        "calories >= 1200",
+        "no_zone_4_5_in_first_4_weeks",
+        "rest_days >= 1",
+        "disclaimer_present"
+      ]
+    },
+    {
+      "id": "test_intermediate_lifter_muscle_gain",
+      "name": "Intermediate Lifter, Muscle Gain",
+      "profile": {
+        "fitnessLevel": "intermediate",
+        "age": 28,
+        "gender": "male",
+        "workoutTypes": ["weightlifting"],
+        "goal": "bulk",
+        "availableDaysPerWeek": 4,
+        "sessionLength": 60,
+        "equipment": "full_gym",
+        "injuries": ["shoulder_minor"],
+        "weight": 82,
+        "height": 178,
+        "weightUnit": "kg"
+      },
+      "expected_classification": {
+        "level": "intermediate",
+        "ageGroup": "18-29",
+        "gender": "male",
+        "sportProfile": "strength",
+        "primaryGoal": "muscle_gain",
+        "trainingFrequency": "4-5",
+        "sessionDuration": "45-60",
+        "equipmentAccess": "full_gym",
+        "injuryHistory": "minor_current",
+        "recoveryState": "good",
+        "nutritionProfile": "macro_tracking"
+      },
+      "expected_modules": [
+        "LEVEL_INTERMEDIATE",
+        "AGE_18_29",
+        "GENDER_MALE",
+        "SPORT_STRENGTH_CORE",
+        "GOAL_BULK",
+        "NUTRITION_STRENGTH_BY_GOAL",
+        "SAFETY_BOUNDARIES",
+        "HYDRATION_UNIVERSAL"
+      ],
+      "expected_plan_characteristics": {
+        "structure": "Upper/Lower or PPL split. 4 sessions. Avoid aggravating shoulder",
+        "volume": "12-18 sets/week per muscle group. Double progression",
+        "periodization": "Rep scheme undulation across 4-week mesocycle",
+        "nutrition": "Caloric surplus 10-20%. Protein 1.6-2.2 g/kg. Pre/post guidance",
+        "deload": "Deload week 4. Exercise rotation between mesocycles",
+        "must_not_include": ["Behind-neck press", "Heavy overhead pressing with shoulder injury"]
+      },
+      "validation_checks": [
+        "sets_per_muscle <= 20",
+        "deload_week_exists",
+        "no_contraindicated_exercises",
+        "calories > tdee",
+        "protein_per_kg >= 1.6"
+      ]
+    },
+    {
+      "id": "test_advanced_cyclist_performance",
+      "name": "Advanced Cyclist, Performance",
+      "profile": {
+        "fitnessLevel": "advanced",
+        "age": 38,
+        "gender": "male",
+        "workoutTypes": ["cycling"],
+        "goal": "performance",
+        "availableDaysPerWeek": 5,
+        "sessionLength": 75,
+        "equipment": "full_gym",
+        "injuries": [],
+        "weight": 73,
+        "height": 180,
+        "weightUnit": "kg",
+        "latestCheckIn": {
+          "sleep_quality": "poor",
+          "energy_level": "low",
+          "soreness_level": "mild"
+        }
+      },
+      "expected_classification": {
+        "level": "advanced",
+        "ageGroup": "30-39",
+        "gender": "male",
+        "sportProfile": "endurance",
+        "primaryGoal": "performance",
+        "trainingFrequency": "4-5",
+        "sessionDuration": "60+",
+        "equipmentAccess": "full_gym",
+        "injuryHistory": "none",
+        "recoveryState": "low",
+        "nutritionProfile": "performance_fueling"
+      },
+      "expected_modules": [
+        "LEVEL_ADVANCED",
+        "AGE_30_39",
+        "GENDER_MALE",
+        "SPORT_CYCLING",
+        "GOAL_PERFORMANCE",
+        "NUTRITION_CYCLING_TRIATHLON",
+        "SAFETY_BOUNDARIES",
+        "HYDRATION_UNIVERSAL"
+      ],
+      "expected_plan_characteristics": {
+        "structure": "FTP-based zones. Polarized distribution (80/20)",
+        "recovery_adjustment": "Reduce Zone 5 this week due to poor sleep, maintain Zone 2, add recovery focus",
+        "key_workouts": "Sweet spot intervals, VO2max intervals, long endurance ride",
+        "nutrition": "3-5 g/kg carbs easy days, 8-12 g/kg hard days. Sport-specific hydration",
+        "tone": "Precise, performance-oriented, minimal fluff"
+      },
+      "validation_checks": [
+        "has_ftp_based_zones",
+        "recovery_state_reflected_in_plan",
+        "rest_days >= 1",
+        "deload_exists"
+      ]
+    },
+    {
+      "id": "test_beginner_general_hybrid",
+      "name": "Beginner, General Fitness, Hybrid",
+      "profile": {
+        "fitnessLevel": "beginner",
+        "age": 45,
+        "gender": "female",
+        "workoutTypes": ["weightlifting", "yoga"],
+        "goal": "general",
+        "availableDaysPerWeek": 3,
+        "sessionLength": 30,
+        "equipment": "home_gym",
+        "injuries": [],
+        "weight": 68,
+        "height": 163,
+        "weightUnit": "kg"
+      },
+      "expected_classification": {
+        "level": "beginner",
+        "ageGroup": "40-49",
+        "gender": "female",
+        "sportProfile": "general_fitness",
+        "primaryGoal": "general_health",
+        "trainingFrequency": "2-3",
+        "sessionDuration": "15-30",
+        "equipmentAccess": "home_gym",
+        "injuryHistory": "none",
+        "recoveryState": "good",
+        "nutritionProfile": "habit_building"
+      },
+      "expected_modules": [
+        "LEVEL_BEGINNER",
+        "AGE_40_49",
+        "GENDER_FEMALE",
+        "SPORT_STRENGTH_CORE",
+        "GOAL_MAINTAIN",
+        "SPORT_YOGA_MOBILITY",
+        "NUTRITION_YOGA_MOBILITY_WALKING",
+        "SAFETY_BOUNDARIES",
+        "HYDRATION_UNIVERSAL"
+      ],
+      "expected_plan_characteristics": {
+        "structure": "Full-body strength 2x/week + 1x light cardio/yoga/mobility",
+        "exercises": "3-4 exercises per strength session. Simple: goblet squat, DB press, DB row, plank",
+        "periodization": "No complex periodization. Add 1-2 reps then increase weight",
+        "nutrition": "Habit-based. Protein target + hydration target. No macro complexity",
+        "tone": "Encouraging, educational. Explain why each exercise matters"
+      },
+      "validation_checks": [
+        "max_exercises_per_session <= 5",
+        "training_days <= 3",
+        "calories >= 1200",
+        "equipment_matches_home_gym",
+        "includes_mobility_day"
+      ]
+    },
+    {
+      "id": "test_intermediate_triathlete_half_ironman",
+      "name": "Intermediate Triathlete, Half Ironman",
+      "profile": {
+        "fitnessLevel": "intermediate",
+        "age": 35,
+        "gender": "male",
+        "workoutTypes": ["swimming", "cycling", "running"],
+        "goal": "performance",
+        "availableDaysPerWeek": 6,
+        "sessionLength": 75,
+        "equipment": "full_gym",
+        "injuries": [],
+        "weight": 78,
+        "height": 175,
+        "weightUnit": "kg",
+        "event": "half_ironman"
+      },
+      "expected_classification": {
+        "level": "intermediate",
+        "ageGroup": "30-39",
+        "gender": "male",
+        "sportProfile": "hybrid",
+        "primaryGoal": "performance",
+        "trainingFrequency": "6-7",
+        "sessionDuration": "60+",
+        "equipmentAccess": "full_gym",
+        "injuryHistory": "none",
+        "recoveryState": "good",
+        "nutritionProfile": "performance_fueling"
+      },
+      "expected_modules": [
+        "LEVEL_INTERMEDIATE",
+        "AGE_30_39",
+        "GENDER_MALE",
+        "SPORT_TRIATHLON",
+        "GOAL_PERFORMANCE",
+        "NUTRITION_CYCLING_TRIATHLON",
+        "SAFETY_BOUNDARIES",
+        "HYDRATION_UNIVERSAL"
+      ],
+      "expected_plan_characteristics": {
+        "structure": "Balanced swim/bike/run per triathlon distribution (10/55/35%)",
+        "key_workouts": "1-2 brick workouts per week. Periodized across 16-20 week build",
+        "nutrition": "Race-specific: 80-100g carbs/hr bike, 60-90g/hr run. Practice in training",
+        "taper": "14-21 days. Volume reduction with maintained intensity",
+        "differentiation": "Must look MATERIALLY different from beginner runner and advanced cyclist plans"
+      },
+      "validation_checks": [
+        "includes_swim_bike_run",
+        "includes_brick_workouts",
+        "volume_distribution_approximately_10_55_35",
+        "taper_period_exists",
+        "race_nutrition_included",
+        "rest_days >= 1"
+      ]
+    }
+  ]
+}

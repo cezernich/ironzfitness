@@ -1,0 +1,137 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "IronZ Plan Output Schema",
+  "description": "Required JSON format for all generated plans (from Spec Section 8)",
+  "type": "object",
+  "required": [
+    "plan_metadata",
+    "athlete_summary",
+    "plan_structure",
+    "progression_logic",
+    "nutrition_strategy",
+    "hydration_strategy",
+    "adaptation_rules",
+    "watchouts",
+    "rationale",
+    "assumptions"
+  ],
+  "properties": {
+    "plan_metadata": {
+      "type": "object",
+      "required": ["generated_at", "philosophy_modules_used", "module_versions", "plan_version", "generation_source"],
+      "properties": {
+        "generated_at": { "type": "string", "format": "date-time" },
+        "philosophy_modules_used": { "type": "array", "items": { "type": "string" } },
+        "module_versions": { "type": "object", "additionalProperties": { "type": "string" } },
+        "plan_version": { "type": "string" },
+        "generation_source": { "type": "string", "enum": ["rules_engine", "ai_assisted", "gap_fallback"] },
+        "gaps_detected": { "type": "array", "items": { "type": "object" } },
+        "freeform_request": { "type": "string" }
+      }
+    },
+    "athlete_summary": {
+      "type": "object",
+      "required": ["level", "sport_profile", "primary_goal", "constraints", "recovery_state"],
+      "properties": {
+        "level": { "type": "string", "enum": ["beginner", "intermediate", "advanced"] },
+        "sport_profile": { "type": "string" },
+        "primary_goal": { "type": "string" },
+        "constraints": {
+          "type": "object",
+          "properties": {
+            "days_per_week": { "type": "integer", "minimum": 1, "maximum": 7 },
+            "session_duration": { "type": "string" },
+            "equipment": { "type": "string" },
+            "injuries": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "recovery_state": { "type": "string", "enum": ["good", "moderate", "low"] }
+      }
+    },
+    "plan_structure": {
+      "type": "object",
+      "required": ["duration_weeks", "mesocycle_length", "days_per_week", "split_type"],
+      "properties": {
+        "duration_weeks": { "type": "integer", "minimum": 1 },
+        "mesocycle_length": { "type": "integer", "minimum": 2, "maximum": 6 },
+        "days_per_week": { "type": "integer", "minimum": 1, "maximum": 7 },
+        "split_type": { "type": "string" },
+        "split_rationale": { "type": "string" },
+        "deload_frequency": { "type": "string" }
+      }
+    },
+    "weekly_template": {
+      "type": "object",
+      "description": "Map of day names to session objects",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["session_type", "purpose"],
+        "properties": {
+          "session_type": { "type": "string" },
+          "purpose": { "type": "string" },
+          "zone": { "type": "string" },
+          "duration": { "type": "string" },
+          "exercises": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["exercise_id", "name", "sets", "reps", "rest_seconds"],
+              "properties": {
+                "exercise_id": { "type": "string" },
+                "name": { "type": "string" },
+                "sets": { "type": "integer" },
+                "reps": { "type": "string" },
+                "rest_seconds": { "type": "integer" },
+                "rpe_target": { "type": "string" },
+                "notes": { "type": "string" }
+              }
+            }
+          },
+          "warm_up": { "type": "string" },
+          "cool_down": { "type": "string" }
+        }
+      }
+    },
+    "progression_logic": { "type": "string" },
+    "nutrition_strategy": {
+      "type": "object",
+      "required": ["daily_targets"],
+      "properties": {
+        "daily_targets": {
+          "type": "object",
+          "required": ["calories", "protein_g", "carbs_g", "fat_g"],
+          "properties": {
+            "calories": { "type": "integer", "minimum": 1200 },
+            "protein_g": { "type": "integer" },
+            "carbs_g": { "type": "integer" },
+            "fat_g": { "type": "integer" }
+          }
+        },
+        "training_day_adjustments": { "type": "string" },
+        "race_fueling_plan": { "type": "string" },
+        "meal_timing": { "type": "string" },
+        "supplements": { "type": "string" }
+      }
+    },
+    "hydration_strategy": {
+      "type": "object",
+      "properties": {
+        "daily_base": { "type": "string" },
+        "training_adjustment": { "type": "string" },
+        "race_day": { "type": "string" }
+      }
+    },
+    "adaptation_rules": {
+      "type": "object",
+      "properties": {
+        "missed_session": { "type": "string" },
+        "too_hard_feedback": { "type": "string" },
+        "too_easy_feedback": { "type": "string" }
+      }
+    },
+    "watchouts": { "type": "array", "items": { "type": "string" } },
+    "rationale": { "type": "string" },
+    "assumptions": { "type": "array", "items": { "type": "string" } },
+    "disclaimer": { "type": "string" }
+  }
+}

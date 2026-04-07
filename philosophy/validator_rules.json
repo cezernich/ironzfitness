@@ -1,0 +1,116 @@
+{
+  "version": "1.0",
+  "description": "Hard validator rules from Philosophy Spec Section 9.1. Checked programmatically after every plan generation.",
+  "hard_rules": [
+    {
+      "id": "calorie_floor",
+      "description": "Minimum calorie targets: 1200 (female), 1500 (male), 1400 (default/unknown)",
+      "check": "plan.nutrition_strategy.daily_targets.calories >= calorie_floor_for_gender",
+      "floors": { "female": 1200, "male": 1500, "default": 1400 },
+      "action_on_fail": "Block plan, regenerate with floor enforced",
+      "severity": "critical"
+    },
+    {
+      "id": "protein_floor",
+      "description": "Protein must be >= 0.6 g/lb bodyweight",
+      "check": "protein_g / (weight_kg * 2.205) >= 0.6",
+      "action_on_fail": "Block plan, increase protein target",
+      "severity": "critical"
+    },
+    {
+      "id": "max_weekly_volume_increase",
+      "description": "Endurance: <= 15% increase. Strength: <= 4 sets/muscle/week increase",
+      "check": "compare_against_previous_plan",
+      "limits": {
+        "endurance_volume_pct": 15,
+        "strength_sets_per_muscle": 4
+      },
+      "action_on_fail": "Cap increase, log warning",
+      "severity": "high"
+    },
+    {
+      "id": "prohibited_phrases",
+      "description": "Scan for dangerous/misleading language",
+      "phrases": [
+        "guaranteed results",
+        "lose \\d+ (lbs|pounds|kg) in \\d+ (days|weeks)",
+        "burn off that meal",
+        "cure",
+        "treat",
+        "diagnose"
+      ],
+      "action_on_fail": "Strip phrases, regenerate affected text",
+      "severity": "critical"
+    },
+    {
+      "id": "beginner_complexity",
+      "description": "Beginners: max 5 exercises/session, max 4 training days",
+      "check": "if level=beginner: max_exercises_per_session <= 5 AND training_days <= 4",
+      "action_on_fail": "Simplify plan",
+      "severity": "high"
+    },
+    {
+      "id": "level_appropriate_volume",
+      "description": "Volume must match level: Beginner <= MAV, Intermediate <= MRV-2, Advanced near MRV",
+      "check": "sets_per_muscle_per_week within level-appropriate range",
+      "ranges": {
+        "beginner": { "max_sets_per_muscle": 14 },
+        "intermediate": { "max_sets_per_muscle": 20 },
+        "advanced": { "max_sets_per_muscle": 25 }
+      },
+      "action_on_fail": "Reduce volume to appropriate range",
+      "severity": "high"
+    },
+    {
+      "id": "rest_day_inclusion",
+      "description": "Minimum 1 full rest day per week for all levels",
+      "check": "rest_days >= 1",
+      "action_on_fail": "Add rest day, redistribute sessions",
+      "severity": "critical"
+    },
+    {
+      "id": "deload_inclusion",
+      "description": "Plans >= 4 weeks must include deload week every 3-5 weeks",
+      "check": "if duration_weeks >= 4: deload_week_exists",
+      "action_on_fail": "Insert deload week",
+      "severity": "high"
+    },
+    {
+      "id": "disclaimer_present",
+      "description": "All plans must include wellness disclaimer",
+      "check": "plan.disclaimer exists OR plan.rationale includes general wellness language",
+      "action_on_fail": "Append disclaimer",
+      "severity": "medium"
+    }
+  ],
+  "soft_rules": [
+    {
+      "id": "complexity_matches_level",
+      "description": "Is complexity appropriate for the stated level?"
+    },
+    {
+      "id": "progression_matches_training_age",
+      "description": "Does progression rate match training age?"
+    },
+    {
+      "id": "nutrition_matches_demand",
+      "description": "Does nutrition match training demand and goal?"
+    },
+    {
+      "id": "recovery_reflected",
+      "description": "Are recovery needs reflected (sleep, stress, soreness)?"
+    },
+    {
+      "id": "constraints_respected",
+      "description": "Does the plan reflect stated constraints (equipment, time, schedule)?"
+    },
+    {
+      "id": "rationale_coherent",
+      "description": "Is the rationale coherent and consistent with the plan structure?"
+    },
+    {
+      "id": "differentiation",
+      "description": "Would two users with materially different profiles receive materially different plans?"
+    }
+  ]
+}

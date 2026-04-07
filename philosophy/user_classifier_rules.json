@@ -1,0 +1,140 @@
+{
+  "version": "1.0",
+  "description": "User classification rules from Philosophy Spec Section 3. Maps user profile data to 11 classification dimensions.",
+  "dimensions": [
+    {
+      "id": "level",
+      "name": "Athlete Level",
+      "values": ["beginner", "intermediate", "advanced"],
+      "source": "profile.fitnessLevel OR survey fitness-level select",
+      "default": "beginner"
+    },
+    {
+      "id": "ageGroup",
+      "name": "Age Group",
+      "values": ["18-29", "30-39", "40-49", "50-59", "60+"],
+      "source": "profile.age OR profile.dateOfBirth",
+      "classification_rules": {
+        "18-29": { "min_age": 18, "max_age": 29 },
+        "30-39": { "min_age": 30, "max_age": 39 },
+        "40-49": { "min_age": 40, "max_age": 49 },
+        "50-59": { "min_age": 50, "max_age": 59 },
+        "60+": { "min_age": 60, "max_age": 120 }
+      },
+      "default": "30-39"
+    },
+    {
+      "id": "gender",
+      "name": "Gender",
+      "values": ["male", "female", "default"],
+      "source": "profile.gender",
+      "mapping": {
+        "male": "male",
+        "female": "female",
+        "non_binary": "default",
+        "prefer_not_to_say": "default",
+        "": "default"
+      },
+      "default": "default"
+    },
+    {
+      "id": "sportProfile",
+      "name": "Sport Profile",
+      "values": ["general_fitness", "strength", "endurance", "hybrid", "sport_performance"],
+      "source": "Derived from profile.workoutTypes + profile.goal",
+      "derivation_rules": {
+        "strength": "workoutTypes includes 'weightlifting' OR 'strength' AND no endurance",
+        "endurance": "workoutTypes includes 'running' OR 'cycling' OR 'swimming' AND no strength",
+        "hybrid": "workoutTypes includes both strength AND endurance categories",
+        "sport_performance": "workoutTypes includes specific sport (triathlon, rowing, etc.)",
+        "general_fitness": "default when no clear specialization"
+      },
+      "default": "general_fitness"
+    },
+    {
+      "id": "primaryGoal",
+      "name": "Primary Goal",
+      "values": ["performance", "muscle_gain", "fat_loss", "general_health", "return_to_training"],
+      "source": "profile.goal OR plan goal buttons",
+      "mapping": {
+        "bulk": "muscle_gain",
+        "muscle_gain": "muscle_gain",
+        "cut": "fat_loss",
+        "fat_loss": "fat_loss",
+        "lose_weight": "fat_loss",
+        "weight_loss": "fat_loss",
+        "maintain": "general_health",
+        "recomp": "general_health",
+        "performance": "performance",
+        "race": "performance",
+        "general": "general_health",
+        "return": "return_to_training"
+      },
+      "default": "general_health"
+    },
+    {
+      "id": "trainingFrequency",
+      "name": "Training Frequency",
+      "values": ["2-3", "4-5", "6-7"],
+      "source": "profile.availableDaysPerWeek OR day picker count",
+      "classification_rules": {
+        "2-3": { "min_days": 1, "max_days": 3 },
+        "4-5": { "min_days": 4, "max_days": 5 },
+        "6-7": { "min_days": 6, "max_days": 7 }
+      },
+      "default": "3"
+    },
+    {
+      "id": "sessionDuration",
+      "name": "Session Duration",
+      "values": ["15-30", "30-45", "45-60", "60+"],
+      "source": "profile.sessionLength",
+      "classification_rules": {
+        "15-30": { "min_minutes": 0, "max_minutes": 30 },
+        "30-45": { "min_minutes": 31, "max_minutes": 45 },
+        "45-60": { "min_minutes": 46, "max_minutes": 60 },
+        "60+": { "min_minutes": 61, "max_minutes": 999 }
+      },
+      "default": "45-60"
+    },
+    {
+      "id": "equipmentAccess",
+      "name": "Equipment Access",
+      "values": ["none", "dumbbells", "kettlebell", "home_gym", "full_gym"],
+      "source": "profile.equipment OR equipment selector + survey",
+      "default": "full_gym"
+    },
+    {
+      "id": "injuryHistory",
+      "name": "Injury History",
+      "values": ["none", "minor_current", "major_past", "chronic"],
+      "source": "profile.injuries + training preferences + survey",
+      "default": "none"
+    },
+    {
+      "id": "recoveryState",
+      "name": "Recovery State",
+      "values": ["good", "moderate", "low"],
+      "source": "Weekly check-in data (sleep_quality, energy_level, soreness_level)",
+      "derivation_rules": {
+        "low": "sleep=poor OR soreness=severe OR energy=low OR 2+ moderate signals",
+        "moderate": "sleep=fair OR soreness=moderate OR energy=moderate",
+        "good": "sleep=good AND soreness<=mild AND energy>=moderate"
+      },
+      "default": "good"
+    },
+    {
+      "id": "nutritionProfile",
+      "name": "Nutrition Profile",
+      "values": ["habit_building", "macro_tracking", "performance_fueling", "weight_management"],
+      "source": "Derived from goal + level",
+      "derivation_rules": {
+        "habit_building": "level=beginner AND any goal",
+        "macro_tracking": "level=intermediate+ AND goal in [muscle_gain, fat_loss]",
+        "performance_fueling": "level=intermediate+ AND goal=performance",
+        "weight_management": "any level AND goal in [fat_loss, general_health] AND NOT performance"
+      },
+      "default": "habit_building"
+    }
+  ]
+}

@@ -1,0 +1,1323 @@
+[
+  {
+    "id": "LEVEL_BEGINNER",
+    "category": "athlete_level",
+    "title": "Beginner Athlete",
+    "version": "1.0",
+    "applies_when": {
+      "level": "beginner",
+      "sport_profile": "any",
+      "goal": "any"
+    },
+    "principles": [
+      "Keep weekly structure predictable and repeatable",
+      "Focus on successful weeks not perfect weeks",
+      "Recovery is productive"
+    ],
+    "plan_rules": [
+      "3-5 exercises per session for strength",
+      "Default to full-body or upper/lower split",
+      "Conservative intensity RPE 6-7 (3-4 RIR)",
+      "80/20 rule for endurance (no VO2max first 4 weeks)",
+      "Leave room for missed sessions"
+    ],
+    "hard_constraints": [
+      "Max 4 training days/week",
+      "No VO2max work first 4 weeks endurance",
+      "RPE 6-7 for strength"
+    ],
+    "nutrition_rules": [
+      "Start with fundamentals: consistent protein, hydration, regular meals",
+      "Calorie target + protein target; macros optional",
+      "3-4 meals/day with protein each",
+      "Simple pre/post-workout fueling"
+    ],
+    "training_adjustments": [],
+    "coaching_tone": "Encouraging, clear, non-judgmental, educational without being overwhelming",
+    "evidence_sources": [
+      "Helms et al. Muscle & Strength Pyramids",
+      "ACSM novice guidelines",
+      "Schoenfeld 2016 meta-analysis on training frequency"
+    ],
+    "rationale": "Beginners benefit most from sustainable structure. Slightly underdosed plans that get completed beat optimal plans that get abandoned.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "LEVEL_INTERMEDIATE",
+    "category": "athlete_level",
+    "title": "Intermediate Athlete",
+    "version": "1.0",
+    "applies_when": {
+      "level": "intermediate",
+      "sport_profile": "any",
+      "goal": "any"
+    },
+    "principles": [
+      "Progression with structure",
+      "Better fatigue management",
+      "Goal specificity",
+      "More intentional workload distribution"
+    ],
+    "plan_rules": [
+      "Double progression or undulating periodization",
+      "3-4 week mesocycles with deload every 4th week",
+      "10-18 sets/week for strength",
+      "Polarized 80/20 for endurance",
+      "RPE 7-8 (2-3 RIR)",
+      "RIR-based autoregulation"
+    ],
+    "hard_constraints": [
+      "Deload every 4th week",
+      "Volume 10-18 sets/week per muscle",
+      "RPE 7-8 working sets"
+    ],
+    "nutrition_rules": [
+      "Goal-specific: Bulk +10-20%, Cut -15-25%, Maintain near TDEE",
+      "Protein 1.6-2.2 g/kg",
+      "Carbs adjusted by volume",
+      "Meal timing around training"
+    ],
+    "training_adjustments": [],
+    "coaching_tone": "Collaborative, specific, slightly more analytical, still practical",
+    "evidence_sources": [
+      "Israetel MEV/MAV/MRV framework",
+      "Schoenfeld rep range meta-analyses",
+      "Nuckols Stronger By Science analysis"
+    ],
+    "rationale": "Intermediates benefit from structured periodization and more nuanced programming than beginners.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "LEVEL_ADVANCED",
+    "category": "athlete_level",
+    "title": "Advanced Athlete",
+    "version": "1.0",
+    "applies_when": {
+      "level": "advanced",
+      "sport_profile": "any",
+      "goal": "any"
+    },
+    "principles": [
+      "Specificity",
+      "Recovery management",
+      "Precision",
+      "Small changes matter more than dramatic changes"
+    ],
+    "plan_rules": [
+      "Highly goal/sport-specific",
+      "Respect accumulated fatigue",
+      "Block periodization may be appropriate",
+      "12-22+ sets/week per muscle",
+      "RPE 8-9 (1-2 RIR)",
+      "Reactive deloading"
+    ],
+    "hard_constraints": [
+      "Volume 12-22+ sets/week (approaching MRV with caution)",
+      "RPE 8-9 key sets",
+      "No aggressive changes without user feedback evidence"
+    ],
+    "nutrition_rules": [
+      "Periodize nutrition with training",
+      "Carb cycling around training days",
+      "Pre/intra/post-workout matters",
+      "Protein 1.6-2.4 g/kg during cuts"
+    ],
+    "training_adjustments": [],
+    "coaching_tone": "Respectful, precise, less explanatory fluff, more performance-oriented but still grounded",
+    "evidence_sources": [
+      "Israetel RP volume landmarks",
+      "Helms evidence-based contest prep",
+      "Galpin 3-5 framework",
+      "Pfitzinger/Daniels marathon periodization"
+    ],
+    "rationale": "Advanced athletes need precision programming. Smaller improvements take more specificity and careful recovery management.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "AGE_18_29",
+    "category": "age_group",
+    "title": "Age Group 18-29",
+    "version": "1.0",
+    "applies_when": {
+      "age_group": "18-29"
+    },
+    "principles": [],
+    "plan_rules": [],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Higher caloric tolerance",
+      "Protein 1.6-2.2 g/kg standard",
+      "Standard hydration"
+    ],
+    "training_adjustments": [
+      "Peak recovery (can handle 5-6 days/week)",
+      "Prioritize movement quality",
+      "Greater volume/intensity tolerance",
+      "Moderate warm-up emphasis",
+      "Build strong aerobic base and foundational strength"
+    ],
+    "coaching_tone": "",
+    "evidence_sources": [
+      "ACSM youth/young adult training",
+      "Kraemer & Ratamess 2004"
+    ],
+    "rationale": "Young adults have peak recovery capacity and can tolerate higher training volumes while building foundational fitness.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "AGE_30_39",
+    "category": "age_group",
+    "title": "Age Group 30-39",
+    "version": "1.0",
+    "applies_when": {
+      "age_group": "30-39"
+    },
+    "principles": [],
+    "plan_rules": [],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Metabolic rate 5-10% lower than 18-29",
+      "Protein 1.6-2.2 g/kg (higher end during cuts)",
+      "Recovery nutrition more important"
+    ],
+    "training_adjustments": [
+      "1-2 rest days/week recommended",
+      "5-10 min dynamic warm-up",
+      "Deload every 4th week",
+      "Joint-friendly alternatives available",
+      "Time-efficient programming (supersets, circuits)"
+    ],
+    "coaching_tone": "",
+    "evidence_sources": [
+      "Tanaka & Seals 2008",
+      "NSCA adult guidelines"
+    ],
+    "rationale": "Adults in their 30s begin to see modest recovery changes and benefit from proactive warm-up and structured deloads.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "AGE_40_49",
+    "category": "age_group",
+    "title": "Age Group 40-49",
+    "version": "1.0",
+    "applies_when": {
+      "age_group": "40-49"
+    },
+    "principles": [],
+    "plan_rules": [],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Protein 1.8-2.4 g/kg",
+      "Anti-inflammatory nutrition emphasis",
+      "TDEE lower",
+      "Recovery protein timing 20-40g within 1-2 hrs post-training"
+    ],
+    "training_adjustments": [
+      "8-12 min dynamic warm-up + ramp-up sets",
+      "Moderate rep ranges (6-12)",
+      "Joint-friendly alternatives proactively offered (trap bar DL, incline press, goblet squat)",
+      "Deload every 3rd-4th week",
+      "Dedicated mobility 2x/week",
+      "Tendon/connective tissue work",
+      "Endurance: max 5-8% volume increase/week"
+    ],
+    "coaching_tone": "",
+    "evidence_sources": [
+      "Fragala et al. 2019",
+      "ACSM 2009",
+      "Phillips et al. 2016 protein with aging"
+    ],
+    "rationale": "Athletes in their 40s benefit from joint-friendly alternatives, longer warm-ups, and higher protein intake to support recovery and connective tissue health.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "AGE_50_59",
+    "category": "age_group",
+    "title": "Age Group 50-59",
+    "version": "1.0",
+    "applies_when": {
+      "age_group": "50-59"
+    },
+    "principles": [],
+    "plan_rules": [],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Protein 1.6-2.2 g/kg default (up to 2.4 g/kg in deficit/heavy training)",
+      "Distribute 4+ meals 25-40g each",
+      "Calcium + Vitamin D (physician consult)",
+      "Proactive hydration",
+      "Anti-inflammatory priority"
+    ],
+    "training_adjustments": [
+      "10-15 min warm-up with joint circles and progressive loading",
+      "Compound movements for bone density",
+      "RPE 7-8 working range",
+      "Balance/proprioception work",
+      "Deload every 3rd week",
+      "More mobility and active recovery",
+      "48-72 hrs between hard endurance sessions",
+      "Avoid high-impact plyos"
+    ],
+    "coaching_tone": "",
+    "evidence_sources": [
+      "Stec et al. 2017",
+      "Borde et al. 2015",
+      "WHO 50+ guidelines"
+    ],
+    "rationale": "Athletes 50-59 need longer warm-ups, bone density emphasis, balance work, and more recovery time between hard sessions.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "AGE_60_PLUS",
+    "category": "age_group",
+    "title": "Age Group 60+",
+    "version": "1.0",
+    "applies_when": {
+      "age_group": "60+"
+    },
+    "principles": [],
+    "plan_rules": [],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Protein 1.6-2.2 g/kg default (up to 2.4 g/kg in deficit)",
+      "Leucine-rich sources",
+      "4-5 meals 30-40g each",
+      "High nutrient density",
+      "Calcium 1200mg/day, Vitamin D 1000-2000 IU",
+      "Schedule-based hydration (not thirst-driven)",
+      "Address medication interactions"
+    ],
+    "training_adjustments": [
+      "12-15 min comprehensive warm-up",
+      "Resistance training essential 2-3x/week for sarcopenia prevention",
+      "Machine-based + free weights",
+      "Functional movements (sit-to-stand, carries, step-ups)",
+      "Balance training every session",
+      "RPE 6-7",
+      "48-72 hrs between hard sessions",
+      "Walking/cycling/swimming preferred for endurance",
+      "Deload every 2nd-3rd week",
+      "Fall prevention mandatory"
+    ],
+    "coaching_tone": "Encouraging, respectful of experience, never patronizing. Focus on what they CAN do.",
+    "evidence_sources": [
+      "Fragala et al. 2019 NSCA",
+      "Peterson et al. 2010 meta-analysis",
+      "ACSM/AHA older adults"
+    ],
+    "rationale": "Older adults require sarcopenia prevention, fall prevention, functional movements, and careful recovery management with higher protein and micronutrient attention.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "GENDER_MALE",
+    "category": "gender",
+    "title": "Male Gender Defaults",
+    "version": "1.0",
+    "applies_when": {
+      "gender": "male"
+    },
+    "principles": [],
+    "plan_rules": [],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Male-specific TDEE (Mifflin-St Jeor)",
+      "Protein 1.6-2.2 g/kg",
+      "Moderate surplus 10-15% for bulk"
+    ],
+    "training_adjustments": [
+      "Strength norms from male population data",
+      "24-48 hr recovery same muscle group",
+      "Higher volume/intensity tolerance",
+      "Upper body emphasis natural but correct imbalances"
+    ],
+    "coaching_tone": "",
+    "evidence_sources": [
+      "Roberts et al. 2020",
+      "Morton et al. 2018"
+    ],
+    "rationale": "Male-specific physiological norms for TDEE calculation, recovery windows, and strength benchmarks.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "GENDER_FEMALE",
+    "category": "gender",
+    "title": "Female Gender Defaults",
+    "version": "1.0",
+    "applies_when": {
+      "gender": "female"
+    },
+    "principles": [],
+    "plan_rules": [],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Female-specific TDEE (200-400 kcal/day lower)",
+      "Iron intake awareness",
+      "Protein 1.6-2.2 g/kg",
+      "Calorie floor 1200",
+      "Luteal phase +100-200 kcal normal",
+      "Calcium 1000-1200mg/day"
+    ],
+    "training_adjustments": [
+      "Female population strength norms",
+      "Higher fatigue resistance at moderate intensities (more reps at given %1RM)",
+      "Menstrual cycle-aware programming opt-in (follicular=higher intensity, luteal=moderate + higher volume -- symptom-driven)",
+      "ACL prevention: knee stability, hamstring strengthening",
+      "Bone density work important",
+      "Higher relative recovery for repeated moderate sets"
+    ],
+    "coaching_tone": "",
+    "evidence_sources": [
+      "Hunter 2014",
+      "Sung et al. 2014",
+      "McNulty et al. 2020",
+      "ACSM female athlete triad"
+    ],
+    "rationale": "Female-specific physiological considerations including menstrual cycle awareness, ACL injury prevention, bone density, and iron intake.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "GENDER_DEFAULT",
+    "category": "gender",
+    "title": "Gender-Neutral Defaults",
+    "version": "1.0",
+    "applies_when": {
+      "gender": "default"
+    },
+    "principles": [],
+    "plan_rules": [],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Activity-adjusted TDEE without sex-specific multipliers (or average)",
+      "Protein 1.8-2.2 g/kg",
+      "Calorie floor 1400",
+      "No sex-specific supplements"
+    ],
+    "training_adjustments": [
+      "Gender-neutral body-weight-ratio norms",
+      "Conservative recovery estimates (longer windows)",
+      "No menstrual/hormonal assumptions",
+      "Rely on user-reported recovery signals"
+    ],
+    "coaching_tone": "Inclusive, non-gendered language. Focus on individual data over population assumptions.",
+    "evidence_sources": [
+      "Inclusive programming principles",
+      "ACSM general population",
+      "Bodyweight-relative standards"
+    ],
+    "rationale": "Gender-neutral approach using bodyweight-relative norms and individual recovery signals rather than sex-specific population data.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "SPORT_STRENGTH_CORE",
+    "category": "sport_strength",
+    "title": "Strength Training Core",
+    "version": "1.0",
+    "applies_when": {
+      "sport_profile": "strength"
+    },
+    "principles": [
+      "Volume landmarks (Israetel/RP): Large muscles MEV 6-8, MAV 12-18, MRV 20-25+",
+      "Small muscles MEV 4-6, MAV 8-12, MRV 15-20",
+      "2x/week frequency per muscle optimal",
+      "8-12 reps most efficient (stimulus-to-fatigue)",
+      "Rest: 3-5 min heavy compounds, 90-120s accessories"
+    ],
+    "plan_rules": [
+      "Double progression (add reps then weight)",
+      "Linear for beginners",
+      "RPE/RIR-based for intermediate+",
+      "Split design: 2-3 days=full body, 3-4=UL or FB, 4-5=UL or PPL, 5-6=PPL",
+      "Proactive deload every 4th week (reduce volume 40-50%, intensity 10-15%)",
+      "Exercise rotation: Tier 1 stable 4-6 weeks, Tier 2 rotate 2-4 weeks, Tier 3 rotate 1-3 weeks"
+    ],
+    "hard_constraints": [
+      "Proximity to failure: beginners 3-4 RIR, intermediate 2-3 RIR, advanced 1-2 RIR"
+    ],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [
+      "Schoenfeld 2016",
+      "Vieira et al. 2024 Bayesian meta-analysis",
+      "Nuckols analysis"
+    ],
+    "rationale": "Core strength training module defining volume landmarks, progression models, split design, and deload protocols based on current evidence.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "SPORT_ENDURANCE_RUNNING",
+    "category": "sport_endurance",
+    "title": "Endurance Running Core",
+    "version": "1.0",
+    "applies_when": {
+      "sport_profile": "endurance",
+      "workout_type": "running"
+    },
+    "principles": [
+      "Polarized 80/20 (80% Z1-2, 20% Z4-5, minimal Z3)",
+      "HR zones: Z1 50-60%, Z2 60-75%, Z3 75-85%, Z4 85-90%, Z5 90-100%"
+    ],
+    "plan_rules": [
+      "Volume progression context-based (easy weeks +10-15%, hard weeks +5-8%)",
+      "Volume-dependent: 10-20mpw +10-15%, 50-75mpw +5-10%, 75+ +3-5%",
+      "Cutback week every 4-6 weeks (drop 20-30%)",
+      "Never add volume AND intensity same week"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [
+      "Seiler polarized training research"
+    ],
+    "rationale": "Polarized training distribution and context-dependent volume progression form the foundation of evidence-based running programming.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "EVENT_5K",
+    "category": "event_running",
+    "title": "5K Race Plan",
+    "version": "1.0",
+    "applies_when": {
+      "event": "5k"
+    },
+    "principles": [],
+    "plan_rules": [
+      "Duration: beginner 8-10 weeks, intermediate 6-8, advanced 4-6",
+      "Key sessions: 1x tempo 20-40min Z3-Z4, 1x VO2max intervals (5x1000m at 5K pace), 1x progression long run 6-9mi, 1-2x easy runs",
+      "Mileage: beginner 15-25mpw, intermediate 25-35, advanced 35-50",
+      "Taper 5-7 days, reduce 40-60% maintain intensity"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "5K-specific training plan with distance-appropriate key sessions, mileage ranges by level, and short taper protocol.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "EVENT_10K",
+    "category": "event_running",
+    "title": "10K Race Plan",
+    "version": "1.0",
+    "applies_when": {
+      "event": "10k"
+    },
+    "principles": [],
+    "plan_rules": [
+      "Duration: beginner 10-12 weeks, intermediate 8-10, advanced 6-8",
+      "Key sessions: 1x 10K intervals (5x1mi at 10K pace), 1x threshold (2-3x8-10min at LT), 1x progression long 8-12mi, easy runs",
+      "Mileage: beginner 20-30, intermediate 30-45, advanced 45-70",
+      "Taper 5-7 days, reduce 40-50%"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "10K-specific training plan with threshold and interval sessions, progressive long runs, and appropriate mileage ranges.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "EVENT_HALF_MARATHON",
+    "category": "event_running",
+    "title": "Half Marathon Race Plan",
+    "version": "1.0",
+    "applies_when": {
+      "event": "half_marathon"
+    },
+    "principles": [],
+    "plan_rules": [
+      "12-14 weeks",
+      "Periodization: Base (wk1-4) aerobic 5-8mi long. Build (wk5-9) tempo+intervals long to 12mi. Peak (wk10-11) race-pace 12-13mi. Taper (wk12+) 2-3 weeks 40-60% reduction",
+      "Key sessions: 1x HM pace 10-13mi, 1x tempo 25-35min Z3, 1x 5K/10K-pace intervals, 1x long with HM segments",
+      "Mileage: beginner 25-40, intermediate 40-60, advanced 65-95",
+      "Race nutrition: gel every 45-60min >75min"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Half marathon plan with phased periodization, race-specific long runs, and introduction of race-day nutrition strategy.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "EVENT_MARATHON",
+    "category": "event_running",
+    "title": "Marathon Race Plan",
+    "version": "1.0",
+    "applies_when": {
+      "event": "marathon"
+    },
+    "principles": [],
+    "plan_rules": [
+      "16-20 weeks",
+      "Three approaches: Pfitzinger (5-phase, peak 55-85mpw, MP long runs, 3-week taper 70/55/30%), Hansons (cumulative fatigue, 6 days/week, max long 16mi, 3 quality sessions, peak 50-55mpw), Traditional (base/build/peak/taper, long to 18-20mi, 3 quality/week, 3-week taper)",
+      "Taper 21 days optimal, volume -41-60%, maintain intensity",
+      "Pacing: percentage-based, first 5K 10-15sec/mile slower",
+      "Race nutrition: carb load 24-48hr 8-12g/kg, during 60-90g carbs/hr from first 15min"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [
+      "Bosquet et al. 2007 taper meta-analysis",
+      "Pyne et al. 2023"
+    ],
+    "rationale": "Marathon plan offering three proven methodologies with evidence-based taper protocols and critical race-day nutrition strategy.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "EVENT_ULTRA",
+    "category": "event_running",
+    "title": "Ultramarathon Race Plan",
+    "version": "1.0",
+    "applies_when": {
+      "event": "ultra"
+    },
+    "principles": [],
+    "plan_rules": [
+      "16-24 weeks",
+      "Emphasis time-on-feet over speed",
+      "Long runs 3-5+ hours",
+      "Mandatory cutback every 3-4 weeks",
+      "Phases: Base (wk1-8) build to 20mi. Specific (9-16) 20-28+mi with walking. Intensity (17-20) peak 25-32mi. Taper (21-24) progressive reduction",
+      "Nutrition: 150-400 kcal/hr, real food OK, practice extensively"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Ultra training prioritizes time-on-feet and nutrition practice over speed, with extended build phases and mandatory cutbacks.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "SPORT_CYCLING",
+    "category": "sport_cycling",
+    "title": "Cycling Training",
+    "version": "1.0",
+    "applies_when": {
+      "sport_profile": "endurance",
+      "workout_type": "cycling"
+    },
+    "principles": [
+      "Coggan power zones: Z1 <55% FTP, Z2 56-75%, Z3 76-90% (sweet spot 89-93%), Z4 91-105%, Z5 106-120%"
+    ],
+    "plan_rules": [
+      "Key workouts: sweet spot 2x20min 90% FTP, VO2max 5x5min 108% FTP, over-unders 90%/105% alternating, endurance 1-4hr Z2",
+      "Periodization: Base 8-12wk Z2 to Build 6-8wk Z3-5 to Peak 3-4wk event-specific",
+      "3 weeks hard 1 week recovery",
+      "Volume: beginner 5-6hr/wk, intermediate 8-10, advanced 12-16+"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Power-zone-based cycling training with structured periodization from base through peak phases.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "SPORT_SWIMMING",
+    "category": "sport_swimming",
+    "title": "Swimming Training",
+    "version": "1.0",
+    "applies_when": {
+      "workout_type": "swimming"
+    },
+    "principles": [],
+    "plan_rules": [
+      "CSS-based zones (200m+400m test): Recovery 65-75% CSS, Endurance 75-90%, Threshold 90-100%, VO2max 100-110%",
+      "Session structure: warm-up 10-15%, drills 10-15%, main 50-60%, kick/pull 10-20%, cool-down",
+      "Volume: beginner 3000-3500m/wk, intermediate 4500-6000m, competitive 6000-8000+",
+      "Max 10%/week increase"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "CSS-based swimming training with structured session composition and volume progression limits.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "SPORT_TRIATHLON",
+    "category": "sport_triathlon",
+    "title": "Triathlon Training",
+    "version": "1.0",
+    "applies_when": {
+      "sport_profile": "hybrid",
+      "workout_type": "triathlon"
+    },
+    "principles": [],
+    "plan_rules": [
+      "Volume distribution: swim 10-12%, bike 50-55%, run 30-35%",
+      "Brick workouts 1-2x/week (sprint 30min+10min, olympic 60+20, 70.3 90-120+30-45)",
+      "Periodization: traditional or reverse (reverse better for swim)",
+      "3wk build + 1wk recovery",
+      "Taper: sprint 7-10d, olympic 10-14d, 70.3 14-21d, ironman 21-28d",
+      "All taper reduce 40-60% maintain intensity",
+      "Concurrent training: min 3hr gap strength/endurance same day, strength first when fresh, max 2 HIIT/week, bike/row for HIIT"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Multi-sport triathlon training with sport-specific volume distribution, brick workouts, and distance-dependent taper protocols.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "SPORT_HIIT",
+    "category": "sport_hiit",
+    "title": "HIIT Training",
+    "version": "1.0",
+    "applies_when": {
+      "workout_type": "hiit"
+    },
+    "principles": [],
+    "plan_rules": [
+      "Formats: circuit (30-45s work, multi-exercise), Tabata (20s/10s x8, advanced only max 1-2x/wk), EMOM, AMRAP",
+      "Max 2-3 sessions/week (never exceed 3 with strength)",
+      "Work:rest ratios: fat loss 1:3 to 1:1, performance 2:1 to 3:1, VO2max 1:1 to 1:2",
+      "4-week blocks: wk1-2 build volume, wk3 peak intensity, wk4 deload"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Pre-HIIT fast carbs 60-90min before (fasted HIIT no fat loss advantage per 2024-2025 reviews)",
+      "Post: 3:1 carbs:protein within 30-60min"
+    ],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "HIIT programming with format variety, frequency limits, goal-specific work:rest ratios, and 4-week block structure.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "SPORT_BODYWEIGHT",
+    "category": "sport_bodyweight",
+    "title": "Bodyweight Training",
+    "version": "1.0",
+    "applies_when": {
+      "workout_type": "bodyweight",
+      "equipment": "none"
+    },
+    "principles": [],
+    "plan_rules": [
+      "Progressive overload without weight: easier-to-harder variations, increased reps/sets (progress 1-2 reps/wk, harder variation at 12-15 reps), decreased rest, increased ROM, eccentric loading (3-5s negatives), tempo manipulation",
+      "Cover all patterns 2-3x/week: horizontal push/pull, vertical push/pull, squat, hinge, core, carry",
+      "Volume: strength 10-15 sets/wk per pattern, hypertrophy 15-25"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [
+      "Progressive push-up training comparable to bench press when volume-matched"
+    ],
+    "rationale": "Bodyweight training using progressive variation, movement pattern coverage, and evidence showing comparable results to weighted training when volume-matched.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "SPORT_YOGA_MOBILITY",
+    "category": "sport_yoga_mobility",
+    "title": "Yoga and Mobility",
+    "version": "1.0",
+    "applies_when": {
+      "workout_type": "yoga"
+    },
+    "principles": [],
+    "plan_rules": [
+      "Session: dynamic warm-up 2-3min, main mobility 10-15min (3-4 exercises per region), cool-down 2-3min",
+      "Stretching: dynamic pre-workout only (10-12 reps), static post-workout or dedicated days (30-60s hold, 2-4 reps, NEVER before strength), PNF most effective (3-6s contraction then 10-30s stretch 1-2x/wk)",
+      "Frequency: 2-3x/week minimum",
+      "Dynamic pre (5-10min) + static post (10-15min) + 1-2 dedicated days (20-45min)",
+      "Daily 10-15min mobility recommended"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Mobility and flexibility programming with evidence-based stretching protocols and timing considerations relative to strength training.",
+    "priority": "low",
+    "is_active": true
+  },
+  {
+    "id": "SPORT_ROWING",
+    "category": "sport_other",
+    "title": "Rowing Training",
+    "version": "1.0",
+    "applies_when": {
+      "workout_type": "rowing"
+    },
+    "principles": [],
+    "plan_rules": [
+      "HR-based zones",
+      "Key workouts: steady state 30-80min Z2, intervals 4x500m threshold, rate work",
+      "Volume: beginner 3-4 sessions/week 20-30min, intermediate 4 sessions 30-45min"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "HR-based rowing training with steady state and interval key workouts scaled by experience level.",
+    "priority": "low",
+    "is_active": true
+  },
+  {
+    "id": "SPORT_PILATES",
+    "category": "sport_other",
+    "title": "Pilates Training",
+    "version": "1.0",
+    "applies_when": {
+      "workout_type": "pilates"
+    },
+    "principles": [],
+    "plan_rules": [
+      "Treat as mobility + core strength",
+      "2-3x/week",
+      "Complement strength training",
+      "Focus on movement quality not intensity"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Pilates as a complementary modality focusing on core strength and movement quality.",
+    "priority": "low",
+    "is_active": true
+  },
+  {
+    "id": "SPORT_WALKING",
+    "category": "sport_other",
+    "title": "Walking",
+    "version": "1.0",
+    "applies_when": {
+      "workout_type": "walking"
+    },
+    "principles": [],
+    "plan_rules": [
+      "Low-intensity steady state",
+      "Counts toward daily movement not training load",
+      "Encourage as active recovery",
+      "No periodization needed"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Walking as a low-intensity daily movement and active recovery modality, not counted as structured training load.",
+    "priority": "low",
+    "is_active": true
+  },
+  {
+    "id": "SPORT_SPECIFIC",
+    "category": "sport_other",
+    "title": "Sport-Specific Performance",
+    "version": "1.0",
+    "applies_when": {
+      "sport_profile": "sport_performance"
+    },
+    "principles": [],
+    "plan_rules": [
+      "Build around competition calendar",
+      "Prioritize sport movement patterns",
+      "Strength supports sport",
+      "Recovery becomes more dynamic"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Sport-specific training organized around competition calendars with strength work supporting primary sport demands.",
+    "priority": "low",
+    "is_active": true
+  },
+  {
+    "id": "GOAL_BULK",
+    "category": "goal",
+    "title": "Muscle Gain / Bulk",
+    "version": "1.0",
+    "applies_when": {
+      "goal": "muscle_gain"
+    },
+    "principles": [],
+    "plan_rules": [
+      "Hypertrophy rep ranges 6-15",
+      "Progressive overload",
+      "Volume progression"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Surplus +10-20% TDEE (250-500 kcal/day)",
+      "Protein 1.6-2.2 g/kg distributed 4+ meals",
+      "Carbs 4-7 g/kg higher on training days",
+      "Fat min 0.5 g/kg",
+      "Weight gain 0.25-0.5% BW/week",
+      "Body comp check every 4-6 weeks (if >60% fat gain, reduce surplus)"
+    ],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Muscle gain phase with controlled surplus, high protein distribution, and body composition monitoring to minimize fat gain.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "GOAL_CUT",
+    "category": "goal",
+    "title": "Fat Loss with Muscle Preservation",
+    "version": "1.0",
+    "applies_when": {
+      "goal": "fat_loss",
+      "context": "muscle_preservation"
+    },
+    "principles": [],
+    "plan_rules": [],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Deficit -15-25% TDEE (max -500 kcal/day for trained)",
+      "Protein 1.6-2.4 g/kg (HIGHER during cut)",
+      "Carbs around training, reduce rest days",
+      "Maintain intensity, reduce volume 20-30%",
+      "No excessive cardio",
+      "Refeed 1-2x/week at maintenance high carb",
+      "Duration 8-16 weeks max then 4+ weeks maintenance",
+      "Rate 0.5-1% BW/week"
+    ],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Evidence-based cutting protocol prioritizing muscle preservation through elevated protein, maintained intensity, and strategic refeeds.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "GOAL_LOSE_WEIGHT",
+    "category": "goal",
+    "title": "General Weight Loss",
+    "version": "1.0",
+    "applies_when": {
+      "goal": "fat_loss"
+    },
+    "principles": [],
+    "plan_rules": [],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Deficit -20-30% TDEE sustainable",
+      "Protein 1.4-2.0 g/kg non-negotiable",
+      "Combo resistance training + moderate cardio/HIIT",
+      "Movement consistency over intensity",
+      "Walking counts",
+      "Portion awareness, protein each meal, hydration",
+      "NO 'burning off meals' or 'earning food' language"
+    ],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Sustainable weight loss approach emphasizing consistency, resistance training, adequate protein, and healthy relationship with food.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "GOAL_MAINTAIN",
+    "category": "goal",
+    "title": "Maintenance / General Health",
+    "version": "1.0",
+    "applies_when": {
+      "goal": "general_health"
+    },
+    "principles": [],
+    "plan_rules": [],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Near TDEE",
+      "Protein >1.3 g/kg minimum, 1.6-2.0 optimal",
+      "Maintain or increase intensity",
+      "Progressive overload",
+      "Recomp cycles 4-12 weeks",
+      "Monitor body composition not just scale",
+      "Higher-load resistance training superior for recomp"
+    ],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Maintenance and recomposition phase focusing on body composition improvement at maintenance calories with progressive overload.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "GOAL_PERFORMANCE",
+    "category": "goal",
+    "title": "Performance Goal",
+    "version": "1.0",
+    "applies_when": {
+      "goal": "performance"
+    },
+    "principles": [],
+    "plan_rules": [
+      "Race/event-specific periodization",
+      "Taper logic",
+      "Peak training blocks",
+      "Sport-specific volume distribution"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Fuel for performance",
+      "Carb periodization",
+      "Race nutrition planning",
+      "No deficit during peak training blocks"
+    ],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Performance-focused goal prioritizing event-specific periodization and adequate fueling over body composition goals.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "NUTRITION_STRENGTH_BY_GOAL",
+    "category": "nutrition_strength",
+    "title": "Strength Nutrition by Goal",
+    "version": "1.0",
+    "applies_when": {
+      "sport_profile": "strength"
+    },
+    "principles": [],
+    "plan_rules": [],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Bulk: +10-20% TDEE, protein 1.6-2.2 g/kg, carbs 4-7 g/kg, fat 0.5-1.5 g/kg",
+      "Cut: -15-25% TDEE, protein 1.6-2.4 g/kg, carbs 2-4 g/kg, fat 0.5-1.0 g/kg, refeed 1-2x/week",
+      "Maintain: TDEE, protein 1.6-2.0, carbs 3-5, fat 0.8-1.5",
+      "Weight loss: -20-30% TDEE, protein 1.4-2.0, carbs 2-4, fat 0.5-1.0"
+    ],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Goal-specific macro targets for strength athletes across bulk, cut, maintenance, and weight loss phases.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "NUTRITION_ENDURANCE_BY_DISTANCE",
+    "category": "nutrition_endurance",
+    "title": "Endurance Nutrition by Distance",
+    "version": "1.0",
+    "applies_when": {
+      "sport_profile": "endurance"
+    },
+    "principles": [],
+    "plan_rules": [],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "5K/10K: carbs 3-5 g/kg, protein 1.4-1.8, no carb loading, no during-race fuel needed",
+      "Half marathon: carbs 5-7, protein 1.4-1.8, 24hr carb load 7-8 g/kg, gel every 45-60min >75min, 150-300ml/20min",
+      "Marathon: carbs 7-10 peak, protein 1.4-2.0, carb load 24-48hr 8-12 g/kg, 60-90g carbs/hr from first 15min, sodium 500-700mg/hr",
+      "Ultra: carbs 8-12 peak, protein 1.4-2.0, 48hr carb load, 150-400 kcal/hr real food OK, sodium+electrolytes"
+    ],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Distance-specific nutrition protocols scaling carbohydrate needs, race fueling, and hydration strategies from 5K through ultra distances.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "NUTRITION_CYCLING_TRIATHLON",
+    "category": "nutrition_cycling_tri",
+    "title": "Cycling and Triathlon Nutrition",
+    "version": "1.0",
+    "applies_when": {
+      "sport_profile": [
+        "endurance",
+        "hybrid"
+      ],
+      "workout_type": [
+        "cycling",
+        "triathlon"
+      ]
+    },
+    "principles": [],
+    "plan_rules": [],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Cycling: carbs 3-5 easy days, 8-12 hard days",
+      "Race 60-90g carbs/hr + sodium 500-700mg/hr >4hr",
+      "Triathlon: 73% Ironman DNFs trace to nutrition",
+      "Ironman 80-100g carbs/hr bike, 60-90g/hr run",
+      "Practice transition nutrition",
+      "Multi-sport 1.6-2.0 g/kg protein daily"
+    ],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Cycling and triathlon-specific nutrition emphasizing carb periodization by training day intensity and critical race-day fueling protocols.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "NUTRITION_HIIT_BODYWEIGHT",
+    "category": "nutrition_hiit_bw",
+    "title": "HIIT and Bodyweight Nutrition",
+    "version": "1.0",
+    "applies_when": {
+      "workout_type": [
+        "hiit",
+        "bodyweight"
+      ]
+    },
+    "principles": [],
+    "plan_rules": [],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Pre-HIIT: fast carbs 60-90min before (fasted HIIT no advantage)",
+      "Post: 3:1 carbs:protein 30-60min",
+      "Daily: carbs 5-8 g/kg, protein 1.6-2.0 g/kg"
+    ],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "HIIT and bodyweight training nutrition with pre/post timing protocols and daily macro targets.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "NUTRITION_YOGA_MOBILITY_WALKING",
+    "category": "nutrition_yoga_low",
+    "title": "Yoga, Mobility, and Walking Nutrition",
+    "version": "1.0",
+    "applies_when": {
+      "workout_type": [
+        "yoga",
+        "pilates",
+        "walking"
+      ]
+    },
+    "principles": [],
+    "plan_rules": [],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Lower intensity does NOT mean low protein",
+      "Protein 1.4-1.8 g/kg",
+      "Carbs 3-5 g/kg",
+      "Fat 1.0-1.5 g/kg",
+      "Maintenance calories",
+      "Anti-inflammatory nutrition for recovery-focused"
+    ],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Nutrition for lower-intensity modalities emphasizing that protein needs remain substantial regardless of training intensity.",
+    "priority": "low",
+    "is_active": true
+  },
+  {
+    "id": "HYDRATION_UNIVERSAL",
+    "category": "hydration",
+    "title": "Universal Hydration Guidelines",
+    "version": "1.0",
+    "applies_when": {
+      "category": "hydration"
+    },
+    "principles": [],
+    "plan_rules": [],
+    "hard_constraints": [],
+    "nutrition_rules": [
+      "Thirst-driven as primary strategy",
+      "Pale yellow urine indicator",
+      "Training days +16-24oz around sessions",
+      "Endurance events: sport-specific protocols by duration/environment/sweat rate",
+      "Avoid rigid body-weight formulas"
+    ],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Evidence-based hydration approach favoring thirst-driven intake over rigid formulas, with sport-specific adjustments for endurance events.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "VARIATION_EXERCISE_ROTATION",
+    "category": "variation",
+    "title": "Exercise Rotation Protocol",
+    "version": "1.0",
+    "applies_when": {
+      "category": "variation"
+    },
+    "principles": [],
+    "plan_rules": [
+      "Tier 1 primary compounds: stable 4-6 weeks per mesocycle (squat, bench, deadlift, OHP, row)",
+      "Tier 2 secondary: rotate every 2-4 weeks (incline bench, DB press, front squat, RDL, cable row)",
+      "Tier 3 accessories: rotate every 1-3 weeks (lateral raises, curls, tricep work)",
+      "Between mesocycles: swap Tier 2 and all Tier 3",
+      "Keep Tier 1 unless plateau"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Tiered exercise rotation balancing movement stability for progression tracking with sufficient variation to prevent accommodation.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "VARIATION_REP_UNDULATION",
+    "category": "variation",
+    "title": "Rep Range Undulation",
+    "version": "1.0",
+    "applies_when": {
+      "category": "variation"
+    },
+    "principles": [],
+    "plan_rules": [
+      "4-week mesocycle: Week 1: 4x8-10 RPE 7 (hypertrophy accumulation)",
+      "Week 2: 5x5-6 RPE 8 (strength emphasis)",
+      "Week 3: 3x10-12 RPE 8-9 (metabolic stress)",
+      "Week 4: 3x8 RPE 5-6 (deload, technique focus)"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Weekly rep range undulation within a mesocycle targeting different training stimuli while managing fatigue through a built-in deload.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "VARIATION_RUNNING",
+    "category": "variation",
+    "title": "Running Workout Variation",
+    "version": "1.0",
+    "applies_when": {
+      "category": "variation",
+      "sport_profile": "endurance"
+    },
+    "principles": [],
+    "plan_rules": [
+      "Each week different workout types, not same run repeated",
+      "Easy runs (Z2) 2-3 days (similar week to week)",
+      "Quality 1: varies by phase (base=steady-state, build=tempo/threshold, peak=race-pace)",
+      "Quality 2: intervals (800m, 1200m, fartlek, hills rotate)",
+      "Long run: Week 1 all easy, Week 2 last 3mi tempo, Week 3 progression, Week 4 cutback easy"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Running variation protocol ensuring weekly workout diversity while maintaining consistent easy run volume and phase-appropriate quality sessions.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "VARIATION_HIIT",
+    "category": "variation",
+    "title": "HIIT Workout Variation",
+    "version": "1.0",
+    "applies_when": {
+      "category": "variation",
+      "workout_type": "hiit"
+    },
+    "principles": [],
+    "plan_rules": [
+      "Rotate formats: circuit, Tabata, EMOM, AMRAP",
+      "Rotate focus: full body, upper, lower, core, cardio-heavy",
+      "Rotate equipment: bodyweight, dumbbells, kettlebell, full gym",
+      "Vary work:rest as periodization progresses"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "HIIT variation across format, focus area, equipment, and work:rest ratios to prevent staleness and drive adaptation.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "VARIATION_MESOCYCLE",
+    "category": "variation",
+    "title": "Mesocycle and Macrocycle Structure",
+    "version": "1.0",
+    "applies_when": {
+      "category": "variation"
+    },
+    "principles": [],
+    "plan_rules": [
+      "Mesocycle (4 weeks): Wk1 intro/moderate below target, Wk2 build at target progressing, Wk3 peak highest volume/intensity, Wk4 deload -40-50% volume",
+      "Macrocycle (12-16 weeks): Block 1 (1-4) hypertrophy, Block 2 (5-8) strength, Block 3 (9-12) peak/power, Block 4 (13-16) active recovery/transition",
+      "Between blocks: swap Tier 2+3 exercises, adjust rep schemes, potentially swap split"
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Structured mesocycle and macrocycle periodization providing systematic volume/intensity progression with built-in recovery and phase transitions.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "SAFETY_BOUNDARIES",
+    "category": "safety",
+    "title": "Safety Boundaries and Constraints",
+    "version": "1.0",
+    "applies_when": {
+      "category": "safety"
+    },
+    "principles": [],
+    "plan_rules": [],
+    "hard_constraints": [
+      "No diagnosis/treatment/medical nutrition therapy",
+      "Calorie floors 1200F/1500M",
+      "Protein floor 0.6 g/lb",
+      "RED-S detection <800cal 3+ days",
+      "No prohibited phrases (guaranteed results, lose X in Y days, burn off meal, cure, treat, diagnose)",
+      "Injury escalation: persistent pain -> professional referral",
+      "Pregnancy/chronic conditions: conservative + referral",
+      "Max progression 10-15%/wk endurance, 2-4 sets/wk strength"
+    ],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [],
+    "rationale": "Safety and sustainability outrank optimization. These are non-negotiable.",
+    "priority": "high",
+    "is_active": true
+  }
+]

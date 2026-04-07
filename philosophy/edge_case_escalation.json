@@ -1,0 +1,74 @@
+{
+  "version": "1.0",
+  "description": "Edge case escalation rules from Philosophy Spec Section 2.4. Safety boundaries that trigger special handling.",
+  "escalation_triggers": [
+    {
+      "id": "eating_disorder_signal",
+      "trigger": "User logs < 800 calories for 3+ consecutive days",
+      "action": "gentle_educational_prompt",
+      "response": "We noticed your calorie intake has been quite low recently. Proper nutrition is essential for health and performance. If you're struggling with eating or body image concerns, please reach out to a healthcare provider or contact the National Eating Disorders Association helpline at 1-800-931-2237.",
+      "severity": "critical",
+      "block_plan_generation": false,
+      "log_event": true
+    },
+    {
+      "id": "persistent_pain",
+      "trigger": "User reports pain in same area for 2+ consecutive check-ins",
+      "action": "professional_referral",
+      "response": "You've mentioned ongoing discomfort in this area. We recommend consulting a healthcare professional or sports medicine doctor before continuing to train through it. In the meantime, we'll adjust your plan to avoid aggravating this area.",
+      "severity": "high",
+      "block_plan_generation": false,
+      "modify_plan": "remove_contraindicated_exercises",
+      "log_event": true
+    },
+    {
+      "id": "pregnancy",
+      "trigger": "User indicates pregnancy in profile or check-in",
+      "action": "conservative_mode",
+      "response": "Congratulations! Exercise during pregnancy can be beneficial, but it's important to work with your healthcare provider to determine what's safe for you. We'll switch to conservative recommendations.",
+      "severity": "critical",
+      "block_plan_generation": true,
+      "require_professional_clearance": true,
+      "log_event": true
+    },
+    {
+      "id": "chronic_condition",
+      "trigger": "User indicates diabetes, heart condition, autoimmune disorder, or other chronic condition",
+      "action": "conservative_mode_with_referral",
+      "response": "Managing a chronic condition alongside training requires personalized guidance. We recommend working with your healthcare provider to determine appropriate exercise parameters. Our general wellness guidance may not account for your specific medical needs.",
+      "severity": "high",
+      "block_plan_generation": false,
+      "modify_plan": "apply_conservative_defaults",
+      "log_event": true
+    },
+    {
+      "id": "extreme_deficit_request",
+      "trigger": "User manually sets calorie target below safety floor (1200F/1500M)",
+      "action": "block_and_educate",
+      "response": "For safety, we enforce minimum calorie targets of 1,200 cal/day for women and 1,500 cal/day for men. Very low calorie diets should only be followed under medical supervision. We've adjusted your target to the minimum safe level.",
+      "severity": "critical",
+      "block_plan_generation": false,
+      "enforce_floor": true,
+      "log_event": true
+    },
+    {
+      "id": "overtraining_signals",
+      "trigger": "User reports 'too_hard' difficulty for 3+ consecutive weeks AND declining session completion rate",
+      "action": "auto_adjust_plan",
+      "response": "Your recent feedback suggests your current plan may be too demanding. We're automatically reducing intensity and volume this week to help you recover. Consistent training at a sustainable level beats pushing through fatigue.",
+      "severity": "medium",
+      "block_plan_generation": false,
+      "modify_plan": "reduce_volume_20_percent",
+      "log_event": true
+    },
+    {
+      "id": "youth_athlete",
+      "trigger": "User age < 16",
+      "action": "age_restricted",
+      "response": "IronZ is designed for athletes 16 and older. For younger athletes, we recommend working with a qualified youth sports coach or certified strength and conditioning specialist.",
+      "severity": "critical",
+      "block_plan_generation": true,
+      "log_event": true
+    }
+  ]
+}
