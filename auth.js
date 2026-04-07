@@ -259,11 +259,17 @@ async function authBoot() {
     return;
   }
 
-  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  let session;
+  try {
+    const { data } = await window.supabaseClient.auth.getSession();
+    session = data?.session;
+  } catch (e) {
+    console.warn('Auth: getSession error', e);
+  }
 
   if (session) {
-    await ensureProfile(session.user);
-    await DB.migrateLocalStorage();
+    try { await ensureProfile(session.user); } catch (e) { console.warn('Auth: ensureProfile error', e); }
+    try { await DB.migrateLocalStorage(); } catch (e) { console.warn('Auth: migration error', e); }
     hideAuthScreen();
     window._appInitialized = true;
     init();
@@ -273,8 +279,8 @@ async function authBoot() {
 
   window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN' && session) {
-      await ensureProfile(session.user);
-      await DB.migrateLocalStorage();
+      try { await ensureProfile(session.user); } catch (e) { console.warn('Auth: ensureProfile error', e); }
+      try { await DB.migrateLocalStorage(); } catch (e) { console.warn('Auth: migration error', e); }
       hideAuthScreen();
       if (!window._appInitialized) {
         window._appInitialized = true;
