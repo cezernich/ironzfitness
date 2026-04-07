@@ -12,13 +12,15 @@ function initAdminVisibility() {
 
 // ── Patch showTab to load admin data ─────────────────────────────────────────
 
-const _origShowTab = showTab;
-showTab = function (name) {
-  _origShowTab(name);
-  if (name === "admin" && window._userRole === "admin") {
-    loadAdminData();
-  }
-};
+if (typeof showTab === 'function') {
+  const _origShowTab = showTab;
+  showTab = function (name) {
+    _origShowTab(name);
+    if (name === "admin" && window._userRole === "admin") {
+      loadAdminData();
+    }
+  };
+}
 
 // ── Data Loading ─────────────────────────────────────────────────────────────
 
