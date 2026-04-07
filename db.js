@@ -462,9 +462,13 @@ const DB = (() => {
     else console.log('DB: migrated profile');
   }
 
+  function _isUUID(s) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+  }
+
   function _shapeWorkout(w, uid) {
     return {
-      id: w.id || crypto.randomUUID(),
+      id: (_isUUID(w.id) ? w.id : null) || crypto.randomUUID(),
       user_id: uid,
       date: w.date || null,
       name: w.name || w.type || null,
@@ -480,7 +484,7 @@ const DB = (() => {
 
   function _shapeTrainingSession(s, uid) {
     return {
-      id: s.id || crypto.randomUUID(),
+      id: (_isUUID(s.id) ? s.id : null) || crypto.randomUUID(),
       plan_id: s.planId || s.plan_id || null,
       user_id: uid,
       scheduled_date: s.date || s.scheduled_date || null,
@@ -497,7 +501,7 @@ const DB = (() => {
 
   function _shapeTrainingPlan(p, uid) {
     return {
-      id: p.id || crypto.randomUUID(),
+      id: (_isUUID(p.id) ? p.id : null) || crypto.randomUUID(),
       user_id: uid,
       name: p.name || p.raceName || null,
       type: p.type || p.raceType || 'general',
@@ -519,7 +523,7 @@ const DB = (() => {
 
   function _shapeRaceEvent(e, uid) {
     return {
-      id: e.id || crypto.randomUUID(),
+      id: (_isUUID(e.id) ? e.id : null) || crypto.randomUUID(),
       user_id: uid,
       name: e.name || e.raceName || '',
       type: e.type || e.raceType || null,
@@ -534,7 +538,7 @@ const DB = (() => {
 
   function _shapeGoal(g, uid) {
     return {
-      id: g.id || crypto.randomUUID(),
+      id: (_isUUID(g.id) ? g.id : null) || crypto.randomUUID(),
       user_id: uid,
       name: g.name || '',
       type: g.type || null,
@@ -549,7 +553,7 @@ const DB = (() => {
 
   function _shapeWeeklyCheckin(c, uid) {
     return {
-      id: c.id || crypto.randomUUID(),
+      id: (_isUUID(c.id) ? c.id : null) || crypto.randomUUID(),
       user_id: uid,
       week_start_date: c.weekStartDate || c.week_start_date || null,
       energy_level: c.energyLevel || c.energy_level || null,
