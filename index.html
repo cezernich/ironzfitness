@@ -1558,62 +1558,205 @@
     <div id="tab-admin" class="tab-content">
       <h2 class="section-title">Admin Panel</h2>
 
-      <!-- Analytics cards -->
-      <div class="admin-stats-row">
-        <div class="admin-stat-card">
-          <div class="admin-stat-value" id="admin-total-users">--</div>
-          <div class="admin-stat-label">Total Users</div>
+      <!-- Admin sub-tabs -->
+      <div class="admin-subtabs">
+        <button class="admin-subtab active" data-subtab="admin-users" onclick="showAdminSubtab('admin-users')">Users</button>
+        <button class="admin-subtab" data-subtab="admin-philosophy" onclick="showAdminSubtab('admin-philosophy')">Philosophy</button>
+        <button class="admin-subtab" data-subtab="admin-exercises" onclick="showAdminSubtab('admin-exercises')">Exercises</button>
+        <button class="admin-subtab" data-subtab="admin-gaps" onclick="showAdminSubtab('admin-gaps')">Gaps</button>
+        <button class="admin-subtab" data-subtab="admin-analytics" onclick="showAdminSubtab('admin-analytics')">Analytics</button>
+      </div>
+
+      <!-- ── SUB-TAB: Users ──────────────────────────────────────── -->
+      <div id="admin-users" class="admin-subtab-content">
+        <div class="admin-stats-row">
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-total-users">--</div>
+            <div class="admin-stat-label">Total Users</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-new-7d">--</div>
+            <div class="admin-stat-label">New (7d)</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-premium-count">--</div>
+            <div class="admin-stat-label">Premium</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-admin-count">--</div>
+            <div class="admin-stat-label">Admins</div>
+          </div>
         </div>
-        <div class="admin-stat-card">
-          <div class="admin-stat-value" id="admin-new-7d">--</div>
-          <div class="admin-stat-label">New (7d)</div>
+        <div class="card" id="admin-signup-chart"></div>
+        <div class="card">
+          <input type="text" id="admin-search" placeholder="Search by name or email..." class="input" style="width:100%;box-sizing:border-box" />
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <select id="admin-filter-role" class="input" style="flex:1">
+              <option value="">All Roles</option>
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </select>
+            <select id="admin-filter-sub" class="input" style="flex:1">
+              <option value="">All Plans</option>
+              <option value="free">Free</option>
+              <option value="premium">Premium</option>
+            </select>
+          </div>
         </div>
-        <div class="admin-stat-card">
-          <div class="admin-stat-value" id="admin-premium-count">--</div>
-          <div class="admin-stat-label">Premium</div>
-        </div>
-        <div class="admin-stat-card">
-          <div class="admin-stat-value" id="admin-admin-count">--</div>
-          <div class="admin-stat-label">Admins</div>
+        <div class="card" style="overflow-x:auto">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Plan</th>
+                <th>Joined</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="admin-users-tbody"></tbody>
+          </table>
         </div>
       </div>
 
-      <!-- Signup chart -->
-      <div class="card" id="admin-signup-chart"></div>
+      <!-- ── SUB-TAB: Philosophy Modules ─────────────────────────── -->
+      <div id="admin-philosophy" class="admin-subtab-content" style="display:none">
+        <div class="admin-stats-row">
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-modules-total">--</div>
+            <div class="admin-stat-label">Modules</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-modules-active">--</div>
+            <div class="admin-stat-label">Active</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-modules-categories">--</div>
+            <div class="admin-stat-label">Categories</div>
+          </div>
+        </div>
+        <div class="card">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="text" id="admin-modules-search" placeholder="Search modules..." class="input" style="flex:1;min-width:150px" />
+            <select id="admin-modules-category-filter" class="input" style="width:auto">
+              <option value="">All Categories</option>
+            </select>
+            <button class="btn-primary btn-sm" onclick="adminToggleModuleEditor()">+ Add Module</button>
+          </div>
+        </div>
+        <!-- Module editor (hidden by default) -->
+        <div class="card" id="admin-module-editor" style="display:none">
+          <h3 style="margin:0 0 12px" id="admin-module-editor-title">Add Module</h3>
+          <div class="form-row"><label>ID</label><input type="text" id="admin-mod-id" class="input" placeholder="e.g. LEVEL_BEGINNER" /></div>
+          <div class="form-row"><label>Category</label><input type="text" id="admin-mod-category" class="input" placeholder="e.g. athlete_level" /></div>
+          <div class="form-row"><label>Title</label><input type="text" id="admin-mod-title" class="input" /></div>
+          <div class="form-row"><label>Version</label><input type="text" id="admin-mod-version" class="input" value="1.0" /></div>
+          <div class="form-row"><label>Applies When (JSON)</label><textarea id="admin-mod-applies" class="input" rows="2" placeholder='{"level": "beginner"}'></textarea></div>
+          <div class="form-row"><label>Principles (one per line)</label><textarea id="admin-mod-principles" class="input" rows="3"></textarea></div>
+          <div class="form-row"><label>Plan Rules (one per line)</label><textarea id="admin-mod-rules" class="input" rows="3"></textarea></div>
+          <div class="form-row"><label>Rationale</label><textarea id="admin-mod-rationale" class="input" rows="2"></textarea></div>
+          <div class="form-row"><label>Priority</label>
+            <select id="admin-mod-priority" class="input"><option>high</option><option selected>medium</option><option>low</option></select>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn-primary" onclick="adminSaveModule()">Save Module</button>
+            <button class="btn-secondary" onclick="adminToggleModuleEditor(false)">Cancel</button>
+          </div>
+          <p id="admin-mod-msg" class="auth-msg" style="margin-top:8px"></p>
+        </div>
+        <!-- Module list -->
+        <div class="card" style="overflow-x:auto">
+          <table class="admin-table">
+            <thead><tr><th>ID</th><th>Category</th><th>Title</th><th>Ver</th><th>Active</th><th>Actions</th></tr></thead>
+            <tbody id="admin-modules-tbody"></tbody>
+          </table>
+        </div>
+      </div>
 
-      <!-- Search & filters -->
-      <div class="card">
-        <input type="text" id="admin-search" placeholder="Search by name or email..." class="input" style="width:100%;box-sizing:border-box" />
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <select id="admin-filter-role" class="input" style="flex:1">
-            <option value="">All Roles</option>
-            <option value="user">User</option>
-            <option value="admin">Admin</option>
+      <!-- ── SUB-TAB: Exercise Library ───────────────────────────── -->
+      <div id="admin-exercises" class="admin-subtab-content" style="display:none">
+        <div class="admin-stats-row">
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-exercises-total">--</div>
+            <div class="admin-stat-label">Exercises</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-exercises-patterns">--</div>
+            <div class="admin-stat-label">Patterns</div>
+          </div>
+        </div>
+        <div class="card">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input type="text" id="admin-exercises-search" placeholder="Search exercises..." class="input" style="flex:1;min-width:150px" />
+            <select id="admin-exercises-pattern-filter" class="input" style="width:auto">
+              <option value="">All Patterns</option>
+            </select>
+            <select id="admin-exercises-diff-filter" class="input" style="width:auto">
+              <option value="">All Levels</option>
+              <option value="beginner">Beginner</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select>
+          </div>
+        </div>
+        <div class="card" style="overflow-x:auto">
+          <table class="admin-table">
+            <thead><tr><th>Name</th><th>Pattern</th><th>Muscles</th><th>Level</th><th>Tier</th><th>Equipment</th></tr></thead>
+            <tbody id="admin-exercises-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── SUB-TAB: Philosophy Gaps ────────────────────────────── -->
+      <div id="admin-gaps" class="admin-subtab-content" style="display:none">
+        <div class="admin-stats-row">
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-gaps-open">--</div>
+            <div class="admin-stat-label">Open Gaps</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-gaps-resolved">--</div>
+            <div class="admin-stat-label">Resolved</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-gaps-users">--</div>
+            <div class="admin-stat-label">Users Affected</div>
+          </div>
+        </div>
+        <div class="card">
+          <select id="admin-gaps-filter" class="input" style="width:auto">
+            <option value="open">Open</option>
+            <option value="in_progress">In Progress</option>
+            <option value="resolved">Resolved</option>
+            <option value="">All</option>
           </select>
-          <select id="admin-filter-sub" class="input" style="flex:1">
-            <option value="">All Plans</option>
-            <option value="free">Free</option>
-            <option value="premium">Premium</option>
-          </select>
+        </div>
+        <div id="admin-gaps-list"></div>
+      </div>
+
+      <!-- ── SUB-TAB: Analytics ──────────────────────────────────── -->
+      <div id="admin-analytics" class="admin-subtab-content" style="display:none">
+        <div class="admin-stats-row">
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-plans-total">--</div>
+            <div class="admin-stat-label">Plans Generated</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-outcomes-total">--</div>
+            <div class="admin-stat-label">Outcomes Logged</div>
+          </div>
+        </div>
+        <div class="card">
+          <h3 style="margin:0 0 12px">Module Effectiveness</h3>
+          <div id="admin-effectiveness-report" style="color:var(--color-text-muted)">Loading...</div>
+        </div>
+        <div class="card">
+          <h3 style="margin:0 0 12px">Recent Plans</h3>
+          <div id="admin-recent-plans" style="color:var(--color-text-muted)">Loading...</div>
         </div>
       </div>
 
-      <!-- User table -->
-      <div class="card" style="overflow-x:auto">
-        <table class="admin-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Plan</th>
-              <th>Joined</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="admin-users-tbody"></tbody>
-        </table>
-      </div>
     </div><!-- end #tab-admin -->
 
   </main>

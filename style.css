@@ -10008,9 +10008,32 @@ button:active {
 
 /* ===== ADMIN PANEL ===== */
 
+.admin-subtabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 12px;
+}
+.admin-subtab {
+  padding: 8px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 12px);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.9em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.admin-subtab.active {
+  background: var(--color-primary, #818cf8);
+  color: #fff;
+  border-color: var(--color-primary, #818cf8);
+}
+
 .admin-stats-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
   gap: 12px;
 }
 
