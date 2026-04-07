@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>IronZ</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#818cf8" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -13,6 +17,8 @@
   <!-- Supabase JS SDK (must load before supabase-init.js) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="supabase-init.js"></script>
+  <script src="db.js"></script>
+  <script src="seed-reference-data.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
@@ -44,6 +50,37 @@
         </div>
         <button class="btn-primary auth-submit-btn" onclick="handleLogin()">Log In</button>
         <p id="auth-msg" class="auth-msg"></p>
+        <p class="auth-forgot-link"><a href="#" onclick="showResetPanel(); return false;">Forgot password?</a></p>
+      </div>
+
+      <!-- Reset password panel -->
+      <div id="auth-panel-reset" style="display:none">
+        <p class="auth-reset-info">Enter your email and we'll send you a link to reset your password.</p>
+        <div class="form-row">
+          <label for="auth-reset-email">Email</label>
+          <input type="email" id="auth-reset-email" placeholder="you@example.com"
+            onkeydown="if(event.key==='Enter') handleResetRequest()" />
+        </div>
+        <button class="btn-primary auth-submit-btn" onclick="handleResetRequest()">Send Reset Link</button>
+        <p id="auth-reset-msg" class="auth-msg"></p>
+        <p class="auth-forgot-link"><a href="#" onclick="switchAuthTab('login'); return false;">Back to login</a></p>
+      </div>
+
+      <!-- New password panel (shown after clicking email link) -->
+      <div id="auth-panel-newpw" style="display:none">
+        <p class="auth-reset-info">Enter your new password below.</p>
+        <div class="form-row">
+          <label for="auth-new-password">New Password</label>
+          <input type="password" id="auth-new-password" placeholder="Min 6 characters"
+            onkeydown="if(event.key==='Enter') handleNewPassword()" />
+        </div>
+        <div class="form-row">
+          <label for="auth-confirm-password">Confirm Password</label>
+          <input type="password" id="auth-confirm-password" placeholder="Min 6 characters"
+            onkeydown="if(event.key==='Enter') handleNewPassword()" />
+        </div>
+        <button class="btn-primary auth-submit-btn" onclick="handleNewPassword()">Update Password</button>
+        <p id="auth-newpw-msg" class="auth-msg"></p>
       </div>
 
       <!-- Signup panel -->
@@ -103,6 +140,7 @@
           <button onclick="closeProfileDropdown(); showTab('saved-workouts')">Saved Workouts</button>
           <button onclick="closeProfileDropdown(); showTab('community')">Community</button>
           <button onclick="closeProfileDropdown(); openSupportEmail()">Contact Support</button>
+          <button id="admin-dropdown-btn" style="display:none" onclick="closeProfileDropdown(); showTab('admin')">Admin Panel</button>
           <button class="nav-dropdown-logout" onclick="handleLogout()">Log Out</button>
         </div>
       </div>
@@ -273,8 +311,19 @@
               <p class="hint" id="plan-weeks-hint" style="margin-top:-8px">12 weeks of sessions, exercises refresh every 4 weeks (3 blocks).</p>
 
               <button class="btn-primary" onclick="generatePlan()">Generate & Schedule Plan</button>
+              <button class="btn-secondary" style="margin-left:8px" onclick="generatePhilosophyPlan()">Philosophy Engine Plan</button>
               <p id="plan-save-msg" class="save-msg"></p>
+              <div id="philosophy-plan-outdated" style="display:none" class="plan-outdated-banner">
+                <p>Your plan was built on philosophy modules that have been updated. <button onclick="regeneratePhilosophyPlan()" class="btn-link">Regenerate?</button></p>
+              </div>
               <div id="generated-plan"></div>
+              <div id="philosophy-rationale" style="display:none">
+                <details class="plan-rationale-details">
+                  <summary>Why this plan?</summary>
+                  <p id="philosophy-rationale-text"></p>
+                  <p id="philosophy-modules-used" class="hint"></p>
+                </details>
+              </div>
             </div>
           </div>
 
@@ -353,10 +402,22 @@
       <section class="card collapsible is-collapsed" id="section-running-zones">
         <div class="card-toggle" onclick="toggleSection('section-running-zones')">
           <h2>Athlete's Zones</h2>
-          <span class="card-chevron">▾</span>
+          <span class="card-chevron">&#9662;</span>
         </div>
         <div class="card-body">
           <div id="zones-content"></div>
+        </div>
+      </section>
+
+      <!-- Training Blocks Explained -->
+      <section class="card collapsible is-collapsed" id="section-training-blocks">
+        <div class="card-toggle" onclick="toggleSection('section-training-blocks')">
+          <h2>Training Blocks</h2>
+          <span class="card-chevron">&#9662;</span>
+        </div>
+        <div class="card-body">
+          <p class="hint">Understand why your plan has different phases and what to expect in each one.</p>
+          <div id="training-blocks-content"></div>
         </div>
       </section>
 
@@ -412,6 +473,11 @@
           <div id="log-endurance-section" style="display:none">
             <div id="log-segment-entries"></div>
             <button class="btn-secondary" onclick="addLogSegmentRow()">+ Add Segment</button>
+          </div>
+
+          <div class="form-row" id="log-watts-row" style="display:none">
+            <label for="log-watts">Avg Power (watts) <span class="optional-tag">optional</span></label>
+            <input type="number" id="log-watts" placeholder="e.g. 205" min="0" max="2000" />
           </div>
 
           <button class="btn-primary" onclick="saveWorkout()">Save Workout</button>
@@ -496,6 +562,9 @@
          NUTRITION TAB
     ===================================================== -->
     <div id="tab-nutrition" class="tab-content">
+
+      <!-- Active Allergies Banner -->
+      <div id="allergy-banner" class="allergy-banner" style="display:none"></div>
 
       <!-- Nutrition Dashboard -->
       <section class="card collapsible" id="section-nutrition-dashboard">
@@ -702,13 +771,17 @@
           </div>
 
           <div class="pref-section">
-            <div class="pref-section-label pref-section-label--dislike">Foods to Avoid</div>
+            <div class="pref-section-label pref-section-label--dislike">Allergies &amp; Foods to Avoid</div>
             <div id="dislikes-chips" class="pref-chips"></div>
             <div class="pref-input-row">
               <input type="text" id="dislike-input" placeholder="e.g. salmon, nuts, eggs"
                 onkeydown="if(event.key==='Enter') addPreference('dislike')" />
               <button class="btn-pref-add btn-pref-add--dislike" onclick="addPreference('dislike')">Add</button>
             </div>
+            <label class="allergy-toggle">
+              <input type="checkbox" id="is-allergy" />
+              <span>This is an allergy (not just a preference)</span>
+            </label>
           </div>
         </div>
       </section>
@@ -773,12 +846,14 @@
         <button class="cal-help-btn" id="cal-help-btn" onclick="toggleCalHelp()" title="Help">?</button>
         <div class="cal-help-tooltip" id="cal-help-tooltip">To edit or remove training plans, go to <strong>Training</strong> tab &rarr; <strong>Active Training Inputs</strong>.</div>
         <div class="calendar-header">
-          <button class="cal-nav-btn" onclick="calPrev()">&#8592;</button>
-          <button class="cal-this-week-btn" id="cal-this-week-btn" onclick="goToThisWeek()" style="display:none">This Week</button>
           <span id="calendar-month-label" class="calendar-month-label"></span>
-          <button class="cal-nav-btn" onclick="calNext()">&#8594;</button>
-          <button class="cal-add-header-btn" onclick="openQuickEntry(selectedDate)" title="Plan activity or restriction">+</button>
-          <button class="cal-zoom-btn" id="cal-zoom-btn" onclick="toggleCalendarMode()">Month view</button>
+          <div class="cal-controls">
+            <button class="cal-nav-btn" onclick="calPrev()">&#8592;</button>
+            <button class="cal-this-week-btn" id="cal-this-week-btn" onclick="goToThisWeek()" style="display:none">Today</button>
+            <button class="cal-zoom-btn" id="cal-zoom-btn" onclick="toggleCalendarMode()">Month view</button>
+            <button class="cal-nav-btn" onclick="calNext()">&#8594;</button>
+            <button class="cal-add-header-btn" onclick="openQuickEntry(selectedDate)" title="Plan activity or restriction">+</button>
+          </div>
         </div>
 
 
@@ -1178,8 +1253,14 @@
               <input type="number" id="profile-weight" placeholder="e.g. 165" min="50" />
             </div>
             <div class="form-row">
-              <label for="profile-height">Height (in)</label>
-              <input type="number" id="profile-height" placeholder="e.g. 70" min="40" />
+              <label>Height</label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input type="number" id="profile-height-feet" min="3" max="8" placeholder="5" style="width:70px" />
+                <span>ft</span>
+                <input type="number" id="profile-height-inches" min="0" max="11" placeholder="10" style="width:70px" />
+                <span>in</span>
+              </div>
+              <input type="hidden" id="profile-height" />
             </div>
           </div>
 
@@ -1231,26 +1312,7 @@
         </div>
       </section>
 
-      <!-- API Key -->
-      <section class="card collapsible is-collapsed" id="section-api-key">
-        <div class="card-toggle" onclick="toggleSection('section-api-key')">
-          <h2>API Key</h2>
-          <span class="card-chevron">&#9662;</span>
-        </div>
-        <div class="card-body">
-          <p class="hint">Enter your Anthropic API key to enable AI features (meal suggestions, workout generation, smart import). Your key is stored locally in your browser — it never leaves your device except to call the API directly.</p>
-          <p class="hint" style="margin-top:4px"><a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get an API key here</a></p>
-          <div class="form-row" style="margin-top:8px">
-            <label for="setting-api-key">API Key</label>
-            <input type="password" id="setting-api-key" placeholder="sk-ant-..." style="font-family:monospace" />
-          </div>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <button class="btn-primary" onclick="saveApiKey()">Save Key</button>
-            <button class="btn-secondary" onclick="clearApiKey()">Remove Key</button>
-          </div>
-          <p id="api-key-msg" class="save-msg"></p>
-        </div>
-      </section>
+      <!-- API Key section removed — AI calls route through server-side proxy -->
 
       <!-- Notifications -->
       <section class="card collapsible is-collapsed" id="section-notifications">
@@ -1287,6 +1349,16 @@
             </div>
             <label class="toggle-switch">
               <input type="checkbox" id="pref-hydration-toggle" onchange="setHydrationEnabled(this.checked)" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="pref-row">
+            <div>
+              <div class="pref-label">Fueling During Workouts</div>
+              <div class="pref-desc">Show fueling plans and markers on sessions over 60 min</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="pref-fueling-toggle" checked onchange="setFuelingEnabled(this.checked)" />
               <span class="toggle-slider"></span>
             </label>
           </div>
@@ -1480,6 +1552,70 @@
 
     </div><!-- end #tab-settings -->
 
+    <!-- ===================================================
+         ADMIN PANEL (visible to role=admin only)
+         =================================================== -->
+    <div id="tab-admin" class="tab-content">
+      <h2 class="section-title">Admin Panel</h2>
+
+      <!-- Analytics cards -->
+      <div class="admin-stats-row">
+        <div class="admin-stat-card">
+          <div class="admin-stat-value" id="admin-total-users">--</div>
+          <div class="admin-stat-label">Total Users</div>
+        </div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-value" id="admin-new-7d">--</div>
+          <div class="admin-stat-label">New (7d)</div>
+        </div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-value" id="admin-premium-count">--</div>
+          <div class="admin-stat-label">Premium</div>
+        </div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-value" id="admin-admin-count">--</div>
+          <div class="admin-stat-label">Admins</div>
+        </div>
+      </div>
+
+      <!-- Signup chart -->
+      <div class="card" id="admin-signup-chart"></div>
+
+      <!-- Search & filters -->
+      <div class="card">
+        <input type="text" id="admin-search" placeholder="Search by name or email..." class="input" style="width:100%;box-sizing:border-box" />
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <select id="admin-filter-role" class="input" style="flex:1">
+            <option value="">All Roles</option>
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+          <select id="admin-filter-sub" class="input" style="flex:1">
+            <option value="">All Plans</option>
+            <option value="free">Free</option>
+            <option value="premium">Premium</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- User table -->
+      <div class="card" style="overflow-x:auto">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Plan</th>
+              <th>Joined</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="admin-users-tbody"></tbody>
+        </table>
+      </div>
+    </div><!-- end #tab-admin -->
+
   </main>
 
   <!-- Quick Entry Modal — Multi-step Wizard -->
@@ -1558,6 +1694,14 @@
             <button class="qe-type-card" onclick="qeSelectType('pilates')">
               <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><path d="M6 20h12"/><path d="M12 6v8"/><path d="m8 10 4 4 4-4"/></svg></span>
               <span class="qe-type-label">Pilates</span>
+            </button>
+            <button class="qe-type-card" onclick="qeSelectType('hyrox')">
+              <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg></span>
+              <span class="qe-type-label">Hyrox</span>
+            </button>
+            <button class="qe-type-card" onclick="qeSelectType('sauna')">
+              <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2c0 0-2 4-2 7a4 4 0 0 0 8 0c0-3-2-7-2-7"/><path d="M4 14h16v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6z"/></svg></span>
+              <span class="qe-type-label">Sauna / Steam</span>
             </button>
             <button class="qe-type-card" onclick="qeSelectType('sport')">
               <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></span>
@@ -1686,6 +1830,58 @@
           <button class="btn-primary"   style="flex:1" onclick="qeGenerateHIIT()">Generate Workout</button>
           <button class="btn-secondary" style="flex:1" onclick="qeGoManual()">Add Manually</button>
         </div>
+      </div>
+
+      <!-- STEP 1f: Sauna / Steam -->
+      <div class="qe-step" id="qe-step-1-sauna" style="display:none">
+        <div class="form-row">
+          <label for="sauna-type">Type</label>
+          <select id="sauna-type">
+            <option value="dry-sauna">Dry Sauna</option>
+            <option value="infrared-sauna">Infrared Sauna</option>
+            <option value="steam-room">Steam Room</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="sauna-duration">Duration (minutes)</label>
+          <input type="number" id="sauna-duration" placeholder="15" min="1" max="120" />
+        </div>
+        <div class="form-row">
+          <label for="sauna-temp">Temperature, F <span class="optional-tag">optional</span></label>
+          <input type="number" id="sauna-temp" placeholder="e.g. 180" />
+        </div>
+        <div class="form-row">
+          <label for="sauna-notes">Notes <span class="optional-tag">optional</span></label>
+          <input type="text" id="sauna-notes" placeholder="e.g. post-workout, cold plunge after" />
+        </div>
+        <button class="btn-primary" style="width:100%;margin-top:12px" onclick="saveSaunaSession()">Save Session</button>
+        <p id="sauna-save-msg" class="save-msg" style="margin-top:8px"></p>
+      </div>
+
+      <!-- STEP 1e: Hyrox Builder -->
+      <div class="qe-step" id="qe-step-1-hyrox" style="display:none">
+        <div class="form-row">
+          <label>Run Distance Between Stations</label>
+          <div class="hyrox-run-options">
+            <button class="hyrox-dist-btn" data-dist="0.25" onclick="setHyroxRunDist(this)">0.25 mi</button>
+            <button class="hyrox-dist-btn is-active" data-dist="0.5" onclick="setHyroxRunDist(this)">0.5 mi</button>
+            <button class="hyrox-dist-btn" data-dist="1.0" onclick="setHyroxRunDist(this)">1.0 mi</button>
+            <button class="hyrox-dist-btn" data-dist="1.0k" onclick="setHyroxRunDist(this)">1 km</button>
+            <input type="text" id="hyrox-custom-dist" class="hyrox-custom-input" placeholder="mi" oninput="setHyroxCustomDist(this)" />
+          </div>
+        </div>
+        <div class="form-row">
+          <label>Select Stations</label>
+          <div id="hyrox-station-list" class="hyrox-station-list"></div>
+        </div>
+        <div class="form-row">
+          <label>Workout Name <span class="optional-tag">optional</span></label>
+          <input type="text" id="hyrox-workout-name" placeholder="e.g. Hyrox Sim #3" />
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn-primary" style="flex:1" onclick="saveHyroxWorkout()">Save to Calendar</button>
+        </div>
+        <p id="hyrox-save-msg" class="save-msg" style="margin-top:8px"></p>
       </div>
 
       <!-- STEP 1c: Cardio / General -->
@@ -1836,8 +2032,8 @@
       <!-- STEP 2a: AI-generated workout preview -->
       <div class="qe-step" id="qe-step-2-generated" style="display:none">
         <div id="qe-ai-loading" style="text-align:center;padding:24px 0;display:none">
-          <div class="qe-spinner"></div>
-          <p style="color:var(--color-text-muted);font-size:0.9rem;margin-top:12px">Building your workout…</p>
+          <div class="qe-spinner" id="qe-main-spinner"></div>
+          <p class="qe-loading-msg" style="color:var(--color-text-muted);font-size:0.9rem;margin-top:12px">Building your workout…</p>
         </div>
         <div id="qe-ai-result"></div>
         <p id="qe-activity-msg-generated" class="save-msg"></p>
@@ -2133,12 +2329,22 @@
   <script src="icons.js"></script>
   <script src="themes.js"></script>
   <script src="stats.js"></script>
+  <script src="touch-drag.js"></script>
   <script src="workouts.js"></script>
   <script src="nutrition.js"></script>
   <script src="meals-data.js"></script>
   <script src="planner.js"></script>
+  <script src="philosophy-engine.js"></script>
+  <script src="exercise-selector.js"></script>
+  <script src="nutrition-calculator.js"></script>
+  <script src="rules-engine.js"></script>
+  <script src="validator.js"></script>
+  <script src="gap-tracker.js"></script>
+  <script src="feedback-loop.js"></script>
+  <script src="philosophy-planner.js"></script>
   <script src="survey.js"></script>
   <script src="exercise-library.js"></script>
+  <script src="fueling.js"></script>
   <script src="calendar.js"></script>
   <script src="live-tracker.js"></script>
   <script src="nl-input.js"></script>
@@ -2167,6 +2373,7 @@
   <script src="weekly-checkin.js"></script>
   <script src="barcode-scanner.js"></script>
   <script src="onboarding.js"></script>
+  <script src="admin.js"></script>
   <!-- auth.js last — overrides window.onload to gate app behind login -->
   <script src="auth.js"></script>
 

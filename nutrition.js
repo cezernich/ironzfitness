@@ -52,7 +52,7 @@ function saveMeal() {
   // Load existing meals, add the new one, and save back to localStorage
   const meals = loadMeals();
   meals.unshift(meal);  // add to the front (newest first)
-  localStorage.setItem("meals", JSON.stringify(meals));
+  localStorage.setItem("meals", JSON.stringify(meals)); if (typeof DB !== 'undefined') DB.syncKey('meals');
 
   // Show success feedback
   msg.style.color = "#22c55e";
@@ -87,7 +87,7 @@ function deleteMeal(id) {
 
   let meals = loadMeals();
   meals = meals.filter(m => m.id !== id);
-  localStorage.setItem("meals", JSON.stringify(meals));
+  localStorage.setItem("meals", JSON.stringify(meals)); if (typeof DB !== 'undefined') DB.syncKey('meals');
 
   renderTodaysSummary();
   renderNutritionHistory();
@@ -239,7 +239,7 @@ function loadPrefs() {
 }
 
 function savePrefs(prefs) {
-  localStorage.setItem("foodPreferences", JSON.stringify(prefs));
+  localStorage.setItem("foodPreferences", JSON.stringify(prefs)); if (typeof DB !== 'undefined') DB.syncKey('foodPreferences');
 }
 
 /**
@@ -247,6 +247,16 @@ function savePrefs(prefs) {
  * Reads the input for 'like' or 'dislike', trims and normalises the value,
  * then persists and re-renders the chip list.
  */
+/** Normalizes a dislike entry to { name, isAllergy } object. Handles legacy plain strings. */
+function _normalizeDislike(item) {
+  if (typeof item === "string") return { name: item, isAllergy: false };
+  return { name: item.name || "", isAllergy: !!item.isAllergy };
+}
+/** Gets the display name from a dislike entry (string or object) */
+function _dislikeName(item) {
+  return typeof item === "string" ? item : (item.name || "");
+}
+
 function addPreference(type) {
   const inputId = type === "like" ? "like-input" : "dislike-input";
   const input = document.getElementById(inputId);
@@ -260,18 +270,27 @@ function addPreference(type) {
   if (terms.length === 0) return;
 
   const prefs = loadPrefs();
-  const list = prefs[type === "like" ? "likes" : "dislikes"];
-  const other = prefs[type === "like" ? "dislikes" : "likes"];
+  const isAllergy = type === "dislike" && document.getElementById("is-allergy")?.checked;
 
-  terms.forEach(term => {
-    // Don't add duplicates or cross-list conflicts
-    if (!list.includes(term) && !other.includes(term)) {
-      list.push(term);
-    }
-  });
+  if (type === "like") {
+    const dislikeNames = prefs.dislikes.map(d => _dislikeName(d));
+    terms.forEach(term => {
+      if (!prefs.likes.includes(term) && !dislikeNames.includes(term)) {
+        prefs.likes.push(term);
+      }
+    });
+  } else {
+    const dislikeNames = prefs.dislikes.map(d => _dislikeName(d));
+    terms.forEach(term => {
+      if (!dislikeNames.includes(term) && !prefs.likes.includes(term)) {
+        prefs.dislikes.push({ name: term, isAllergy: !!isAllergy });
+      }
+    });
+  }
 
   savePrefs(prefs);
   input.value = "";
+  if (document.getElementById("is-allergy")) document.getElementById("is-allergy").checked = false;
   renderFoodPreferences();
   if (typeof selectedDate !== "undefined" && selectedDate && typeof renderMealPlan === "function") renderMealPlan(selectedDate);
 }
@@ -282,8 +301,11 @@ function addPreference(type) {
  */
 function removePreference(type, term) {
   const prefs = loadPrefs();
-  const key = type === "like" ? "likes" : "dislikes";
-  prefs[key] = prefs[key].filter(t => t !== term);
+  if (type === "like") {
+    prefs.likes = prefs.likes.filter(t => t !== term);
+  } else {
+    prefs.dislikes = prefs.dislikes.filter(d => _dislikeName(d) !== term);
+  }
   savePrefs(prefs);
   renderFoodPreferences();
   if (typeof selectedDate !== "undefined" && selectedDate && typeof renderMealPlan === "function") renderMealPlan(selectedDate);
@@ -306,14 +328,44 @@ function renderFoodPreferences() {
 
   dislikesEl.innerHTML = prefs.dislikes.length === 0
     ? `<span class="pref-empty">None added yet</span>`
-    : prefs.dislikes.map(t => chipHTML("dislike", t)).join("");
+    : prefs.dislikes.map(d => {
+        const item = _normalizeDislike(d);
+        return chipHTML("dislike", item.name, item.isAllergy);
+      }).join("");
+
+  // Show active allergies banner in nutrition tab
+  const allergyBanner = document.getElementById("allergy-banner");
+  const allergies = prefs.dislikes.map(d => _normalizeDislike(d)).filter(d => d.isAllergy);
+  if (allergyBanner) {
+    if (allergies.length > 0) {
+      allergyBanner.innerHTML = allergies.map(a =>
+        `<span class="allergy-chip">${a.name}</span>`
+      ).join("");
+      allergyBanner.style.display = "";
+    } else {
+      allergyBanner.style.display = "none";
+    }
+  }
 }
 
-function chipHTML(type, term) {
-  return `<span class="pref-chip pref-chip--${type}">
-    ${term}
+function chipHTML(type, term, isAllergy) {
+  const allergyBadge = isAllergy ? `<span class="allergy-badge">ALLERGY</span>` : "";
+  const chipClass = isAllergy ? "pref-chip pref-chip--allergy" : `pref-chip pref-chip--${type}`;
+  return `<span class="${chipClass}">
+    ${term}${allergyBadge}
     <button class="pref-chip-remove" onclick="removePreference('${type}', '${term}')" title="Remove"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
   </span>`;
+}
+
+/** Helper to get structured allergy/avoid data for use by other modules */
+function getAllergyData() {
+  const prefs = loadPrefs();
+  const items = prefs.dislikes.map(d => _normalizeDislike(d));
+  return {
+    allergies: items.filter(d => d.isAllergy).map(d => d.name),
+    avoids: items.filter(d => !d.isAllergy).map(d => d.name),
+    allNames: items.map(d => d.name),
+  };
 }
 
 

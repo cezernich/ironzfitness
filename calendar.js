@@ -26,8 +26,10 @@ const DISCIPLINE_COLORS = {
   triathlon:    "var(--color-cyan)",
   general:      "var(--color-success)",
   hiit:         "var(--color-accent)",
+  hyrox:        "var(--color-amber)",
   bodyweight:   "var(--color-accent)",
   yoga:         "var(--color-violet)",
+  wellness:     "var(--color-success)",
 };
 
 const RESTRICTION_LABELS = {
@@ -514,11 +516,11 @@ function _cleanupCompletionRecord(sessionId) {
     const entry = meta[sessionId];
     if (entry) {
       delete meta[sessionId];
-      localStorage.setItem("completedSessions", JSON.stringify(meta));
+      localStorage.setItem("completedSessions", JSON.stringify(meta)); if (typeof DB !== 'undefined') DB.syncKey('completedSessions');
       // Remove the isCompletion workout record
       let workouts = JSON.parse(localStorage.getItem("workouts") || "[]");
       workouts = workouts.filter(w => String(w.id) !== String(entry.workoutId));
-      localStorage.setItem("workouts", JSON.stringify(workouts));
+      localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
     }
   } catch {}
 }
@@ -528,9 +530,9 @@ function deleteScheduledWorkout(id, dateStr) {
   let schedule = [];
   try { schedule = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
   schedule = schedule.filter(w => String(w.id) !== String(id));
-  localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+  localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
   _cleanupCompletionRecord(`session-sw-${id}`);
-  try { const r = JSON.parse(localStorage.getItem("workoutRatings") || "{}"); if (r[String(id)]) { delete r[String(id)]; localStorage.setItem("workoutRatings", JSON.stringify(r)); } } catch {}
+  try { const r = JSON.parse(localStorage.getItem("workoutRatings") || "{}"); if (r[String(id)]) { delete r[String(id)]; localStorage.setItem("workoutRatings", JSON.stringify(r)); if (typeof DB !== 'undefined') DB.syncKey('workoutRatings'); } } catch {}
   renderCalendar();
   if (typeof selectedDate !== "undefined" && selectedDate) renderDayDetail(selectedDate);
   if (typeof renderStats === "function") renderStats();
@@ -611,7 +613,7 @@ function swEditSave(cardId, workoutId) {
   let schedule = [];
   try { schedule = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
   schedule = schedule.map(w => String(w.id) === String(workoutId) ? { ...w, exercises } : w);
-  localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+  localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
   if (typeof selectedDate !== "undefined" && selectedDate) renderDayDetail(selectedDate);
 }
 
@@ -646,12 +648,12 @@ function doMoveSession(cardId, sourceType, sourceId, _origDate) {
     let workouts = [];
     try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
     workouts = workouts.map(w => String(w.id) === String(sourceId) ? { ...w, date: newDate } : w);
-    localStorage.setItem("workouts", JSON.stringify(workouts));
+    localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
   } else if (sourceType === "scheduled") {
     let schedule = [];
     try { schedule = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
     schedule = schedule.map(w => String(w.id) === String(sourceId) ? { ...w, date: newDate } : w);
-    localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+    localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
   }
   renderCalendar();
   if (typeof selectedDate !== "undefined" && selectedDate) renderDayDetail(selectedDate);
@@ -667,7 +669,7 @@ function doDuplicateSession(cardId, sourceType, sourceId, _origDate) {
     const orig = workouts.find(w => String(w.id) === String(sourceId));
     if (orig) {
       workouts.unshift({ ...orig, id: generateId(), date: newDate, completedSessionId: undefined, isCompletion: undefined });
-      localStorage.setItem("workouts", JSON.stringify(workouts));
+      localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
     }
   } else if (sourceType === "scheduled") {
     let schedule = [];
@@ -675,7 +677,7 @@ function doDuplicateSession(cardId, sourceType, sourceId, _origDate) {
     const orig = schedule.find(w => String(w.id) === String(sourceId));
     if (orig) {
       schedule.push({ ...orig, id: generateId(), date: newDate });
-      localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+      localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
     }
   }
   renderCalendar();
@@ -781,7 +783,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
           </div>
         </div>
         ${buildIntensityStrip(s, cardId, w.type)}
-        <div class="card-body">${buildStepsList(s, w.type)}${_genCompletion}</div>
+        <div class="card-body">${buildStepsList(s, w.type)}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(s.duration, s.name) : ""}${_genCompletion}</div>
       </div>`;
   }
 
@@ -796,7 +798,11 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
       hiitHeader += `</div>`;
     }
     const _logCompEx = isSessionComplete(cardId) ? _getCompletionExercises(cardId) : null;
-    const exTable    = hiitHeader + buildExerciseTableHTML(_logCompEx || w.exercises, { hiit: w.type === "hiit" || !!w.hiitMeta });
+    const _isHyroxEx = w.type === "hyrox" || w.isHyrox;
+    const _compRec = _isHyroxEx ? _getCompletionRecord(cardId) : null;
+    const _hyroxSplit = _compRec?.hyroxData ? _buildHyroxSplitSummary(_compRec.hyroxData) : "";
+    const _displayEx = _logCompEx || w.exercises;
+    const exTable    = hiitHeader + _hyroxSplit + buildExerciseTableHTML(_displayEx, { hiit: w.type === "hiit" || !!w.hiitMeta, hyrox: _isHyroxEx });
     const _completion = buildCompletionSection(cardId, w.type, _logCompEx || w.exercises, dateStr, w.duration || null);
     const movePanel = buildSessionMovePanel(cardId, "logged", w.id, dateStr);
     const moveBtn = `<button class="btn-move-session" title="Move / Duplicate" onclick="event.stopPropagation();toggleMovePanel('${cardId}')">⇄</button>`;
@@ -883,7 +889,19 @@ function buildIntensityStrip(session, cardId, discipline) {
     return `<div class="intensity-seg ${cls}" style="width:${pct}%" title="${tip}"></div>`;
   }).join("");
 
-  return `<div class="session-intensity-strip" onclick="event.stopPropagation(); toggleSection('${cardId}')">${bars}</div>`;
+  // Overlay fueling markers on the strip
+  let fuelMarkers = "";
+  if (total >= 60 && typeof generateFuelingPlan === "function" && typeof isFuelingEnabled === "function" && isFuelingEnabled()) {
+    const plan = generateFuelingPlan(total);
+    if (plan && plan.items && plan.items.length > 0) {
+      fuelMarkers = plan.items.map((item, i) => {
+        const leftPct = (item.minute / total * 100).toFixed(2);
+        return `<div class="fuel-tick" style="left:${leftPct}%" title="${item.source.name} #${i + 1} at min ${item.minute} (${item.carbs}g)"><svg class="fuel-drop" viewBox="0 0 24 28" width="18" height="22"><path d="M12 2C12 2 4 12 4 17a8 8 0 0 0 16 0c0-5-8-15-8-15z" fill="var(--color-accent)" stroke="none"/><text x="12" y="20" text-anchor="middle" fill="#fff" font-size="9" font-weight="700">F${i + 1}</text></svg></div>`;
+      }).join("");
+    }
+  }
+
+  return `<div class="session-intensity-strip" onclick="event.stopPropagation(); toggleSection('${cardId}')" style="position:relative">${bars}${fuelMarkers}</div>`;
 }
 
 /**
@@ -1027,6 +1045,37 @@ function _getCompletionExercises(sessionId) {
   } catch { return null; }
 }
 
+function _getCompletionRecord(sessionId) {
+  try {
+    const workouts = JSON.parse(localStorage.getItem("workouts")) || [];
+    return workouts.find(w => w.isCompletion && w.completedSessionId === sessionId) || null;
+  } catch { return null; }
+}
+
+function _buildHyroxSplitSummary(hd) {
+  if (!hd) return "";
+  const _fmtMs = ms => {
+    const sec = Math.floor((ms || 0) / 1000);
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    return h > 0 ? `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}` : `${m}:${String(s).padStart(2,"0")}`;
+  };
+  return `
+    <div style="display:flex;gap:10px;margin:8px 0 10px">
+      <div style="flex:1;text-align:center;padding:6px 8px;border-radius:6px;background:rgba(59,130,246,0.1)">
+        <div style="font-size:0.7rem;opacity:0.7">Running</div>
+        <div style="font-weight:700;font-variant-numeric:tabular-nums">${_fmtMs(hd.totalRunMs)}</div>
+      </div>
+      <div style="flex:1;text-align:center;padding:6px 8px;border-radius:6px;background:rgba(245,158,11,0.1)">
+        <div style="font-size:0.7rem;opacity:0.7">Stations</div>
+        <div style="font-weight:700;font-variant-numeric:tabular-nums">${_fmtMs(hd.totalStationMs)}</div>
+      </div>
+      <div style="flex:1;text-align:center;padding:6px 8px;border-radius:6px;background:rgba(34,197,94,0.1)">
+        <div style="font-size:0.7rem;opacity:0.7">Total</div>
+        <div style="font-weight:700;font-variant-numeric:tabular-nums">${_fmtMs(hd.totalMs)}</div>
+      </div>
+    </div>`;
+}
+
 function hasAnyCompletedSession(dateStr) {
   if (dateStr > getTodayString()) return false;
   try {
@@ -1040,20 +1089,20 @@ function undoSessionCompletion(sessionId, dateStr) {
   const meta = loadCompletionMeta();
   const entry = meta[sessionId];
   delete meta[sessionId];
-  localStorage.setItem("completedSessions", JSON.stringify(meta));
+  localStorage.setItem("completedSessions", JSON.stringify(meta)); if (typeof DB !== 'undefined') DB.syncKey('completedSessions');
 
   // Remove the matching isCompletion workout record
   if (entry?.workoutId) {
     let workouts = [];
     try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
     workouts = workouts.filter(w => String(w.id) !== String(entry.workoutId));
-    localStorage.setItem("workouts", JSON.stringify(workouts));
+    localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
 
     // Clean up associated rating
     if (typeof loadWorkoutRatings === "function") {
       const ratings = loadWorkoutRatings();
       delete ratings[String(entry.workoutId)];
-      localStorage.setItem("workoutRatings", JSON.stringify(ratings));
+      localStorage.setItem("workoutRatings", JSON.stringify(ratings)); if (typeof DB !== 'undefined') DB.syncKey('workoutRatings');
     }
   }
 
@@ -1197,6 +1246,11 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
         <input type="number" id="cdist-${sessionId}" class="completion-dur-input"
           placeholder="e.g. 3.1" min="0" step="0.1" />
       </div>` : ""}
+      ${type === "cycling" ? `<div class="completion-dur-row">
+        <label class="completion-field-label">Avg Power (watts) <span class="optional-tag">optional</span></label>
+        <input type="number" id="cwatts-${sessionId}" class="completion-dur-input"
+          placeholder="e.g. 205" min="0" max="2000" />
+      </div>` : ""}
       <textarea id="cnotes-${sessionId}" class="completion-notes"
         placeholder="Notes (optional)"></textarea>`;
   } else {
@@ -1213,6 +1267,11 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
           <label class="completion-field-label">Distance (${_cUnit})</label>
           <input type="number" id="cdist-${sessionId}" class="completion-dur-input"
             placeholder="e.g. 3.1" min="0" step="0.1" />
+        </div>` : ""}
+        ${type === "cycling" ? `<div class="completion-dur-row">
+          <label class="completion-field-label">Avg Power (watts) <span class="optional-tag">optional</span></label>
+          <input type="number" id="cwatts-${sessionId}" class="completion-dur-input"
+            placeholder="e.g. 205" min="0" max="2000" />
         </div>` : ""}
         <textarea id="cnotes-${sessionId}" class="completion-notes"
           placeholder="Notes (optional)"></textarea>
@@ -1338,6 +1397,40 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   const duration = document.getElementById(`cdur-${sessionId}`)?.value || "";
   const distance = document.getElementById(`cdist-${sessionId}`)?.value || "";
 
+  // Pace sanity check for endurance types (sport-specific thresholds)
+  if (duration && distance && _ENDURANCE_TYPES.has(type)) {
+    const durMin = parseFloat(duration);
+    const distVal = parseFloat(distance);
+    if (durMin > 0 && distVal > 0) {
+      const unit = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
+      const distMi = unit === "km" ? distVal / 1.60934 : distVal;
+      let paceWarning = null;
+
+      if (type === "cycling") {
+        const mph = (distMi / durMin) * 60;
+        if (mph > 45) paceWarning = `That's ${mph.toFixed(1)} mph — extremely fast for cycling. Did you enter correctly?`;
+        else if (mph < 3) paceWarning = `That's ${mph.toFixed(1)} mph — very slow for cycling. Did you enter correctly?`;
+      } else if (type === "swimming") {
+        const distM = unit === "mi" ? distVal * 1609.34 : distVal * 1000;
+        const per100m = durMin / (distM / 100);
+        if (per100m < 0.5) paceWarning = `That's a ${Math.floor(per100m)}:${String(Math.round((per100m % 1) * 60)).padStart(2, "0")}/100m pace — faster than any world record. Did you enter correctly?`;
+      } else {
+        // Running / triathlon — original check
+        const distKm = unit === "mi" ? distVal * 1.60934 : distVal;
+        const paceMinPerKm = durMin / distKm;
+        if (paceMinPerKm < 2.8) {
+          const paceStr = `${Math.floor(paceMinPerKm)}:${String(Math.round((paceMinPerKm % 1) * 60)).padStart(2, "0")}/${unit}`;
+          paceWarning = `That's a ${paceStr} pace — faster than any world record. Did you enter the duration correctly?`;
+        }
+      }
+
+      if (paceWarning && !confirm(paceWarning)) {
+        _lastCompletionSaveTime = 0;
+        return;
+      }
+    }
+  }
+
   let exercises = [];
   if (hasExercises) {
     ((_completionExerciseMap[sessionId]) || []).forEach((ex, i) => {
@@ -1389,6 +1482,9 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   let workouts = [];
   try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
   const workoutId = Date.now();
+  // Watts for cycling
+  const wattsVal = parseInt(document.getElementById(`cwatts-${sessionId}`)?.value) || null;
+
   workouts.unshift({
     id:                 workoutId,
     date:               dateStr,
@@ -1398,15 +1494,16 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
     exercises:          exercises.length ? exercises : undefined,
     duration:           duration || null,
     distance:           distance || null,
+    ...(wattsVal && { avgWatts: wattsVal }),
     completedSessionId: sessionId,
     isCompletion:       true,
   });
-  localStorage.setItem("workouts", JSON.stringify(workouts));
+  localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
 
   // Mark session as completed
   const meta = loadCompletionMeta();
   meta[sessionId] = { workoutId, completedAt: new Date().toISOString() };
-  localStorage.setItem("completedSessions", JSON.stringify(meta));
+  localStorage.setItem("completedSessions", JSON.stringify(meta)); if (typeof DB !== 'undefined') DB.syncKey('completedSessions');
 
   // Refresh views
   renderCalendar();
@@ -1567,7 +1664,7 @@ function getDayTotals(dateStr) {
 
 // ─── Day detail panel ─────────────────────────────────────────────────────────
 
-const _WORKOUT_TYPE_LABELS = { hiit: "HIIT", weightlifting: "Weightlifting", running: "Running", cycling: "Cycling", swimming: "Swimming", yoga: "Yoga", general: "General Fitness", bodyweight: "Bodyweight", brick: "Brick (Bike + Run)" };
+const _WORKOUT_TYPE_LABELS = { hiit: "HIIT", hyrox: "Hyrox", weightlifting: "Weightlifting", running: "Running", cycling: "Cycling", swimming: "Swimming", yoga: "Yoga", general: "General Fitness", bodyweight: "Bodyweight", brick: "Brick (Bike + Run)", wellness: "Wellness" };
 function _wTypeLabel(type) { return _WORKOUT_TYPE_LABELS[type] || capitalize(type); }
 
 /**
@@ -1928,7 +2025,7 @@ function renderDayDetail(dateStr) {
               </div>
             </div>
             ${buildIntensityStrip(session, cardId, p.discipline)}
-            <div class="card-body">${buildStepsList(session, p.discipline)}${buildWorkoutExplanation(session, dateStr, p.discipline, effectLoad, p.sessionName)}${_planCompletion}</div>
+            <div class="card-body">${buildStepsList(session, p.discipline)}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(session.duration, session.name) : ""}${buildWorkoutExplanation(session, dateStr, p.discipline, effectLoad, p.sessionName)}${_planCompletion}</div>
           </div>`;
       } else {
         html += `
@@ -1988,7 +2085,7 @@ function renderDayDetail(dateStr) {
                 </div>
               </div>
               ${buildIntensityStrip(session, cardId, w.discipline)}
-              <div class="card-body">${buildStepsList(session, w.discipline)}${buildWorkoutExplanation(session, dateStr, w.discipline, effectLoad, w.sessionName)}${_swMovePanel}${_swCompletion}</div>
+              <div class="card-body">${buildStepsList(session, w.discipline)}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(session.duration, session.name) : ""}${buildWorkoutExplanation(session, dateStr, w.discipline, effectLoad, w.sessionName)}${_swMovePanel}${_swCompletion}</div>
             </div>`;
           return;
         }
@@ -2026,7 +2123,10 @@ function renderDayDetail(dateStr) {
             : `${ICONS.lightbulb} Reduced sets & weight per your ${data.restriction.type || ""} restriction`;
           _liftRestrictNote = `<div class="restriction-session-note" style="margin-bottom:8px">${_restrictMsg}</div>`;
         }
-        body = _liftRestrictNote + _swHiitHeader + buildExerciseTableHTML(displayExercises, { hiit: w.type === "hiit" || !!w.hiitMeta });
+        const _swIsHyrox = w.type === "hyrox" || w.isHyrox;
+        const _swCompRec = _swIsHyrox ? _getCompletionRecord(cardId) : null;
+        const _swHyroxSplit = _swCompRec?.hyroxData ? _buildHyroxSplitSummary(_swCompRec.hyroxData) : "";
+        body = _liftRestrictNote + _swHiitHeader + _swHyroxSplit + buildExerciseTableHTML(displayExercises, { hiit: w.type === "hiit" || !!w.hiitMeta, hyrox: _swIsHyrox });
       } else if (w.details) {
         body = `<p class="session-details">${w.details}</p>`;
       }
@@ -2431,7 +2531,7 @@ function buildMealExplanation(dateStr, nutrition) {
   if (proteinTarget > 0) parts.push(`your protein target of ${proteinTarget}g`);
   const likes = (foodPrefs.likes || []).filter(f => f);
   if (likes.length > 0) parts.push(`preference for ${likes.slice(0, 3).map(f => escHtml(f)).join(", ")}`);
-  const dislikes = (foodPrefs.dislikes || []).filter(f => f);
+  const dislikes = (foodPrefs.dislikes || []).filter(f => f).map(f => typeof f === "string" ? f : (f.name || ""));
   if (dislikes.length > 0) parts.push(`avoiding ${dislikes.slice(0, 3).map(f => escHtml(f)).join(", ")}`);
   // Show dietary restrictions
   try {
@@ -2626,14 +2726,14 @@ function saveNutritionAdjustment(dateStr, key, value) {
     adjustments[dateStr] = { ...getBaseNutritionTarget(dateStr) };
   }
   adjustments[dateStr][key] = value;
-  localStorage.setItem("nutritionAdjustments", JSON.stringify(adjustments));
+  localStorage.setItem("nutritionAdjustments", JSON.stringify(adjustments)); if (typeof DB !== 'undefined') DB.syncKey('nutritionAdjustments');
 }
 
 function resetNutritionTargets(dateStr) {
   let adjustments = {};
   try { adjustments = JSON.parse(localStorage.getItem("nutritionAdjustments")) || {}; } catch {}
   delete adjustments[dateStr];
-  localStorage.setItem("nutritionAdjustments", JSON.stringify(adjustments));
+  localStorage.setItem("nutritionAdjustments", JSON.stringify(adjustments)); if (typeof DB !== 'undefined') DB.syncKey('nutritionAdjustments');
   renderDayDetail(dateStr); // re-renders targets and refreshes meal plan
 }
 
@@ -2687,7 +2787,7 @@ function savePlanMeals(dateStr, meals) {
       source:   "generated",
     });
   });
-  localStorage.setItem("meals", JSON.stringify(all));
+  localStorage.setItem("meals", JSON.stringify(all)); if (typeof DB !== 'undefined') DB.syncKey('meals');
   if (typeof renderNutritionHistory === "function") renderNutritionHistory();
   if (typeof renderTodaysSummary   === "function") renderTodaysSummary();
   renderDayDetail(dateStr);
@@ -2779,7 +2879,7 @@ function onCellDrop(event, targetDate) {
     const entry  = { ...schedule[idx], date: targetDate };
     if (typeof entry.id === "string") entry.id = entry.id.replace(sourceDate, targetDate);
     schedule.splice(idx, 1, entry);
-    localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+    localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
 
   } else if (dragData.type === "plan") {
     const plan = loadTrainingPlan();
@@ -2798,7 +2898,7 @@ function onCellDrop(event, targetDate) {
     const idx = workouts.findIndex(w => String(w.id) === String(dragData.payload.id));
     if (idx === -1) return;
     workouts[idx] = { ...workouts[idx], date: targetDate };
-    localStorage.setItem("workouts", JSON.stringify(workouts));
+    localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
   }
 
   renderCalendar();
@@ -2888,6 +2988,56 @@ function closeQuickEntry() {
   const overlay = document.getElementById("quick-entry-overlay");
   if (overlay) overlay.classList.remove("is-open");
   _qeDateStr = null;
+  _stopLoadingMessages();
+}
+
+// ── Fun loading messages ──────────────────────────────────────────────────────
+const _LOADING_MESSAGES = [
+  "Building your workout…",
+  "Warming up the engine…",
+  "Calculating intervals…",
+  "Dialing in the zones…",
+  "Picking the perfect exercises…",
+  "Almost there…",
+  "Fine-tuning your plan…",
+  "Lacing up…",
+];
+function _getLoadingIcons() {
+  const icons = [];
+  if (typeof ICONS !== "undefined") {
+    if (ICONS.bike) icons.push(ICONS.bike);
+    if (ICONS.run) icons.push(ICONS.run);
+    if (ICONS.swim) icons.push(ICONS.swim);
+    if (ICONS.weights) icons.push(ICONS.weights);
+  }
+  return icons;
+}
+let _loadingMsgInterval = null;
+let _loadingIconInterval = null;
+function _startLoadingMessages() {
+  const msgEl = document.querySelector(".qe-loading-msg");
+  const spinnerEl = document.querySelector(".qe-spinner");
+  let msgIdx = 0;
+  let iconIdx = 0;
+  if (msgEl) {
+    msgEl.textContent = _LOADING_MESSAGES[0];
+    _loadingMsgInterval = setInterval(() => {
+      msgIdx = (msgIdx + 1) % _LOADING_MESSAGES.length;
+      msgEl.textContent = _LOADING_MESSAGES[msgIdx];
+    }, 2500);
+  }
+  const icons = _getLoadingIcons();
+  if (spinnerEl && icons.length > 0) {
+    spinnerEl.innerHTML = icons[0];
+    _loadingIconInterval = setInterval(() => {
+      iconIdx = (iconIdx + 1) % icons.length;
+      spinnerEl.innerHTML = icons[iconIdx];
+    }, 1500);
+  }
+}
+function _stopLoadingMessages() {
+  if (_loadingMsgInterval) { clearInterval(_loadingMsgInterval); _loadingMsgInterval = null; }
+  if (_loadingIconInterval) { clearInterval(_loadingIconInterval); _loadingIconInterval = null; }
 }
 
 // ── Wizard step navigation ────────────────────────────────────────────────────
@@ -2908,6 +3058,8 @@ function qeShowStep(step, subType) {
     yoga: "Yoga Session",         mobility: "Mobility Session",
     walking: "Walking Session",   rowing: "Rowing Session",
     pilates: "Pilates Session",   sport: "Sport Session",
+    hyrox: "Hyrox Session",
+    sauna: "Sauna / Steam",
     restriction: "Rest / Restriction",
   };
   const titleEl = document.getElementById("qe-wizard-title");
@@ -2918,6 +3070,8 @@ function qeShowStep(step, subType) {
   } else if (step === 1) {
     if (subType === "strength")          document.getElementById("qe-step-1-strength").style.display    = "";
     else if (subType === "hiit")         document.getElementById("qe-step-1-hiit").style.display        = "";
+    else if (subType === "hyrox")        { document.getElementById("qe-step-1-hyrox").style.display     = ""; _initHyroxBuilder(); }
+    else if (subType === "sauna")        document.getElementById("qe-step-1-sauna").style.display       = "";
     else if (subType === "restriction")  document.getElementById("qe-step-1-restriction").style.display = "";
     else if (subType === "equipment")    document.getElementById("qe-step-1-equipment").style.display   = "";
     else {
@@ -2937,6 +3091,174 @@ function qeShowStep(step, subType) {
       qeInitManualRows();
     }
   }
+}
+
+// ── Hyrox Builder ────────────────────────────────────────────────────────────
+
+// Default weights are Men's Open division. Users can edit in the builder.
+// Men's Open: Sled Push 152kg/335lb, Sled Pull 103kg/227lb, Farmer 2x24kg/53lb, Sandbag 20kg/44lb, Wall Ball 6kg/14lb
+// Women's Open: Sled Push 103kg/227lb, Sled Pull 78kg/172lb, Farmer 2x16kg/35lb, Sandbag 10kg/22lb, Wall Ball 4kg/9lb
+const HYROX_STATIONS = [
+  { id: "ski",               name: "SkiErg",              defaultDistance: "1000",  unit: "m",    defaultWeight: "" },
+  { id: "sled-push",         name: "Sled Push",           defaultDistance: "50",    unit: "m",    defaultWeight: "335" },
+  { id: "sled-pull",         name: "Sled Pull",           defaultDistance: "50",    unit: "m",    defaultWeight: "227" },
+  { id: "burpee-broad-jump", name: "Burpee Broad Jump",   defaultDistance: "80",    unit: "m",    defaultWeight: "" },
+  { id: "row",               name: "Rowing",              defaultDistance: "1000",  unit: "m",    defaultWeight: "" },
+  { id: "farmer-carry",      name: "Farmer Carry",        defaultDistance: "200",   unit: "m",    defaultWeight: "53 per hand" },
+  { id: "sandbag-lunges",    name: "Sandbag Lunges",      defaultDistance: "100",   unit: "m",    defaultWeight: "44" },
+  { id: "wall-balls",        name: "Wall Balls",          defaultDistance: "75",    unit: "reps", defaultWeight: "14" },
+];
+
+let _hyroxRunDist = "0.5";
+let _hyroxRunUnit = "mi";
+
+function _initHyroxBuilder() {
+  const listEl = document.getElementById("hyrox-station-list");
+  if (!listEl) return;
+  listEl.innerHTML = HYROX_STATIONS.map(s => `
+    <label class="hyrox-station-row">
+      <input type="checkbox" class="hyrox-station-cb" data-station="${s.id}" checked />
+      <span class="hyrox-station-name">${escHtml(s.name)}</span>
+      <input type="text" class="hyrox-station-dist" data-station="${s.id}" value="${s.defaultDistance}" style="width:60px" />
+      <span class="hyrox-station-unit">${s.unit}</span>
+      ${s.defaultWeight ? `<span style="margin-left:4px">@</span><input type="text" class="hyrox-station-wt" data-station="${s.id}" value="${s.defaultWeight}" style="width:80px" /><span>lb</span>` : ""}
+    </label>
+  `).join("");
+}
+
+function setHyroxRunDist(btn) {
+  document.querySelectorAll(".hyrox-dist-btn").forEach(b => b.classList.remove("is-active"));
+  btn.classList.add("is-active");
+  const customInput = document.getElementById("hyrox-custom-dist");
+  if (customInput) customInput.value = "";
+  const val = btn.dataset.dist;
+  if (val === "1.0k") {
+    _hyroxRunDist = "1.0";
+    _hyroxRunUnit = "km";
+  } else {
+    _hyroxRunDist = val;
+    _hyroxRunUnit = "mi";
+  }
+}
+
+function setHyroxCustomDist(input) {
+  const val = input.value.trim();
+  if (!val) return;
+  document.querySelectorAll(".hyrox-dist-btn").forEach(b => b.classList.remove("is-active"));
+  // Parse unit: if ends with "km" or "k", use km
+  if (val.toLowerCase().endsWith("km") || val.toLowerCase().endsWith("k")) {
+    _hyroxRunDist = parseFloat(val) || "1.0";
+    _hyroxRunUnit = "km";
+  } else {
+    _hyroxRunDist = parseFloat(val.replace(/mi$/i, "")) || "0.5";
+    _hyroxRunUnit = "mi";
+  }
+}
+
+function saveHyroxWorkout() {
+  const msg = document.getElementById("hyrox-save-msg");
+  const dateStr = _qeDateStr;
+  if (!dateStr) { if (msg) msg.textContent = "No date selected."; return; }
+
+  const checked = document.querySelectorAll(".hyrox-station-cb:checked");
+  if (checked.length === 0) { if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = "Select at least one station."; } return; }
+
+  const exercises = [];
+  let stationIndex = 0;
+  checked.forEach(cb => {
+    const stationId = cb.dataset.station;
+    const station = HYROX_STATIONS.find(s => s.id === stationId);
+    if (!station) return;
+    stationIndex++;
+    // Run before station
+    exercises.push({
+      name: `Run ${stationIndex}`,
+      sets: "1",
+      reps: `${_hyroxRunDist} ${_hyroxRunUnit}`,
+      weight: "",
+    });
+    // Station
+    const distInput = document.querySelector(`.hyrox-station-dist[data-station="${stationId}"]`);
+    const wtInput = document.querySelector(`.hyrox-station-wt[data-station="${stationId}"]`);
+    const dist = distInput?.value || station.defaultDistance;
+    const wt = wtInput?.value || station.defaultWeight || "";
+    exercises.push({
+      name: station.name,
+      sets: "1",
+      reps: `${dist} ${station.unit}`,
+      weight: wt ? `${wt} lb` : "",
+    });
+  });
+  // Final run
+  exercises.push({
+    name: `Run ${stationIndex + 1}`,
+    sets: "1",
+    reps: `${_hyroxRunDist} ${_hyroxRunUnit}`,
+    weight: "",
+  });
+
+  const workoutName = document.getElementById("hyrox-workout-name")?.value.trim() || "Hyrox Workout";
+
+  // Save as workout
+  let workouts = [];
+  try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
+  workouts.unshift({
+    id: Date.now(),
+    date: dateStr,
+    name: workoutName,
+    type: "hyrox",
+    notes: "",
+    exercises,
+    isHyrox: true,
+  });
+  localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
+
+  if (msg) { msg.style.color = "var(--color-success)"; msg.textContent = "Hyrox workout saved!"; }
+  renderCalendar();
+  if (typeof renderDayDetail === "function") renderDayDetail(dateStr);
+  setTimeout(() => closeQuickEntry(), 700);
+}
+
+// ── Sauna / Steam Session ────────────────────────────────────────────────────
+
+function saveSaunaSession() {
+  const msg = document.getElementById("sauna-save-msg");
+  const dateStr = _qeDateStr;
+  if (!dateStr) { if (msg) msg.textContent = "No date selected."; return; }
+
+  const duration = parseInt(document.getElementById("sauna-duration")?.value);
+  if (!duration || duration < 1) { if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = "Please enter duration."; } return; }
+
+  const saunaType = document.getElementById("sauna-type")?.value || "dry-sauna";
+  const temp = document.getElementById("sauna-temp")?.value || "";
+  const notes = document.getElementById("sauna-notes")?.value.trim() || "";
+
+  const typeLabels = { "dry-sauna": "Dry Sauna", "infrared-sauna": "Infrared Sauna", "steam-room": "Steam Room" };
+
+  let workouts = [];
+  try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
+  workouts.unshift({
+    id: Date.now(),
+    date: dateStr,
+    name: typeLabels[saunaType] || "Sauna",
+    type: "wellness",
+    subType: saunaType,
+    duration: String(duration),
+    temperature: temp ? parseInt(temp) : null,
+    notes: notes || `${typeLabels[saunaType]} · ${duration} min`,
+    isSauna: true,
+  });
+  localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
+
+  // Adjust hydration target: ~1.5 oz per minute of heat exposure
+  if (typeof adjustHydrationForSauna === "function") {
+    adjustHydrationForSauna(dateStr, duration);
+  }
+
+  if (msg) { msg.style.color = "var(--color-success)"; msg.textContent = "Session saved!"; }
+  renderCalendar();
+  if (typeof renderDayDetail === "function") renderDayDetail(dateStr);
+  setTimeout(() => closeQuickEntry(), 700);
 }
 
 function toggleMoreTypes(btn) {
@@ -2979,14 +3301,8 @@ async function qeSubmitAskIronZ() {
   const loadingEl = document.getElementById("qe-ai-loading");
   const resultEl  = document.getElementById("qe-ai-result");
   loadingEl.style.display = "";
+  _startLoadingMessages();
   resultEl.innerHTML = "";
-
-  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
-  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
-    loadingEl.style.display = "none";
-    resultEl.innerHTML = `<div class="qe-ai-error">API key not set. Open <strong>config.js</strong> and paste your Anthropic API key.</div>`;
-    return;
-  }
 
   try {
     let profile = {};
@@ -3017,20 +3333,12 @@ async function qeSubmitAskIronZ() {
       if (avoided.length) avoidCtx = ` NEVER include these exercises: ${avoided.join(", ")}.`;
     } catch {}
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1200,
-        messages: [{
-          role: "user",
-          content: `You are a personal trainer. The athlete says: "${prompt}". ${profileCtx}${refCtx}${avoidCtx}
+    const data = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1200,
+      messages: [{
+        role: "user",
+        content: `You are a personal trainer. The athlete says: "${prompt}". ${profileCtx}${refCtx}${avoidCtx}
 
 Determine the workout type and generate an appropriate session.
 
@@ -3042,17 +3350,13 @@ For running/cycling/swim/cardio workouts:
 {"type":"cardio","sport":"running","title":"Run Name","intervals":[{"name":"Phase","duration":"10 min","effort":"Easy","details":"Keep HR zone 2"}]}
 
 Use "Bodyweight" for bodyweight exercises. Strength exercises must have specific weights in lbs rounded to the nearest 5 (e.g. 135, 185 — NEVER 137, 267). Use reference lifts if provided. Include 5-8 exercises or 3-5 intervals.`
-        }]
-      })
+      }]
     });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
 
     const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
     const cleaned = text.replace(/```json|```/g, "").trim();
     const workout = JSON.parse(cleaned);
-    loadingEl.style.display = "none";
+    loadingEl.style.display = "none"; _stopLoadingMessages();
 
     if (workout.type === "cardio") {
       // Cardio — reuse the cardio-generated display
@@ -3098,7 +3402,7 @@ Use "Bodyweight" for bodyweight exercises. Strength exercises must have specific
       resultEl.appendChild(btnRow);
     }
   } catch (err) {
-    loadingEl.style.display = "none";
+    loadingEl.style.display = "none"; _stopLoadingMessages();
     resultEl.innerHTML = `<div class="qe-ai-error">${ICONS.warning} Could not generate workout. ${err.message || "Try again."}<br><br>
       <button class="btn-secondary" onclick="qeShowStep(0,null)">← Go back</button>
     </div>`;
@@ -3143,13 +3447,6 @@ async function qeGenerateHIIT() {
   loadingEl.style.display = "";
   resultEl.innerHTML = "";
 
-  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
-  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
-    loadingEl.style.display = "none";
-    resultEl.innerHTML = `<div class="qe-ai-error">API key not set. Open <strong>config.js</strong> and paste your Anthropic API key.</div>`;
-    return;
-  }
-
   let profile = {};
   try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
   const level = profile.fitnessLevel || "intermediate";
@@ -3186,20 +3483,12 @@ async function qeGenerateHIIT() {
   }[format] || "Circuit";
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1200,
-        messages: [{
-          role: "user",
-          content: `Generate a ${duration}-minute HIIT workout. ${profileCtx}${avoidCtx}
+    const data = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1200,
+      messages: [{
+        role: "user",
+        content: `Generate a ${duration}-minute HIIT workout. ${profileCtx}${avoidCtx}
 
 Format: ${formatDesc}
 Intensity: ${intensityDesc}
@@ -3233,18 +3522,14 @@ Rules:
 - For EMOM: reps should be completable well within 60 seconds
 - For Tabata: reps should be "20 sec" (work period)
 - For AMRAP: omit rest between exercises, set restBetweenRounds to "0s"`
-        }]
-      })
+      }]
     });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
 
     const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
     const cleaned = text.replace(/```json|```/g, "").trim();
     const hiit = JSON.parse(cleaned);
 
-    loadingEl.style.display = "none";
+    loadingEl.style.display = "none"; _stopLoadingMessages();
 
     // Calculate rounds from target duration and exercise count
     const numEx = (hiit.exercises || []).length || 1;
@@ -3311,7 +3596,7 @@ Rules:
     resultEl.appendChild(btnRow);
 
   } catch (err) {
-    loadingEl.style.display = "none";
+    loadingEl.style.display = "none"; _stopLoadingMessages();
     resultEl.innerHTML = `<div class="qe-ai-error">Error: ${err.message}</div>`;
   }
 }
@@ -3333,57 +3618,42 @@ async function qeGenerateStrength() {
   loadingEl.style.display = "";
   resultEl.innerHTML = "";
 
-  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
-  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
-    loadingEl.style.display = "none";
-    resultEl.innerHTML = `<div class="qe-ai-error">API key not set. Open <strong>config.js</strong> and paste your Anthropic API key.</div>`;
-    return;
-  }
-
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1200,
-        messages: [{
-          role: "user",
-          content: (() => {
-            let profile = {};
-            try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
-            let strengthRefs = null;
-            try {
-              const allZones = JSON.parse(localStorage.getItem("trainingZones")) || {};
-              strengthRefs = allZones.strength || null;
-            } catch {}
+    const data = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1200,
+      messages: [{
+        role: "user",
+        content: (() => {
+          let profile = {};
+          try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
+          let strengthRefs = null;
+          try {
+            const allZones = JSON.parse(localStorage.getItem("trainingZones")) || {};
+            strengthRefs = allZones.strength || null;
+          } catch {}
 
-            const profileCtx = profile.weight
-              ? `The athlete weighs ${profile.weight} lbs${profile.gender ? `, ${profile.gender}` : ""}.`
-              : "";
+          const profileCtx = profile.weight
+            ? `The athlete weighs ${profile.weight} lbs${profile.gender ? `, ${profile.gender}` : ""}.`
+            : "";
 
-            const liftLabels = { bench: "Bench Press", squat: "Back Squat", deadlift: "Deadlift", ohp: "Overhead Press", row: "Barbell Row" };
-            const typeLabels = { "1rm": "1-rep max", "5rm": "5-rep max", "10rm": "10-rep max" };
-            let refCtx = "";
-            if (strengthRefs) {
-              const lines = Object.entries(liftLabels)
-                .filter(([k]) => strengthRefs[k]?.weight)
-                .map(([k, label]) => `${label}: ${strengthRefs[k].weight} lbs (${typeLabels[strengthRefs[k].type] || strengthRefs[k].type})`);
-              if (lines.length) refCtx = `\nAthlete's reference lifts (MUST use to calculate all exercise weights): ${lines.join(", ")}. Scale working weights from these: ~85% for 5 reps, ~75% for 10 reps, ~65% for 12 reps. For non-reference exercises estimate proportionally.`;
-            }
-            let avoidCtx = "";
-            try {
-              const prefs = JSON.parse(localStorage.getItem("trainingPreferences") || "{}");
-              const avoided = prefs.avoidedExercises || [];
-              if (avoided.length) avoidCtx = `\nNEVER include these exercises: ${avoided.join(", ")}.`;
-            } catch {}
+          const liftLabels = { bench: "Bench Press", squat: "Back Squat", deadlift: "Deadlift", ohp: "Overhead Press", row: "Barbell Row" };
+          const typeLabels = { "1rm": "1-rep max", "5rm": "5-rep max", "10rm": "10-rep max" };
+          let refCtx = "";
+          if (strengthRefs) {
+            const lines = Object.entries(liftLabels)
+              .filter(([k]) => strengthRefs[k]?.weight)
+              .map(([k, label]) => `${label}: ${strengthRefs[k].weight} lbs (${typeLabels[strengthRefs[k].type] || strengthRefs[k].type})`);
+            if (lines.length) refCtx = `\nAthlete's reference lifts (MUST use to calculate all exercise weights): ${lines.join(", ")}. Scale working weights from these: ~85% for 5 reps, ~75% for 10 reps, ~65% for 12 reps. For non-reference exercises estimate proportionally.`;
+          }
+          let avoidCtx = "";
+          try {
+            const prefs = JSON.parse(localStorage.getItem("trainingPreferences") || "{}");
+            const avoided = prefs.avoidedExercises || [];
+            if (avoided.length) avoidCtx = `\nNEVER include these exercises: ${avoided.join(", ")}.`;
+          } catch {}
 
-            return `Generate a ${duration}-minute strength workout for a ${level} targeting: ${muscles}. ${profileCtx}${refCtx}${avoidCtx}
+          return `Generate a ${duration}-minute strength workout for a ${level} targeting: ${muscles}. ${profileCtx}${refCtx}${avoidCtx}
 
 Return ONLY valid JSON, no markdown, no explanation:
 {
@@ -3394,13 +3664,9 @@ Return ONLY valid JSON, no markdown, no explanation:
 }
 
 Include 5-8 exercises. Each exercise MUST have a specific weight in lbs rounded to the nearest 5 (e.g. 135, 185, 225 — NEVER 137, 183, 267). Reps must be a single integer, never a range. Use "Bodyweight" only for true bodyweight exercises. Use common gym exercises.`;
-          })()
-        }]
-      })
+        })()
+      }]
     });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
 
     const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
     const cleaned = text.replace(/```json|```/g, "").trim();
@@ -3408,7 +3674,7 @@ Include 5-8 exercises. Each exercise MUST have a specific weight in lbs rounded 
 
     _qeGeneratedExercises = (workout.exercises || []).map(ex => ({ ...ex, weight: _roundExWeight(ex.weight) }));
     _qeEditingExerciseIndex = null;
-    loadingEl.style.display = "none";
+    loadingEl.style.display = "none"; _stopLoadingMessages();
 
     resultEl.innerHTML = `<div class="qe-generated-workout">
       <div class="qe-generated-title">${ICONS.sparkles} ${workout.title || "Your Workout"}</div>
@@ -3432,7 +3698,7 @@ Include 5-8 exercises. Each exercise MUST have a specific weight in lbs rounded 
     resultEl.appendChild(btnRow);
 
   } catch (err) {
-    loadingEl.style.display = "none";
+    loadingEl.style.display = "none"; _stopLoadingMessages();
     resultEl.innerHTML = `<div class="qe-ai-error">
       ${ICONS.warning} Could not generate workout. ${err.message || "Try again."}<br><br>
       <button class="btn-secondary" onclick="qeGoManual()">Add manually instead</button>
@@ -3501,12 +3767,46 @@ function _qeRenderExerciseList() {
     }
   }
   listEl.innerHTML = rendered.join("");
+  // Attach touch drag to generated exercise items for mobile
+  _qeAttachTouchDrag(listEl);
+}
+
+function _qeAttachTouchDrag(listEl) {
+  const items = listEl.querySelectorAll(".qe-exercise-item[draggable]");
+  items.forEach(el => {
+    // Extract the exercise index from the ondragstart attribute
+    const match = el.getAttribute("ondragstart")?.match(/qeDragStart\(event,(\d+)\)/);
+    if (!match) return;
+    TouchDrag.attach(el, listEl, {
+      hintClasses: ["drag-insert-above", "drag-insert-below", "drag-ss-target"],
+      rowSelector: ".qe-exercise-item[draggable]",
+      handleSelector: ".drag-handle",
+      onDrop(dragEl, targetEl, clientY) {
+        const dragMatch = dragEl.getAttribute("ondragstart")?.match(/qeDragStart\(event,(\d+)\)/);
+        const dropMatch = targetEl.getAttribute("ondragstart")?.match(/qeDragStart\(event,(\d+)\)/) ||
+                          targetEl.getAttribute("ondrop")?.match(/qeDrop\(event,(\d+)\)/);
+        if (!dragMatch || !dropMatch) return;
+        const dragIdx = parseInt(dragMatch[1]);
+        const targetIdx = parseInt(dropMatch[1]);
+        // Simulate drop event
+        _qeDragIndex = dragIdx;
+        const rect = targetEl.getBoundingClientRect();
+        const fakeEvent = {
+          preventDefault() {},
+          currentTarget: targetEl,
+          clientY: clientY,
+        };
+        qeDrop(fakeEvent, targetIdx);
+      }
+    });
+  });
 }
 
 function _renderExerciseRow(i, inSuperset) {
   const ex = _qeGeneratedExercises[i];
   if (i === _qeEditingExerciseIndex) {
     return `<div class="qe-exercise-item qe-edit-row" draggable="true" ondragstart="qeDragStart(event,${i})">
+      <span class="drag-handle" title="Drag to reorder">⠿</span>
       <input class="qe-edit-name" id="qe-edit-name-${i}" value="${escHtml(ex.name)}" placeholder="Exercise name" />
       <div class="qe-edit-detail">
         ${inSuperset ? "" : `<input class="qe-edit-sets" id="qe-edit-sets-${i}" type="number" min="1" max="20" value="${escHtml(ex.sets)}" /><span>×</span>`}
@@ -3523,6 +3823,7 @@ function _renderExerciseRow(i, inSuperset) {
     ondragover="qeDragOver(event,${i})"
     ondragleave="qeDragLeave(event)"
     ondrop="qeDrop(event,${i})">
+    <span class="drag-handle" title="Drag to reorder">⠿</span>
     <div class="qe-exercise-name">${escHtml(ex.name)}<div class="qe-exercise-sub">${escHtml(ex.rest)} rest</div></div>
     <div class="qe-exercise-detail">${inSuperset ? "" : escHtml(ex.sets) + "×"}${escHtml(ex.reps)}</div>
     <input class="qe-weight-input" id="qe-weight-${i}" type="text" value="${escHtml(_roundExWeight(ex.weight) || '')}" placeholder="lbs / BW" />
@@ -3659,9 +3960,6 @@ async function qeRegenExercise(i) {
     if (w) ex.weight = w.value;
   });
 
-  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
-  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") return;
-
   const muscles  = [..._qeSelectedMuscles].join(", ");
   const current  = _qeGeneratedExercises[i].name;
   const others   = _qeGeneratedExercises.filter((_, j) => j !== i).map(e => e.name).join(", ");
@@ -3675,25 +3973,14 @@ async function qeRegenExercise(i) {
   }
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 200,
-        messages: [{
-          role: "user",
-          content: `Replace "${current}" with ONE different exercise targeting ${muscles}. Already in the workout: ${others || "none"}. Reps must be a single integer, never a range. Return ONLY valid JSON, no markdown:\n{"name":"Exercise Name","sets":3,"reps":10,"rest":"60s","weight":"135 lbs"}`
-        }]
-      })
+    const data = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 200,
+      messages: [{
+        role: "user",
+        content: `Replace "${current}" with ONE different exercise targeting ${muscles}. Already in the workout: ${others || "none"}. Reps must be a single integer, never a range. Return ONLY valid JSON, no markdown:\n{"name":"Exercise Name","sets":3,"reps":10,"rest":"60s","weight":"135 lbs"}`
+      }]
     });
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
     const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
     const ex = JSON.parse(text.replace(/```json|```/g, "").trim());
     _qeGeneratedExercises[i] = { ...ex, weight: _roundExWeight(ex.weight) };
@@ -3722,13 +4009,6 @@ async function qeGenerateCardio() {
   const resultEl  = document.getElementById("qe-ai-result");
   loadingEl.style.display = "";
   resultEl.innerHTML = "";
-
-  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
-  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
-    loadingEl.style.display = "none";
-    resultEl.innerHTML = `<div class="qe-ai-error">API key not set. Open <strong>config.js</strong> and paste your Anthropic API key.</div>`;
-    return;
-  }
 
   try {
     let profile = {};
@@ -3791,30 +4071,18 @@ For phases with repeated intervals (e.g. 3×8 min tempo with recovery jogs), use
 Include 3-6 phases (warm-up, main set(s), cool-down). Do NOT include static stretching — that is done separately outside the timed workout. Effort must be one of: RW, Z1, Z2, Z3, Z4, Z5, Z6 (RW=Rest/Walk, Z1=Recovery, Z2=Aerobic Base, Z3=Tempo, Z4=Threshold, Z5=VO2 Max, Z6=Max Sprint). Be specific with paces, distances, or power targets where relevant.`;
     }
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 800,
-        messages: [{ role: "user", content: prompt }]
-      })
+    const data = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 800,
+      messages: [{ role: "user", content: prompt }]
     });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
 
     const text    = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
     const cleaned = text.replace(/```json|```/g, "").trim();
     const workout = JSON.parse(cleaned);
 
     _qeGeneratedCardioData = workout;
-    loadingEl.style.display = "none";
+    loadingEl.style.display = "none"; _stopLoadingMessages();
 
     const effortToZone = { RW:"rw",Z1:"z1",Z2:"z2",Z3:"z3",Z4:"z4",Z5:"z5",Z6:"z6", Easy:"z2",Moderate:"z3",Hard:"z4",Max:"z5", T1:"z-transition" };
     let html = `<div class="qe-generated-workout"><div class="qe-generated-title">${workout.title || "Your Workout"}</div>`;
@@ -3840,7 +4108,7 @@ Include 3-6 phases (warm-up, main set(s), cool-down). Do NOT include static stre
     resultEl.appendChild(btnRow);
 
   } catch (err) {
-    loadingEl.style.display = "none";
+    loadingEl.style.display = "none"; _stopLoadingMessages();
     resultEl.innerHTML = `<div class="qe-ai-error">
       ${ICONS.warning} Could not generate workout. ${err.message || "Try again."}<br><br>
       <button class="btn-secondary" onclick="qeGoCardioManual()">Add manually instead</button>
@@ -3866,7 +4134,7 @@ function qeSaveGeneratedCardio() {
   if (existingR && existingR.action === "remove") {
     if (!confirm("This day has a restriction that removes all sessions.\n\nRemove the restriction and add this workout?")) return;
     delete restrictions[dateStr];
-    localStorage.setItem("dayRestrictions", JSON.stringify(restrictions));
+    localStorage.setItem("dayRestrictions", JSON.stringify(restrictions)); if (typeof DB !== 'undefined') DB.syncKey('dayRestrictions');
   }
 
   let workouts = [];
@@ -3877,7 +4145,7 @@ function qeSaveGeneratedCardio() {
     exercises: [],
     aiSession: _qeGeneratedCardioData,
   });
-  localStorage.setItem("workouts", JSON.stringify(workouts));
+  localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
 
   renderCalendar();
   if (selectedDate === dateStr) renderDayDetail(dateStr);
@@ -4020,7 +4288,7 @@ function qeSaveCardioManual() {
   if (existingR && existingR.action === "remove") {
     if (!confirm("This day has a restriction that removes all sessions.\n\nRemove the restriction and add this workout?")) return;
     delete restrictions[dateStr];
-    localStorage.setItem("dayRestrictions", JSON.stringify(restrictions));
+    localStorage.setItem("dayRestrictions", JSON.stringify(restrictions)); if (typeof DB !== 'undefined') DB.syncKey('dayRestrictions');
   }
 
   let workouts = [];
@@ -4029,7 +4297,7 @@ function qeSaveCardioManual() {
     id: generateId(), date: dateStr, type, notes, exercises: [],
     ...(intervals.length ? { aiSession: { title: notes || capitalize(type) + " Session", intervals } } : {})
   });
-  localStorage.setItem("workouts", JSON.stringify(workouts));
+  localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
 
   renderCalendar();
   if (selectedDate === dateStr) renderDayDetail(dateStr);
@@ -4063,8 +4331,10 @@ function qeAddExerciseRow() {
   div.className = "qe-manual-row" + (isHiit ? " hiit-row" : "");
   div.id = `qe-mrow-${id}`;
   div.draggable = true;
+  const dragHandleHTML = `<span class="drag-handle" title="Drag to reorder">⠿</span>`;
   if (isHiit) {
     div.innerHTML = `
+      ${dragHandleHTML}
       <div><label>Exercise</label>
         <input type="text" id="qe-mex-${id}" placeholder="e.g. Burpees, Row 500m" /></div>
       <div><label>Reps / Time / Distance</label>
@@ -4074,6 +4344,7 @@ function qeAddExerciseRow() {
       <button class="remove-exercise-btn" onclick="qeRemoveRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   } else {
     div.innerHTML = `
+      ${dragHandleHTML}
       <div><label>Exercise</label>
         <input type="text"   id="qe-mex-${id}"   placeholder="e.g. Bench Press" /></div>
       <div><label>Sets</label>
@@ -4117,7 +4388,26 @@ function qeAddExerciseRow() {
     }
     _qeManualDragId = null;
   });
-  document.getElementById("qe-exercise-rows").appendChild(div);
+  // Touch support for mobile
+  const qeContainer = document.getElementById("qe-exercise-rows");
+  TouchDrag.attach(div, qeContainer, {
+    hintClasses: ["drag-insert-above", "drag-insert-below", "drag-ss-target"],
+    rowSelector: ".qe-manual-row",
+    handleSelector: ".drag-handle",
+    onDrop(dragEl, targetEl, clientY) {
+      const rect = targetEl.getBoundingClientRect();
+      const pct = (clientY - rect.top) / rect.height;
+      _qeClearAllHints();
+      const fromId = parseInt(dragEl.id.replace("qe-mrow-", ""));
+      const toId   = parseInt(targetEl.id.replace("qe-mrow-", ""));
+      if (pct > 0.3 && pct < 0.7) {
+        _qeManualGroupSuperset(fromId, toId);
+      } else {
+        _qeManualReorder(fromId, toId, pct <= 0.3);
+      }
+    }
+  });
+  qeContainer.appendChild(div);
 }
 
 function _qeClearAllHints() {
@@ -4332,7 +4622,7 @@ function _qeSaveStrengthWorkout(dateStr, label, notes, exercises, hiitMeta) {
   if (existingR && existingR.action === "remove") {
     if (!confirm("This day has a restriction that removes all sessions.\n\nRemove the restriction and add this workout?")) return;
     delete restrictions[dateStr];
-    localStorage.setItem("dayRestrictions", JSON.stringify(restrictions));
+    localStorage.setItem("dayRestrictions", JSON.stringify(restrictions)); if (typeof DB !== 'undefined') DB.syncKey('dayRestrictions');
   }
 
   let workouts = [];
@@ -4341,7 +4631,7 @@ function _qeSaveStrengthWorkout(dateStr, label, notes, exercises, hiitMeta) {
   const entry = { id: generateId(), date: dateStr, type: _saveType, name: label, notes, exercises };
   if (hiitMeta) entry.hiitMeta = hiitMeta;
   workouts.unshift(entry);
-  localStorage.setItem("workouts", JSON.stringify(workouts));
+  localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
 
   renderCalendar();
   if (selectedDate === dateStr) renderDayDetail(dateStr);
@@ -4369,7 +4659,7 @@ function saveQuickActivity() {
     const label = RESTRICTION_LABELS[existingR.type] || existingR.type;
     if (!confirm(`This day has a "${label}" restriction.\n\nRemove the restriction and add this workout?`)) return;
     delete restrictions[dateStr];
-    localStorage.setItem("dayRestrictions", JSON.stringify(restrictions));
+    localStorage.setItem("dayRestrictions", JSON.stringify(restrictions)); if (typeof DB !== 'undefined') DB.syncKey('dayRestrictions');
   }
 
   const intensity  = document.getElementById("qe-activity-intensity")?.value || "moderate";
@@ -4387,7 +4677,7 @@ function saveQuickActivity() {
   let workouts = [];
   try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
   workouts.unshift({ id: generateId(), date: dateStr, type, notes, exercises: [], ...(generatedSession ? { generatedSession } : {}) });
-  localStorage.setItem("workouts", JSON.stringify(workouts));
+  localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
 
   renderCalendar();
   if (selectedDate === dateStr) renderDayDetail(dateStr);
@@ -4410,7 +4700,7 @@ function saveQuickRestriction() {
   let restrictions = {};
   try { restrictions = JSON.parse(localStorage.getItem("dayRestrictions")) || {}; } catch {}
   restrictions[dateStr] = { type, note, action, createdAt: new Date().toISOString() };
-  localStorage.setItem("dayRestrictions", JSON.stringify(restrictions));
+  localStorage.setItem("dayRestrictions", JSON.stringify(restrictions)); if (typeof DB !== 'undefined') DB.syncKey('dayRestrictions');
 
   renderCalendar();
   if (selectedDate === dateStr) renderDayDetail(dateStr);
@@ -4427,7 +4717,7 @@ function removeRestriction(dateStr) {
   let restrictions = {};
   try { restrictions = JSON.parse(localStorage.getItem("dayRestrictions")) || {}; } catch {}
   delete restrictions[dateStr];
-  localStorage.setItem("dayRestrictions", JSON.stringify(restrictions));
+  localStorage.setItem("dayRestrictions", JSON.stringify(restrictions)); if (typeof DB !== 'undefined') DB.syncKey('dayRestrictions');
   renderCalendar();
   renderDayDetail(dateStr);
 }
@@ -4463,7 +4753,7 @@ function saveQuickEquipmentRestriction() {
       restrictions[d.toISOString().slice(0, 10)] = entry;
     }
   }
-  localStorage.setItem("equipmentRestrictions", JSON.stringify(restrictions));
+  localStorage.setItem("equipmentRestrictions", JSON.stringify(restrictions)); if (typeof DB !== 'undefined') DB.syncKey('equipmentRestrictions');
 
   if (typeof refreshGeneratedWorkouts === "function") refreshGeneratedWorkouts();
   renderCalendar();
@@ -4512,7 +4802,7 @@ function removeEquipmentRestriction(dateStr, scope) {
     delete restrictions[dateStr];
   }
 
-  localStorage.setItem("equipmentRestrictions", JSON.stringify(restrictions));
+  localStorage.setItem("equipmentRestrictions", JSON.stringify(restrictions)); if (typeof DB !== 'undefined') DB.syncKey('equipmentRestrictions');
   if (typeof refreshGeneratedWorkouts === "function") refreshGeneratedWorkouts();
   renderCalendar();
   renderDayDetail(dateStr);
@@ -4529,13 +4819,6 @@ async function importTrainingPlan() {
 
   const startDate = document.getElementById("custom-plan-start")?.value || document.getElementById("import-start-date")?.value || getTodayString();
   const repeat    = parseInt(document.getElementById("import-repeat")?.value) || 1;
-
-  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
-  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
-    msg.textContent = "API key not set. Open config.js and paste your Anthropic API key.";
-    msg.style.color = "var(--color-error)";
-    return;
-  }
 
   msg.textContent = "Parsing your plan...";
   msg.style.color = "var(--color-text-muted)";
@@ -4560,20 +4843,12 @@ async function importTrainingPlan() {
   } catch {}
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 4096,
-        messages: [{
-          role: "user",
-          content: `Parse this training plan into structured JSON. ${profileCtx}${refCtx}
+    const data = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 4096,
+      messages: [{
+        role: "user",
+        content: `Parse this training plan into structured JSON. ${profileCtx}${refCtx}
 
 The plan text:
 """
@@ -4609,12 +4884,8 @@ Rules:
 - Omit rest days entirely — do not include them.
 - If the plan doesn't specify weeks, treat it as 1 week.
 - Every session MUST have a type and sessionName.`
-        }]
-      })
+      }]
     });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
 
     const raw = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
     const cleaned = raw.replace(/```json|```/g, "").trim();
@@ -4682,7 +4953,7 @@ Rules:
     // Save to workoutSchedule
     const existing = typeof loadWorkoutSchedule === "function" ? loadWorkoutSchedule() : [];
     const merged = [...existing, ...schedule];
-    localStorage.setItem("workoutSchedule", JSON.stringify(merged));
+    localStorage.setItem("workoutSchedule", JSON.stringify(merged)); if (typeof DB !== 'undefined') DB.syncSchedule();
 
     // Save imported plan metadata for Active Training Plans display
     const planMeta = {
@@ -4702,7 +4973,7 @@ Rules:
     };
     const importedPlans = (() => { try { return JSON.parse(localStorage.getItem("importedPlans")) || []; } catch { return []; } })();
     importedPlans.push(planMeta);
-    localStorage.setItem("importedPlans", JSON.stringify(importedPlans));
+    localStorage.setItem("importedPlans", JSON.stringify(importedPlans)); if (typeof DB !== 'undefined') DB.syncKey('importedPlans');
 
     // Show success
     const totalSessions = schedule.length;
@@ -4758,7 +5029,7 @@ function loadWorkoutRatings() {
 function saveWorkoutRating(workoutId, rating, note) {
   const ratings = loadWorkoutRatings();
   ratings[workoutId] = { rating, note: note || "", date: new Date().toISOString() };
-  localStorage.setItem("workoutRatings", JSON.stringify(ratings));
+  localStorage.setItem("workoutRatings", JSON.stringify(ratings)); if (typeof DB !== 'undefined') DB.syncKey('workoutRatings');
 }
 
 function getWorkoutRating(workoutId) {

@@ -6,7 +6,7 @@ function getCheckinHistory() {
 }
 
 function saveCheckinHistory(history) {
-  localStorage.setItem("checkinHistory", JSON.stringify(history));
+  localStorage.setItem("checkinHistory", JSON.stringify(history)); if (typeof DB !== 'undefined') DB.syncKey('checkinHistory');
 }
 
 /**

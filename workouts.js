@@ -656,7 +656,7 @@ function loadTrainingPreferences() {
 }
 
 function saveTrainingPreferences(prefs) {
-  localStorage.setItem("trainingPreferences", JSON.stringify(prefs));
+  localStorage.setItem("trainingPreferences", JSON.stringify(prefs)); if (typeof DB !== 'undefined') DB.syncKey('trainingPreferences');
 }
 
 function renderAvoidedExercisesList() {
@@ -724,6 +724,17 @@ function refreshGeneratedWorkouts() {
       return { ...w, exercises: getWeightliftingExercises(focus, level, blockIndex, eqRestr) };
     }
 
+    if (w.type === "bodyweight" && w.exercises) {
+      const idMatch = String(w.id).match(/bodyweight-(\w+)-b(\d+)/);
+      if (!idMatch) return { ...w, exercises: filterAvoidedExercises(w.exercises) };
+      const focus = idMatch[1];
+      const level = w.level || "intermediate";
+      const exercises = (BODYWEIGHT_LIBRARY[focus] || {})[level]
+                     || (BODYWEIGHT_LIBRARY[focus] || {}).beginner || [];
+      changed = true;
+      return { ...w, exercises: filterAvoidedExercises(exercises) };
+    }
+
     if (w.type === "general" && w.exercises) {
       const level    = w.level || "beginner";
       const sessions = ((lib["general"] || {})[level]) || ((lib["general"] || {})["beginner"]) || [];
@@ -741,7 +752,7 @@ function refreshGeneratedWorkouts() {
   });
 
   if (changed) {
-    localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+    localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
     if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
       renderDayDetail(selectedDate);
     }
@@ -1068,6 +1079,18 @@ function generatePlan() {
     }
   }
 
+  // ----- Bodyweight -----
+  else if (type === "bodyweight") {
+    const focuses = ["push", "pull", "legs"];
+    for (let i = 0; i < days; i++) {
+      const focus = focuses[i % focuses.length];
+      const exercises = (BODYWEIGHT_LIBRARY[focus] || {})[level]
+                     || (BODYWEIGHT_LIBRARY[focus] || {}).beginner
+                     || [];
+      html += buildLiftingDay(`Day ${i + 1}: ${capitalize(focus)} (Bodyweight)`, filterAvoidedExercises(exercises));
+    }
+  }
+
   // ----- General Fitness -----
   else if (type === "general") {
     const templates = EXERCISE_LIBRARY.general[level] || EXERCISE_LIBRARY.general.beginner;
@@ -1185,6 +1208,18 @@ function _initRowDrag(row, container) {
     if (e.clientY < mid) container.insertBefore(_logDragEl, row);
     else                 container.insertBefore(_logDragEl, row.nextSibling);
   });
+  // Touch support for mobile
+  TouchDrag.attach(row, container, {
+    hintClasses: ["drag-insert-above", "drag-insert-below"],
+    rowSelector: "[draggable]",
+    handleSelector: ".drag-handle",
+    onDrop(dragEl, targetEl, clientY) {
+      const rect = targetEl.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      if (clientY < mid) container.insertBefore(dragEl, targetEl);
+      else               container.insertBefore(dragEl, targetEl.nextSibling);
+    }
+  });
 }
 
 const LOG_ENDURANCE_TYPES = ["running", "cycling", "swimming", "triathlon", "walking", "rowing"];
@@ -1198,8 +1233,10 @@ function logTypeChanged() {
   const isEndurance = LOG_ENDURANCE_TYPES.includes(type);
   const strengthSec  = document.getElementById("log-strength-section");
   const enduranceSec = document.getElementById("log-endurance-section");
+  const wattsRow     = document.getElementById("log-watts-row");
   if (strengthSec)  strengthSec.style.display  = isEndurance ? "none" : "";
   if (enduranceSec) enduranceSec.style.display = isEndurance ? "" : "none";
+  if (wattsRow) wattsRow.style.display = type === "cycling" ? "" : "none";
   // Update discipline selectors visibility on existing segment rows
   document.querySelectorAll("#log-segment-entries .sw-segment-row").forEach(row => {
     const discDiv = row.querySelector(".seg-discipline-wrap");
@@ -1253,6 +1290,7 @@ function addExerciseRow() {
   row.className = "exercise-row";
 
   row.innerHTML = `
+    <span class="drag-handle" title="Drag to reorder">⠿</span>
     <div>
       <label>Exercise Name</label>
       <input type="text" class="ex-name" placeholder="e.g. Bench Press" />
@@ -1462,6 +1500,11 @@ function saveWorkout() {
     exercises,
   };
   if (segments) workout.segments = segments;
+  // Bike watt logging
+  if (type === "cycling") {
+    const watts = parseInt(document.getElementById("log-watts")?.value);
+    if (watts > 0) workout.avgWatts = watts;
+  }
 
   // Load existing workouts from localStorage (or start with an empty array)
   const workouts = loadWorkouts();
@@ -1470,7 +1513,7 @@ function saveWorkout() {
   workouts.unshift(workout);
 
   // Save the updated array back to localStorage as a JSON string
-  localStorage.setItem("workouts", JSON.stringify(workouts));
+  localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
 
   // Show success message and refresh the history display
   msg.style.color = "#22c55e";
@@ -1535,7 +1578,7 @@ function deleteWorkout(id) {
           try {
             const m = JSON.parse(localStorage.getItem("completedSessions") || "{}");
             delete m[w.completedSessionId];
-            localStorage.setItem("completedSessions", JSON.stringify(m));
+            localStorage.setItem("completedSessions", JSON.stringify(m)); if (typeof DB !== 'undefined') DB.syncKey('completedSessions');
           } catch {}
         }
       });
@@ -1543,20 +1586,20 @@ function deleteWorkout(id) {
     }
   }
 
-  localStorage.setItem("workouts", JSON.stringify(workouts));
+  localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
 
   // Clear completedSessions entries
   try {
     const meta = JSON.parse(localStorage.getItem("completedSessions") || "{}");
     if (deleted?.completedSessionId) delete meta[deleted.completedSessionId];
     delete meta[sessionKey];
-    localStorage.setItem("completedSessions", JSON.stringify(meta));
+    localStorage.setItem("completedSessions", JSON.stringify(meta)); if (typeof DB !== 'undefined') DB.syncKey('completedSessions');
   } catch {}
 
   // Clear workout rating for this workout
   try {
     const ratings = JSON.parse(localStorage.getItem("workoutRatings") || "{}");
-    if (ratings[String(id)]) { delete ratings[String(id)]; localStorage.setItem("workoutRatings", JSON.stringify(ratings)); }
+    if (ratings[String(id)]) { delete ratings[String(id)]; localStorage.setItem("workoutRatings", JSON.stringify(ratings)); if (typeof DB !== 'undefined') DB.syncKey('workoutRatings'); }
   } catch {}
 
   renderWorkoutHistory();
@@ -1598,7 +1641,7 @@ function toggleWorkoutStar(workoutId) {
   const already = list.find(s => s.fromLoggedId === String(workoutId));
 
   if (already) {
-    localStorage.setItem("savedWorkouts", JSON.stringify(list.filter(s => s.fromLoggedId !== String(workoutId))));
+    localStorage.setItem("savedWorkouts", JSON.stringify(list.filter(s => s.fromLoggedId !== String(workoutId)))); if (typeof DB !== 'undefined') DB.syncKey('savedWorkouts');
   } else {
     if (list.length >= SW_MAX) { alert(`Max ${SW_MAX} saved workouts reached. Remove one first.`); return; }
     list.unshift({
@@ -1612,7 +1655,7 @@ function toggleWorkoutStar(workoutId) {
       duration:        w.duration        || undefined,
       fromLoggedId:    String(workoutId),
     });
-    localStorage.setItem("savedWorkouts", JSON.stringify(list));
+    localStorage.setItem("savedWorkouts", JSON.stringify(list)); if (typeof DB !== 'undefined') DB.syncKey('savedWorkouts');
   }
   renderWorkoutHistory();
   if (typeof renderSavedWorkouts === "function") renderSavedWorkouts();
@@ -1631,7 +1674,7 @@ function starPlanSession(id, name, type, exercises, notes) {
     exercises:        exercises || [],
     fromScheduledId:  String(id),
   });
-  localStorage.setItem("savedWorkouts", JSON.stringify(list));
+  localStorage.setItem("savedWorkouts", JSON.stringify(list)); if (typeof DB !== 'undefined') DB.syncKey('savedWorkouts');
   if (typeof renderSavedWorkouts === "function") renderSavedWorkouts();
 }
 
@@ -1641,7 +1684,7 @@ function isPlanSessionStarred(id) {
 
 function unstarPlanSession(id) {
   const list = loadSavedWorkouts().filter(s => s.fromScheduledId !== String(id));
-  localStorage.setItem("savedWorkouts", JSON.stringify(list));
+  localStorage.setItem("savedWorkouts", JSON.stringify(list)); if (typeof DB !== 'undefined') DB.syncKey('savedWorkouts');
   if (typeof renderSavedWorkouts === "function") renderSavedWorkouts();
 }
 
@@ -1753,6 +1796,7 @@ function _renderWorkoutHistoryList(workouts) {
       const summaryHtml = _histSummary([
         totalMin ? `${Math.round(totalMin)} min` : "",
         `${w.segments.length} segment${w.segments.length !== 1 ? "s" : ""}`,
+        w.avgWatts ? `${w.avgWatts}W avg` : "",
       ]);
       const segTable = `<table class="exercise-table" style="margin-top:8px">
         <thead><tr><th>Phase</th><th>Duration</th><th>Zone</th></tr></thead>
@@ -1768,6 +1812,62 @@ function _renderWorkoutHistoryList(workouts) {
             <div class="history-header-right" onclick="event.stopPropagation()">${btnHtml}</div>
           </div>
           <div class="card-body">${notesHtml}${segTable}</div>
+        </div>`;
+    }
+
+    // Hyrox session
+    if ((w.type === "hyrox" || w.isHyrox) && w.exercises && w.exercises.length > 0) {
+      const stationCount = w.exercises.filter(e => !/^run\s/i.test(e.name)).length;
+      const summaryHtml = _histSummary([
+        w.duration ? `${w.duration} min` : "",
+        stationCount ? `${stationCount} station${stationCount !== 1 ? "s" : ""}` : "",
+      ]);
+      const _fmtMs = ms => {
+        const sec = Math.floor((ms || 0) / 1000);
+        const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+        return h > 0 ? `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}` : `${m}:${String(s).padStart(2,"0")}`;
+      };
+      const hd = w.hyroxData;
+      const hasTimes = hd || w.exercises.some(e => e.splitTime);
+      const splitSummary = hd ? `
+        <div style="display:flex;gap:12px;margin:8px 0 12px">
+          <div style="flex:1;text-align:center;padding:6px 8px;border-radius:6px;background:rgba(59,130,246,0.1)">
+            <div style="font-size:0.7rem;opacity:0.7">Running</div>
+            <div style="font-weight:700;font-variant-numeric:tabular-nums">${_fmtMs(hd.totalRunMs)}</div>
+          </div>
+          <div style="flex:1;text-align:center;padding:6px 8px;border-radius:6px;background:rgba(245,158,11,0.1)">
+            <div style="font-size:0.7rem;opacity:0.7">Stations</div>
+            <div style="font-weight:700;font-variant-numeric:tabular-nums">${_fmtMs(hd.totalStationMs)}</div>
+          </div>
+          <div style="flex:1;text-align:center;padding:6px 8px;border-radius:6px;background:rgba(34,197,94,0.1)">
+            <div style="font-size:0.7rem;opacity:0.7">Total</div>
+            <div style="font-weight:700;font-variant-numeric:tabular-nums">${_fmtMs(hd.totalMs)}</div>
+          </div>
+        </div>` : "";
+      const hyroxRows = w.exercises.map(e => {
+        const isRun = /^run\s/i.test(e.name);
+        const weightStr = e.weight ? escHtml(e.weight) : "";
+        return `<tr${isRun ? ' style="opacity:0.75"' : ""}>
+          <td>${escHtml(e.name)}</td>
+          <td>${escHtml(String(e.reps || "—"))}${weightStr ? ` <span style="opacity:0.6">@ ${weightStr}</span>` : ""}</td>
+          ${hasTimes ? `<td style="font-variant-numeric:tabular-nums;text-align:right">${e.splitTime ? _fmtMs(e.splitTime) : "—"}</td>` : ""}
+        </tr>`;
+      }).join("");
+      const hyroxHeader = hasTimes
+        ? `<th>Station</th><th>Distance</th><th style="text-align:right">Time</th>`
+        : `<th>Station</th><th>Distance</th>`;
+      const hyroxTable = `<table class="exercise-table"><thead><tr>${hyroxHeader}</tr></thead><tbody>${hyroxRows}</tbody></table>`;
+      return `
+        <div class="history-entry collapsible is-collapsed" id="${cardId}">
+          <div class="history-header card-toggle" onclick="toggleSection('${cardId}')">
+            <div class="history-header-left">
+              <span class="workout-tag tag-${w.type}">${w.type}</span>
+              <span class="history-date">${formatDate(w.date)}</span>
+              ${nameHtml}${summaryHtml}
+            </div>
+            <div class="history-header-right" onclick="event.stopPropagation()">${btnHtml}</div>
+          </div>
+          <div class="card-body">${notesHtml}${splitSummary}${hyroxTable}</div>
         </div>`;
     }
 
@@ -1796,6 +1896,7 @@ function _renderWorkoutHistoryList(workouts) {
     const summaryHtml = _histSummary([
       w.duration ? `${w.duration} min` : "",
       w.distance ? String(w.distance) : "",
+      w.avgWatts ? `${w.avgWatts}W avg` : "",
     ]);
     return `
       <div class="history-entry collapsible is-collapsed" id="${cardId}">
@@ -1850,8 +1951,17 @@ function _normalizeWeightDisplay(raw) {
 
 function buildExerciseTableHTML(exercises, opts) {
   const isHiit = opts?.hiit || false;
-  const cols = isHiit ? 3 : 4;
-  const headerRow = isHiit
+  const isHyrox = opts?.hyrox || false;
+  const _fmtSplitMs = ms => {
+    const sec = Math.floor((ms || 0) / 1000);
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    return h > 0 ? `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}` : `${m}:${String(s).padStart(2,"0")}`;
+  };
+  const hyroxHasTimes = isHyrox && exercises && exercises.some(e => e.splitTime);
+  const cols = isHyrox ? (hyroxHasTimes ? 3 : 2) : isHiit ? 3 : 4;
+  const headerRow = isHyrox
+    ? (hyroxHasTimes ? `<th>Station</th><th>Distance</th><th style="text-align:right">Time</th>` : `<th>Station</th><th>Distance</th>`)
+    : isHiit
     ? `<th>Exercise</th><th>Reps / Time / Distance</th><th>Weight</th>`
     : `<th>Exercise</th><th>Sets</th><th>Reps</th><th>Weight</th>`;
 
@@ -1897,7 +2007,14 @@ function buildExerciseTableHTML(exercises, opts) {
       rows += `<tr class="superset-end-row"><td colspan="${cols}"></td></tr>`;
     } else {
       const e = seg.items[0];
-      if (isHiit) {
+      if (isHyrox) {
+        const _isRun = /^run\s/i.test(e.name);
+        const _wtStr = e.weight ? ` <span style="opacity:0.6">@ ${escHtml(e.weight)}</span>` : "";
+        rows += `<tr${_isRun ? ' style="opacity:0.75"' : ""}>`;
+        rows += `<td>${escHtml(e.name)}</td><td>${escHtml(String(e.reps||"—"))}${_wtStr}</td>`;
+        if (hyroxHasTimes) rows += `<td style="font-variant-numeric:tabular-nums;text-align:right">${e.splitTime ? _fmtSplitMs(e.splitTime) : "—"}</td>`;
+        rows += `</tr>`;
+      } else if (isHiit) {
         rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(String(e.reps||"—"))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight)||"—")}</td></tr>`;
       } else {
         rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(String(e.sets||"—"))}</td><td>${escHtml(String(e.reps||"—"))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight)||"—")}</td></tr>`;
@@ -2025,6 +2142,23 @@ function saveWorkoutSchedule(type, selectedDays, level, startDate, totalWeeks, r
           hiitMeta:    { format: s.format, rounds: s.rounds, restBetweenRounds: s.restBetweenRounds || null },
           source:      "generated",
         };
+      } else if (type === "bodyweight") {
+        const bwFocuses = ["push", "pull", "legs"];
+        const focus = bwFocuses[absSlot % 3];
+        // Alternate block index for variety (same pattern as weightlifting alt)
+        const bwLib = blockIndex % 2 === 0 ? BODYWEIGHT_LIBRARY : BODYWEIGHT_LIBRARY;
+        const exercises = filterAvoidedExercises(
+          (bwLib[focus] || {})[level] || (bwLib[focus] || {}).beginner || []
+        );
+        entry = {
+          id:          `ws-${dateStr}-${type}-${focus}-b${blockIndex}`,
+          date:        dateStr,
+          type,
+          level,
+          sessionName: `${capitalize(focus)} (Bodyweight)`,
+          exercises,
+          source:      "generated",
+        };
       } else {
         // Fall back to beginner if this type doesn't have the requested level
         let sessions   = ((lib[type] || {})[level]) || ((lib[type] || {})["beginner"]) || [];
@@ -2071,7 +2205,7 @@ function saveWorkoutSchedule(type, selectedDays, level, startDate, totalWeeks, r
     seen.add(key);
     return true;
   });
-  localStorage.setItem("workoutSchedule", JSON.stringify(deduped));
+  localStorage.setItem("workoutSchedule", JSON.stringify(deduped)); if (typeof DB !== 'undefined') DB.syncSchedule();
   return schedule.length;
 }
 
@@ -2133,7 +2267,7 @@ function saveEnduranceTrainingSchedule(type, dows, level, startDate, totalWeeks,
     seen.add(key);
     return true;
   });
-  localStorage.setItem("workoutSchedule", JSON.stringify(deduped));
+  localStorage.setItem("workoutSchedule", JSON.stringify(deduped)); if (typeof DB !== 'undefined') DB.syncSchedule();
   return schedule.length;
 }
 
@@ -2297,10 +2431,15 @@ function swTypeChanged() {
   if (strengthSec) strengthSec.style.display = isEndurance ? "none" : "";
   if (enduranceSec) enduranceSec.style.display = isEndurance ? "" : "none";
   if (hiitMeta) hiitMeta.style.display = isHiit ? "" : "none";
-  // Rebuild exercise rows when switching to/from HIIT
+  // Rebuild exercise rows when switching to/from HIIT (header changes)
   const entries = document.getElementById("sw-exercise-entries");
-  if (entries && entries.children.length === 0) {
-    addSwExerciseRow();
+  if (entries) {
+    // Clear header rows when type changes
+    entries.querySelectorAll(".exercise-row-header").forEach(h => h.remove());
+    if (entries.querySelectorAll(".exercise-row").length === 0) {
+      entries.innerHTML = "";
+      addSwExerciseRow();
+    }
   }
   // Update discipline selectors visibility and grid class on existing segment rows
   document.querySelectorAll("#sw-segment-entries .sw-segment-row").forEach(row => {
@@ -2362,20 +2501,33 @@ function addSwSegmentRow(seg) {
 function addSwExerciseRow() {
   const container = document.getElementById("sw-exercise-entries");
   const isHiit = document.getElementById("sw-type")?.value === "hiit";
+
+  // Add a header row if this is the first exercise
+  if (container.children.length === 0) {
+    const header = document.createElement("div");
+    header.className = "exercise-row-header" + (isHiit ? " hiit-row-header" : "");
+    if (isHiit) {
+      header.innerHTML = `<span>Exercise</span><span>Reps / Time</span><span>Weight</span><span></span>`;
+    } else {
+      header.innerHTML = `<span>Exercise</span><span>Sets</span><span>Reps</span><span>Weight</span><span></span>`;
+    }
+    container.appendChild(header);
+  }
+
   const row = document.createElement("div");
-  row.className = "exercise-row" + (isHiit ? " hiit-row" : "");
+  row.className = "exercise-row exercise-row--compact" + (isHiit ? " hiit-row" : "");
   if (isHiit) {
     row.innerHTML = `
-      <div><label>Exercise</label><input type="text" class="ex-name" placeholder="e.g. Burpees, Row 500m" /></div>
-      <div><label>Reps / Time / Distance</label><input type="text" class="ex-reps" placeholder="e.g. 10, 45s, 500m" /></div>
-      <div><label>Weight</label><input type="text" class="ex-weight" placeholder="optional" /></div>
+      <input type="text" class="ex-name" placeholder="e.g. Burpees" />
+      <input type="text" class="ex-reps" placeholder="e.g. 10, 45s" />
+      <input type="text" class="ex-weight" placeholder="optional" />
       <button class="remove-exercise-btn" onclick="this.parentElement.remove()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   } else {
     row.innerHTML = `
-      <div><label>Exercise Name</label><input type="text" class="ex-name" placeholder="e.g. Bench Press" /></div>
-      <div><label>Sets</label><input type="number" class="ex-sets" placeholder="3" min="1" /></div>
-      <div><label>Reps</label><input type="number" class="ex-reps" placeholder="10" min="1" /></div>
-      <div><label>Weight</label><input type="text" class="ex-weight" placeholder="45lbs" /></div>
+      <input type="text" class="ex-name" placeholder="e.g. Bench Press" />
+      <input type="number" class="ex-sets" placeholder="3" min="1" />
+      <input type="number" class="ex-reps" placeholder="10" min="1" />
+      <input type="text" class="ex-weight" placeholder="45lbs" />
       <button class="remove-exercise-btn" onclick="this.parentElement.remove()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   }
   _initRowDrag(row, container);
@@ -2455,7 +2607,7 @@ function saveSavedWorkout() {
     list.unshift(entry);
   }
 
-  localStorage.setItem("savedWorkouts", JSON.stringify(list));
+  localStorage.setItem("savedWorkouts", JSON.stringify(list)); if (typeof DB !== 'undefined') DB.syncKey('savedWorkouts');
   closeSaveWorkoutModal();
   renderSavedWorkouts();
 }
@@ -2463,7 +2615,7 @@ function saveSavedWorkout() {
 function deleteSavedWorkout(id) {
   if (!confirm("Delete this saved workout?")) return;
   const list = loadSavedWorkouts().filter(s => s.id !== id);
-  localStorage.setItem("savedWorkouts", JSON.stringify(list));
+  localStorage.setItem("savedWorkouts", JSON.stringify(list)); if (typeof DB !== 'undefined') DB.syncKey('savedWorkouts');
   renderSavedWorkouts();
 }
 
@@ -2531,7 +2683,7 @@ function confirmAssignSavedWorkout(id) {
   if (sw.duration)         entry.duration         = sw.duration;
   if (sw.hiitMeta)         entry.hiitMeta         = sw.hiitMeta;
   workouts.unshift(entry);
-  localStorage.setItem("workouts", JSON.stringify(workouts));
+  localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
 
   if (msgEl) { msgEl.textContent = `Added to ${dateStr}`; msgEl.style.color = "var(--color-success)"; }
   setTimeout(() => {
@@ -2932,7 +3084,7 @@ function saveCommunityWorkout(communityId) {
   const saved = JSON.parse(localStorage.getItem("savedWorkouts") || "[]");
   if (saved.some(s => s.communityId === communityId)) {
     const updated = saved.filter(s => s.communityId !== communityId);
-    localStorage.setItem("savedWorkouts", JSON.stringify(updated));
+    localStorage.setItem("savedWorkouts", JSON.stringify(updated)); if (typeof DB !== 'undefined') DB.syncKey('savedWorkouts');
     renderCommunityWorkouts();
     return;
   }
@@ -2953,7 +3105,7 @@ function saveCommunityWorkout(communityId) {
   if (cw.segments)  entry.segments  = JSON.parse(JSON.stringify(cw.segments));
 
   saved.push(entry);
-  localStorage.setItem("savedWorkouts", JSON.stringify(saved));
+  localStorage.setItem("savedWorkouts", JSON.stringify(saved)); if (typeof DB !== 'undefined') DB.syncKey('savedWorkouts');
   renderCommunityWorkouts();
 }
 
@@ -3033,7 +3185,7 @@ function submitShareWorkout() {
   // Save to localStorage user-shared workouts list
   const shared = JSON.parse(localStorage.getItem("userSharedWorkouts") || "[]");
   shared.push(communityEntry);
-  localStorage.setItem("userSharedWorkouts", JSON.stringify(shared));
+  localStorage.setItem("userSharedWorkouts", JSON.stringify(shared)); if (typeof DB !== 'undefined') DB.syncKey('userSharedWorkouts');
 
   closeShareWorkout();
   renderWorkoutHistory();
@@ -3046,7 +3198,7 @@ function unshareWorkout(id) {
   let shared = [];
   try { shared = JSON.parse(localStorage.getItem("userSharedWorkouts") || "[]"); } catch {}
   shared = shared.filter(w => w.id !== id);
-  localStorage.setItem("userSharedWorkouts", JSON.stringify(shared));
+  localStorage.setItem("userSharedWorkouts", JSON.stringify(shared)); if (typeof DB !== 'undefined') DB.syncKey('userSharedWorkouts');
   renderCommunityWorkouts();
 }
 
@@ -3195,7 +3347,7 @@ function saveCreateCommunityWorkout() {
 
   const shared = JSON.parse(localStorage.getItem("userSharedWorkouts") || "[]");
   shared.push(entry);
-  localStorage.setItem("userSharedWorkouts", JSON.stringify(shared));
+  localStorage.setItem("userSharedWorkouts", JSON.stringify(shared)); if (typeof DB !== 'undefined') DB.syncKey('userSharedWorkouts');
 
   closeCreateCommunityWorkout();
   renderCommunityWorkouts();

@@ -1,0 +1,41 @@
+{
+  "name": "IronZ Fitness",
+  "short_name": "IronZ",
+  "description": "Your all-in-one triathlon and fitness training companion",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#818cf8",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Log Water",
+      "short_name": "Water",
+      "url": "./?action=hydration",
+      "description": "Quick-add a bottle of water"
+    },
+    {
+      "name": "Log Meal",
+      "short_name": "Meal",
+      "url": "./?action=meal-manual",
+      "description": "Log a meal manually"
+    },
+    {
+      "name": "Today's Plan",
+      "short_name": "Today",
+      "url": "./?action=today",
+      "description": "See today's training plan"
+    }
+  ]
+}

@@ -5,6 +5,7 @@ const SURVEY_SPORT_OPTIONS = [
   { value: "running",       icon: ICONS.run,     label: "Running",       desc: "Road races from 5K to marathon" },
   { value: "triathlon",     icon: ICONS.swim,    label: "Triathlon",     desc: "Swim · Bike · Run events" },
   { value: "cycling",       icon: ICONS.bike,    label: "Cycling",       desc: "Gran fondos, century rides & more" },
+  { value: "hyrox",         icon: ICONS.activity, label: "Hyrox",        desc: "Run + functional fitness race" },
   { value: "just-training", icon: ICONS.activity, label: "Other / Mixed Training", desc: "No race goal — mix of activities" },
 ];
 
@@ -22,6 +23,8 @@ const SURVEY_RACE_OPTIONS = [
   { value: "granFondo",     sport: "cycling",       icon: ICONS.trophy,  label: "Gran Fondo",         desc: "Timed mass-start road ride" },
   { value: "life-cycling",  sport: "cycling",       icon: ICONS.activity, label: "Training for Life", desc: "No race — just stay fit and ride" },
   { value: "life-swimming", sport: "swimming",      icon: ICONS.activity, label: "Training for Life", desc: "No race — just stay fit and swim" },
+  { value: "hyrox",         sport: "hyrox",         icon: ICONS.activity, label: "Hyrox",              desc: "8x 1km run + 8 functional stations" },
+  { value: "hyroxDoubles",  sport: "hyrox",         icon: ICONS.activity, label: "Hyrox Doubles",      desc: "Partner Hyrox event" },
   { value: "just-training", sport: "just-training", icon: ICONS.activity, label: "Other / Mixed Training", desc: "No race goal — build strength and fitness year-round" },
 ];
 
@@ -108,6 +111,7 @@ function _getSurveyZoneSports() {
   if (s === "running" || s === "triathlon") sports.push("running");
   if (s === "cycling" || s === "triathlon") sports.push("biking");
   if (s === "triathlon") sports.push("swimming");
+  if (s === "hyrox") { sports.push("running"); sports.push("strength"); }
   if (s === "strength" || isEffectivelyStrength()) sports.push("strength");
   // Just-training: check individual activities
   if (s === "just-training") {
@@ -118,7 +122,21 @@ function _getSurveyZoneSports() {
   }
   // Gym strength add-on for race types
   if (surveyData.gymStrength && !sports.includes("strength")) sports.push("strength");
-  return sports;
+
+  // Filter out sports that already have zones saved
+  try {
+    const saved = JSON.parse(localStorage.getItem("trainingZones")) || {};
+    return sports.filter(sport => {
+      const data = saved[sport];
+      if (!data) return true; // no zones saved — show in survey
+      // Check if zones actually have meaningful data
+      if (sport === "running" && data.zones) return false;
+      if (sport === "biking" && data.ftp) return false;
+      if (sport === "swimming" && data.zones) return false;
+      if (sport === "strength" && (data.bench || data.squat || data.deadlift)) return false;
+      return true;
+    });
+  } catch { return sports; }
 }
 
 function _getMixedFlowSteps() {
@@ -437,12 +455,6 @@ async function _ironzRunAi(dayIdx) {
   const msg = document.getElementById(`ironz-ai-msg-${dayIdx}`);
   if (!desc) { if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = "Describe the session."; } return; }
 
-  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
-  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
-    if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = "API key not set in config.js."; }
-    return;
-  }
-
   if (msg) { msg.style.color = "var(--color-text-muted)"; msg.textContent = "Generating..."; }
 
   let profileCtx = "";
@@ -461,18 +473,10 @@ async function _ironzRunAi(dayIdx) {
   } catch {}
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1024,
-        messages: [{ role: "user", content: `You are a personal trainer. Generate a single workout session. ${profileCtx}${avoidCtx}
+    const data = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      messages: [{ role: "user", content: `You are a personal trainer. Generate a single workout session. ${profileCtx}${avoidCtx}
 
 The athlete wants: "${desc}"
 
@@ -485,11 +489,7 @@ Return ONLY valid JSON (no markdown):
 
 For cardio, use: {"name":"Session Name","type":"running","details":"description of the run/ride/swim"}
 Be specific with sets, reps, and weights.` }]
-      })
     });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
 
     const rawText = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
     const session = JSON.parse(rawText.replace(/```json|```/g, "").trim());
@@ -554,13 +554,13 @@ function _ironzSavePlan() {
   let existing = [];
   try { existing = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
   const merged = [...existing, ...schedule];
-  localStorage.setItem("workoutSchedule", JSON.stringify(merged));
+  localStorage.setItem("workoutSchedule", JSON.stringify(merged)); if (typeof DB !== 'undefined') DB.syncSchedule();
 
   // Save plan metadata
   let plans = [];
   try { plans = JSON.parse(localStorage.getItem("importedPlans")) || []; } catch {}
   plans.push({ id: planId, name: planName, startDate, weeks, createdAt: new Date().toISOString() });
-  localStorage.setItem("importedPlans", JSON.stringify(plans));
+  localStorage.setItem("importedPlans", JSON.stringify(plans)); if (typeof DB !== 'undefined') DB.syncKey('importedPlans');
 
   if (msg) { msg.style.color = "var(--color-success, #22c55e)"; msg.textContent = `${schedule.length} sessions saved to calendar!`; }
   _ironzWeekPlan = null;
@@ -574,12 +574,6 @@ async function _customPlanIronZ() {
   const prompt = (document.getElementById("sv-ironz-prompt")?.value || "").trim();
   const msg = document.getElementById("sv-ironz-msg");
   if (!prompt) { if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = "Please describe the plan you want."; } return; }
-
-  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
-  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
-    if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = "API key not set. Open config.js and paste your Anthropic API key."; }
-    return;
-  }
 
   const startDate = document.getElementById("sv-ironz-start")?.value || "";
   const weeks = parseInt(document.getElementById("sv-ironz-weeks")?.value) || 8;
@@ -613,20 +607,12 @@ async function _customPlanIronZ() {
   } catch {}
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 4096,
-        messages: [{
-          role: "user",
-          content: `You are a personal trainer. Create a ${weeks}-week training plan. ${profileCtx}${refCtx}${avoidCtx}
+    const data = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 4096,
+      messages: [{
+        role: "user",
+        content: `You are a personal trainer. Create a ${weeks}-week training plan. ${profileCtx}${refCtx}${avoidCtx}
 
 The athlete says: "${prompt}"
 
@@ -646,12 +632,8 @@ Week 2
 ...
 
 Be specific with exercises, sets, reps, weights, distances, and paces. Include warm-up and cool-down notes.`
-        }]
-      })
+      }]
     });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
 
     const planText = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
 
@@ -681,12 +663,6 @@ async function svWelcomeAskIronZ() {
   if (!prompt) return;
 
   const msg = document.getElementById("sv-welcome-ironz-msg");
-  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
-  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
-    if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = "API key not set. Open config.js and paste your Anthropic API key."; }
-    return;
-  }
-
   if (msg) { msg.style.color = "var(--color-text-muted)"; msg.textContent = "Generating your plan..."; }
   if (input) input.disabled = true;
 
@@ -724,20 +700,12 @@ async function svWelcomeAskIronZ() {
   } catch {}
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 4096,
-        messages: [{
-          role: "user",
-          content: `You are a personal trainer. Create a training plan. ${profileCtx}${refCtx}${avoidCtx}
+    const data = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 4096,
+      messages: [{
+        role: "user",
+        content: `You are a personal trainer. Create a training plan. ${profileCtx}${refCtx}${avoidCtx}
 
 The athlete says: "${prompt}"
 
@@ -757,12 +725,8 @@ Week 2
 ...
 
 Be specific with exercises, sets, reps, weights, distances, and paces. Include warm-up and cool-down notes.`
-        }]
-      })
+      }]
     });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
 
     const planText = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
 
@@ -1244,7 +1208,9 @@ function buildSurveyRaceDate() {
 }
 
 function buildSurveyLongDay() {
-  const sessionLabel = surveyData.sport === "running" ? "long run" : "long ride";
+  const sessionLabel = surveyData.sport === "running" ? "long run"
+    : surveyData.sport === "hyrox" ? "long session"
+    : "long ride";
   const days = [
     { dow: 0, label: "Sunday" },
     { dow: 1, label: "Monday" },
@@ -1442,13 +1408,31 @@ function buildSurveyDaysPerWeek() {
       </div>`;
   }
 
-  // All other sports: card to select count, then show day picker
+  // Sport-specific day recommendations
+  const sportDayRecs = {
+    triathlon: { beginner: 4, intermediate: 5, advanced: 6,
+      context: { beginner: "Beginner triathletes should start with 4 days — enough to touch all 3 sports without burnout. You'll swim, bike, and run each once, plus one extra session.", intermediate: "5 days gives room for two sessions in your weakest discipline while covering all three sports each week.", advanced: "6 days allows double sessions in key sports and dedicated brick workouts for race-specific preparation." }},
+    cycling: { beginner: 3, intermediate: 4, advanced: 5,
+      context: { beginner: "3 rides per week builds a strong aerobic base while giving your body time to adapt to time in the saddle.", intermediate: "4 days adds a second quality ride (intervals or tempo) alongside your long ride and easy spins.", advanced: "5 days provides high volume with structured intensity — key for FTP development." }},
+    swimming: { beginner: 3, intermediate: 4, advanced: 5,
+      context: { beginner: "3 sessions per week is ideal to build technique and feel for the water without shoulder overuse.", intermediate: "4 swims adds enough frequency to develop stroke efficiency and aerobic capacity.", advanced: "5 sessions allows dedicated drill work, threshold sets, and open water practice." }},
+    hyrox: { beginner: 4, intermediate: 5, advanced: 6,
+      context: { beginner: "4 days covers running, functional strength, and one combined session — the essentials for Hyrox preparation.", intermediate: "5 days adds a second running session and more station-specific work to build race capacity.", advanced: "6 days allows full Hyrox simulations, dedicated running volume, and heavy functional training." }},
+  };
+
+  const sportRec = sportDayRecs[surveyData.sport];
+  const recDays = sportRec ? (sportRec[surveyData.level] || sportRec.intermediate) : null;
+  const recContext = sportRec?.context?.[surveyData.level] || sportRec?.context?.intermediate || "";
+
+  // Pre-fill with recommendation if not yet set
+  if (recDays && !surveyData.daysPerWeek) surveyData.daysPerWeek = recDays;
+
   const opts = [
     { value: 3, label: "3 days / week", desc: "Recovery-focused, manageable volume" },
     { value: 4, label: "4 days / week", desc: "Balanced training with rest days built in" },
     { value: 5, label: "5 days / week", desc: "Higher commitment, strong progression" },
     { value: 6, label: "6 days / week", desc: "High-volume, competitive preparation" },
-    { value: 7, label: "7 days / week", desc: isJustTrainingSport() ? "Maximum frequency — train every day of the week" : "Full triathlon load — swim, bike, run every day of the week" },
+    { value: 7, label: "7 days / week", desc: isJustTrainingSport() ? "Maximum frequency — train every day" : "Full training load — high volume every day" },
   ];
 
   if (!surveyData.preferredDays && surveyData.daysPerWeek) {
@@ -1466,12 +1450,13 @@ function buildSurveyDaysPerWeek() {
   return `
     <div class="sv-question-wrap">
       <h2 class="sv-question">How many days can you train each week?</h2>
-      <p class="sv-hint">Be realistic — a plan you can stick to beats one you can't.</p>
+      <p class="sv-hint">${recContext || "Be realistic — a plan you can stick to beats one you can't."}</p>
+      ${recDays ? `<p class="sv-hint" style="font-weight:600;color:var(--color-accent);margin-top:4px">Recommended for ${surveyData.level || "your"} level: ${recDays} days/week</p>` : ""}
       <div class="sv-option-list">
         ${opts.map(o => `
-          <button class="sv-option-card ${surveyData.daysPerWeek === o.value ? "is-selected" : ""}"
+          <button class="sv-option-card ${surveyData.daysPerWeek === o.value ? "is-selected" : ""}${o.value === recDays ? " sv-recommended" : ""}"
             onclick="svSetDayCount(${o.value}); renderSurveyStep()">
-            <span class="sv-option-icon sv-days-num">${o.value}</span>
+            <span class="sv-option-icon sv-days-num">${o.value}${o.value === recDays ? '<span class="sv-rec-badge">Rec</span>' : ""}</span>
             <div class="sv-option-text">
               <div class="sv-option-label">${o.label}</div>
               <div class="sv-option-desc">${o.desc}</div>
@@ -2021,6 +2006,7 @@ function submitSurveyPlan() {
       const profile = JSON.parse(localStorage.getItem("profile")) || {};
       profile.daysPerWeek = surveyData.daysPerWeek;
       localStorage.setItem("profile", JSON.stringify(profile));
+      if (typeof DB !== 'undefined') DB.profile.save(profile).catch(() => {});
     } catch { /* ignore */ }
 
     localStorage.setItem("surveyComplete", "1");
@@ -2056,22 +2042,39 @@ function submitSurveyPlan() {
     }
 
     if (surveyData.yogaTypes.length > 0) {
-      localStorage.setItem("yogaTypes", JSON.stringify(surveyData.yogaTypes));
+      localStorage.setItem("yogaTypes", JSON.stringify(surveyData.yogaTypes)); if (typeof DB !== 'undefined') DB.syncKey('yogaTypes');
     }
 
     const msg = document.getElementById("sv-gen-msg");
-    if (msg) msg.textContent = `✓ ${count} ${label} added to your calendar!`;
 
-    setTimeout(() => {
-      closeSurvey();
-      currentWeekStart = getWeekStart(new Date());
-      renderCalendar();
-      selectDay(getTodayString());
-      if (typeof renderRaceEvents     === "function") renderRaceEvents();
-      if (typeof renderTrainingInputs === "function") renderTrainingInputs();
-      if (typeof renderGreeting       === "function") renderGreeting();
-      if (typeof renderZones          === "function") renderZones();
-    }, 1100);
+    // Determine plan type for philosophy
+    const _triTypes = ["ironman", "halfIronman", "olympic", "sprint"];
+    const _runTypes = ["marathon", "halfMarathon", "tenK", "fiveK"];
+    const _cycleTypes = ["centuryRide", "granFondo"];
+    const _planType = _triTypes.includes(surveyData.raceType) ? "triathlon"
+      : _runTypes.includes(surveyData.raceType) ? "running"
+      : _cycleTypes.includes(surveyData.raceType) ? "cycling"
+      : surveyData.sport === "hyrox" ? "general"
+      : "general";
+
+    if (msg) msg.innerHTML = `
+      <div style="text-align:center;padding:8px 0">
+        <div style="font-weight:700;font-size:1rem;color:var(--color-success);margin-bottom:12px">${count} ${label} added to your calendar!</div>
+        <p style="color:var(--color-text-muted);font-size:0.85rem;margin:0 0 14px">Want to understand why your plan is structured this way?</p>
+        <div style="display:flex;gap:8px;justify-content:center">
+          <button class="btn-primary" onclick="closeSurvey();if(typeof showTrainingPhilosophy==='function')showTrainingPhilosophy('${_planType}')">See Training Philosophy</button>
+          <button class="btn-secondary" onclick="closeSurvey()">Skip</button>
+        </div>
+      </div>`;
+
+    currentWeekStart = getWeekStart(new Date());
+    renderCalendar();
+    selectDay(getTodayString());
+    if (typeof renderRaceEvents     === "function") renderRaceEvents();
+    if (typeof renderTrainingInputs === "function") renderTrainingInputs();
+    if (typeof renderGreeting       === "function") renderGreeting();
+    if (typeof renderZones          === "function") renderZones();
+    if (typeof renderTrainingBlocksSection === "function") renderTrainingBlocksSection();
   };
 
   // Strength-specific: set up split data for saveWorkoutSchedule
@@ -2168,18 +2171,18 @@ function submitSurveyPlan() {
 
   // Handle gym/strength toggle based on survey answer
   if (surveyData.gymStrength === true) {
-    localStorage.setItem("gymStrengthEnabled", "1");
+    localStorage.setItem("gymStrengthEnabled", "1"); if (typeof DB !== 'undefined') DB.syncKey('gymStrengthEnabled');
     const gymDowMap = { 1: [2], 2: [2, 5], 3: [2, 4, 6] };
     const gymDows = gymDowMap[surveyData.gymDays] || [2, 5];
     if (typeof saveWorkoutSchedule === "function") {
       // Remove any existing generated weightlifting before re-adding so re-running
       // the survey never stacks duplicate sessions on the same dates.
       const ws = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
-      localStorage.setItem("workoutSchedule", JSON.stringify(ws.filter(e => !(e.source === "generated" && e.type === "weightlifting"))));
+      localStorage.setItem("workoutSchedule", JSON.stringify(ws.filter(e => !(e.source === "generated" && e.type === "weightlifting")))); if (typeof DB !== 'undefined') DB.syncSchedule();
       saveWorkoutSchedule("weightlifting", gymDows, surveyData.level || "intermediate", getTodayString(), 104, 4, true);
     }
   } else {
-    localStorage.setItem("gymStrengthEnabled", "0");
+    localStorage.setItem("gymStrengthEnabled", "0"); if (typeof DB !== 'undefined') DB.syncKey('gymStrengthEnabled');
   }
   if (typeof initGymStrengthToggle === "function") initGymStrengthToggle();
 

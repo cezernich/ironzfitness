@@ -28,7 +28,7 @@ function getHydrationSettings() {
 }
 
 function saveHydrationSettingsData(settings) {
-  localStorage.setItem("hydrationSettings", JSON.stringify(settings));
+  localStorage.setItem("hydrationSettings", JSON.stringify(settings)); if (typeof DB !== 'undefined') DB.syncKey('hydrationSettings');
 }
 
 function getBaseHydrationTarget() {
@@ -69,10 +69,23 @@ function getHydrationBreakdown() {
   const baseOz = getBaseHydrationTarget();
   const workoutInfo = getTodayWorkoutInfo();
   const bonusOz = workoutInfo ? workoutInfo.bonusOz : 0;
-  const reason = workoutInfo
-    ? `${baseOz} base + ${bonusOz} for your ${workoutInfo.sessionName}`
-    : null;
-  return { baseOz, bonusOz, totalOz: baseOz + bonusOz, reason };
+  // Include sauna bonus if any
+  let saunaBonus = 0;
+  try {
+    const today = typeof getTodayString === "function" ? getTodayString() : new Date().toISOString().slice(0, 10);
+    const log = JSON.parse(localStorage.getItem("hydrationLog") || "{}");
+    saunaBonus = (log[today] && log[today].saunaBonus) || 0;
+  } catch {}
+  const totalBonus = bonusOz + saunaBonus;
+  let reason = null;
+  if (workoutInfo && saunaBonus > 0) {
+    reason = `${baseOz} base + ${bonusOz} workout + ${saunaBonus} sauna`;
+  } else if (workoutInfo) {
+    reason = `${baseOz} base + ${bonusOz} for your ${workoutInfo.sessionName}`;
+  } else if (saunaBonus > 0) {
+    reason = `${baseOz} base + ${saunaBonus} for sauna session`;
+  }
+  return { baseOz, bonusOz: totalBonus, totalOz: baseOz + totalBonus, reason };
 }
 
 function getHydrationTarget() {
@@ -89,7 +102,7 @@ function isHydrationEnabled() {
 }
 
 function setHydrationEnabled(enabled) {
-  localStorage.setItem("hydrationEnabled", enabled ? "1" : "0");
+  localStorage.setItem("hydrationEnabled", enabled ? "1" : "0"); if (typeof DB !== 'undefined') DB.syncKey('hydrationEnabled');
   applyHydrationToggle();
 }
 
@@ -159,7 +172,7 @@ function logWater(beverageType) {
   else day.beverages.push({ type, count: 1 });
 
   log[today] = day;
-  localStorage.setItem("hydrationLog", JSON.stringify(log));
+  localStorage.setItem("hydrationLog", JSON.stringify(log)); if (typeof DB !== 'undefined') DB.syncKey('hydrationLog');
 
   renderHydration();
 
@@ -196,7 +209,7 @@ function undoWater() {
   }
 
   log[today] = day;
-  localStorage.setItem("hydrationLog", JSON.stringify(log));
+  localStorage.setItem("hydrationLog", JSON.stringify(log)); if (typeof DB !== 'undefined') DB.syncKey('hydrationLog');
   renderHydration();
 
   if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
@@ -403,6 +416,22 @@ function saveHydrationSettings() {
   saveHydrationSettingsData({ bottleSize, dailyTargetOz });
   closeHydrationSettings();
   renderHydration();
+}
+
+/* =====================================================================
+   SAUNA HYDRATION ADJUSTMENT
+   ===================================================================== */
+
+function adjustHydrationForSauna(dateStr, durationMinutes) {
+  // ~1.5 oz additional hydration per minute of sauna/steam exposure
+  const additionalOz = Math.round(durationMinutes * 1.5);
+  try {
+    const log = JSON.parse(localStorage.getItem("hydrationLog")) || {};
+    const dayLog = log[dateStr] || { total: 0, beverages: [], saunaBonus: 0 };
+    dayLog.saunaBonus = (dayLog.saunaBonus || 0) + additionalOz;
+    log[dateStr] = dayLog;
+    localStorage.setItem("hydrationLog", JSON.stringify(log)); if (typeof DB !== 'undefined') DB.syncKey('hydrationLog');
+  } catch {}
 }
 
 /* =====================================================================

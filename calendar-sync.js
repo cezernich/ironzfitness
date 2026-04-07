@@ -216,7 +216,7 @@ async function importBusyTimes() {
       }
     });
 
-    localStorage.setItem("dayRestrictions", JSON.stringify(restrictions));
+    localStorage.setItem("dayRestrictions", JSON.stringify(restrictions)); if (typeof DB !== 'undefined') DB.syncKey('dayRestrictions');
     if (typeof renderCalendar === "function") renderCalendar();
 
     if (syncStatus) syncStatus.textContent = `Imported ${imported} busy day restrictions`;

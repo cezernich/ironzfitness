@@ -1175,7 +1175,7 @@ function savePR() {
   if (!time) return;
   const prs = loadPRs();
   prs[distance] = { time, date: getTodayString() };
-  localStorage.setItem("personalRecords", JSON.stringify(prs));
+  localStorage.setItem("personalRecords", JSON.stringify(prs)); if (typeof DB !== 'undefined') DB.syncKey('personalRecords');
   document.getElementById("pr-time").value = "";
   renderSavedPRs();
 }
@@ -1183,7 +1183,7 @@ function savePR() {
 function deletePR(distance) {
   const prs = loadPRs();
   delete prs[distance];
-  localStorage.setItem("personalRecords", JSON.stringify(prs));
+  localStorage.setItem("personalRecords", JSON.stringify(prs)); if (typeof DB !== 'undefined') DB.syncKey('personalRecords');
   renderSavedPRs();
 }
 

@@ -59,7 +59,7 @@ function getDaysSinceLastActivity() {
   meals.forEach(m => allDates.add(m.date));
   Object.keys(hydLog).forEach(d => { if (hydLog[d] > 0) allDates.add(d); });
 
-  if (allDates.size === 0) return 999;
+  if (allDates.size === 0) return 7; // No history — treat as ~1 week gap
 
   const sorted = [...allDates].sort().reverse();
   const lastDate = new Date(sorted[0] + "T12:00:00");
@@ -259,7 +259,7 @@ function compressWeekSchedule() {
     }
   });
 
-  localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+  localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
   return moved;
 }
 
@@ -372,7 +372,7 @@ function moveMissedToToday(sessionId) {
   if (idx !== -1) {
     schedule[idx].date = today;
     schedule[idx].rescheduled = true;
-    localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+    localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
     if (typeof renderCalendar === "function") renderCalendar();
     if (typeof selectDay === "function") selectDay(today);
   }
@@ -383,12 +383,6 @@ function moveMissedToToday(sessionId) {
  * Generate a quick 20-minute workout via Claude API based on user profile and context.
  */
 async function generateQuickWorkout(btn) {
-  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
-  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
-    alert("Please set your Anthropic API key in Settings first.");
-    return;
-  }
-
   // Show loading state
   const origText = btn.textContent;
   btn.textContent = "Generating...";
@@ -429,28 +423,17 @@ Requirements:
 - Include warmup and cooldown
 - Keep it simple and achievable
 - If the user's sport is known, make it sport-relevant; otherwise make it a general bodyweight/cardio session
+- Title should be descriptive of the workout content (e.g. "Easy Comeback Run", "Bodyweight Circuit"), NOT include the number of days off
 
 Return ONLY valid JSON, no markdown:
-{"title":"Session Title","type":"easy","intervals":[{"name":"Phase name","duration":"X min","effort":"low|moderate","details":"Brief instruction"}]}`;
+{"title":"Session Title","type":"easy","intervals":[{"name":"Phase name","duration":"X min","effort":"Easy|Moderate","details":"Brief instruction"}]}`;
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1000,
-        messages: [{ role: "user", content: prompt }]
-      })
+    const data = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1000,
+      messages: [{ role: "user", content: prompt }]
     });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
 
     const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
     const cleaned = text.replace(/```json|```/g, "").trim();
@@ -467,9 +450,6 @@ Return ONLY valid JSON, no markdown:
       sessionName: workout.title || "Quick Comeback Workout",
       source: "generated",
       level: "easy",
-      details: (workout.intervals || []).map(i =>
-        `${i.name} (${i.duration}, ${i.effort || ""}): ${i.details || ""}`
-      ).join("\n"),
       aiSession: {
         title: workout.title || "Quick Comeback Workout",
         intervals: (workout.intervals || []).map(i => ({
@@ -482,7 +462,7 @@ Return ONLY valid JSON, no markdown:
     };
 
     schedule.push(entry);
-    localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+    localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
 
     // Refresh UI
     dismissAdherencePrompt();

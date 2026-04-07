@@ -1,5 +1,31 @@
 // app.js — General app initialization and tab navigation
 
+// ── PWA: Register service worker ────────────────────────────────────────────
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("service-worker.js").catch(() => {});
+  });
+}
+
+// ── PWA: Handle shortcut actions from URL params ────────────────────────────
+(function _handlePwaAction() {
+  const action = new URLSearchParams(window.location.search).get("action");
+  if (!action) return;
+  // Clear the URL param to prevent re-triggering on refresh
+  window.history.replaceState({}, "", window.location.pathname);
+  window.addEventListener("load", () => {
+    setTimeout(() => {
+      if (action === "hydration") {
+        if (typeof logWater === "function") logWater("water");
+      } else if (action === "meal-manual") {
+        if (typeof showTab === "function") showTab("nutrition");
+      } else if (action === "today") {
+        if (typeof showTab === "function") showTab("home");
+      }
+    }, 500);
+  });
+})();
+
 /* =====================================================================
    COLLAPSIBLE SECTIONS
    ===================================================================== */
@@ -64,6 +90,7 @@ function showTab(name) {
     if (typeof renderGoals === "function") renderGoals();
     if (typeof renderTrainingConflicts === "function") renderTrainingConflicts();
     if (typeof renderZones === "function") renderZones();
+    if (typeof renderTrainingBlocksSection === "function") renderTrainingBlocksSection();
     if (typeof initCustomPlan === "function") initCustomPlan();
   }
 
@@ -74,6 +101,7 @@ function showTab(name) {
     renderRunningZones();
     if (typeof renderThemePicker === "function") renderThemePicker();
     applyNutritionToggle();
+    if (typeof applyFuelingToggle === "function") applyFuelingToggle();
     applyMeasurementToggle();
     if (typeof renderNotifSettings === "function") renderNotifSettings();
     if (typeof renderTrustCenter === "function") renderTrustCenter();
@@ -87,9 +115,9 @@ function showTab(name) {
     if (typeof renderWeekMealPlanner === "function") renderWeekMealPlanner();
   }
 
-  // Render stats when opening Stats tab
+  // Render stats when opening Stats tab — always reset to Stats sub-view
   if (name === "stats") {
-    renderStats();
+    selectStatsView("stats");
     if (typeof renderLevelProgress === "function") renderLevelProgress();
   }
 
@@ -190,7 +218,7 @@ function isNutritionEnabled() {
 }
 
 function setNutritionEnabled(enabled) {
-  localStorage.setItem("nutritionEnabled", enabled ? "1" : "0");
+  localStorage.setItem("nutritionEnabled", enabled ? "1" : "0"); if (typeof DB !== 'undefined') DB.syncKey('nutritionEnabled');
   applyNutritionToggle();
   // Re-render day detail if open so nutrition sections appear/disappear immediately
   if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
@@ -215,7 +243,7 @@ function getDistanceUnit() {
   return getMeasurementSystem() === "metric" ? "km" : "mi";
 }
 function setMeasurementSystem(system) {
-  localStorage.setItem("measurementSystem", system);
+  localStorage.setItem("measurementSystem", system); if (typeof DB !== 'undefined') DB.syncKey('measurementSystem');
   applyMeasurementToggle();
 }
 function applyMeasurementToggle() {
@@ -258,7 +286,7 @@ function cleanupOrphanedCompletions() {
       return true;
     });
     if (workouts.length !== before) {
-      localStorage.setItem("workouts", JSON.stringify(workouts));
+      localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
     }
 
     // Clean up ratings for removed workout IDs
@@ -269,7 +297,7 @@ function cleanupOrphanedCompletions() {
         for (const id of removedIds) {
           if (ratings[id]) { delete ratings[id]; ratingsChanged = true; }
         }
-        if (ratingsChanged) localStorage.setItem("workoutRatings", JSON.stringify(ratings));
+        if (ratingsChanged) localStorage.setItem("workoutRatings", JSON.stringify(ratings)); if (typeof DB !== 'undefined') DB.syncKey('workoutRatings');
       } catch {}
     }
 
@@ -282,12 +310,25 @@ function cleanupOrphanedCompletions() {
       }
     }
     if (metaChanged) {
-      localStorage.setItem("completedSessions", JSON.stringify(meta));
+      localStorage.setItem("completedSessions", JSON.stringify(meta)); if (typeof DB !== 'undefined') DB.syncKey('completedSessions');
     }
   } catch {}
 }
 
 function init() {
+  // Load philosophy engine modules (non-blocking)
+  if (typeof loadPhilosophyModules === 'function') {
+    loadPhilosophyModules().catch(e => console.warn('[IronZ] Philosophy module load:', e.message));
+  }
+  if (typeof loadExerciseLibrary === 'function') {
+    loadExerciseLibrary().catch(e => console.warn('[IronZ] Exercise library load:', e.message));
+  }
+
+  // Refresh all caches from Supabase (non-blocking)
+  if (typeof DB !== 'undefined') {
+    DB.profile.get().catch(() => {});
+    DB.refreshAllKeys().catch(() => {});
+  }
   cleanupOrphanedCompletions();
   const today = getTodayString();
   document.getElementById("log-date").value  = today;
@@ -389,11 +430,118 @@ function init() {
   // Check for Strava OAuth callback
   if (typeof handleStravaCallback === "function") handleStravaCallback();
 
-  // Show API key status
-  loadApiKeyStatus();
+  // API key UI removed — AI calls route through server-side proxy
+
+  // Check for outdated philosophy plan
+  if (typeof isPlanOutdated === 'function' && isPlanOutdated()) {
+    const banner = document.getElementById('philosophy-plan-outdated');
+    if (banner) banner.style.display = '';
+  }
 }
 
 window.onload = init;
+
+/* ── Philosophy Engine UI Glue ─────────────────────────────────────────── */
+
+async function generatePhilosophyPlan() {
+  const msg = document.getElementById('plan-save-msg');
+  if (msg) { msg.textContent = 'Generating philosophy-based plan...'; msg.style.color = 'var(--color-accent)'; }
+
+  try {
+    const result = await philosophyGeneratePlan({ type: 'standard' });
+    if (result && result.plan) {
+      displayPhilosophyPlan(result);
+      if (msg) { msg.textContent = 'Plan generated!'; msg.style.color = 'var(--color-success)'; }
+    } else {
+      if (msg) { msg.textContent = 'Failed to generate plan.'; msg.style.color = 'var(--color-danger)'; }
+    }
+  } catch (e) {
+    console.error('[IronZ] Philosophy plan generation failed:', e);
+    if (msg) { msg.textContent = 'Error: ' + e.message; msg.style.color = 'var(--color-danger)'; }
+  }
+  setTimeout(() => { if (msg) msg.textContent = ''; }, 5000);
+}
+
+async function regeneratePhilosophyPlan() {
+  const banner = document.getElementById('philosophy-plan-outdated');
+  if (banner) banner.style.display = 'none';
+  await generatePhilosophyPlan();
+}
+
+function displayPhilosophyPlan(result) {
+  const plan = result.plan;
+  const container = document.getElementById('generated-plan');
+  if (!container) return;
+
+  let html = '<div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--color-border);">';
+  html += `<strong style="font-size:0.95rem;">Philosophy Engine Plan — ${plan.plan_structure?.split_type || 'Custom'} (${plan.athlete_summary?.level || ''})</strong>`;
+
+  // Show validation flags if any
+  if (result.flags && result.flags.length > 0) {
+    html += '<div style="margin:8px 0; padding:8px; background:var(--color-surface); border-radius:6px; font-size:0.82rem;">';
+    html += '<strong>Validation adjustments:</strong><ul style="margin:4px 0; padding-left:18px;">';
+    for (const f of result.flags) {
+      html += `<li>${f.flag}</li>`;
+    }
+    html += '</ul></div>';
+  }
+
+  // Weekly template
+  const template = plan.weekly_template || {};
+  const dayOrder = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+  for (const day of dayOrder) {
+    const session = template[day];
+    if (!session) continue;
+    html += `<div style="margin:10px 0; padding:10px; background:var(--color-surface); border-radius:8px;">`;
+    html += `<strong style="text-transform:capitalize">${day}</strong>: `;
+    html += `<span style="color:var(--color-accent)">${session.session_type}</span>`;
+    html += ` — ${session.purpose}`;
+    if (session.zone) html += ` <span class="hint">(${session.zone})</span>`;
+    if (session.duration) html += ` <span class="hint">${session.duration}</span>`;
+
+    if (session.exercises && session.exercises.length > 0) {
+      html += '<div style="margin-top:6px; padding-left:12px; font-size:0.85rem;">';
+      for (const ex of session.exercises) {
+        html += `<div style="margin:3px 0">${ex.name}: ${ex.sets}x${ex.reps} — rest ${ex.rest_seconds}s`;
+        if (ex.rpe_target) html += ` (RPE ${ex.rpe_target})`;
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  // Nutrition summary
+  if (plan.nutrition_strategy?.daily_targets) {
+    const nt = plan.nutrition_strategy.daily_targets;
+    html += '<div style="margin:12px 0; padding:10px; background:var(--color-surface); border-radius:8px;">';
+    html += `<strong>Daily Nutrition Targets:</strong> ${nt.calories} kcal | ${nt.protein_g}g protein | ${nt.carbs_g}g carbs | ${nt.fat_g}g fat`;
+    if (plan.nutrition_strategy.training_day_adjustments) {
+      html += `<br><span class="hint">${plan.nutrition_strategy.training_day_adjustments}</span>`;
+    }
+    html += '</div>';
+  }
+
+  // Progression
+  if (plan.progression_logic) {
+    html += `<div style="margin:8px 0; font-size:0.85rem;"><strong>Progression:</strong> ${plan.progression_logic}</div>`;
+  }
+
+  html += '</div>';
+  container.innerHTML = html;
+
+  // Show rationale
+  const rationaleDiv = document.getElementById('philosophy-rationale');
+  const rationaleText = document.getElementById('philosophy-rationale-text');
+  const modulesUsed = document.getElementById('philosophy-modules-used');
+  if (rationaleDiv && rationaleText) {
+    rationaleText.textContent = plan.rationale || '';
+    if (modulesUsed && plan.plan_metadata?.philosophy_modules_used) {
+      modulesUsed.textContent = 'Modules: ' + plan.plan_metadata.philosophy_modules_used.join(', ');
+    }
+    rationaleDiv.style.display = '';
+  }
+}
 
 
 /* =====================================================================
@@ -401,15 +549,20 @@ window.onload = init;
    ===================================================================== */
 
 function saveProfile() {
+  // Convert ft/in to total inches for height
+  const feet = parseInt(document.getElementById("profile-height-feet")?.value) || 0;
+  const inches = parseInt(document.getElementById("profile-height-inches")?.value) || 0;
+  const totalInches = feet * 12 + inches;
   const profile = {
     name:   document.getElementById("profile-name").value.trim(),
     age:    document.getElementById("profile-age").value,
     weight: document.getElementById("profile-weight").value,
-    height: document.getElementById("profile-height").value,
+    height: String(totalInches || ""),
     gender: document.getElementById("profile-gender").value,
     goal:   document.getElementById("profile-goal").value,
   };
   localStorage.setItem("profile", JSON.stringify(profile));
+  if (typeof DB !== 'undefined') DB.profile.save(profile).catch(() => {});
   updateNavInitials();
   renderGreeting();
 
@@ -425,7 +578,15 @@ function loadProfileIntoForm() {
     if (profile.name)   document.getElementById("profile-name").value   = profile.name;
     if (profile.age)    document.getElementById("profile-age").value    = profile.age;
     if (profile.weight) document.getElementById("profile-weight").value = profile.weight;
-    if (profile.height) document.getElementById("profile-height").value = profile.height;
+    if (profile.height) {
+      const h = parseInt(profile.height);
+      if (!isNaN(h) && h > 0) {
+        const feetEl = document.getElementById("profile-height-feet");
+        const inchesEl = document.getElementById("profile-height-inches");
+        if (feetEl) feetEl.value = Math.floor(h / 12);
+        if (inchesEl) inchesEl.value = h % 12;
+      }
+    }
     if (profile.gender) document.getElementById("profile-gender").value = profile.gender;
     if (profile.goal)   document.getElementById("profile-goal").value   = profile.goal;
   } catch { /* ignore */ }
@@ -433,45 +594,78 @@ function loadProfileIntoForm() {
 
 
 /* =====================================================================
-   SETTINGS — API KEY
+   SETTINGS — TRAINING ZONES
    ===================================================================== */
 
-function saveApiKey() {
-  const input = document.getElementById("setting-api-key");
-  const msg = document.getElementById("api-key-msg");
-  const key = (input?.value || "").trim();
-  if (!key || !key.startsWith("sk-")) {
-    msg.style.color = "var(--color-danger)";
-    msg.textContent = "Please enter a valid API key (starts with sk-).";
-    setTimeout(() => { msg.textContent = ""; }, 3000);
-    return;
+function saveTrainingZonesSettings() {
+  let zones = {};
+  try { zones = JSON.parse(localStorage.getItem("trainingZones")) || {}; } catch {}
+
+  const easy = document.getElementById("zone-run-easy")?.value.trim();
+  const tempo = document.getElementById("zone-run-tempo")?.value.trim();
+  const vo2 = document.getElementById("zone-run-vo2")?.value.trim();
+  if (easy || tempo || vo2) {
+    zones.running = zones.running || {};
+    zones.running.easy = easy || "";
+    zones.running.tempo = tempo || "";
+    zones.running.vo2max = vo2 || "";
+    zones.running.source = "settings";
+    zones.running.lastUpdated = new Date().toISOString().slice(0, 10);
   }
-  localStorage.setItem("anthropicApiKey", key);
-  input.value = "";
-  msg.style.color = "var(--color-success)";
-  msg.textContent = "API key saved! AI features are now enabled.";
-  setTimeout(() => { msg.textContent = ""; }, 3000);
-}
 
-function clearApiKey() {
-  localStorage.removeItem("anthropicApiKey");
-  document.getElementById("setting-api-key").value = "";
-  const msg = document.getElementById("api-key-msg");
-  msg.style.color = "var(--color-text-muted)";
-  msg.textContent = "API key removed.";
-  setTimeout(() => { msg.textContent = ""; }, 3000);
-}
+  const ftp = document.getElementById("zone-ftp")?.value;
+  if (ftp) {
+    zones.biking = zones.biking || {};
+    zones.biking.ftp = parseInt(ftp) || null;
+    zones.biking.source = "settings";
+    zones.biking.lastUpdated = new Date().toISOString().slice(0, 10);
+  }
 
-function loadApiKeyStatus() {
-  const key = localStorage.getItem("anthropicApiKey");
-  if (key) {
-    const msg = document.getElementById("api-key-msg");
-    if (msg) {
-      msg.style.color = "var(--color-success)";
-      msg.textContent = "Key saved (sk-..." + key.slice(-4) + ")";
+  const maxHr = document.getElementById("zone-hr-max")?.value;
+  const restHr = document.getElementById("zone-hr-rest")?.value;
+  if (maxHr || restHr) {
+    zones.heartRate = {
+      max: parseInt(maxHr) || null,
+      resting: parseInt(restHr) || null,
+      source: "settings",
+      lastUpdated: new Date().toISOString().slice(0, 10),
+    };
+    // Calculate 5-zone model using Karvonen formula
+    if (zones.heartRate.max && zones.heartRate.resting) {
+      const hrr = zones.heartRate.max - zones.heartRate.resting;
+      zones.heartRate.zones = {
+        z1: { min: Math.round(zones.heartRate.resting + hrr * 0.50), max: Math.round(zones.heartRate.resting + hrr * 0.60) },
+        z2: { min: Math.round(zones.heartRate.resting + hrr * 0.60), max: Math.round(zones.heartRate.resting + hrr * 0.70) },
+        z3: { min: Math.round(zones.heartRate.resting + hrr * 0.70), max: Math.round(zones.heartRate.resting + hrr * 0.80) },
+        z4: { min: Math.round(zones.heartRate.resting + hrr * 0.80), max: Math.round(zones.heartRate.resting + hrr * 0.90) },
+        z5: { min: Math.round(zones.heartRate.resting + hrr * 0.90), max: zones.heartRate.max },
+      };
     }
   }
+
+  localStorage.setItem("trainingZones", JSON.stringify(zones)); if (typeof DB !== 'undefined') DB.syncKey('trainingZones');
+  const msg = document.getElementById("zones-save-msg");
+  if (msg) { msg.style.color = "var(--color-success)"; msg.textContent = "Zones saved!"; setTimeout(() => { msg.textContent = ""; }, 3000); }
 }
+
+function loadZonesIntoForm() {
+  try {
+    const zones = JSON.parse(localStorage.getItem("trainingZones")) || {};
+    if (zones.running) {
+      if (zones.running.easy) document.getElementById("zone-run-easy").value = zones.running.easy;
+      if (zones.running.tempo) document.getElementById("zone-run-tempo").value = zones.running.tempo;
+      if (zones.running.vo2max) document.getElementById("zone-run-vo2").value = zones.running.vo2max;
+    }
+    if (zones.biking?.ftp) document.getElementById("zone-ftp").value = zones.biking.ftp;
+    if (zones.heartRate?.max) document.getElementById("zone-hr-max").value = zones.heartRate.max;
+    if (zones.heartRate?.resting) document.getElementById("zone-hr-rest").value = zones.heartRate.resting;
+  } catch {}
+}
+
+
+/* =====================================================================
+   SETTINGS — API KEY (removed — AI calls route through server-side proxy)
+   ===================================================================== */
 
 
 /* =====================================================================
@@ -505,13 +699,13 @@ function clearFutureWorkouts() {
   // workoutSchedule — keep up to cutoff
   try {
     const ws = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
-    localStorage.setItem("workoutSchedule", JSON.stringify(ws.filter(w => w.date <= cutoff)));
+    localStorage.setItem("workoutSchedule", JSON.stringify(ws.filter(w => w.date <= cutoff))); if (typeof DB !== 'undefined') DB.syncSchedule();
   } catch {}
 
   // trainingPlan — keep up to cutoff
   try {
     const tp = JSON.parse(localStorage.getItem("trainingPlan") || "[]");
-    localStorage.setItem("trainingPlan", JSON.stringify(tp.filter(p => p.date <= cutoff)));
+    localStorage.setItem("trainingPlan", JSON.stringify(tp.filter(p => p.date <= cutoff))); if (typeof DB !== 'undefined') DB.syncTrainingPlan();
   } catch {}
 
   _refreshAllViews();
@@ -667,7 +861,7 @@ function loadTrainingZones(sport) {
     // Migrate from legacy runningZones key
     if (!all.running) {
       const old = JSON.parse(localStorage.getItem("runningZones"));
-      if (old) { all.running = old; localStorage.setItem("trainingZones", JSON.stringify(all)); }
+      if (old) { all.running = old; localStorage.setItem("trainingZones", JSON.stringify(all)); if (typeof DB !== 'undefined') DB.syncKey('trainingZones'); }
     }
     return all[sport] || null;
   } catch { return null; }
@@ -677,7 +871,7 @@ function saveTrainingZonesData(sport, data) {
   let all = {};
   try { all = JSON.parse(localStorage.getItem("trainingZones")) || {}; } catch {}
   all[sport] = data;
-  localStorage.setItem("trainingZones", JSON.stringify(all));
+  localStorage.setItem("trainingZones", JSON.stringify(all)); if (typeof DB !== 'undefined') DB.syncKey('trainingZones');
 }
 
 // Keep legacy functions so calendar.js still works

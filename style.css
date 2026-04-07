@@ -134,6 +134,9 @@ header {
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--color-border);
   padding: 14px 24px;
+  padding-top: calc(14px + env(safe-area-inset-top, 0px));
+  padding-left: calc(24px + env(safe-area-inset-left, 0px));
+  padding-right: calc(24px + env(safe-area-inset-right, 0px));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -203,6 +206,9 @@ main {
   max-width: 820px;
   margin: 0 auto;
   padding: 24px 16px 80px;
+  padding-left: calc(16px + env(safe-area-inset-left, 0px));
+  padding-right: calc(16px + env(safe-area-inset-right, 0px));
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -518,6 +524,200 @@ nav {
   margin-top: -6px;
 }
 
+.optional-tag {
+  display: inline;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  opacity: 0.6;
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 4px;
+}
+
+/* ===== FUELING PLAN ===== */
+.fueling-plan-section {
+  margin-top: 12px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 8px;
+}
+.fueling-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 6px 0;
+}
+.fueling-toggle .chevron-why { transition: transform 0.2s; }
+.fueling-toggle.is-open .chevron-why { transform: rotate(180deg); }
+.fueling-plan-body {
+  display: none;
+  padding: 8px 0 4px;
+  font-size: 0.84rem;
+}
+.fueling-plan-body.is-open { display: block; }
+.fueling-summary {
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 6px;
+}
+.fueling-note {
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+  font-size: 0.82rem;
+}
+.fueling-item {
+  padding: 3px 0 3px 12px;
+  border-left: 2px solid var(--color-accent);
+  margin-bottom: 4px;
+  color: var(--color-text);
+}
+.fueling-sodium {
+  border-left-color: var(--color-amber, #f59e0b);
+  color: var(--color-amber, #f59e0b);
+}
+
+/* ===== TRAINING BLOCKS EXPLAINED ===== */
+.tb-info-btn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tb-info-btn:active { background: var(--color-accent-glow); }
+
+.tb-timeline {
+  display: flex;
+  gap: 0;
+  margin-bottom: 16px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.tb-timeline-block {
+  flex: 1;
+  padding: 8px 6px;
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #fff;
+}
+.tb-timeline-block:nth-child(1) { background: #3b82f6; }
+.tb-timeline-block:nth-child(2) { background: #f59e0b; }
+.tb-timeline-block:nth-child(3) { background: #ef4444; }
+.tb-timeline-block:nth-child(4) { background: #22c55e; }
+.tb-timeline-block.tb-current { outline: 2.5px solid #fff; outline-offset: -2px; font-weight: 900; }
+
+.tb-block {
+  padding: 12px;
+  margin-bottom: 10px;
+  background: var(--color-surface-2);
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+}
+.tb-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.tb-block-name {
+  font-weight: 800;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+}
+.tb-block-weeks {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+.tb-block-focus {
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: var(--color-accent);
+  margin-bottom: 6px;
+}
+.tb-block-desc { font-size: 0.82rem; margin: 4px 0; }
+.tb-block-why { font-size: 0.78rem; color: var(--color-text-muted); margin: 4px 0; }
+.tb-block-feel { font-size: 0.78rem; color: var(--color-text-muted); margin: 4px 0; font-style: italic; }
+
+/* ===== HYROX BUILDER ===== */
+.hyrox-run-options {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.hyrox-dist-btn {
+  padding: 8px 14px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.hyrox-dist-btn.is-active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-glow);
+  color: var(--color-accent);
+  font-weight: 600;
+}
+.hyrox-custom-input {
+  width: 56px;
+  padding: 6px 4px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-size: 0.78rem;
+  text-align: center;
+}
+.hyrox-station-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.hyrox-station-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.hyrox-station-name {
+  flex: 1;
+  font-weight: 600;
+}
+.hyrox-station-dist,
+.hyrox-station-wt {
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.82rem;
+  text-align: center;
+}
+.hyrox-station-unit {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  min-width: 28px;
+}
+
 
 /* ===== 5. FORMS ===== */
 
@@ -771,6 +971,26 @@ button:active {
 
 .exercise-row[draggable="true"] { cursor: grab; }
 .exercise-row[draggable="true"]:active { cursor: grabbing; }
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-width: 28px;
+  height: 40px;
+  font-size: 18px;
+  color: var(--color-text-muted);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  flex-shrink: 0;
+  border-radius: 6px;
+}
+.drag-handle:active {
+  color: var(--color-accent);
+  background: var(--color-surface-2);
+}
+
 .exercise-row.drag-active,
 .qe-manual-row.drag-active,
 .edit-exercise-row.drag-active,
@@ -959,6 +1179,8 @@ button:active {
 .tag-running       { background-color: var(--color-amber); }
 .tag-triathlon     { background-color: var(--color-cyan); }
 .tag-cycling       { background-color: var(--color-teal); }
+.tag-hyrox         { background-color: var(--color-amber); }
+.tag-wellness      { background-color: var(--color-success); }
 .tag-general,
 .tag-other         { background-color: var(--color-text-muted); }
 
@@ -1129,17 +1351,21 @@ button:active {
 
 .calendar-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .calendar-month-label {
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-weight: 700;
   color: var(--color-text);
-  flex: 1;
-  text-align: center;
+}
+
+.cal-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .cal-nav-btn {
@@ -1319,6 +1545,8 @@ button:active {
 .week-cell--triathlon    { border-top-color: var(--color-cyan); }
 .week-cell--general      { border-top-color: var(--color-success); }
 .week-cell--hiit         { border-top-color: var(--color-accent); }
+.week-cell--hyrox        { border-top-color: var(--color-amber); }
+.week-cell--wellness     { border-top-color: var(--color-success); }
 .week-cell--bodyweight   { border-top-color: var(--color-accent); }
 .week-cell--swimming     { border-top-color: var(--color-cyan); }
 
@@ -1734,10 +1962,57 @@ button:active {
   height: 26px;
   display: flex;
   cursor: pointer;
-  overflow: hidden;
+  overflow: visible;
   border-top: 1px solid var(--color-border);
   border-bottom: 1px solid var(--color-border);
   transition: opacity 0.15s;
+  position: relative;
+  margin-bottom: 18px;
+}
+.session-intensity-strip:not(:has(.fuel-tick)) {
+  margin-bottom: 0;
+}
+
+.fuel-tick {
+  position: absolute;
+  bottom: -20px;
+  transform: translateX(-50%);
+  z-index: 2;
+  pointer-events: auto;
+  line-height: 0;
+}
+.fuel-drop {
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.25));
+}
+
+.fueling-toggle-icon {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 4px;
+  color: var(--color-accent);
+}
+.fueling-toggle-icon svg { stroke: var(--color-accent); fill: none; }
+
+.fueling-item-icon {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 4px;
+  color: var(--color-accent);
+}
+.fueling-item-icon svg { stroke: var(--color-accent); fill: none; }
+
+.fueling-customize-btn {
+  margin-top: 10px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.fueling-customize-btn:active {
+  background: var(--color-surface-2);
 }
 
 .session-intensity-strip:hover { opacity: 0.8; }
@@ -1833,14 +2108,15 @@ button:active {
   display: flex;
   gap: 6px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 .zones-tab {
-  padding: 6px 16px;
+  padding: 6px 14px;
   border-radius: 20px;
   border: 1px solid var(--color-border);
   background: var(--color-surface);
   color: var(--color-text-muted);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -2457,6 +2733,11 @@ button:active {
   font-size: 0.78rem;
   color: var(--color-text-muted);
   margin-top: 3px;
+}
+.race-card-detail {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
 }
 .race-tags {
   display: flex;
@@ -3233,6 +3514,52 @@ button:active {
   grid-template-columns: 2fr 1.5fr 1fr auto;
 }
 
+/* ── Compact exercise rows (no per-row labels, shared header) ── */
+
+.exercise-row-header {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 28px;
+  gap: 8px;
+  padding: 0 10px 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.exercise-row-header.hiit-row-header {
+  grid-template-columns: 2fr 1.5fr 1fr 28px;
+}
+
+.exercise-row--compact {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 28px;
+  gap: 8px;
+  background: var(--color-surface-2);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  align-items: center;
+}
+.exercise-row--compact.hiit-row {
+  grid-template-columns: 2fr 1.5fr 1fr 28px;
+}
+.exercise-row--compact label { display: none; }
+.exercise-row--compact > div { display: contents; }
+.exercise-row--compact input {
+  padding: 7px 8px;
+  font-size: 0.85rem;
+}
+.exercise-row--compact .remove-exercise-btn {
+  position: static;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Cardio row: Phase | Dur col | Zone | Details | × */
 .qe-cardio-row { grid-template-columns: 1.5fr 1.2fr 1.4fr 2fr auto; align-items: start; }
 
@@ -3303,16 +3630,25 @@ button:active {
 
 /* AI generated workout */
 .qe-spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-accent);
-  border-radius: 50%;
-  animation: qe-spin 0.75s linear infinite;
+  width: 56px;
+  height: 56px;
   margin: 0 auto;
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.qe-spinner svg {
+  width: 48px;
+  height: 48px;
+  animation: qe-bounce 0.6s ease-in-out infinite alternate;
 }
 
-@keyframes qe-spin { to { transform: rotate(360deg); } }
+@keyframes qe-bounce {
+  0% { transform: translateY(0) scale(1); }
+  100% { transform: translateY(-8px) scale(1.05); }
+}
+
 
 .qe-generated-workout {
   background: var(--color-surface-2);
@@ -3915,6 +4251,56 @@ button:active {
   background: rgba(248, 113, 113, 0.15);
   border-color: rgba(248, 113, 113, 0.35);
   color: var(--color-danger);
+}
+
+.pref-chip--allergy {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.allergy-badge {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  background: #ef4444;
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.allergy-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.allergy-toggle input[type="checkbox"] { margin: 0; }
+
+.allergy-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 10px;
+}
+.allergy-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .pref-chip-remove {
@@ -4600,6 +4986,24 @@ button:active {
   color: var(--color-accent);
   min-width: 28px;
   text-align: center;
+  position: relative;
+}
+.sv-rec-badge {
+  display: none;
+}
+.sv-recommended {
+  border-color: var(--color-accent);
+}
+.sv-recommended .sv-check::before {
+  content: "Rec";
+  font-size: 0.6rem;
+  font-weight: 700;
+  background: var(--color-accent);
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+  letter-spacing: 0.03em;
 }
 
 .sv-option-text { flex: 1; }
@@ -5533,8 +5937,8 @@ button:active {
 /* Workout interest cards */
 .ob-interest-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
 }
 
 .ob-interest-card {
@@ -5672,7 +6076,21 @@ button:active {
 .coaching-insight {
   display: flex; gap: 10px; padding: 12px; margin-bottom: 8px;
   border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-surface-2);
+  position: relative;
 }
+.coaching-dismiss-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 4px;
+  opacity: 0.5;
+  line-height: 0;
+}
+.coaching-dismiss-btn:hover { opacity: 1; }
 .coaching-icon svg { width: 18px; height: 18px; flex-shrink: 0; }
 .coaching-body { flex: 1; }
 .coaching-title { font-weight: 700; font-size: 0.86rem; margin-bottom: 3px; }
@@ -6203,10 +6621,10 @@ button:active {
 }
 
 .hydration-beverage-picker {
-  display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px;
+  display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;
 }
 .hydration-bev-btn {
-  flex: 1; min-width: 0; padding: 6px 4px; font-size: 0.72rem;
+  flex: 1 1 auto; min-width: 70px; padding: 8px 6px; font-size: 0.78rem;
   border: 1px solid var(--color-border); border-radius: 8px;
   background: var(--color-surface); color: var(--color-text);
   cursor: pointer; text-align: center; white-space: nowrap;
@@ -6494,8 +6912,8 @@ button:active {
 
 .day-picker {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-wrap: nowrap;
+  gap: 6px;
   margin-top: 6px;
 }
 
@@ -6507,13 +6925,13 @@ button:active {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   border: 1.5px solid var(--color-border);
   background: var(--color-surface-2);
   color: var(--color-text-muted);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 700;
   cursor: pointer;
   user-select: none;
@@ -7146,9 +7564,9 @@ button:active {
 }
 
 #section-generate-plan.gym-disabled {
-  opacity: 0.35;
-  pointer-events: none;
-  user-select: none;
+  opacity: 1;
+  pointer-events: auto;
+  user-select: auto;
 }
 #section-generate-plan.gym-disabled .gym-toggle {
   opacity: 1;
@@ -7232,9 +7650,11 @@ button:active {
 
   .week-cell-date { font-size: 0.9rem; }
 
-  /* Calendar header wraps on small screens */
-  .calendar-header { flex-wrap: wrap; }
-  .calendar-month-label { order: -1; flex-basis: 100%; text-align: left; }
+  /* Calendar controls: tighter on mobile */
+  .cal-controls { gap: 6px; }
+  .cal-nav-btn { padding: 7px 12px; }
+  .cal-this-week-btn { padding: 6px 10px; }
+  .cal-zoom-btn { padding: 6px 10px; }
 }
 
 
@@ -7581,6 +8001,28 @@ button:active {
   font-size: 0.85rem;
   min-height: 1.2em;
   text-align: center;
+}
+
+.auth-forgot-link {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.auth-forgot-link a {
+  color: var(--color-accent, #3498db);
+  text-decoration: none;
+}
+
+.auth-forgot-link a:hover {
+  text-decoration: underline;
+}
+
+.auth-reset-info {
+  font-size: 0.9rem;
+  color: var(--color-text-muted, #aaa);
+  text-align: center;
+  margin-bottom: 12px;
 }
 
 /* Home icon tab in nav */
@@ -8011,22 +8453,63 @@ button:active {
 
   main { padding: 16px 10px 80px; }
 
-  /* ── Exercise / segment rows: stack vertically ── */
+  /* ── Exercise / segment rows: stack on mobile ── */
   .exercise-row,
   .qe-manual-row {
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-wrap: wrap;
     gap: 6px;
+    position: relative;
+    padding-right: 36px;
   }
-  .exercise-row > div:first-child,
-  .qe-manual-row > div:first-child {
-    grid-column: 1 / -1;
+  .exercise-row .drag-handle,
+  .qe-manual-row .drag-handle {
+    position: absolute;
+    left: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+  }
+  .exercise-row > div,
+  .qe-manual-row > div {
+    flex: 1 1 calc(50% - 6px);
+    min-width: calc(50% - 6px);
+  }
+  /* Exercise name spans full width */
+  .exercise-row > div:first-of-type,
+  .qe-manual-row > div:first-of-type {
+    flex: 1 1 100%;
+    min-width: 100%;
+    padding-left: 24px;
+  }
+  .exercise-row .ex-pyramid-btn,
+  .qe-manual-row .ex-pyramid-btn {
+    display: none;
+  }
+  .exercise-row .ex-pyramid-detail,
+  .qe-manual-row .ex-pyramid-detail {
+    flex: 1 1 100%;
+  }
+  .remove-exercise-btn {
+    position: absolute;
+    top: 8px;
+    right: 6px;
+    padding: 6px 10px;
+    font-size: 1rem;
   }
   .qe-cardio-row {
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-wrap: wrap;
     gap: 6px;
+    position: relative;
+    padding-right: 36px;
   }
-  .qe-cardio-row > div:first-child {
-    grid-column: 1 / -1;
+  .qe-cardio-row > div {
+    flex: 1 1 calc(50% - 6px);
+    min-width: calc(50% - 6px);
+  }
+  .qe-cardio-row > div:first-of-type {
+    flex: 1 1 100%;
   }
   .sw-segment-row,
   .sw-segment-row--brick {
@@ -8035,21 +8518,6 @@ button:active {
   .sw-segment-row > div:first-child,
   .sw-segment-row--brick > .seg-discipline-wrap {
     grid-column: 1 / -1;
-  }
-
-  /* ── Remove button: float right on stacked rows ── */
-  .remove-exercise-btn {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    padding: 6px 10px;
-    font-size: 1rem;
-  }
-  .exercise-row,
-  .qe-manual-row,
-  .qe-cardio-row {
-    position: relative;
-    padding-right: 36px;
   }
 
   /* ── Touch targets: minimum 44px ── */
@@ -8075,9 +8543,11 @@ button:active {
   .cell-day-num { font-size: 0.7rem; }
   .dot { width: 4px; height: 4px; }
 
-  /* ── Week view: narrower cells ── */
+  /* ── Week view: narrower cells, still scrollable ── */
   .calendar-grid--week {
-    grid-template-columns: repeat(7, minmax(52px, 1fr));
+    grid-template-columns: repeat(7, minmax(58px, 1fr));
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .week-cell { min-height: 80px; padding: 6px 4px; }
   .week-cell-date { font-size: 0.82rem; }
@@ -8129,8 +8599,7 @@ button:active {
   /* ── Nutrition log options: 1-col on small screens ── */
   .nutri-log-options { grid-template-columns: 1fr; }
 
-  /* ── Onboarding interest grid: 2-col on small screens ── */
-  .ob-interest-grid { grid-template-columns: repeat(2, 1fr); }
+  /* interest grid already 2-col by default */
 
   /* ── Achievements grid: 1-col on small screens ── */
   .achievements-grid { grid-template-columns: 1fr; }
@@ -8138,6 +8607,92 @@ button:active {
   /* ── Custom plan day actions: full width ── */
   .custom-day-header { flex-direction: column; align-items: flex-start; }
   .custom-day-actions { width: 100%; }
+
+  /* ── Drag handle adjustments on small screens ── */
+  .drag-handle { width: 24px; min-width: 24px; font-size: 16px; }
+
+  /* ── Sticky save button for workout editor ── */
+  .edit-workout-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    background: var(--color-surface);
+    padding: 12px 0;
+    border-top: 1px solid var(--color-border);
+    margin-top: auto;
+  }
+}
+
+
+/* ===== MOBILE UX GLOBAL FIXES ===== */
+
+/* Prevent iOS zoom on input focus — ensure 16px minimum */
+@media (max-width: 600px) {
+  input[type="text"],
+  input[type="number"],
+  input[type="date"],
+  input[type="email"],
+  input[type="password"],
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  /* Cards: prevent horizontal overflow */
+  .card {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  /* Nav bar: even distribution for touch targets */
+  nav {
+    justify-content: space-around;
+    width: 100%;
+    gap: 4px;
+  }
+  .nav-circle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Modals: ensure scrollable on mobile */
+  .quick-entry-modal,
+  .sw-modal,
+  .survey-modal,
+  .rating-modal {
+    max-height: 88vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Calendar day cells: uniform size, no text overflow */
+  .calendar-cell {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Week cells: prevent text overflow */
+  .week-cell {
+    overflow: hidden;
+  }
+  .session-bubble {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  /* Tables: scrollable on narrow screens */
+  .exercise-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Live tracker: full width on mobile */
+  .live-tracker {
+    max-width: 100vw;
+  }
 }
 
 /* ===== WORKOUT RATING MODAL ===== */
@@ -8483,10 +9038,92 @@ button:active {
   border-bottom: 1px solid var(--color-border);
 }
 
+.live-exit-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.live-exit-btn:active {
+  background: var(--color-danger, #ef4444);
+  color: #fff;
+  border-color: transparent;
+}
+
+.live-swap-btn {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-accent);
+  font-size: 14px;
+  padding: 4px 8px;
+  cursor: pointer;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.live-swap-btn:active {
+  background: var(--color-accent-glow);
+}
+
+.swap-alt-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 14px;
+  margin-bottom: 6px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--color-text);
+  transition: border-color 0.15s;
+}
+.swap-alt-btn:active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-glow);
+}
+.swap-alt-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.swap-alt-muscles {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+.swap-custom-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+.swap-custom-input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+.swap-custom-btn {
+  padding: 10px 16px;
+  white-space: nowrap;
+}
+
 .live-header-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   margin-bottom: 10px;
 }
 
@@ -8795,6 +9432,62 @@ button:active {
   color: var(--color-text-muted);
 }
 .live-step-item--active .live-step-item-dur { color: inherit; opacity: 0.7; }
+
+/* ── Hyrox live tracker ── */
+
+.live-hyrox-step {
+  text-align: center;
+  padding: 20px 16px;
+}
+.live-hyrox-station-type {
+  display: inline-block;
+  padding: 4px 16px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+.live-hyrox-run {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--color-accent);
+}
+.live-hyrox-station {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--color-amber);
+}
+.live-hyrox-station-name {
+  font-size: 1.4rem;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.live-hyrox-station-detail {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-bottom: 16px;
+}
+.live-hyrox-station-timer {
+  font-size: 2.8rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  margin-bottom: 20px;
+}
+
+/* Hyrox result rows in history */
+.hyrox-result-run td:first-child { color: var(--color-accent); }
+.hyrox-result-station td:first-child { color: var(--color-amber); font-weight: 600; }
+
+/* In Hyrox mode, done items show time instead of strikethrough */
+.live-hyrox-step ~ .live-step-list .live-step-item--done {
+  opacity: 0.7;
+  text-decoration: none;
+}
+.live-hyrox-step ~ .live-step-list .live-step-item--done .live-step-item-dur {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--color-success);
+}
 
 .live-complete-msg {
   text-align: center;
@@ -9312,3 +10005,228 @@ button:active {
 .cal-sync-badge .icon { width: 14px; height: 14px; }
 .cal-sync-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .cal-sync-status-msg { font-size: 0.78rem; color: var(--color-text-muted); margin-top: 8px; min-height: 20px; }
+
+/* ===== ADMIN PANEL ===== */
+
+.admin-stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.admin-stat-card {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 12px);
+  padding: 18px 12px;
+  text-align: center;
+}
+
+.admin-stat-value {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--color-text);
+  line-height: 1.1;
+}
+
+.admin-stat-label {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+/* ── Signup chart ── */
+
+.admin-chart-header {
+  margin-bottom: 12px;
+}
+
+.admin-chart-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--color-text);
+}
+
+.admin-chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 100px;
+}
+
+.admin-chart-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.admin-chart-bar {
+  width: 100%;
+  min-height: 2px;
+  background: var(--color-accent);
+  border-radius: 3px 3px 0 0;
+  transition: height 0.3s;
+}
+
+.admin-chart-date {
+  font-size: 0.55rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* ── User table ── */
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.admin-table th {
+  text-align: left;
+  padding: 10px 8px;
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-text-muted);
+  border-bottom: 2px solid var(--color-border);
+}
+
+.admin-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.admin-table tr:last-child td { border-bottom: none; }
+
+.admin-td-name { font-weight: 600; white-space: nowrap; }
+.admin-td-email { color: var(--color-text-muted); }
+
+.admin-td-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.admin-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, color 0.15s;
+}
+.admin-action-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.admin-action-btn svg { width: 16px; height: 16px; }
+
+/* ── Badges ── */
+
+.admin-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.admin-badge-admin {
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--color-accent);
+}
+
+.admin-badge-user {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--color-text-muted);
+}
+
+.admin-badge-premium {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--color-amber, #f59e0b);
+}
+
+.admin-badge-free {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--color-text-muted);
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 520px) {
+  .admin-stats-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .admin-table { font-size: 0.78rem; }
+  .admin-table th, .admin-table td { padding: 8px 5px; }
+  .admin-td-email { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* ===== PHILOSOPHY ENGINE UI ===== */
+
+.plan-outdated-banner {
+  background: var(--color-warning-bg, #fff3cd);
+  border: 1px solid var(--color-warning-border, #ffc107);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  font-size: 0.88rem;
+}
+.plan-outdated-banner p { margin: 0; }
+.plan-outdated-banner .btn-link {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+}
+
+.plan-rationale-details {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--color-surface);
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+.plan-rationale-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--color-text);
+}
+.plan-rationale-details p {
+  margin: 8px 0 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary, var(--color-text));
+}
+.plan-rationale-details .hint {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.btn-secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  padding: 10px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+.btn-secondary:hover { background: var(--color-surface-2); }

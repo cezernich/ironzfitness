@@ -37,12 +37,6 @@ async function submitNLInput(dateStr) {
   responseEl.innerHTML = `<div class="nl-loading">Thinking\u2026</div>`;
 
   try {
-    const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
-    if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
-      responseEl.innerHTML = `<div class="nl-error">API key not configured. Add your key in config.js.</div>`;
-      return;
-    }
-
     // Gather context
     const profile = _safeJSON("profile") || {};
     const schedule = (_safeJSON("workoutSchedule") || []).filter(w => w.date >= dateStr).slice(0, 14);
@@ -91,27 +85,15 @@ Be conservative — only add restrictions if the user's message clearly warrants
 Today is ${dateStr} (${new Date(dateStr + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" })}).
 When referring to dates, use the correct day-of-week name. Do NOT guess day names — derive them from the dates in the schedule context.`;
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 500,
-        system: systemPrompt,
-        messages: [{
-          role: "user",
-          content: `User says: "${text}"\n\nContext: ${JSON.stringify(context)}`
-        }]
-      })
+    const data = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 500,
+      system: systemPrompt,
+      messages: [{
+        role: "user",
+        content: `User says: "${text}"\n\nContext: ${JSON.stringify(context)}`
+      }]
     });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
 
     const rawText = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
     const result = JSON.parse(rawText.replace(/```json|```/g, "").trim());
@@ -189,7 +171,7 @@ function _applyNLActions(restrictions, dateStr) {
     }
   });
 
-  localStorage.setItem("dayRestrictions", JSON.stringify(dayRestrictions));
+  localStorage.setItem("dayRestrictions", JSON.stringify(dayRestrictions)); if (typeof DB !== 'undefined') DB.syncKey('dayRestrictions');
 
   // Refresh views
   if (typeof renderCalendar === "function") renderCalendar();

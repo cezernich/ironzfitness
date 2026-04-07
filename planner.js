@@ -98,7 +98,111 @@ const RACE_CONFIGS = {
       { name: "Taper", weeks: 1 },
     ],
   },
+  hyrox: {
+    label: "Hyrox",
+    totalWeeks: 14,
+    phases: [
+      { name: "Base", weeks: 4 },
+      { name: "Build", weeks: 4 },
+      { name: "Peak", weeks: 4 },
+      { name: "Taper", weeks: 2 },
+    ],
+  },
+  hyroxDoubles: {
+    label: "Hyrox Doubles",
+    totalWeeks: 12,
+    phases: [
+      { name: "Base", weeks: 3 },
+      { name: "Build", weeks: 4 },
+      { name: "Peak", weeks: 3 },
+      { name: "Taper", weeks: 2 },
+    ],
+  },
 };
+
+/**
+ * getAdaptivePhases(raceType, weeksAvailable, level, daysPerWeek)
+ * Returns phase array adjusted to the athlete's actual situation.
+ *
+ * Rules:
+ * - Taper is fixed (1-2 weeks depending on race distance)
+ * - Remaining weeks split across Base/Build/Peak
+ * - Beginners: longer base (~45% of remaining), shorter peak (~15%)
+ * - Advanced: shorter base (~25%), longer build+peak
+ * - More training days (5+) can slightly compress base (faster adaptation)
+ * - If weeks < minimum viable, warn but still produce a compressed plan
+ */
+function getAdaptivePhases(raceType, weeksAvailable, level, daysPerWeek) {
+  const config = RACE_CONFIGS[raceType];
+  if (!config) return null;
+
+  const idealWeeks = config.totalWeeks;
+  const phases = config.phases;
+  const hasThreePhases = phases.length === 3; // some plans skip Peak
+
+  // If we have the ideal or more weeks, use default phases
+  if (weeksAvailable >= idealWeeks) return { phases: [...phases], compressed: false };
+
+  // Minimum viable weeks per race type
+  const minWeeks = { ironman: 12, halfIronman: 10, olympic: 8, sprint: 6, marathon: 10, halfMarathon: 8, tenK: 5, fiveK: 4, centuryRide: 10, granFondo: 8, hyrox: 8, hyroxDoubles: 6 };
+  const min = minWeeks[raceType] || 6;
+  const weeks = Math.max(weeksAvailable, min);
+
+  // Taper: fixed based on race distance
+  const longRaces = ["ironman", "marathon", "centuryRide"];
+  const medRaces = ["halfIronman", "halfMarathon", "olympic", "granFondo", "hyrox"];
+  const taperWeeks = longRaces.includes(raceType) ? 2 : medRaces.includes(raceType) ? 1 : 1;
+
+  const trainingWeeks = weeks - taperWeeks;
+
+  // Phase ratios based on level
+  let baseRatio, buildRatio, peakRatio;
+  if (level === "beginner") {
+    baseRatio = 0.45;
+    buildRatio = 0.40;
+    peakRatio = 0.15;
+  } else if (level === "advanced") {
+    baseRatio = 0.25;
+    buildRatio = 0.40;
+    peakRatio = 0.35;
+  } else {
+    // intermediate (default)
+    baseRatio = 0.35;
+    buildRatio = 0.40;
+    peakRatio = 0.25;
+  }
+
+  // High frequency (5+ days) slightly compresses base
+  if (daysPerWeek && daysPerWeek >= 5) {
+    baseRatio -= 0.05;
+    buildRatio += 0.05;
+  }
+
+  let baseWeeks = Math.max(1, Math.round(trainingWeeks * baseRatio));
+  let buildWeeks = Math.max(1, Math.round(trainingWeeks * buildRatio));
+  let peakWeeks = Math.max(1, trainingWeeks - baseWeeks - buildWeeks);
+
+  // For short plans or plans without peak phase
+  if (hasThreePhases || trainingWeeks < 6) {
+    // Merge peak into build
+    buildWeeks = trainingWeeks - baseWeeks;
+    peakWeeks = 0;
+  }
+
+  const result = [
+    { name: "Base", weeks: baseWeeks },
+    { name: "Build", weeks: buildWeeks },
+  ];
+  if (peakWeeks > 0) result.push({ name: "Peak", weeks: peakWeeks });
+  result.push({ name: "Taper", weeks: taperWeeks });
+
+  return {
+    phases: result,
+    compressed: weeksAvailable < idealWeeks,
+    idealWeeks,
+    actualWeeks: weeks,
+  };
+}
 
 // Weekly patterns: day-of-week (0=Sun … 6=Sat) → {discipline, load}
 // Each race type has patterns per phase name.
@@ -830,7 +934,7 @@ function removeConflictingSchedule(schedType, raceCat) {
     catch { return []; }
   })();
   const filtered = existing.filter(s => s.type !== schedType);
-  localStorage.setItem("workoutSchedule", JSON.stringify(filtered));
+  localStorage.setItem("workoutSchedule", JSON.stringify(filtered)); if (typeof DB !== 'undefined') DB.syncSchedule();
 
   renderTrainingConflicts();
   if (typeof renderCalendar === "function") renderCalendar();
@@ -858,7 +962,7 @@ function loadTrainingNotes() {
   catch { return []; }
 }
 function saveTrainingNotes(notes) {
-  localStorage.setItem("trainingNotes", JSON.stringify(notes));
+  localStorage.setItem("trainingNotes", JSON.stringify(notes)); if (typeof DB !== 'undefined') DB.syncKey('trainingNotes');
 }
 
 const RACE_TYPE_ICON = {
@@ -904,9 +1008,85 @@ function _escapeHtml(str) {
   return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
+/**
+ * checkARacePromotion()
+ * If the A race has passed and there are remaining B races:
+ * - If exactly one B race remains, auto-promote it to A
+ * - If multiple B races remain, prompt the user to pick
+ */
+function checkARacePromotion() {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const events = loadEvents();
+  const upcoming = events.filter(e => e.date >= todayStr);
+  const hasActiveA = upcoming.some(e => (e.priority || "A").toUpperCase() === "A");
+
+  if (hasActiveA) return; // A race still active, nothing to do
+
+  const bRaces = upcoming.filter(e => (e.priority || "A").toUpperCase() === "B");
+  if (bRaces.length === 0) return; // no races at all
+
+  if (bRaces.length === 1) {
+    // Auto-promote the only remaining race
+    const race = events.find(e => e.id === bRaces[0].id);
+    if (race) {
+      race.priority = "A";
+      saveEvents(events);
+    }
+  } else {
+    // Multiple B races — prompt user to choose
+    _showARacePromotionModal(bRaces, events);
+  }
+}
+
+function _showARacePromotionModal(bRaces, allEvents) {
+  let overlay = document.getElementById("a-race-promotion-overlay");
+  if (overlay) overlay.remove();
+
+  overlay = document.createElement("div");
+  overlay.id = "a-race-promotion-overlay";
+  overlay.className = "quick-entry-overlay is-open";
+  overlay.style.cssText = "display:flex;z-index:10001";
+
+  const buttons = bRaces.map(r => {
+    const cfg = RACE_CONFIGS[r.type];
+    const label = r.name || (cfg ? cfg.label : r.type);
+    const dateStr = typeof formatDisplayDate === "function" ? formatDisplayDate(r.date) : r.date;
+    return `<button class="swap-alt-btn" onclick="_promoteToARace('${r.id}')">
+      <span class="swap-alt-name">${_escapeHtml(label)}</span>
+      <span class="swap-alt-muscles">${dateStr}</span>
+    </button>`;
+  }).join("");
+
+  overlay.innerHTML = `
+    <div class="quick-entry-modal" style="max-width:400px;padding:24px">
+      <h3 style="margin:0 0 8px">Your A Race has passed</h3>
+      <p style="margin:0 0 16px;color:var(--color-text-muted);font-size:0.85rem">Which race should be your new primary goal?</p>
+      ${buttons}
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+}
+
+function _promoteToARace(raceId) {
+  const events = loadEvents();
+  const race = events.find(e => e.id === raceId);
+  if (race) {
+    race.priority = "A";
+    saveEvents(events);
+  }
+  document.getElementById("a-race-promotion-overlay")?.remove();
+  if (typeof renderTrainingInputs === "function") renderTrainingInputs();
+  if (typeof renderRaceEvents === "function") renderRaceEvents();
+  if (typeof renderTrainingBlocksSection === "function") renderTrainingBlocksSection();
+}
+
 function renderTrainingInputs() {
   const container = document.getElementById("training-inputs-list");
   if (!container) return;
+
+  // Check if A race needs promotion
+  checkARacePromotion();
 
   const todayStr  = new Date().toISOString().slice(0, 10);
   const races     = loadEvents().filter(e => e.date > todayStr);
@@ -950,6 +1130,10 @@ function renderTrainingInputs() {
         </div>
         <div class="race-card-name">${_escapeHtml(race.name || (cfg ? cfg.label : race.type))}</div>
         <div class="race-card-meta">${cfg ? cfg.label : race.type}</div>
+        ${race.location ? `<div class="race-card-detail">${_escapeHtml(race.location)}</div>` : ""}
+        ${race.elevation ? `<div class="race-card-detail">Elevation: +${race.elevation} ft</div>` : ""}
+        ${race.avgTemp ? `<div class="race-card-detail">Avg Temp: ${race.avgTemp}°F</div>` : ""}
+        ${race.courseNotes ? `<div class="race-card-detail" style="font-style:italic">${_escapeHtml(race.courseNotes)}</div>` : ""}
         ${tags ? `<div class="race-tags">${tags}</div>` : ""}
         <div class="race-card-footer">
           <span class="race-date-badge">${formatDisplayDate(race.date)}</span>
@@ -1044,7 +1228,6 @@ function renderTrainingInputs() {
 
 /** Open the Race Events section and load the race for editing */
 function tiEditRace(id) {
-  openBuildPlanTab('race');
   editEvent(id);
 }
 
@@ -1178,7 +1361,7 @@ function _deleteImportedSession(planId, sessionId) {
 
   // Remove from workoutSchedule
   const schedule = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
-  localStorage.setItem("workoutSchedule", JSON.stringify(schedule.filter(e => e.id !== sessionId)));
+  localStorage.setItem("workoutSchedule", JSON.stringify(schedule.filter(e => e.id !== sessionId))); if (typeof DB !== 'undefined') DB.syncSchedule();
 
   // Update plan metadata
   const plans = (() => { try { return JSON.parse(localStorage.getItem("importedPlans")) || []; } catch { return []; } })();
@@ -1189,7 +1372,7 @@ function _deleteImportedSession(planId, sessionId) {
     if (removed) {
       plan.sessions = plan.sessions.filter(s => s.date !== removed.date || s.sessionName !== removed.sessionName);
     }
-    localStorage.setItem("importedPlans", JSON.stringify(plans));
+    localStorage.setItem("importedPlans", JSON.stringify(plans)); if (typeof DB !== 'undefined') DB.syncKey('importedPlans');
   }
 
   _renderImportedSessions(planId);
@@ -1221,7 +1404,7 @@ function _saveImportedPlanEdits(planId) {
       s.date = d.toISOString().slice(0, 10);
     });
   }
-  localStorage.setItem("importedPlans", JSON.stringify(plans));
+  localStorage.setItem("importedPlans", JSON.stringify(plans)); if (typeof DB !== 'undefined') DB.syncKey('importedPlans');
 
   // Shift workoutSchedule entries with matching planId
   if (shiftDays !== 0) {
@@ -1232,7 +1415,7 @@ function _saveImportedPlanEdits(planId) {
         e.date = d.toISOString().slice(0, 10);
       }
     });
-    localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+    localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
   }
 
   // Close modal, refresh
@@ -1280,7 +1463,7 @@ function removeTrainingInput(kind, id) {
       return false;                            // future — remove
     });
     console.log(`[removeTrainingInput] schedule type="${id}" before=${before} after=${filtered.length} removed=${before - filtered.length}`);
-    localStorage.setItem("workoutSchedule", JSON.stringify(filtered));
+    localStorage.setItem("workoutSchedule", JSON.stringify(filtered)); if (typeof DB !== 'undefined') DB.syncSchedule();
     renderTrainingConflicts();
     if (typeof renderCalendar === "function") renderCalendar();
   } else if (kind === "imported") {
@@ -1296,10 +1479,10 @@ function removeTrainingInput(kind, id) {
       }
       return false;
     });
-    localStorage.setItem("workoutSchedule", JSON.stringify(filtered));
+    localStorage.setItem("workoutSchedule", JSON.stringify(filtered)); if (typeof DB !== 'undefined') DB.syncSchedule();
     // Remove plan metadata
     const plans = (() => { try { return JSON.parse(localStorage.getItem("importedPlans")) || []; } catch { return []; } })();
-    localStorage.setItem("importedPlans", JSON.stringify(plans.filter(p => p.id !== id)));
+    localStorage.setItem("importedPlans", JSON.stringify(plans.filter(p => p.id !== id))); if (typeof DB !== 'undefined') DB.syncKey('importedPlans');
     if (typeof renderCalendar === "function") renderCalendar();
   } else if (kind === "note") {
     saveTrainingNotes(loadTrainingNotes().filter(n => n.id !== id));
@@ -1360,7 +1543,7 @@ function loadEvents() {
 }
 
 function saveEvents(events) {
-  localStorage.setItem("events", JSON.stringify(events));
+  localStorage.setItem("events", JSON.stringify(events)); if (typeof DB !== 'undefined') DB.syncEvents();
 }
 
 function loadTrainingPlan() {
@@ -1372,7 +1555,7 @@ function loadTrainingPlan() {
 }
 
 function saveTrainingPlanData(plan) {
-  localStorage.setItem("trainingPlan", JSON.stringify(plan));
+  localStorage.setItem("trainingPlan", JSON.stringify(plan)); if (typeof DB !== 'undefined') DB.syncTrainingPlan();
 }
 
 // ─── Training plan generation ────────────────────────────────────────────────
@@ -1750,6 +1933,7 @@ const RACE_SPORT_OPTS = [
   { value: "running",   icon: ICONS.run,  label: "Running",    desc: "Races or training for life" },
   { value: "cycling",   icon: ICONS.bike, label: "Cycling",    desc: "Races or training for life" },
   { value: "swimming",  icon: ICONS.swim, label: "Swimming",   desc: "Training for life" },
+  { value: "hyrox",     icon: ICONS.activity || "&#9883;", label: "Hyrox", desc: "Run + functional fitness race" },
 ];
 
 let raceFormState = {
@@ -2186,7 +2370,7 @@ function loadGymStrengthEnabled() {
 }
 
 function setGymStrengthEnabled(enabled) {
-  localStorage.setItem("gymStrengthEnabled", enabled ? "1" : "0");
+  localStorage.setItem("gymStrengthEnabled", enabled ? "1" : "0"); if (typeof DB !== 'undefined') DB.syncKey('gymStrengthEnabled');
   const toggle = document.getElementById("gym-strength-toggle");
   if (toggle) toggle.checked = enabled;
 
@@ -2195,7 +2379,7 @@ function setGymStrengthEnabled(enabled) {
     let schedule = [];
     try { schedule = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
     const filtered = schedule.filter(e => !(e.source === "generated" && GYM_STRENGTH_TYPES.includes(e.type)));
-    localStorage.setItem("workoutSchedule", JSON.stringify(filtered));
+    localStorage.setItem("workoutSchedule", JSON.stringify(filtered)); if (typeof DB !== 'undefined') DB.syncSchedule();
     if (typeof renderCalendar === "function") renderCalendar();
     if (typeof renderTrainingConflicts === "function") renderTrainingConflicts();
   }
@@ -2283,6 +2467,12 @@ function saveRace() {
   if (rfSlider) raceFormState.savedDaysPerWeek = parseInt(rfSlider.value);
   const isRunning = raceFormState.sport === "running";
 
+  // Collect race details (location, elevation, temp, notes)
+  const raceLocation = document.getElementById("race-location")?.value?.trim() || raceFormState.savedLocation || "";
+  const raceElevation = document.getElementById("race-elevation")?.value || raceFormState.savedElevation || "";
+  const raceTemp = document.getElementById("race-temp")?.value || raceFormState.savedTemp || "";
+  const raceCourseNotes = document.getElementById("race-notes")?.value?.trim() || raceFormState.savedCourseNotes || "";
+
   const race = {
     id: _editingRaceId || Date.now().toString(),
     name,
@@ -2291,6 +2481,10 @@ function saveRace() {
     priority,
     date,
     longDay,
+    ...(raceLocation && { location: raceLocation }),
+    ...(raceElevation && { elevation: parseInt(raceElevation) }),
+    ...(raceTemp && { avgTemp: parseInt(raceTemp) }),
+    ...(raceCourseNotes && { courseNotes: raceCourseNotes }),
     ...(isRunning && raceFormState.savedRunGoal !== null       && { runGoal: raceFormState.savedRunGoal }),
     ...(isRunning && raceFormState.savedReturningFromInjury !== null && { returningFromInjury: raceFormState.savedReturningFromInjury }),
     ...(isRunning && raceFormState.savedDaysPerWeek            && { daysPerWeek: raceFormState.savedDaysPerWeek }),
@@ -2308,8 +2502,21 @@ function saveRace() {
   saveEvents(events);
 
   const verb = _editingRaceId ? "updated" : "saved";
-  msgEl.textContent = `✓ ${name} ${verb}! ${newEntries.length} training sessions generated.`;
-  msgEl.style.color = "var(--color-success)";
+
+  // Determine plan type for philosophy
+  const _triRaces = ["ironman", "halfIronman", "olympic", "sprint"];
+  const _runRaces = ["marathon", "halfMarathon", "tenK", "fiveK"];
+  const _cycleRaces = ["centuryRide", "granFondo"];
+  const _pType = _triRaces.includes(type) ? "triathlon" : _runRaces.includes(type) ? "running" : _cycleRaces.includes(type) ? "cycling" : "general";
+
+  msgEl.innerHTML = `
+    <div style="text-align:center;padding:4px 0">
+      <div style="font-weight:600;color:var(--color-success);margin-bottom:10px">${name} ${verb}! ${newEntries.length} training sessions generated.</div>
+      <p style="color:var(--color-text-muted);font-size:0.82rem;margin:0 0 10px">Want to understand why your plan is structured this way?</p>
+      <button class="tb-info-btn" onclick="if(typeof showTrainingPhilosophy==='function')showTrainingPhilosophy('${_pType}');this.closest('div').parentElement.innerHTML=''">See Training Philosophy</button>
+      <button class="btn-secondary" style="margin-left:6px;font-size:0.78rem;padding:4px 12px" onclick="this.closest('div').parentElement.innerHTML=''">Dismiss</button>
+    </div>`;
+  msgEl.style.color = "";
 
   // Reset edit state and form
   _cancelEditRace();
@@ -2318,40 +2525,117 @@ function saveRace() {
   renderTrainingConflicts();
   if (typeof renderCalendar === "function") renderCalendar();
   if (typeof renderTrainingInputs === "function") renderTrainingInputs();
-
-  setTimeout(() => { msgEl.textContent = ""; }, 4000);
+  if (typeof renderTrainingBlocksSection === "function") renderTrainingBlocksSection();
 }
 
-/** Populates the race form with an existing race for editing */
+/** Opens a clean edit modal for an existing race */
 function editEvent(id) {
   const race = loadEvents().find(e => e.id === id);
   if (!race) return;
 
-  _editingRaceId = id;
+  const cfg = RACE_CONFIGS[race.type] || {};
+  const sel = (cur, val) => cur === val ? "selected" : "";
+  const DOW_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-  const _typeToSport = {
-    ironman: "triathlon", halfIronman: "triathlon", olympic: "triathlon", sprint: "triathlon",
-    marathon: "running", halfMarathon: "running", tenK: "running", fiveK: "running",
-    centuryRide: "cycling", granFondo: "cycling",
-  };
+  let overlay = document.getElementById("edit-race-overlay");
+  if (overlay) overlay.remove();
 
-  const _editSport = _typeToSport[race.type] || "running";
-  raceFormState = {
-    step: _editSport === "running" ? 5 : _editSport === "triathlon" ? 4 : 3,
-    sport: _editSport,
-    type: race.type,
-    savedName: race.name || "",
-    savedDate: race.date || "",
-    savedLevel: race.level || "intermediate",
-    savedPriority: race.priority || "A",
-    savedLongDay: (race.longDay !== null && race.longDay !== undefined) ? String(race.longDay) : "",
-    savedRunGoal: race.runGoal ?? null,
-    savedReturningFromInjury: race.returningFromInjury ?? null,
-    savedDaysPerWeek: race.daysPerWeek ?? null,
-  };
+  overlay = document.createElement("div");
+  overlay.id = "edit-race-overlay";
+  overlay.className = "quick-entry-overlay is-open";
+  overlay.style.cssText = "display:flex;z-index:10001";
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
 
-  openBuildPlanTab('race');
-  renderRaceForm();
+  overlay.innerHTML = `
+    <div class="quick-entry-modal" style="max-width:420px;padding:24px">
+      <h3 style="margin:0 0 4px">Edit Race</h3>
+      <p style="margin:0 0 16px;color:var(--color-text-muted);font-size:0.82rem">${cfg.label || race.type}</p>
+
+      <div class="form-row" style="margin-bottom:10px">
+        <label>Race Name</label>
+        <input type="text" id="edit-race-name" value="${_escapeHtml(race.name || "")}" placeholder="e.g. Boston Marathon 2026" />
+      </div>
+
+      <div class="form-row" style="margin-bottom:10px">
+        <label>Race Date</label>
+        <input type="date" id="edit-race-date" value="${race.date || ""}" />
+      </div>
+
+      <div class="form-grid" style="margin-bottom:10px">
+        <div class="form-row">
+          <label>Level</label>
+          <select id="edit-race-level">
+            <option value="beginner" ${sel(race.level, "beginner")}>Beginner</option>
+            <option value="intermediate" ${sel(race.level, "intermediate")}>Intermediate</option>
+            <option value="advanced" ${sel(race.level, "advanced")}>Advanced</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Priority</label>
+          <select id="edit-race-priority">
+            <option value="A" ${sel(race.priority, "A")}>A Race</option>
+            <option value="B" ${sel(race.priority, "B")}>B Race</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-grid" style="margin-bottom:10px">
+        <div class="form-row">
+          <label>Days / Week</label>
+          <select id="edit-race-days">
+            <option value="">Default</option>
+            ${[3,4,5,6,7].map(n => `<option value="${n}" ${race.daysPerWeek === n ? "selected" : ""}>${n} days</option>`).join("")}
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Long Session Day</label>
+          <select id="edit-race-longday">
+            <option value="">Default (Saturday)</option>
+            ${DOW_LABELS.map((d, i) => `<option value="${i}" ${race.longDay === i ? "selected" : ""}>${d}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn-primary" style="flex:1" onclick="_saveEditedRace('${race.id}')">Save Changes</button>
+        <button class="btn-secondary" style="flex:1" onclick="document.getElementById('edit-race-overlay').remove()">Cancel</button>
+      </div>
+      <p id="edit-race-msg" class="save-msg" style="margin-top:8px"></p>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+}
+
+function _saveEditedRace(raceId) {
+  const events = loadEvents();
+  const race = events.find(e => e.id === raceId);
+  if (!race) return;
+
+  race.name = document.getElementById("edit-race-name")?.value.trim() || race.name;
+  race.date = document.getElementById("edit-race-date")?.value || race.date;
+  race.level = document.getElementById("edit-race-level")?.value || race.level;
+  race.priority = document.getElementById("edit-race-priority")?.value || race.priority;
+
+  const days = document.getElementById("edit-race-days")?.value;
+  race.daysPerWeek = days ? parseInt(days) : race.daysPerWeek;
+
+  const longDay = document.getElementById("edit-race-longday")?.value;
+  race.longDay = longDay !== "" ? parseInt(longDay) : race.longDay;
+
+  saveEvents(events);
+
+  // Regenerate training plan for this race
+  const newEntries = typeof generateTrainingPlan === "function" ? generateTrainingPlan(race) : [];
+  const existingPlan = loadTrainingPlan().filter(e => e.raceId !== raceId);
+  saveTrainingPlanData([...existingPlan, ...newEntries]);
+
+  document.getElementById("edit-race-overlay")?.remove();
+
+  if (typeof renderRaceEvents === "function") renderRaceEvents();
+  if (typeof renderTrainingInputs === "function") renderTrainingInputs();
+  if (typeof renderTrainingBlocksSection === "function") renderTrainingBlocksSection();
+  if (typeof renderCalendar === "function") renderCalendar();
 }
 
 function _cancelEditRace() {
@@ -2392,7 +2676,10 @@ const DISCIPLINE_ICONS = {
   swimming:     ICONS.swim,
   triathlon:    ICONS.swim,
   general:      ICONS.activity,
+  hiit:         ICONS.flame || ICONS.zap,
+  hyrox:        ICONS.activity,
   yoga:         ICONS.yoga,
+  wellness:     ICONS.droplet,
 };
 
 function renderRaceEvents() {
@@ -2436,10 +2723,15 @@ function renderRaceEvents() {
         </div>
         <div class="race-card-name">${race.name}</div>
         <div class="race-card-meta">${config.label || race.type}</div>
+        ${race.location ? `<div class="race-card-detail">${race.location}</div>` : ""}
+        ${race.elevation ? `<div class="race-card-detail">Elevation: +${race.elevation} ft</div>` : ""}
+        ${race.avgTemp ? `<div class="race-card-detail">Avg Temp: ${race.avgTemp}°F</div>` : ""}
+        ${race.courseNotes ? `<div class="race-card-detail" style="font-style:italic">${_escapeHtml(race.courseNotes)}</div>` : ""}
         ${tags ? `<div class="race-tags">${tags}</div>` : ""}
         <div class="race-card-footer">
           <span class="race-date-badge">${formatDisplayDate(race.date)}</span>
           <span class="race-countdown ${isPast ? "past" : ""}">${label}</span>
+          ${typeof renderTrainingPhilosophyButton === "function" ? renderTrainingPhilosophyButton(race.type === "triathlon" || race.type === "olympic-tri" || race.type === "half-ironman" || race.type === "ironman" ? "triathlon" : race.type === "marathon" || race.type === "half-marathon" || race.type === "10k" || race.type === "5k" ? "running" : race.type === "century" || race.type === "gran-fondo" ? "cycling" : "general") : ""}
         </div>
       </div>`;
   }).join("");
@@ -2448,4 +2740,261 @@ function renderRaceEvents() {
 function formatDisplayDate(dateStr) {
   const d = new Date(dateStr + "T00:00:00");
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+
+/* =====================================================================
+   TRAINING BLOCKS EXPLAINED — helps beginners understand plan phases
+   ===================================================================== */
+
+const TRAINING_BLOCK_INFO = {
+  running: {
+    title: "Your Running Plan Structure",
+    blocks: [
+      { name: "BASE", weeks: "1-5", focus: "Building your aerobic engine",
+        desc: "Easy, conversational-pace miles to build endurance safely.",
+        why: "Your body needs time to adapt tendons, ligaments, and cardiovascular system.",
+        feel: "Like it's \"too easy\" — that's the point!" },
+      { name: "BUILD", weeks: "6-10", focus: "Adding speed and strength",
+        desc: "Introducing tempo runs, intervals, and longer long runs.",
+        why: "Now that your base is set, your body can handle harder efforts.",
+        feel: "Challenged but recovering between sessions." },
+      { name: "PEAK", weeks: "11-14", focus: "Race-specific fitness",
+        desc: "Highest volume and intensity weeks, race-pace practice.",
+        why: "Sharpening your fitness to be race-ready.",
+        feel: "Tired — this is normal and expected." },
+      { name: "TAPER", weeks: "15-16", focus: "Rest and ready",
+        desc: "Reducing volume while maintaining some intensity.",
+        why: "Your body needs 10-14 days to fully absorb training and arrive fresh.",
+        feel: "Antsy, maybe sluggish — totally normal, your body is storing energy." }
+    ]
+  },
+  cycling: {
+    title: "Your Cycling Plan Structure",
+    blocks: [
+      { name: "BASE", weeks: "1-4", focus: "Aerobic foundation",
+        desc: "Long steady rides, building time in the saddle.",
+        why: "Develops fat-burning efficiency and cardiovascular capacity.",
+        feel: "Easy and sustainable — zone 2 focus." },
+      { name: "BUILD", weeks: "5-8", focus: "Strength & threshold",
+        desc: "Sweet spot intervals, tempo efforts, and climbing.",
+        why: "Raises your FTP and ability to sustain power.",
+        feel: "Legs burning on intervals but recovering between rides." },
+      { name: "PEAK", weeks: "9-12", focus: "Race sharpening",
+        desc: "VO2max intervals, race simulations, high intensity.",
+        why: "Fine-tuning top-end fitness for event performance.",
+        feel: "Fatigued but powerful — trust the process." },
+      { name: "TAPER", weeks: "13-14", focus: "Fresh legs",
+        desc: "Reduced volume, a few sharp efforts to stay activated.",
+        why: "Lets accumulated fatigue dissipate before race day.",
+        feel: "Restless — that's a good sign." }
+    ]
+  },
+  triathlon: {
+    title: "Your Triathlon Plan Structure",
+    blocks: [
+      { name: "BASE", weeks: "1-5", focus: "Multi-sport foundation",
+        desc: "Building comfort in all three disciplines with easy volume.",
+        why: "Establishes aerobic base across swim/bike/run without overuse.",
+        feel: "Manageable — focus on technique and consistency." },
+      { name: "BUILD", weeks: "6-10", focus: "Sport-specific intensity",
+        desc: "Brick workouts, threshold sessions, race-pace practice.",
+        why: "Develops the ability to transition between sports under fatigue.",
+        feel: "Challenging weeks — prioritize recovery and nutrition." },
+      { name: "PEAK", weeks: "11-14", focus: "Race simulation",
+        desc: "Full race-distance rehearsals, pacing strategy, nutrition practice.",
+        why: "Nothing new on race day — practice everything in training.",
+        feel: "Tired but confident in your race plan." },
+      { name: "TAPER", weeks: "15-16", focus: "Arrive fresh",
+        desc: "Short, crisp sessions to keep muscles activated.",
+        why: "Two weeks of reduced load for full physiological adaptation.",
+        feel: "You might feel slower — your body is storing energy." }
+    ]
+  },
+  general: {
+    title: "Your Training Plan Structure",
+    blocks: [
+      { name: "FOUNDATION", weeks: "1-3", focus: "Movement quality & habits",
+        desc: "Establishing proper form and consistent training schedule.",
+        why: "Good habits and technique prevent injury and set you up for progress.",
+        feel: "Light and manageable — building the routine." },
+      { name: "PROGRESSION", weeks: "4-8", focus: "Progressive overload",
+        desc: "Gradually increasing weight, reps, or duration.",
+        why: "Your body adapts to stress — we need to keep challenging it.",
+        feel: "Workouts getting harder but strength is building." },
+      { name: "INTENSIFICATION", weeks: "9-12", focus: "Peak performance",
+        desc: "Highest intensity and volume to maximize fitness gains.",
+        why: "Pushing your limits to reach new personal bests.",
+        feel: "Demanding — recovery and sleep are critical." },
+      { name: "DELOAD", weeks: "13", focus: "Active recovery",
+        desc: "Reduced volume and intensity for one week.",
+        why: "Lets your body supercompensate — you'll come back stronger.",
+        feel: "Light workouts — resist the urge to push hard." }
+    ]
+  }
+};
+
+/**
+ * showTrainingPhilosophy(planType)
+ * Shows a modal explaining the training blocks for the given plan type.
+ */
+function showTrainingPhilosophy(planType) {
+  const info = TRAINING_BLOCK_INFO[planType] || TRAINING_BLOCK_INFO.general;
+
+  let overlay = document.getElementById("training-philosophy-overlay");
+  if (overlay) overlay.remove();
+
+  overlay = document.createElement("div");
+  overlay.id = "training-philosophy-overlay";
+  overlay.className = "quick-entry-overlay is-open";
+  overlay.style.cssText = "display:flex;z-index:10001";
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+
+  const blocksHTML = info.blocks.map(b => `
+    <div class="tb-block">
+      <div class="tb-block-header">
+        <span class="tb-block-name">${b.name}</span>
+        <span class="tb-block-weeks">Weeks ${b.weeks}</span>
+      </div>
+      <div class="tb-block-focus">${b.focus}</div>
+      <p class="tb-block-desc">${b.desc}</p>
+      <p class="tb-block-why"><strong>Why:</strong> ${b.why}</p>
+      <p class="tb-block-feel"><strong>You'll feel:</strong> ${b.feel}</p>
+    </div>
+  `).join("");
+
+  overlay.innerHTML = `
+    <div class="quick-entry-modal" style="max-width:480px;padding:24px">
+      <h2 style="margin:0 0 16px">${info.title}</h2>
+      <div class="tb-timeline">
+        ${info.blocks.map(b => `<div class="tb-timeline-block"><span>${b.name}</span></div>`).join("")}
+      </div>
+      ${blocksHTML}
+      <button class="btn-primary" style="width:100%;margin-top:16px" onclick="document.getElementById('training-philosophy-overlay').remove()">Got It</button>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+}
+
+/**
+ * renderTrainingPhilosophyButton(planType)
+ * Returns HTML for a small info button that opens the training blocks modal.
+ */
+/**
+ * renderTrainingBlocksSection()
+ * Populates the Training Blocks card in the Training tab based on active races/plans.
+ */
+function renderTrainingBlocksSection() {
+  const container = document.getElementById("training-blocks-content");
+  if (!container) return;
+
+  const section = document.getElementById("section-training-blocks");
+  const events = typeof loadEvents === "function" ? loadEvents() : [];
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const upcoming = events.filter(e => e.date >= todayStr).sort((a, b) => a.date.localeCompare(b.date));
+
+  // Only show for race types that use periodized training blocks
+  const BLOCK_RACE_TYPES = new Set(["ironman", "halfIronman", "olympic", "sprint", "marathon", "halfMarathon", "tenK", "fiveK", "centuryRide", "granFondo", "hyrox", "hyroxDoubles"]);
+  const blockRaces = upcoming.filter(e => BLOCK_RACE_TYPES.has(e.type));
+
+  if (blockRaces.length === 0) {
+    if (section) section.style.display = "none";
+    return;
+  }
+  if (section) section.style.display = "";
+
+  // Only show training blocks for the A race — one periodization cycle at a time
+  const aRace = blockRaces.find(e => (e.priority || "A").toUpperCase() === "A");
+  const bRaces = blockRaces.filter(e => (e.priority || "A").toUpperCase() === "B");
+  const race = aRace || racesWithPlans[0];
+
+  let html = "";
+  {
+    const config = RACE_CONFIGS[race.type];
+    if (!config) return;
+
+    const raceDate = new Date(race.date + "T00:00:00");
+    const today = new Date();
+    const weeksOut = Math.max(1, Math.ceil((raceDate - today) / (7 * 24 * 60 * 60 * 1000)));
+
+    // Get adaptive phases based on athlete profile
+    const adaptive = getAdaptivePhases(race.type, weeksOut, race.level || "intermediate", race.daysPerWeek || null);
+    const phases = adaptive ? adaptive.phases : config.phases;
+
+    // Determine plan type for philosophy modal
+    const triTypes = ["ironman", "halfIronman", "olympic", "sprint"];
+    const runTypes = ["marathon", "halfMarathon", "tenK", "fiveK"];
+    const cycleTypes = ["centuryRide", "granFondo"];
+    const planType = triTypes.includes(race.type) ? "triathlon"
+      : runTypes.includes(race.type) ? "running"
+      : cycleTypes.includes(race.type) ? "cycling"
+      : "general";
+
+    // Calculate date ranges for each phase (working backwards from race date)
+    const totalPlanWeeks = phases.reduce((s, p) => s + p.weeks, 0);
+    const planStartDate = new Date(raceDate);
+    planStartDate.setDate(planStartDate.getDate() - totalPlanWeeks * 7);
+
+    let currentBlock = null;
+    let phaseStartDate = new Date(planStartDate);
+    const phaseDates = phases.map(p => {
+      const start = new Date(phaseStartDate);
+      const end = new Date(start);
+      end.setDate(end.getDate() + p.weeks * 7 - 1);
+      phaseStartDate = new Date(end);
+      phaseStartDate.setDate(phaseStartDate.getDate() + 1);
+
+      const nowMs = today.getTime();
+      if (nowMs >= start.getTime() && nowMs <= end.getTime()) {
+        currentBlock = p.name;
+      }
+
+      return { ...p, start, end };
+    });
+
+    const fmtDate = d => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+    // Compressed plan warning
+    const compressedNote = adaptive?.compressed
+      ? `<div style="font-size:0.78rem;color:var(--color-amber,#f59e0b);margin-bottom:6px">Compressed plan — ideal is ${adaptive.idealWeeks} weeks, you have ${weeksOut}. Phases adjusted for ${race.level || "intermediate"} level.</div>`
+      : "";
+
+    // Level + frequency context
+    const levelLabel = race.level ? `${race.level.charAt(0).toUpperCase() + race.level.slice(1)}` : "";
+    const freqLabel = race.daysPerWeek ? `${race.daysPerWeek}x/week` : "";
+    const contextParts = [levelLabel, freqLabel].filter(Boolean);
+    const contextNote = contextParts.length ? `<div style="font-size:0.78rem;color:var(--color-text-muted);margin-bottom:4px">${contextParts.join(" · ")}</div>` : "";
+
+    html += `<div style="margin-bottom:16px">
+      <div style="font-weight:700;font-size:0.9rem;margin-bottom:4px">${_escapeHtml(race.name || config.label)} — ${weeksOut} weeks out</div>
+      ${contextNote}${compressedNote}
+      <div class="tb-timeline">
+        ${phaseDates.map(p => {
+          const isCurrent = currentBlock && p.name.toLowerCase() === currentBlock.toLowerCase();
+          return `<div class="tb-timeline-block${isCurrent ? " tb-current" : ""}" title="${fmtDate(p.start)} – ${fmtDate(p.end)}"><span>${p.name}</span><br><span style="font-size:0.6rem;opacity:0.8">${p.weeks}w</span><br><span style="font-size:0.55rem;opacity:0.7">${fmtDate(p.start)} – ${fmtDate(p.end)}</span></div>`;
+        }).join("")}
+      </div>
+      ${currentBlock ? `<div style="font-size:0.82rem;margin-top:6px">Currently in: <strong>${currentBlock}</strong></div>` : ""}
+      <button class="tb-info-btn" style="margin-top:8px" onclick="showTrainingPhilosophy('${planType}')">Learn about each phase</button>
+    </div>`;
+
+    // Show B races as tune-ups within the timeline
+    if (bRaces.length > 0) {
+      html += `<div style="font-size:0.82rem;color:var(--color-text-muted);margin-bottom:12px">`;
+      bRaces.forEach(b => {
+        const bDate = new Date(b.date + "T00:00:00");
+        const bWeeks = Math.max(1, Math.ceil((bDate - new Date()) / (7 * 24 * 60 * 60 * 1000)));
+        const bConfig = RACE_CONFIGS[b.type];
+        html += `<div style="margin-bottom:4px"><strong>B Race:</strong> ${_escapeHtml(b.name || (bConfig ? bConfig.label : b.type))} — ${bWeeks} weeks out (tune-up)</div>`;
+      });
+      html += `</div>`;
+    }
+  }
+
+  container.innerHTML = html || `<p style="color:var(--color-text-muted);font-size:0.85rem">No active race plans found.</p>`;
+}
+
+function renderTrainingPhilosophyButton(planType) {
+  return `<button class="tb-info-btn" onclick="event.stopPropagation();showTrainingPhilosophy('${planType || "general"}')" title="Learn about your plan structure">&#8505; Training Blocks</button>`;
 }

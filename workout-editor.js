@@ -83,8 +83,10 @@ function _addEditRow(ex) {
   div.id = `edit-row-${id}`;
   const weightVal = typeof _normalizeWeightDisplay === 'function' ? _normalizeWeightDisplay(ex?.weight || '') : (ex?.weight || '');
   const hasSetDetails = ex?.setDetails && ex.setDetails.length > 0;
+  const dragHandleHTML = `<span class="drag-handle" title="Drag to reorder">⠿</span>`;
   if (_editIsHiit) {
     div.innerHTML = `
+      ${dragHandleHTML}
       <div><label>Exercise</label>
         <input type="text" id="edit-ex-${id}" value="${ex?.name || ""}" placeholder="e.g. Burpees, Row 500m" /></div>
       <div class="edit-summary-fields" id="edit-summary-${id}"><label>Reps / Time / Distance</label>
@@ -94,6 +96,7 @@ function _addEditRow(ex) {
       <button class="remove-exercise-btn" title="Remove" onclick="removeEditRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   } else {
     div.innerHTML = `
+      ${dragHandleHTML}
       <div><label>Exercise</label>
         <input type="text"   id="edit-ex-${id}"    value="${ex?.name   || ""}" placeholder="e.g. Bench Press" /></div>
       <div><label>Sets</label>
@@ -152,7 +155,26 @@ function _addEditRow(ex) {
     }
     _editDragId = null;
   });
-  document.getElementById("edit-exercise-rows").appendChild(div);
+  // Touch support for mobile
+  const editContainer = document.getElementById("edit-exercise-rows");
+  TouchDrag.attach(div, editContainer, {
+    hintClasses: ["drag-insert-above", "drag-insert-below", "drag-ss-target"],
+    rowSelector: ".edit-exercise-row",
+    handleSelector: ".drag-handle",
+    onDrop(dragEl, targetEl, clientY) {
+      const rect = targetEl.getBoundingClientRect();
+      const pct = (clientY - rect.top) / rect.height;
+      _editClearAllHints();
+      const fromId = parseInt(dragEl.id.replace("edit-row-", ""));
+      const toId   = parseInt(targetEl.id.replace("edit-row-", ""));
+      if (pct > 0.3 && pct < 0.7) {
+        _editGroupSuperset(fromId, toId);
+      } else {
+        _editReorder(fromId, toId, pct <= 0.3);
+      }
+    }
+  });
+  editContainer.appendChild(div);
   // Render pending setDetails now that the element is in the DOM
   if (hasSetDetails) {
     _editRenderSetDetails(id, ex.setDetails);
@@ -474,14 +496,6 @@ async function swapExercise(rowId) {
   const current = nameEl.value.trim();
   if (!current) { nameEl.focus(); return; }
 
-  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
-  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
-    nameEl.value = "";
-    nameEl.placeholder = "Type replacement exercise";
-    nameEl.focus();
-    return;
-  }
-
   const btn = nameEl.closest(".edit-exercise-row").querySelector(".swap-btn");
   if (btn) { btn.textContent = "…"; btn.disabled = true; }
 
@@ -490,26 +504,15 @@ async function swapExercise(rowId) {
     try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
     const level = profile.fitnessLevel || "intermediate";
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 200,
-        messages: [{
-          role: "user",
-          content: `Suggest 3 alternative exercises to replace "${current}" for a ${level} athlete. Return ONLY a JSON array of 3 strings, no markdown: ["Exercise 1","Exercise 2","Exercise 3"]`
-        }]
-      })
+    const data = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 200,
+      messages: [{
+        role: "user",
+        content: `Suggest 3 alternative exercises to replace "${current}" for a ${level} athlete. Return ONLY a JSON array of 3 strings, no markdown: ["Exercise 1","Exercise 2","Exercise 3"]`
+      }]
     });
 
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
     const text    = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
     const options = JSON.parse(text.replace(/```json|```/g, "").trim());
     _showSwapPicker(rowId, current, options);

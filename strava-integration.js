@@ -236,7 +236,7 @@ async function importStravaActivities() {
     });
 
     if (imported > 0) {
-      localStorage.setItem("workouts", JSON.stringify(workouts));
+      localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
       localStorage.setItem("stravaLastSync", new Date().toISOString());
 
       // Refresh UI

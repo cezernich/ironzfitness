@@ -20,7 +20,8 @@ function _setLivePref(key, val) {
 function startLiveWorkout(sessionId, dateStr, type, stepsJson, exercisesJson) {
   const steps = stepsJson ? JSON.parse(stepsJson) : null;
   const exercises = exercisesJson ? JSON.parse(exercisesJson) : null;
-  const isStrength = !!(exercises && exercises.length > 0 && !steps);
+  const isHyrox = type === "hyrox" && exercises && exercises.length > 0;
+  const isStrength = !isHyrox && !!(exercises && exercises.length > 0 && !steps);
 
   _liveTracker = {
     sessionId,
@@ -29,6 +30,7 @@ function startLiveWorkout(sessionId, dateStr, type, stepsJson, exercisesJson) {
     steps: steps || [],
     exercises: exercises || [],
     isStrength,
+    isHyrox,
     currentStep: 0,
     startTime: Date.now(),
     stepStart: Date.now(),
@@ -44,6 +46,8 @@ function startLiveWorkout(sessionId, dateStr, type, stepsJson, exercisesJson) {
         return { done: false, reps: sd ? sd.reps : (ex.reps || ""), weight: sd ? sd.weight : (ex.weight || "") };
       });
     }) : [],
+    // For Hyrox: track split time per station/run
+    stationTimes: isHyrox ? exercises.map(() => null) : [],
     currentExercise: 0,
     currentSet: 0,
     restCountdown: 0,
@@ -92,7 +96,7 @@ function _updateLiveTimerDisplay() {
   }
 
   // Update step timer for endurance
-  if (!_liveTracker.isStrength) {
+  if (!_liveTracker.isStrength && !_liveTracker.isHyrox) {
     const stepTimerEl = document.getElementById("live-step-timer");
     if (stepTimerEl && !_liveTracker.paused) {
       const stepElapsed = Date.now() - _liveTracker.stepStart;
@@ -100,10 +104,19 @@ function _updateLiveTimerDisplay() {
     }
   }
 
+  // Update Hyrox station timer
+  if (_liveTracker.isHyrox) {
+    const hxTimerEl = document.getElementById("live-hyrox-station-timer");
+    if (hxTimerEl && !_liveTracker.paused) {
+      const stationElapsed = Date.now() - _liveTracker.stepStart;
+      hxTimerEl.textContent = _formatMs(stationElapsed);
+    }
+  }
+
   // Progress bar
   const progEl = document.getElementById("live-progress-fill");
   if (progEl) {
-    const pct = _liveTracker.isStrength ? _getStrengthProgress() : _getEnduranceProgress();
+    const pct = _liveTracker.isHyrox ? _getHyroxProgress() : _liveTracker.isStrength ? _getStrengthProgress() : _getEnduranceProgress();
     progEl.style.width = `${Math.min(pct, 100)}%`;
   }
 }
@@ -138,6 +151,15 @@ function _getEnduranceProgress() {
   return totalMin > 0 ? (elapsedMin / totalMin) * 100 : 0;
 }
 
+function _getHyroxProgress() {
+  if (!_liveTracker?.exercises?.length) return 0;
+  const total = _liveTracker.exercises.length;
+  const done = _liveTracker.stationTimes.filter(t => t !== null).length;
+  // Current station partial progress
+  const partial = done < total ? 0.5 : 0;
+  return ((done + partial) / total) * 100;
+}
+
 // ── Render ───────────────────────────────────────────────────────────────────
 
 function _renderLiveTracker() {
@@ -150,7 +172,7 @@ function _renderLiveTracker() {
   overlay.className = "live-tracker-overlay";
 
   const t = _liveTracker;
-  const body = t.isStrength ? _buildStrengthView() : _buildEnduranceView();
+  const body = t.isHyrox ? _buildHyroxView() : t.isStrength ? _buildStrengthView() : _buildEnduranceView();
   const prefs = _getLivePrefs();
   const hideTimer = prefs.hideTimer || false;
   const hideRest = prefs.hideRestTimer || false;
@@ -159,6 +181,7 @@ function _renderLiveTracker() {
     <div class="live-tracker">
       <div class="live-tracker-header">
         <div class="live-header-top">
+          <button class="live-exit-btn" onclick="_exitLiveWorkout()" title="Exit without saving"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg></button>
           <span class="live-timer" id="live-timer" style="${hideTimer ? "display:none" : ""}">${_formatMs(t.elapsed)}</span>
           <div class="live-header-btns">
             <button class="live-btn-settings" onclick="_toggleLiveSettings()" title="Settings">${typeof ICONS !== "undefined" && ICONS.settings ? ICONS.settings : "&#9881;"}</button>
@@ -204,6 +227,7 @@ function _buildStrengthView() {
           <span class="live-exercise-name">${_escLiveHtml(ex.name)}</span>
           <span class="live-exercise-target">${ex.sets || "3"} x ${ex.reps || ""} ${ex.weight ? "@ " + ex.weight : ""}</span>
           ${allDone ? '<span class="live-done-check">&#10003;</span>' : ""}
+          ${!allDone ? `<button class="live-swap-btn" onclick="_swapLiveExercise(${ei})" title="Swap exercise">&#8644;</button>` : ""}
         </div>
         <div class="live-sets-grid" id="live-sets-${ei}">
           <div class="live-sets-header">
@@ -265,6 +289,78 @@ function _buildEnduranceView() {
         </div>
       `).join("")}
     </div>`;
+}
+
+function _buildHyroxView() {
+  const t = _liveTracker;
+  const idx = t.currentStep;
+  const total = t.exercises.length;
+  const current = t.exercises[idx];
+  if (!current) return '<div class="live-complete-msg">All stations complete!</div>';
+
+  const isRun = /^run\s/i.test(current.name);
+  const stationElapsed = Date.now() - t.stepStart;
+
+  return `
+    <div class="live-hyrox-step">
+      <div class="live-step-counter">Station ${idx + 1} of ${total}</div>
+      <div class="live-hyrox-station-type${isRun ? " live-hyrox-run" : " live-hyrox-station"}">${isRun ? "RUN" : "STATION"}</div>
+      <div class="live-hyrox-station-name">${_escLiveHtml(current.name)}</div>
+      <div class="live-hyrox-station-detail">${_escLiveHtml(current.reps || "")}${current.weight ? " @ " + _escLiveHtml(current.weight) : ""}</div>
+      <div class="live-hyrox-station-timer" id="live-hyrox-station-timer">${_formatMs(stationElapsed)}</div>
+      <div class="live-step-nav">
+        ${idx > 0 ? `<button class="live-btn-step" onclick="_liveHyroxPrev()">Prev</button>` : `<span></span>`}
+        ${idx < total - 1 ? `<button class="live-btn-step live-btn-step--next" onclick="_liveHyroxNext()">Next Station</button>` : `<button class="live-btn-step live-btn-step--next" onclick="_finishLiveWorkout()">Finish</button>`}
+      </div>
+    </div>
+    <div class="live-step-list">
+      ${t.exercises.map((ex, i) => {
+        const done = t.stationTimes[i] !== null;
+        const timeStr = done ? _formatMs(t.stationTimes[i]) : "";
+        return `
+          <div class="live-step-item${i === idx ? " live-step-item--active" : ""}${done ? " live-step-item--done" : ""}" onclick="_liveHyroxGoTo(${i})">
+            <span class="live-step-item-num">${i + 1}</span>
+            <span class="live-step-item-label">${_escLiveHtml(ex.name)}</span>
+            <span class="live-step-item-dur">${done ? timeStr : ""}</span>
+          </div>`;
+      }).join("")}
+    </div>`;
+}
+
+// ── Hyrox Navigation ────────────────────────────────────────────────────────
+
+function _liveHyroxNext() {
+  if (!_liveTracker || _liveTracker.currentStep >= _liveTracker.exercises.length - 1) return;
+  // Record split time for current station
+  const elapsed = Date.now() - _liveTracker.stepStart;
+  _liveTracker.stationTimes[_liveTracker.currentStep] = elapsed;
+  // Advance
+  _liveTracker.currentStep++;
+  _liveTracker.stepStart = Date.now();
+  const body = document.getElementById("live-tracker-body");
+  if (body) body.innerHTML = _buildHyroxView();
+}
+
+function _liveHyroxPrev() {
+  if (!_liveTracker || _liveTracker.currentStep <= 0) return;
+  // Record current station time before going back
+  const elapsed = Date.now() - _liveTracker.stepStart;
+  _liveTracker.stationTimes[_liveTracker.currentStep] = elapsed;
+  _liveTracker.currentStep--;
+  _liveTracker.stepStart = Date.now();
+  const body = document.getElementById("live-tracker-body");
+  if (body) body.innerHTML = _buildHyroxView();
+}
+
+function _liveHyroxGoTo(idx) {
+  if (!_liveTracker || idx < 0 || idx >= _liveTracker.exercises.length) return;
+  // Record current station time
+  const elapsed = Date.now() - _liveTracker.stepStart;
+  _liveTracker.stationTimes[_liveTracker.currentStep] = elapsed;
+  _liveTracker.currentStep = idx;
+  _liveTracker.stepStart = Date.now();
+  const body = document.getElementById("live-tracker-body");
+  if (body) body.innerHTML = _buildHyroxView();
 }
 
 // ── Interactions ─────────────────────────────────────────────────────────────
@@ -378,11 +474,122 @@ function _finishLiveWorkout() {
     });
   }
 
-  if (hasUnlogged) {
+  if (t.isHyrox) {
+    // Record final station time if not already captured
+    if (t.stationTimes[t.currentStep] === null) {
+      t.stationTimes[t.currentStep] = Date.now() - t.stepStart;
+    }
+    _showHyroxFinishModal();
+  } else if (hasUnlogged) {
     _showFinishChoiceModal();
+  } else if (!t.isStrength) {
+    _showEnduranceFinishModal();
   } else {
     _commitLiveWorkout(false);
   }
+}
+
+function _showHyroxFinishModal() {
+  if (!_liveTracker) return;
+  const t = _liveTracker;
+
+  // Calculate totals
+  let totalRunMs = 0, totalStationMs = 0;
+  const rows = t.exercises.map((ex, i) => {
+    const ms = t.stationTimes[i] || 0;
+    const isRun = /^run\s/i.test(ex.name);
+    if (isRun) totalRunMs += ms;
+    else totalStationMs += ms;
+    return `<tr class="${isRun ? "hyrox-result-run" : "hyrox-result-station"}">
+      <td>${_escLiveHtml(ex.name)}</td>
+      <td>${_escLiveHtml(ex.reps || "")}</td>
+      <td style="font-variant-numeric:tabular-nums;text-align:right">${_formatMs(ms)}</td>
+    </tr>`;
+  }).join("");
+
+  const totalMs = t.elapsed;
+
+  let overlay = document.getElementById("live-hyrox-finish");
+  if (overlay) overlay.remove();
+
+  overlay = document.createElement("div");
+  overlay.id = "live-hyrox-finish";
+  overlay.className = "quick-entry-overlay is-open";
+  overlay.style.cssText = "display:flex;z-index:10001";
+  overlay.onclick = function(e) { if (e.target === overlay) return; };
+
+  overlay.innerHTML = `
+    <div class="quick-entry-modal" style="max-width:420px;padding:24px;max-height:90vh;overflow-y:auto">
+      <h3 style="margin:0 0 4px">Hyrox Results</h3>
+      <div class="hyrox-result-total" style="font-size:1.8rem;font-weight:800;font-variant-numeric:tabular-nums;margin-bottom:12px">${_formatMs(totalMs)}</div>
+      <div class="hyrox-result-split" style="display:flex;gap:16px;margin-bottom:16px">
+        <div style="flex:1;text-align:center;padding:8px;border-radius:8px;background:rgba(59,130,246,0.12)">
+          <div style="font-size:0.75rem;opacity:0.7;margin-bottom:2px">Running</div>
+          <div style="font-size:1.1rem;font-weight:700;font-variant-numeric:tabular-nums">${_formatMs(totalRunMs)}</div>
+        </div>
+        <div style="flex:1;text-align:center;padding:8px;border-radius:8px;background:rgba(245,158,11,0.12)">
+          <div style="font-size:0.75rem;opacity:0.7;margin-bottom:2px">Stations</div>
+          <div style="font-size:1.1rem;font-weight:700;font-variant-numeric:tabular-nums">${_formatMs(totalStationMs)}</div>
+        </div>
+      </div>
+      <table class="exercise-table" style="margin-bottom:16px">
+        <thead><tr><th>Station</th><th>Distance</th><th style="text-align:right">Time</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <button class="btn-primary" style="width:100%" onclick="_commitHyroxWorkout()">Save Workout</button>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+}
+
+function _commitHyroxWorkout() {
+  document.getElementById("live-hyrox-finish")?.remove();
+  _commitLiveWorkout(false);
+}
+
+function _showEnduranceFinishModal() {
+  if (!_liveTracker) return;
+  const t = _liveTracker;
+  const isCycling = t.type === "cycling" || t.type === "bike";
+  const unit = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
+
+  let overlay = document.getElementById("live-endurance-finish");
+  if (overlay) overlay.remove();
+
+  overlay = document.createElement("div");
+  overlay.id = "live-endurance-finish";
+  overlay.className = "quick-entry-overlay is-open";
+  overlay.style.cssText = "display:flex;z-index:10001";
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+
+  overlay.innerHTML = `
+    <div class="quick-entry-modal" style="max-width:360px;padding:24px">
+      <h3 style="margin:0 0 12px">Workout Details</h3>
+      <div class="form-row" style="margin-bottom:10px">
+        <label>Distance (${unit})</label>
+        <input type="number" id="live-finish-distance" placeholder="e.g. 11" min="0" step="0.1" />
+      </div>
+      ${isCycling ? `<div class="form-row" style="margin-bottom:10px">
+        <label>Avg Power (watts) <span class="optional-tag">optional</span></label>
+        <input type="number" id="live-finish-watts" placeholder="e.g. 205" min="0" max="2000" />
+      </div>` : ""}
+      <button class="btn-primary" style="width:100%;margin-bottom:8px" onclick="_saveLiveEnduranceDetails()">Save</button>
+      <button class="btn-secondary" style="width:100%;opacity:0.7" onclick="document.getElementById('live-endurance-finish').remove();_commitLiveWorkout(false)">Skip</button>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+}
+
+function _saveLiveEnduranceDetails() {
+  if (!_liveTracker) return;
+  const dist = document.getElementById("live-finish-distance")?.value || "";
+  const watts = parseInt(document.getElementById("live-finish-watts")?.value) || null;
+  _liveTracker._finishDistance = dist;
+  _liveTracker._finishWatts = watts;
+  document.getElementById("live-endurance-finish")?.remove();
+  _commitLiveWorkout(false);
 }
 
 function _showFinishChoiceModal() {
@@ -474,6 +681,23 @@ function _commitLiveWorkout(logAll) {
   let workouts = [];
   try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
   const workoutId = Date.now();
+  const _finishDist = t._finishDistance || null;
+  const _finishWatts = t._finishWatts || null;
+
+  // For Hyrox: attach split times to each exercise and compute run/station totals
+  let hyroxData = undefined;
+  if (t.isHyrox && t.exercises.length) {
+    let totalRunMs = 0, totalStationMs = 0;
+    exercises = t.exercises.map((ex, i) => {
+      const splitMs = t.stationTimes[i] || 0;
+      const isRun = /^run\s/i.test(ex.name);
+      if (isRun) totalRunMs += splitMs;
+      else totalStationMs += splitMs;
+      return { name: ex.name, sets: ex.sets || "1", reps: ex.reps || "", weight: ex.weight || "", splitTime: splitMs };
+    });
+    hyroxData = { totalRunMs, totalStationMs, totalMs: t.elapsed };
+  }
+
   workouts.unshift({
     id: workoutId,
     date: t.dateStr,
@@ -482,16 +706,20 @@ function _commitLiveWorkout(logAll) {
     notes: `Live tracked · ${durationMin} min`,
     exercises: exercises.length ? exercises : undefined,
     duration: String(durationMin),
+    ...(_finishDist && { distance: _finishDist }),
+    ...(_finishWatts && { avgWatts: _finishWatts }),
+    ...(hyroxData && { hyroxData }),
     completedSessionId: t.sessionId,
     isCompletion: true,
     liveTracked: true,
+    isHyrox: !!t.isHyrox,
   });
-  localStorage.setItem("workouts", JSON.stringify(workouts));
+  localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
 
   // Mark session as completed
   const meta = typeof loadCompletionMeta === "function" ? loadCompletionMeta() : {};
   meta[t.sessionId] = { workoutId, completedAt: new Date().toISOString() };
-  localStorage.setItem("completedSessions", JSON.stringify(meta));
+  localStorage.setItem("completedSessions", JSON.stringify(meta)); if (typeof DB !== 'undefined') DB.syncKey('completedSessions');
 
   const dateStr = t.dateStr;
 
@@ -524,6 +752,46 @@ function _commitLiveWorkout(logAll) {
       }
     }, 600);
   }
+}
+
+function _swapLiveExercise(exerciseIndex) {
+  if (!_liveTracker || !_liveTracker.isStrength) return;
+  const ex = _liveTracker.exercises[exerciseIndex];
+  if (!ex) return;
+
+  if (typeof showSwapExerciseSheet !== "function") {
+    alert("Exercise swap not available.");
+    return;
+  }
+
+  showSwapExerciseSheet(ex.name, function(newName) {
+    const oldName = ex.name;
+    _liveTracker.exercises[exerciseIndex].name = newName;
+    _liveTracker.exercises[exerciseIndex].swappedFrom = oldName;
+    _liveTracker.exercises[exerciseIndex].swapReason = "equipment_busy";
+    // Re-render
+    const body = document.getElementById("live-tracker-body");
+    if (body) body.innerHTML = _buildStrengthView();
+  });
+}
+
+function _exitLiveWorkout() {
+  if (!_liveTracker) return;
+  const t = _liveTracker;
+  // Check if user has logged any data
+  let hasProgress = false;
+  if (t.isHyrox) {
+    hasProgress = t.stationTimes.some(st => st !== null) || t.elapsed > 60000;
+  } else if (t.isStrength) {
+    hasProgress = t.sets.some(exSets => exSets.some(s => s.done));
+  } else {
+    hasProgress = t.elapsed > 60000; // more than 1 minute elapsed
+  }
+
+  if (hasProgress) {
+    if (!confirm("You have unsaved workout data. Exit without saving?")) return;
+  }
+  _closeLiveTracker();
 }
 
 function _closeLiveTracker() {

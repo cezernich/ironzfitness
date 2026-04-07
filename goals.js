@@ -11,7 +11,7 @@ function loadGoals() {
 }
 
 function saveGoals(goals) {
-  localStorage.setItem("fitnessGoals", JSON.stringify(goals));
+  localStorage.setItem("fitnessGoals", JSON.stringify(goals)); if (typeof DB !== 'undefined') DB.syncKey('fitnessGoals');
 }
 
 function renderGoals() {

@@ -66,24 +66,11 @@ Return ONLY valid JSON, no markdown:
 Include exactly ${daysPerWeek} sessions per week on the specified days.`;
 
   try {
-    const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 4000,
-        messages: [{ role: "user", content: prompt }]
-      })
+    const data = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 4000,
+      messages: [{ role: "user", content: prompt }]
     });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
 
     const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
     const cleaned = text.replace(/```json|```/g, "").trim();
@@ -136,7 +123,7 @@ Include exactly ${daysPerWeek} sessions per week on the specified days.`;
       schedule = schedule.filter(e => !(e.id?.startsWith("life-") && e.date >= minDate && e.date <= maxDate));
     }
     schedule.push(...newEntries);
-    localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+    localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
 
     if (msg) {
       msg.style.color = "var(--color-success)";

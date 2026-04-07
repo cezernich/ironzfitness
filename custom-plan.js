@@ -280,13 +280,6 @@ async function cpSubmitAskIronZ() {
   const modal = document.getElementById("cp-ai-modal");
   const dow = parseInt(modal?.dataset.dow);
 
-  const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
-  if (!apiKey || apiKey === "YOUR_ANTHROPIC_API_KEY") {
-    const msg = document.getElementById("cp-ask-ironz-msg");
-    if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = "API key not set. Open config.js and paste your Anthropic API key."; }
-    return;
-  }
-
   closeCustomPlanAIModal();
 
   const contentEl = document.getElementById(`custom-day-${dow}-content`);
@@ -321,20 +314,12 @@ async function cpSubmitAskIronZ() {
   } catch {}
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1200,
-        messages: [{
-          role: "user",
-          content: `You are a personal trainer. The athlete says: "${prompt}". ${profileCtx}${refCtx}${avoidCtx}
+    const data = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1200,
+      messages: [{
+        role: "user",
+        content: `You are a personal trainer. The athlete says: "${prompt}". ${profileCtx}${refCtx}${avoidCtx}
 
 Determine the workout type and generate an appropriate session.
 
@@ -342,12 +327,8 @@ Return ONLY valid JSON, no markdown:
 For strength/HIIT/general workouts: {"type":"strength","title":"Session Name","exercises":[{"name":"Exercise","sets":3,"reps":10,"rest":"60s","weight":"135 lbs"}]}
 For cardio (running/cycling/swimming): {"type":"running","title":"Session Name","intervals":[{"name":"Phase","duration":"10 min","effort":"Easy","details":"Description"}]}
 Include 5-8 exercises or 3-5 intervals.`
-        }]
-      })
+      }]
     });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
 
     const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
     const cleaned = text.replace(/```json|```/g, "").trim();
@@ -402,7 +383,11 @@ async function customPlanGenerateAI(dow, workoutType, extraContext) {
 
   const extraCtx = extraContext ? extraContext + " " : "";
   const isCardio = ["running", "cycling", "swimming"].includes(workoutType);
-  const prompt = `Generate a single ${workoutType} session. ${extraCtx}${profileCtx}${levelCtx}${avoidCtx}
+  const isBodyweight = workoutType === "bodyweight";
+  const bwConstraint = isBodyweight
+    ? "IMPORTANT: This is a BODYWEIGHT-ONLY session. Every exercise must use ONLY bodyweight — absolutely NO dumbbells, barbells, kettlebells, cables, machines, or any external weight. All weight fields must be \"Bodyweight\". "
+    : "";
+  const prompt = `Generate a single ${workoutType} session. ${bwConstraint}${extraCtx}${profileCtx}${levelCtx}${avoidCtx}
 
 Return ONLY valid JSON, no markdown:
 ${isCardio
@@ -412,24 +397,11 @@ ${isCardio
 Include 5-8 exercises or 3-5 intervals.`;
 
   try {
-    const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1200,
-        messages: [{ role: "user", content: prompt }]
-      })
+    const data = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1200,
+      messages: [{ role: "user", content: prompt }]
     });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
 
     const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
     const cleaned = text.replace(/```json|```/g, "").trim();
@@ -570,6 +542,7 @@ function cpManualAddExRow() {
   _cpManualRowCount++;
   const id = _cpManualRowCount;
   const isHiit = _cpManualSelectedType === "hiit";
+  const isBW = _cpManualSelectedType === "bodyweight";
   const div = document.createElement("div");
   div.className = "qe-manual-row" + (isHiit ? " hiit-row" : "");
   div.id = `cp-mrow-${id}`;
@@ -583,15 +556,18 @@ function cpManualAddExRow() {
         <input type="text" id="cp-mwt-${id}" placeholder="optional" /></div>
       <button class="remove-exercise-btn" onclick="cpManualRemoveRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   } else {
+    const wtPlaceholder = isBW ? "Bodyweight" : "lbs/kg";
+    const wtValue = isBW ? "Bodyweight" : "";
+    const exPlaceholder = isBW ? "e.g. Push-ups, Pull-ups" : "e.g. Bench Press";
     div.innerHTML = `
       <div><label>Exercise</label>
-        <input type="text"   id="cp-mex-${id}"   placeholder="e.g. Bench Press" /></div>
+        <input type="text"   id="cp-mex-${id}"   placeholder="${exPlaceholder}" /></div>
       <div><label>Sets</label>
         <input type="number" id="cp-msets-${id}" placeholder="3" min="1" max="20" onchange="cpPyramidSetsChanged(${id})" /></div>
       <div><label>Reps</label>
         <input type="text"   id="cp-mreps-${id}" placeholder="10" /></div>
       <div><label>Weight</label>
-        <input type="text"   id="cp-mwt-${id}"   placeholder="lbs/kg" /></div>
+        <input type="text"   id="cp-mwt-${id}"   placeholder="${wtPlaceholder}" value="${wtValue}"${isBW ? ' readonly' : ''} /></div>
       <button class="ex-pyramid-btn" title="Per-set reps &amp; weight" onclick="cpTogglePyramid(${id})">▾</button>
       <button class="remove-exercise-btn" onclick="cpManualRemoveRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
       <div class="ex-pyramid-detail" id="cp-pyr-${id}" style="display:none"></div>`;
@@ -903,7 +879,7 @@ function saveCustomPlan() {
   schedule = schedule.filter(e => !(e.source === "custom" && e.date >= minDate && e.date <= maxDate));
   schedule.push(...newEntries);
 
-  localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+  localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
 
   const msg = document.getElementById("custom-plan-msg");
   if (msg) {

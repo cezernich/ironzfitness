@@ -26,7 +26,7 @@ function _loadActiveChallenges() {
 }
 
 function _saveActiveChallenges(arr) {
-  localStorage.setItem("activeChallenges", JSON.stringify(arr));
+  localStorage.setItem("activeChallenges", JSON.stringify(arr)); if (typeof DB !== 'undefined') DB.syncKey('activeChallenges');
 }
 
 function _loadCompletedChallenges() {
@@ -34,7 +34,7 @@ function _loadCompletedChallenges() {
 }
 
 function _saveCompletedChallenges(arr) {
-  localStorage.setItem("completedChallenges", JSON.stringify(arr));
+  localStorage.setItem("completedChallenges", JSON.stringify(arr)); if (typeof DB !== 'undefined') DB.syncKey('completedChallenges');
 }
 
 /* =====================================================================

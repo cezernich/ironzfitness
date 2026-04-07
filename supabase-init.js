@@ -4,8 +4,8 @@
 // Find them at: https://supabase.com/dashboard → your project → Settings → API
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SUPABASE_URL      = 'YOUR_SUPABASE_PROJECT_URL';  // e.g. https://xyzabc.supabase.co
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';     // starts with eyJ...
+const SUPABASE_URL      = 'https://dagdpdcwqdlibxbitdgr.supabase.co';  // e.g. https://xyzabc.supabase.co
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRhZ2RwZGN3cWRsaWJ4Yml0ZGdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1Mjk4NjQsImV4cCI6MjA5MTEwNTg2NH0.vc-fvFgZNEvusGgc3yhCzMRmuKrXUHW5uxHHMx1JV44';     // starts with eyJ...
 
 window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 

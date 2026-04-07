@@ -138,7 +138,9 @@ function _mealMatchesPrefs(meal, prefs) {
   const nameLower = meal.name.toLowerCase();
   const ingLower = meal.ingredients.map(i => i.name.toLowerCase());
   for (const d of (prefs.dislikes || [])) {
-    const dl = d.toLowerCase();
+    // Support both string and { name, isAllergy } formats
+    const dl = (typeof d === "string" ? d : (d.name || "")).toLowerCase();
+    if (!dl) continue;
     if (nameLower.includes(dl)) return false;
     if (ingLower.some(i => i.includes(dl))) return false;
   }
@@ -311,7 +313,7 @@ function generateWeekMealPlan(options) {
     days: days,
   };
 
-  localStorage.setItem("currentWeekMealPlan", JSON.stringify(plan));
+  localStorage.setItem("currentWeekMealPlan", JSON.stringify(plan)); if (typeof DB !== 'undefined') DB.syncKey('currentWeekMealPlan');
   _weekPlanState = plan;
   _householdSize = hs;
   _selectedDayIdx = (new Date().getDay() + 6) % 7; // Reset to today
@@ -376,7 +378,7 @@ function swapMeal(dayIndex, slotIndex) {
   const newMeal = _pickMeal(slot, slotCal, restrictions, prefs, usedNames);
   day.meals[slotIndex] = newMeal;
 
-  localStorage.setItem("currentWeekMealPlan", JSON.stringify(_weekPlanState));
+  localStorage.setItem("currentWeekMealPlan", JSON.stringify(_weekPlanState)); if (typeof DB !== 'undefined') DB.syncKey('currentWeekMealPlan');
   renderWeekMealPlanner();
 }
 
@@ -397,7 +399,7 @@ function saveWeekPlan(plan, name) {
     plan: JSON.parse(JSON.stringify(plan)),
   });
 
-  localStorage.setItem("savedMealPlans", JSON.stringify(saved));
+  localStorage.setItem("savedMealPlans", JSON.stringify(saved)); if (typeof DB !== 'undefined') DB.syncKey('savedMealPlans');
   return true;
 }
 
@@ -408,7 +410,7 @@ function loadSavedPlans() {
 function deleteSavedPlan(id) {
   let saved = loadSavedPlans();
   saved = saved.filter(s => s.id !== id);
-  localStorage.setItem("savedMealPlans", JSON.stringify(saved));
+  localStorage.setItem("savedMealPlans", JSON.stringify(saved)); if (typeof DB !== 'undefined') DB.syncKey('savedMealPlans');
   renderWeekMealPlanner();
 }
 
@@ -418,7 +420,7 @@ function loadSavedPlanById(id) {
   if (!found) return;
   _weekPlanState = JSON.parse(JSON.stringify(found.plan));
   _householdSize = _weekPlanState.householdSize || 1;
-  localStorage.setItem("currentWeekMealPlan", JSON.stringify(_weekPlanState));
+  localStorage.setItem("currentWeekMealPlan", JSON.stringify(_weekPlanState)); if (typeof DB !== 'undefined') DB.syncKey('currentWeekMealPlan');
   renderWeekMealPlanner();
 }
 

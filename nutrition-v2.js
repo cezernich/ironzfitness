@@ -303,7 +303,7 @@ function quickAddMealSelect(cal, protein, carbs, fat, name) {
   };
   const meals = loadMeals();
   meals.unshift(meal);
-  localStorage.setItem("meals", JSON.stringify(meals));
+  localStorage.setItem("meals", JSON.stringify(meals)); if (typeof DB !== 'undefined') DB.syncKey('meals');
 
   closeQuickAddMeal();
   updateNutritionDashboard();
@@ -341,37 +341,20 @@ async function handleMealPhoto(input) {
   const mediaType = file.type || "image/jpeg";
 
   try {
-    const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1024,
-        system: "You are a nutrition analysis AI. Analyze the food in this image. Return ONLY valid JSON with no markdown formatting: { \"foods\": [{\"name\": \"item\", \"estimated_calories\": 0, \"protein_g\": 0, \"carbs_g\": 0, \"fat_g\": 0}], \"total\": {\"calories\": 0, \"protein_g\": 0, \"carbs_g\": 0, \"fat_g\": 0}, \"description\": \"brief description\" }",
-        messages: [{
-          role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-            { type: "text", text: "Identify all food items in this image and estimate the nutritional content for each. Be as accurate as possible with portion sizes." }
-          ]
-        }]
-      })
+    const data = await callAI({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1024,
+      system: "You are a nutrition analysis AI. Analyze the food in this image. Return ONLY valid JSON with no markdown formatting: { \"foods\": [{\"name\": \"item\", \"estimated_calories\": 0, \"protein_g\": 0, \"carbs_g\": 0, \"fat_g\": 0}], \"total\": {\"calories\": 0, \"protein_g\": 0, \"carbs_g\": 0, \"fat_g\": 0}, \"description\": \"brief description\" }",
+      messages: [{
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+          { type: "text", text: "Identify all food items in this image and estimate the nutritional content for each. Be as accurate as possible with portion sizes." }
+        ]
+      }]
     });
 
-    const data = await response.json();
     loadingEl.style.display = "none";
-
-    if (data.error) {
-      document.getElementById("photo-meal-msg").textContent = "AI error: " + (data.error.message || "Unknown error");
-      document.getElementById("photo-meal-msg").style.color = "var(--color-danger)";
-      return;
-    }
 
     const text = data.content?.[0]?.text || "";
     // Extract JSON from response (handle possible markdown wrapping)
@@ -439,7 +422,7 @@ function savePhotoMeal() {
 
   const meals = loadMeals();
   meals.unshift(meal);
-  localStorage.setItem("meals", JSON.stringify(meals));
+  localStorage.setItem("meals", JSON.stringify(meals)); if (typeof DB !== 'undefined') DB.syncKey('meals');
 
   const msg = document.getElementById("photo-meal-msg");
   msg.style.color = "var(--color-success)";
@@ -494,8 +477,9 @@ async function generateMealSuggestions() {
     fat: Math.max(0, targets.fat - eaten.fat),
   };
 
-  // Dietary context
+  // Dietary context with allergy safety
   let dietaryCtx = "";
+  let allergyConstraint = "";
   try {
     const obData = JSON.parse(localStorage.getItem("onboardingData") || "{}");
     if (obData.dietaryRestrictions?.length && !obData.dietaryRestrictions.includes("none")) {
@@ -504,15 +488,22 @@ async function generateMealSuggestions() {
     if (obData.allergies) dietaryCtx += `Allergies: ${obData.allergies}. `;
   } catch {}
 
+  // Structured allergy data from food preferences
+  const aData = typeof getAllergyData === "function" ? getAllergyData() : null;
+  if (aData && aData.allergies.length > 0) {
+    allergyConstraint = `\nCRITICAL SAFETY CONSTRAINT: The user has the following allergies: ${aData.allergies.join(", ")}. NEVER suggest any meal, ingredient, or recipe that contains these items or derivatives of these items. This is a medical safety requirement.\n`;
+  }
+  const avoidsText = aData ? aData.avoids.join(", ") : prefs.dislikes.map(d => typeof d === "string" ? d : d.name).join(", ");
+
   const workout = getTodayScheduledWorkout();
   const workoutCtx = workout ? `Today's workout: ${workout.title || workout.type || "training session"}. ` : "Rest day. ";
 
   const prompt = `Generate 3 meal suggestions for the rest of today.
-
+${allergyConstraint}
 User: ${profile.age || 30}yo, ${profile.weight || 160}lbs, goal: ${profile.goal || "general fitness"}.
 ${workoutCtx}${dietaryCtx}
 Foods they love: ${prefs.likes.join(", ") || "none specified"}.
-Foods to avoid: ${prefs.dislikes.join(", ") || "none specified"}.
+Foods to avoid: ${avoidsText || "none specified"}.
 Already eaten today: ${todaysMeals.length ? todaysMeals.map(m => m.name).join(", ") : "nothing yet"}.
 Remaining macros needed: ${remaining.calories} cal, ${remaining.protein}g protein, ${remaining.carbs}g carbs, ${remaining.fat}g fat.
 
@@ -520,29 +511,26 @@ Return ONLY valid JSON array, no markdown:
 [{"meal_type":"lunch","name":"Meal Name","ingredients":["item1","item2"],"calories":0,"protein":0,"carbs":0,"fat":0,"prep_time":"15 min"}]`;
 
   try {
-    const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1500,
-        messages: [{ role: "user", content: prompt }]
-      })
+    const data = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1500,
+      messages: [{ role: "user", content: prompt }]
     });
 
-    const data = await response.json();
     const text = data.content?.[0]?.text || "";
     const jsonMatch = text.match(/\[[\s\S]*\]/);
 
     if (!jsonMatch) throw new Error("Could not parse response");
 
-    const suggestions = JSON.parse(jsonMatch[0]);
+    let suggestions = JSON.parse(jsonMatch[0]);
+    // Post-generation safety: filter out meals containing allergens
+    const postAData = typeof getAllergyData === "function" ? getAllergyData() : null;
+    if (postAData && postAData.allergies.length > 0) {
+      suggestions = suggestions.filter(s => {
+        const text = (s.name + " " + (s.ingredients || []).join(" ")).toLowerCase();
+        return !postAData.allergies.some(a => text.includes(a.toLowerCase()));
+      });
+    }
     resultEl.style.display = "";
     window._mealSuggestions = suggestions;
     resultEl.innerHTML = suggestions.map((s, i) => `
@@ -586,7 +574,7 @@ function logSuggestedMeal(name, cal, protein, carbs, fat) {
   };
   const meals = loadMeals();
   meals.unshift(meal);
-  localStorage.setItem("meals", JSON.stringify(meals));
+  localStorage.setItem("meals", JSON.stringify(meals)); if (typeof DB !== 'undefined') DB.syncKey('meals');
 
   updateNutritionDashboard();
   renderNutritionHistory();
@@ -615,6 +603,7 @@ async function generateGroceryList() {
   const targets = (typeof getDailyNutritionTarget === "function") ? getDailyNutritionTarget(getTodayString()) : calculateNutritionTargets();
 
   let dietaryCtx = "";
+  let groceryAllergyConstraint = "";
   try {
     const obData = JSON.parse(localStorage.getItem("onboardingData") || "{}");
     if (obData.dietaryRestrictions?.length && !obData.dietaryRestrictions.includes("none")) {
@@ -623,35 +612,30 @@ async function generateGroceryList() {
     if (obData.allergies) dietaryCtx += `Allergies: ${obData.allergies}. `;
   } catch {}
 
-  const prompt = `Generate a weekly grocery list for one person.
+  const gAData = typeof getAllergyData === "function" ? getAllergyData() : null;
+  if (gAData && gAData.allergies.length > 0) {
+    groceryAllergyConstraint = `\nCRITICAL SAFETY CONSTRAINT: The user has the following allergies: ${gAData.allergies.join(", ")}. NEVER include any item that contains these allergens or derivatives. This is a medical safety requirement.\n`;
+  }
+  const gAvoidsText = gAData ? gAData.avoids.join(", ") : prefs.dislikes.map(d => typeof d === "string" ? d : d.name).join(", ");
 
+  const prompt = `Generate a weekly grocery list for one person.
+${groceryAllergyConstraint}
 Profile: ${profile.age || 30}yo, ${profile.weight || 160}lbs, goal: ${profile.goal || "general fitness"}.
 Daily targets: ${targets.calories} cal, ${targets.protein}g protein, ${targets.carbs}g carbs, ${targets.fat}g fat.
 ${dietaryCtx}
 Foods they love: ${prefs.likes.join(", ") || "none specified"}.
-Foods to avoid: ${prefs.dislikes.join(", ") || "none specified"}.
+Foods to avoid: ${gAvoidsText || "none specified"}.
 
 Return ONLY valid JSON, no markdown:
 {"categories":[{"name":"Produce","items":["item1","item2"]},{"name":"Protein","items":["item1"]},{"name":"Dairy","items":[]},{"name":"Grains","items":[]},{"name":"Other","items":[]}]}`;
 
   try {
-    const apiKey = (typeof APP_CONFIG !== "undefined") ? APP_CONFIG.anthropicApiKey : "";
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1500,
-        messages: [{ role: "user", content: prompt }]
-      })
+    const data = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1500,
+      messages: [{ role: "user", content: prompt }]
     });
 
-    const data = await response.json();
     const text = data.content?.[0]?.text || "";
     const jsonMatch = text.match(/\{[\s\S]*\}/);
 

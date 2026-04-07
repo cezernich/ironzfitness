@@ -6,7 +6,6 @@ const ONBOARDING_STEPS = [
   "profile",
   "goals",
   "experience",
-  "availability",  // days per week + session length
   "workout-interests",
   "features",
   "dietary",       // conditional — only if nutrition selected
@@ -141,11 +140,20 @@ function validateOnboardingStep() {
     const name = document.getElementById("ob-name")?.value.trim();
     const age = document.getElementById("ob-age")?.value;
     const weight = document.getElementById("ob-weight")?.value;
-    const height = document.getElementById("ob-height")?.value;
     if (!name) { if (msg) msg.textContent = "Please enter your name."; return false; }
     if (!age || age < 10 || age > 100) { if (msg) msg.textContent = "Please enter a valid age."; return false; }
     if (!weight || weight < 50) { if (msg) msg.textContent = "Please enter your weight."; return false; }
-    if (!height || height < 40) { if (msg) msg.textContent = "Please enter your height."; return false; }
+    // Height validation: imperial (ft/in) vs metric (cm)
+    const isMetric = obData.units === "metric";
+    if (isMetric) {
+      const height = document.getElementById("ob-height")?.value;
+      if (!height || height < 100 || height > 250) { if (msg) msg.textContent = "Please enter a valid height in cm."; return false; }
+    } else {
+      const feet = parseInt(document.getElementById("ob-height-feet")?.value);
+      const inches = parseInt(document.getElementById("ob-height-inches")?.value);
+      if (isNaN(feet) || feet < 3 || feet > 8) { if (msg) msg.textContent = "Please enter valid feet (3-8)."; return false; }
+      if (isNaN(inches) || inches < 0 || inches > 11) { if (msg) msg.textContent = "Please enter valid inches (0-11)."; return false; }
+    }
     return true;
   }
 
@@ -156,12 +164,6 @@ function validateOnboardingStep() {
 
   if (step === "experience") {
     if (!obData.level) { if (msg) msg.textContent = "Please select your experience level."; return false; }
-    return true;
-  }
-
-  if (step === "availability") {
-    const days = parseInt(document.getElementById("ob-days-per-week")?.value);
-    if (!days || days < 1 || days > 7) { if (msg) msg.textContent = "Please select training days per week."; return false; }
     return true;
   }
 
@@ -183,12 +185,15 @@ function collectOnboardingStep() {
     obData.name = document.getElementById("ob-name")?.value.trim() || "";
     obData.age = document.getElementById("ob-age")?.value || "";
     obData.weight = document.getElementById("ob-weight")?.value || "";
-    obData.height = document.getElementById("ob-height")?.value || "";
     obData.gender = document.getElementById("ob-gender")?.value || "";
-  }
-
-  if (step === "availability") {
-    obData.daysPerWeek = parseInt(document.getElementById("ob-days-per-week")?.value) || 4;
+    // Height: convert ft/in to total inches (imperial) or store cm (metric)
+    if (obData.units === "metric") {
+      obData.height = document.getElementById("ob-height")?.value || "";
+    } else {
+      const feet = parseInt(document.getElementById("ob-height-feet")?.value) || 0;
+      const inches = parseInt(document.getElementById("ob-height-inches")?.value) || 0;
+      obData.height = String(feet * 12 + inches);
+    }
   }
 
   if (step === "workout-interests") {
@@ -198,6 +203,7 @@ function collectOnboardingStep() {
   if (step === "features") {
     obData.nutritionEnabled = document.getElementById("ob-feat-nutrition")?.checked ?? true;
     obData.hydrationEnabled = document.getElementById("ob-feat-hydration")?.checked ?? true;
+    obData.fuelingEnabled = document.getElementById("ob-feat-fueling")?.checked ?? true;
     obData.hydrationHabit = document.querySelector('input[name="ob-hydration-habit"]:checked')?.value || "sometimes";
   }
 
@@ -228,7 +234,6 @@ function renderOnboardingStep() {
     case "profile":       content.innerHTML = buildOBProfile(); break;
     case "goals":         content.innerHTML = buildOBGoals(); break;
     case "experience":    content.innerHTML = buildOBExperience(); break;
-    case "availability":  content.innerHTML = buildOBAvailability(); break;
     case "workout-interests": content.innerHTML = buildOBWorkoutInterests(); break;
     case "features":      content.innerHTML = buildOBFeatures(); break;
     case "dietary":       content.innerHTML = buildOBDietary(); break;
@@ -282,8 +287,17 @@ function buildOBProfile() {
         <input type="number" id="ob-weight" placeholder="${weightPlaceholder}" min="20" value="${escOB(obData.weight)}" />
       </div>
       <div class="form-row">
-        <label for="ob-height">${heightLabel}</label>
-        <input type="number" id="ob-height" placeholder="${heightPlaceholder}" min="40" value="${escOB(obData.height)}" />
+        <label>${heightLabel}</label>
+        ${isMetric ? `
+          <input type="number" id="ob-height" placeholder="e.g. 178" min="100" max="250" value="${escOB(obData.height)}" />
+        ` : `
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="number" id="ob-height-feet" min="3" max="8" placeholder="5" style="width:70px" value="${obData.height ? Math.floor(parseInt(obData.height) / 12) : ""}" />
+            <span>ft</span>
+            <input type="number" id="ob-height-inches" min="0" max="11" placeholder="10" style="width:70px" value="${obData.height ? parseInt(obData.height) % 12 : ""}" />
+            <span>in</span>
+          </div>
+        `}
       </div>
     </div>
     <div class="form-row">
@@ -374,30 +388,6 @@ function obSelectLevel(value) {
   document.getElementById("onboarding-val-msg").textContent = "";
 }
 
-function buildOBAvailability() {
-  return `
-    <h2 class="ob-step-title">Training Schedule</h2>
-    <p class="ob-step-desc">How many days per week can you train? We'll tailor workout lengths to your sport and level.</p>
-    <div class="ob-availability-grid">
-      <div class="form-row">
-        <label for="ob-days-per-week">Training days per week</label>
-        <div class="ob-day-picker">
-          ${[2, 3, 4, 5, 6, 7].map(d => `
-            <button type="button" class="ob-day-btn ${obData.daysPerWeek === d ? "selected" : ""}" onclick="obSelectDays(${d})">${d}</button>
-          `).join("")}
-        </div>
-        <input type="hidden" id="ob-days-per-week" value="${obData.daysPerWeek}" />
-      </div>
-    </div>
-  `;
-}
-
-function obSelectDays(n) {
-  obData.daysPerWeek = n;
-  document.getElementById("ob-days-per-week").value = n;
-  document.querySelectorAll(".ob-day-btn").forEach(b => b.classList.toggle("selected", parseInt(b.textContent) === n));
-}
-
 function buildOBWorkoutInterests() {
   const interests = [
     { value: "running",    icon: ICONS.run,      label: "Running" },
@@ -437,6 +427,16 @@ function buildOBFeatures() {
         </div>
         <label class="toggle-switch">
           <input type="checkbox" id="ob-feat-nutrition" ${obData.nutritionEnabled ? "checked" : ""} />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="ob-feature-row">
+        <div class="ob-feature-info">
+          <span class="ob-feature-name">Fueling During Workouts</span>
+          <span class="ob-feature-desc">Get fueling plans for sessions over 60 min</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="ob-feat-fueling" ${obData.fuelingEnabled !== false ? "checked" : ""} />
           <span class="toggle-slider"></span>
         </label>
       </div>
@@ -545,7 +545,6 @@ function buildOBSummary() {
       <p class="ob-subtitle">Here's your profile. What would you like to do next?</p>
     </div>
     <div class="ob-summary-card" style="margin-top:16px">
-      <div class="ob-summary-row"><span class="ob-summary-label">Schedule</span><span>${obData.daysPerWeek} days/week</span></div>
       <div class="ob-summary-row"><span class="ob-summary-label">Goal</span><span>${goalLabel}</span></div>
       <div class="ob-summary-row"><span class="ob-summary-label">Level</span><span>${levelLabel}</span></div>
       <div class="ob-summary-row"><span class="ob-summary-label">Interests</span><span>${interestsList}</span></div>
@@ -759,7 +758,7 @@ function finishOnboarding(buildPlan) {
   if (typeof setMeasurementSystem === "function") {
     setMeasurementSystem(obData.units || "imperial");
   } else {
-    localStorage.setItem("measurementSystem", obData.units || "imperial");
+    localStorage.setItem("measurementSystem", obData.units || "imperial"); if (typeof DB !== 'undefined') DB.syncKey('measurementSystem');
   }
 
   // 1. Save profile to localStorage — always in imperial for internal consistency
@@ -778,6 +777,7 @@ function finishOnboarding(buildPlan) {
     goal: obData.goal,
   };
   localStorage.setItem("profile", JSON.stringify(profile));
+  if (typeof DB !== 'undefined') DB.profile.save(profile).catch(() => {});
 
   // 2. Save onboarding-specific data
   const onboardingData = {
@@ -794,16 +794,25 @@ function finishOnboarding(buildPlan) {
 
   // 3. Apply feature toggles
   setNutritionEnabled(obData.nutritionEnabled);
-  localStorage.setItem("hydrationEnabled", obData.hydrationEnabled ? "1" : "0");
+  localStorage.setItem("hydrationEnabled", obData.hydrationEnabled ? "1" : "0"); if (typeof DB !== 'undefined') DB.syncKey('hydrationEnabled');
+  localStorage.setItem("fuelingEnabled", obData.fuelingEnabled !== false ? "1" : "0"); if (typeof DB !== 'undefined') DB.syncKey('fuelingEnabled');
 
   // 4. Save food preferences if nutrition enabled
   if (obData.nutritionEnabled) {
     const likes = obData.foodsLove ? obData.foodsLove.split(",").map(s => s.trim()).filter(Boolean) : [];
     const dislikes = obData.foodsAvoid ? obData.foodsAvoid.split(",").map(s => s.trim()).filter(Boolean) : [];
     const existing = JSON.parse(localStorage.getItem("foodPreferences") || '{"likes":[],"dislikes":[]}');
+    // Dedup likes (plain strings)
     existing.likes = [...new Set([...existing.likes, ...likes])];
-    existing.dislikes = [...new Set([...existing.dislikes, ...dislikes])];
-    localStorage.setItem("foodPreferences", JSON.stringify(existing));
+    // Dedup dislikes: handle mixed formats (strings and {name, isAllergy} objects)
+    const existingNames = existing.dislikes.map(d => typeof d === "string" ? d : (d.name || ""));
+    dislikes.forEach(term => {
+      if (!existingNames.includes(term)) {
+        existing.dislikes.push(term);
+        existingNames.push(term);
+      }
+    });
+    localStorage.setItem("foodPreferences", JSON.stringify(existing)); if (typeof DB !== 'undefined') DB.syncKey('foodPreferences');
   }
 
   // 5. Set hydration target based on body weight and habit
@@ -811,7 +820,7 @@ function finishOnboarding(buildPlan) {
     const baseOz = Math.round(parseFloat(obData.weight) * 0.67);
     const habitMultiplier = { rarely: 0.8, sometimes: 1.0, usually: 1.1 };
     const targetOz = Math.round(baseOz * (habitMultiplier[obData.hydrationHabit] || 1.0));
-    localStorage.setItem("hydrationDailyTargetOz", String(targetOz));
+    localStorage.setItem("hydrationDailyTargetOz", String(targetOz)); if (typeof DB !== 'undefined') DB.syncKey('hydrationDailyTargetOz');
   }
 
   // 6. Mark onboarding complete

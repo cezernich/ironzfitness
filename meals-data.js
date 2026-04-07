@@ -139,9 +139,19 @@ function pickMeal(options, targetCalories, preferHighCarb, preferHighProtein, ex
     }
   }
 
-  // 3. Filter out disliked foods
-  if (prefs.dislikes.length > 0) {
-    const filtered = pool.filter(m => !mealContainsTerm(m, prefs.dislikes));
+  // 3. Filter out allergens (hard filter — never include) and disliked foods (soft filter)
+  const allergyData = typeof getAllergyData === "function" ? getAllergyData() : null;
+  if (allergyData && allergyData.allergies.length > 0) {
+    // Hard filter: allergens are NEVER included, even if it empties the pool
+    pool = pool.filter(m => !mealContainsTerm(m, allergyData.allergies));
+  }
+  if (allergyData && allergyData.avoids.length > 0) {
+    const filtered = pool.filter(m => !mealContainsTerm(m, allergyData.avoids));
+    if (filtered.length > 0) pool = filtered;
+  } else if (prefs.dislikes.length > 0 && !allergyData) {
+    // Legacy fallback: normalize dislikes to plain strings
+    const dislikeNames = prefs.dislikes.map(d => typeof d === "string" ? d : (d.name || "")).filter(Boolean);
+    const filtered = pool.filter(m => !mealContainsTerm(m, dislikeNames));
     if (filtered.length > 0) pool = filtered;
   }
 

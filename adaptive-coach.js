@@ -125,7 +125,7 @@ function adjustPlanIntensity(direction) {
     }
   });
 
-  localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+  localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
 }
 
 /**
@@ -145,20 +145,20 @@ function reducePlanVolume() {
     futureByWeek[weekStart].push(s);
   });
 
-  // For each week with 4+ sessions, remove the last one (usually the easiest)
+  // For each week with 3+ sessions, remove one (lowest priority first)
   const removedIds = new Set();
   Object.values(futureByWeek).forEach(weekSessions => {
-    if (weekSessions.length >= 4) {
-      // Sort by load priority — remove easiest first
-      const loadPriority = { easy: 0, moderate: 1, hard: 2, long: 3 };
-      weekSessions.sort((a, b) => (loadPriority[a.load] || 1) - (loadPriority[b.load] || 1));
+    if (weekSessions.length >= 3) {
+      // Sort: prefer removing easy/rest sessions; sessions without load go first
+      const loadPriority = { easy: 0, moderate: 2, hard: 3, long: 4 };
+      weekSessions.sort((a, b) => (loadPriority[a.load] ?? 1) - (loadPriority[b.load] ?? 1));
       removedIds.add(weekSessions[0].id);
     }
   });
 
   if (removedIds.size > 0) {
     schedule = schedule.filter(s => !removedIds.has(s.id));
-    localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+    localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
   }
 
   return removedIds.size;
@@ -185,7 +185,7 @@ function getCoachingInsights() {
 
   // Intensity trend
   const trend = analyzeIntensityTrend();
-  if (trend === "decrease") {
+  if (trend === "decrease" && !_isCoachingDismissed("decreaseIntensity") && !_isCoachingDismissed("intensity")) {
     insights.push({
       type: "intensity",
       icon: ICONS.warning,
@@ -193,7 +193,7 @@ function getCoachingInsights() {
       message: "You've rated recent weeks as too hard. We can dial back intensity for next week.",
       action: { label: "Reduce Intensity", handler: "applyCoachingAction('decreaseIntensity')" },
     });
-  } else if (trend === "increase") {
+  } else if (trend === "increase" && !_isCoachingDismissed("increaseIntensity") && !_isCoachingDismissed("intensity")) {
     insights.push({
       type: "intensity",
       icon: ICONS.trendingUp,
@@ -204,20 +204,22 @@ function getCoachingInsights() {
   }
 
   // Completion rate
-  const completion = analyzeCompletionRate();
-  if (completion.suggestion) {
-    const msg = completion.suggestion.message
-      .replace("${Math.round(rate * 100)}", Math.round(completion.rate * 100))
-      .replace("${Math.max(2, recent.length - 2)}", "fewer");
-    insights.push({
-      type: "volume",
-      icon: completion.suggestion.action === "increase" ? ICONS.trendingUp : ICONS.lightbulb,
-      title: completion.suggestion.action === "increase" ? "Strong Consistency" : "Let's Simplify",
-      message: msg,
-      action: completion.suggestion.action === "decrease"
-        ? { label: "Reduce Volume", handler: "applyCoachingAction('reduceVolume')" }
-        : null,
-    });
+  if (!_isCoachingDismissed("reduceVolume") && !_isCoachingDismissed("volume")) {
+    const completion = analyzeCompletionRate();
+    if (completion.suggestion) {
+      const msg = completion.suggestion.message
+        .replace("${Math.round(rate * 100)}", Math.round(completion.rate * 100))
+        .replace("${Math.max(2, recent.length - 2)}", "fewer");
+      insights.push({
+        type: "volume",
+        icon: completion.suggestion.action === "increase" ? ICONS.trendingUp : ICONS.lightbulb,
+        title: completion.suggestion.action === "increase" ? "Strong Consistency" : "Let's Simplify",
+        message: msg,
+        action: completion.suggestion.action === "decrease"
+          ? { label: "Reduce Volume", handler: "applyCoachingAction('reduceVolume')" }
+          : null,
+      });
+    }
   }
 
   // Nutrition engagement
@@ -247,9 +249,10 @@ function buildCoachingInsights() {
   let html = `<div class="coaching-insights">
     <div class="coaching-header">${ICONS.sparkles} Coaching Insights</div>`;
 
-  insights.forEach(insight => {
+  insights.forEach((insight, i) => {
     html += `
-      <div class="coaching-insight coaching-${insight.type}">
+      <div class="coaching-insight coaching-${insight.type}" id="coaching-insight-${i}">
+        <button class="coaching-dismiss-btn" onclick="_dismissCoachingInsight('${insight.type}');this.closest('.coaching-insight').remove();if(!document.querySelector('.coaching-insight')){const c=document.querySelector('.coaching-insights');if(c)c.remove()}" title="Dismiss"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg></button>
         <span class="coaching-icon">${insight.icon}</span>
         <div class="coaching-body">
           <div class="coaching-title">${escHtml(insight.title)}</div>
@@ -268,23 +271,55 @@ function buildCoachingInsights() {
    ===================================================================== */
 
 function applyCoachingAction(action) {
+  let msg = "";
   switch (action) {
     case "increaseIntensity":
       adjustPlanIntensity("increase");
+      msg = "Intensity increased for upcoming sessions.";
       break;
     case "decreaseIntensity":
       adjustPlanIntensity("decrease");
+      msg = "Intensity reduced for upcoming sessions.";
       break;
     case "reduceVolume":
       const removed = reducePlanVolume();
+      msg = removed > 0
+        ? `Removed ${removed} session${removed > 1 ? "s" : ""} from your upcoming weeks.`
+        : "No sessions to remove — your plan is already light.";
       break;
   }
+
+  // Persist that this action was taken today so insight doesn't reappear
+  _dismissCoachingInsight(action);
 
   // Refresh UI
   if (typeof renderCalendar === "function") renderCalendar();
   if (typeof selectDay === "function") selectDay(getTodayString());
 
-  // Remove the insight card after action
+  // Remove the insight card and show feedback
   const insightsEl = document.querySelector(".coaching-insights");
-  if (insightsEl) insightsEl.style.display = "none";
+  if (insightsEl) {
+    insightsEl.innerHTML = `<div class="coaching-insights">
+      <div class="coaching-header">${typeof ICONS !== "undefined" ? ICONS.sparkles : ""} Coaching Insights</div>
+      <div class="coaching-insight" style="text-align:center;padding:16px">
+        <span style="font-size:0.9rem">${msg}</span>
+      </div>
+    </div>`;
+    setTimeout(() => { if (insightsEl) insightsEl.remove(); }, 3000);
+  }
+}
+
+/** Persist dismissed/actioned insights so they don't reappear the same day */
+function _dismissCoachingInsight(key) {
+  let dismissed = {};
+  try { dismissed = JSON.parse(localStorage.getItem("coachingDismissed") || "{}"); } catch {}
+  dismissed[key] = getTodayString();
+  localStorage.setItem("coachingDismissed", JSON.stringify(dismissed));
+}
+
+function _isCoachingDismissed(key) {
+  try {
+    const dismissed = JSON.parse(localStorage.getItem("coachingDismissed") || "{}");
+    return dismissed[key] === getTodayString();
+  } catch { return false; }
 }
