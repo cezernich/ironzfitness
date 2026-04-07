@@ -3,6 +3,16 @@
 -- Run this in Supabase SQL Editor (Dashboard → SQL Editor → New Query)
 -- ============================================================================
 
+-- Helper: check if current user is admin (SECURITY DEFINER bypasses RLS
+-- to avoid infinite recursion when admin policies subquery profiles)
+CREATE OR REPLACE FUNCTION is_admin()
+RETURNS boolean AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = auth.uid() AND role = 'admin'
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
 -- ── Table 1: profiles ──────────────────────────────────────────────────────
 -- Created on first run; ALTER statements add columns idempotently.
 
@@ -480,21 +490,21 @@ CREATE POLICY "Authenticated users can insert gaps"
   ON philosophy_gaps FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 CREATE POLICY "Admins can read gaps"
   ON philosophy_gaps FOR SELECT USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    is_admin()
   );
 CREATE POLICY "Admins can update gaps"
   ON philosophy_gaps FOR UPDATE USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    is_admin()
   );
 
 -- Module version history: admin only
 CREATE POLICY "Admins can read version history"
   ON module_version_history FOR SELECT USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    is_admin()
   );
 CREATE POLICY "Admins can insert version history"
   ON module_version_history FOR INSERT WITH CHECK (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    is_admin()
   );
 
 -- Generated plans: user owns their plans
@@ -514,27 +524,27 @@ CREATE POLICY "Users can insert own outcomes"
 -- Admin write access for philosophy modules and exercise library
 CREATE POLICY "Admins can insert philosophy_modules"
   ON philosophy_modules FOR INSERT WITH CHECK (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    is_admin()
   );
 CREATE POLICY "Admins can update philosophy_modules"
   ON philosophy_modules FOR UPDATE USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    is_admin()
   );
 CREATE POLICY "Admins can delete philosophy_modules"
   ON philosophy_modules FOR DELETE USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    is_admin()
   );
 CREATE POLICY "Admins can insert exercise_library"
   ON exercise_library FOR INSERT WITH CHECK (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    is_admin()
   );
 CREATE POLICY "Admins can update exercise_library"
   ON exercise_library FOR UPDATE USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    is_admin()
   );
 CREATE POLICY "Admins can delete exercise_library"
   ON exercise_library FOR DELETE USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    is_admin()
   );
 
 -- ── Module effectiveness report function ────────────────────────────────────
@@ -575,11 +585,11 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE POLICY "Admins can read all profiles"
   ON profiles FOR SELECT USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    auth.uid() = id OR is_admin()
   );
 CREATE POLICY "Admins can update all profiles"
   ON profiles FOR UPDATE USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    auth.uid() = id OR is_admin()
   );
 
 -- ── Table: ai_usage (rate limiting for AI proxy) ──────────────────────────
