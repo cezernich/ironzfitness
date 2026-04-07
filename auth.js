@@ -5,7 +5,7 @@
 // ── Dev bypass ─────────────────────────────────────────────────────────────────
 // Set to true to skip login and go straight to the app.
 // Flip back to false before going live with real auth.
-const DEV_BYPASS_AUTH = true;
+const DEV_BYPASS_AUTH = false;
 
 // ── Show / hide helpers ────────────────────────────────────────────────────────
 
@@ -218,14 +218,21 @@ async function ensureProfile(user) {
   }
 
   if (!existing) {
+    // First user in the system gets admin role
+    const { count } = await client
+      .from('profiles')
+      .select('id', { count: 'exact', head: true });
+    const isFirstUser = (count === 0 || count === null);
+
     const { error: insertError } = await client.from('profiles').insert({
       id:                  user.id,
       email:               user.email,
       full_name:           user.user_metadata?.full_name || '',
       subscription_status: 'free',
-      role:                'user',
+      role:                isFirstUser ? 'admin' : 'user',
     });
     if (insertError) console.warn('Profile insert error:', insertError.message);
+    else if (isFirstUser) console.log('First user — assigned admin role');
   }
 
   // Fetch role for admin gating
