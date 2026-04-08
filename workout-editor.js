@@ -82,13 +82,18 @@ function openEditPlanSession(dateStr, raceId, discipline, load) {
   const intervals = [];
   if (session && session.steps) {
     session.steps.forEach(step => {
+      // Normalize zone: could be number (1), string ("Z1"), or label ("Z1")
+      var zone = step.zone || step.effort || "Z2";
+      if (typeof zone === 'number') zone = "Z" + zone;
+      if (typeof zone === 'string' && /^\d+$/.test(zone)) zone = "Z" + zone;
+
       intervals.push({
         name: step.label || step.name || "",
         duration: (step.duration || "") + " min",
-        effort: step.zone || "Z2",
+        effort: zone,
         reps: step.reps || 1,
-        restDuration: step.restDuration || "",
-        restEffort: step.restEffort || "",
+        restDuration: step.restDuration ? (step.restDuration + " min") : "",
+        restEffort: step.restEffort ? ("Z" + step.restEffort) : "",
       });
     });
   }
@@ -131,12 +136,19 @@ function openEditScheduledWorkout(id) {
     if (session && session.steps && !w.aiSession) {
       w.aiSession = {
         title: session.name || w.discipline,
-        intervals: session.steps.map(step => ({
-          name: step.label || step.name || "",
-          duration: (step.duration || "") + " min",
-          effort: step.zone || "Z2",
-          reps: step.reps || 1,
-        }))
+        intervals: session.steps.map(step => {
+          var zone = step.zone || step.effort || "Z2";
+          if (typeof zone === 'number') zone = "Z" + zone;
+          if (typeof zone === 'string' && /^\d+$/.test(zone)) zone = "Z" + zone;
+          return {
+            name: step.label || step.name || "",
+            duration: (step.duration || "") + " min",
+            effort: zone,
+            reps: step.reps || 1,
+            restDuration: step.restDuration ? (step.restDuration + " min") : "",
+            restEffort: step.restEffort ? ("Z" + step.restEffort) : "",
+          };
+        })
       };
       localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
       if (typeof DB !== 'undefined') DB.syncKey('workoutSchedule');
@@ -512,7 +524,7 @@ function _addEditIntervalRow(iv) {
   let initMode = "time", initDist = "", initMin = "";
   if (iv?.duration) {
     const durStr = String(iv.duration);
-    if (/mi|km|yd/i.test(durStr) || (/\bm\b/.test(durStr) && !/min/i.test(durStr))) {
+    if ((/\bmi(?:les?)?\b/i.test(durStr) && !/min/i.test(durStr)) || /\bkm\b/i.test(durStr) || /\byd\b/i.test(durStr) || (/\bm\b/.test(durStr) && !/min/i.test(durStr))) {
       initMode = "distance";
       initDist = durStr.match(/[\d.]+/)?.[0] || "";
     } else {
