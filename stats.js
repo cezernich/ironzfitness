@@ -9,7 +9,7 @@ function localDateStr(d) {
 /* ─── Computations ─────────────────────────────────────────────────────── */
 
 function computeByType(workouts) {
-  const order  = ["weightlifting","running","triathlon","cycling","general","other"];
+  const order  = ["weightlifting","running","triathlon","cycling","stairstepper","general","other"];
   const counts = {};
   order.forEach(t => counts[t] = 0);
   workouts.forEach(w => {
@@ -739,7 +739,7 @@ function loadCompletedSessions() {
   let logged   = [];
   try { logged = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
 
-  const pastLogged = logged.filter(w => w.date < today || (w.date === today && w.isCompletion));
+  const pastLogged = logged.filter(w => w.date <= today);
 
   // Build set of session IDs that have a completion record so we can skip the original
   const completedOriginals = new Set();
