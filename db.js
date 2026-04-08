@@ -490,6 +490,10 @@ const DB = (() => {
   }
 
   function _shapeWorkout(w, uid) {
+    // Store the full workout object in a JSONB 'data' column
+    // This preserves aiSession, exercises, segments, generatedSession, hiitMeta, supersetIds, etc.
+    var fullData = Object.assign({}, w);
+    delete fullData.user_id; // don't nest user_id inside data
     return {
       id: (_isUUID(w.id) ? w.id : null) || crypto.randomUUID(),
       user_id: uid,
@@ -501,7 +505,8 @@ const DB = (() => {
       avg_watts: w.avgWatts || w.avg_watts || null,
       source: w.source || 'manual',
       completed: w.completed !== false,
-      created_at: w.createdAt || w.created_at || new Date().toISOString()
+      created_at: w.createdAt || w.created_at || new Date().toISOString(),
+      data: fullData
     };
   }
 

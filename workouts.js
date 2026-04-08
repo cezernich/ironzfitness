@@ -1827,6 +1827,12 @@ function deleteWorkout(id) {
 
   localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
 
+  // Delete from Supabase so it doesn't sync back on next login
+  if (deleted && window.supabaseClient) {
+    window.supabaseClient.from('workouts').delete().eq('id', deleted.id)
+      .then(({ error }) => { if (error) console.warn('DB: delete workout error', error.message); });
+  }
+
   // Clear completedSessions entries
   try {
     const meta = JSON.parse(localStorage.getItem("completedSessions") || "{}");
