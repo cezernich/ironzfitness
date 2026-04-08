@@ -327,16 +327,29 @@ const DB = (() => {
 
   // Keys that should sync to Supabase via user_data table
   const SYNCED_KEYS = [
-    'meals', 'savedWorkouts', 'dayRestrictions', 'completedSessions',
-    'workoutRatings', 'importedPlans', 'personalRecords', 'nutritionAdjustments',
-    'foodPreferences', 'equipmentRestrictions', 'trainingZones', 'hydrationLog',
-    'checkinHistory', 'fitnessGoals', 'trainingPreferences', 'trainingNotes',
-    'savedMealPlans', 'currentWeekMealPlan', 'hydrationSettings', 'fuelingPrefs',
-    'hydrationDailyTargetOz', 'yogaTypes', 'completedChallenges', 'activeChallenges',
-    'userSharedWorkouts', 'measurementSystem', 'gymStrengthEnabled',
+    // Core data — MUST sync for cross-device
+    'workouts', 'workoutSchedule', 'trainingPlan', 'events',
+    'profile', 'meals', 'savedWorkouts', 'goals',
+    // Training state
+    'dayRestrictions', 'completedSessions', 'workoutRatings',
+    'importedPlans', 'personalRecords', 'nutritionAdjustments',
+    'foodPreferences', 'equipmentRestrictions', 'trainingZones',
+    'trainingZonesHistory', 'trainingPreferences', 'trainingNotes',
+    // Nutrition & hydration
+    'hydrationLog', 'hydrationSettings', 'hydrationDailyTargetOz',
+    'savedMealPlans', 'currentWeekMealPlan', 'fuelingPrefs',
+    // App state & preferences
+    'checkinHistory', 'fitnessGoals', 'yogaTypes',
+    'completedChallenges', 'activeChallenges', 'userSharedWorkouts',
+    'measurementSystem', 'gymStrengthEnabled',
     'nutritionEnabled', 'hydrationEnabled', 'fuelingEnabled',
     'workoutEffortFeedback', 'calibrationSignals',
     'hasOnboarded', 'surveyComplete', 'onboardingData',
+    // Plan management
+    'activePlan', 'activePlanAt', 'activePlanSource',
+    'currentRecoveryState', 'latestCheckIn',
+    // Preferences
+    'notifSettings', 'theme', 'userLevel', 'coachingDismissed',
   ];
 
   const _keyTimers = {};
@@ -402,7 +415,8 @@ const DB = (() => {
   // Does NOT delete localStorage data — it remains as offline cache.
 
   async function migrateLocalStorage() {
-    if (localStorage.getItem('supabase_migrated') === 'true') return;
+    // v2: re-migrate to push all data to user_data table (source of truth)
+    if (localStorage.getItem('supabase_migrated_v2') === 'true') return;
 
     const uid = await _userId();
     if (!uid) return;
@@ -482,6 +496,7 @@ const DB = (() => {
 
     if (errorCount === 0) {
       localStorage.setItem('supabase_migrated', 'true');
+      localStorage.setItem('supabase_migrated_v2', 'true');
       console.log('DB: Migration complete');
     } else {
       console.warn(`DB: Migration had ${errorCount} errors — will retry next login`);
@@ -661,10 +676,14 @@ const DB = (() => {
   }
 
   function syncWorkouts() {
+    // Primary: sync full data via user_data (preserves all fields)
+    syncKey('workouts');
+    // Secondary: also push to structured table for analytics (may lose some fields, but that's OK)
     _debouncedSync('workouts', 'workouts', _shapeWorkout);
   }
 
   function syncSchedule() {
+    syncKey('workoutSchedule');
     _debouncedSync('training_sessions', 'workoutSchedule', _shapeTrainingSession);
   }
 
@@ -674,10 +693,12 @@ const DB = (() => {
   }
 
   function syncEvents() {
+    syncKey('events');
     _debouncedSync('race_events', 'events', _shapeRaceEvent);
   }
 
   function syncGoals() {
+    syncKey('goals');
     _debouncedSync('goals', 'goals', _shapeGoal);
   }
 
@@ -687,24 +708,33 @@ const DB = (() => {
   async function refreshAllTables() {
     const uid = await _userId();
     if (!uid) return;
-    console.log('DB: Pulling all tables from Supabase');
-    const tables = [
-      { accessor: workouts, name: 'workouts' },
-      { accessor: trainingSessions, name: 'training_sessions' },
-      // trainingPlans removed — trainingPlan localStorage is synced via user_data, not training_plans table
-      { accessor: raceEvents, name: 'race_events' },
-      { accessor: goals, name: 'goals' },
-      { accessor: weeklyCheckins, name: 'weekly_checkins' },
-      { accessor: generatedPlans, name: 'generated_plans' },
-      { accessor: planAdherence, name: 'plan_adherence' },
+    console.log('DB: Pulling all data from Supabase (user_data is source of truth)');
+
+    // PRIMARY: Pull all user_data keys — this is the source of truth for all app state
+    await refreshAllKeys();
+
+    // SECONDARY: Pull structured tables only for keys NOT already populated by user_data
+    // These are fallbacks for data that predates the user_data sync
+    const fallbackTables = [
+      { accessor: raceEvents, name: 'race_events', lsKey: 'events' },
+      { accessor: goals, name: 'goals', lsKey: 'goals' },
+      { accessor: weeklyCheckins, name: 'weekly_checkins', lsKey: 'weeklyCheckins' },
     ];
     const results = await Promise.allSettled(
-      tables.map(t => t.accessor.list().then(data => {
-        console.log(`DB: pulled ${t.name} (${data?.length || 0} rows)`);
-      }))
+      fallbackTables.map(t => {
+        // Only pull from structured table if user_data didn't already populate this key
+        var existing = _lsGet(t.lsKey);
+        if (existing && Array.isArray(existing) && existing.length > 0) {
+          console.log('DB: ' + t.name + ' — already populated from user_data (' + existing.length + ' items), skipping table pull');
+          return Promise.resolve();
+        }
+        return t.accessor.list().then(function(data) {
+          console.log('DB: pulled ' + t.name + ' (fallback, ' + (data?.length || 0) + ' rows)');
+        });
+      })
     );
     results.forEach((r, i) => {
-      if (r.status === 'rejected') console.warn(`DB: pull ${tables[i].name} failed`, r.reason);
+      if (r.status === 'rejected') console.warn('DB: pull ' + fallbackTables[i].name + ' failed', r.reason);
     });
   }
 
