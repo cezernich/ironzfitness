@@ -936,7 +936,7 @@ const SESSION_DESCRIPTIONS = {
       steps: [
         { type: "warmup",   duration: 5,  zone: 1, label: "Easy jog + dynamic drills — leg swings, high knees, arm circles" },
         { type: "main",     duration: 10, zone: 2, label: "Easy run — conversational pace, focus on form" },
-        { type: "main",     duration: 20, zone: 2, label: "Station practice — pick 2–3 stations, moderate weight, focus on movement quality: wall balls, sled push, farmers carry" },
+        { type: "main",     duration: 20, zone: 2, label: "Station practice — pick 2–3 stations, moderate weight, focus on movement quality: wall balls, sled push, farmers carry", exercise: true },
         { type: "cooldown", duration: 5,  zone: 1, label: "Walk + stretch — hamstrings, shoulders, hip flexors" },
       ],
     },
@@ -945,7 +945,7 @@ const SESSION_DESCRIPTIONS = {
       steps: [
         { type: "warmup",   duration: 5,  zone: 1, label: "Easy jog + 4×20s strides — build to working effort" },
         { type: "main",     duration: 4,  zone: 3, label: "1 km run at race pace — practice pacing between stations", reps: 3, rest: 1 },
-        { type: "main",     duration: 25, zone: 3, label: "Station circuit — SkiErg, sled push, burpee broad jumps, rowing, wall balls; race-effort intensity, minimal rest between stations" },
+        { type: "main",     duration: 25, zone: 3, label: "Station circuit — SkiErg, sled push, burpee broad jumps, rowing, wall balls; race-effort intensity, minimal rest between stations", exercise: true },
         { type: "cooldown", duration: 5,  zone: 1, label: "Easy jog + full-body stretch" },
       ],
     },
@@ -954,7 +954,7 @@ const SESSION_DESCRIPTIONS = {
       steps: [
         { type: "warmup",   duration: 5,  zone: 1, label: "Easy jog + drills + 4×20s build strides" },
         { type: "main",     duration: 4,  zone: 4, label: "1 km hard run — at or above race pace", reps: 4, rest: 1 },
-        { type: "main",     duration: 30, zone: 4, label: "Full station simulation — all 8 stations at race weight and pace; practice transitions and grip management" },
+        { type: "main",     duration: 30, zone: 4, label: "Full station simulation — all 8 stations at race weight and pace; practice transitions and grip management", exercise: true },
         { type: "cooldown", duration: 10, zone: 1, label: "Easy walk + full mobility — flush legs, open shoulders" },
       ],
     },
@@ -965,7 +965,7 @@ const SESSION_DESCRIPTIONS = {
       duration: 40,
       steps: [
         { type: "warmup",   duration: 5,  zone: 1, label: "Foam roll + band activation — glutes, shoulders, core" },
-        { type: "main",     duration: 30, zone: 2, label: "Functional strength circuit: 3 rounds — goblet squats ×12, push-ups ×15, bent-over rows ×12, lunges ×10/side, plank 45s; 60s rest between rounds" },
+        { type: "main",     duration: 30, zone: 2, label: "Functional strength circuit: 3 rounds — goblet squats ×12, push-ups ×15, bent-over rows ×12, lunges ×10/side, plank 45s; 60s rest between rounds", exercise: true },
         { type: "cooldown", duration: 5,  zone: 1, label: "Stretch — hip flexors, lats, thoracic spine" },
       ],
     },
@@ -973,8 +973,8 @@ const SESSION_DESCRIPTIONS = {
       duration: 50,
       steps: [
         { type: "warmup",   duration: 5,  zone: 1, label: "Dynamic warm-up — inchworms, world's greatest stretch, band pull-aparts" },
-        { type: "main",     duration: 15, zone: 3, label: "Heavy compound work: 4×6 back squat or trap-bar deadlift, 4×8 bench press or overhead press — rest 2 min between sets; build to race-relevant strength" },
-        { type: "main",     duration: 20, zone: 3, label: "Station-specific strength: sled push/pull practice ×4, wall balls 3×20, farmers carry 4×40m, sandbag lunges 3×20 — focus on grip endurance and pacing" },
+        { type: "main",     duration: 15, zone: 3, label: "Heavy compound work: 4×6 back squat or trap-bar deadlift, 4×8 bench press or overhead press — rest 2 min between sets; build to race-relevant strength", exercise: true },
+        { type: "main",     duration: 20, zone: 3, label: "Station-specific strength: sled push/pull practice ×4, wall balls 3×20, farmers carry 4×40m, sandbag lunges 3×20 — focus on grip endurance and pacing", exercise: true },
         { type: "cooldown", duration: 10, zone: 1, label: "Easy row 5 min + full-body stretch" },
       ],
     },
@@ -982,8 +982,8 @@ const SESSION_DESCRIPTIONS = {
       duration: 60,
       steps: [
         { type: "warmup",   duration: 5,  zone: 1, label: "Dynamic warm-up + 2×30s SkiErg to prime pulling muscles" },
-        { type: "main",     duration: 20, zone: 4, label: "Heavy lifting: 5×5 deadlift, 4×6 weighted pull-ups, 4×8 front squat — race-weight or heavier; full recovery between sets" },
-        { type: "main",     duration: 25, zone: 4, label: "Race-simulation circuit under fatigue: 1 km row → 20 wall balls → sled push 25m → 20 burpee broad jumps → farmers carry 50m → 25 sandbag lunges; minimal rest, race intensity", reps: 2, rest: 3 },
+        { type: "main",     duration: 20, zone: 4, label: "Heavy lifting: 5×5 deadlift, 4×6 weighted pull-ups, 4×8 front squat — race-weight or heavier; full recovery between sets", exercise: true },
+        { type: "main",     duration: 25, zone: 4, label: "Race-simulation circuit under fatigue: 1 km row → 20 wall balls → sled push 25m → 20 burpee broad jumps → farmers carry 50m → 25 sandbag lunges; minimal rest, race intensity", reps: 2, rest: 3, exercise: true },
         { type: "cooldown", duration: 10, zone: 1, label: "Easy jog 5 min + mobility — hips, shoulders, grip stretches" },
       ],
     },
@@ -1847,10 +1847,38 @@ function computeRunDaysRecommendation(level, runGoal, returningFromInjury) {
  * Priority when trimming: long > hard/moderate/strides > easy.
  * When expanding, adds easy runs on free days while respecting quality-session buffer rules.
  */
-function adjustPatternToDays(pattern, daysPerWeek) {
-  if (!daysPerWeek) return pattern;
+function adjustPatternToDays(pattern, daysPerWeek, unavailableDays) {
+  const unavailSet = new Set(unavailableDays || []);
+  let entries = Object.entries(pattern).map(([d, s]) => [parseInt(d), s]);
+
+  // First: remove any sessions on unavailable days, redistributing to nearby available days
+  if (unavailSet.size > 0) {
+    const kept = [];
+    const displaced = [];
+    for (const [dow, session] of entries) {
+      if (unavailSet.has(dow)) displaced.push(session);
+      else kept.push([dow, session]);
+    }
+    // Try to redistribute displaced sessions to open available days
+    const usedDows = new Set(kept.map(([d]) => d));
+    for (const session of displaced) {
+      let placed = false;
+      for (const d of [1, 2, 3, 4, 5, 6, 0]) {
+        if (!unavailSet.has(d) && !usedDows.has(d)) {
+          kept.push([d, session]);
+          usedDows.add(d);
+          placed = true;
+          break;
+        }
+      }
+      // If no open day, drop the session (respect user's constraint)
+    }
+    entries = kept;
+  }
+
+  if (!daysPerWeek) return Object.fromEntries(entries);
+
   const loadPri = { long: 0, hard: 1, moderate: 1, strides: 1, easy: 2 };
-  const entries = Object.entries(pattern).map(([d, s]) => [parseInt(d), s]);
   if (entries.length > daysPerWeek) {
     entries.sort((a, b) => (loadPri[a[1].load] ?? 2) - (loadPri[b[1].load] ?? 2));
     return Object.fromEntries(entries.slice(0, daysPerWeek).map(([d, s]) => [d, s]));
@@ -1868,7 +1896,7 @@ function adjustPatternToDays(pattern, daysPerWeek) {
     let needed = daysPerWeek - entries.length;
     for (const d of [1, 2, 3, 4, 5, 6, 0]) {
       if (needed <= 0) break;
-      if (!usedDows.has(d) && !blockedDows.has(d)) {
+      if (!usedDows.has(d) && !blockedDows.has(d) && !unavailSet.has(d)) {
         result[d] = { discipline: "run", load: "easy" };
         usedDows.add(d);
         needed--;
@@ -1876,7 +1904,7 @@ function adjustPatternToDays(pattern, daysPerWeek) {
     }
     return result;
   }
-  return pattern;
+  return Object.fromEntries(entries);
 }
 
 // ─── Progressive run session durations ───────────────────────────────────────
@@ -1994,9 +2022,10 @@ function generateTrainingPlan(race) {
     ? applyLongDayPreference(levelPatterns, race.longDay, longDiscipline)
     : levelPatterns;
 
-  // Apply days-per-week adjustment for all plan types
-  const patterns = race.daysPerWeek
-    ? Object.fromEntries(Object.entries(longDayPatterns).map(([ph, pat]) => [ph, adjustPatternToDays(pat, race.daysPerWeek)]))
+  // Apply days-per-week and unavailable-days adjustment for all plan types
+  const hasAdjustment = race.daysPerWeek || (race.unavailableDays && race.unavailableDays.length > 0);
+  const patterns = hasAdjustment
+    ? Object.fromEntries(Object.entries(longDayPatterns).map(([ph, pat]) => [ph, adjustPatternToDays(pat, race.daysPerWeek, race.unavailableDays)]))
     : longDayPatterns;
 
   // Pre-plan build-up: if plan start is in the future, add gentle sessions in the gap
@@ -2173,7 +2202,7 @@ const RACE_SPORT_OPTS = [
 let raceFormState = {
   step: 1, sport: null, type: null,
   savedName: "", savedDate: "", savedLevel: "intermediate", savedPriority: "A", savedLongDay: "",
-  savedRunGoal: null, savedReturningFromInjury: null, savedDaysPerWeek: null,
+  savedRunGoal: null, savedReturningFromInjury: null, savedDaysPerWeek: null, savedUnavailableDays: null,
   savedLifeGoal: null, savedLifeLevel: null, savedLifeStart: null, savedLifeDuration: null, savedLifeDays: null,
 };
 
@@ -2238,7 +2267,7 @@ function renderRaceForm() {
   else if (raceFormState.step === 2)      c.innerHTML = _rfStep2();
   else if (raceFormState.step === "life") c.innerHTML = _rfStepLife();
   else if (raceFormState.step === 3)      c.innerHTML = _rfStep3();
-  else if (raceFormState.step === 4)      c.innerHTML = raceFormState.sport === "running" ? _rfStep4() : _rfStep4Tri();
+  else if (raceFormState.step === 4)      c.innerHTML = raceFormState.sport === "running" ? _rfStep4() : raceFormState.sport === "triathlon" ? _rfStep4Tri() : _rfStep4General();
   else                                    c.innerHTML = _rfStep5();
 }
 
@@ -2312,8 +2341,7 @@ function _rfStep3() {
     ? `<button class="btn-primary" onclick="_rfValidateStep3AndNext()" style="margin-top:16px">Next →</button>`
     : isTri
     ? `<button class="btn-primary" onclick="_rfValidateStep3AndNextTri()" style="margin-top:16px">Next →</button>`
-    : `<button class="btn-primary" onclick="saveRace()" style="margin-top:16px">${_editingRaceId ? "Update Race" : "Generate Plan"}</button>
-       ${_editingRaceId ? `<button class="btn-secondary" id="race-cancel-btn" onclick="_cancelEditRace()" style="margin-left:8px">Cancel Edit</button>` : ""}`;
+    : `<button class="btn-primary" onclick="_rfValidateStep3AndNextGeneral()" style="margin-top:16px">Next →</button>`;
   return `
     <div class="rf-step">
       <button class="rf-back-btn" onclick="rfBack()">← Back</button>
@@ -2562,6 +2590,72 @@ function _rfStep4Tri() {
     </div>`;
 }
 
+function _rfValidateStep3AndNextGeneral() {
+  _rfSaveStep3FormState();
+  const date = raceFormState.savedDate;
+  if (!date) { _rfShowError("Please set a race date to continue."); return; }
+  if (new Date(date + "T00:00:00") <= new Date()) { _rfShowError("Race date must be in the future."); return; }
+  if (raceFormState.savedPriority === "A") {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const allRaces = (() => { try { return JSON.parse(localStorage.getItem("events")) || []; } catch { return []; } })();
+    const existingA = allRaces.find(r => (r.priority || "A").toUpperCase() === "A" && r.id !== _editingRaceId && r.date >= todayStr);
+    if (existingA) {
+      _rfShowError(`You already have an upcoming A Race (${existingA.name || existingA.type}). Only one A Race is allowed at a time — set this to B, or edit your existing A Race first.`);
+      return;
+    }
+  }
+  raceFormState.step = 4;
+  renderRaceForm();
+}
+
+function _rfStep4General() {
+  const s = raceFormState;
+  const rec = s.savedLevel === "advanced" ? 6 : s.savedLevel === "beginner" ? 4 : 5;
+  const daysValue = s.savedDaysPerWeek || rec;
+  const marks = [3,4,5,6,7].map(n =>
+    `<span class="sv-slider-mark ${n === rec ? "sv-slider-mark--rec" : ""}">${n}</span>`
+  ).join("");
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const unavail = s.savedUnavailableDays || [];
+  const dayBtns = dayNames.map((name, i) => {
+    const isOff = unavail.includes(i);
+    return `<button class="rf-day-btn${isOff ? " rf-day-off" : ""}" data-dow="${i}" onclick="_rfToggleUnavailDay(${i})">${name}</button>`;
+  }).join("");
+  return `
+    <div class="rf-step">
+      <button class="rf-back-btn" onclick="rfBack()">← Back</button>
+      <h3 class="sv-question" style="margin:12px 0 6px">Training days per week?</h3>
+      <p class="hint" style="margin-bottom:8px">Recommended: <strong>${rec} days</strong> based on your fitness level.</p>
+      <div class="sv-slider-wrap">
+        <div class="sv-slider-value" id="rf-days-display">${daysValue} days / week</div>
+        <input type="range" class="sv-slider" id="rf-days-slider"
+          min="3" max="7" step="1" value="${daysValue}"
+          oninput="raceFormState.savedDaysPerWeek=parseInt(this.value); document.getElementById('rf-days-display').textContent=this.value+' days / week'" />
+        <div class="sv-slider-marks">${marks}</div>
+      </div>
+      <h3 class="sv-question" style="margin:20px 0 6px">Any days you can't train?</h3>
+      <p class="hint" style="margin-bottom:8px">Tap to mark days off. We'll avoid scheduling sessions on those days.</p>
+      <div class="rf-day-picker">${dayBtns}</div>
+      <p id="rf-val-msg" class="rf-val-msg"></p>
+      <button class="btn-primary" onclick="saveRace()" style="margin-top:24px">${_editingRaceId ? "Update Race" : "Generate Plan"}</button>
+      ${_editingRaceId ? `<button class="btn-secondary" onclick="_cancelEditRace()" style="margin-left:8px">Cancel Edit</button>` : ""}
+    </div>`;
+}
+
+function _rfToggleUnavailDay(dow) {
+  if (!raceFormState.savedUnavailableDays) raceFormState.savedUnavailableDays = [];
+  const arr = raceFormState.savedUnavailableDays;
+  const idx = arr.indexOf(dow);
+  if (idx >= 0) arr.splice(idx, 1);
+  else arr.push(dow);
+  // Re-render just the buttons
+  const btns = document.querySelectorAll(".rf-day-btn");
+  btns.forEach(btn => {
+    const d = parseInt(btn.dataset.dow);
+    btn.classList.toggle("rf-day-off", arr.includes(d));
+  });
+}
+
 function rfSelectSport(sport) {
   raceFormState.sport = sport;
   raceFormState.type  = null;
@@ -2721,7 +2815,8 @@ function saveRace() {
     ...(raceCourseNotes && { courseNotes: raceCourseNotes }),
     ...(isRunning && raceFormState.savedRunGoal !== null       && { runGoal: raceFormState.savedRunGoal }),
     ...(isRunning && raceFormState.savedReturningFromInjury !== null && { returningFromInjury: raceFormState.savedReturningFromInjury }),
-    ...(isRunning && raceFormState.savedDaysPerWeek            && { daysPerWeek: raceFormState.savedDaysPerWeek }),
+    ...(raceFormState.savedDaysPerWeek && { daysPerWeek: raceFormState.savedDaysPerWeek }),
+    ...(raceFormState.savedUnavailableDays && raceFormState.savedUnavailableDays.length > 0 && { unavailableDays: raceFormState.savedUnavailableDays }),
     createdAt: new Date().toISOString(),
   };
 
@@ -2830,6 +2925,16 @@ function editEvent(id) {
         </div>
       </div>
 
+      <div class="form-row" style="margin-bottom:10px">
+        <label>Days Off (can't train)</label>
+        <div class="rf-day-picker" id="edit-race-unavail-days">
+          ${DOW_LABELS.map((d, i) => {
+            const isOff = race.unavailableDays && race.unavailableDays.includes(i);
+            return `<button type="button" class="rf-day-btn${isOff ? " rf-day-off" : ""}" data-dow="${i}" onclick="this.classList.toggle('rf-day-off')">${d.slice(0,3)}</button>`;
+          }).join("")}
+        </div>
+      </div>
+
       <div style="display:flex;gap:8px;margin-top:16px">
         <button class="btn-primary" style="flex:1" onclick="_saveEditedRace('${race.id}')">Save Changes</button>
         <button class="btn-secondary" style="flex:1" onclick="document.getElementById('edit-race-overlay').remove()">Cancel</button>
@@ -2857,6 +2962,11 @@ function _saveEditedRace(raceId) {
   const longDay = document.getElementById("edit-race-longday")?.value;
   race.longDay = longDay !== "" ? parseInt(longDay) : race.longDay;
 
+  // Read unavailable days from toggle buttons
+  const unavailBtns = document.querySelectorAll("#edit-race-unavail-days .rf-day-btn.rf-day-off");
+  const unavailDays = Array.from(unavailBtns).map(btn => parseInt(btn.dataset.dow));
+  race.unavailableDays = unavailDays.length > 0 ? unavailDays : undefined;
+
   saveEvents(events);
 
   // Regenerate training plan for this race
@@ -2874,7 +2984,7 @@ function _saveEditedRace(raceId) {
 
 function _cancelEditRace() {
   _editingRaceId = null;
-  raceFormState = { step: 1, sport: null, type: null, savedName: "", savedDate: "", savedLevel: "intermediate", savedPriority: "A", savedLongDay: "", savedRunGoal: null, savedReturningFromInjury: null, savedDaysPerWeek: null };
+  raceFormState = { step: 1, sport: null, type: null, savedName: "", savedDate: "", savedLevel: "intermediate", savedPriority: "A", savedLongDay: "", savedRunGoal: null, savedReturningFromInjury: null, savedDaysPerWeek: null, savedUnavailableDays: null };
   renderRaceForm();
 }
 

@@ -5508,6 +5508,32 @@ button:active {
   border-radius: 4px;
 }
 
+.rf-day-picker {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.rf-day-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 2px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.rf-day-btn:hover { border-color: var(--color-accent); }
+.rf-day-btn.rf-day-off {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: var(--color-danger, #ef4444);
+  color: var(--color-danger, #ef4444);
+  text-decoration: line-through;
+}
+
 .sv-day-picker-label {
   font-size: 0.75rem;
   font-weight: 700;
