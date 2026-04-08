@@ -71,7 +71,7 @@ async function callAI({ messages, model, max_tokens, system }) {
       throw new Error(data.message || "Rate limit exceeded. Try again tomorrow.");
     }
     if (response.status === 401) {
-      throw new Error("Session expired. Please sign in again.");
+      throw new Error(data.debug || data.error || "Session expired. Please sign in again.");
     }
     throw new Error(data.error?.message || data.error || data.message || "AI request failed");
   }

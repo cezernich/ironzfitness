@@ -33,19 +33,18 @@ Deno.serve(async (req) => {
     if (!authHeader) return jsonResponse({ error: "Missing authorization" }, 401);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Verify user with anon client + their JWT
-    const token = authHeader.replace("Bearer ", "");
-    const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-    const { data: { user }, error: authError } = await anonClient.auth.getUser();
-    if (authError || !user) return jsonResponse({ error: "Invalid or expired token" }, 401);
-
-    // Service role client for DB operations (bypasses RLS)
+    // Use service role client to verify user token
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return jsonResponse({
+        error: "Invalid or expired token",
+        debug: authError?.message || "getUser returned no user",
+      }, 401);
+    }
 
     // ── 2. Rate limiting ─────────────────────────────────────────────────
     const today = new Date().toISOString().slice(0, 10);
