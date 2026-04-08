@@ -751,7 +751,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
           </div>
           <div class="session-header-right">
             ${displayDur ? `<span class="session-duration-badge">${isReduced ? "⬇ " : ""}${displayDur} min</span>` : ""}
-            ${_buildUndoHeaderBtn(cardId, dateStr)}${moveBtn}${delBtn}
+            ${_buildUndoHeaderBtn(cardId, dateStr)}${moveBtn}${editBtn}${delBtn}
             <span class="card-chevron">▾</span>
           </div>
         </div>
@@ -3429,12 +3429,227 @@ Use "Bodyweight" for bodyweight exercises. Strength exercises must have specific
       btnRow.innerHTML = `<button class="btn-primary" style="flex:1" onclick="qeSaveGeneratedStrength()">Save Session</button>`;
       resultEl.appendChild(btnRow);
     }
+
+    // Add follow-up Ask IronZ input for modifying the workout
+    _qeAppendModifyInput(resultEl);
+
   } catch (err) {
     loadingEl.style.display = "none"; _stopLoadingMessages();
     resultEl.innerHTML = `<div class="qe-ai-error">${ICONS.warning} Could not generate workout. ${err.message || "Try again."}<br><br>
       <button class="btn-secondary" onclick="qeShowStep(0,null)">← Go back</button>
     </div>`;
   }
+}
+
+// ── Ask IronZ: follow-up modification input ──────────────────────────────────
+function _qeAppendModifyInput(container) {
+  const wrap = document.createElement("div");
+  wrap.id = "qe-modify-panel";
+  wrap.style.cssText = "margin-top:16px;border-top:1px solid var(--color-border);padding-top:12px";
+  wrap.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span class="logo-mark" style="font-size:0.9rem"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+      <span style="font-weight:600;font-size:0.85rem">Modify with IronZ</span>
+    </div>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="qe-modify-input" placeholder="e.g. increase bench press by 10 lbs" style="flex:1;font-size:0.85rem" />
+      <button class="btn-primary" style="padding:8px 14px;white-space:nowrap" onclick="qeSubmitModify()">Go</button>
+    </div>
+    <div id="qe-modify-status" style="font-size:0.8rem;color:var(--color-text-muted);margin-top:6px;display:none"></div>`;
+  container.appendChild(wrap);
+
+  // Enter key submits
+  wrap.querySelector("#qe-modify-input").addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); qeSubmitModify(); }
+  });
+}
+
+async function qeSubmitModify() {
+  const input = document.getElementById("qe-modify-input");
+  const prompt = (input?.value || "").trim();
+  if (!prompt) return;
+
+  const statusEl = document.getElementById("qe-modify-status");
+  statusEl.style.display = "";
+  statusEl.textContent = "Thinking...";
+  statusEl.style.color = "var(--color-text-muted)";
+  input.disabled = true;
+
+  try {
+    // Build current workout context
+    let workoutCtx;
+    if (_qeSelectedType === "strength" || _qeSelectedType === "manual") {
+      workoutCtx = {
+        type: "strength",
+        title: document.getElementById("qe-workout-name")?.value || "",
+        exercises: _qeGeneratedExercises.map(ex => ({
+          name: ex.name, sets: ex.sets, reps: ex.reps, weight: ex.weight, rest: ex.rest
+        }))
+      };
+    } else if (_qeGeneratedCardioData) {
+      workoutCtx = {
+        type: "cardio",
+        title: _qeGeneratedCardioData.title,
+        sport: _qeGeneratedCardioData.sport,
+        intervals: _qeGeneratedCardioData.intervals
+      };
+    }
+
+    const data = await callAskIronZ({
+      question: prompt,
+      context: {
+        current_workout: workoutCtx
+      }
+    });
+
+    const answer = data.answer || "";
+
+    // Parse action block from response
+    const actionMatch = answer.match(/```action\s*([\s\S]*?)```/);
+    let actionsApplied = false;
+
+    if (actionMatch) {
+      try {
+        const parsed = JSON.parse(actionMatch[1].trim());
+        const actions = parsed.actions || [];
+        actionsApplied = _qeApplyWorkoutActions(actions);
+      } catch (e) {
+        console.warn("Failed to parse action block:", e);
+      }
+    }
+
+    // Show confirmation text (strip the action block)
+    const displayText = answer.replace(/```action[\s\S]*?```/, "").trim();
+    if (displayText) {
+      statusEl.style.color = "var(--color-success, #22c55e)";
+      statusEl.textContent = displayText;
+    } else if (actionsApplied) {
+      statusEl.style.color = "var(--color-success, #22c55e)";
+      statusEl.textContent = "Done.";
+    }
+
+    input.value = "";
+  } catch (err) {
+    statusEl.style.color = "var(--color-error, #ef4444)";
+    statusEl.textContent = err.message || "Failed. Try again.";
+  } finally {
+    input.disabled = false;
+    input.focus();
+  }
+}
+
+function _qeApplyWorkoutActions(actions) {
+  let applied = false;
+  for (const act of actions) {
+    switch (act.action) {
+      case "update_exercise": {
+        const idx = _qeFindExercise(act.target);
+        if (idx === -1) break;
+        const ex = _qeGeneratedExercises[idx];
+        if (act.updates.weight != null) ex.weight = _roundExWeight(String(act.updates.weight));
+        if (act.updates.sets != null) ex.sets = act.updates.sets;
+        if (act.updates.reps != null) ex.reps = String(act.updates.reps);
+        if (act.updates.rest != null) ex.rest = act.updates.rest;
+        if (act.updates.name != null) ex.name = act.updates.name;
+        applied = true;
+        break;
+      }
+      case "swap_exercise": {
+        const idx = _qeFindExercise(act.target);
+        if (idx === -1) break;
+        const repl = act.replacement;
+        _qeGeneratedExercises[idx] = {
+          name: repl.name,
+          sets: repl.sets || _qeGeneratedExercises[idx].sets,
+          reps: repl.reps || _qeGeneratedExercises[idx].reps,
+          weight: _roundExWeight(String(repl.weight || "Bodyweight")),
+          rest: repl.rest || _qeGeneratedExercises[idx].rest
+        };
+        applied = true;
+        break;
+      }
+      case "add_exercise": {
+        const newEx = {
+          name: act.exercise.name,
+          sets: act.exercise.sets || 3,
+          reps: act.exercise.reps || "10",
+          weight: _roundExWeight(String(act.exercise.weight || "Bodyweight")),
+          rest: act.exercise.rest || "60s"
+        };
+        _qeGeneratedExercises.push(newEx);
+        applied = true;
+        break;
+      }
+      case "remove_exercise": {
+        const idx = _qeFindExercise(act.target);
+        if (idx === -1) break;
+        _qeGeneratedExercises.splice(idx, 1);
+        applied = true;
+        break;
+      }
+      case "update_cardio_interval": {
+        if (!_qeGeneratedCardioData) break;
+        const iv = _qeGeneratedCardioData.intervals.find(i =>
+          i.name.toLowerCase().includes(act.target.toLowerCase())
+        );
+        if (!iv) break;
+        if (act.updates.duration != null) iv.duration = act.updates.duration;
+        if (act.updates.effort != null) iv.effort = act.updates.effort;
+        if (act.updates.details != null) iv.details = act.updates.details;
+        applied = true;
+        break;
+      }
+    }
+  }
+
+  // Re-render the workout display
+  if (applied) {
+    if (_qeSelectedType === "strength" || _qeSelectedType === "manual") {
+      _qeRenderExerciseList();
+    } else if (_qeGeneratedCardioData) {
+      _qeRerenderCardio();
+    }
+  }
+  return applied;
+}
+
+function _qeFindExercise(target) {
+  if (!target) return -1;
+  const t = target.toLowerCase();
+  // Exact match first
+  let idx = _qeGeneratedExercises.findIndex(ex => ex.name.toLowerCase() === t);
+  if (idx !== -1) return idx;
+  // Partial match
+  idx = _qeGeneratedExercises.findIndex(ex => ex.name.toLowerCase().includes(t));
+  if (idx !== -1) return idx;
+  // Reverse partial (target contains exercise name)
+  idx = _qeGeneratedExercises.findIndex(ex => t.includes(ex.name.toLowerCase()));
+  return idx;
+}
+
+function _qeRerenderCardio() {
+  const resultEl = document.getElementById("qe-ai-result");
+  if (!resultEl || !_qeGeneratedCardioData) return;
+  const effortColors = { Easy: "#22c55e", Moderate: "#f59e0b", Hard: "#f97316", Max: "#ef4444" };
+  const intervalsHtml = _qeGeneratedCardioData.intervals.map(iv => {
+    const c = effortColors[iv.effort] || "#64748b";
+    return `<div class="qe-cardio-interval">
+      <div class="qe-cardio-interval-header">
+        <span class="qe-cardio-phase">${escHtml(iv.name)}</span>
+        <span class="qe-cardio-meta">${escHtml(iv.duration)} · <span style="color:${c}">${escHtml(iv.effort)}</span></span>
+      </div>
+      ${iv.details ? `<div class="qe-cardio-details">${escHtml(iv.details)}</div>` : ""}
+    </div>`;
+  }).join("");
+  resultEl.innerHTML = `<div class="qe-generated-workout">
+    <div class="qe-generated-title">${ICONS.sparkles} ${escHtml(_qeGeneratedCardioData.title)}</div>
+    ${intervalsHtml}
+  </div>`;
+  const btnRow = document.createElement("div");
+  btnRow.style.cssText = "display:flex;gap:10px;margin-top:12px";
+  btnRow.innerHTML = `<button class="btn-primary" style="flex:1" onclick="qeSaveGeneratedCardio()">Save Session</button>`;
+  resultEl.appendChild(btnRow);
+  _qeAppendModifyInput(resultEl);
 }
 
 function qeWizardBack() {
