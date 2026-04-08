@@ -101,65 +101,20 @@ function buildStatsOverview(total, streaks, thisWeek) {
 /* ─── Totals Section ──────────────────────────────────────────────────── */
 
 function _computeTotals(workouts) {
-  const totals = { runKm: 0, bikeKm: 0, swimKm: 0, liftMin: 0, hiitMin: 0, cardioMin: 0, yogaMin: 0, totalMin: 0 };
+  const totals = { runMin: 0, bikeMin: 0, swimMin: 0, liftMin: 0, hiitMin: 0, cardioMin: 0, yogaMin: 0, totalMin: 0 };
 
   workouts.forEach(w => {
     const type = (w.type || "").toLowerCase();
     const mins = _extractWorkoutMinutes(w);
     totals.totalMin += mins;
 
-    // Categorize time
-    if (type === "weightlifting" || type === "bodyweight") totals.liftMin += mins;
-    else if (type === "hiit") totals.hiitMin += mins;
-    else if (type === "yoga") totals.yogaMin += mins;
-    else totals.cardioMin += mins;
-
-    // Extract distances from interval data
-    if (w.aiSession?.intervals) {
-      w.aiSession.intervals.forEach(iv => {
-        const durStr = String(iv.duration || "");
-        const reps = iv.reps || 1;
-        // Distance-based intervals (e.g. "5 mi", "400m", "1.5 km")
-        const miMatch = durStr.match(/([\d.]+)\s*mi/i);
-        const kmMatch = durStr.match(/([\d.]+)\s*km/i);
-        const mMatch  = durStr.match(/([\d.]+)\s*m\b/i);
-        let km = 0;
-        if (miMatch) km = parseFloat(miMatch[1]) * 1.60934;
-        else if (kmMatch) km = parseFloat(kmMatch[1]);
-        else if (mMatch) km = parseFloat(mMatch[1]) / 1000;
-
-        // Time-based: estimate run distance from zones
-        if (km === 0 && (type === "running" || type === "run")) {
-          const durMin = _parseDurMinFromStr(durStr);
-          if (durMin > 0 && typeof _estimateRunKm === "function") {
-            km = _estimateRunKm(iv.effort, durMin);
-          }
-        }
-
-        km *= reps;
-        if (km > 0) {
-          if (type === "running" || type === "run") totals.runKm += km;
-          else if (type === "cycling" || type === "bike") totals.bikeKm += km;
-          else if (type === "swimming" || type === "swim") totals.swimKm += km;
-        }
-      });
-    }
-
-    // Direct distance field (manual logs, e.g. "5.2 mi")
-    if (w.distance) {
-      const dStr = String(w.distance);
-      const miM = dStr.match(/([\d.]+)\s*mi/i);
-      const kmM = dStr.match(/([\d.]+)\s*km/i);
-      let km = 0;
-      if (miM) km = parseFloat(miM[1]) * 1.60934;
-      else if (kmM) km = parseFloat(kmM[1]);
-      else { const num = parseFloat(dStr); if (!isNaN(num)) km = num * 1.60934; } // assume miles if no unit
-      if (km > 0) {
-        if (type === "running" || type === "run") totals.runKm += km;
-        else if (type === "cycling" || type === "bike") totals.bikeKm += km;
-        else if (type === "swimming" || type === "swim") totals.swimKm += km;
-      }
-    }
+    if (type === "running")                                    totals.runMin  += mins;
+    else if (type === "cycling")                               totals.bikeMin += mins;
+    else if (type === "swimming")                              totals.swimMin += mins;
+    else if (type === "weightlifting" || type === "bodyweight") totals.liftMin += mins;
+    else if (type === "hiit")                                  totals.hiitMin += mins;
+    else if (type === "yoga")                                  totals.yogaMin += mins;
+    else                                                       totals.cardioMin += mins;
   });
   return totals;
 }
@@ -218,9 +173,9 @@ function buildStatsTotals() {
   }
 
   const rows =
-    _row(ICONS.run, "Running",    _fmtDist(monthTotals.runKm),  _fmtDist(yearTotals.runKm),  _fmtDist(allTotals.runKm)) +
-    _row(ICONS.bike, "Cycling",   _fmtDist(monthTotals.bikeKm), _fmtDist(yearTotals.bikeKm), _fmtDist(allTotals.bikeKm)) +
-    _row(ICONS.swim, "Swimming",  _fmtSwimDist(monthTotals.swimKm), _fmtSwimDist(yearTotals.swimKm), _fmtSwimDist(allTotals.swimKm)) +
+    _row(ICONS.run, "Running",    _fmtHours(monthTotals.runMin),  _fmtHours(yearTotals.runMin),  _fmtHours(allTotals.runMin)) +
+    _row(ICONS.bike, "Cycling",   _fmtHours(monthTotals.bikeMin), _fmtHours(yearTotals.bikeMin), _fmtHours(allTotals.bikeMin)) +
+    _row(ICONS.swim, "Swimming",  _fmtHours(monthTotals.swimMin), _fmtHours(yearTotals.swimMin), _fmtHours(allTotals.swimMin)) +
     _row(ICONS.weights, "Lifting", _fmtHours(monthTotals.liftMin), _fmtHours(yearTotals.liftMin), _fmtHours(allTotals.liftMin)) +
     _row(ICONS.flame, "HIIT",     _fmtHours(monthTotals.hiitMin), _fmtHours(yearTotals.hiitMin), _fmtHours(allTotals.hiitMin)) +
     _row(ICONS.activity, "Cardio", _fmtHours(monthTotals.cardioMin), _fmtHours(yearTotals.cardioMin), _fmtHours(allTotals.cardioMin)) +
