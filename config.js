@@ -49,12 +49,12 @@ async function callAI({ messages, model, max_tokens, system }) {
     throw new Error("Please sign in to use AI features");
   }
 
-  const supabaseUrl = window.supabaseClient.supabaseUrl || SUPABASE_URL;
-  const response = await fetch(`${supabaseUrl}/functions/v1/ai-proxy`, {
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/ask-ironz`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${session.access_token}`,
+      "apikey": SUPABASE_ANON_KEY,
     },
     body: JSON.stringify({
       messages,
@@ -79,6 +79,54 @@ async function callAI({ messages, model, max_tokens, system }) {
   // If the Anthropic API itself returned an error
   if (data.error) {
     throw new Error(data.error.message || "AI service error");
+  }
+
+  return data;
+}
+
+/**
+ * callAskIronZ — Send a coaching question to the philosophy-aware Ask IronZ Edge Function.
+ *
+ * @param {Object} opts
+ * @param {string} opts.question   - The user's question (required)
+ * @param {Object} [opts.profile]  - Extra profile context (optional, merged with DB profile)
+ * @param {Object} [opts.context]  - Extra context like { sport, race_type } (optional)
+ * @returns {Promise<Object>}      - { answer, modules_used, modules_count, _remaining }
+ */
+async function callAskIronZ({ question, profile, context }) {
+  if (!window.supabaseClient) {
+    throw new Error("Supabase not initialized");
+  }
+
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error("Please sign in to use AI features");
+  }
+
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/ask-ironz`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${session.access_token}`,
+      "apikey": SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({
+      question,
+      ...(profile && { profile }),
+      ...(context && { context }),
+    }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    if (response.status === 429) {
+      throw new Error(data.message || "Rate limit exceeded. Try again tomorrow.");
+    }
+    if (response.status === 401) {
+      throw new Error("Session expired. Please sign in again.");
+    }
+    throw new Error(data.error || data.message || "AI request failed");
   }
 
   return data;

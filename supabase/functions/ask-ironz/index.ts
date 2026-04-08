@@ -65,10 +65,38 @@ Deno.serve(async (req) => {
 
     // ── 3. Parse request ─────────────────────────────────────────────────
     const body = await req.json();
+
+    // ── Passthrough mode: raw messages from callAI (NL input, etc.) ──────
+    if (body.messages && Array.isArray(body.messages)) {
+      const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+      if (!anthropicKey) return jsonResponse({ error: "AI service not configured" }, 503);
+
+      const anthropicResponse = await fetch(ANTHROPIC_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": anthropicKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: body.model || "claude-haiku-4-5-20251001",
+          max_tokens: Math.min(body.max_tokens || 1024, 4096),
+          messages: body.messages,
+          ...(body.system && { system: body.system }),
+        }),
+      });
+
+      const result = await anthropicResponse.json();
+      const remaining = MAX_REQUESTS_PER_DAY - (currentCount + 1);
+
+      return jsonResponse({ ...result, _remaining: remaining }, anthropicResponse.status);
+    }
+
+    // ── Question mode: philosophy-aware coaching ─────────────────────────
     const { question, profile, context } = body;
 
     if (!question || typeof question !== "string") {
-      return jsonResponse({ error: "Missing 'question' field" }, 400);
+      return jsonResponse({ error: "Missing 'question' or 'messages' field" }, 400);
     }
 
     // ── 4. Pull user profile from DB ─────────────────────────────────────
