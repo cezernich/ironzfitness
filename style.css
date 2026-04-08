@@ -7021,6 +7021,47 @@ button:active {
 .hydration-info { display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .hydration-count { font-size: 1.2rem; font-weight: 700; }
 .hydration-oz { font-size: 0.85rem; color: var(--color-text-muted); }
+.hydration-date-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  justify-content: center;
+}
+.hydration-nav-btn {
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  width: 32px;
+  height: 32px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.hydration-nav-btn:hover:not(:disabled) { background: var(--color-accent); color: var(--color-accent-text); }
+.hydration-nav-btn:disabled { opacity: 0.3; cursor: default; }
+.hydration-nav-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  min-width: 120px;
+  text-align: center;
+}
+.hydration-nav-today-btn {
+  background: none;
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.hydration-nav-today-btn:hover { background: var(--color-accent); color: var(--color-accent-text); }
 .hydration-btn-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .hydration-mybottle-btn { padding: 10px 16px; font-size: 0.9rem; flex: 1; }
 .hydration-quickadd-btn { padding: 8px 12px; font-size: 0.8rem; }

@@ -45,47 +45,11 @@ function getBaseHydrationTarget() {
 }
 
 function getTodayWorkoutInfo() {
-  const today = getTodayString();
-  try {
-    const schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
-    const todayWorkouts = schedule.filter(w => w.date === today);
-    if (todayWorkouts.length === 0) return null;
-    // Use the first workout for bonus calculation; pick highest bonus if multiple
-    let bestBonus = 0;
-    let bestName = "";
-    for (const w of todayWorkouts) {
-      const t = (w.type || "").toLowerCase();
-      const bonus = WORKOUT_HYDRATION_BONUS[t] || 16; // default 16oz for unknown workout types
-      if (bonus > bestBonus) {
-        bestBonus = bonus;
-        bestName = w.sessionName || w.type || "workout";
-      }
-    }
-    return { bonusOz: bestBonus, sessionName: bestName };
-  } catch { return null; }
+  return getWorkoutInfoForDate(getHydrationDate());
 }
 
 function getHydrationBreakdown() {
-  const baseOz = getBaseHydrationTarget();
-  const workoutInfo = getTodayWorkoutInfo();
-  const bonusOz = workoutInfo ? workoutInfo.bonusOz : 0;
-  // Include sauna bonus if any
-  let saunaBonus = 0;
-  try {
-    const today = typeof getTodayString === "function" ? getTodayString() : new Date().toISOString().slice(0, 10);
-    const log = JSON.parse(localStorage.getItem("hydrationLog") || "{}");
-    saunaBonus = (log[today] && log[today].saunaBonus) || 0;
-  } catch {}
-  const totalBonus = bonusOz + saunaBonus;
-  let reason = null;
-  if (workoutInfo && saunaBonus > 0) {
-    reason = `${baseOz} base + ${bonusOz} workout + ${saunaBonus} sauna`;
-  } else if (workoutInfo) {
-    reason = `${baseOz} base + ${bonusOz} for your ${workoutInfo.sessionName}`;
-  } else if (saunaBonus > 0) {
-    reason = `${baseOz} base + ${saunaBonus} for sauna session`;
-  }
-  return { baseOz, bonusOz: totalBonus, totalOz: baseOz + totalBonus, reason };
+  return getHydrationBreakdownForDate(getHydrationDate());
 }
 
 function getHydrationTarget() {
@@ -139,16 +103,49 @@ function getLogBottles(entry) {
 }
 
 function getTodayHydration() {
-  const log = getHydrationLog();
-  const today = getTodayString();
-  return normalizeDayLog(log[today]).total;
+  return getHydrationForDate(getHydrationDate()).total;
 }
 
 /** Get effective oz for today accounting for beverage coefficients */
 function getTodayEffectiveOz() {
-  const log = getHydrationLog();
+  return getEffectiveOzForDate(getHydrationDate());
+}
+
+let _selectedBeverage = "water";
+let _hydrationDate = null; // null = today
+
+/** Get the currently selected hydration date (defaults to today) */
+function getHydrationDate() {
+  return _hydrationDate || getTodayString();
+}
+
+/** Set the hydration date and re-render */
+function setHydrationDate(dateStr) {
+  _hydrationDate = dateStr || null;
+  renderHydration();
+}
+
+/** Navigate hydration date by offset days (-1 = yesterday, +1 = tomorrow) */
+function shiftHydrationDate(offset) {
+  const current = getHydrationDate();
+  const d = new Date(current + "T12:00:00");
+  d.setDate(d.getDate() + offset);
   const today = getTodayString();
-  const day = normalizeDayLog(log[today]);
+  const newDate = d.toISOString().slice(0, 10);
+  // Don't allow future dates
+  if (newDate > today) return;
+  setHydrationDate(newDate === today ? null : newDate);
+}
+
+/** Get hydration data for a specific date */
+function getHydrationForDate(dateStr) {
+  const log = getHydrationLog();
+  return normalizeDayLog(log[dateStr]);
+}
+
+/** Get effective oz for a specific date accounting for beverage coefficients */
+function getEffectiveOzForDate(dateStr) {
+  const day = getHydrationForDate(dateStr);
   const bottleSize = getBottleSize();
   let effectiveOz = 0;
   for (const b of day.beverages) {
@@ -158,55 +155,95 @@ function getTodayEffectiveOz() {
   return Math.round(effectiveOz);
 }
 
-let _selectedBeverage = "water";
+/** Get workout bonus for a specific date */
+function getWorkoutInfoForDate(dateStr) {
+  try {
+    const schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
+    const dayWorkouts = schedule.filter(w => w.date === dateStr);
+    if (dayWorkouts.length === 0) return null;
+    let bestBonus = 0;
+    let bestName = "";
+    for (const w of dayWorkouts) {
+      const t = (w.type || "").toLowerCase();
+      const bonus = WORKOUT_HYDRATION_BONUS[t] || 16;
+      if (bonus > bestBonus) {
+        bestBonus = bonus;
+        bestName = w.sessionName || w.type || "workout";
+      }
+    }
+    return { bonusOz: bestBonus, sessionName: bestName };
+  } catch { return null; }
+}
+
+/** Get hydration breakdown for a specific date */
+function getHydrationBreakdownForDate(dateStr) {
+  const baseOz = getBaseHydrationTarget();
+  const workoutInfo = getWorkoutInfoForDate(dateStr);
+  const bonusOz = workoutInfo ? workoutInfo.bonusOz : 0;
+  let saunaBonus = 0;
+  try {
+    const log = JSON.parse(localStorage.getItem("hydrationLog") || "{}");
+    saunaBonus = (log[dateStr] && log[dateStr].saunaBonus) || 0;
+  } catch {}
+  const totalBonus = bonusOz + saunaBonus;
+  let reason = null;
+  if (workoutInfo && saunaBonus > 0) {
+    reason = `${baseOz} base + ${bonusOz} workout + ${saunaBonus} sauna`;
+  } else if (workoutInfo) {
+    reason = `${baseOz} base + ${bonusOz} for your ${workoutInfo.sessionName}`;
+  } else if (saunaBonus > 0) {
+    reason = `${baseOz} base + ${saunaBonus} for sauna session`;
+  }
+  return { baseOz, bonusOz: totalBonus, totalOz: baseOz + totalBonus, reason };
+}
 
 function logWater(beverageType) {
   const type = beverageType || _selectedBeverage || "water";
   const log = getHydrationLog();
-  const today = getTodayString();
-  const day = normalizeDayLog(log[today]);
+  const dateStr = getHydrationDate();
+  const day = normalizeDayLog(log[dateStr]);
 
   day.total++;
   const existing = day.beverages.find(b => b.type === type);
   if (existing) existing.count++;
   else day.beverages.push({ type, count: 1 });
 
-  log[today] = day;
+  log[dateStr] = day;
   localStorage.setItem("hydrationLog", JSON.stringify(log)); if (typeof DB !== 'undefined') DB.syncKey('hydrationLog');
 
   renderHydration();
 
-  // Refresh today dashboard if visible
+  // Refresh day detail if visible
   if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
     renderDayDetail(selectedDate);
   }
 
-  // Check if target met
-  const effectiveOz = getTodayEffectiveOz();
-  const targetOz = getHydrationTarget();
-  const bottleSize = getBottleSize();
-  const prevOz = effectiveOz - bottleSize * (BEVERAGE_TYPES[type] || BEVERAGE_TYPES.water).coeff;
-
-  if (effectiveOz >= targetOz && prevOz < targetOz) {
-    playHydrationGoalAnimation();
+  // Check if target met (only animate for today)
+  if (dateStr === getTodayString()) {
+    const effectiveOz = getEffectiveOzForDate(dateStr);
+    const targetOz = getHydrationBreakdownForDate(dateStr).totalOz;
+    const bottleSize = getBottleSize();
+    const prevOz = effectiveOz - bottleSize * (BEVERAGE_TYPES[type] || BEVERAGE_TYPES.water).coeff;
+    if (effectiveOz >= targetOz && prevOz < targetOz) {
+      playHydrationGoalAnimation();
+    }
   }
 }
 
 function logWaterOz(oz) {
   const bottleSize = getBottleSize();
-  // Calculate how many "bottles" this is (fractional)
   const bottles = oz / bottleSize;
   const type = _selectedBeverage || "water";
   const log = getHydrationLog();
-  const today = getTodayString();
-  const day = normalizeDayLog(log[today]);
+  const dateStr = getHydrationDate();
+  const day = normalizeDayLog(log[dateStr]);
 
   day.total += bottles;
   const existing = day.beverages.find(b => b.type === type);
   if (existing) existing.count += bottles;
   else day.beverages.push({ type, count: bottles });
 
-  log[today] = day;
+  log[dateStr] = day;
   localStorage.setItem("hydrationLog", JSON.stringify(log)); if (typeof DB !== 'undefined') DB.syncKey('hydrationLog');
   renderHydration();
 
@@ -214,12 +251,14 @@ function logWaterOz(oz) {
     renderDayDetail(selectedDate);
   }
 
-  const effectiveOz = getTodayEffectiveOz();
-  const targetOz = getHydrationTarget();
-  const coeff = (BEVERAGE_TYPES[type] || BEVERAGE_TYPES.water).coeff;
-  const prevOz = effectiveOz - oz * coeff;
-  if (effectiveOz >= targetOz && prevOz < targetOz) {
-    playHydrationGoalAnimation();
+  if (dateStr === getTodayString()) {
+    const effectiveOz = getEffectiveOzForDate(dateStr);
+    const targetOz = getHydrationBreakdownForDate(dateStr).totalOz;
+    const coeff = (BEVERAGE_TYPES[type] || BEVERAGE_TYPES.water).coeff;
+    const prevOz = effectiveOz - oz * coeff;
+    if (effectiveOz >= targetOz && prevOz < targetOz) {
+      playHydrationGoalAnimation();
+    }
   }
 
   // Close quick add panel
@@ -242,12 +281,11 @@ function toggleQuickAddWater() {
 
 function undoWater() {
   const log = getHydrationLog();
-  const today = getTodayString();
-  const day = normalizeDayLog(log[today]);
+  const dateStr = getHydrationDate();
+  const day = normalizeDayLog(log[dateStr]);
   if (day.total <= 0) return;
 
   day.total--;
-  // Remove from the last beverage type logged
   for (let i = day.beverages.length - 1; i >= 0; i--) {
     if (day.beverages[i].count > 0) {
       day.beverages[i].count--;
@@ -256,7 +294,7 @@ function undoWater() {
     }
   }
 
-  log[today] = day;
+  log[dateStr] = day;
   localStorage.setItem("hydrationLog", JSON.stringify(log)); if (typeof DB !== 'undefined') DB.syncKey('hydrationLog');
   renderHydration();
 
@@ -272,12 +310,19 @@ function undoWater() {
 function renderHydration() {
   if (!isHydrationEnabled()) return;
 
+  const dateStr = getHydrationDate();
+  const today = getTodayString();
+  const isToday = dateStr === today;
+
   const bottleSize = getBottleSize();
   const breakdown = getHydrationBreakdown();
   const targetOz = breakdown.totalOz;
   const bottles = getTodayHydration();
   const effectiveOz = getTodayEffectiveOz();
   const bottlesNeeded = Math.ceil(targetOz / bottleSize);
+
+  // Date navigator
+  _renderHydrationDateNav(dateStr, isToday);
 
   // Current / target display
   const currentEl = document.getElementById("hydration-current");
@@ -305,8 +350,38 @@ function renderHydration() {
   // Beverage picker
   renderBeveragePicker();
 
-  // Smart timing tip
-  renderHydrationTimingTip();
+  // Smart timing tip (only for today)
+  if (isToday) {
+    renderHydrationTimingTip();
+  } else {
+    const tipEl = document.getElementById("hydration-tip");
+    if (tipEl) tipEl.style.display = "none";
+  }
+}
+
+function _renderHydrationDateNav(dateStr, isToday) {
+  let nav = document.getElementById("hydration-date-nav");
+  if (!nav) {
+    const header = document.querySelector("#hydration-card > div:first-child");
+    if (!header) return;
+    nav = document.createElement("div");
+    nav.id = "hydration-date-nav";
+    nav.className = "hydration-date-nav";
+    header.insertAdjacentElement("afterend", nav);
+  }
+
+  // Format date label
+  const d = new Date(dateStr + "T12:00:00");
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const label = isToday ? "Today" : `${dayNames[d.getDay()]}, ${monthNames[d.getMonth()]} ${d.getDate()}`;
+
+  nav.innerHTML = `
+    <button class="hydration-nav-btn" onclick="shiftHydrationDate(-1)" title="Previous day">&lsaquo;</button>
+    <span class="hydration-nav-label">${label}</span>
+    <button class="hydration-nav-btn" onclick="shiftHydrationDate(1)" title="Next day" ${isToday ? "disabled" : ""}>&rsaquo;</button>
+    ${!isToday ? `<button class="hydration-nav-today-btn" onclick="setHydrationDate(null)">Today</button>` : ""}
+  `;
 }
 
 function updateHydrationVisual(current, target) {

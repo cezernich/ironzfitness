@@ -1785,16 +1785,18 @@ function buildTodayDashboard(dateStr, data, nutrition) {
   // Hydration status (if enabled)
   let hydrationHtml = "";
   if (typeof isHydrationEnabled === "function" && isHydrationEnabled()) {
-    const targetOz = typeof getHydrationTarget === "function" ? getHydrationTarget() : 96;
+    const breakdown = typeof getHydrationBreakdownForDate === "function" ? getHydrationBreakdownForDate(dateStr) : { totalOz: 96 };
+    const targetOz = breakdown.totalOz;
     const bottleSize = typeof getBottleSize === "function" ? getBottleSize() : 12;
-    const bottles = typeof getTodayHydration === "function" ? getTodayHydration() : 0;
-    const currentOz = bottles * bottleSize;
-    const pct = targetOz > 0 ? Math.min(Math.round(currentOz / targetOz * 100), 100) : 0;
+    const dayData = typeof getHydrationForDate === "function" ? getHydrationForDate(dateStr) : { total: 0 };
+    const bottles = dayData.total;
+    const effectiveOz = typeof getEffectiveOzForDate === "function" ? getEffectiveOzForDate(dateStr) : bottles * bottleSize;
+    const pct = targetOz > 0 ? Math.min(Math.round(effectiveOz / targetOz * 100), 100) : 0;
     hydrationHtml = `
       <div class="td-section">
         <div class="td-section-header">
           <span class="td-section-label">${ICONS.droplet} Hydration</span>
-          <span class="td-section-stat">${currentOz} / ${targetOz} oz</span>
+          <span class="td-section-stat">${effectiveOz} / ${targetOz} oz</span>
         </div>
         <div class="td-progress-row">
           <div class="td-progress-track td-progress-track--water"><div class="td-progress-fill td-progress-fill--water" style="width:${pct}%"></div></div>
@@ -1811,7 +1813,7 @@ function buildTodayDashboard(dateStr, data, nutrition) {
     actions.push(`<button class="td-action-btn" onclick="showTab('nutrition')">${ICONS.utensils || "&#127860;"} Log Meal</button>`);
   }
   if (typeof isHydrationEnabled === "function" && isHydrationEnabled()) {
-    actions.push(`<button class="td-action-btn" onclick="if(typeof logWater==='function') logWater()">${ICONS.droplet} Log Water</button>`);
+    actions.push(`<button class="td-action-btn" onclick="if(typeof setHydrationDate==='function') setHydrationDate('${dateStr}'); if(typeof logWater==='function') logWater()">${ICONS.droplet} Log Water</button>`);
   }
 
   return `
@@ -1860,11 +1862,10 @@ function renderDailyRings() {
   const hydrationEnabled = typeof isHydrationEnabled === "function" && isHydrationEnabled();
   let hydPct = 0, hydLabel = "";
   if (hydrationEnabled) {
-    const targetOz = typeof getHydrationTarget === "function" ? getHydrationTarget() : 96;
-    const bottleSize = typeof getBottleSize === "function" ? getBottleSize() : 12;
-    const bottles = typeof getTodayHydration === "function" ? getTodayHydration() : 0;
-    const currentOz = bottles * bottleSize;
-    hydPct = targetOz > 0 ? Math.min(currentOz / targetOz, 1) : 0;
+    const breakdown = typeof getHydrationBreakdownForDate === "function" ? getHydrationBreakdownForDate(dateStr) : { totalOz: 96 };
+    const targetOz = breakdown.totalOz;
+    const effectiveOz = typeof getEffectiveOzForDate === "function" ? getEffectiveOzForDate(dateStr) : 0;
+    hydPct = targetOz > 0 ? Math.min(effectiveOz / targetOz, 1) : 0;
     hydLabel = `${Math.round(hydPct * 100)}%`;
   }
 
