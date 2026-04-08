@@ -4,6 +4,9 @@
   "description": "",
   "main": "adaptive-coach.js",
   "scripts": {
+    "build": "rsync -av --exclude=www --exclude=node_modules --exclude=ios --exclude=.git --exclude='*.docx' *.js *.css *.html *.json *.sql icons/ philosophy/ supabase/ Logo/ scripts/ 'Future Features/' 'Training Philosophy/' www/",
+    "sync": "npm run build && npx cap sync ios",
+    "open": "npx cap open ios",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
