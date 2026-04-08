@@ -1437,7 +1437,7 @@ function saveWorkout() {
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  if (date >= today) {
+  if (date > today) {
     msg.style.color = "#ef4444";
     msg.textContent = "Log a Workout is for past/missed workouts only.";
     return;
