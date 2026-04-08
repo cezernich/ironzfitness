@@ -903,6 +903,15 @@ function _getZoneHistory(sport) {
   return history.filter(h => h.sport === sport).sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
+function deleteZoneHistoryEntry(dateISO) {
+  let history = [];
+  try { history = JSON.parse(localStorage.getItem("trainingZonesHistory")) || []; } catch {}
+  history = history.filter(h => h.date !== dateISO);
+  localStorage.setItem("trainingZonesHistory", JSON.stringify(history));
+  if (typeof DB !== 'undefined') DB.syncKey('trainingZonesHistory');
+  renderZones();
+}
+
 function _renderZoneHistoryRow(entry) {
   const d = new Date(entry.date);
   const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -925,9 +934,11 @@ function _renderZoneHistoryRow(entry) {
     detail = lifts.join(" / ") || "No lifts recorded";
   }
 
+  const safeDate = entry.date.replace(/'/g, "\\'");
   return `<div class="zone-history-row">
     <span class="zone-history-date">${dateStr}</span>
     <span class="zone-history-detail">${detail}</span>
+    <button class="zone-history-delete" title="Remove" onclick="event.stopPropagation(); deleteZoneHistoryEntry('${safeDate}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
   </div>`;
 }
 
