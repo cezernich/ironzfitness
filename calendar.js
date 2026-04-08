@@ -27,6 +27,7 @@ const DISCIPLINE_COLORS = {
   general:      "var(--color-success)",
   hiit:         "var(--color-accent)",
   hyrox:        "var(--color-amber)",
+  hyroxStrength:"var(--color-violet)",
   bodyweight:   "var(--color-accent)",
   yoga:         "var(--color-violet)",
   stairstepper: "var(--color-amber)",
@@ -272,6 +273,7 @@ function renderWeekOverview() {
     triathlon: ICONS.swim, brick: ICONS.zap,
     general: ICONS.activity, hiit: ICONS.flame, bodyweight: ICONS.activity, yoga: ICONS.yoga,
     stairstepper: ICONS.steps,
+    hyroxStrength: ICONS.weights,
   };
 
   const pills = Object.entries(byType).map(([type, count]) => {
@@ -1027,6 +1029,7 @@ const DISCIPLINE_TO_WORKOUT_TYPE = {
   triathlon: "triathlon", general: "general", yoga: "general",
   stairstepper: "stairstepper",
   hyrox: "hyrox",
+  hyroxStrength: "hyrox",
 };
 
 // In-memory map of exercises for each completion form (populated during renderDayDetail)
