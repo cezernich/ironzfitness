@@ -110,8 +110,18 @@ const DB = (() => {
             if (opts.orderBy) q = q.order(opts.orderBy, { ascending: opts.asc ?? true });
             const { data, error } = await q;
             if (!error && data) {
-              _lsSet(lsKey, data);
-              return data;
+              // For workouts: merge the 'data' JSONB column back into the top-level object
+              // This restores exercises, aiSession, segments, etc. that were stored in the blob
+              var restored = data.map(function(row) {
+                if (row.data && typeof row.data === 'object') {
+                  var merged = Object.assign({}, row.data, row);
+                  delete merged.data; // don't nest the blob
+                  return merged;
+                }
+                return row;
+              });
+              _lsSet(lsKey, restored);
+              return restored;
             }
           } catch {}
         }
@@ -492,9 +502,12 @@ const DB = (() => {
   function _shapeWorkout(w, uid) {
     // Store the full workout object in a JSONB 'data' column
     // This preserves aiSession, exercises, segments, generatedSession, hiitMeta, supersetIds, etc.
-    var fullData = Object.assign({}, w);
-    delete fullData.user_id; // don't nest user_id inside data
-    return {
+    var fullData = {};
+    var skipKeys = { user_id: 1, id: 1, date: 1, name: 1, type: 1, notes: 1, duration_minutes: 1, avg_watts: 1, source: 1, completed: 1, created_at: 1, plan_session_id: 1, data: 1 };
+    for (var k in w) {
+      if (w.hasOwnProperty(k) && !skipKeys[k]) fullData[k] = w[k];
+    }
+    var row = {
       id: (_isUUID(w.id) ? w.id : null) || crypto.randomUUID(),
       user_id: uid,
       date: w.date || null,
@@ -505,9 +518,11 @@ const DB = (() => {
       avg_watts: w.avgWatts || w.avg_watts || null,
       source: w.source || 'manual',
       completed: w.completed !== false,
-      created_at: w.createdAt || w.created_at || new Date().toISOString(),
-      data: fullData
+      created_at: w.createdAt || w.created_at || new Date().toISOString()
     };
+    // Only include data column if there's extra data to store
+    if (Object.keys(fullData).length > 0) row.data = fullData;
+    return row;
   }
 
   function _shapeTrainingSession(s, uid) {
