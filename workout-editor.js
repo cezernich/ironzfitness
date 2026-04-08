@@ -444,6 +444,7 @@ function _addEditIntervalRow(iv) {
   }
   const initReps = iv?.reps || "";
   const initRest = iv?.restDuration ? String(iv.restDuration).match(/[\d.]+/)?.[0] || "" : "";
+  const restEff = iv?.restEffort || "RW";
   const hasReps = initReps && Number(initReps) > 1;
   const div = document.createElement("div");
   div.className = "edit-interval-card";
@@ -489,7 +490,13 @@ function _addEditIntervalRow(iv) {
       </div>
       <div class="eiv-field eiv-rest-field" id="edit-rest-wrap-${id}" style="${hasReps?"":"display:none"}">
         <input type="number" id="edit-ivrest-${id}" value="${initRest}" placeholder="1" min="0" />
-        <span class="qe-unit-label">min rest</span>
+        <span class="qe-unit-label">min</span>
+        <select id="edit-ivrestzone-${id}">
+          <option value="RW" ${restEff==="RW"?"selected":""}>Rest</option>
+          <option value="Z1" ${restEff==="Z1"?"selected":""}>Z1</option>
+          <option value="Z2" ${restEff==="Z2"?"selected":""}>Z2</option>
+          <option value="Z3" ${restEff==="Z3"?"selected":""}>Z3</option>
+        </select>
       </div>
     </div>
     <div class="eiv-details">
@@ -600,6 +607,8 @@ function saveEditedWorkout() {
         iv.reps = repsVal;
         const restVal = document.getElementById(`edit-ivrest-${id}`)?.value;
         if (restVal) iv.restDuration = `${restVal} min`;
+        const restZone = document.getElementById(`edit-ivrestzone-${id}`)?.value;
+        if (restZone) iv.restEffort = restZone;
       }
       intervals.push(iv);
     });
