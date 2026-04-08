@@ -1026,6 +1026,7 @@ const DISCIPLINE_TO_WORKOUT_TYPE = {
   weightlifting: "weightlifting", cycling: "cycling", running: "running",
   triathlon: "triathlon", general: "general", yoga: "general",
   stairstepper: "stairstepper",
+  hyrox: "hyrox",
 };
 
 // In-memory map of exercises for each completion form (populated during renderDayDetail)

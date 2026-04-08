@@ -639,6 +639,176 @@ const WEEKLY_PATTERNS = {
       4: { discipline: "bike", load: "easy" },
     },
   },
+  hyrox: {
+    beginner: {
+      Base: {
+        1: { discipline: "run", load: "easy" },
+        3: { discipline: "hyrox", load: "easy" },
+        5: { discipline: "run", load: "easy" },
+        6: { discipline: "hyrox", load: "moderate" },
+      },
+      Build: {
+        1: { discipline: "run", load: "moderate" },
+        3: { discipline: "hyrox", load: "moderate" },
+        5: { discipline: "run", load: "easy" },
+        6: { discipline: "hyrox", load: "moderate" },
+      },
+      Peak: {
+        1: { discipline: "run", load: "moderate" },
+        3: { discipline: "hyrox", load: "hard" },
+        5: { discipline: "run", load: "easy" },
+        6: { discipline: "hyrox", load: "hard" },
+      },
+      Taper: {
+        1: { discipline: "run", load: "easy" },
+        4: { discipline: "hyrox", load: "easy" },
+      },
+    },
+    intermediate: {
+      Base: {
+        1: { discipline: "run", load: "easy" },
+        2: { discipline: "hyrox", load: "easy" },
+        3: { discipline: "run", load: "moderate" },
+        5: { discipline: "hyrox", load: "moderate" },
+        6: { discipline: "run", load: "long" },
+      },
+      Build: {
+        1: { discipline: "run", load: "moderate" },
+        2: { discipline: "hyrox", load: "moderate" },
+        3: { discipline: "run", load: "hard" },
+        5: { discipline: "hyrox", load: "hard" },
+        6: { discipline: "run", load: "long" },
+      },
+      Peak: {
+        1: { discipline: "run", load: "hard" },
+        2: { discipline: "hyrox", load: "hard" },
+        3: { discipline: "run", load: "moderate" },
+        5: { discipline: "hyrox", load: "hard" },
+        6: { discipline: "run", load: "long" },
+      },
+      Taper: {
+        1: { discipline: "run", load: "easy" },
+        3: { discipline: "hyrox", load: "easy" },
+        5: { discipline: "run", load: "easy" },
+      },
+    },
+    advanced: {
+      Base: {
+        0: { discipline: "run", load: "easy" },
+        1: { discipline: "hyrox", load: "moderate" },
+        2: { discipline: "run", load: "moderate" },
+        3: { discipline: "hyrox", load: "easy" },
+        5: { discipline: "run", load: "easy" },
+        6: { discipline: "hyrox", load: "moderate" },
+      },
+      Build: {
+        0: { discipline: "run", load: "moderate" },
+        1: { discipline: "hyrox", load: "hard" },
+        2: { discipline: "run", load: "hard" },
+        3: { discipline: "hyrox", load: "moderate" },
+        5: { discipline: "run", load: "moderate" },
+        6: { discipline: "hyrox", load: "hard" },
+      },
+      Peak: {
+        0: { discipline: "run", load: "hard" },
+        1: { discipline: "hyrox", load: "hard" },
+        2: { discipline: "run", load: "hard" },
+        3: { discipline: "hyrox", load: "hard" },
+        5: { discipline: "run", load: "moderate" },
+        6: { discipline: "hyrox", load: "hard" },
+      },
+      Taper: {
+        1: { discipline: "run", load: "easy" },
+        3: { discipline: "hyrox", load: "easy" },
+        5: { discipline: "run", load: "easy" },
+      },
+    },
+  },
+  hyroxDoubles: {
+    beginner: {
+      Base: {
+        1: { discipline: "run", load: "easy" },
+        3: { discipline: "hyrox", load: "easy" },
+        5: { discipline: "run", load: "easy" },
+        6: { discipline: "hyrox", load: "moderate" },
+      },
+      Build: {
+        1: { discipline: "run", load: "moderate" },
+        3: { discipline: "hyrox", load: "moderate" },
+        5: { discipline: "run", load: "easy" },
+        6: { discipline: "hyrox", load: "moderate" },
+      },
+      Peak: {
+        1: { discipline: "run", load: "moderate" },
+        3: { discipline: "hyrox", load: "hard" },
+        5: { discipline: "run", load: "easy" },
+        6: { discipline: "hyrox", load: "hard" },
+      },
+      Taper: {
+        1: { discipline: "run", load: "easy" },
+        4: { discipline: "hyrox", load: "easy" },
+      },
+    },
+    intermediate: {
+      Base: {
+        1: { discipline: "run", load: "easy" },
+        2: { discipline: "hyrox", load: "easy" },
+        3: { discipline: "run", load: "moderate" },
+        5: { discipline: "hyrox", load: "moderate" },
+        6: { discipline: "run", load: "long" },
+      },
+      Build: {
+        1: { discipline: "run", load: "moderate" },
+        2: { discipline: "hyrox", load: "moderate" },
+        3: { discipline: "run", load: "hard" },
+        5: { discipline: "hyrox", load: "hard" },
+        6: { discipline: "run", load: "long" },
+      },
+      Peak: {
+        1: { discipline: "run", load: "hard" },
+        2: { discipline: "hyrox", load: "hard" },
+        3: { discipline: "run", load: "moderate" },
+        5: { discipline: "hyrox", load: "hard" },
+        6: { discipline: "run", load: "long" },
+      },
+      Taper: {
+        1: { discipline: "run", load: "easy" },
+        3: { discipline: "hyrox", load: "easy" },
+        5: { discipline: "run", load: "easy" },
+      },
+    },
+    advanced: {
+      Base: {
+        0: { discipline: "run", load: "easy" },
+        1: { discipline: "hyrox", load: "moderate" },
+        2: { discipline: "run", load: "moderate" },
+        3: { discipline: "hyrox", load: "easy" },
+        5: { discipline: "run", load: "easy" },
+        6: { discipline: "hyrox", load: "moderate" },
+      },
+      Build: {
+        0: { discipline: "run", load: "moderate" },
+        1: { discipline: "hyrox", load: "hard" },
+        2: { discipline: "run", load: "hard" },
+        3: { discipline: "hyrox", load: "moderate" },
+        5: { discipline: "run", load: "moderate" },
+        6: { discipline: "hyrox", load: "hard" },
+      },
+      Peak: {
+        0: { discipline: "run", load: "hard" },
+        1: { discipline: "hyrox", load: "hard" },
+        2: { discipline: "run", load: "hard" },
+        3: { discipline: "hyrox", load: "hard" },
+        5: { discipline: "run", load: "moderate" },
+        6: { discipline: "hyrox", load: "hard" },
+      },
+      Taper: {
+        1: { discipline: "run", load: "easy" },
+        3: { discipline: "hyrox", load: "easy" },
+        5: { discipline: "run", load: "easy" },
+      },
+    },
+  },
 };
 
 // Structured session descriptions per discipline + load.
@@ -760,6 +930,36 @@ const SESSION_DESCRIPTIONS = {
     },
   },
 
+  hyrox: {
+    easy: {
+      duration: 40,
+      steps: [
+        { type: "warmup",   duration: 5,  zone: 1, label: "Easy jog + dynamic drills — leg swings, high knees, arm circles" },
+        { type: "main",     duration: 10, zone: 2, label: "Easy run — conversational pace, focus on form" },
+        { type: "main",     duration: 20, zone: 2, label: "Station practice — pick 2–3 stations, moderate weight, focus on movement quality: wall balls, sled push, farmers carry" },
+        { type: "cooldown", duration: 5,  zone: 1, label: "Walk + stretch — hamstrings, shoulders, hip flexors" },
+      ],
+    },
+    moderate: {
+      duration: 55,
+      steps: [
+        { type: "warmup",   duration: 5,  zone: 1, label: "Easy jog + 4×20s strides — build to working effort" },
+        { type: "main",     duration: 4,  zone: 3, label: "1 km run at race pace — practice pacing between stations", reps: 3, rest: 1 },
+        { type: "main",     duration: 25, zone: 3, label: "Station circuit — SkiErg, sled push, burpee broad jumps, rowing, wall balls; race-effort intensity, minimal rest between stations" },
+        { type: "cooldown", duration: 5,  zone: 1, label: "Easy jog + full-body stretch" },
+      ],
+    },
+    hard: {
+      duration: 65,
+      steps: [
+        { type: "warmup",   duration: 5,  zone: 1, label: "Easy jog + drills + 4×20s build strides" },
+        { type: "main",     duration: 4,  zone: 4, label: "1 km hard run — at or above race pace", reps: 4, rest: 1 },
+        { type: "main",     duration: 30, zone: 4, label: "Full station simulation — all 8 stations at race weight and pace; practice transitions and grip management" },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy walk + full mobility — flush legs, open shoulders" },
+      ],
+    },
+  },
+
   brick: {
     easy: {
       duration: 60,
@@ -829,6 +1029,8 @@ const TRAINING_CATEGORY = {
   fiveK:       "running",
   centuryRide: "cycling",
   granFondo:   "cycling",
+  hyrox:       "hyrox",
+  hyroxDoubles:"hyrox",
   // Schedule workout types (from generatePlan)
   triathlon:   "triathlon",
   running:     "running",
@@ -839,6 +1041,7 @@ const CATEGORY_LABELS = {
   triathlon: "Triathlon",
   running:   "Running",
   cycling:   "Cycling",
+  hyrox:     "Hyrox",
 };
 
 /**
@@ -976,6 +1179,8 @@ const RACE_TYPE_ICON = {
   fiveK:        ICONS.run,
   centuryRide:  ICONS.bike,
   granFondo:    ICONS.bike,
+  hyrox:        ICONS.activity,
+  hyroxDoubles: ICONS.activity,
 };
 
 const SCHEDULE_TYPE_ICON  = { running: ICONS.run, weightlifting: ICONS.weights, cycling: ICONS.bike, swimming: ICONS.swim, triathlon: ICONS.swim, general: ICONS.activity, hiit: ICONS.flame, bodyweight: ICONS.activity, yoga: ICONS.yoga, mobility: ICONS.activity, walking: ICONS.run, rowing: ICONS.swim, pilates: ICONS.activity, sport: ICONS.activity };
