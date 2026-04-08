@@ -805,13 +805,23 @@ function finishOnboarding(buildPlan) {
     // Dedup likes (plain strings)
     existing.likes = [...new Set([...existing.likes, ...likes])];
     // Dedup dislikes: handle mixed formats (strings and {name, isAllergy} objects)
-    const existingNames = existing.dislikes.map(d => typeof d === "string" ? d : (d.name || ""));
+    const existingNames = existing.dislikes.map(d => typeof d === "string" ? d.toLowerCase() : (d.name || "").toLowerCase());
     dislikes.forEach(term => {
-      if (!existingNames.includes(term)) {
+      if (!existingNames.includes(term.toLowerCase())) {
         existing.dislikes.push(term);
-        existingNames.push(term);
+        existingNames.push(term.toLowerCase());
       }
     });
+
+    // Add allergies as {name, isAllergy: true} objects so they're flagged for filtering
+    const allergies = obData.allergies ? obData.allergies.split(/[,;]+/).map(s => s.trim()).filter(Boolean) : [];
+    allergies.forEach(term => {
+      if (!existingNames.includes(term.toLowerCase())) {
+        existing.dislikes.push({ name: term, isAllergy: true });
+        existingNames.push(term.toLowerCase());
+      }
+    });
+
     localStorage.setItem("foodPreferences", JSON.stringify(existing)); if (typeof DB !== 'undefined') DB.syncKey('foodPreferences');
   }
 
