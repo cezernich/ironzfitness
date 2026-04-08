@@ -110,16 +110,31 @@ const DB = (() => {
             if (opts.orderBy) q = q.order(opts.orderBy, { ascending: opts.asc ?? true });
             const { data, error } = await q;
             if (!error && data) {
-              // For workouts: merge the 'data' JSONB column back into the top-level object
-              // This restores exercises, aiSession, segments, etc. that were stored in the blob
+              // Merge the 'data' JSONB column back into the top-level object
               var restored = data.map(function(row) {
                 if (row.data && typeof row.data === 'object') {
                   var merged = Object.assign({}, row.data, row);
-                  delete merged.data; // don't nest the blob
+                  delete merged.data;
                   return merged;
                 }
                 return row;
               });
+              // Only overwrite localStorage if Supabase has data
+              // If Supabase is empty but localStorage has data, keep localStorage (offline-first)
+              var local = _lsGet(lsKey) || [];
+              if (restored.length > 0) {
+                // Merge: keep local items not in Supabase, add Supabase items
+                var remoteIds = {};
+                restored.forEach(function(r) { if (r.id) remoteIds[r.id] = true; });
+                var localOnly = local.filter(function(l) { return l.id && !remoteIds[l.id]; });
+                var merged = restored.concat(localOnly);
+                _lsSet(lsKey, merged);
+                return merged;
+              } else if (local.length > 0) {
+                // Supabase empty, localStorage has data — keep local, re-sync up
+                console.log('DB: ' + lsKey + ' — Supabase empty but localStorage has ' + local.length + ' items, keeping local');
+                return local;
+              }
               _lsSet(lsKey, restored);
               return restored;
             }
