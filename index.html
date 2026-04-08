@@ -98,6 +98,10 @@
           <input type="password" id="auth-signup-password" placeholder="Min 6 characters"
             onkeydown="if(event.key==='Enter') handleSignup()" />
         </div>
+        <label class="auth-terms-label">
+          <input type="checkbox" id="auth-agree-terms" />
+          <span>I agree to the <a href="terms.html" target="_blank">Terms &amp; Conditions</a> and <a href="privacy.html" target="_blank">Privacy Policy</a></span>
+        </label>
         <button class="btn-primary auth-submit-btn" onclick="handleSignup()">Create Account</button>
         <p id="auth-signup-msg" class="auth-msg"></p>
       </div>

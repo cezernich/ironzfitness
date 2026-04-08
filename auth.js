@@ -173,6 +173,10 @@ async function handleSignup() {
     setAuthMsg('auth-signup-msg', 'Password must be at least 6 characters.', true);
     return;
   }
+  if (!document.getElementById('auth-agree-terms')?.checked) {
+    setAuthMsg('auth-signup-msg', 'You must agree to the Terms & Conditions and Privacy Policy.', true);
+    return;
+  }
 
   const btn = document.querySelector('#auth-panel-signup .btn-primary');
   btn.disabled    = true;
