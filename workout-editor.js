@@ -70,58 +70,54 @@ function openEditWorkout(id, source) {
 }
 
 /**
- * Open editor for a plan entry or scheduled workout.
- * Converts the session into a temporary workout in the "workouts" store,
- * then opens the standard editor on it.
+ * Open editor for a plan entry (trainingPlan).
+ * Edits are saved directly onto the plan entry as overrides.
  */
 function openEditPlanSession(dateStr, raceId, discipline, load) {
-  const session = (typeof SESSION_DESCRIPTIONS !== 'undefined' && SESSION_DESCRIPTIONS[discipline])
-    ? SESSION_DESCRIPTIONS[discipline][load] : null;
+  const plan = JSON.parse(localStorage.getItem("trainingPlan") || "[]");
+  const entry = plan.find(e => e.date === dateStr && e.raceId === raceId && e.discipline === discipline && e.load === load);
+  if (!entry) return;
 
-  // Build intervals from session steps
-  const intervals = [];
-  if (session && session.steps) {
-    session.steps.forEach(step => {
-      // Normalize zone: could be number (1), string ("Z1"), or label ("Z1")
-      var zone = step.zone || step.effort || "Z2";
-      if (typeof zone === 'number') zone = "Z" + zone;
-      if (typeof zone === 'string' && /^\d+$/.test(zone)) zone = "Z" + zone;
-
-      intervals.push({
-        name: step.label || step.name || "",
-        duration: (step.duration || "") + " min",
-        effort: zone,
-        reps: step.reps || 1,
-        restDuration: step.restDuration ? (step.restDuration + " min") : "",
-        restEffort: step.restEffort ? ("Z" + step.restEffort) : "",
-      });
-    });
+  // Give the entry a stable id if it doesn't have one
+  if (!entry.id) {
+    entry.id = "plan-" + dateStr + "-" + (raceId || discipline) + "-" + load;
+    localStorage.setItem("trainingPlan", JSON.stringify(plan));
   }
 
-  // Create a workout entry that the editor can work with
-  const workoutId = "plan-edit-" + dateStr + "-" + (raceId || discipline);
-  const workouts = JSON.parse(localStorage.getItem("workouts") || "[]");
-
-  // Check if we already created an edit copy for this session
-  let existing = workouts.find(w => w.id === workoutId);
-  if (!existing) {
-    const type = { running: "running", cycling: "cycling", swimming: "swimming", strength: "weightlifting" }[discipline] || "general";
-    existing = {
-      id: workoutId,
-      date: dateStr,
-      type: type,
-      notes: session ? (session.name || "") : "",
-      aiSession: intervals.length > 0 ? { title: session?.name || discipline, intervals } : null,
-      exercises: [],
-      fromSaved: session?.name || discipline,
-      _planSource: { raceId, discipline, load },
-    };
-    workouts.push(existing);
-    localStorage.setItem("workouts", JSON.stringify(workouts));
-    if (typeof DB !== 'undefined') DB.syncWorkouts();
+  // If the entry already has edited overrides, use those; otherwise derive from SESSION_DESCRIPTIONS
+  if (!entry.aiSession && !entry.exercises) {
+    const session = (typeof SESSION_DESCRIPTIONS !== 'undefined' && SESSION_DESCRIPTIONS[discipline])
+      ? SESSION_DESCRIPTIONS[discipline][load] : null;
+    if (session && session.steps) {
+      entry.aiSession = {
+        title: session.name || discipline,
+        intervals: session.steps.map(step => {
+          var zone = step.zone || step.effort || "Z2";
+          if (typeof zone === 'number') zone = "Z" + zone;
+          if (typeof zone === 'string' && /^\d+$/.test(zone)) zone = "Z" + zone;
+          return {
+            name: step.label || step.name || "",
+            duration: (step.duration || "") + " min",
+            effort: zone,
+            reps: step.reps || 1,
+            restDuration: step.restDuration ? (step.restDuration + " min") : "",
+            restEffort: step.restEffort ? ("Z" + step.restEffort) : "",
+          };
+        })
+      };
+      localStorage.setItem("trainingPlan", JSON.stringify(plan));
+    }
   }
 
-  openEditWorkout(workoutId, "workouts");
+  // Set the type so the editor knows how to render
+  const type = { running: "running", cycling: "cycling", swimming: "swimming", strength: "weightlifting" }[discipline] || "general";
+  if (!entry.type) {
+    entry.type = type;
+    localStorage.setItem("trainingPlan", JSON.stringify(plan));
+  }
+  if (!entry.notes) entry.notes = entry.sessionName || "";
+
+  openEditWorkout(entry.id, "trainingPlan");
 }
 
 function openEditScheduledWorkout(id) {
@@ -735,6 +731,11 @@ function saveEditedWorkout() {
   }
 
   localStorage.setItem(_editSource, JSON.stringify(workouts));
+  if (typeof DB !== 'undefined') {
+    if (_editSource === "workouts") DB.syncWorkouts();
+    else if (_editSource === "workoutSchedule") DB.syncKey('workoutSchedule');
+    else if (_editSource === "trainingPlan") DB.syncKey('trainingPlan');
+  }
 
   if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
   if (typeof renderCalendar       === "function") renderCalendar();

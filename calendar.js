@@ -2049,9 +2049,27 @@ function renderDayDetail(dateStr) {
       const effectLoad     = getEffectiveLoad(p.load, data.restriction);
       const targetDuration = getRestrictedDuration(p.duration, p.load, data.restriction);
       const isReduced      = effectLoad !== p.load || targetDuration !== p.duration;
-      const rawSession     = (SESSION_DESCRIPTIONS[p.discipline] || {})[effectLoad]
-                          || (SESSION_DESCRIPTIONS[p.discipline] || {})[p.load];
-      const session        = rawSession ? scaleSessionDuration(rawSession, targetDuration) : rawSession;
+      // Use edited overrides if present on the plan entry, otherwise fall back to SESSION_DESCRIPTIONS
+      let rawSession;
+      if (p.aiSession) {
+        // Plan entry was edited — build a session object from the saved intervals
+        rawSession = {
+          name: p.aiSession.title || p.sessionName,
+          duration: targetDuration || p.duration,
+          steps: (p.aiSession.intervals || []).map(iv => {
+            let zone = iv.effort || "Z2";
+            if (typeof zone === 'string' && zone.startsWith("Z")) zone = parseInt(zone.slice(1)) || 2;
+            const step = { label: iv.name, duration: parseInt(iv.duration) || 0, zone };
+            if (iv.reps && iv.reps > 1) { step.reps = iv.reps; }
+            if (iv.restDuration) { step.rest = parseInt(iv.restDuration) || 0; }
+            return step;
+          }),
+        };
+      } else {
+        rawSession = (SESSION_DESCRIPTIONS[p.discipline] || {})[effectLoad]
+                     || (SESSION_DESCRIPTIONS[p.discipline] || {})[p.load];
+      }
+      const session = rawSession && !p.aiSession ? scaleSessionDuration(rawSession, targetDuration) : rawSession;
       const intensLabel = getIntensityLabel(effectLoad);
       const intensClass = getIntensityClass(effectLoad);
 
@@ -2074,7 +2092,7 @@ function renderDayDetail(dateStr) {
               <div class="session-header-right">
                 <span class="session-duration-badge">${_getCompletionDuration(cardId) || session.duration} min</span>
                 <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
-                ${_planUndoBtn}<button class="edit-workout-btn" title="Edit" onclick="event.stopPropagation(); openEditPlanSession('${dateStr}','${p.raceId}','${p.discipline}','${effectLoad}')">Edit</button>${_planDelBtn}
+                ${_planUndoBtn}<button class="edit-workout-btn" title="Edit" onclick="event.stopPropagation(); openEditPlanSession('${dateStr}','${p.raceId}','${p.discipline}','${p.load}')">Edit</button>${_planDelBtn}
                 <span class="card-chevron">▾</span>
               </div>
             </div>
