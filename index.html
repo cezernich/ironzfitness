@@ -482,8 +482,9 @@
             <input type="text" id="log-notes" placeholder="e.g. Felt strong today, ran 3 miles" />
           </div>
 
-          <div id="log-import-section" style="margin-bottom:12px">
-            <label for="log-import-text">Paste Workout</label>
+          <button class="btn-secondary" id="log-import-toggle" onclick="document.getElementById('log-import-section').style.display='';this.style.display='none'" style="margin-bottom:12px">Import Workout</button>
+          <div id="log-import-section" style="display:none;margin-bottom:12px">
+            <label for="log-import-text">Paste your workout</label>
             <textarea id="log-import-text" rows="5" placeholder="e.g.&#10;5x&#10;- 10 chest pulls&#10;- 10 glute bridges&#10;&#10;10x&#10;- 5 chin up&#10;- 10 pushup" style="width:100%;resize:vertical"></textarea>
             <button class="btn-secondary" id="log-import-btn" onclick="importWorkoutFromText()" style="margin-top:6px">Parse Workout</button>
             <p id="log-import-msg" class="save-msg" style="margin-top:4px"></p>
