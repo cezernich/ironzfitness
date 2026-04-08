@@ -572,9 +572,16 @@ function saveProfile() {
   setTimeout(() => { msg.textContent = ""; }, 3000);
 }
 
-function loadProfileIntoForm() {
+async function loadProfileIntoForm() {
   try {
-    const profile = JSON.parse(localStorage.getItem("profile")) || {};
+    // Try fetching from Supabase first (populates localStorage as cache)
+    let profile = null;
+    if (typeof DB !== 'undefined') {
+      try { profile = await DB.profile.get(); } catch {}
+    }
+    if (!profile || !profile.name) {
+      profile = JSON.parse(localStorage.getItem("profile")) || {};
+    }
     if (profile.name)   document.getElementById("profile-name").value   = profile.name;
     if (profile.age)    document.getElementById("profile-age").value    = profile.age;
     if (profile.weight) document.getElementById("profile-weight").value = profile.weight;
