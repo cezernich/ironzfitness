@@ -1881,6 +1881,10 @@
           </div>
         </div>
         <div style="border-top:1px solid var(--color-border);margin:18px 0 14px"></div>
+        <button class="qe-type-card qe-type-card--library" onclick="qeShowLibrary()">
+          <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
+          <span class="qe-type-label" style="font-size:1rem;font-weight:700;letter-spacing:0.02em">Choose from Library</span>
+        </button>
         <button class="qe-type-card qe-type-card--ask-ironz" onclick="qeShowAskIronZ()">
           <span class="logo-mark" style="font-size:1.2rem"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
           <span class="qe-type-label" style="font-size:1rem;font-weight:700;letter-spacing:0.02em">Ask IronZ</span>
@@ -1906,6 +1910,15 @@
             <span class="qe-type-label">Equipment Available</span>
           </button>
         </div>
+      </div>
+
+      <!-- STEP: Library picker (Saved / Community) -->
+      <div class="qe-step" id="qe-step-library" style="display:none">
+        <div class="qe-library-tabs">
+          <button class="qe-library-tab active" id="qe-lib-tab-saved" onclick="qeLibTab('saved')">Saved Workouts</button>
+          <button class="qe-library-tab" id="qe-lib-tab-community" onclick="qeLibTab('community')">Browse Community</button>
+        </div>
+        <div id="qe-library-list" class="qe-library-list"></div>
       </div>
 
       <!-- STEP 1a: Strength -->

@@ -873,19 +873,19 @@ function buildIntensityStrip(session, cardId, discipline) {
   session.steps.forEach(step => {
     if (step.reps && step.rest != null) {
       for (let i = 0; i < step.reps; i++) {
-        segments.push({ duration: step.duration, zone: step.zone });
+        segments.push({ duration: step.duration, zone: step.zone, exercise: step.exercise });
         if (i < step.reps - 1) segments.push({ duration: step.rest, zone: 1, isRest: true });
       }
     } else {
-      segments.push({ duration: step.duration, zone: step.zone });
+      segments.push({ duration: step.duration, zone: step.zone, exercise: step.exercise });
     }
   });
 
   const total = segments.reduce((s, seg) => s + seg.duration, 0);
   const bars  = segments.map(seg => {
     const pct = (seg.duration / total * 100).toFixed(2);
-    const cls = seg.isRest ? "z-rest" : `z${seg.zone}`;
-    let tip = seg.isRest ? "Rest" : `Z${seg.zone}`;
+    const cls = seg.isRest ? "z-rest" : `z${seg.zone}${seg.exercise ? " exercise" : ""}`;
+    let tip = seg.isRest ? "Rest" : (seg.exercise ? "Exercise" : `Z${seg.zone}`);
     if (!seg.isRest && discipline) {
       const label = _getZoneLabel(discipline, seg.zone);
       if (label) tip += `: ${label}`;
@@ -3671,11 +3671,179 @@ function _qeRerenderCardio() {
 function qeWizardBack() {
   _qeSelectedMuscles = new Set();
   document.querySelectorAll(".qe-muscle-btn.selected").forEach(btn => btn.classList.remove("selected"));
-  if (_qeWizardStep === 2 && _qeSelectedType && _qeSelectedType !== "strength" && _qeSelectedType !== "restriction") {
+  if (_qeWizardStep === "library") {
+    qeShowStep(0, null);
+  } else if (_qeWizardStep === 2 && _qeSelectedType && _qeSelectedType !== "strength" && _qeSelectedType !== "restriction") {
     qeShowStep(1, _qeSelectedType);
   } else {
     qeShowStep(0, null);
   }
+}
+
+// ── Library picker (Saved / Community) ────────────────────────────────────────
+let _qeLibActiveTab = "saved";
+let _qeLibCommunityFilter = "All";
+
+function qeShowLibrary() {
+  _qeLibActiveTab = "saved";
+  _qeLibCommunityFilter = "All";
+
+  document.querySelectorAll(".qe-step").forEach(el => { el.style.display = "none"; });
+  document.getElementById("qe-step-library").style.display = "";
+
+  const titleEl = document.getElementById("qe-wizard-title");
+  if (titleEl) titleEl.textContent = "Choose from Library";
+
+  const backBtn = document.getElementById("qe-back-btn");
+  if (backBtn) backBtn.style.display = "";
+
+  document.querySelectorAll(".qe-dot").forEach(d => d.classList.remove("active"));
+
+  _qeWizardStep = "library";
+
+  qeLibTab("saved");
+}
+
+function qeLibTab(tab) {
+  _qeLibActiveTab = tab;
+  document.getElementById("qe-lib-tab-saved").classList.toggle("active", tab === "saved");
+  document.getElementById("qe-lib-tab-community").classList.toggle("active", tab === "community");
+
+  if (tab === "saved") {
+    _renderLibSaved();
+  } else {
+    _qeLibCommunityFilter = "All";
+    _renderLibCommunity();
+  }
+}
+
+function _renderLibSaved() {
+  const list = document.getElementById("qe-library-list");
+  if (!list) return;
+
+  const saved = loadSavedWorkouts();
+  if (saved.length === 0) {
+    list.innerHTML = `<div class="qe-lib-empty">No saved workouts yet.<br>Save workouts from your history or the Community tab.</div>`;
+    return;
+  }
+
+  list.innerHTML = saved.map(sw => {
+    const typeLabel = capitalize(sw.type || "Workout");
+    let preview = "";
+    if (sw.exercises && sw.exercises.length) {
+      preview = sw.exercises.slice(0, 3).map(e => escHtml(e.name)).join(", ");
+      if (sw.exercises.length > 3) preview += ` +${sw.exercises.length - 3} more`;
+    } else if (sw.segments && sw.segments.length) {
+      preview = sw.segments.slice(0, 3).map(s => escHtml(s.name + " " + s.duration)).join(", ");
+      if (sw.segments.length > 3) preview += ` +${sw.segments.length - 3} more`;
+    }
+    return `<div class="qe-lib-card" onclick="_qeLibPreviewWorkout('saved','${sw.id}')">
+      <div class="qe-lib-card-top">
+        <div>
+          <div class="qe-lib-card-name">${escHtml(sw.name || typeLabel)}</div>
+          <div class="qe-lib-card-meta">${escHtml(typeLabel)}${sw.notes ? " &middot; " + escHtml(sw.notes.slice(0, 40)) : ""}</div>
+        </div>
+        <button class="qe-lib-add-btn" onclick="event.stopPropagation(); qeLibAddWorkout('saved','${sw.id}')">Add</button>
+      </div>
+      ${preview ? `<div class="qe-lib-card-exercises">${preview}</div>` : ""}
+    </div>`;
+  }).join("");
+}
+
+function _renderLibCommunity() {
+  const list = document.getElementById("qe-library-list");
+  if (!list) return;
+
+  const all = typeof _commGetAll === "function" ? _commGetAll() : (typeof COMMUNITY_WORKOUTS !== "undefined" ? COMMUNITY_WORKOUTS : []);
+  if (all.length === 0) {
+    list.innerHTML = `<div class="qe-lib-empty">No community workouts available.</div>`;
+    return;
+  }
+
+  const categories = ["All", ...Array.from(new Set(all.map(w => w.category)))];
+  const filtered = _qeLibCommunityFilter === "All" ? all : all.filter(w => w.category === _qeLibCommunityFilter);
+
+  let filterHtml = `<div class="qe-lib-filter-row">${categories.map(c =>
+    `<button class="qe-lib-filter-btn${c === _qeLibCommunityFilter ? " active" : ""}" onclick="_qeLibFilterComm('${c}')">${escHtml(c)}</button>`
+  ).join("")}</div>`;
+
+  let cardsHtml = filtered.map(w => {
+    const diffLabel = w.difficulty || "";
+    let preview = "";
+    if (w.exercises && w.exercises.length) {
+      preview = w.exercises.slice(0, 3).map(e => escHtml(e.name)).join(", ");
+      if (w.exercises.length > 3) preview += ` +${w.exercises.length - 3} more`;
+    } else if (w.segments && w.segments.length) {
+      preview = w.segments.slice(0, 3).map(s => escHtml(s.name + " " + s.duration)).join(", ");
+      if (w.segments.length > 3) preview += ` +${w.segments.length - 3} more`;
+    }
+    return `<div class="qe-lib-card" onclick="_qeLibPreviewWorkout('community','${w.id}')">
+      <div class="qe-lib-card-top">
+        <div>
+          <div class="qe-lib-card-name">${escHtml(w.name)}</div>
+          <div class="qe-lib-card-meta">${escHtml(w.author || "")}${diffLabel ? " &middot; " + escHtml(diffLabel) : ""}${w.category ? " &middot; " + escHtml(w.category) : ""}</div>
+        </div>
+        <button class="qe-lib-add-btn" onclick="event.stopPropagation(); qeLibAddWorkout('community','${w.id}')">Add</button>
+      </div>
+      ${preview ? `<div class="qe-lib-card-exercises">${preview}</div>` : ""}
+    </div>`;
+  }).join("");
+
+  if (filtered.length === 0) cardsHtml = `<div class="qe-lib-empty">No workouts in this category.</div>`;
+
+  list.innerHTML = filterHtml + cardsHtml;
+}
+
+function _qeLibFilterComm(cat) {
+  _qeLibCommunityFilter = cat;
+  _renderLibCommunity();
+}
+
+function _qeLibPreviewWorkout(source, id) {
+  // Toggle expand — for now just add directly
+  qeLibAddWorkout(source, id);
+}
+
+function qeLibAddWorkout(source, id) {
+  const dateStr = document.getElementById("qe-date")?.value || _qeDateStr;
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    alert("Please select a valid date.");
+    return;
+  }
+
+  let workout = null;
+
+  if (source === "saved") {
+    workout = loadSavedWorkouts().find(s => s.id === id);
+  } else {
+    const all = typeof _commGetAll === "function" ? _commGetAll() : (typeof COMMUNITY_WORKOUTS !== "undefined" ? COMMUNITY_WORKOUTS : []);
+    workout = all.find(w => w.id === id);
+  }
+
+  if (!workout) return;
+
+  const workouts = loadWorkouts();
+  const entry = {
+    id:        generateId("workout"),
+    date:      dateStr,
+    type:      workout.type,
+    notes:     workout.name || workout.notes || "",
+    exercises: workout.exercises ? JSON.parse(JSON.stringify(workout.exercises)) : [],
+    fromSaved: workout.name,
+  };
+  if (workout.segments)  entry.segments  = JSON.parse(JSON.stringify(workout.segments));
+  if (workout.aiSession) entry.aiSession = { ...workout.aiSession, title: workout.name || workout.aiSession.title };
+  if (workout.generatedSession) entry.generatedSession = { ...workout.generatedSession, name: workout.name || workout.generatedSession.name };
+  if (workout.duration)  entry.duration  = workout.duration;
+  if (workout.hiitMeta)  entry.hiitMeta  = JSON.parse(JSON.stringify(workout.hiitMeta));
+
+  workouts.unshift(entry);
+  localStorage.setItem("workouts", JSON.stringify(workouts));
+  if (typeof DB !== "undefined") DB.syncWorkouts();
+
+  closeQuickEntry();
+  renderCalendar();
+  if (typeof renderDayDetail === "function" && typeof selectedDate !== "undefined") renderDayDetail(selectedDate);
 }
 
 // ── Muscle toggle ─────────────────────────────────────────────────────────────
