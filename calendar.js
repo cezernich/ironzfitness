@@ -952,7 +952,7 @@ function buildStepsList(session, discipline) {
 
   return session.steps.map(step => {
     const isT1      = step.note === "T1";
-    const typeLabel = isT1 ? "TRANSITION" : (SESSION_TYPE_LABELS[step.type] || step.type.toUpperCase());
+    const typeLabel = isT1 ? "TRANSITION" : (SESSION_TYPE_LABELS[step.type] || (step.type ? step.type.toUpperCase() : "SET"));
     let durationText;
     if (step.reps) {
       durationText = `${step.reps} × ${step.duration} min`;
@@ -1913,6 +1913,13 @@ function renderDayDetail(dateStr) {
   const content = document.getElementById("day-detail-content");
   if (!content) return;
 
+  try { return _renderDayDetailInner(dateStr, content); } catch (e) {
+    console.error("renderDayDetail crashed for", dateStr, e);
+    content.innerHTML = `<div class="day-detail-date">${dateStr}</div><p style="color:var(--color-text-muted)">Error rendering day detail. Check console.</p>`;
+  }
+}
+
+function _renderDayDetailInner(dateStr, content) {
   const data        = getDataForDate(dateStr);
   const displayDate = formatDisplayDate(dateStr);
   const isToday     = dateStr === getTodayString();
@@ -1955,34 +1962,28 @@ function renderDayDetail(dateStr) {
     ${_totalsHtml}
   </div>`;
 
-  // ── Adherence prompt (today only, if not dismissed) ────────────────────────
-  if (isToday && typeof buildAdherencePrompt === "function" && !isAdherenceDismissedToday()) {
-    html += buildAdherencePrompt();
-  }
-
-  // ── Coaching insights (today only) ──────────────────────────────────────────
-  if (isToday && typeof buildCoachingInsights === "function") {
-    html += buildCoachingInsights();
-  }
-
-  // ── Rating smart alert (shown on today only) ───────────────────────────────
-  if (isToday && typeof getRatingSmartAlert === "function") {
-    const _rAlert = getRatingSmartAlert();
-    if (_rAlert) {
-      const _rIcon = _rAlert.type === "easy" ? ICONS.zap : ICONS.warning;
-      html += `<div class="rating-smart-alert rating-alert-${_rAlert.type}">${_rIcon} ${_rAlert.message}</div>`;
-    }
-  }
-
-  // ── Goal progress summary (today only) ──────────────────────────────────
-  if (isToday && typeof buildGoalsSummaryForHome === "function") {
-    html += buildGoalsSummaryForHome();
+  // ── Today-only widgets (wrapped individually so one failure doesn't block the render)
+  if (isToday) {
+    try { if (typeof buildAdherencePrompt === "function" && !isAdherenceDismissedToday()) html += buildAdherencePrompt(); } catch (e) { console.error("adherence prompt error:", e); }
+    try { if (typeof buildCoachingInsights === "function") html += buildCoachingInsights(); } catch (e) { console.error("coaching insights error:", e); }
+    try {
+      if (typeof getRatingSmartAlert === "function") {
+        const _rAlert = getRatingSmartAlert();
+        if (_rAlert) {
+          const _rIcon = _rAlert.type === "easy" ? ICONS.zap : ICONS.warning;
+          html += `<div class="rating-smart-alert rating-alert-${_rAlert.type}">${_rIcon} ${_rAlert.message}</div>`;
+        }
+      }
+    } catch (e) { console.error("rating alert error:", e); }
+    try { if (typeof buildGoalsSummaryForHome === "function") html += buildGoalsSummaryForHome(); } catch (e) { console.error("goals summary error:", e); }
   }
 
   // ── Rest day intelligence banner ──────────────────────────────────────────
-  if ((isToday || dateStr === localDateStr((() => { const t = new Date(); t.setDate(t.getDate() + 1); return t; })())) && typeof buildRestDayBanner === "function") {
-    html += buildRestDayBanner(dateStr);
-  }
+  try {
+    if ((isToday || dateStr === localDateStr((() => { const t = new Date(); t.setDate(t.getDate() + 1); return t; })())) && typeof buildRestDayBanner === "function") {
+      html += buildRestDayBanner(dateStr);
+    }
+  } catch (e) { console.error("rest day banner error:", e); }
 
   // ── Restriction banner ────────────────────────────────────────────────────
   if (data.restriction) {
@@ -2280,9 +2281,7 @@ function renderDayDetail(dateStr) {
   }
 
   // ── Safety warning (today only) ─────────────────────────────────────────────
-  if (isToday && typeof renderSafetyWarning === "function") {
-    html += renderSafetyWarning();
-  }
+  try { if (isToday && typeof renderSafetyWarning === "function") html += renderSafetyWarning(); } catch (e) { console.error("safety warning error:", e); }
 
   // ── Nutrition sections (hidden when nutrition tracking is disabled) ────────
   if (typeof isNutritionEnabled === "function" && isNutritionEnabled()) {
