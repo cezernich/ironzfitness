@@ -4489,23 +4489,86 @@ function qeGenerateCardio() {
       }
       intervals.push({ name: "Cool-Down", duration: cooldownMin + " min", effort: iz.cooldown, details: swimDetail(iz.cooldown) });
     } else {
-      // Running / Cycling / generic
+      // Running / Cycling / generic — with variation on regenerate
       const mainMin = durMin - warmupMin - cooldownMin;
       intervals = [
         { name: "Warm-Up", duration: warmupMin + " min", effort: iz.warmup, details: detailFn(iz.warmup) },
       ];
       if (intensity === "light") {
-        intervals.push({ name: "Steady State", duration: mainMin + " min", effort: iz.main, details: detailFn(iz.main) });
+        const lightVariants = [
+          () => [{ name: "Steady State", duration: mainMin + " min", effort: iz.main, details: detailFn(iz.main) }],
+          () => {
+            const half = Math.round(mainMin / 2);
+            return [
+              { name: "Easy Cruise", duration: half + " min", effort: "Z2", details: detailFn("Z2") },
+              { name: "Relaxed Finish", duration: (mainMin - half) + " min", effort: "Z1", details: detailFn("Z1") },
+            ];
+          },
+          () => [
+            { name: "Gradual Build", duration: Math.round(mainMin * 0.6) + " min", effort: "Z1", details: detailFn("Z1") },
+            { name: "Comfortable Effort", duration: Math.round(mainMin * 0.4) + " min", effort: "Z2", details: detailFn("Z2") },
+          ],
+        ];
+        intervals.push(...lightVariants[Math.floor(Math.random() * lightVariants.length)]());
       } else if (intensity === "moderate") {
-        intervals.push({ name: "Base Effort", duration: Math.round(mainMin * 0.7) + " min", effort: iz.main, details: detailFn(iz.main) });
-        intervals.push({ name: "Tempo Push", duration: Math.round(mainMin * 0.3) + " min", effort: iz.hard, details: detailFn(iz.hard) });
+        const modVariants = [
+          () => [
+            { name: "Base Effort", duration: Math.round(mainMin * 0.7) + " min", effort: iz.main, details: detailFn(iz.main) },
+            { name: "Tempo Push", duration: Math.round(mainMin * 0.3) + " min", effort: iz.hard, details: detailFn(iz.hard) },
+          ],
+          () => [
+            { name: "Easy Base", duration: Math.round(mainMin * 0.4) + " min", effort: iz.main, details: detailFn(iz.main) },
+            { name: "Tempo Block", duration: Math.round(mainMin * 0.35) + " min", effort: iz.hard, details: detailFn(iz.hard) },
+            { name: "Easy Finish", duration: Math.round(mainMin * 0.25) + " min", effort: iz.main, details: detailFn(iz.main) },
+          ],
+          () => {
+            const reps = 3;
+            const workMin = Math.max(2, Math.round((mainMin * 0.4) / reps));
+            const easyMin = Math.max(2, Math.round((mainMin * 0.6) / (reps + 1)));
+            return [
+              { name: "Steady Build", duration: easyMin + " min", effort: iz.main, details: detailFn(iz.main) },
+              { name: `Tempo Surges (${reps}x)`, duration: workMin + " min", effort: iz.hard, details: detailFn(iz.hard), reps: reps, restDuration: easyMin + " min", restEffort: iz.main },
+            ];
+          },
+          () => [
+            { name: "Progression Start", duration: Math.round(mainMin * 0.5) + " min", effort: iz.main, details: detailFn(iz.main) },
+            { name: "Tempo Finish", duration: Math.round(mainMin * 0.5) + " min", effort: iz.hard, details: detailFn(iz.hard) },
+          ],
+        ];
+        intervals.push(...modVariants[Math.floor(Math.random() * modVariants.length)]());
       } else {
-        // intense / max — structured intervals
-        const reps = intensity === "max" ? 5 : 4;
-        const workMin = Math.floor((mainMin * 0.5) / reps);
-        const restMin = Math.floor((mainMin * 0.5) / reps);
-        intervals.push({ name: "Easy Base", duration: Math.round(mainMin * 0.2) + " min", effort: iz.main, details: detailFn(iz.main) });
-        intervals.push({ name: `Intervals (${reps}x)`, duration: workMin + " min", effort: iz.hard, details: detailFn(iz.hard), reps: reps, restDuration: restMin + " min", restEffort: iz.warmup });
+        // intense / max — structured intervals with variation
+        const intVariants = [
+          () => {
+            const reps = intensity === "max" ? 5 : 4;
+            const workMin = Math.max(2, Math.floor((mainMin * 0.5) / reps));
+            const restMin = Math.max(1, Math.floor((mainMin * 0.5) / reps));
+            return [
+              { name: "Easy Base", duration: Math.round(mainMin * 0.2) + " min", effort: iz.main, details: detailFn(iz.main) },
+              { name: `Intervals (${reps}x)`, duration: workMin + " min", effort: iz.hard, details: detailFn(iz.hard), reps: reps, restDuration: restMin + " min", restEffort: iz.warmup },
+            ];
+          },
+          () => {
+            const reps = intensity === "max" ? 6 : 5;
+            const workMin = Math.max(1, Math.floor((mainMin * 0.45) / reps));
+            const restMin = Math.max(1, Math.floor((mainMin * 0.3) / reps));
+            return [
+              { name: "Build-Up", duration: Math.round(mainMin * 0.15) + " min", effort: iz.main, details: detailFn(iz.main) },
+              { name: `Short Repeats (${reps}x)`, duration: workMin + " min", effort: iz.hard, details: detailFn(iz.hard), reps: reps, restDuration: restMin + " min", restEffort: iz.warmup },
+              { name: "Easy Flush", duration: Math.round(mainMin * 0.1) + " min", effort: iz.main, details: detailFn(iz.main) },
+            ];
+          },
+          () => {
+            const reps = intensity === "max" ? 4 : 3;
+            const workMin = Math.max(3, Math.floor((mainMin * 0.55) / reps));
+            const restMin = Math.max(2, Math.floor((mainMin * 0.25) / reps));
+            return [
+              { name: `Long Efforts (${reps}x)`, duration: workMin + " min", effort: iz.hard, details: detailFn(iz.hard), reps: reps, restDuration: restMin + " min", restEffort: iz.warmup },
+              { name: "Easy Wind-Down", duration: Math.round(mainMin * 0.1) + " min", effort: iz.main, details: detailFn(iz.main) },
+            ];
+          },
+        ];
+        intervals.push(...intVariants[Math.floor(Math.random() * intVariants.length)]());
       }
       intervals.push({ name: "Cool-Down", duration: cooldownMin + " min", effort: iz.cooldown, details: detailFn(iz.cooldown) });
     }
