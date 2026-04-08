@@ -1660,6 +1660,9 @@ function getDayTotals(dateStr) {
   data.loggedWorkouts.forEach(w => {
     const sport = w.type || "";
     const isRun = sport === "running" || sport === "run";
+    let sessionMin = 0;
+    let sessionKm = 0;
+
     if (w.aiSession?.intervals) {
       w.aiSession.intervals.forEach(iv => {
         const reps       = iv.reps || 1;
@@ -1667,27 +1670,35 @@ function getDayTotals(dateStr) {
         const restDur    = iv.restDuration ? _parseDurMin(String(iv.restDuration)) : 0;
         const mainDistKm = _parseDistKm(String(iv.duration || ""));
 
-        // Always count time
-        totalMin += mainDur * reps + restDur * Math.max(0, reps - 1);
+        sessionMin += mainDur * reps + restDur * Math.max(0, reps - 1);
 
-        // Also track distance if available
         if (mainDistKm > 0) {
-          _addKm(sport, mainDistKm * reps);
+          sessionKm += mainDistKm * reps;
         } else if (isRun) {
           const mainKm = _estimateRunKm(iv.effort, mainDur);
           if (mainKm > 0) {
-            _addKm(sport, mainKm * reps);
+            sessionKm += mainKm * reps;
             if (iv.restEffort && restDur > 0) {
-              _addKm(sport, _estimateRunKm(iv.restEffort, restDur) * Math.max(0, reps - 1));
+              sessionKm += _estimateRunKm(iv.restEffort, restDur) * Math.max(0, reps - 1);
             }
           }
         }
       });
+
+      // Sanity check: cap estimated distance based on session time
+      // Max ~12 km/hr (5:00/km) for any session — prevents inflated estimates
+      if (sessionKm > 0 && sessionMin > 0) {
+        const maxKm = (sessionMin / 60) * 12;
+        if (sessionKm > maxKm) sessionKm = maxKm;
+      }
     } else if (w.generatedSession?.duration) {
-      totalMin += _parseDurMin(w.generatedSession.duration);
+      sessionMin = _parseDurMin(w.generatedSession.duration);
     } else if (w.duration) {
-      totalMin += _parseDurMin(String(w.duration));
+      sessionMin = _parseDurMin(String(w.duration));
     }
+
+    totalMin += sessionMin;
+    if (sessionKm > 0) _addKm(sport, sessionKm);
   });
 
   return { totalMin, totalKm, sportKm };
