@@ -2,7 +2,7 @@
 // Pulls relevant philosophy modules from DB, builds a constrained prompt,
 // and proxies to Claude with the philosophy as guardrails.
 //
-// Deploy: supabase functions deploy ask-ironz
+// Deploy: supabase functions deploy ask-ironz --no-verify-jwt
 // Secret: supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
