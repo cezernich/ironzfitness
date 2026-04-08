@@ -1204,9 +1204,10 @@ async function importWorkoutFromText() {
   try {
     const result = await callAI({
       system: `You are a workout parser. Parse the user's workout notes into a JSON array of exercises.
-Each exercise object must have: { "name": string, "sets": number, "reps": number, "weight": string }
+Each exercise object must have: { "name": string, "sets": number, "reps": number, "weight": string, "supersetGroup": string|null }
 - If sets aren't specified, default to 1.
-- If a group of exercises shares a set count (like "5x" followed by a list), apply that set count to each exercise in the group.
+- If a group of exercises shares a set count (like "5x" or "10x" followed by a list), those exercises are a SUPERSET. Apply that set count to each exercise and give them the same "supersetGroup" string (e.g. "A", "B", "C" for different groups).
+- Exercises NOT in a superset should have "supersetGroup": null.
 - If weight isn't mentioned, use "" (empty string).
 - If reps aren't mentioned (like "Abs"), use 1 set and 0 reps.
 - For cardio warmups like "Incline walk 5 min", use sets:1, reps:0, weight:"5 min".
@@ -1228,23 +1229,54 @@ Each exercise object must have: { "name": string, "sets": number, "reps": number
       throw new Error("No exercises found. Try a different format.");
     }
 
-    // Clear existing rows and populate
+    // Clear existing rows and superset wraps, then populate
     const container = document.getElementById("exercise-entries");
     container.innerHTML = "";
+    _logSsCount = 0;
 
+    // Group exercises by supersetGroup if the AI returned one
+    const groups = [];
+    let currentGroup = null;
     exercises.forEach(ex => {
-      addExerciseRow();
-      const rows = container.querySelectorAll(".exercise-row");
-      const lastRow = rows[rows.length - 1];
-      if (lastRow) {
-        const nameInput = lastRow.querySelector(".ex-name");
-        const setsInput = lastRow.querySelector(".ex-sets");
-        const repsInput = lastRow.querySelector(".ex-reps");
-        const weightInput = lastRow.querySelector(".ex-weight");
-        if (nameInput) nameInput.value = ex.name || "";
-        if (setsInput) setsInput.value = ex.sets || 1;
-        if (repsInput) repsInput.value = ex.reps || 0;
-        if (weightInput) weightInput.value = ex.weight || "";
+      if (ex.supersetGroup) {
+        if (!currentGroup || currentGroup.id !== ex.supersetGroup) {
+          currentGroup = { id: ex.supersetGroup, items: [] };
+          groups.push(currentGroup);
+        }
+        currentGroup.items.push(ex);
+      } else {
+        currentGroup = null;
+        groups.push({ id: null, items: [ex] });
+      }
+    });
+
+    groups.forEach(group => {
+      if (group.id && group.items.length > 1) {
+        // Superset group
+        _logSsCount++;
+        const gid = "lss-" + _logSsCount;
+        const setsVal = group.items[0].sets || 3;
+        const wrap = document.createElement("div");
+        wrap.className = "qe-superset-group";
+        wrap.id = "log-ss-wrap-" + gid;
+        wrap.innerHTML = '<div class="qe-superset-label">Superset <span class="qe-ss-sets-wrap"><input type="number" class="log-ss-sets-input" min="1" max="20" value="' + setsVal + '" onchange="_logSupersetSetsChange(\'' + gid + '\', this.value)" /> sets</span><button class="qe-unsuperset-btn" onclick="_logUnsuperset(\'' + gid + '\')">Remove</button></div>';
+        container.appendChild(wrap);
+
+        group.items.forEach(ex => {
+          const row = _createExerciseRowWithValues(ex.name, ex.sets, ex.reps, ex.weight);
+          row.dataset.ssId = gid;
+          row.classList.add("qe-manual-ss-member");
+          const setsInput = row.querySelector(".ex-sets");
+          if (setsInput) setsInput.style.display = "none";
+          _initRowDrag(row, container);
+          wrap.appendChild(row);
+        });
+      } else {
+        // Single exercise
+        const ex = group.items[0];
+        const row = _createExerciseRowWithValues(ex.name, ex.sets, ex.reps, ex.weight);
+        _initRowDrag(row, container);
+        container.appendChild(row);
       }
     });
 
@@ -1261,47 +1293,166 @@ Each exercise object must have: { "name": string, "sets": number, "reps": number
   }
 }
 
+function _createExerciseRowWithValues(name, sets, reps, weight) {
+  const row = document.createElement("div");
+  row.className = "exercise-row";
+  row.draggable = true;
+  row.innerHTML = `
+    <span class="drag-handle" title="Drag to reorder">⠿</span>
+    <div>
+      <label>Exercise Name</label>
+      <input type="text" class="ex-name" value="${(name || '').replace(/"/g, '&quot;')}" placeholder="e.g. Bench Press" />
+    </div>
+    <div>
+      <label>Sets</label>
+      <input type="number" class="ex-sets" value="${sets || 1}" placeholder="3" min="1" onchange="exPyramidSetsChanged(this)" />
+    </div>
+    <div>
+      <label>Reps</label>
+      <input type="number" class="ex-reps" value="${reps || 0}" placeholder="10" min="0" />
+    </div>
+    <div>
+      <label>Weight</label>
+      <input type="text" class="ex-weight" value="${(weight || '').replace(/"/g, '&quot;')}" placeholder="45lbs" />
+    </div>
+    <button class="ex-pyramid-btn" title="Per-set reps & weight" onclick="exTogglePyramid(this)">▾</button>
+    <button class="remove-exercise-btn" title="Remove" onclick="removeExerciseRow(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
+    <div class="ex-pyramid-detail" style="display:none"></div>
+  `;
+  return row;
+}
+
 /** Shows/hides the intensity selector when "Generate workout" checkbox changes */
 
 /* --- Drag-to-reorder helpers for exercise / segment rows --- */
 let _logDragEl = null;
+let _logSsCount = 0;
+
 function _initRowDrag(row, container) {
   row.draggable = true;
   row.addEventListener("dragstart", (e) => { _logDragEl = row; row.classList.add("drag-active"); e.dataTransfer.effectAllowed = "move"; });
-  row.addEventListener("dragend",   ()  => { row.classList.remove("drag-active"); _logDragEl = null; });
+  row.addEventListener("dragend",   ()  => { row.classList.remove("drag-active"); _logDragEl = null; _logClearAllHints(); });
   row.addEventListener("dragover",  (e) => {
     if (!_logDragEl || _logDragEl === row) return;
     e.preventDefault();
     const rect = row.getBoundingClientRect();
-    const mid  = rect.top + rect.height / 2;
-    row.classList.toggle("drag-insert-above", e.clientY < mid);
-    row.classList.toggle("drag-insert-below", e.clientY >= mid);
+    const pct  = (e.clientY - rect.top) / rect.height;
+    row.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target");
+    if (pct > 0.3 && pct < 0.7) {
+      row.classList.add("drag-ss-target");
+    } else {
+      row.classList.add(pct <= 0.3 ? "drag-insert-above" : "drag-insert-below");
+    }
   });
-  row.addEventListener("dragleave", () => { row.classList.remove("drag-insert-above", "drag-insert-below"); });
+  row.addEventListener("dragleave", () => { row.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target"); });
   row.addEventListener("drop", (e) => {
     e.preventDefault();
-    row.classList.remove("drag-insert-above", "drag-insert-below");
+    _logClearAllHints();
     if (!_logDragEl || _logDragEl === row) return;
     const rect = row.getBoundingClientRect();
-    const mid  = rect.top + rect.height / 2;
-    if (e.clientY < mid) container.insertBefore(_logDragEl, row);
-    else                 container.insertBefore(_logDragEl, row.nextSibling);
+    const pct  = (e.clientY - rect.top) / rect.height;
+    if (pct > 0.3 && pct < 0.7) {
+      _logGroupSuperset(_logDragEl, row);
+    } else {
+      if (pct <= 0.3) container.insertBefore(_logDragEl, row);
+      else            container.insertBefore(_logDragEl, row.nextSibling);
+    }
+    _logDragEl = null;
   });
   // Touch support for mobile
   TouchDrag.attach(row, container, {
-    hintClasses: ["drag-insert-above", "drag-insert-below"],
+    hintClasses: ["drag-insert-above", "drag-insert-below", "drag-ss-target"],
     rowSelector: "[draggable]",
     handleSelector: ".drag-handle",
     onDrop(dragEl, targetEl, clientY) {
       const rect = targetEl.getBoundingClientRect();
-      const mid = rect.top + rect.height / 2;
-      if (clientY < mid) container.insertBefore(dragEl, targetEl);
-      else               container.insertBefore(dragEl, targetEl.nextSibling);
+      const pct = (clientY - rect.top) / rect.height;
+      _logClearAllHints();
+      if (pct > 0.3 && pct < 0.7) {
+        _logGroupSuperset(dragEl, targetEl);
+      } else {
+        if (pct <= 0.3) container.insertBefore(dragEl, targetEl);
+        else            container.insertBefore(dragEl, targetEl.nextSibling);
+      }
     }
   });
 }
 
-const LOG_ENDURANCE_TYPES = ["running", "cycling", "swimming", "triathlon", "walking", "rowing"];
+function _logClearAllHints() {
+  document.querySelectorAll("#exercise-entries .exercise-row").forEach(el => {
+    el.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target");
+  });
+}
+
+function _logGroupSuperset(dragRow, targetRow) {
+  const container = document.getElementById("exercise-entries");
+  targetRow.after(dragRow);
+
+  let gid = targetRow.dataset.ssId;
+  if (!gid) {
+    _logSsCount++;
+    gid = "lss-" + _logSsCount;
+    targetRow.dataset.ssId = gid;
+    _logAddSupersetWrap(targetRow, gid);
+  }
+  dragRow.dataset.ssId = gid;
+  dragRow.classList.add("qe-manual-ss-member");
+  targetRow.classList.add("qe-manual-ss-member");
+  _logUpdateSupersetWrap(gid);
+
+  // Sync sets from group input
+  const wrap = document.getElementById("log-ss-wrap-" + gid);
+  const groupSets = wrap?.querySelector(".log-ss-sets-input")?.value || "3";
+  [dragRow, targetRow].forEach(el => {
+    const inp = el.querySelector(".ex-sets");
+    if (inp) { inp.value = groupSets; inp.style.display = "none"; }
+    const lbl = el.querySelector("label");
+  });
+}
+
+function _logAddSupersetWrap(anchorEl, gid) {
+  let wrap = document.getElementById("log-ss-wrap-" + gid);
+  if (!wrap) {
+    const setsVal = anchorEl.querySelector(".ex-sets")?.value || "3";
+    wrap = document.createElement("div");
+    wrap.className = "qe-superset-group";
+    wrap.id = "log-ss-wrap-" + gid;
+    wrap.innerHTML = '<div class="qe-superset-label">Superset <span class="qe-ss-sets-wrap"><input type="number" class="log-ss-sets-input" min="1" max="20" value="' + setsVal + '" onchange="_logSupersetSetsChange(\'' + gid + '\', this.value)" /> sets</span><button class="qe-unsuperset-btn" onclick="_logUnsuperset(\'' + gid + '\')">Remove</button></div>';
+    anchorEl.parentNode.insertBefore(wrap, anchorEl);
+    wrap.appendChild(anchorEl);
+  }
+}
+
+function _logUpdateSupersetWrap(gid) {
+  const wrap = document.getElementById("log-ss-wrap-" + gid);
+  if (!wrap) return;
+  document.querySelectorAll('[data-ss-id="' + gid + '"]').forEach(el => {
+    if (!wrap.contains(el)) wrap.appendChild(el);
+  });
+}
+
+function _logSupersetSetsChange(gid, val) {
+  document.querySelectorAll('[data-ss-id="' + gid + '"]').forEach(el => {
+    const inp = el.querySelector(".ex-sets");
+    if (inp) inp.value = val;
+  });
+}
+
+function _logUnsuperset(gid) {
+  const wrap = document.getElementById("log-ss-wrap-" + gid);
+  if (!wrap) return;
+  const container = document.getElementById("exercise-entries");
+  wrap.querySelectorAll(".exercise-row").forEach(el => {
+    el.classList.remove("qe-manual-ss-member");
+    delete el.dataset.ssId;
+    const inp = el.querySelector(".ex-sets");
+    if (inp) inp.style.display = "";
+    container.appendChild(el);
+  });
+  wrap.remove();
+}
+
+const LOG_ENDURANCE_TYPES = ["running", "cycling", "swimming", "triathlon", "walking", "rowing", "stairstepper"];
 
 function _isLogBrickType() {
   return document.getElementById("log-workout-type")?.value === "triathlon";
@@ -1547,6 +1698,7 @@ function saveWorkout() {
       const weight = row.querySelector(".ex-weight").value.trim();
       if (!name) return;
       const ex = { name, sets, reps, weight };
+      if (row.dataset.ssId) ex.supersetId = row.dataset.ssId;
 
       // Collect per-set pyramid details if expanded
       const detail = row.querySelector(".ex-pyramid-detail");
@@ -2498,7 +2650,7 @@ function closeSaveWorkoutModal() {
   _swEditId = null;
 }
 
-const SW_ENDURANCE_TYPES = ["running", "cycling", "swimming", "triathlon"];
+const SW_ENDURANCE_TYPES = ["running", "cycling", "swimming", "triathlon", "stairstepper"];
 
 function swTypeChanged() {
   const type = document.getElementById("sw-type")?.value;
@@ -3483,6 +3635,7 @@ function openCommAdminForm() {
             <option value="running">Running</option>
             <option value="cycling">Cycling</option>
             <option value="yoga">Yoga</option>
+            <option value="stairstepper">Stair Stepper</option>
             <option value="general">General</option>
           </select>
         </div>
