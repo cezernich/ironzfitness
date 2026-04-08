@@ -2054,17 +2054,21 @@ function _renderDayDetailInner(dateStr, content) {
       let rawSession;
       if (p.aiSession) {
         // Plan entry was edited — build a session object from the saved intervals
+        const _ivs = p.aiSession.intervals || [];
+        const _steps = _ivs.map((iv, idx) => {
+          let zone = iv.effort || "Z2";
+          if (typeof zone === 'string' && zone.startsWith("Z")) zone = parseInt(zone.slice(1)) || 2;
+          const type = iv.type || (idx === 0 ? "warmup" : idx === _ivs.length - 1 ? "cooldown" : "main");
+          const step = { type, label: iv.name, duration: parseInt(iv.duration) || 0, zone };
+          if (iv.reps && iv.reps > 1) { step.reps = iv.reps; }
+          if (iv.restDuration) { step.rest = parseInt(iv.restDuration) || 0; }
+          return step;
+        });
+        const _totalMin = _steps.reduce((s, st) => s + (st.duration * (st.reps || 1)) + ((st.rest || 0) * Math.max(0, (st.reps || 1) - 1)), 0);
         rawSession = {
           name: p.aiSession.title || p.sessionName,
-          duration: targetDuration || p.duration,
-          steps: (p.aiSession.intervals || []).map(iv => {
-            let zone = iv.effort || "Z2";
-            if (typeof zone === 'string' && zone.startsWith("Z")) zone = parseInt(zone.slice(1)) || 2;
-            const step = { label: iv.name, duration: parseInt(iv.duration) || 0, zone };
-            if (iv.reps && iv.reps > 1) { step.reps = iv.reps; }
-            if (iv.restDuration) { step.rest = parseInt(iv.restDuration) || 0; }
-            return step;
-          }),
+          duration: targetDuration || p.duration || _totalMin,
+          steps: _steps,
         };
       } else {
         rawSession = (SESSION_DESCRIPTIONS[p.discipline] || {})[effectLoad]
