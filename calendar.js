@@ -2066,7 +2066,7 @@ function renderDayDetail(dateStr) {
               <div class="session-header-right">
                 <span class="session-duration-badge">${_getCompletionDuration(cardId) || session.duration} min</span>
                 <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
-                ${_planUndoBtn}${_planDelBtn}
+                ${_planUndoBtn}<button class="edit-workout-btn" title="Edit" onclick="event.stopPropagation(); openEditPlanSession('${dateStr}','${p.raceId}','${p.discipline}','${effectLoad}')">Edit</button>${_planDelBtn}
                 <span class="card-chevron">▾</span>
               </div>
             </div>
@@ -2126,7 +2126,7 @@ function renderDayDetail(dateStr) {
                 <div class="session-header-right">
                   <span class="session-duration-badge">${_getCompletionDuration(cardId) || targetDuration} min</span>
                   <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
-                  ${_swUndoBtn}${_swMoveBtn}${_swDelBtn}
+                  ${_swUndoBtn}${_swMoveBtn}<button class="edit-workout-btn" title="Edit" onclick="event.stopPropagation(); openEditScheduledWorkout('${w.id}')">Edit</button>${_swDelBtn}
                   <span class="card-chevron">▾</span>
                 </div>
               </div>
@@ -2215,9 +2215,7 @@ function renderDayDetail(dateStr) {
       const _swGenEditPanel  = "";
       const _swGenMoveBtn    = `<button class="btn-move-session" title="Move / Duplicate" onclick="event.stopPropagation();toggleMovePanel('${cardId}')">⇄</button>`;
       const _swGenDelBtn     = `<button class="delete-btn" title="Remove" onclick="event.stopPropagation();deleteScheduledWorkout('${w.id}','${dateStr}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
-      const _swGenEditBtn    = w.exercises?.length
-        ? `<button class="edit-workout-btn" title="Edit" onclick="event.stopPropagation();openEditWorkout('${w.id}','workoutSchedule')">Edit</button>`
-        : "";
+      const _swGenEditBtn    = `<button class="edit-workout-btn" title="Edit" onclick="event.stopPropagation();openEditScheduledWorkout('${w.id}')">Edit</button>`;
       const _swGenCompleted  = isSessionComplete(cardId);
       const _swGenDoneInd    = _swGenCompleted ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
       const _swGenUndoBtn    = _buildUndoHeaderBtn(cardId, dateStr);

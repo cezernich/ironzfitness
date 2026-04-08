@@ -69,6 +69,83 @@ function openEditWorkout(id, source) {
   document.getElementById("edit-workout-overlay").classList.add("is-open");
 }
 
+/**
+ * Open editor for a plan entry or scheduled workout.
+ * Converts the session into a temporary workout in the "workouts" store,
+ * then opens the standard editor on it.
+ */
+function openEditPlanSession(dateStr, raceId, discipline, load) {
+  const session = (typeof SESSION_DESCRIPTIONS !== 'undefined' && SESSION_DESCRIPTIONS[discipline])
+    ? SESSION_DESCRIPTIONS[discipline][load] : null;
+
+  // Build intervals from session steps
+  const intervals = [];
+  if (session && session.steps) {
+    session.steps.forEach(step => {
+      intervals.push({
+        name: step.label || step.name || "",
+        duration: (step.duration || "") + " min",
+        effort: step.zone || "Z2",
+        reps: step.reps || 1,
+        restDuration: step.restDuration || "",
+        restEffort: step.restEffort || "",
+      });
+    });
+  }
+
+  // Create a workout entry that the editor can work with
+  const workoutId = "plan-edit-" + dateStr + "-" + (raceId || discipline);
+  const workouts = JSON.parse(localStorage.getItem("workouts") || "[]");
+
+  // Check if we already created an edit copy for this session
+  let existing = workouts.find(w => w.id === workoutId);
+  if (!existing) {
+    const type = { running: "running", cycling: "cycling", swimming: "swimming", strength: "weightlifting" }[discipline] || "general";
+    existing = {
+      id: workoutId,
+      date: dateStr,
+      type: type,
+      notes: session ? (session.name || "") : "",
+      aiSession: intervals.length > 0 ? { title: session?.name || discipline, intervals } : null,
+      exercises: [],
+      fromSaved: session?.name || discipline,
+      _planSource: { raceId, discipline, load },
+    };
+    workouts.push(existing);
+    localStorage.setItem("workouts", JSON.stringify(workouts));
+    if (typeof DB !== 'undefined') DB.syncWorkouts();
+  }
+
+  openEditWorkout(workoutId, "workouts");
+}
+
+function openEditScheduledWorkout(id) {
+  const schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
+  const w = schedule.find(x => String(x.id) === String(id));
+  if (!w) return;
+
+  // If it has a discipline + load, convert steps to intervals
+  if (w.discipline && w.load) {
+    const session = (typeof SESSION_DESCRIPTIONS !== 'undefined' && SESSION_DESCRIPTIONS[w.discipline])
+      ? SESSION_DESCRIPTIONS[w.discipline][w.load] : null;
+    if (session && session.steps && !w.aiSession) {
+      w.aiSession = {
+        title: session.name || w.discipline,
+        intervals: session.steps.map(step => ({
+          name: step.label || step.name || "",
+          duration: (step.duration || "") + " min",
+          effort: step.zone || "Z2",
+          reps: step.reps || 1,
+        }))
+      };
+      localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+      if (typeof DB !== 'undefined') DB.syncKey('workoutSchedule');
+    }
+  }
+
+  openEditWorkout(id, "workoutSchedule");
+}
+
 function closeEditWorkout() {
   document.getElementById("edit-workout-overlay").classList.remove("is-open");
   _editWorkoutId = null;
