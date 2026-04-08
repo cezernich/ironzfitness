@@ -311,6 +311,7 @@ const DB = (() => {
     'userSharedWorkouts', 'measurementSystem', 'gymStrengthEnabled',
     'nutritionEnabled', 'hydrationEnabled', 'fuelingEnabled',
     'workoutEffortFeedback', 'calibrationSignals',
+    'hasOnboarded', 'surveyComplete', 'onboardingData',
   ];
 
   const _keyTimers = {};
@@ -637,6 +638,33 @@ const DB = (() => {
     _debouncedSync('goals', 'goals', _shapeGoal);
   }
 
+  // ── Pull all structured tables from Supabase → localStorage ──────────────
+  // Called on login to ensure a new device has all the user's data.
+
+  async function refreshAllTables() {
+    const uid = await _userId();
+    if (!uid) return;
+    console.log('DB: Pulling all tables from Supabase');
+    const tables = [
+      { accessor: workouts, name: 'workouts' },
+      { accessor: trainingSessions, name: 'training_sessions' },
+      { accessor: trainingPlans, name: 'training_plans' },
+      { accessor: raceEvents, name: 'race_events' },
+      { accessor: goals, name: 'goals' },
+      { accessor: weeklyCheckins, name: 'weekly_checkins' },
+      { accessor: generatedPlans, name: 'generated_plans' },
+      { accessor: planAdherence, name: 'plan_adherence' },
+    ];
+    const results = await Promise.allSettled(
+      tables.map(t => t.accessor.list().then(data => {
+        console.log(`DB: pulled ${t.name} (${data?.length || 0} rows)`);
+      }))
+    );
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') console.warn(`DB: pull ${tables[i].name} failed`, r.reason);
+    });
+  }
+
   // ── Public API ────────────────────────────────────────────────────────────
 
   return {
@@ -662,6 +690,7 @@ const DB = (() => {
     syncGoals,
     syncKey,
     refreshAllKeys,
+    refreshAllTables,
     SYNCED_KEYS,
     migrateLocalStorage,
     _isOnline,

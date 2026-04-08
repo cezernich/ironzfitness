@@ -2015,6 +2015,7 @@ function submitSurveyPlan() {
     } catch { /* ignore */ }
 
     localStorage.setItem("surveyComplete", "1");
+    if (typeof DB !== 'undefined') DB.syncKey('surveyComplete');
 
     // Save athlete zones from survey
     if (surveyData.zones && Object.keys(surveyData.zones).length > 0) {

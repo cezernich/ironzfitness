@@ -272,6 +272,9 @@ async function authBoot() {
   if (session) {
     try { await ensureProfile(session.user); } catch (e) { console.warn('Auth: ensureProfile error', e); }
     try { await DB.migrateLocalStorage(); } catch (e) { console.warn('Auth: migration error', e); }
+    // Pull all data from Supabase before initializing UI
+    try { await DB.refreshAllKeys(); } catch (e) { console.warn('Auth: refreshAllKeys error', e); }
+    try { await DB.refreshAllTables(); } catch (e) { console.warn('Auth: refreshAllTables error', e); }
     hideAuthScreen();
     window._appInitialized = true;
     init();
@@ -283,6 +286,8 @@ async function authBoot() {
     if (event === 'SIGNED_IN' && session) {
       try { await ensureProfile(session.user); } catch (e) { console.warn('Auth: ensureProfile error', e); }
       try { await DB.migrateLocalStorage(); } catch (e) { console.warn('Auth: migration error', e); }
+      try { await DB.refreshAllKeys(); } catch (e) { console.warn('Auth: refreshAllKeys error', e); }
+      try { await DB.refreshAllTables(); } catch (e) { console.warn('Auth: refreshAllTables error', e); }
       hideAuthScreen();
       if (!window._appInitialized) {
         window._appInitialized = true;

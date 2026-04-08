@@ -58,7 +58,7 @@ function showOnboarding() {
   obStep = 0;
   // Full reset
   obData = {
-    name: "", age: "", weight: "", height: "", gender: "", units: "imperial",
+    name: "", birthday: "", age: "", weight: "", height: "", gender: "", units: "imperial",
     goal: null, level: null, daysPerWeek: 4, sessionLength: 45,
     workoutInterests: [], hydrationHabit: "sometimes",
     nutritionEnabled: true, hydrationEnabled: true,
@@ -138,10 +138,10 @@ function validateOnboardingStep() {
 
   if (step === "profile") {
     const name = document.getElementById("ob-name")?.value.trim();
-    const age = document.getElementById("ob-age")?.value;
+    const birthday = document.getElementById("ob-birthday")?.value;
     const weight = document.getElementById("ob-weight")?.value;
     if (!name) { if (msg) msg.textContent = "Please enter your name."; return false; }
-    if (!age || age < 10 || age > 100) { if (msg) msg.textContent = "Please enter a valid age."; return false; }
+    if (!birthday) { if (msg) msg.textContent = "Please enter your birthday."; return false; }
     if (!weight || weight < 50) { if (msg) msg.textContent = "Please enter your weight."; return false; }
     // Height validation: imperial (ft/in) vs metric (cm)
     const isMetric = obData.units === "metric";
@@ -183,7 +183,8 @@ function collectOnboardingStep() {
 
   if (step === "profile") {
     obData.name = document.getElementById("ob-name")?.value.trim() || "";
-    obData.age = document.getElementById("ob-age")?.value || "";
+    obData.birthday = document.getElementById("ob-birthday")?.value || "";
+    obData.age = obData.birthday ? String(_calcAgeFromBirthday(obData.birthday)) : "";
     obData.weight = document.getElementById("ob-weight")?.value || "";
     obData.gender = document.getElementById("ob-gender")?.value || "";
     // Height: convert ft/in to total inches (imperial) or store cm (metric)
@@ -279,8 +280,8 @@ function buildOBProfile() {
         <input type="text" id="ob-name" placeholder="e.g. Alex Johnson" value="${escOB(obData.name)}" />
       </div>
       <div class="form-row">
-        <label for="ob-age">Age</label>
-        <input type="number" id="ob-age" placeholder="e.g. 32" min="10" max="100" value="${escOB(obData.age)}" />
+        <label for="ob-birthday">Birthday</label>
+        <input type="date" id="ob-birthday" value="${escOB(obData.birthday)}" max="${new Date().toISOString().slice(0,10)}" />
       </div>
       <div class="form-row">
         <label for="ob-weight">${weightLabel}</label>
@@ -770,7 +771,8 @@ function finishOnboarding(buildPlan) {
   }
   const profile = {
     name: obData.name,
-    age: obData.age,
+    birthday: obData.birthday,
+    age: obData.birthday ? String(_calcAgeFromBirthday(obData.birthday)) : obData.age,
     weight: profileWeight,
     height: profileHeight,
     gender: obData.gender,
@@ -835,6 +837,7 @@ function finishOnboarding(buildPlan) {
 
   // 6. Mark onboarding complete
   localStorage.setItem("hasOnboarded", "1");
+  if (typeof DB !== 'undefined') DB.syncKey('hasOnboarded');
 
   // 7. Close overlay
   closeOnboarding();
@@ -867,6 +870,16 @@ function finishOnboarding(buildPlan) {
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
+
+function _calcAgeFromBirthday(dateStr) {
+  if (!dateStr) return 0;
+  const birth = new Date(dateStr);
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
 
 function escOB(str) {
   if (!str) return "";
