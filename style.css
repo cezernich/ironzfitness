@@ -2203,6 +2203,54 @@ button:active {
   margin-bottom: 16px;
 }
 
+/* ── Zone History ─────────────────────────────────────────────────────────── */
+.zone-history-section {
+  margin-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+.zone-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+.zone-history-header .card-chevron {
+  transition: transform 0.2s;
+}
+.zone-history-section.is-expanded .zone-history-header .card-chevron {
+  transform: rotate(180deg);
+}
+.zone-history-list {
+  display: none;
+}
+.zone-history-section.is-expanded .zone-history-list {
+  display: block;
+}
+.zone-history-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.8rem;
+}
+.zone-history-row:last-child {
+  border-bottom: none;
+}
+.zone-history-date {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  margin-right: 12px;
+}
+.zone-history-detail {
+  color: var(--color-text);
+  text-align: right;
+}
+
 .strength-ref-row {
   display: flex;
   align-items: center;

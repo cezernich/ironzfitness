@@ -879,6 +879,75 @@ function saveTrainingZonesData(sport, data) {
   try { all = JSON.parse(localStorage.getItem("trainingZones")) || {}; } catch {}
   all[sport] = data;
   localStorage.setItem("trainingZones", JSON.stringify(all)); if (typeof DB !== 'undefined') DB.syncKey('trainingZones');
+
+  // Append to zone history
+  _appendZoneHistory(sport, data);
+}
+
+function _appendZoneHistory(sport, data) {
+  let history = [];
+  try { history = JSON.parse(localStorage.getItem("trainingZonesHistory")) || []; } catch {}
+  const entry = {
+    sport,
+    date: new Date().toISOString(),
+    data: JSON.parse(JSON.stringify(data)),
+  };
+  history.push(entry);
+  localStorage.setItem("trainingZonesHistory", JSON.stringify(history));
+  if (typeof DB !== 'undefined') DB.syncKey('trainingZonesHistory');
+}
+
+function _getZoneHistory(sport) {
+  let history = [];
+  try { history = JSON.parse(localStorage.getItem("trainingZonesHistory")) || []; } catch {}
+  return history.filter(h => h.sport === sport).sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+function _renderZoneHistoryRow(entry) {
+  const d = new Date(entry.date);
+  const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const data = entry.data;
+  let detail = "";
+
+  if (entry.sport === "running") {
+    detail = `${data.referenceDist} in ${data.referenceTime} &middot; VDOT ${data.vdot}`;
+  } else if (entry.sport === "biking") {
+    detail = `FTP: ${data.ftp} W`;
+  } else if (entry.sport === "swimming") {
+    detail = `T-Pace: ${data.tPaceStr} /100m (${data.referenceDist} in ${data.referenceTime})`;
+  } else if (entry.sport === "strength") {
+    const lifts = ["bench","squat","deadlift","ohp","row"]
+      .filter(k => data[k]?.weight)
+      .map(k => {
+        const labels = { bench: "BP", squat: "SQ", deadlift: "DL", ohp: "OHP", row: "Row" };
+        return `${labels[k]} ${data[k].weight}`;
+      });
+    detail = lifts.join(" / ") || "No lifts recorded";
+  }
+
+  return `<div class="zone-history-row">
+    <span class="zone-history-date">${dateStr}</span>
+    <span class="zone-history-detail">${detail}</span>
+  </div>`;
+}
+
+function _buildZoneHistoryHTML(sport) {
+  const history = _getZoneHistory(sport);
+  if (history.length <= 1) return ""; // Only current entry or none — nothing to show
+
+  // Skip the most recent (it's the current zones), show the rest
+  const past = history.slice(1);
+  if (past.length === 0) return "";
+
+  const rows = past.slice(0, 20).map(e => _renderZoneHistoryRow(e)).join("");
+  return `
+    <div class="zone-history-section">
+      <div class="zone-history-header" onclick="this.parentElement.classList.toggle('is-expanded')">
+        <span>Zone History (${past.length})</span>
+        <span class="card-chevron">▾</span>
+      </div>
+      <div class="zone-history-list">${rows}</div>
+    </div>`;
 }
 
 // Keep legacy functions so calendar.js still works
@@ -969,7 +1038,28 @@ function selectZonesSport(sport) {
 
 function renderRunningZones() { renderZones(); } // legacy alias
 
+// Seed zone history with existing data on first render (one-time migration)
+function _seedZoneHistoryIfNeeded() {
+  if (localStorage.getItem("_zoneHistorySeeded")) return;
+  let all = {};
+  try { all = JSON.parse(localStorage.getItem("trainingZones")) || {}; } catch {}
+  for (const sport of ["running", "biking", "swimming", "strength"]) {
+    if (all[sport]) {
+      const existing = _getZoneHistory(sport);
+      if (existing.length === 0) {
+        const date = all[sport].calculatedAt || all[sport].updatedAt || new Date().toISOString();
+        let history = [];
+        try { history = JSON.parse(localStorage.getItem("trainingZonesHistory")) || []; } catch {}
+        history.push({ sport, date, data: JSON.parse(JSON.stringify(all[sport])) });
+        localStorage.setItem("trainingZonesHistory", JSON.stringify(history));
+      }
+    }
+  }
+  localStorage.setItem("_zoneHistorySeeded", "true");
+}
+
 function renderZones() {
+  _seedZoneHistoryIfNeeded();
   const el = document.getElementById("zones-content");
   if (!el) return;
 
@@ -1018,7 +1108,8 @@ function renderZones() {
       ${dateLabel ? `<div class="zones-ref-line">Updated ${dateLabel}</div>` : ""}
       <div class="zones-table">${rows || "<p class='hint'>No lifts recorded yet.</p>"}</div>
       <button class="btn-secondary zones-update-btn" onclick="openUpdateZonesForm()">Update Lifts</button>
-      <div id="zones-form-area"></div>`;
+      <div id="zones-form-area"></div>
+      ${_buildZoneHistoryHTML("strength")}`;
     return;
   }
 
@@ -1070,7 +1161,8 @@ function renderZones() {
     <div class="zones-ref-line">${refLine}</div>
     <div class="zones-table">${zoneRows}</div>
     <button class="btn-secondary zones-update-btn" onclick="openUpdateZonesForm()">Update Zones</button>
-    <div id="zones-form-area"></div>`;
+    <div id="zones-form-area"></div>
+    ${_buildZoneHistoryHTML(sport)}`;
 }
 
 function openUpdateZonesForm() {
