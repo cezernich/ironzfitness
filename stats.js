@@ -101,7 +101,7 @@ function buildStatsOverview(total, streaks, thisWeek) {
 /* ─── Totals Section ──────────────────────────────────────────────────── */
 
 function _computeTotals(workouts) {
-  const totals = { runMin: 0, bikeMin: 0, swimMin: 0, liftMin: 0, hiitMin: 0, cardioMin: 0, yogaMin: 0, totalMin: 0 };
+  const totals = { runMin: 0, bikeMin: 0, swimMin: 0, liftMin: 0, hiitMin: 0, cardioMin: 0, yogaMin: 0, totalMin: 0, runKm: 0, bikeKm: 0, swimKm: 0 };
 
   workouts.forEach(w => {
     const type = (w.type || "").toLowerCase();
@@ -115,6 +115,39 @@ function _computeTotals(workouts) {
     else if (type === "hiit")                                  totals.hiitMin += mins;
     else if (type === "yoga")                                  totals.yogaMin += mins;
     else                                                       totals.cardioMin += mins;
+
+    // Distance from intervals
+    if (w.aiSession?.intervals) {
+      w.aiSession.intervals.forEach(iv => {
+        const durStr = String(iv.duration || "");
+        const reps = iv.reps || 1;
+        const miMatch = durStr.match(/([\d.]+)\s*mi$/i);
+        const kmMatch = durStr.match(/([\d.]+)\s*km$/i);
+        let km = 0;
+        if (miMatch) km = parseFloat(miMatch[1]) * 1.60934;
+        else if (kmMatch) km = parseFloat(kmMatch[1]);
+        km *= reps;
+        if (km > 0) {
+          if (type === "running") totals.runKm += km;
+          else if (type === "cycling") totals.bikeKm += km;
+          else if (type === "swimming") totals.swimKm += km;
+        }
+      });
+    }
+    // Distance from direct field
+    if (w.distance) {
+      const dStr = String(w.distance);
+      const miM = dStr.match(/([\d.]+)\s*mi/i);
+      const kmM = dStr.match(/([\d.]+)\s*km/i);
+      let km = 0;
+      if (miM) km = parseFloat(miM[1]) * 1.60934;
+      else if (kmM) km = parseFloat(kmM[1]);
+      if (km > 0) {
+        if (type === "running") totals.runKm += km;
+        else if (type === "cycling") totals.bikeKm += km;
+        else if (type === "swimming") totals.swimKm += km;
+      }
+    }
   });
   return totals;
 }
@@ -163,19 +196,21 @@ function buildStatsTotals() {
   const yearTotals  = _computeTotals(thisYear);
   const monthTotals = _computeTotals(thisMonth);
 
-  function _row(icon, label, monthVal, yearVal, allVal) {
-    if (!monthVal && !yearVal && !allVal) return "";
+  function _row(icon, label, monthTime, yearTime, allTime, monthDist, yearDist, allDist) {
+    const hasTime = monthTime !== "0 min" || yearTime !== "0 min" || allTime !== "0 min";
+    const hasDist = monthDist || yearDist || allDist;
+    if (!hasTime && !hasDist) return "";
     return `<div class="totals-row">
       <span class="totals-icon">${icon}</span>
       <span class="totals-label">${label}</span>
-      <span class="totals-value" data-month="${monthVal}" data-year="${yearVal}" data-all="${allVal}">${monthVal}</span>
+      <span class="totals-value" data-month="${monthTime}" data-year="${yearTime}" data-all="${allTime}"${hasDist ? ` data-month-dist="${monthDist}" data-year-dist="${yearDist}" data-all-dist="${allDist}"` : ""}>${monthTime}</span>
     </div>`;
   }
 
   const rows =
-    _row(ICONS.run, "Running",    _fmtHours(monthTotals.runMin),  _fmtHours(yearTotals.runMin),  _fmtHours(allTotals.runMin)) +
-    _row(ICONS.bike, "Cycling",   _fmtHours(monthTotals.bikeMin), _fmtHours(yearTotals.bikeMin), _fmtHours(allTotals.bikeMin)) +
-    _row(ICONS.swim, "Swimming",  _fmtHours(monthTotals.swimMin), _fmtHours(yearTotals.swimMin), _fmtHours(allTotals.swimMin)) +
+    _row(ICONS.run, "Running",    _fmtHours(monthTotals.runMin),  _fmtHours(yearTotals.runMin),  _fmtHours(allTotals.runMin),  _fmtDist(monthTotals.runKm),  _fmtDist(yearTotals.runKm),  _fmtDist(allTotals.runKm)) +
+    _row(ICONS.bike, "Cycling",   _fmtHours(monthTotals.bikeMin), _fmtHours(yearTotals.bikeMin), _fmtHours(allTotals.bikeMin), _fmtDist(monthTotals.bikeKm), _fmtDist(yearTotals.bikeKm), _fmtDist(allTotals.bikeKm)) +
+    _row(ICONS.swim, "Swimming",  _fmtHours(monthTotals.swimMin), _fmtHours(yearTotals.swimMin), _fmtHours(allTotals.swimMin), _fmtSwimDist(monthTotals.swimKm), _fmtSwimDist(yearTotals.swimKm), _fmtSwimDist(allTotals.swimKm)) +
     _row(ICONS.weights, "Lifting", _fmtHours(monthTotals.liftMin), _fmtHours(yearTotals.liftMin), _fmtHours(allTotals.liftMin)) +
     _row(ICONS.flame, "HIIT",     _fmtHours(monthTotals.hiitMin), _fmtHours(yearTotals.hiitMin), _fmtHours(allTotals.hiitMin)) +
     _row(ICONS.activity, "Cardio", _fmtHours(monthTotals.cardioMin), _fmtHours(yearTotals.cardioMin), _fmtHours(allTotals.cardioMin)) +
@@ -197,22 +232,48 @@ function buildStatsTotals() {
         </div>
       </div>
       <div class="card-body">
-        <div class="totals-grid">${rows}</div>
-        <div class="totals-footer">
-          <span class="totals-total-label">Total Time</span>
-          <span class="totals-total-value" data-month="${_fmtHours(monthTotals.totalMin)}" data-year="${_fmtHours(yearTotals.totalMin)}" data-all="${_fmtHours(allTotals.totalMin)}">${_fmtHours(monthTotals.totalMin)}</span>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:8px" onclick="event.stopPropagation()">
+          <div class="totals-unit-toggle">
+            <button class="totals-unit-btn is-active" onclick="switchTotalsUnit('time', this)">Time</button>
+            <button class="totals-unit-btn" onclick="switchTotalsUnit('distance', this)">Distance</button>
+          </div>
         </div>
+        <div class="totals-grid">${rows}</div>
       </div>
     </section>`;
 }
 
+let _totalsCurrentView = "month";
+let _totalsCurrentUnit = "time";
+
 function switchTotalsView(view, btn) {
+  _totalsCurrentView = view;
   const section = document.getElementById("section-stats-totals");
   if (!section) return;
   section.querySelectorAll(".totals-toggle-btn").forEach(b => b.classList.remove("is-active"));
   btn.classList.add("is-active");
-  section.querySelectorAll("[data-month][data-year][data-all]").forEach(el => {
-    el.textContent = view === "all" ? el.dataset.all : view === "year" ? el.dataset.year : el.dataset.month;
+  _updateTotalsValues(section);
+}
+
+function switchTotalsUnit(unit, btn) {
+  _totalsCurrentUnit = unit;
+  const section = document.getElementById("section-stats-totals");
+  if (!section) return;
+  section.querySelectorAll(".totals-unit-btn").forEach(b => b.classList.remove("is-active"));
+  btn.classList.add("is-active");
+  _updateTotalsValues(section);
+}
+
+function _updateTotalsValues(section) {
+  const view = _totalsCurrentView;
+  const unit = _totalsCurrentUnit;
+  section.querySelectorAll(".totals-value").forEach(el => {
+    const hasDist = el.dataset.monthDist;
+    if (unit === "distance" && hasDist) {
+      el.textContent = view === "all" ? el.dataset.allDist : view === "year" ? el.dataset.yearDist : el.dataset.monthDist;
+    } else {
+      el.textContent = view === "all" ? el.dataset.all : view === "year" ? el.dataset.year : el.dataset.month;
+    }
   });
 }
 
