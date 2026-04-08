@@ -7021,9 +7021,49 @@ button:active {
 .hydration-info { display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .hydration-count { font-size: 1.2rem; font-weight: 700; }
 .hydration-oz { font-size: 0.85rem; color: var(--color-text-muted); }
-.hydration-btn-row { display: flex; gap: 8px; align-items: center; }
-.hydration-log-btn { padding: 10px 16px; font-size: 0.9rem; }
+.hydration-btn-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.hydration-mybottle-btn { padding: 10px 16px; font-size: 0.9rem; flex: 1; }
+.hydration-quickadd-btn { padding: 8px 12px; font-size: 0.8rem; }
 .hydration-undo-btn { padding: 8px 12px; font-size: 0.8rem; }
+.hydration-quickadd {
+  margin-top: 8px;
+  padding: 10px;
+  background: var(--color-surface-2);
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+.hydration-quickadd-sizes {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.hydration-quickadd-sizes button {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.hydration-quickadd-sizes button:hover {
+  background: var(--color-accent);
+  color: var(--color-accent-text, #fff);
+  border-color: var(--color-accent);
+}
+.hydration-quickadd-custom {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.hydration-quickadd-custom input {
+  width: 70px;
+  padding: 6px 8px;
+  font-size: 0.85rem;
+}
 .hydration-tip {
   background: var(--color-surface-alt, var(--color-surface-2));
   border-radius: 8px; padding: 10px 12px;

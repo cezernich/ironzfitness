@@ -192,6 +192,54 @@ function logWater(beverageType) {
   }
 }
 
+function logWaterOz(oz) {
+  const bottleSize = getBottleSize();
+  // Calculate how many "bottles" this is (fractional)
+  const bottles = oz / bottleSize;
+  const type = _selectedBeverage || "water";
+  const log = getHydrationLog();
+  const today = getTodayString();
+  const day = normalizeDayLog(log[today]);
+
+  day.total += bottles;
+  const existing = day.beverages.find(b => b.type === type);
+  if (existing) existing.count += bottles;
+  else day.beverages.push({ type, count: bottles });
+
+  log[today] = day;
+  localStorage.setItem("hydrationLog", JSON.stringify(log)); if (typeof DB !== 'undefined') DB.syncKey('hydrationLog');
+  renderHydration();
+
+  if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
+    renderDayDetail(selectedDate);
+  }
+
+  const effectiveOz = getTodayEffectiveOz();
+  const targetOz = getHydrationTarget();
+  const coeff = (BEVERAGE_TYPES[type] || BEVERAGE_TYPES.water).coeff;
+  const prevOz = effectiveOz - oz * coeff;
+  if (effectiveOz >= targetOz && prevOz < targetOz) {
+    playHydrationGoalAnimation();
+  }
+
+  // Close quick add panel
+  const panel = document.getElementById("hydration-quickadd");
+  if (panel) panel.style.display = "none";
+}
+
+function logWaterCustom() {
+  const input = document.getElementById("hydration-custom-oz");
+  const oz = parseFloat(input?.value);
+  if (!oz || oz <= 0) return;
+  logWaterOz(oz);
+  if (input) input.value = "";
+}
+
+function toggleQuickAddWater() {
+  const panel = document.getElementById("hydration-quickadd");
+  if (panel) panel.style.display = panel.style.display === "none" ? "" : "none";
+}
+
 function undoWater() {
   const log = getHydrationLog();
   const today = getTodayString();
@@ -238,6 +286,10 @@ function renderHydration() {
   if (currentEl) currentEl.textContent = bottles;
   if (targetEl) targetEl.textContent = bottlesNeeded;
   if (ozEl) ozEl.textContent = `${effectiveOz} / ${targetOz} oz`;
+
+  // My Bottle button label
+  const myBottleBtn = document.getElementById("hydration-mybottle-btn");
+  if (myBottleBtn) myBottleBtn.textContent = `+ My Bottle (${bottleSize}oz)`;
 
   // Undo button
   const undoBtn = document.getElementById("hydration-undo-btn");

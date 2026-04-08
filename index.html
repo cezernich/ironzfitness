@@ -918,8 +918,23 @@
             </div>
             <div class="hydration-oz" id="hydration-oz-display">0 / 96 oz</div>
             <div class="hydration-btn-row">
-              <button class="btn-primary hydration-log-btn" onclick="logWater()">+ 1 Bottle</button>
+              <button class="btn-primary hydration-mybottle-btn" onclick="logWater()" id="hydration-mybottle-btn">+ My Bottle</button>
+              <button class="btn-secondary hydration-quickadd-btn" onclick="toggleQuickAddWater()">Quick Add</button>
               <button class="btn-secondary hydration-undo-btn" onclick="undoWater()" id="hydration-undo-btn" style="display:none">Undo</button>
+            </div>
+            <div class="hydration-quickadd" id="hydration-quickadd" style="display:none">
+              <div class="hydration-quickadd-sizes">
+                <button onclick="logWaterOz(8)">8oz</button>
+                <button onclick="logWaterOz(12)">12oz</button>
+                <button onclick="logWaterOz(16)">16oz</button>
+                <button onclick="logWaterOz(20)">20oz</button>
+                <button onclick="logWaterOz(24)">24oz</button>
+                <button onclick="logWaterOz(32)">32oz</button>
+              </div>
+              <div class="hydration-quickadd-custom">
+                <input type="number" id="hydration-custom-oz" placeholder="oz" min="1" max="128" />
+                <button class="btn-secondary" onclick="logWaterCustom()">Add</button>
+              </div>
             </div>
           </div>
         </div>
