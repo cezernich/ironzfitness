@@ -7,7 +7,8 @@ let _editIsCardio      = false;
 let _editIsHiit        = false;
 let _editDragId        = null;
 let _editSsCount       = 0;
-let _editSource        = "workouts"; // "workouts" or "workoutSchedule"
+let _editSource        = "workouts"; // "workouts", "workoutSchedule", or "trainingPlan"
+let _editPlanKey       = null;      // For plan entries: { date, raceId, discipline, load }
 // _editSsMode and _editSsDragId removed — superset now triggered by drop zone
 
 // ── Open ──────────────────────────────────────────────────────────────────────
@@ -75,16 +76,16 @@ function openEditWorkout(id, source) {
  */
 function openEditPlanSession(dateStr, raceId, discipline, load) {
   const plan = JSON.parse(localStorage.getItem("trainingPlan") || "[]");
-  const entry = plan.find(e => e.date === dateStr && e.raceId === raceId && e.discipline === discipline && e.load === load);
-  if (!entry) return;
+  const idx = plan.findIndex(e => e.date === dateStr && e.raceId === raceId && e.discipline === discipline && e.load === load);
+  if (idx === -1) return;
+  const entry = plan[idx];
 
   // Give the entry a stable id if it doesn't have one
   if (!entry.id) {
     entry.id = "plan-" + dateStr + "-" + (raceId || discipline) + "-" + load;
-    localStorage.setItem("trainingPlan", JSON.stringify(plan));
   }
 
-  // If the entry already has edited overrides, use those; otherwise derive from SESSION_DESCRIPTIONS
+  // If the entry doesn't have edited overrides yet, derive from SESSION_DESCRIPTIONS
   if (!entry.aiSession && !entry.exercises) {
     const session = (typeof SESSION_DESCRIPTIONS !== 'undefined' && SESSION_DESCRIPTIONS[discipline])
       ? SESSION_DESCRIPTIONS[discipline][load] : null;
@@ -105,17 +106,20 @@ function openEditPlanSession(dateStr, raceId, discipline, load) {
           };
         })
       };
-      localStorage.setItem("trainingPlan", JSON.stringify(plan));
     }
   }
 
-  // Set the type so the editor knows how to render
+  // Set type and notes so the editor knows how to render
   const type = { running: "running", cycling: "cycling", swimming: "swimming", strength: "weightlifting" }[discipline] || "general";
-  if (!entry.type) {
-    entry.type = type;
-    localStorage.setItem("trainingPlan", JSON.stringify(plan));
-  }
+  if (!entry.type) entry.type = type;
   if (!entry.notes) entry.notes = entry.sessionName || "";
+
+  // Save the plan key so save can find the entry even if id is lost
+  _editPlanKey = { date: dateStr, raceId, discipline, load };
+
+  // Persist all changes in one write
+  plan[idx] = entry;
+  localStorage.setItem("trainingPlan", JSON.stringify(plan));
 
   openEditWorkout(entry.id, "trainingPlan");
 }
@@ -157,6 +161,7 @@ function openEditScheduledWorkout(id) {
 function closeEditWorkout() {
   document.getElementById("edit-workout-overlay").classList.remove("is-open");
   _editWorkoutId = null;
+  _editPlanKey   = null;
 }
 
 // ── Strength row management ───────────────────────────────────────────────────
@@ -672,8 +677,13 @@ function saveEditedWorkout() {
 
   let workouts = [];
   try { workouts = JSON.parse(localStorage.getItem(_editSource)) || []; } catch {}
-  const idx = workouts.findIndex(x => String(x.id) === String(_editWorkoutId));
-  if (idx === -1) { msg.textContent = "Workout not found."; return; }
+  let idx = workouts.findIndex(x => String(x.id) === String(_editWorkoutId));
+  // Fallback for plan entries: match by date/raceId/discipline/load if id lookup fails
+  if (idx === -1 && _editSource === "trainingPlan" && _editPlanKey) {
+    const k = _editPlanKey;
+    idx = workouts.findIndex(e => e.date === k.date && e.raceId === k.raceId && e.discipline === k.discipline && e.load === k.load);
+  }
+  if (idx === -1) { if (msg) msg.textContent = "Workout not found."; return; }
 
   if (_editIsCardio) {
     const intervals = [];
