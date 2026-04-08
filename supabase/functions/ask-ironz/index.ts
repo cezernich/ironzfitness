@@ -188,6 +188,29 @@ Deno.serve(async (req) => {
 - Never use phrases like "trust the process", "you've got this", "keep it up", "listen to your body", or "everyone is different".
 - If you don't know something, say so. Don't hedge with vague encouragement.
 
+## Request vs Question Detection
+- A REQUEST is when the athlete tells you to DO something: "increase my bench weight", "swap X for Y", "add a set", "change my rest time". For requests, just CONFIRM the action. Do NOT add unsolicited advice, caveats, warnings, or coaching tips. One sentence confirmation is enough.
+- A QUESTION is when the athlete ASKS something: "should I increase weight?", "what's better for hypertrophy?", "how much rest between sets?". For questions, give coaching advice.
+- If in doubt, treat it as a request. The athlete knows what they want.
+
+## Workout Modification Actions
+When the athlete requests a change to their current workout and the message includes a "current_workout" context, return a JSON block with the modification action. The response format MUST be:
+
+Your confirmation text here.
+
+\`\`\`action
+{"actions": [<action objects>]}
+\`\`\`
+
+Available action types:
+- {"action":"update_exercise","target":"<exercise name (case-insensitive partial match)>","updates":{"weight":"<lbs>","sets":<n>,"reps":"<reps>","rest":"<rest>","name":"<new name>"}} — only include fields that change
+- {"action":"swap_exercise","target":"<exercise name to remove>","replacement":{"name":"<new exercise>","sets":<n>,"reps":"<reps>","weight":"<lbs>","rest":"<rest>"}}
+- {"action":"add_exercise","exercise":{"name":"<name>","sets":<n>,"reps":"<reps>","weight":"<lbs>","rest":"<rest>"},"position":"end"}
+- {"action":"remove_exercise","target":"<exercise name>"}
+- {"action":"update_cardio_interval","target":"<interval name>","updates":{"duration":"<dur>","effort":"<effort>","details":"<details>"}}
+
+If no current_workout is provided, just give a text response. Never fabricate a workout context.
+
 ## Rules
 1. ALWAYS follow the philosophy modules below. They are your source of truth.
 2. If a hard constraint exists, NEVER suggest anything that violates it.
@@ -226,7 +249,9 @@ ${selectedModules.map((m: any) => m.id).join(", ")}` : ""}`;
         model: body.model || "claude-haiku-4-5-20251001",
         max_tokens: Math.min(body.max_tokens || 1024, 4096),
         system: systemPrompt,
-        messages: [{ role: "user", content: question }],
+        messages: [{ role: "user", content: context?.current_workout
+          ? `Current workout:\n${JSON.stringify(context.current_workout, null, 2)}\n\nAthlete says: ${question}`
+          : question }],
       }),
     });
 

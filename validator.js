@@ -233,6 +233,112 @@ const HARD_RULES = [
     }
   },
   {
+    id: 'session_time_coverage',
+    description: 'Generated workout must fill 70-110% of requested session duration',
+    check: (plan, profile) => {
+      const requestedDuration = parseInt(profile.sessionLength || profile.sessionDuration);
+      if (!requestedDuration) return true;
+
+      const template = plan.weekly_template || {};
+      for (const [day, session] of Object.entries(template)) {
+        if (session.session_type === 'rest' || session.session_type === 'mobility') continue;
+        if (!session.exercises || session.exercises.length === 0) continue;
+
+        const warmup = session.warmup_minutes || 5;
+        const buffer = 5;
+        const transitionTime = session.exercises.length * 1.5;
+
+        let workingTime = 0;
+        for (const exercise of session.exercises) {
+          const sets = (exercise.prescription && exercise.prescription.sets) || exercise.sets || 3;
+          const restSec = (exercise.prescription && exercise.prescription.rest_seconds) || exercise.rest_seconds || 90;
+          const workSec = 45;
+          workingTime += sets * ((workSec + restSec) / 60);
+        }
+
+        const estimatedTotal = warmup + workingTime + transitionTime + buffer;
+        const coverage = estimatedTotal / requestedDuration;
+
+        if (coverage < 0.70 || coverage > 1.10) {
+          return false;
+        }
+      }
+      return true;
+    },
+    fix: (plan, profile) => {
+      const requestedDuration = parseInt(profile.sessionLength || profile.sessionDuration);
+      if (!requestedDuration) return { fixed: true, flag: 'No session duration specified — skipped' };
+
+      const template = plan.weekly_template || {};
+      const flags = [];
+
+      for (const [day, session] of Object.entries(template)) {
+        if (session.session_type === 'rest' || session.session_type === 'mobility') continue;
+        if (!session.exercises || session.exercises.length === 0) continue;
+
+        const warmup = session.warmup_minutes || 5;
+        const buffer = 5;
+        const transitionTime = session.exercises.length * 1.5;
+
+        let workingTime = 0;
+        for (const exercise of session.exercises) {
+          const sets = (exercise.prescription && exercise.prescription.sets) || exercise.sets || 3;
+          const restSec = (exercise.prescription && exercise.prescription.rest_seconds) || exercise.rest_seconds || 90;
+          const workSec = 45;
+          workingTime += sets * ((workSec + restSec) / 60);
+        }
+
+        let estimatedTotal = warmup + workingTime + transitionTime + buffer;
+        let coverage = estimatedTotal / requestedDuration;
+
+        // Over 110%: remove exercises from the bottom (isolation/accessory first)
+        while (coverage > 1.10 && session.exercises.length > 2) {
+          session.exercises.pop();
+          // Recalculate
+          const newTransition = session.exercises.length * 1.5;
+          let newWork = 0;
+          for (const ex of session.exercises) {
+            const s = (ex.prescription && ex.prescription.sets) || ex.sets || 3;
+            const r = (ex.prescription && ex.prescription.rest_seconds) || ex.rest_seconds || 90;
+            newWork += s * ((45 + r) / 60);
+          }
+          estimatedTotal = warmup + newWork + newTransition + buffer;
+          coverage = estimatedTotal / requestedDuration;
+          flags.push(`${day}: removed exercise to reduce time coverage`);
+        }
+
+        // Under 70%: increase sets on existing exercises
+        while (coverage < 0.70) {
+          let added = false;
+          for (const ex of session.exercises) {
+            const pres = ex.prescription || ex;
+            const currentSets = pres.sets || 3;
+            if (currentSets < 5) {
+              pres.sets = currentSets + 1;
+              if (ex.prescription) ex.prescription.sets = pres.sets;
+              added = true;
+              break;
+            }
+          }
+          if (!added) break;
+          // Recalculate
+          let newWork = 0;
+          for (const ex of session.exercises) {
+            const s = (ex.prescription && ex.prescription.sets) || ex.sets || 3;
+            const r = (ex.prescription && ex.prescription.rest_seconds) || ex.rest_seconds || 90;
+            newWork += s * ((45 + r) / 60);
+          }
+          const newTransition = session.exercises.length * 1.5;
+          estimatedTotal = warmup + newWork + newTransition + buffer;
+          coverage = estimatedTotal / requestedDuration;
+          flags.push(`${day}: added set to increase time coverage`);
+        }
+      }
+
+      return { fixed: true, flag: flags.length > 0 ? 'Session volume adjusted to match requested duration: ' + flags.join('; ') : 'Session time coverage within bounds' };
+    }
+  },
+  {
     id: 'disclaimer_present',
     description: 'All plans must include wellness disclaimer',
     check: (plan) => {

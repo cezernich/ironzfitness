@@ -741,7 +741,7 @@ function clearAllData() {
    "theme", "notifSettings", "notifLog", "adherenceDismissed",
    "subscription", "recentScans", "stravaAuth", "stravaLastSync",
    "stravaOauthState", "savedMealPlans", "activeChallenges",
-   "completedChallenges"].forEach(k => localStorage.removeItem(k));
+   "completedChallenges", "workoutEffortFeedback", "calibrationSignals"].forEach(k => localStorage.removeItem(k));
   if (typeof initGymStrengthToggle === "function") initGymStrengthToggle();
   loadProfileIntoForm();
   _refreshAllViews();

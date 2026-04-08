@@ -2679,6 +2679,7 @@ const DISCIPLINE_ICONS = {
   hiit:         ICONS.flame || ICONS.zap,
   hyrox:        ICONS.activity,
   yoga:         ICONS.yoga,
+  stairstepper: ICONS.steps,
   wellness:     ICONS.droplet,
 };
 

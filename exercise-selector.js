@@ -291,7 +291,7 @@ function _pickRandom(arr) {
  * Main function. Selects exercises for a workout session.
  * Returns array of exercise objects with set/rep prescription attached.
  */
-function selectExercises(sessionType, classification, profile, previousExercises) {
+function selectExercises(sessionType, classification, profile, previousExercises, volumeParams) {
   var lib = exerciseLibrary;
   if (!lib || lib.length === 0) {
     console.warn('exercise-selector: exerciseLibrary is empty. Call loadExerciseLibrary() first.');
@@ -337,8 +337,17 @@ function selectExercises(sessionType, classification, profile, previousExercises
     }
   }
 
-  // Try to add one optional pattern exercise if the session is not already long
-  var maxExercises = _getMaxExercises(sessionType, classification);
+  // Determine exercise count bounds from volumeParams or legacy fallback
+  var maxExercises, minExercises;
+  if (volumeParams && volumeParams.max_exercises) {
+    maxExercises = volumeParams.max_exercises;
+    minExercises = volumeParams.min_exercises || 2;
+  } else {
+    maxExercises = _getMaxExercises(sessionType, classification);
+    minExercises = 2;
+  }
+
+  // Add optional pattern exercises up to max
   for (var o = 0; o < optionalPatterns.length && selected.length < maxExercises; o++) {
     var optPattern = optionalPatterns[o];
     var optCandidates = _getCandidatesForPattern(available, optPattern, null, selected);
@@ -348,12 +357,42 @@ function selectExercises(sessionType, classification, profile, previousExercises
     }
   }
 
+  // Fill to minExercises if movement patterns produced fewer — add accessories for trained muscles
+  if (selected.length < minExercises) {
+    var allPatterns = requiredPatterns.concat(optionalPatterns);
+    for (var f = 0; f < allPatterns.length && selected.length < minExercises; f++) {
+      var fillCandidates = _getCandidatesForPattern(available, allPatterns[f], null, selected);
+      var fillPick = selectByTier(fillCandidates, [2, 3], prev);
+      if (fillPick) {
+        selected.push(fillPick);
+      }
+    }
+  }
+
+  // If still under min, try any available exercise not already selected
+  if (selected.length < minExercises) {
+    var selectedIds = {};
+    for (var si = 0; si < selected.length; si++) selectedIds[selected[si].id] = true;
+    var remaining = available.filter(function(ex) { return !selectedIds[ex.id]; });
+    while (selected.length < minExercises && remaining.length > 0) {
+      var pick = selectByTier(remaining, [2, 3], prev);
+      if (!pick) break;
+      selected.push(pick);
+      remaining = remaining.filter(function(ex) { return ex.id !== pick.id; });
+    }
+  }
+
+  // Cap at maxExercises
+  if (selected.length > maxExercises) {
+    selected = selected.slice(0, maxExercises);
+  }
+
   // Attach set/rep prescription to each exercise
   var modules = _getActiveModules(classification);
   var result = [];
   for (var s = 0; s < selected.length; s++) {
     var exCopy = Object.assign({}, selected[s]);
-    exCopy.prescription = buildExerciseSet(selected[s], classification, modules);
+    exCopy.prescription = buildExerciseSet(selected[s], classification, modules, volumeParams);
     result.push(exCopy);
   }
 
@@ -435,7 +474,7 @@ function _getActiveModules(classification) {
  * Build the set/rep/rest prescription for an exercise.
  * Uses the exercise's defaults, then adjusts based on classification and module rules.
  */
-function buildExerciseSet(exercise, classification, modules) {
+function buildExerciseSet(exercise, classification, modules, volumeParams) {
   var level = (classification && classification.level) || 'intermediate';
   var goal = (classification && classification.primaryGoal) || 'general_health';
 
@@ -443,8 +482,13 @@ function buildExerciseSet(exercise, classification, modules) {
   var repRange = _parseRepRange(exercise.default_rep_range || '8-12');
   var restSeconds = exercise.default_rest_seconds || 90;
 
-  // Default sets
-  var sets = 3;
+  // Apply volume params rest and sets if available
+  if (volumeParams && volumeParams.rest_seconds) {
+    restSeconds = Math.round((volumeParams.rest_seconds[0] + volumeParams.rest_seconds[1]) / 2);
+  }
+
+  // Default sets — use volumeParams if available
+  var sets = (volumeParams && volumeParams.sets_per_exercise) || 3;
 
   // Adjust by level
   if (level === 'beginner') {

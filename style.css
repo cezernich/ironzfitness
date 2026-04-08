@@ -969,13 +969,23 @@ button:active {
 
 .exercise-row {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr auto auto;
-  gap: 8px;
-  align-items: end;
+  grid-template-columns: 28px 2fr 1fr 1fr 1fr auto 28px;
+  gap: 6px;
+  align-items: center;
   background: var(--color-surface-2);
-  border-radius: 8px;
-  padding: 10px;
-  margin-bottom: 8px;
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+}
+.exercise-row label { display: none; }
+.exercise-row .remove-exercise-btn {
+  position: static;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .exercise-row[draggable="true"] { cursor: grab; }
@@ -986,8 +996,8 @@ button:active {
   justify-content: center;
   width: 28px;
   min-width: 28px;
-  height: 40px;
-  font-size: 18px;
+  height: 28px;
+  font-size: 16px;
   color: var(--color-text-muted);
   cursor: grab;
   touch-action: none;
@@ -1024,6 +1034,39 @@ button:active {
   transition: outline 0.15s, background 0.15s;
 }
 
+/* Edit exercise header — matches edit row grid with drag-handle spacer */
+.edit-row-header {
+  grid-template-columns: 28px 2fr 1fr 1fr 1fr 28px;
+}
+.edit-row-header.hiit-row-header {
+  grid-template-columns: 28px 2fr 1.5fr 1fr 28px;
+}
+
+/* Compact edit exercise rows — no per-row labels, tighter spacing */
+.edit-exercise-row {
+  grid-template-columns: 28px 2fr 1fr 1fr 1fr 28px;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  align-items: center;
+}
+.edit-exercise-row.hiit-row {
+  grid-template-columns: 28px 2fr 1.5fr 1fr 28px;
+}
+.edit-exercise-row label { display: none; }
+.edit-exercise-row input {
+  padding: 7px 8px;
+  font-size: 0.85rem;
+}
+.edit-exercise-row .remove-exercise-btn {
+  position: static;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Per-set editing in workout editor */
 .edit-set-detail-wrap { grid-column: 1 / -1; }
 .edit-perset-toggle {
@@ -1043,19 +1086,9 @@ button:active {
 .edit-set-label { font-size: 0.8rem; color: var(--color-text-muted); }
 .edit-set-row input { width: 100%; }
 
-.exercise-row label {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 4px;
-  display: block;
-}
-
 .exercise-row input {
-  padding: 8px 10px;
-  font-size: 0.875rem;
+  padding: 7px 8px;
+  font-size: 0.85rem;
 }
 
 /* Pyramid per-set detail */
@@ -3584,7 +3617,7 @@ button:active {
   grid-template-columns: 2fr 1.5fr 1fr auto;
 }
 .exercise-row.hiit-row {
-  grid-template-columns: 2fr 1.5fr 1fr auto;
+  grid-template-columns: 28px 2fr 1.5fr 1fr auto 28px;
 }
 
 /* ── Compact exercise rows (no per-row labels, shared header) ── */
@@ -3592,7 +3625,7 @@ button:active {
 .exercise-row-header {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr 1fr 28px;
-  gap: 8px;
+  gap: 6px;
   padding: 0 10px 4px;
   font-size: 0.7rem;
   font-weight: 600;
@@ -3602,6 +3635,9 @@ button:active {
 }
 .exercise-row-header.hiit-row-header {
   grid-template-columns: 2fr 1.5fr 1fr 28px;
+}
+.log-row-header {
+  grid-template-columns: 28px 2fr 1fr 1fr 1fr auto 28px;
 }
 
 .exercise-row--compact {
@@ -3633,21 +3669,107 @@ button:active {
   justify-content: center;
 }
 
-/* Cardio row: Phase | Dur col | Zone | Details | × */
-.qe-cardio-row { grid-template-columns: 1.5fr 1.2fr 1.4fr 2fr auto; align-items: start; }
+/* Cardio header row (used by quick-entry cardio, not edit modal) */
+.cardio-row-header {
+  display: grid;
+  grid-template-columns: 1.2fr 1.2fr 0.8fr 1.5fr 28px;
+  gap: 6px;
+  padding: 0 10px 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 
-.qe-dur-col { display: flex; flex-direction: column; gap: 4px; }
+/* Cardio row (quick-entry) */
+.qe-cardio-row {
+  grid-template-columns: 1.2fr 1.2fr 0.8fr 1.5fr auto;
+  align-items: center;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+}
+.qe-cardio-row label { display: none; }
+
+/* ── Edit interval card (two-line layout) ── */
+.edit-interval-card {
+  background: var(--color-surface-2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+}
+.eiv-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.eiv-phase-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.eiv-phase-input {
+  flex: 1;
+  padding: 5px 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.eiv-header .remove-exercise-btn {
+  position: static;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.eiv-fields {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.eiv-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.eiv-field input[type="number"] {
+  width: 55px;
+  padding: 5px 6px;
+  font-size: 0.85rem;
+}
+.eiv-field select {
+  padding: 5px 28px 5px 8px;
+  font-size: 0.85rem;
+}
+.eiv-details {
+  margin-top: 4px;
+}
+.eiv-details input {
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.qe-dur-col { display: flex; flex-direction: column; gap: 3px; }
 
 .qe-dur-toggle {
   display: flex;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 4px;
   overflow: hidden;
   width: fit-content;
 }
 .qe-dur-mode-btn {
-  padding: 3px 10px;
-  font-size: 0.72rem;
+  padding: 2px 8px;
+  font-size: 0.65rem;
   font-weight: 600;
   background: transparent;
   border: none;
@@ -3675,6 +3797,24 @@ button:active {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+/* Compact inputs in cardio rows */
+.qe-cardio-row input,
+.qe-cardio-row select {
+  padding: 7px 8px;
+  font-size: 0.85rem;
+}
+.qe-cardio-row select {
+  padding-right: 28px;
+}
+.qe-cardio-row .remove-exercise-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .qe-manual-row label {
@@ -8629,6 +8769,11 @@ button:active {
     padding: 6px 10px;
     font-size: 1rem;
   }
+  .cardio-row-header,
+  .edit-row-header,
+  .log-row-header { display: none; }
+  .edit-exercise-row label,
+  .exercise-row label { display: block; }
   .qe-cardio-row {
     display: flex;
     flex-wrap: wrap;
@@ -8636,6 +8781,7 @@ button:active {
     position: relative;
     padding-right: 36px;
   }
+  .qe-cardio-row label { display: block; }
   .qe-cardio-row > div {
     flex: 1 1 calc(50% - 6px);
     min-width: calc(50% - 6px);

@@ -446,6 +446,14 @@
         <div class="card-body">
           <p class="hint">Record what you actually did today.</p>
 
+          <button class="btn-secondary" id="log-import-toggle" onclick="document.getElementById('log-import-section').style.display='';this.style.display='none'" style="margin-bottom:12px">Import Workout</button>
+          <div id="log-import-section" style="display:none;margin-bottom:12px">
+            <label for="log-import-text">Paste your workout</label>
+            <textarea id="log-import-text" rows="5" placeholder="e.g.&#10;5x&#10;- 10 chest pulls&#10;- 10 glute bridges&#10;&#10;10x&#10;- 5 chin up&#10;- 10 pushup" style="width:100%;resize:vertical"></textarea>
+            <button class="btn-secondary" id="log-import-btn" onclick="importWorkoutFromText()" style="margin-top:6px">Parse Workout</button>
+            <p id="log-import-msg" class="save-msg" style="margin-top:4px"></p>
+          </div>
+
           <div class="form-row">
             <label for="log-date">Date</label>
             <input type="date" id="log-date" />
@@ -470,6 +478,7 @@
               <option value="mobility">Mobility</option>
               <option value="walking">Walking</option>
               <option value="rowing">Rowing</option>
+              <option value="stairstepper">Stair Stepper</option>
               <option value="pilates">Pilates</option>
               <option value="sport">Sport-Specific</option>
               <option value="general">General Fitness</option>
@@ -482,15 +491,10 @@
             <input type="text" id="log-notes" placeholder="e.g. Felt strong today, ran 3 miles" />
           </div>
 
-          <button class="btn-secondary" id="log-import-toggle" onclick="document.getElementById('log-import-section').style.display='';this.style.display='none'" style="margin-bottom:12px">Import Workout</button>
-          <div id="log-import-section" style="display:none;margin-bottom:12px">
-            <label for="log-import-text">Paste your workout</label>
-            <textarea id="log-import-text" rows="5" placeholder="e.g.&#10;5x&#10;- 10 chest pulls&#10;- 10 glute bridges&#10;&#10;10x&#10;- 5 chin up&#10;- 10 pushup" style="width:100%;resize:vertical"></textarea>
-            <button class="btn-secondary" id="log-import-btn" onclick="importWorkoutFromText()" style="margin-top:6px">Parse Workout</button>
-            <p id="log-import-msg" class="save-msg" style="margin-top:4px"></p>
-          </div>
-
           <div id="log-strength-section">
+            <div class="exercise-row-header log-row-header">
+              <span></span><span>Exercise</span><span>Sets</span><span>Reps</span><span>Weight</span><span></span><span></span>
+            </div>
             <div id="exercise-entries"></div>
             <button class="btn-secondary" onclick="addExerciseRow()">+ Add Exercise</button>
           </div>
@@ -1060,6 +1064,7 @@
               <option value="cycling">Cycling</option>
               <option value="swimming">Swimming</option>
               <option value="triathlon">Triathlon / Brick</option>
+              <option value="stairstepper">Stair Stepper</option>
               <option value="general">General Fitness</option>
               <option value="other">Other</option>
             </select>
@@ -2295,9 +2300,6 @@
 
       <!-- Cardio: interval rows -->
       <div id="edit-interval-section" style="display:none">
-        <div class="cardio-row-header" id="edit-cardio-header">
-          <span>Phase</span><span>Duration</span><span>Zone</span><span>Details</span><span></span>
-        </div>
         <div id="edit-interval-rows"></div>
         <button class="btn-secondary" style="width:100%;margin-top:4px" onclick="addEditIntervalRow()">+ Add Interval / Phase</button>
       </div>

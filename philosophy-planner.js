@@ -134,6 +134,70 @@ Nutrition Rules: ${(m.nutrition_rules || []).join('; ')}
 Coaching Tone: ${m.coaching_tone || 'Professional and encouraging'}
 `).join('\n---\n');
 
+  // Layer 2b: Endurance-specific supplementary rules (zone calc + intervals)
+  let layer2b = '';
+  if (['endurance', 'hybrid'].includes(classification.sportProfile)) {
+    // HR zone calculation context
+    const hrZones = typeof calculateHRZones === 'function' ? calculateHRZones(profile) : null;
+    if (hrZones) {
+      const zoneLines = Object.entries(hrZones.zones).map(([k, z]) =>
+        `${k.toUpperCase()} ${z.name}: ${z.low || '<'}${z.low ? '-' : ''}${z.high} bpm`
+      ).join(', ');
+      layer2b += `\nHR ZONES (Tier ${hrZones.tier} — ${hrZones.method}): ${zoneLines}\n`;
+    }
+    layer2b += `
+ZONE CALCULATION RULES:
+- Tier 1 (age only): Max HR = 208 - 0.7*age. Zones as % of max HR. Standard error +/-10 bpm.
+- Tier 2 (age + resting HR): Karvonen formula. Target HR = ((MaxHR - RestingHR) * pct) + RestingHR. More accurate.
+- Tier 3 (LTHR): Zones as % of lactate threshold HR. Most accurate for trained runners.
+- Always use the highest tier available based on user data.
+- If user provides known max HR, use it instead of age-predicted formula.
+`;
+
+    // Interval session rules for time-goal runners
+    const intervalGuidance = typeof getIntervalSessionGuidance === 'function'
+      ? getIntervalSessionGuidance(profile, classification) : null;
+    if (intervalGuidance) {
+      layer2b += `
+INTERVAL RULES (time-goal runner):
+- One weekly interval session is NON-NEGOTIABLE for runners with a time goal.
+- ${intervalGuidance.exampleSession}
+- Total interval volume: ${intervalGuidance.intervalVolumeMiles} miles (5-10% of weekly mileage).
+- Placement: ${intervalGuidance.placement}
+- Progression: ${intervalGuidance.progression}
+`;
+    }
+
+    // Offseason rules if applicable
+    if (typeof isOffseason === 'function' && isOffseason(profile, classification)) {
+      layer2b += `
+OFFSEASON RULES:
+- Volume: 50-60% of peak training volume. This is active recovery, not fitness preservation.
+- No long runs exceeding 60 minutes. Most runs 30-45 min.
+- Focus: speed development (strides), hill work, strength training (2-3 sessions/week).
+- No structured interval or tempo work — keep running aerobic and fun.
+- Coaching tone: relaxed, encouraging exploration. Reduce pressure, increase autonomy.
+`;
+    }
+
+    // Marathon long run scaling if applicable
+    const survey = typeof getSurveyData === 'function' ? getSurveyData() : null;
+    if (survey?.raceType === 'marathon') {
+      const scaling = typeof getMarathonLongRunScaling === 'function'
+        ? getMarathonLongRunScaling(profile, classification) : null;
+      if (scaling) {
+        layer2b += `
+MARATHON LONG RUN SCALING:
+- 20+ mile runs in this block: ${scaling.twentyPlusMilers[0]}-${scaling.twentyPlusMilers[1]}
+- Long run peak distance: ${scaling.longRunPeak}
+- Marathon pace in long runs: ${scaling.marathonPaceInLongRun ? 'Yes (6-12 miles at MP)' : 'No'}
+- Safety: never more than one 20+ miler per 2-week period. Min 10-14 days between.
+- Note: ${scaling.note}
+`;
+      }
+    }
+  }
+
   // Layer 3: User profile
   const layer3 = `
 USER PROFILE:
@@ -163,7 +227,7 @@ USER REQUEST: ${request.text || 'Generate a personalized training and nutrition 
 
 IMPORTANT: Your response MUST be consistent with the philosophy modules above. Do not contradict any principle, plan rule, or hard constraint. If the user's request conflicts with a hard constraint, explain why you adapted the request to stay within safety boundaries.`;
 
-  return layer1 + '\n\n' + layer2 + '\n\n' + layer3 + '\n\n' + layer4 + '\n\n' + userRequest;
+  return layer1 + '\n\n' + layer2 + (layer2b ? '\n\n' + layer2b : '') + '\n\n' + layer3 + '\n\n' + layer4 + '\n\n' + userRequest;
 }
 
 // ── Plan Storage ────────────────────────────────────────────────────────────

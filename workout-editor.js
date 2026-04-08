@@ -22,7 +22,7 @@ function openEditWorkout(id, source) {
   _editWorkoutId     = id;
   _editRowCount      = 0;
   _editIntervalCount = 0;
-  const _cardioTypes = ["running", "cycling", "swimming", "triathlon", "general"];
+  const _cardioTypes = ["running", "cycling", "swimming", "triathlon", "stairstepper", "general"];
   _editIsCardio = !!(w.aiSession) || (_cardioTypes.includes(w.type) && !(w.exercises && w.exercises.length));
   _editIsHiit = w.type === "hiit" || !!w.hiitMeta;
 
@@ -31,6 +31,7 @@ function openEditWorkout(id, source) {
     cycling: "e.g. Strong ride, averaged 220W",
     swimming: "e.g. Good form, focused on catch",
     triathlon: "e.g. Brick felt solid, transitions smooth",
+    stairstepper: "e.g. 30 min, steady climb at level 8",
     general: "e.g. Good session, felt energized",
   };
   const _notesPlaceholder = _editIsCardio
@@ -89,7 +90,7 @@ function _addEditRow(ex) {
       ${dragHandleHTML}
       <div><label>Exercise</label>
         <input type="text" id="edit-ex-${id}" value="${ex?.name || ""}" placeholder="e.g. Burpees, Row 500m" /></div>
-      <div class="edit-summary-fields" id="edit-summary-${id}"><label>Reps / Time / Distance</label>
+      <div class="edit-summary-fields" id="edit-summary-${id}"><label>Reps / Time</label>
         <input type="text" id="edit-reps-${id}" value="${ex?.reps || ""}" placeholder="e.g. 10, 45s, 500m" /></div>
       <div class="edit-summary-fields" id="edit-summary-wt-${id}"><label>Weight</label>
         <input type="text" id="edit-wt-${id}" value="${weightVal}" placeholder="optional" /></div>
@@ -434,49 +435,72 @@ function _addEditIntervalRow(iv) {
   let initMode = "time", initDist = "", initMin = "";
   if (iv?.duration) {
     const durStr = String(iv.duration);
-    if (/mi|km|m\b|yd/i.test(durStr)) {
+    if (/mi|km|yd/i.test(durStr) || (/\bm\b/.test(durStr) && !/min/i.test(durStr))) {
       initMode = "distance";
       initDist = durStr.match(/[\d.]+/)?.[0] || "";
     } else {
       initMin = durStr.match(/[\d.]+/)?.[0] || "";
     }
   }
+  const initReps = iv?.reps || "";
+  const initRest = iv?.restDuration ? String(iv.restDuration).match(/[\d.]+/)?.[0] || "" : "";
+  const hasReps = initReps && Number(initReps) > 1;
   const div = document.createElement("div");
-  div.className = "qe-manual-row qe-cardio-row edit-exercise-row";
+  div.className = "edit-interval-card";
   div.id = `edit-iv-${id}`;
   div.dataset.durMode = initMode;
   div.innerHTML = `
-    <div><label>Phase</label>
-      <input type="text" id="edit-ivphase-${id}" value="${iv?.name || ""}" placeholder="e.g. Warm-up" /></div>
-    <div class="qe-dur-col">
-      <div class="qe-dur-toggle">
-        <button class="qe-dur-mode-btn${initMode==="distance"?" active":""}" data-mode="distance"
-          onclick="setEditIntervalMode(${id},'distance')">Distance</button>
-        <button class="qe-dur-mode-btn${initMode==="time"?" active":""}" data-mode="time"
-          onclick="setEditIntervalMode(${id},'time')">Time</button>
+    <div class="eiv-header">
+      <span class="eiv-phase-label">Phase</span>
+      <input type="text" id="edit-ivphase-${id}" class="eiv-phase-input" value="${iv?.name || ""}" placeholder="e.g. Warm-up" />
+      <button class="remove-exercise-btn" title="Remove" onclick="removeEditIntervalRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
+    </div>
+    <div class="eiv-fields">
+      <div class="eiv-field">
+        <div class="qe-dur-toggle">
+          <button class="qe-dur-mode-btn${initMode==="distance"?" active":""}" data-mode="distance"
+            onclick="setEditIntervalMode(${id},'distance')">Dist</button>
+          <button class="qe-dur-mode-btn${initMode==="time"?" active":""}" data-mode="time"
+            onclick="setEditIntervalMode(${id},'time')">Time</button>
+        </div>
+        <div id="edit-dist-wrap-${id}" style="${initMode==="distance"?"":"display:none"}">
+          <input type="number" id="edit-ivdist-${id}" value="${initDist}" placeholder="5" min="0" step="0.1" />
+          <span class="qe-unit-label">${unit}</span>
+        </div>
+        <div id="edit-time-wrap-${id}" style="${initMode==="time"?"":"display:none"}">
+          <input type="number" id="edit-ivmin-${id}" value="${initMin}" placeholder="10" min="0" />
+          <span class="qe-unit-label">min</span>
+        </div>
       </div>
-      <div id="edit-dist-wrap-${id}" style="${initMode==="distance"?"":"display:none"}">
-        <input type="number" id="edit-ivdist-${id}" value="${initDist}" placeholder="e.g. 5" min="0" step="0.1" style="width:70px" />
-        <span class="qe-unit-label">${unit}</span>
+      <div class="eiv-field">
+        <select id="edit-iveffort-${id}">
+          <option value="RW" ${eff==="RW"?"selected":""}>Rest/Walk</option>
+          <option value="Z1" ${eff==="Z1"||eff==="Easy"?"selected":""}>Z1</option>
+          <option value="Z2" ${eff==="Z2"||eff==="Moderate"?"selected":""}>Z2</option>
+          <option value="Z3" ${eff==="Z3"?"selected":""}>Z3</option>
+          <option value="Z4" ${eff==="Z4"||eff==="Hard"?"selected":""}>Z4</option>
+          <option value="Z5" ${eff==="Z5"||eff==="Max"?"selected":""}>Z5</option>
+          <option value="Z6" ${eff==="Z6"?"selected":""}>Z6</option>
+        </select>
       </div>
-      <div id="edit-time-wrap-${id}" style="${initMode==="time"?"":"display:none"}">
-        <input type="number" id="edit-ivmin-${id}" value="${initMin}" placeholder="e.g. 10" min="0" style="width:70px" />
-        <span class="qe-unit-label">min</span>
+      <div class="eiv-field eiv-reps-field">
+        <input type="number" id="edit-ivreps-${id}" value="${initReps}" placeholder="1" min="1" max="99" />
+        <span class="qe-unit-label">reps</span>
+      </div>
+      <div class="eiv-field eiv-rest-field" id="edit-rest-wrap-${id}" style="${hasReps?"":"display:none"}">
+        <input type="number" id="edit-ivrest-${id}" value="${initRest}" placeholder="1" min="0" />
+        <span class="qe-unit-label">min rest</span>
       </div>
     </div>
-    <div><label>Zone</label>
-      <select id="edit-iveffort-${id}">
-        <option value="RW" ${eff==="RW"?"selected":""}>Rest / Walk</option>
-        <option value="Z1" ${eff==="Z1"||eff==="Easy"?"selected":""}>Z1 Recovery</option>
-        <option value="Z2" ${eff==="Z2"||eff==="Moderate"?"selected":""}>Z2 Aerobic</option>
-        <option value="Z3" ${eff==="Z3"?"selected":""}>Z3 Tempo</option>
-        <option value="Z4" ${eff==="Z4"||eff==="Hard"?"selected":""}>Z4 Threshold</option>
-        <option value="Z5" ${eff==="Z5"||eff==="Max"?"selected":""}>Z5 VO2 Max</option>
-        <option value="Z6" ${eff==="Z6"?"selected":""}>Z6 Max Sprint</option>
-      </select></div>
-    <div style="flex:2"><label>Details</label>
-      <input type="text" id="edit-ivdetails-${id}" value="${iv?.details || ""}" placeholder="e.g. 5:30/km, HR under 145" /></div>
-    <button class="remove-exercise-btn" title="Remove" onclick="removeEditIntervalRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
+    <div class="eiv-details">
+      <input type="text" id="edit-ivdetails-${id}" value="${iv?.details || ""}" placeholder="Details (e.g. 5:30/km, HR under 145)" />
+    </div>`;
+  // Show/hide rest field when reps changes
+  const repsInput = div.querySelector(`#edit-ivreps-${id}`);
+  repsInput.addEventListener("input", () => {
+    const restWrap = document.getElementById(`edit-rest-wrap-${id}`);
+    if (restWrap) restWrap.style.display = Number(repsInput.value) > 1 ? "" : "none";
+  });
   document.getElementById("edit-interval-rows").appendChild(div);
 }
 
@@ -565,12 +589,19 @@ function saveEditedWorkout() {
       const id   = inp.id.replace("edit-ivphase-", "");
       const name = inp.value.trim();
       if (!name) return;
-      intervals.push({
+      const iv = {
         name,
         duration: _editIntervalRowDuration(id),
         effort:   document.getElementById(`edit-iveffort-${id}`)?.value  || "Z2",
         details:  document.getElementById(`edit-ivdetails-${id}`)?.value || "",
-      });
+      };
+      const repsVal = parseInt(document.getElementById(`edit-ivreps-${id}`)?.value);
+      if (repsVal > 1) {
+        iv.reps = repsVal;
+        const restVal = document.getElementById(`edit-ivrest-${id}`)?.value;
+        if (restVal) iv.restDuration = `${restVal} min`;
+      }
+      intervals.push(iv);
     });
     workouts[idx] = {
       ...workouts[idx],

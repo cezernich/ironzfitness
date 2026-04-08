@@ -3,7 +3,7 @@
     "id": "LEVEL_BEGINNER",
     "category": "athlete_level",
     "title": "Beginner Athlete",
-    "version": "1.0",
+    "version": "1.1",
     "applies_when": { "level": "beginner", "sport_profile": "any", "goal": "any" },
     "principles": [
       "Keep weekly structure predictable and repeatable",
@@ -15,7 +15,8 @@
       "Default to full-body or upper/lower split",
       "Conservative intensity RPE 6-7 (3-4 RIR)",
       "80/20 rule for endurance (no VO2max first 4 weeks)",
-      "Leave room for missed sessions"
+      "Leave room for missed sessions",
+      "When applying volume-to-time scaling, always use the lower end of the exercise range. Hard cap at 5 exercises per session regardless of duration or session composition. Default rest periods to 60-90 seconds (loads are lighter, recovery demands are lower)."
     ],
     "hard_constraints": [
       "Max 4 training days/week",
@@ -43,7 +44,7 @@
     "id": "LEVEL_INTERMEDIATE",
     "category": "athlete_level",
     "title": "Intermediate Athlete",
-    "version": "1.0",
+    "version": "1.1",
     "applies_when": { "level": "intermediate", "sport_profile": "any", "goal": "any" },
     "principles": [
       "Progression with structure",
@@ -57,7 +58,8 @@
       "10-18 sets/week for strength",
       "Polarized 80/20 for endurance",
       "RPE 7-8 (2-3 RIR)",
-      "RIR-based autoregulation"
+      "RIR-based autoregulation",
+      "When applying volume-to-time scaling, use the full range from the corresponding session composition table. Standard rest periods as specified in the VOLUME_TIME_SCALING module."
     ],
     "hard_constraints": [
       "Deload every 4th week",
@@ -85,7 +87,7 @@
     "id": "LEVEL_ADVANCED",
     "category": "athlete_level",
     "title": "Advanced Athlete",
-    "version": "1.0",
+    "version": "1.1",
     "applies_when": { "level": "advanced", "sport_profile": "any", "goal": "any" },
     "principles": [
       "Specificity",
@@ -99,7 +101,8 @@
       "Block periodization may be appropriate",
       "12-22+ sets/week per muscle",
       "RPE 8-9 (1-2 RIR)",
-      "Reactive deloading"
+      "Reactive deloading",
+      "When applying volume-to-time scaling, can push toward the upper end of the exercise range. For primary compound lifts at near-maximal intensity, rest periods may extend to 180-300 seconds — this reduces total exercise count for a given duration but is appropriate because advanced athletes derive more benefit from intensity management than exercise variety."
     ],
     "hard_constraints": [
       "Volume 12-22+ sets/week (approaching MRV with caution)",
@@ -394,7 +397,7 @@
     "id": "SPORT_STRENGTH_CORE",
     "category": "sport_strength",
     "title": "Strength Training Core",
-    "version": "1.0",
+    "version": "1.1",
     "applies_when": { "sport_profile": "strength" },
     "principles": [
       "Volume landmarks (Israetel/RP): Large muscles MEV 6-8, MAV 12-18, MRV 20-25+",
@@ -409,7 +412,8 @@
       "RPE/RIR-based for intermediate+",
       "Split design: 2-3 days=full body, 3-4=UL or FB, 4-5=UL or PPL, 5-6=PPL",
       "Proactive deload every 4th week (reduce volume 40-50%, intensity 10-15%)",
-      "Exercise rotation: Tier 1 stable 4-6 weeks, Tier 2 rotate 2-4 weeks, Tier 3 rotate 1-3 weeks"
+      "Exercise rotation: Tier 1 stable 4-6 weeks, Tier 2 rotate 2-4 weeks, Tier 3 rotate 1-3 weeks",
+      "Before assembling exercises for any session, classify the session as compound-heavy, isolation-heavy, or mixed based on the planned movement pattern distribution. Use the VOLUME_TIME_SCALING module's corresponding table to determine exercise count and rest period targets for the requested session duration."
     ],
     "hard_constraints": [
       "Proximity to failure: beginners 3-4 RIR, intermediate 2-3 RIR, advanced 1-2 RIR"
@@ -424,13 +428,82 @@
     ],
     "rationale": "Core strength training module defining volume landmarks, progression models, split design, and deload protocols based on current evidence.",
     "priority": "high",
+    "is_active": true,
+    "change_log": "2026-04-08 v1.1: Added dependency on VOLUME_TIME_SCALING module for session assembly"
+  },
+  {
+    "id": "VOLUME_TIME_SCALING",
+    "category": "training_rules",
+    "title": "Time-aware volume scaling for session duration",
+    "version": "1.0",
+    "applies_when": {
+      "level": "any",
+      "sport_profile": ["strength", "general_fitness", "hiit", "bodyweight"],
+      "goal": "any"
+    },
+    "principles": [
+      "Session duration is a hard constraint, not a suggestion — workouts must fill the requested time window",
+      "Under-filling a session erodes trust and wastes adaptation potential",
+      "Over-filling creates time pressure that degrades form and RPE accuracy",
+      "Compound-heavy sessions require more rest and fewer exercises per unit time than isolation sessions",
+      "Advanced athletes may need fewer exercises with longer rest — intensity trumps variety at high levels"
+    ],
+    "plan_rules": [
+      "Classify each session as compound-heavy (≥60% compounds), isolation-heavy (≥60% isolation), or mixed",
+      "Use the corresponding volume-to-time table to determine exercise count range for the requested duration",
+      "Apply level modifier: beginners use lower end of range (cap 5), intermediates use full range, advanced can push upper end",
+      "Calculate estimated session time using: warm_up + Σ(sets × time_per_set) + (exercises × 1.5min transition) + 5min buffer",
+      "Reject plans where estimated time is <70% or >110% of requested duration"
+    ],
+    "hard_constraints": [
+      "Minimum 2 exercises per session regardless of duration",
+      "Maximum 12 exercises per session regardless of duration",
+      "Beginners capped at 5 exercises per session",
+      "Compound exercises: minimum 120s rest between sets",
+      "Session time coverage must be 70-110% of requested duration"
+    ],
+    "volume_time_tables": {
+      "mixed": {
+        "30": {"min_exercises": 3, "max_exercises": 4, "sets_per_exercise": 3, "rest_seconds": [60, 90], "warmup_minutes": 5},
+        "45": {"min_exercises": 4, "max_exercises": 6, "sets_per_exercise": [3, 4], "rest_seconds": [90, 120], "warmup_minutes": [5, 7]},
+        "60": {"min_exercises": 5, "max_exercises": 7, "sets_per_exercise": [3, 4], "rest_seconds": [90, 150], "warmup_minutes": [7, 10]},
+        "75": {"min_exercises": 6, "max_exercises": 8, "sets_per_exercise": [3, 4], "rest_seconds": [120, 180], "warmup_minutes": [7, 10]},
+        "90": {"min_exercises": 7, "max_exercises": 10, "sets_per_exercise": [3, 4], "rest_seconds": [120, 180], "warmup_minutes": 10}
+      },
+      "compound_heavy": {
+        "30": {"min_exercises": 2, "max_exercises": 3, "sets_per_exercise": [3, 4], "rest_seconds": [120, 180], "warmup_minutes": [5, 7]},
+        "45": {"min_exercises": 3, "max_exercises": 4, "sets_per_exercise": [3, 4], "rest_seconds": [120, 180], "warmup_minutes": [7, 10]},
+        "60": {"min_exercises": 4, "max_exercises": 5, "sets_per_exercise": [3, 4], "rest_seconds": [150, 180], "warmup_minutes": [7, 10]},
+        "75": {"min_exercises": 4, "max_exercises": 6, "sets_per_exercise": [3, 4], "rest_seconds": [150, 210], "warmup_minutes": 10},
+        "90": {"min_exercises": 5, "max_exercises": 7, "sets_per_exercise": [3, 4], "rest_seconds": [150, 210], "warmup_minutes": 10}
+      },
+      "isolation_heavy": {
+        "30": {"min_exercises": 4, "max_exercises": 5, "sets_per_exercise": 3, "rest_seconds": [45, 75], "warmup_minutes": [3, 5]},
+        "45": {"min_exercises": 5, "max_exercises": 7, "sets_per_exercise": [3, 4], "rest_seconds": [60, 90], "warmup_minutes": 5},
+        "60": {"min_exercises": 6, "max_exercises": 9, "sets_per_exercise": [3, 4], "rest_seconds": [60, 90], "warmup_minutes": [5, 7]},
+        "75": {"min_exercises": 7, "max_exercises": 10, "sets_per_exercise": [3, 4], "rest_seconds": [60, 90], "warmup_minutes": [5, 7]},
+        "90": {"min_exercises": 8, "max_exercises": 12, "sets_per_exercise": [3, 4], "rest_seconds": [60, 90], "warmup_minutes": 7}
+      }
+    },
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "Confident, evidence-based. When explaining why a session has fewer or more exercises than expected, reference the session composition and rest requirements.",
+    "evidence_sources": [
+      "Schoenfeld et al. (2017) — Dose-response relationship between weekly resistance training volume and muscle mass",
+      "Grgic et al. (2017) — Effects of short versus long inter-set rest intervals on muscle hypertrophy",
+      "Schoenfeld et al. (2021) — Loading recommendations re-examination of the repetition continuum",
+      "ACSM Guidelines for Exercise Testing and Prescription, 11th ed.",
+      "NSCA Essentials of Strength Training and Conditioning, 4th ed."
+    ],
+    "rationale": "Without time-aware volume scaling, the engine produces workouts that drastically under-fill or over-fill the requested duration. This module ensures every workout plausibly fills the user's available time by mapping duration × session composition × level to concrete volume parameters.",
+    "priority": "critical",
     "is_active": true
   },
   {
     "id": "SPORT_ENDURANCE_RUNNING",
     "category": "sport_endurance",
     "title": "Endurance Running Core",
-    "version": "1.0",
+    "version": "1.1",
     "applies_when": { "sport_profile": "endurance", "workout_type": "running" },
     "principles": [
       "Polarized 80/20 (80% Z1-2, 20% Z4-5, minimal Z3)",
@@ -440,18 +513,27 @@
       "Volume progression context-based (easy weeks +10-15%, hard weeks +5-8%)",
       "Volume-dependent: 10-20mpw +10-15%, 50-75mpw +5-10%, 75+ +3-5%",
       "Cutback week every 4-6 weeks (drop 20-30%)",
-      "Never add volume AND intensity same week"
+      "Never add volume AND intensity same week",
+      "For runners with a specific time goal: include one weekly interval session (800m or 1K repeats at I-pace). This is non-negotiable for time-goal training.",
+      "Total interval volume should be 5-8% of weekly mileage for intermediates, up to 10% for advanced",
+      "Place interval sessions on a day following an easy day, never after a long run or tempo",
+      "Progress repeats from shorter (400-800m) to longer (1K-1600m) as the race approaches",
+      "Reference RUNNING_ZONE_CALCULATIONS module for pacing interval work by HR zones"
     ],
     "hard_constraints": [],
     "nutrition_rules": [],
     "training_adjustments": [],
     "coaching_tone": "",
     "evidence_sources": [
-      "Seiler polarized training research"
+      "Seiler polarized training research",
+      "Billat et al. — vVO2max interval research",
+      "Daniels — Daniels' Running Formula (I-pace intervals)",
+      "Midgley et al. (2006) — systematic review on VO2max training"
     ],
-    "rationale": "Polarized training distribution and context-dependent volume progression form the foundation of evidence-based running programming.",
+    "rationale": "Polarized training distribution and context-dependent volume progression form the foundation of evidence-based running programming. Interval repeats for time-goal runners develop VO2max and race-specific fitness.",
     "priority": "high",
-    "is_active": true
+    "is_active": true,
+    "change_log": "2026-04-08: Added weekly interval repeat requirement for time-goal runners; linked to zone calculations module"
   },
   {
     "id": "EVENT_5K",
@@ -524,7 +606,7 @@
     "id": "EVENT_MARATHON",
     "category": "event_running",
     "title": "Marathon Race Plan",
-    "version": "1.0",
+    "version": "1.1",
     "applies_when": { "event": "marathon" },
     "principles": [],
     "plan_rules": [
@@ -532,7 +614,10 @@
       "Three approaches: Pfitzinger (5-phase, peak 55-85mpw, MP long runs, 3-week taper 70/55/30%), Hansons (cumulative fatigue, 6 days/week, max long 16mi, 3 quality sessions, peak 50-55mpw), Traditional (base/build/peak/taper, long to 18-20mi, 3 quality/week, 3-week taper)",
       "Taper 21 days optimal, volume -41-60%, maintain intensity",
       "Pacing: percentage-based, first 5K 10-15sec/mile slower",
-      "Race nutrition: carb load 24-48hr 8-12g/kg, during 60-90g carbs/hr from first 15min"
+      "Race nutrition: carb load 24-48hr 8-12g/kg, during 60-90g carbs/hr from first 15min",
+      "Scale the number of 20+ mile runs by runner experience and weekly mileage: first-timers 0-1, beginners 1-2, intermediates 2-4, advanced 4-5 with 6-12 miles at marathon pace per long run",
+      "Never program more than one 20+ mile run per 2-week period",
+      "Minimum 10-14 days between 20+ milers for all levels"
     ],
     "hard_constraints": [],
     "nutrition_rules": [],
@@ -540,11 +625,16 @@
     "coaching_tone": "",
     "evidence_sources": [
       "Bosquet et al. 2007 taper meta-analysis",
-      "Pyne et al. 2023"
+      "Pyne et al. 2023",
+      "Hansons Marathon Method",
+      "Pfitzinger & Douglas — Advanced Marathoning",
+      "Daniels — Daniels' Running Formula",
+      "Fellrnr comparative analysis"
     ],
-    "rationale": "Marathon plan offering three proven methodologies with evidence-based taper protocols and critical race-day nutrition strategy.",
+    "rationale": "Marathon plan offering three proven methodologies with evidence-based taper protocols, experience-scaled long run programming, and critical race-day nutrition strategy.",
     "priority": "high",
-    "is_active": true
+    "is_active": true,
+    "change_log": "2026-04-08: Added experience-scaled marathon long run programming with safety guardrails"
   },
   {
     "id": "EVENT_ULTRA",
@@ -1387,5 +1477,115 @@
     "rationale": "Placeholder module for knee injury caution. To be expanded with specific rehabilitation protocols and professional referral criteria.",
     "priority": "high",
     "is_active": false
+  },
+  {
+    "id": "RUNNING_OFFSEASON",
+    "category": "sport_endurance",
+    "title": "Offseason / transition phase for runners",
+    "version": "1.0",
+    "applies_when": { "level": "any", "sport_profile": "endurance", "training_phase": "offseason" },
+    "principles": [
+      "Offseason volume: 50-60% of peak training volume",
+      "Sessions should be shorter (30-45 min most runs)",
+      "Focus shifts to speed development, hill work, and strength training",
+      "2-3 strength sessions/week — best time in the annual cycle to prioritize gym work",
+      "Encourage enjoyment and exploration — reduce watch dependency"
+    ],
+    "plan_rules": [
+      "Reduce weekly mileage to 50-60% of the user's peak training volume",
+      "No long runs exceeding 60 minutes",
+      "Include 2-3 stride sessions per week (6-10 x 80-100m near-sprint with full recovery)",
+      "Include 1 hill session per week (6-10 x 60-90s hard effort hill repeats)",
+      "Include 2-3 strength training sessions targeting compound lower body + single-leg work",
+      "No structured interval or tempo work — keep running aerobic and fun",
+      "Duration: 2-6 weeks depending on preceding training block intensity and race"
+    ],
+    "hard_constraints": [
+      "Never reduce volume below 40% of peak (risk of excessive detraining)",
+      "Never eliminate running entirely unless medically indicated",
+      "Strength training intensity can increase but running intensity should decrease"
+    ],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "Relaxed, encouraging exploration. Less pressure, more autonomy. 'This is your time to run without a watch.'",
+    "evidence_sources": [
+      "Pfitzinger & Douglas — Advanced Marathoning (periodization chapters)",
+      "Daniels — Daniels' Running Formula (transition phase guidance)",
+      "General coaching consensus on offseason volume reduction"
+    ],
+    "rationale": "The offseason allows physical and mental recovery while maintaining a fitness base. Speed and strength work during reduced volume builds qualities that are hard to develop during high-volume training blocks.",
+    "priority": "medium",
+    "is_active": true
+  },
+  {
+    "id": "RUNNING_ZONE_CALCULATIONS",
+    "category": "training_rules",
+    "title": "Tiered heart rate zone calculation system",
+    "version": "1.0",
+    "applies_when": { "level": "any", "sport_profile": ["endurance", "hybrid"], "goal": "any" },
+    "principles": [
+      "Progressive accuracy: zones improve as user provides more data",
+      "Tier 1 (age only): Max HR = 208 - 0.7*age. Standard error +/-10 bpm.",
+      "Tier 2 (age + resting HR): Karvonen formula. Accounts for individual fitness level.",
+      "Tier 3 (LTHR): Zones as % of lactate threshold HR. Most accurate for trained runners.",
+      "Always use the highest tier available. If user provides known max HR, use it instead of age-predicted."
+    ],
+    "plan_rules": [
+      "Use highest available zone tier when prescribing intensity",
+      "Tier 1 zones: Z1 50-60%, Z2 60-70%, Z3 70-80%, Z4 80-90%, Z5 90-100% of max HR",
+      "Tier 2 zones (HRR): Z1 40-50%, Z2 50-65%, Z3 65-78%, Z4 78-88%, Z5 88-100% of HRR",
+      "Tier 3 zones (LTHR): Z1 <75%, Z2 75-85%, Z3 85-95%, Z4 95-102%, Z5 102-110%+ of LTHR",
+      "When resting HR is added, recalculate all zones and notify user of upgrade",
+      "Complement HR zones with pace zones from VDOT for cross-reference"
+    ],
+    "hard_constraints": [
+      "Never prescribe zones without at least age data",
+      "Display accuracy note for Tier 1 zones (age-estimated)"
+    ],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [
+      "Tanaka et al. (2001) — Age-predicted maximal heart rate revisited, JACC",
+      "Karvonen et al. (1957) — The effects of training on heart rate",
+      "ACSM Guidelines for Exercise Testing and Prescription, 11th ed."
+    ],
+    "rationale": "Progressive accuracy: zones improve as user provides more data. No user is blocked by lack of lab testing, but serious runners get precise zones when they have the data.",
+    "priority": "high",
+    "is_active": true
+  },
+  {
+    "id": "RUNNING_FEEDBACK_CALIBRATION",
+    "category": "adaptation",
+    "title": "1/3 feedback calibration rule for plan adjustment",
+    "version": "1.0",
+    "applies_when": { "level": "any", "sport_profile": ["endurance", "strength", "general_fitness", "hybrid"], "goal": "any" },
+    "principles": [
+      "Post-hoc review tool, not a training prescription",
+      "~1/3 workouts should feel easier, ~1/3 about right, ~1/3 harder than intended",
+      "Assesses perceived effort relative to intent, NOT intensity distribution",
+      "Compatible with 80/20 polarized model — both frameworks coexist"
+    ],
+    "plan_rules": [
+      "After each completed workout, prompt: How did this feel compared to what you expected? (Easier / About right / Harder)",
+      "Aggregate over the week and surface calibration signals in weekly check-in",
+      "If >50% of workouts feel harder than intended for 2+ consecutive weeks: reduce volume 10% or intensity one notch",
+      "If >50% of workouts feel easier than intended for 2+ consecutive weeks: consider progression step",
+      "Single-week deviations are normal and should not trigger automatic adjustments"
+    ],
+    "hard_constraints": [
+      "This rule must never override Tier 1 evidence-based training prescriptions",
+      "Framed as feedback tool only — never as a training distribution target"
+    ],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [
+      "Coaching heuristic — Tier 4 evidence",
+      "Compatible with Seiler (2010) polarized training model (Tier 1)"
+    ],
+    "rationale": "Provides a simple, user-friendly feedback mechanism that helps the app (and user) detect when training load is miscalibrated. Framed as a review tool, not a prescription, so it doesn't conflict with evidence-based programming rules.",
+    "priority": "medium",
+    "is_active": true
   }
 ]

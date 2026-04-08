@@ -310,6 +310,7 @@ const DB = (() => {
     'hydrationDailyTargetOz', 'yogaTypes', 'completedChallenges', 'activeChallenges',
     'userSharedWorkouts', 'measurementSystem', 'gymStrengthEnabled',
     'nutritionEnabled', 'hydrationEnabled', 'fuelingEnabled',
+    'workoutEffortFeedback', 'calibrationSignals',
   ];
 
   const _keyTimers = {};

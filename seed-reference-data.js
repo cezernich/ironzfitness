@@ -116,6 +116,109 @@ async function seedReferenceData() {
     rationale: 'Spreads training days evenly with built-in rest gaps',
   });
 
+  // ── Running Philosophy Update Modules (2026-04-08) ─────────────────────
+  modules.push({
+    id: 'RUNNING_OFFSEASON',
+    category: 'sport_endurance',
+    title: 'Offseason / transition phase for runners',
+    version: '1.0',
+    applies_when: { level: 'any', sport_profile: 'endurance', training_phase: 'offseason' },
+    principles: [
+      'Offseason volume: 50-60% of peak training volume',
+      'Sessions should be shorter (30-45 min most runs)',
+      'Focus shifts to speed development, hill work, and strength training',
+      '2-3 strength sessions/week — best time in the annual cycle to prioritize gym work',
+      'Encourage enjoyment and exploration — reduce watch dependency'
+    ],
+    plan_rules: [
+      'Reduce weekly mileage to 50-60% of the user\'s peak training volume',
+      'No long runs exceeding 60 minutes',
+      'Include 2-3 stride sessions per week (6-10 x 80-100m near-sprint with full recovery)',
+      'Include 1 hill session per week (6-10 x 60-90s hard effort hill repeats)',
+      'Include 2-3 strength training sessions targeting compound lower body + single-leg work',
+      'No structured interval or tempo work — keep running aerobic and fun',
+      'Duration: 2-6 weeks depending on preceding training block intensity and race'
+    ],
+    hard_constraints: [
+      'Never reduce volume below 40% of peak (risk of excessive detraining)',
+      'Never eliminate running entirely unless medically indicated',
+      'Strength training intensity can increase but running intensity should decrease'
+    ],
+    coaching_tone: 'Relaxed, encouraging exploration. Less pressure, more autonomy.',
+    evidence_sources: [
+      'Pfitzinger & Douglas — Advanced Marathoning',
+      'Daniels — Daniels\' Running Formula',
+      'General coaching consensus on offseason volume reduction'
+    ],
+    rationale: 'The offseason allows physical and mental recovery while maintaining a fitness base.',
+    priority: 'medium',
+  });
+
+  modules.push({
+    id: 'RUNNING_ZONE_CALCULATIONS',
+    category: 'training_rules',
+    title: 'Tiered heart rate zone calculation system',
+    version: '1.0',
+    applies_when: { level: 'any', sport_profile: ['endurance', 'hybrid'], goal: 'any' },
+    principles: [
+      'Progressive accuracy: zones improve as user provides more data',
+      'Tier 1 (age only): Max HR = 208 - 0.7*age. Standard error +/-10 bpm.',
+      'Tier 2 (age + resting HR): Karvonen formula.',
+      'Tier 3 (LTHR): Zones as % of lactate threshold HR. Most accurate.',
+      'Always use the highest tier available.'
+    ],
+    plan_rules: [
+      'Use highest available zone tier when prescribing intensity',
+      'Tier 1: Z1 50-60%, Z2 60-70%, Z3 70-80%, Z4 80-90%, Z5 90-100% of max HR',
+      'Tier 2 (HRR): Z1 40-50%, Z2 50-65%, Z3 65-78%, Z4 78-88%, Z5 88-100%',
+      'Tier 3 (LTHR): Z1 <75%, Z2 75-85%, Z3 85-95%, Z4 95-102%, Z5 102-110%+',
+      'When resting HR is added, recalculate all zones and notify user',
+      'Complement HR zones with pace zones from VDOT'
+    ],
+    hard_constraints: [
+      'Never prescribe zones without at least age data',
+      'Display accuracy note for Tier 1 zones'
+    ],
+    evidence_sources: [
+      'Tanaka et al. (2001) — JACC',
+      'Karvonen et al. (1957)',
+      'ACSM Guidelines 11th ed.'
+    ],
+    rationale: 'Progressive accuracy: zones improve as user provides more data.',
+    priority: 'high',
+  });
+
+  modules.push({
+    id: 'RUNNING_FEEDBACK_CALIBRATION',
+    category: 'adaptation',
+    title: '1/3 feedback calibration rule for plan adjustment',
+    version: '1.0',
+    applies_when: { level: 'any', sport_profile: ['endurance', 'strength', 'general_fitness', 'hybrid'], goal: 'any' },
+    principles: [
+      'Post-hoc review tool, not a training prescription',
+      '~1/3 easier, ~1/3 about right, ~1/3 harder than intended',
+      'Assesses perceived effort relative to intent, NOT intensity distribution',
+      'Compatible with 80/20 polarized model'
+    ],
+    plan_rules: [
+      'After each workout, prompt: How did this feel? (Easier / About right / Harder)',
+      'Aggregate weekly and surface calibration signals in check-in dashboard',
+      'If >50% harder for 2+ weeks: reduce volume 10% or intensity one notch',
+      'If >50% easier for 2+ weeks: consider progression step',
+      'Single-week deviations should not trigger automatic adjustments'
+    ],
+    hard_constraints: [
+      'Must never override Tier 1 evidence-based training prescriptions',
+      'Framed as feedback tool only'
+    ],
+    evidence_sources: [
+      'Coaching heuristic — Tier 4 evidence',
+      'Compatible with Seiler (2010) polarized model'
+    ],
+    rationale: 'Simple feedback mechanism to detect miscalibrated training load.',
+    priority: 'medium',
+  });
+
   // Insert all philosophy modules
   for (const mod of modules) {
     const row = {

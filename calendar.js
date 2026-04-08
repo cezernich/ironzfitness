@@ -29,6 +29,7 @@ const DISCIPLINE_COLORS = {
   hyrox:        "var(--color-amber)",
   bodyweight:   "var(--color-accent)",
   yoga:         "var(--color-violet)",
+  stairstepper: "var(--color-amber)",
   wellness:     "var(--color-success)",
 };
 
@@ -270,6 +271,7 @@ function renderWeekOverview() {
     weightlifting: ICONS.weights,
     triathlon: ICONS.swim, brick: ICONS.zap,
     general: ICONS.activity, hiit: ICONS.flame, bodyweight: ICONS.activity, yoga: ICONS.yoga,
+    stairstepper: ICONS.steps,
   };
 
   const pills = Object.entries(byType).map(([type, count]) => {
@@ -1023,6 +1025,7 @@ const DISCIPLINE_TO_WORKOUT_TYPE = {
   swim: "triathlon", bike: "cycling", run: "running", brick: "triathlon", race: "triathlon",
   weightlifting: "weightlifting", cycling: "cycling", running: "running",
   triathlon: "triathlon", general: "general", yoga: "general",
+  stairstepper: "stairstepper",
 };
 
 // In-memory map of exercises for each completion form (populated during renderDayDetail)
@@ -1129,7 +1132,7 @@ function _getCompletionDuration(sessionId) {
   return null;
 }
 
-const _ENDURANCE_TYPES = new Set(["running", "cycling", "swimming", "triathlon"]);
+const _ENDURANCE_TYPES = new Set(["running", "cycling", "swimming", "triathlon", "stairstepper"]);
 
 function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDuration, steps) {
   // No completion UI for future dates
