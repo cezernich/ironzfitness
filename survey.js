@@ -166,6 +166,11 @@ function openSurvey() {
 function closeSurvey() {
   const overlay = document.getElementById("survey-overlay");
   if (overlay) overlay.classList.remove("is-open");
+  // If user dismisses without completing, mark as skipped so it doesn't re-open
+  if (!localStorage.getItem("surveyComplete")) {
+    localStorage.setItem("surveyComplete", "skipped");
+    if (typeof DB !== 'undefined') DB.syncKey('surveyComplete');
+  }
 }
 
 // ── Custom plan flow (inside survey modal) ──────────────────────────────────
