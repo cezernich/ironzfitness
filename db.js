@@ -385,7 +385,7 @@ const DB = (() => {
   const workouts         = _userTable('workouts', 'workouts');
   const workoutExercises = _userTable('workout_exercises', 'workoutExercises');
   const workoutSegments  = _userTable('workout_segments', 'workoutSegments');
-  const trainingPlans    = _userTable('training_plans', 'trainingPlan');
+  const trainingPlans    = _userTable('training_plans', '_trainingPlans_meta');
   const trainingSessions = _userTable('training_sessions', 'workoutSchedule');
   const planAdherence    = _userTable('plan_adherence', 'planAdherence');
   const weeklyCheckins   = _userTable('weekly_checkins', 'weeklyCheckins');
@@ -413,7 +413,7 @@ const DB = (() => {
       { lsKey: 'profile', handler: _migrateProfile },
       { lsKey: 'workouts', table: 'workouts', shape: _shapeWorkout },
       { lsKey: 'workoutSchedule', table: 'training_sessions', shape: _shapeTrainingSession },
-      { lsKey: 'trainingPlan', table: 'training_plans', shape: _shapeTrainingPlan },
+      // trainingPlan synced via user_data (syncKey), not training_plans table
       { lsKey: 'events', table: 'race_events', shape: _shapeRaceEvent },
       { lsKey: 'goals', table: 'goals', shape: _shapeGoal },
       { lsKey: 'weeklyCheckins', table: 'weekly_checkins', shape: _shapeWeeklyCheckin },
@@ -669,7 +669,8 @@ const DB = (() => {
   }
 
   function syncTrainingPlan() {
-    _debouncedSync('training_plans', 'trainingPlan', _shapeTrainingPlan);
+    // trainingPlan is an array of daily sessions — sync via user_data, not training_plans table
+    syncKey('trainingPlan');
   }
 
   function syncEvents() {
@@ -690,7 +691,7 @@ const DB = (() => {
     const tables = [
       { accessor: workouts, name: 'workouts' },
       { accessor: trainingSessions, name: 'training_sessions' },
-      { accessor: trainingPlans, name: 'training_plans' },
+      // trainingPlans removed — trainingPlan localStorage is synced via user_data, not training_plans table
       { accessor: raceEvents, name: 'race_events' },
       { accessor: goals, name: 'goals' },
       { accessor: weeklyCheckins, name: 'weekly_checkins' },
