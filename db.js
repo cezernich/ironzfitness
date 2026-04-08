@@ -50,8 +50,19 @@ const DB = (() => {
             .eq('id', uid)
             .maybeSingle();
           if (!error && data) {
-            _lsSet('profile', data);
-            return data;
+            // Map DB column names to app field names (only non-empty values)
+            const fromDb = {};
+            if (data.full_name) fromDb.name = data.full_name;
+            if (data.age) fromDb.age = String(data.age);
+            if (data.weight_lbs) fromDb.weight = String(data.weight_lbs);
+            if (data.height_inches) fromDb.height = String(data.height_inches);
+            if (data.gender) fromDb.gender = data.gender;
+            if (data.primary_goal) fromDb.goal = data.primary_goal;
+            // Merge: DB values win over localStorage, but don't blank out existing data
+            const existing = _lsGet('profile') || {};
+            const merged = { ...existing, ...fromDb };
+            _lsSet('profile', merged);
+            return merged;
           }
         } catch {}
       }
@@ -66,7 +77,17 @@ const DB = (() => {
 
       if (uid) {
         try {
-          const row = { ...profileData, id: uid, updated_at: new Date().toISOString() };
+          // Map app field names to DB column names
+          const row = {
+            id: uid,
+            full_name: profileData.name || merged.name || null,
+            age: profileData.age ? parseInt(profileData.age) : null,
+            weight_lbs: profileData.weight ? parseFloat(profileData.weight) : null,
+            height_inches: profileData.height ? parseInt(profileData.height) : null,
+            gender: profileData.gender || null,
+            primary_goal: profileData.goal || merged.goal || null,
+            updated_at: new Date().toISOString(),
+          };
           const { error } = await _client()
             .from('profiles')
             .upsert(row, { onConflict: 'id' });
