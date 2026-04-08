@@ -222,18 +222,16 @@ async function ensureProfile(user) {
   }
 
   if (!existing) {
-    // First user in the system gets admin role
-    const { count } = await client
-      .from('profiles')
-      .select('id', { count: 'exact', head: true });
-    const isFirstUser = (count === 0 || count === null);
+    // Determine role — only the hardcoded owner email gets admin
+    const adminEmail = 'chasezernich@gmail.com';
+    const isAdmin = user.email && user.email.toLowerCase() === adminEmail;
 
     const { error: insertError } = await client.from('profiles').insert({
       id:                  user.id,
       email:               user.email,
       full_name:           user.user_metadata?.full_name || '',
       subscription_status: 'free',
-      role:                isFirstUser ? 'admin' : 'user',
+      role:                isAdmin ? 'admin' : 'user',
     });
     if (insertError) console.warn('Profile insert error:', insertError.message);
     else if (isFirstUser) console.log('First user — assigned admin role');
