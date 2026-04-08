@@ -1,5 +1,25 @@
 // app.js — General app initialization and tab navigation
 
+// Global helper: compute age from birthday string (YYYY-MM-DD)
+function _calcAgeFromBirthday(dateStr) {
+  if (!dateStr) return 0;
+  var birth = new Date(dateStr);
+  var today = new Date();
+  var age = today.getFullYear() - birth.getFullYear();
+  var m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
+
+// Global helper: get age from profile (prefers birthday, falls back to stored age)
+function getProfileAge() {
+  try {
+    var p = JSON.parse(localStorage.getItem("profile") || "{}");
+    if (p.birthday) return _calcAgeFromBirthday(p.birthday);
+    return parseInt(p.age) || 0;
+  } catch { return 0; }
+}
+
 // ── PWA: Register service worker ────────────────────────────────────────────
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -555,7 +575,8 @@ function saveProfile() {
   const totalInches = feet * 12 + inches;
   const profile = {
     name:   document.getElementById("profile-name").value.trim(),
-    age:    document.getElementById("profile-age").value,
+    birthday: document.getElementById("profile-birthday").value,
+    age:    document.getElementById("profile-birthday").value ? String(_calcAgeFromBirthday(document.getElementById("profile-birthday").value)) : "",
     weight: document.getElementById("profile-weight").value,
     height: String(totalInches || ""),
     gender: document.getElementById("profile-gender").value,
@@ -583,7 +604,8 @@ async function loadProfileIntoForm() {
       profile = JSON.parse(localStorage.getItem("profile")) || {};
     }
     if (profile.name)   document.getElementById("profile-name").value   = profile.name;
-    if (profile.age)    document.getElementById("profile-age").value    = profile.age;
+    if (profile.birthday) document.getElementById("profile-birthday").value = profile.birthday;
+    else if (profile.age) document.getElementById("profile-birthday").value = ""; // legacy: had age but no birthday
     if (profile.weight) document.getElementById("profile-weight").value = profile.weight;
     if (profile.height) {
       const h = parseInt(profile.height);
