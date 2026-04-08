@@ -1237,10 +1237,10 @@ Each exercise object must have: { "name": string, "sets": number, "reps": number
       const rows = container.querySelectorAll(".exercise-row");
       const lastRow = rows[rows.length - 1];
       if (lastRow) {
-        const nameInput = lastRow.querySelector(".exercise-name");
-        const setsInput = lastRow.querySelector(".exercise-sets");
-        const repsInput = lastRow.querySelector(".exercise-reps");
-        const weightInput = lastRow.querySelector(".exercise-weight");
+        const nameInput = lastRow.querySelector(".ex-name");
+        const setsInput = lastRow.querySelector(".ex-sets");
+        const repsInput = lastRow.querySelector(".ex-reps");
+        const weightInput = lastRow.querySelector(".ex-weight");
         if (nameInput) nameInput.value = ex.name || "";
         if (setsInput) setsInput.value = ex.sets || 1;
         if (repsInput) repsInput.value = ex.reps || 0;
