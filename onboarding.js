@@ -848,7 +848,10 @@ function finishOnboarding(buildPlan) {
       if (typeof showTab === "function") showTab("training");
     }
   } else {
-    // Just explore — land on home tab
+    // Just explore — mark survey as skipped so it doesn't re-open on refresh
+    localStorage.setItem("surveyComplete", "skipped");
+    if (typeof DB !== 'undefined') DB.syncKey('surveyComplete');
+    // Land on home tab
     if (typeof showTab === "function") showTab("home");
   }
 }
