@@ -1814,8 +1814,11 @@
           <input type="date" id="qe-date" onchange="updateQERestrictionWarning(this.value)" />
         </div>
         <div id="qe-restriction-warning" class="qe-restriction-warning" style="display:none"></div>
-        <p class="qe-section-label">What type of session?</p>
-        <div class="qe-type-grid">
+        <div class="qe-top-links">
+          <a href="#" class="qe-library-link" onclick="event.preventDefault();qeShowLibrary()">Choose from library</a>
+          <a href="#" class="qe-library-link" onclick="event.preventDefault();qeShowAskIronZ()">Ask IronZ</a>
+        </div>
+        <div class="qe-type-grid qe-type-grid--compact">
           <button class="qe-type-card" onclick="qeSelectType('strength')">
             <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v16"/><path d="M18 4v16"/><path d="M4 7.5h4"/><path d="M4 16.5h4"/><path d="M16 7.5h4"/><path d="M16 16.5h4"/></svg></span>
             <span class="qe-type-label">Strength</span>
@@ -1880,15 +1883,6 @@
             </button>
           </div>
         </div>
-        <div style="border-top:1px solid var(--color-border);margin:18px 0 14px"></div>
-        <button class="qe-type-card qe-type-card--library" onclick="qeShowLibrary()">
-          <span class="qe-type-icon"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
-          <span class="qe-type-label" style="font-size:1rem;font-weight:700;letter-spacing:0.02em">Choose from Library</span>
-        </button>
-        <button class="qe-type-card qe-type-card--ask-ironz" onclick="qeShowAskIronZ()">
-          <span class="logo-mark" style="font-size:1.2rem"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
-          <span class="qe-type-label" style="font-size:1rem;font-weight:700;letter-spacing:0.02em">Ask IronZ</span>
-        </button>
         <div id="qe-ask-ironz-panel" style="display:none;margin-top:12px">
           <textarea id="qe-ask-ironz-input" class="qe-ask-ironz-input" maxlength="150"
             placeholder="Describe what you want, e.g. &quot;hard leg day&quot; or &quot;easy 30 min run to shake out&quot;"

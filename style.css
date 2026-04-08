@@ -3454,24 +3454,41 @@ button:active {
 }
 
 /* Type grid */
+.qe-top-links {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+.qe-library-link {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.qe-library-link:hover { color: var(--color-accent); }
+
 .qe-type-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 10px;
+}
+.qe-type-grid--compact {
+  gap: 8px;
 }
 
 .qe-more-types-toggle {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   width: 100%;
-  margin: 12px 0 4px;
-  padding: 8px;
+  margin: 8px 0 2px;
+  padding: 4px;
   background: none;
   border: none;
   color: var(--color-text-muted);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   cursor: pointer;
   transition: color 0.15s;
 }
@@ -3483,14 +3500,15 @@ button:active {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 14px 8px;
+  gap: 4px;
+  padding: 10px 6px;
   background: var(--color-surface-2);
   border: 1.5px solid var(--color-border);
-  border-radius: 12px;
+  border-radius: 10px;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s, transform 0.1s;
   color: var(--color-text);
+  font-size: 0.85rem;
 }
 
 .qe-type-card:hover {
