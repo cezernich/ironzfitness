@@ -1729,6 +1729,7 @@ function saveWorkout() {
     type,
     notes,
     exercises,
+    fromSaved: name || _wTypeLabel(type) || "Logged Workout",
   };
   if (segments) workout.segments = segments;
   // Bike watt logging
@@ -1746,6 +1747,15 @@ function saveWorkout() {
   // Save the updated array back to localStorage as a JSON string
   localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
 
+  // Auto-mark as completed since this is a logged (already done) workout
+  const cardId = `session-log-${workout.id}`;
+  try {
+    const completedSessions = JSON.parse(localStorage.getItem("completedSessions") || "{}");
+    completedSessions[cardId] = { completedAt: new Date().toISOString(), duration: null };
+    localStorage.setItem("completedSessions", JSON.stringify(completedSessions));
+    if (typeof DB !== 'undefined') DB.syncKey('completedSessions');
+  } catch (e) { /* ignore */ }
+
   // Show success message and refresh the history display
   msg.style.color = "#22c55e";
   msg.textContent = "Workout saved!";
@@ -1754,9 +1764,7 @@ function saveWorkout() {
   // Reset the form
   const logDateEl2 = document.getElementById("log-date");
   logDateEl2.value = "";
-  const yesterday2 = new Date();
-  yesterday2.setDate(yesterday2.getDate() - 1);
-  logDateEl2.max = yesterday2.toISOString().slice(0, 10);
+  logDateEl2.max = new Date().toISOString().slice(0, 10);
   const logNameEl = document.getElementById("log-workout-name");
   if (logNameEl) logNameEl.value = "";
   document.getElementById("log-notes").value = "";
