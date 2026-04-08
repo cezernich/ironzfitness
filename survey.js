@@ -111,7 +111,7 @@ function _getSurveyZoneSports() {
   if (s === "running" || s === "triathlon") sports.push("running");
   if (s === "cycling" || s === "triathlon") sports.push("biking");
   if (s === "triathlon") sports.push("swimming");
-  if (s === "hyrox") { sports.push("running"); sports.push("strength"); }
+  if (s === "hyrox") { sports.push("running"); sports.push("strength"); surveyData.gymStrength = true; }
   if (s === "strength" || isEffectivelyStrength()) sports.push("strength");
   // Just-training: check individual activities
   if (s === "just-training") {
@@ -800,13 +800,13 @@ function surveyNext() {
   if (SURVEY_STEPS[next] === "strength-split" && !isEffectivelyStrength()) next++;
   if (SURVEY_STEPS[next] === "plan-length"   && !isEffectivelyStrength()) next++;
   if (SURVEY_STEPS[next] === "activity-days" && !(isNonRaceType() && surveyData.activities.length > 1)) next++;
-  if (SURVEY_STEPS[next] === "gym-strength"  && isNonRaceType())  next++;
+  if (SURVEY_STEPS[next] === "gym-strength"  && (isNonRaceType() || surveyData.sport === "hyrox"))  next++;
   if (SURVEY_STEPS[next] === "zones"        && _getSurveyZoneSports().length === 0) next++;
   if (next < SURVEY_STEPS.length) { surveyStep = next; renderSurveyStep(); }
 }
 
 function _shouldSkipStep(step) {
-  if (step === "gym-strength"   && isNonRaceType())             return true;
+  if (step === "gym-strength"   && (isNonRaceType() || surveyData.sport === "hyrox"))  return true;
   if (step === "activity-days"  && !(isNonRaceType() && surveyData.activities.length > 1)) return true;
   if (step === "plan-length"    && !isEffectivelyStrength())    return true;
   if (step === "strength-split" && !isEffectivelyStrength())    return true;
