@@ -1182,6 +1182,85 @@ function buildCardioDay(title, details) {
    Handles the "Log a Workout" form — adding exercise rows and saving.
    ===================================================================== */
 
+// ── Quick Import: paste workout text → AI parses → populates rows ───────────
+
+async function importWorkoutFromText() {
+  const textarea = document.getElementById("log-import-text");
+  const msg = document.getElementById("log-import-msg");
+  const btn = document.getElementById("log-import-btn");
+  const text = (textarea?.value || "").trim();
+
+  if (!text) {
+    msg.style.color = "#ef4444";
+    msg.textContent = "Paste your workout first.";
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Parsing...";
+  msg.style.color = "var(--color-text-muted)";
+  msg.textContent = "";
+
+  try {
+    const result = await callAI({
+      system: `You are a workout parser. Parse the user's workout notes into a JSON array of exercises.
+Each exercise object must have: { "name": string, "sets": number, "reps": number, "weight": string }
+- If sets aren't specified, default to 1.
+- If a group of exercises shares a set count (like "5x" followed by a list), apply that set count to each exercise in the group.
+- If weight isn't mentioned, use "" (empty string).
+- If reps aren't mentioned (like "Abs"), use 1 set and 0 reps.
+- For cardio warmups like "Incline walk 5 min", use sets:1, reps:0, weight:"5 min".
+- Return ONLY the JSON array, no other text.`,
+      messages: [{ role: "user", content: text }],
+      max_tokens: 1024
+    });
+
+    const content = result.content?.[0]?.text || result.content || "";
+    let exercises;
+    try {
+      const jsonStr = content.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+      exercises = JSON.parse(jsonStr);
+    } catch {
+      throw new Error("Could not parse AI response. Try simplifying your input.");
+    }
+
+    if (!Array.isArray(exercises) || exercises.length === 0) {
+      throw new Error("No exercises found. Try a different format.");
+    }
+
+    // Clear existing rows and populate
+    const container = document.getElementById("exercise-entries");
+    container.innerHTML = "";
+
+    exercises.forEach(ex => {
+      addExerciseRow();
+      const rows = container.querySelectorAll(".exercise-row");
+      const lastRow = rows[rows.length - 1];
+      if (lastRow) {
+        const nameInput = lastRow.querySelector(".exercise-name");
+        const setsInput = lastRow.querySelector(".exercise-sets");
+        const repsInput = lastRow.querySelector(".exercise-reps");
+        const weightInput = lastRow.querySelector(".exercise-weight");
+        if (nameInput) nameInput.value = ex.name || "";
+        if (setsInput) setsInput.value = ex.sets || 1;
+        if (repsInput) repsInput.value = ex.reps || 0;
+        if (weightInput) weightInput.value = ex.weight || "";
+      }
+    });
+
+    msg.style.color = "var(--color-success, #2ecc71)";
+    msg.textContent = `Imported ${exercises.length} exercises. Review and save.`;
+    textarea.value = "";
+
+  } catch (err) {
+    msg.style.color = "#ef4444";
+    msg.textContent = err.message || "Failed to parse workout.";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Parse Workout";
+  }
+}
+
 /** Shows/hides the intensity selector when "Generate workout" checkbox changes */
 
 /* --- Drag-to-reorder helpers for exercise / segment rows --- */
