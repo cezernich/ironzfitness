@@ -827,11 +827,11 @@ let _activeZonesSport = "running";
 
 // ── Running: Jack Daniels VDOT method ─────────────────────────────────────────
 const ZONE_CONFIG = [
-  { num: 1, name: "Recovery",  pcts: [0.59, 0.64], desc: "Warmup · Cooldown · Very easy miles" },
-  { num: 2, name: "Easy",      pcts: [0.65, 0.74], desc: "Base miles · Aerobic development" },
-  { num: 3, name: "Tempo",     pcts: [0.83, 0.88], desc: "Comfortably hard · RPE 6–7" },
-  { num: 4, name: "Threshold", pcts: [0.95, 1.00], desc: "Hard intervals · RPE 8" },
-  { num: 5, name: "Speed",     pcts: [1.05, 1.15], desc: "Short reps · Race-specific" },
+  { num: 1, name: "Recovery",  pcts: [0.59, 0.74], desc: "Warmup · Cooldown · Very easy miles" },
+  { num: 2, name: "Easy",      pcts: [0.74, 0.84], desc: "Base miles · Aerobic development" },
+  { num: 3, name: "Tempo",     pcts: [0.84, 0.92], desc: "Comfortably hard · RPE 6–7" },
+  { num: 4, name: "Threshold", pcts: [0.92, 1.00], desc: "Hard intervals · RPE 8" },
+  { num: 5, name: "Speed",     pcts: [1.00, 1.15], desc: "Short reps · Race-specific" },
 ];
 
 const ZONE_DISTANCES = {
