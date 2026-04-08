@@ -827,11 +827,11 @@ let _activeZonesSport = "running";
 
 // ── Running: Jack Daniels VDOT method ─────────────────────────────────────────
 const ZONE_CONFIG = [
-  { num: 1, name: "Recovery",  pcts: [0.59, 0.74], desc: "Warmup · Cooldown · Very easy miles" },
-  { num: 2, name: "Easy",      pcts: [0.74, 0.84], desc: "Base miles · Aerobic development" },
-  { num: 3, name: "Tempo",     pcts: [0.84, 0.92], desc: "Comfortably hard · RPE 6–7" },
-  { num: 4, name: "Threshold", pcts: [0.92, 1.00], desc: "Hard intervals · RPE 8" },
-  { num: 5, name: "Speed",     pcts: [1.00, 1.15], desc: "Short reps · Race-specific" },
+  { num: 1, name: "Recovery",  pcts: [0.54, 0.62], desc: "Warmup · Cooldown · Very easy miles" },
+  { num: 2, name: "Easy",      pcts: [0.62, 0.70], desc: "Base miles · Aerobic development" },
+  { num: 3, name: "Tempo",     pcts: [0.83, 0.88], desc: "Comfortably hard · RPE 6–7" },
+  { num: 4, name: "Threshold", pcts: [0.95, 1.00], desc: "Hard intervals · RPE 8" },
+  { num: 5, name: "Speed",     pcts: [1.05, 1.15], desc: "Short reps · Race-specific" },
 ];
 
 const ZONE_DISTANCES = {
@@ -985,8 +985,9 @@ function computeRunningZones(distMeters, totalSeconds) {
   function toPacePerMile(vel) { return 1609.344 / vel; }
 
   function fmt(minPerMile) {
-    const m = Math.floor(minPerMile);
-    const s = Math.round((minPerMile - m) * 60);
+    let m = Math.floor(minPerMile);
+    let s = Math.round((minPerMile - m) * 60);
+    if (s >= 60) { m += 1; s -= 60; }
     return `${m}:${s < 10 ? "0" : ""}${s}`;
   }
 
