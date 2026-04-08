@@ -2069,7 +2069,7 @@ button:active {
 .intensity-seg.z5    { background: #ef4444; }
 .intensity-seg.z6    { background: #b91c1c; }
 .intensity-seg.z-rest{ background: rgba(255, 255, 255, 0.06); }
-.intensity-seg.exercise { background: #8b5cf6; }
+.session-intensity-strip .intensity-seg.exercise { background: #8b5cf6; }
 .intensity-seg.z-transition { background: #a78bfa; }
 .zone-badge.z-transition { background: rgba(167, 139, 250, 0.18); color: #a78bfa; }
 

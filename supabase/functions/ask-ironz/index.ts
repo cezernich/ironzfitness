@@ -6,9 +6,47 @@
 // Secret: supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import faqData from "./faq.json" with { type: "json" };
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MAX_REQUESTS_PER_DAY = 30;
+
+// ── FAQ matching ─────────────────────────────────────────────────────────────
+function findFaqMatch(question: string): { answer: string; faq_id: string; faq_question: string } | null {
+  const q = question.toLowerCase().replace(/[?!.,'"]/g, "").trim();
+  const qWords = q.split(/\s+/);
+
+  let bestMatch: typeof faqData[number] | null = null;
+  let bestScore = 0;
+
+  for (const entry of faqData) {
+    let score = 0;
+
+    // Check keyword matches (each keyword phrase can be multi-word)
+    for (const kw of entry.keywords) {
+      if (q.includes(kw.toLowerCase())) {
+        score += 3;
+      }
+    }
+
+    // Check question similarity — count shared significant words
+    const faqWords = entry.question.toLowerCase().replace(/[?!.,'"]/g, "").split(/\s+/)
+      .filter((w: string) => w.length > 3); // skip short words
+    const sharedWords = faqWords.filter((w: string) => qWords.includes(w));
+    score += sharedWords.length;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = entry;
+    }
+  }
+
+  // Require a minimum score to avoid false matches
+  if (bestMatch && bestScore >= 4) {
+    return { answer: bestMatch.answer, faq_id: bestMatch.id, faq_question: bestMatch.question };
+  }
+  return null;
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -103,6 +141,24 @@ Deno.serve(async (req) => {
 
     if (!question || typeof question !== "string") {
       return jsonResponse({ error: "Missing 'question' or 'messages' field" }, 400);
+    }
+
+    // ── 3b. Check FAQ for a match (saves API calls) ─────────────────────
+    // Skip FAQ for workout modification requests (need AI for actions)
+    if (!context?.current_workout) {
+      const faqMatch = findFaqMatch(question);
+      if (faqMatch) {
+        const remaining = MAX_REQUESTS_PER_DAY - (currentCount + 1);
+        return jsonResponse({
+          answer: faqMatch.answer,
+          source: "faq",
+          faq_id: faqMatch.faq_id,
+          faq_question: faqMatch.faq_question,
+          modules_used: [],
+          modules_count: 0,
+          _remaining: remaining,
+        });
+      }
     }
 
     // ── 4. Pull user profile from DB ─────────────────────────────────────

@@ -1894,12 +1894,24 @@ function adjustPatternToDays(pattern, daysPerWeek, unavailableDays) {
     });
     const result = { ...Object.fromEntries(entries) };
     let needed = daysPerWeek - entries.length;
+    // First pass: prefer non-blocked days (soft buffer around hard/moderate)
     for (const d of [1, 2, 3, 4, 5, 6, 0]) {
       if (needed <= 0) break;
       if (!usedDows.has(d) && !blockedDows.has(d) && !unavailSet.has(d)) {
         result[d] = { discipline: "run", load: "easy" };
         usedDows.add(d);
         needed--;
+      }
+    }
+    // Second pass: relax quality buffer if we still need more days
+    if (needed > 0) {
+      for (const d of [1, 2, 3, 4, 5, 6, 0]) {
+        if (needed <= 0) break;
+        if (!usedDows.has(d) && !unavailSet.has(d)) {
+          result[d] = { discipline: "run", load: "easy" };
+          usedDows.add(d);
+          needed--;
+        }
       }
     }
     return result;
@@ -2611,7 +2623,8 @@ function _rfValidateStep3AndNextGeneral() {
 function _rfStep4General() {
   const s = raceFormState;
   const rec = s.savedLevel === "advanced" ? 6 : s.savedLevel === "beginner" ? 4 : 5;
-  const daysValue = s.savedDaysPerWeek || rec;
+  if (!s.savedDaysPerWeek) s.savedDaysPerWeek = rec;
+  const daysValue = s.savedDaysPerWeek;
   const marks = [3,4,5,6,7].map(n =>
     `<span class="sv-slider-mark ${n === rec ? "sv-slider-mark--rec" : ""}">${n}</span>`
   ).join("");

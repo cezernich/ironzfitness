@@ -1,0 +1,198 @@
+[
+  {
+    "id": "getting-started-create-account",
+    "category": "Getting Started",
+    "keywords": ["create account", "sign up", "register", "new account", "make account"],
+    "question": "How do I create an account?",
+    "answer": "Tap \"Sign Up\" on the login screen, enter your email and password, then check your email for a confirmation link. Once confirmed, you can log in and complete the onboarding questionnaire to personalize your experience."
+  },
+  {
+    "id": "getting-started-onboarding",
+    "category": "Getting Started",
+    "keywords": ["onboarding", "questionnaire", "survey", "setup", "getting started"],
+    "question": "Do I need to complete the onboarding questionnaire?",
+    "answer": "Yes. The onboarding questionnaire collects your fitness level, goals, available equipment, and training preferences. IronZ uses this information to generate personalized training plans, nutrition targets, and hydration goals. Without it, the app cannot tailor recommendations to you."
+  },
+  {
+    "id": "getting-started-multiple-devices",
+    "category": "Getting Started",
+    "keywords": ["multiple devices", "sync", "another device", "new phone", "different device"],
+    "question": "Can I use IronZ on multiple devices?",
+    "answer": "Yes. All your data syncs to the cloud. Log in with the same account on any device and your profile, workouts, nutrition, and hydration data will be there."
+  },
+  {
+    "id": "getting-started-reset-password",
+    "category": "Getting Started",
+    "keywords": ["forgot password", "reset password", "lost password", "change password", "can't log in"],
+    "question": "I forgot my password. How do I reset it?",
+    "answer": "Tap \"Forgot Password\" on the login screen. Enter your email and you will receive a reset link. Click the link, set a new password, and log back in."
+  },
+  {
+    "id": "training-plan-generation",
+    "category": "Training & Workouts",
+    "keywords": ["generate plan", "training plan", "how plan works", "plan generation", "create plan", "build plan"],
+    "question": "How does IronZ generate my training plan?",
+    "answer": "IronZ uses a rules-based philosophy engine backed by 45 science-based modules. Your profile (age, fitness level, goals, available equipment, training frequency) is matched against these modules to assemble a personalized plan. No generic templates. Standard plans are generated deterministically without any AI — the AI is only used for freeform Ask IronZ questions."
+  },
+  {
+    "id": "training-add-workout",
+    "category": "Training & Workouts",
+    "keywords": ["add workout", "add session", "new workout", "log workout", "create workout"],
+    "question": "How do I add a workout to my calendar?",
+    "answer": "Tap the \"+\" button or \"Add Session\" on the home screen. Select the workout type (Strength, Running, Cycling, Swimming, HIIT, Yoga), or choose from your saved library. Fill in the details and save."
+  },
+  {
+    "id": "training-edit-workout",
+    "category": "Training & Workouts",
+    "keywords": ["edit workout", "modify workout", "change workout", "update workout", "customize workout"],
+    "question": "Can I edit a workout after it's been generated?",
+    "answer": "Yes. Tap \"Edit\" on any workout card to modify exercises, sets, reps, weights, or duration. You can also swap exercises, add new ones, or remove ones you do not want."
+  },
+  {
+    "id": "training-zones",
+    "category": "Training & Workouts",
+    "keywords": ["training zones", "heart rate zones", "pace zones", "zones", "VDOT", "zone calculation"],
+    "question": "What are training zones and how are they calculated?",
+    "answer": "Training zones are pace or heart rate ranges that target specific physiological adaptations. IronZ calculates running zones using the Jack Daniels VDOT model based on your race times or time trial results. Zones include Recovery (Z1), Easy (Z2), Tempo (Z3), Threshold (Z4), and Speed (Z5). There are intentional gaps between some zones — these represent paces that do not serve a specific training purpose."
+  },
+  {
+    "id": "training-zone-gaps",
+    "category": "Training & Workouts",
+    "keywords": ["zone gaps", "gaps between zones", "no man's land", "why gaps", "zone gap"],
+    "question": "Why are there gaps between my running zones?",
+    "answer": "The gaps are intentional and scientifically correct. In the Jack Daniels model, Easy pace and Tempo pace do not connect directly. The space between them is sometimes called \"no man's land\" — too fast to be easy, too slow to produce tempo adaptations. Training in this range is less effective than staying in a defined zone."
+  },
+  {
+    "id": "training-update-zones",
+    "category": "Training & Workouts",
+    "keywords": ["update zones", "recalculate zones", "new zones", "change zones", "zone update"],
+    "question": "How often should I update my training zones?",
+    "answer": "Update your zones whenever you run a new race or time trial that reflects your current fitness. A good rule of thumb is every 4-8 weeks during a training cycle, or after a breakthrough performance."
+  },
+  {
+    "id": "training-ask-modify",
+    "category": "Training & Workouts",
+    "keywords": ["ask ironz modify", "modify workout ai", "change workout ai", "ask to change"],
+    "question": "Can I ask IronZ to modify my workout?",
+    "answer": "Yes. Use the Ask IronZ feature and make a direct request like \"increase my bench press by 10 pounds\" or \"swap tricep dips for close-grip bench press.\" IronZ will make the change to your active workout."
+  },
+  {
+    "id": "nutrition-targets",
+    "category": "Nutrition",
+    "keywords": ["nutrition targets", "calorie target", "macro targets", "how calories calculated", "nutrition calculation"],
+    "question": "How does IronZ calculate my nutrition targets?",
+    "answer": "Nutrition targets are based on your body weight, activity level, training goals, and the philosophy engine's nutrition modules. Calorie and macronutrient recommendations follow evidence-based guidelines for athletic performance. These are starting points — adjust based on how your body responds."
+  },
+  {
+    "id": "nutrition-log-meals",
+    "category": "Nutrition",
+    "keywords": ["log meals", "track macros", "food tracking", "meal tracking", "log food", "track calories"],
+    "question": "Can I log meals and track macros?",
+    "answer": "Yes. Navigate to the Nutrition section to log meals, track calories, protein, carbs, and fat. You can also set food preferences and dietary restrictions."
+  },
+  {
+    "id": "nutrition-not-dietitian",
+    "category": "Nutrition",
+    "keywords": ["dietitian", "medical advice", "nutrition advice", "replace dietitian", "medical nutrition"],
+    "question": "Is the nutrition advice a replacement for a dietitian?",
+    "answer": "No. IronZ provides general nutrition guidance for athletic performance based on published research. It is not medical nutrition therapy. If you have specific dietary needs, food allergies, metabolic conditions, or eating disorders, consult a registered dietitian."
+  },
+  {
+    "id": "hydration-tracking",
+    "category": "Hydration",
+    "keywords": ["hydration tracking", "log water", "track water", "water intake", "my bottle", "quick add"],
+    "question": "How does hydration tracking work?",
+    "answer": "Tap \"My Bottle\" to quickly log your default bottle size (set in settings), or tap \"Quick Add\" to choose a different size (8oz, 12oz, 16oz, 20oz, etc.). Your daily total is tracked against a personalized hydration target based on your body weight and activity level."
+  },
+  {
+    "id": "hydration-previous-day",
+    "category": "Hydration",
+    "keywords": ["previous day hydration", "log past water", "yesterday water", "retroactive hydration"],
+    "question": "Can I log hydration for a previous day?",
+    "answer": "Yes. Navigate to the previous day using the date selector and add hydration entries retroactively."
+  },
+  {
+    "id": "hydration-target",
+    "category": "Hydration",
+    "keywords": ["hydration target", "water goal", "how much water", "daily water target", "hydration goal"],
+    "question": "How is my daily hydration target calculated?",
+    "answer": "Your hydration target is based on your body weight (a common starting point is half your body weight in ounces), adjusted for training intensity, climate, and activity duration. The philosophy engine refines this based on your profile."
+  },
+  {
+    "id": "ask-ironz-what",
+    "category": "Ask IronZ",
+    "keywords": ["what is ask ironz", "ask ironz", "ai coaching", "ai assistant", "coaching assistant"],
+    "question": "What is Ask IronZ?",
+    "answer": "Ask IronZ is an AI-powered coaching assistant. You can ask training questions, request workout modifications, or get advice on nutrition and recovery. It is constrained by the IronZ training philosophy so all answers are consistent with our evidence-based approach."
+  },
+  {
+    "id": "ask-ironz-real-coach",
+    "category": "Ask IronZ",
+    "keywords": ["real coach", "certified trainer", "professional coach", "is it a coach", "human coach"],
+    "question": "Is Ask IronZ a real coach?",
+    "answer": "No. Ask IronZ is an AI assistant, not a certified personal trainer or licensed professional. It provides guidance based on the IronZ training philosophy and published exercise science. For medical concerns or individualized coaching, consult a qualified professional."
+  },
+  {
+    "id": "ask-ironz-change-workout",
+    "category": "Ask IronZ",
+    "keywords": ["change workout", "modify workout", "ask ironz change", "add weight", "swap exercise"],
+    "question": "Can Ask IronZ change my workout?",
+    "answer": "Yes. If you make a direct request like \"add 5 pounds to my squat\" or \"replace this exercise with pull-ups,\" Ask IronZ can modify your active workout. It distinguishes between questions (gives advice) and requests (takes action)."
+  },
+  {
+    "id": "billing-free",
+    "category": "Account & Billing",
+    "keywords": ["free", "pricing", "cost", "how much", "subscription", "premium", "paid"],
+    "question": "Is IronZ free?",
+    "answer": "IronZ offers both free and premium tiers. Core features are available for free. Premium features (including advanced AI coaching, detailed analytics, and integrations) require a subscription."
+  },
+  {
+    "id": "billing-cancel",
+    "category": "Account & Billing",
+    "keywords": ["cancel subscription", "cancel plan", "unsubscribe", "stop subscription", "cancel membership"],
+    "question": "How do I cancel my subscription?",
+    "answer": "You can cancel anytime through the Apple App Store or Google Play Store subscription settings, or through your account settings in the app. Your access continues until the end of the current billing period."
+  },
+  {
+    "id": "billing-delete-account",
+    "category": "Account & Billing",
+    "keywords": ["delete account", "remove account", "delete data", "erase data", "account deletion"],
+    "question": "How do I delete my account and data?",
+    "answer": "Contact support@ironz.app to request account deletion. Your data will be removed within 30 days of a verified request, as described in our Privacy Policy."
+  },
+  {
+    "id": "integrations-strava",
+    "category": "Integrations",
+    "keywords": ["strava", "strava sync", "connect strava", "strava integration"],
+    "question": "Does IronZ connect to Strava?",
+    "answer": "Strava integration is coming soon. Once available, you will be able to automatically sync completed workouts between IronZ and Strava."
+  },
+  {
+    "id": "integrations-garmin-whoop",
+    "category": "Integrations",
+    "keywords": ["garmin", "whoop", "garmin sync", "whoop sync", "wearable", "heart rate monitor"],
+    "question": "Will IronZ support Garmin or Whoop?",
+    "answer": "Garmin and Whoop integrations are on the roadmap. These will allow IronZ to incorporate heart rate, recovery, and sleep data into your training recommendations."
+  },
+  {
+    "id": "troubleshoot-data-missing",
+    "category": "Troubleshooting",
+    "keywords": ["data missing", "data not showing", "lost data", "data gone", "sync issue", "data disappeared"],
+    "question": "My data is not showing up on a new device.",
+    "answer": "Make sure you are logged in with the same account. Your data syncs to the cloud automatically. If data is still missing, log out and log back in to trigger a sync. If the issue persists, contact support@ironz.app."
+  },
+  {
+    "id": "troubleshoot-stuck-building",
+    "category": "Troubleshooting",
+    "keywords": ["stuck", "building workout", "loading", "frozen", "not loading", "spinning"],
+    "question": "The app is stuck on \"Building your workout.\"",
+    "answer": "Try closing and reopening the app. If the issue persists, check your internet connection — workout generation uses the local philosophy engine but some features require a connection to Supabase. Clear your browser cache and try again."
+  },
+  {
+    "id": "troubleshoot-bug-report",
+    "category": "Troubleshooting",
+    "keywords": ["bug", "report bug", "found bug", "issue", "problem", "error", "broken"],
+    "question": "I found a bug. How do I report it?",
+    "answer": "Email support@ironz.app with a description of what happened, what you expected, and a screenshot if possible. Include your device type and browser/app version."
+  }
+]

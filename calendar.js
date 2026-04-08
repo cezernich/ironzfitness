@@ -868,16 +868,23 @@ function _getZoneLabel(sport, zoneNum) {
 }
 
 function buildIntensityStrip(session, cardId, discipline) {
+  const _isExerciseStep = (step, disc) => {
+    if (step.exercise) return true;
+    if (!disc || (!disc.startsWith("hyrox") && disc !== "hyroxStrength")) return false;
+    const l = (step.label || "").toLowerCase();
+    return /station|circuit|strength|lifting|sled|wall ball|farmer|sandbag|skierg|row(?:ing)?.*wall|burpee|goblet|squat|deadlift|pull-up|lunge|plank|push-up|bench|press/.test(l);
+  };
   // Expand steps with reps into alternating work/rest segments
   const segments = [];
   session.steps.forEach(step => {
+    const ex = _isExerciseStep(step, discipline);
     if (step.reps && step.rest != null) {
       for (let i = 0; i < step.reps; i++) {
-        segments.push({ duration: step.duration, zone: step.zone, exercise: step.exercise });
+        segments.push({ duration: step.duration, zone: step.zone, exercise: ex });
         if (i < step.reps - 1) segments.push({ duration: step.rest, zone: 1, isRest: true });
       }
     } else {
-      segments.push({ duration: step.duration, zone: step.zone, exercise: step.exercise });
+      segments.push({ duration: step.duration, zone: step.zone, exercise: ex });
     }
   });
 
