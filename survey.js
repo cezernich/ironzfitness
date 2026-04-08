@@ -2063,15 +2063,18 @@ function submitSurveyPlan() {
       : surveyData.sport === "hyrox" ? "general"
       : "general";
 
-    if (msg) msg.innerHTML = `
-      <div style="text-align:center;padding:8px 0">
-        <div style="font-weight:700;font-size:1rem;color:var(--color-success);margin-bottom:12px">${count} ${label} added to your calendar!</div>
-        <p style="color:var(--color-text-muted);font-size:0.85rem;margin:0 0 14px">Want to understand why your plan is structured this way?</p>
-        <div style="display:flex;gap:8px;justify-content:center">
-          <button class="btn-primary" onclick="closeSurvey();if(typeof showTrainingPhilosophy==='function')showTrainingPhilosophy('${_planType}')">See Training Philosophy</button>
-          <button class="btn-secondary" onclick="closeSurvey()">Skip</button>
-        </div>
-      </div>`;
+    if (msg) {
+      msg.innerHTML = `
+        <div style="text-align:center;padding:8px 0">
+          <div style="font-weight:700;font-size:1rem;color:var(--color-success);margin-bottom:12px">${count} ${label} added to your calendar!</div>
+          <p style="color:var(--color-text-muted);font-size:0.85rem;margin:0 0 14px">Want to understand why your plan is structured this way?</p>
+          <div style="display:flex;gap:8px;justify-content:center">
+            <button class="btn-primary" onclick="closeSurvey();if(typeof showTrainingPhilosophy==='function')showTrainingPhilosophy('${_planType}')">See Training Philosophy</button>
+            <button class="btn-secondary" onclick="closeSurvey()">Skip</button>
+          </div>
+        </div>`;
+      setTimeout(() => msg.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
+    }
 
     currentWeekStart = getWeekStart(new Date());
     renderCalendar();

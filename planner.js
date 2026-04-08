@@ -2846,6 +2846,7 @@ function saveRace() {
       <button class="btn-secondary" style="margin-left:6px;font-size:0.78rem;padding:4px 12px" onclick="this.closest('div').parentElement.innerHTML=''">Dismiss</button>
     </div>`;
   msgEl.style.color = "";
+  setTimeout(() => msgEl.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
 
   // Reset edit state and form
   _cancelEditRace();
