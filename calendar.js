@@ -3806,31 +3806,49 @@ function _localSelectForMuscles(muscleSet, level, duration, equipmentAccess) {
   const selected = [];
   const usedPatterns = new Set();
 
-  // First pass: one exercise per pattern
-  for (const pattern of targetPatterns) {
+  // First pass: one exercise per muscle group (not just per pattern)
+  // This ensures biceps AND triceps each get at least one exercise even though both use isolation_arms
+  for (const m of muscles) {
     if (selected.length >= maxEx) break;
-    const armFilter = (pattern === 'isolation_arms') ? _MUSCLE_ARM_FILTER[muscles.find(m => _MUSCLE_ARM_FILTER[m])] || null : null;
-    const candidates = filtered.filter(ex => {
-      if (ex.movement_pattern !== pattern) return false;
-      if (armFilter && ex.muscle_groups && ex.muscle_groups.indexOf(armFilter) === -1) return false;
-      return !selected.some(s => s.id === ex.id);
-    });
-    const pick = selectByTier(candidates, preferredTiers, []);
-    if (pick) {
-      selected.push(pick);
-      usedPatterns.add(pattern);
+    const armFilter = _MUSCLE_ARM_FILTER[m] || null;
+    const patterns = _MUSCLE_TO_PATTERNS[m] || [];
+    for (const pattern of patterns) {
+      if (selected.length >= maxEx) break;
+      const candidates = filtered.filter(ex => {
+        if (ex.movement_pattern !== pattern) return false;
+        if (armFilter && ex.muscle_groups && ex.muscle_groups.indexOf(armFilter) === -1) return false;
+        return !selected.some(s => s.id === ex.id);
+      });
+      const pick = selectByTier(candidates, preferredTiers, []);
+      if (pick) {
+        selected.push(pick);
+        usedPatterns.add(pattern);
+        break;
+      }
     }
   }
 
-  // Second pass: fill remaining slots with variety
-  for (const pattern of targetPatterns) {
-    if (selected.length >= maxEx) break;
-    const candidates = filtered.filter(ex => {
-      if (ex.movement_pattern !== pattern) return false;
-      return !selected.some(s => s.id === ex.id);
-    });
-    const pick = selectByTier(candidates, preferredTiers, selected.map(s => s.id));
-    if (pick) selected.push(pick);
+  // Second pass: keep filling with more exercises per muscle until maxEx
+  let fillRound = 0;
+  while (selected.length < maxEx && fillRound < 5) {
+    fillRound++;
+    let addedAny = false;
+    for (const m of muscles) {
+      if (selected.length >= maxEx) break;
+      const armFilter = _MUSCLE_ARM_FILTER[m] || null;
+      const patterns = _MUSCLE_TO_PATTERNS[m] || [];
+      for (const pattern of patterns) {
+        if (selected.length >= maxEx) break;
+        const candidates = filtered.filter(ex => {
+          if (ex.movement_pattern !== pattern) return false;
+          if (armFilter && ex.muscle_groups && ex.muscle_groups.indexOf(armFilter) === -1) return false;
+          return !selected.some(s => s.id === ex.id);
+        });
+        const pick = selectByTier(candidates, preferredTiers, selected.map(s => s.id));
+        if (pick) { selected.push(pick); addedAny = true; break; }
+      }
+    }
+    if (!addedAny) break;
   }
 
   // Build exercise prescriptions with weight estimates
@@ -3838,8 +3856,11 @@ function _localSelectForMuscles(muscleSet, level, duration, equipmentAccess) {
   return selected.map(ex => {
     const prescription = buildExerciseSet(ex, classification, modules);
     const repRange = { min: prescription.rep_min || 8, max: prescription.rep_max || 12 };
-    const weight = (ex.equipment_required && ex.equipment_required.length > 0)
-      ? _estimateWeight(ex, repRange, profile)
+    // Estimate weight — only show "Bodyweight" for genuinely bodyweight exercises
+    const hasEquip = ex.equipment_required && ex.equipment_required.length > 0;
+    const looksWeighted = /bar|dumbbell|cable|machine|ez|kettlebell|smith|curl|press|fly|skull|extension|pushdown|pulldown|row/i.test(ex.name);
+    const weight = (hasEquip || looksWeighted)
+      ? (_estimateWeight(ex, repRange, profile) || "—")
       : "Bodyweight";
     return {
       name: ex.name,
