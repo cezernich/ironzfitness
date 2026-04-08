@@ -333,19 +333,7 @@ function renderFoodPreferences() {
         return chipHTML("dislike", item.name, item.isAllergy);
       }).join("");
 
-  // Show active allergies banner in nutrition tab
-  const allergyBanner = document.getElementById("allergy-banner");
-  const allergies = prefs.dislikes.map(d => _normalizeDislike(d)).filter(d => d.isAllergy);
-  if (allergyBanner) {
-    if (allergies.length > 0) {
-      allergyBanner.innerHTML = allergies.map(a =>
-        `<span class="allergy-chip">${a.name}</span>`
-      ).join("");
-      allergyBanner.style.display = "";
-    } else {
-      allergyBanner.style.display = "none";
-    }
-  }
+  // Allergy data is tracked in food preferences but no longer shown as a top-level banner
 }
 
 function chipHTML(type, term, isAllergy) {

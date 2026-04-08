@@ -1237,9 +1237,9 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
       </div>
       ${rows}
       <div class="completion-dur-row" style="margin-top:10px">
-        <label class="completion-field-label">Duration (min)</label>
-        <input type="number" id="cdur-${sessionId}" class="completion-dur-input"
-          placeholder="e.g. 45" min="1"${exDurVal} />
+        <label class="completion-field-label">Duration</label>
+        <input type="text" id="cdur-${sessionId}" class="completion-dur-input"
+          placeholder="e.g. 45 or 19:42" inputmode="decimal"${exDurVal} />
       </div>
       ${_ENDURANCE_TYPES.has(type) ? `<div class="completion-dur-row">
         <label class="completion-field-label">Distance (${_unit})</label>
@@ -1259,9 +1259,9 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
     formBody = `
       <div class="completion-cardio-fields">
         <div class="completion-dur-row">
-          <label class="completion-field-label">Duration (min)</label>
-          <input type="number" id="cdur-${sessionId}" class="completion-dur-input"
-            placeholder="e.g. 45" min="1"${durVal} />
+          <label class="completion-field-label">Duration</label>
+          <input type="text" id="cdur-${sessionId}" class="completion-dur-input"
+            placeholder="e.g. 45 or 19:42" inputmode="decimal"${durVal} />
         </div>
         ${_ENDURANCE_TYPES.has(type) ? `<div class="completion-dur-row">
           <label class="completion-field-label">Distance (${_cUnit})</label>
@@ -1386,6 +1386,33 @@ function _cexReadSetDetails(sessionId, exIdx) {
   return allSame ? null : details;
 }
 
+/**
+ * Parse duration input that supports mm:ss (e.g. "19:42") or plain minutes (e.g. "45").
+ * Returns total minutes as a decimal number, or NaN if invalid.
+ */
+function _parseDurationInput(val) {
+  const s = String(val || "").trim();
+  if (!s) return NaN;
+  // mm:ss format
+  const mmss = s.match(/^(\d+):(\d{1,2})$/);
+  if (mmss) {
+    return parseInt(mmss[1], 10) + parseInt(mmss[2], 10) / 60;
+  }
+  // Plain number (minutes)
+  return parseFloat(s);
+}
+
+/**
+ * Format minutes as mm:ss for display (e.g. 19.7 → "19:42")
+ */
+function _formatDuration(minutes) {
+  if (!minutes || isNaN(minutes)) return "";
+  const min = Math.floor(minutes);
+  const sec = Math.round((minutes - min) * 60);
+  if (sec === 0) return String(min);
+  return `${min}:${String(sec).padStart(2, "0")}`;
+}
+
 let _lastCompletionSaveTime = 0;
 function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   const now = Date.now();
@@ -1394,7 +1421,8 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   // Don't save again if already completed
   if (isSessionComplete(sessionId)) return;
   const notes    = (document.getElementById(`cnotes-${sessionId}`)?.value || "").trim();
-  const duration = document.getElementById(`cdur-${sessionId}`)?.value || "";
+  const rawDuration = document.getElementById(`cdur-${sessionId}`)?.value || "";
+  const duration = rawDuration ? String(_parseDurationInput(rawDuration)) : "";
   const distance = document.getElementById(`cdist-${sessionId}`)?.value || "";
 
   // Pace sanity check for endurance types (sport-specific thresholds)
@@ -1490,7 +1518,7 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
     date:               dateStr,
     name:               sessionName,
     type,
-    notes:              notes || (duration ? `${duration} min` : ""),
+    notes:              notes || (duration ? `${_formatDuration(parseFloat(duration))} min` : ""),
     exercises:          exercises.length ? exercises : undefined,
     duration:           duration || null,
     distance:           distance || null,
@@ -3434,6 +3462,181 @@ function qeToggleMuscle(btn) {
 // ── Manual strength entry ─────────────────────────────────────────────────────
 function qeGoManual() { qeShowStep(2, "manual"); }
 
+// ── Local muscle-to-movement-pattern mapping for deterministic generation ─────
+const _MUSCLE_TO_PATTERNS = {
+  chest:      ['horizontal_push'],
+  back:       ['horizontal_pull', 'vertical_pull'],
+  shoulders:  ['vertical_push'],
+  biceps:     ['isolation_arms'],
+  triceps:    ['isolation_arms'],
+  quads:      ['squat'],
+  hamstrings: ['hinge'],
+  glutes:     ['hinge', 'squat', 'isolation_legs'],
+  core:       ['core'],
+  calves:     ['isolation_legs'],
+  'full body': ['squat', 'hinge', 'horizontal_push', 'horizontal_pull', 'core'],
+};
+
+// Arm muscle filter for isolation_arms pattern
+const _MUSCLE_ARM_FILTER = { biceps: 'biceps', triceps: 'triceps' };
+
+/**
+ * Estimate working weight for an exercise from reference lifts.
+ * Uses strength training zones (bench, squat, deadlift, ohp, row) to scale.
+ */
+function _estimateWeight(exercise, repRange, profile) {
+  let refs = null;
+  try {
+    const zones = JSON.parse(localStorage.getItem("trainingZones")) || {};
+    refs = zones.strength || null;
+  } catch {}
+  if (!refs) return "Bodyweight";
+
+  // Map exercise movement patterns to reference lifts
+  const patternToRef = {
+    horizontal_push: 'bench',
+    squat: 'squat',
+    hinge: 'deadlift',
+    vertical_push: 'ohp',
+    horizontal_pull: 'row',
+    vertical_pull: 'row',
+  };
+
+  const refKey = patternToRef[exercise.movement_pattern];
+  if (!refKey || !refs[refKey] || !refs[refKey].weight) return "Bodyweight";
+
+  const refWeight = parseFloat(refs[refKey].weight);
+  const refType = refs[refKey].type || '1rm';
+  if (!refWeight || isNaN(refWeight)) return "Bodyweight";
+
+  // Convert reference to estimated 1RM
+  const refToMultiplier = { '1rm': 1, '5rm': 1.15, '10rm': 1.3 };
+  const est1RM = refWeight * (refToMultiplier[refType] || 1);
+
+  // Rep-based percentage of 1RM
+  const midReps = Math.round((repRange.min + repRange.max) / 2);
+  let pct;
+  if (midReps <= 3) pct = 0.9;
+  else if (midReps <= 5) pct = 0.85;
+  else if (midReps <= 8) pct = 0.75;
+  else if (midReps <= 12) pct = 0.65;
+  else pct = 0.55;
+
+  // For secondary/accessory exercises (tier 2/3), scale down further
+  if (exercise.tier === 2) pct *= 0.85;
+  else if (exercise.tier === 3) pct *= 0.7;
+
+  const weight = Math.round((est1RM * pct) / 5) * 5;
+  return weight > 0 ? weight + " lbs" : "Bodyweight";
+}
+
+/**
+ * Select exercises from the local library for given muscle groups.
+ * Returns exercise objects with prescription and weight estimates.
+ */
+function _localSelectForMuscles(muscleSet, level, duration, equipmentAccess) {
+  const lib = exerciseLibrary;
+  if (!lib || lib.length === 0) return [];
+
+  let profile = {};
+  try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
+  const classification = {
+    level: level || 'intermediate',
+    equipmentAccess: equipmentAccess || 'full_gym',
+    primaryGoal: profile.goal ? _mapGoalForClassification(profile.goal) : 'general_health',
+    sessionDuration: _mapDuration(duration),
+  };
+
+  // Determine which movement patterns to target
+  const targetPatterns = new Set();
+  const muscles = [...muscleSet];
+  for (const m of muscles) {
+    const patterns = _MUSCLE_TO_PATTERNS[m] || [];
+    patterns.forEach(p => targetPatterns.add(p));
+  }
+
+  // Get avoided exercises
+  let avoided = [];
+  try {
+    const prefs = JSON.parse(localStorage.getItem("trainingPreferences") || "{}");
+    avoided = (prefs.avoidedExercises || []).map(n => n.toLowerCase());
+  } catch {}
+
+  const available = filterAvailableExercises(lib, profile, classification);
+  const filtered = available.filter(ex => {
+    if (avoided.some(a => ex.name.toLowerCase().includes(a))) return false;
+    return targetPatterns.has(ex.movement_pattern);
+  });
+
+  // Determine how many exercises based on duration
+  const durMin = parseInt(duration) || 45;
+  let maxEx = durMin <= 30 ? 4 : durMin <= 45 ? 6 : durMin <= 60 ? 7 : 8;
+
+  // Pick exercises using tier-based selection
+  const preferredTiers = level === 'beginner' ? [2, 3] : [1, 2];
+  const selected = [];
+  const usedPatterns = new Set();
+
+  // First pass: one exercise per pattern
+  for (const pattern of targetPatterns) {
+    if (selected.length >= maxEx) break;
+    const armFilter = (pattern === 'isolation_arms') ? _MUSCLE_ARM_FILTER[muscles.find(m => _MUSCLE_ARM_FILTER[m])] || null : null;
+    const candidates = filtered.filter(ex => {
+      if (ex.movement_pattern !== pattern) return false;
+      if (armFilter && ex.muscle_groups && ex.muscle_groups.indexOf(armFilter) === -1) return false;
+      return !selected.some(s => s.id === ex.id);
+    });
+    const pick = selectByTier(candidates, preferredTiers, []);
+    if (pick) {
+      selected.push(pick);
+      usedPatterns.add(pattern);
+    }
+  }
+
+  // Second pass: fill remaining slots with variety
+  for (const pattern of targetPatterns) {
+    if (selected.length >= maxEx) break;
+    const candidates = filtered.filter(ex => {
+      if (ex.movement_pattern !== pattern) return false;
+      return !selected.some(s => s.id === ex.id);
+    });
+    const pick = selectByTier(candidates, preferredTiers, selected.map(s => s.id));
+    if (pick) selected.push(pick);
+  }
+
+  // Build exercise prescriptions with weight estimates
+  const modules = _getActiveModules(classification);
+  return selected.map(ex => {
+    const prescription = buildExerciseSet(ex, classification, modules);
+    const repRange = { min: prescription.rep_min || 8, max: prescription.rep_max || 12 };
+    const weight = (ex.equipment_required && ex.equipment_required.length > 0)
+      ? _estimateWeight(ex, repRange, profile)
+      : "Bodyweight";
+    return {
+      name: ex.name,
+      sets: prescription.sets || 3,
+      reps: prescription.rep_max || 10,
+      rest: prescription.rest_seconds ? prescription.rest_seconds + "s" : "60s",
+      weight: _roundExWeight(weight) || "Bodyweight",
+      _exerciseId: ex.id,
+    };
+  });
+}
+
+function _mapGoalForClassification(goal) {
+  const map = { 'Build Muscle': 'muscle_gain', 'Lose Weight': 'fat_loss', 'Get Stronger': 'performance',
+    'Improve Endurance': 'performance', 'General Fitness': 'general_health', 'Train for Race': 'performance' };
+  return map[goal] || goal || 'general_health';
+}
+
+function _mapDuration(dur) {
+  const d = parseInt(dur) || 45;
+  if (d <= 30) return '15-30';
+  if (d <= 45) return '30-45';
+  if (d <= 60) return '45-60';
+  return '60+';
+}
+
 async function qeGenerateHIIT() {
   const format    = document.getElementById("qe-hiit-format")?.value || "circuit";
   const focus     = document.getElementById("qe-hiit-focus")?.value || "full body";
@@ -3447,110 +3650,119 @@ async function qeGenerateHIIT() {
   loadingEl.style.display = "";
   resultEl.innerHTML = "";
 
-  let profile = {};
-  try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
-  const level = profile.fitnessLevel || "intermediate";
-  const profileCtx = profile.weight
-    ? `Athlete: ${profile.weight} lbs${profile.gender ? `, ${profile.gender}` : ""}, ${level} level.`
-    : `Athlete level: ${level}.`;
-
-  let avoidCtx = "";
   try {
-    const prefs = JSON.parse(localStorage.getItem("trainingPreferences") || "{}");
-    const avoided = prefs.avoidedExercises || [];
-    if (avoided.length) avoidCtx = ` NEVER include these exercises: ${avoided.join(", ")}.`;
-  } catch {}
+    // Ensure exercise library is loaded
+    if (!exerciseLibrary || exerciseLibrary.length === 0) {
+      await loadExerciseLibrary();
+    }
 
-  const equipmentDesc = {
-    none: "bodyweight only, no equipment",
-    dumbbells: "dumbbells available",
-    kettlebell: "kettlebell available",
-    "full-gym": "full gym with barbell, dumbbells, kettlebells, pull-up bar, boxes",
-  }[equipment] || "bodyweight only";
+    let profile = {};
+    try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
+    const level = profile.fitnessLevel || "intermediate";
 
-  const intensityDesc = {
-    light: "Light intensity — longer rest periods, lower-impact movements, focus on form over speed",
-    moderate: "Moderate intensity — balanced work-to-rest ratio, steady effort",
-    intense: "High intensity — shorter rest periods, explosive movements, push hard",
-    max: "Maximum intensity — minimal rest, all-out effort, most demanding variations",
-  }[intensity] || "Moderate intensity";
+    // Map equipment select values to exercise-selector equipment access
+    const equipMap = { none: 'none', dumbbells: 'dumbbells', kettlebell: 'kettlebell', 'full-gym': 'full_gym' };
+    const equipAccess = equipMap[equipment] || 'full_gym';
 
-  const formatDesc = {
-    circuit: "Circuit: multiple exercises done back-to-back for a set number of rounds, with rest between rounds",
-    tabata: "Tabata: 8 rounds of 20 seconds max effort / 10 seconds rest per exercise, cycle through exercises",
-    emom: "EMOM: assign a movement and rep count to each minute, cycle through for the full duration",
-    amrap: "AMRAP: list exercises with rep counts, athlete does as many rounds as possible in the time cap",
-  }[format] || "Circuit";
+    // Map focus to muscle groups
+    const focusToMuscles = {
+      'full body': ['chest', 'back', 'quads', 'core'],
+      'upper body': ['chest', 'back', 'shoulders'],
+      'lower body': ['quads', 'hamstrings', 'glutes'],
+      'core': ['core'],
+    };
+    const muscleSet = new Set(focusToMuscles[focus] || focusToMuscles['full body']);
 
-  try {
-    const data = await callAI({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1200,
-      messages: [{
-        role: "user",
-        content: `Generate a ${duration}-minute HIIT workout. ${profileCtx}${avoidCtx}
+    // Build classification for exercise selection
+    const classification = {
+      level: level,
+      equipmentAccess: equipAccess,
+      primaryGoal: 'fat_loss',
+      sessionDuration: _mapDuration(duration),
+    };
 
-Format: ${formatDesc}
-Intensity: ${intensityDesc}
-Focus: ${focus}
-Equipment: ${equipmentDesc}
+    // Get avoided exercises
+    let avoided = [];
+    try {
+      const prefs = JSON.parse(localStorage.getItem("trainingPreferences") || "{}");
+      avoided = (prefs.avoidedExercises || []).map(n => n.toLowerCase());
+    } catch {}
 
-Return ONLY valid JSON, no markdown:
-{
-  "title": "Workout title",
-  "format": "${format}",
-  "totalTime": "${duration} min",
-  "rounds": 4,
-  "workTime": "40s",
-  "restTime": "20s",
-  "restBetweenRounds": "60s",
-  "exercises": [
-    { "name": "Exercise Name", "sets": 1, "reps": "12", "rest": "20s", "weight": "Bodyweight" }
-  ]
-}
+    // Select HIIT-appropriate exercises from library
+    const targetPatterns = new Set();
+    for (const m of muscleSet) {
+      (_MUSCLE_TO_PATTERNS[m] || []).forEach(p => targetPatterns.add(p));
+    }
 
-Rules:
-- exercises: the list of movements in one round/circuit. Each exercise is done once per round.
-- sets: always 1 (the rounds field handles repetition). Sets MUST be 1.
-- reps: rep count OR time (e.g. "12" or "30 sec")
-- rest: rest after this exercise before the next one within a round
-- weight: "Bodyweight" or specific weight if equipment allows
-- rounds: total number of times through the circuit
-- workTime/restTime: for Tabata format timing per exercise
-- restBetweenRounds: rest between complete rounds
-- Include 4-8 exercises appropriate for ${focus} focus
-- For EMOM: reps should be completable well within 60 seconds
-- For Tabata: reps should be "20 sec" (work period)
-- For AMRAP: omit rest between exercises, set restBetweenRounds to "0s"`
-      }]
+    const available = filterAvailableExercises(exerciseLibrary, profile, classification);
+    const filtered = available.filter(ex => {
+      if (avoided.some(a => ex.name.toLowerCase().includes(a))) return false;
+      return targetPatterns.has(ex.movement_pattern);
     });
 
-    const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
-    const cleaned = text.replace(/```json|```/g, "").trim();
-    const hiit = JSON.parse(cleaned);
+    // For HIIT, prefer tier 2-3 (more accessible movements)
+    const preferredTiers = [2, 3];
+    const durMin = parseInt(duration) || 20;
+    const numEx = Math.min(Math.max(4, Math.floor(durMin / 4)), 8);
+
+    const selected = [];
+    const patternArr = [...targetPatterns];
+    for (let i = 0; i < numEx; i++) {
+      const pattern = patternArr[i % patternArr.length];
+      const candidates = filtered.filter(ex => {
+        if (ex.movement_pattern !== pattern) return false;
+        return !selected.some(s => s.id === ex.id);
+      });
+      const pick = selectByTier(candidates, preferredTiers, selected.map(s => s.id));
+      if (pick) selected.push(pick);
+    }
+
+    // Build HIIT structure based on format
+    const intensityConfig = {
+      light:    { workSec: 40, restSec: 30, restBetween: 90, reps: 10 },
+      moderate: { workSec: 40, restSec: 20, restBetween: 60, reps: 12 },
+      intense:  { workSec: 30, restSec: 15, restBetween: 45, reps: 15 },
+      max:      { workSec: 20, restSec: 10, restBetween: 30, reps: 20 },
+    };
+    const cfg = intensityConfig[intensity] || intensityConfig.moderate;
+
+    let calcRounds, workTime, restTime, restBetweenRounds;
+    const actualNumEx = selected.length || 1;
+
+    if (format === "tabata") {
+      workTime = "20s"; restTime = "10s";
+      calcRounds = Math.max(1, Math.floor(durMin / (actualNumEx * 0.5)));
+      restBetweenRounds = "60s";
+    } else if (format === "emom") {
+      workTime = ""; restTime = "";
+      calcRounds = Math.max(1, Math.floor(durMin / actualNumEx));
+      restBetweenRounds = "0s";
+    } else if (format === "amrap") {
+      workTime = ""; restTime = "";
+      calcRounds = 1;
+      restBetweenRounds = "0s";
+    } else {
+      // circuit
+      workTime = cfg.workSec + "s"; restTime = cfg.restSec + "s";
+      const restMin = cfg.restBetween / 60;
+      calcRounds = Math.max(1, Math.floor(durMin / (actualNumEx * ((cfg.workSec + cfg.restSec) / 60) + restMin)));
+      restBetweenRounds = cfg.restBetween + "s";
+    }
+
+    const hiitTitle = `${focus.charAt(0).toUpperCase() + focus.slice(1)} ${format.toUpperCase()} — ${durMin} min`;
+
+    // Build exercise objects
+    const exercises = selected.map(ex => ({
+      name: ex.name,
+      sets: 1,
+      reps: format === "tabata" ? "20 sec" : format === "emom" ? String(Math.max(6, cfg.reps - 4)) : String(cfg.reps),
+      rest: format === "amrap" ? "0s" : cfg.restSec + "s",
+      weight: "Bodyweight",
+    }));
 
     loadingEl.style.display = "none"; _stopLoadingMessages();
 
-    // Calculate rounds from target duration and exercise count
-    const numEx = (hiit.exercises || []).length || 1;
-    const durMin = parseInt(duration) || 20;
-    const fmt = hiit.format || format;
-    let calcRounds;
-    if (fmt === "emom") {
-      // 1 exercise per minute, so 1 round = numEx minutes
-      calcRounds = Math.floor(durMin / numEx);
-    } else if (fmt === "tabata") {
-      // 30s per exercise (20 on + 10 off), 1 round = numEx * 0.5 min
-      calcRounds = Math.floor(durMin / (numEx * 0.5));
-    } else if (fmt === "circuit") {
-      // Estimate ~1 min per exercise + rest between rounds (~1 min)
-      const restMin = parseFloat(String(hiit.restBetweenRounds || "60").match(/[\d.]+/)?.[0] || 60) / 60;
-      calcRounds = Math.floor(durMin / (numEx + restMin));
-    } else {
-      // AMRAP: time cap, rounds not predetermined
-      calcRounds = hiit.rounds || 1;
-    }
-    calcRounds = Math.max(calcRounds, 1);
+    const fmt = format;
 
     // Build header summary
     const fmtLabels = { circuit: "Circuit", tabata: "Tabata", emom: "EMOM", amrap: "AMRAP" };
@@ -3559,14 +3771,14 @@ Rules:
     if (fmt === "amrap") {
       summaryHtml += ` (as many rounds as possible)`;
     } else {
-      summaryHtml += `, ${calcRounds} round${calcRounds !== 1 ? "s" : ""} of ${numEx} exercises`;
+      summaryHtml += `, ${calcRounds} round${calcRounds !== 1 ? "s" : ""} of ${actualNumEx} exercises`;
     }
-    if (fmt === "tabata") summaryHtml += ` (${hiit.workTime || "20s"} on / ${hiit.restTime || "10s"} off)`;
-    else if (fmt !== "amrap" && hiit.restBetweenRounds && hiit.restBetweenRounds !== "0s") summaryHtml += `, ${hiit.restBetweenRounds} rest between rounds`;
+    if (fmt === "tabata") summaryHtml += ` (${workTime} on / ${restTime} off)`;
+    else if (fmt !== "amrap" && restBetweenRounds && restBetweenRounds !== "0s") summaryHtml += `, ${restBetweenRounds} rest between rounds`;
     summaryHtml += `</div>`;
 
     // Store exercises — sets = calcRounds so user sees total sets needed
-    _qeGeneratedExercises = (hiit.exercises || []).map(ex => ({
+    _qeGeneratedExercises = exercises.map(ex => ({
       ...ex,
       sets: fmt === "amrap" ? 1 : calcRounds,
       rest: ex.rest || "20s",
@@ -3578,7 +3790,7 @@ Rules:
       ${summaryHtml}
       <div class="form-row" style="margin-bottom:10px">
         <label for="qe-workout-name">Workout Name (optional)</label>
-        <input type="text" id="qe-workout-name" value="${(hiit.title || "HIIT Session").replace(/"/g,"&quot;")}" placeholder="e.g. Full Body HIIT" />
+        <input type="text" id="qe-workout-name" value="${hiitTitle.replace(/"/g,"&quot;")}" placeholder="e.g. Full Body HIIT" />
       </div>
       <div class="qe-exercise-header">
         <span></span><span>Sets × Reps</span><span>Weight</span><span></span>
@@ -3619,68 +3831,28 @@ async function qeGenerateStrength() {
   resultEl.innerHTML = "";
 
   try {
-    const data = await callAI({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1200,
-      messages: [{
-        role: "user",
-        content: (() => {
-          let profile = {};
-          try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
-          let strengthRefs = null;
-          try {
-            const allZones = JSON.parse(localStorage.getItem("trainingZones")) || {};
-            strengthRefs = allZones.strength || null;
-          } catch {}
+    // Ensure exercise library is loaded
+    if (!exerciseLibrary || exerciseLibrary.length === 0) {
+      await loadExerciseLibrary();
+    }
 
-          const profileCtx = profile.weight
-            ? `The athlete weighs ${profile.weight} lbs${profile.gender ? `, ${profile.gender}` : ""}.`
-            : "";
+    // Use local exercise selector — no API call
+    const exercises = _localSelectForMuscles(_qeSelectedMuscles, level, duration, 'full_gym');
+    if (exercises.length === 0) {
+      throw new Error("No exercises found for the selected muscle groups.");
+    }
 
-          const liftLabels = { bench: "Bench Press", squat: "Back Squat", deadlift: "Deadlift", ohp: "Overhead Press", row: "Barbell Row" };
-          const typeLabels = { "1rm": "1-rep max", "5rm": "5-rep max", "10rm": "10-rep max" };
-          let refCtx = "";
-          if (strengthRefs) {
-            const lines = Object.entries(liftLabels)
-              .filter(([k]) => strengthRefs[k]?.weight)
-              .map(([k, label]) => `${label}: ${strengthRefs[k].weight} lbs (${typeLabels[strengthRefs[k].type] || strengthRefs[k].type})`);
-            if (lines.length) refCtx = `\nAthlete's reference lifts (MUST use to calculate all exercise weights): ${lines.join(", ")}. Scale working weights from these: ~85% for 5 reps, ~75% for 10 reps, ~65% for 12 reps. For non-reference exercises estimate proportionally.`;
-          }
-          let avoidCtx = "";
-          try {
-            const prefs = JSON.parse(localStorage.getItem("trainingPreferences") || "{}");
-            const avoided = prefs.avoidedExercises || [];
-            if (avoided.length) avoidCtx = `\nNEVER include these exercises: ${avoided.join(", ")}.`;
-          } catch {}
+    const title = `${muscles} — ${duration} min`;
 
-          return `Generate a ${duration}-minute strength workout for a ${level} targeting: ${muscles}. ${profileCtx}${refCtx}${avoidCtx}
-
-Return ONLY valid JSON, no markdown, no explanation:
-{
-  "title": "Workout title",
-  "exercises": [
-    { "name": "Exercise Name", "sets": 3, "reps": 10, "rest": "60s", "weight": "135 lbs" }
-  ]
-}
-
-Include 5-8 exercises. Each exercise MUST have a specific weight in lbs rounded to the nearest 5 (e.g. 135, 185, 225 — NEVER 137, 183, 267). Reps must be a single integer, never a range. Use "Bodyweight" only for true bodyweight exercises. Use common gym exercises.`;
-        })()
-      }]
-    });
-
-    const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
-    const cleaned = text.replace(/```json|```/g, "").trim();
-    const workout = JSON.parse(cleaned);
-
-    _qeGeneratedExercises = (workout.exercises || []).map(ex => ({ ...ex, weight: _roundExWeight(ex.weight) }));
+    _qeGeneratedExercises = exercises.map(ex => ({ ...ex, weight: _roundExWeight(ex.weight) }));
     _qeEditingExerciseIndex = null;
     loadingEl.style.display = "none"; _stopLoadingMessages();
 
     resultEl.innerHTML = `<div class="qe-generated-workout">
-      <div class="qe-generated-title">${ICONS.sparkles} ${workout.title || "Your Workout"}</div>
+      <div class="qe-generated-title">${ICONS.sparkles} ${title}</div>
       <div class="form-row" style="margin-bottom:10px">
         <label for="qe-workout-name">Workout Name (optional)</label>
-        <input type="text" id="qe-workout-name" value="${(workout.title || "").replace(/"/g,"&quot;")}" placeholder="e.g. Push Day A" />
+        <input type="text" id="qe-workout-name" value="${title.replace(/"/g,"&quot;")}" placeholder="e.g. Push Day A" />
       </div>
       <div class="qe-exercise-header">
         <span></span><span>Sets × Reps</span><span>Weight</span><span></span>
@@ -3995,7 +4167,7 @@ async function qeRegenExercise(i) {
 
 function qeGoCardioManual() { qeShowStep(2, "cardio-manual"); }
 
-async function qeGenerateCardio() {
+function qeGenerateCardio() {
   const type      = _qeSelectedType;
   const intensity = document.getElementById("qe-activity-intensity")?.value || "moderate";
   const isBrick   = type === "brick";
@@ -4015,77 +4187,122 @@ async function qeGenerateCardio() {
     try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
     const level = profile.fitnessLevel || "intermediate";
 
-    const typeLabels = { running: "runner", cycling: "cyclist", swim: "swimmer", hiit: "athlete", brick: "triathlete" };
-    const sportName  = { running: "running", cycling: "cycling", swim: "swimming", hiit: "HIIT", brick: "brick (bike + run)" };
-    const sportLabel = typeLabels[type] || "athlete";
-    const sport      = sportName[type] || type;
+    // Load training zones for pace/power targets
+    let zones = {};
+    try { zones = JSON.parse(localStorage.getItem("trainingZones")) || {}; } catch {}
 
-    let zonesCtx = "";
-    try {
-      const zones = JSON.parse(localStorage.getItem("trainingZones")) || {};
-      if ((type === "running" || type === "brick") && zones.running) {
-        const r = zones.running;
-        if (r.easyPaceMin) zonesCtx = `Run easy pace: ${r.easyPaceMin}:${(r.easyPaceSec || "00").toString().padStart(2,"0")}/mile. `;
-        if (r.thresholdPaceMin) zonesCtx += `Run threshold: ${r.thresholdPaceMin}:${(r.thresholdPaceSec || "00").toString().padStart(2,"0")}/mile. `;
+    const durMin = parseInt(duration) || 45;
+    const sportName = { running: "Run", cycling: "Ride", swim: "Swim", hiit: "HIIT", brick: "Brick" };
+
+    // Build zone-based details from user's training zones
+    function runDetail(zone) {
+      const r = zones.running || {};
+      if (zone === "Z2" && r.easy) return `Easy pace: ${r.easy}`;
+      if (zone === "Z2" && r.easyPaceMin) return `Easy pace: ${r.easyPaceMin}:${(r.easyPaceSec||"00").toString().padStart(2,"0")}/mile`;
+      if (zone === "Z3" && r.tempo) return `Tempo pace: ${r.tempo}`;
+      if (zone === "Z3" && r.thresholdPaceMin) return `Threshold: ${r.thresholdPaceMin}:${(r.thresholdPaceSec||"00").toString().padStart(2,"0")}/mile`;
+      if (zone === "Z4" && r.thresholdPaceMin) return `Threshold pace: ${r.thresholdPaceMin}:${(r.thresholdPaceSec||"00").toString().padStart(2,"0")}/mile`;
+      if (zone === "Z5" && r.vo2max) return `VO2max effort: ${r.vo2max}`;
+      const descs = { Z1: "Very easy effort, conversational", Z2: "Aerobic base, comfortable pace",
+        Z3: "Tempo effort, comfortably hard", Z4: "Threshold effort, sustainable hard",
+        Z5: "VO2max, hard effort", Z6: "Max sprint" };
+      return descs[zone] || "Steady effort";
+    }
+    function bikeDetail(zone) {
+      const c = zones.cycling || {};
+      const ftp = c.ftp ? parseInt(c.ftp) : null;
+      const pctMap = { Z1: 0.5, Z2: 0.7, Z3: 0.85, Z4: 0.95, Z5: 1.1, Z6: 1.3 };
+      if (ftp && pctMap[zone]) return `~${Math.round(ftp * pctMap[zone])}W (${Math.round(pctMap[zone]*100)}% FTP)`;
+      const descs = { Z1: "Easy spin, recovery", Z2: "Endurance pace",
+        Z3: "Sweet spot / tempo", Z4: "Threshold effort", Z5: "VO2max intervals", Z6: "Sprint" };
+      return descs[zone] || "Steady effort";
+    }
+    function swimDetail(zone) {
+      const s = zones.swimming || {};
+      if (s.css) {
+        const descs = { Z1: `Easy, CSS + 15-20s`, Z2: `Aerobic, CSS + 8-12s`,
+          Z3: `Tempo, CSS + 3-5s`, Z4: `Threshold, near CSS (${s.css}/100m)`, Z5: `VO2max, CSS - 3-5s` };
+        return descs[zone] || `Steady effort`;
       }
-      if ((type === "cycling" || type === "brick") && zones.cycling) {
-        if (zones.cycling.ftp) zonesCtx += `FTP: ${zones.cycling.ftp}W. `;
-      }
-      if (type === "swim" && zones.swimming) {
-        if (zones.swimming.css) zonesCtx = `CSS: ${zones.swimming.css}/100m. `;
-      }
-    } catch {}
-
-    let prompt;
-    if (type === "brick") {
-      prompt = `Generate a ${duration}-minute ${intensity} brick workout (bike then run) for a ${level} triathlete. The bike portion should be ${bikeDur} minutes and the run portion should be ${runDur} minutes. ${zonesCtx}
-
-A brick workout is a cycling session immediately followed by a run — the purpose is to train the bike-to-run transition. Structure the workout as: bike warm-up, bike main set, quick transition, run segments.
-
-Return ONLY valid JSON, no markdown, no explanation:
-{
-  "title": "Workout title",
-  "intervals": [
-    { "name": "Phase name", "duration": "X min", "effort": "Z1-Z6", "details": "Specific instructions", "sport": "bike|run" }
-  ]
-}
-
-For phases with repeated intervals (e.g. 4×7 min tempo with recovery), use these optional fields on that interval object instead of bundling into one duration:
-  "reps": 4, "duration": "7 min", "effort": "Z3", "restDuration": "1 min", "restEffort": "Z2"
-
-Each interval MUST include a "sport" field set to "bike" or "run". The bike phases should total ${bikeDur} minutes and the run phases should total ${runDur} minutes. The transition phase between bike and run MUST use effort "T1" (not Z1 or Z2) and sport "run". Include 5-8 phases. Effort must be one of: RW, Z1, Z2, Z3, Z4, Z5, Z6, T1 (RW=Rest/Walk, Z1=Recovery, Z2=Aerobic Base, Z3=Tempo, Z4=Threshold, Z5=VO2 Max, Z6=Max Sprint, T1=Transition). Bike zones should reference power/wattage. Run zones should reference pace (min/mile), NOT watts. Be specific with targets.`;
-    } else {
-      prompt = `Generate a ${duration}-minute ${intensity} ${sport} workout for a ${level} ${sportLabel}. ${zonesCtx}
-
-Return ONLY valid JSON, no markdown, no explanation:
-{
-  "title": "Workout title",
-  "intervals": [
-    { "name": "Phase name", "duration": "X min", "effort": "Z1-Z6", "details": "Specific instructions" }
-  ]
-}
-
-For phases with repeated intervals (e.g. 3×8 min tempo with recovery jogs), use these optional fields on that interval object instead of bundling into one duration:
-  "reps": 3, "duration": "8 min", "effort": "Z3", "restDuration": "2 min", "restEffort": "Z2"
-
-Include 3-6 phases (warm-up, main set(s), cool-down). Do NOT include static stretching — that is done separately outside the timed workout. Effort must be one of: RW, Z1, Z2, Z3, Z4, Z5, Z6 (RW=Rest/Walk, Z1=Recovery, Z2=Aerobic Base, Z3=Tempo, Z4=Threshold, Z5=VO2 Max, Z6=Max Sprint). Be specific with paces, distances, or power targets where relevant.`;
+      const descs = { Z1: "Very easy, long rest", Z2: "Steady swimming, moderate effort",
+        Z3: "Tempo effort", Z4: "Threshold pace", Z5: "Hard interval effort" };
+      return descs[zone] || "Steady effort";
     }
 
-    const data = await callAI({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 800,
-      messages: [{ role: "user", content: prompt }]
-    });
+    // Intensity maps to zone distribution
+    const intZones = {
+      light:    { warmup: "Z1", main: "Z2", hard: "Z3", cooldown: "Z1" },
+      moderate: { warmup: "Z1", main: "Z2", hard: "Z3", cooldown: "Z1" },
+      intense:  { warmup: "Z2", main: "Z3", hard: "Z4", cooldown: "Z1" },
+      max:      { warmup: "Z2", main: "Z3", hard: "Z5", cooldown: "Z1" },
+    };
+    const iz = intZones[intensity] || intZones.moderate;
 
-    const text    = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
-    const cleaned = text.replace(/```json|```/g, "").trim();
-    const workout = JSON.parse(cleaned);
+    let intervals = [];
+    const detailFn = type === "cycling" ? bikeDetail : type === "swim" ? swimDetail : runDetail;
+    const warmupMin = level === "beginner" ? Math.max(5, Math.round(durMin * 0.2)) : Math.round(durMin * 0.15);
+    const cooldownMin = Math.max(3, Math.round(durMin * 0.1));
+
+    if (type === "brick") {
+      const bMin = parseInt(bikeDur) || 45;
+      const rMin = parseInt(runDur) || 20;
+      const bWarmup = Math.round(bMin * 0.2);
+      const bMain = bMin - bWarmup;
+      const rMain = rMin - 2; // 2 min transition
+      intervals = [
+        { name: "Bike Warm-Up", duration: bWarmup + " min", effort: "Z1", details: bikeDetail("Z1"), sport: "bike" },
+        { name: "Bike Main Set", duration: bMain + " min", effort: iz.main, details: bikeDetail(iz.main), sport: "bike" },
+        { name: "Transition", duration: "2 min", effort: "T1", details: "Quick change, settle into run form", sport: "run" },
+        { name: "Run Main Set", duration: rMain + " min", effort: iz.main, details: runDetail(iz.main), sport: "run" },
+      ];
+      // Add intervals for intense/max
+      if (intensity === "intense" || intensity === "max") {
+        const hardDur = Math.round(bMain * 0.3);
+        intervals.splice(2, 0, { name: "Bike Hard Effort", duration: hardDur + " min", effort: iz.hard, details: bikeDetail(iz.hard), sport: "bike" });
+        intervals[1].duration = (bMain - hardDur) + " min";
+      }
+    } else if (type === "swim") {
+      const mainMin = durMin - warmupMin - cooldownMin;
+      intervals = [
+        { name: "Warm-Up", duration: warmupMin + " min", effort: iz.warmup, details: swimDetail(iz.warmup) },
+        { name: "Main Set", duration: Math.round(mainMin * 0.6) + " min", effort: iz.main, details: swimDetail(iz.main) },
+      ];
+      if (intensity !== "light") {
+        intervals.push({ name: "Hard Intervals", duration: Math.round(mainMin * 0.4) + " min", effort: iz.hard, details: swimDetail(iz.hard) });
+      } else {
+        intervals[1].duration = mainMin + " min";
+      }
+      intervals.push({ name: "Cool-Down", duration: cooldownMin + " min", effort: iz.cooldown, details: swimDetail(iz.cooldown) });
+    } else {
+      // Running / Cycling / generic
+      const mainMin = durMin - warmupMin - cooldownMin;
+      intervals = [
+        { name: "Warm-Up", duration: warmupMin + " min", effort: iz.warmup, details: detailFn(iz.warmup) },
+      ];
+      if (intensity === "light") {
+        intervals.push({ name: "Steady State", duration: mainMin + " min", effort: iz.main, details: detailFn(iz.main) });
+      } else if (intensity === "moderate") {
+        intervals.push({ name: "Base Effort", duration: Math.round(mainMin * 0.7) + " min", effort: iz.main, details: detailFn(iz.main) });
+        intervals.push({ name: "Tempo Push", duration: Math.round(mainMin * 0.3) + " min", effort: iz.hard, details: detailFn(iz.hard) });
+      } else {
+        // intense / max — structured intervals
+        const reps = intensity === "max" ? 5 : 4;
+        const workMin = Math.floor((mainMin * 0.5) / reps);
+        const restMin = Math.floor((mainMin * 0.5) / reps);
+        intervals.push({ name: "Easy Base", duration: Math.round(mainMin * 0.2) + " min", effort: iz.main, details: detailFn(iz.main) });
+        intervals.push({ name: `Intervals (${reps}x)`, duration: workMin + " min", effort: iz.hard, details: detailFn(iz.hard), reps: reps, restDuration: restMin + " min", restEffort: iz.warmup });
+      }
+      intervals.push({ name: "Cool-Down", duration: cooldownMin + " min", effort: iz.cooldown, details: detailFn(iz.cooldown) });
+    }
+
+    const title = `${sportName[type] || type} — ${intensity} ${durMin} min`;
+    const workout = { title, intervals };
 
     _qeGeneratedCardioData = workout;
     loadingEl.style.display = "none"; _stopLoadingMessages();
 
     const effortToZone = { RW:"rw",Z1:"z1",Z2:"z2",Z3:"z3",Z4:"z4",Z5:"z5",Z6:"z6", Easy:"z2",Moderate:"z3",Hard:"z4",Max:"z5", T1:"z-transition" };
-    let html = `<div class="qe-generated-workout"><div class="qe-generated-title">${workout.title || "Your Workout"}</div>`;
+    let html = `<div class="qe-generated-workout"><div class="qe-generated-title">${escHtml(workout.title)}</div>`;
     (workout.intervals || []).forEach(iv => {
       const zCls = effortToZone[iv.effort] || "z2";
       const sportTag = iv.sport ? `<span class="qe-brick-sport qe-brick-${iv.sport}">${iv.sport === "bike" ? "Bike" : "Run"}</span> ` : "";

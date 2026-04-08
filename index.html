@@ -567,9 +567,6 @@
     ===================================================== -->
     <div id="tab-nutrition" class="tab-content">
 
-      <!-- Active Allergies Banner -->
-      <div id="allergy-banner" class="allergy-banner" style="display:none"></div>
-
       <!-- Nutrition Dashboard -->
       <section class="card collapsible" id="section-nutrition-dashboard">
         <div class="card-toggle" onclick="toggleSection('section-nutrition-dashboard')">
@@ -1500,12 +1497,21 @@
           <p class="hint">Permanently delete stored data. This cannot be undone.</p>
 
           <div class="settings-danger-grid">
-            <div class="settings-danger-row">
-              <div>
-                <div class="settings-danger-label">Workout History</div>
-                <div class="settings-danger-desc">Delete all logged workouts</div>
+            <div class="settings-danger-pair">
+              <div class="settings-danger-row">
+                <div>
+                  <div class="settings-danger-label">Workout History</div>
+                  <div class="settings-danger-desc">Delete all logged workouts</div>
+                </div>
+                <button class="btn-danger" onclick="clearWorkouts()">Clear</button>
               </div>
-              <button class="btn-danger" onclick="clearWorkouts()">Clear</button>
+              <div class="settings-danger-row">
+                <div>
+                  <div class="settings-danger-label">Future Workouts</div>
+                  <div class="settings-danger-desc">Remove upcoming scheduled workouts</div>
+                </div>
+                <button class="btn-danger" onclick="clearFutureWorkouts()">Clear</button>
+              </div>
             </div>
             <div class="settings-danger-row">
               <div>
@@ -1513,13 +1519,6 @@
                 <div class="settings-danger-desc">Delete all logged meals</div>
               </div>
               <button class="btn-danger" onclick="clearNutrition()">Clear</button>
-            </div>
-            <div class="settings-danger-row">
-              <div>
-                <div class="settings-danger-label">Future Workouts</div>
-                <div class="settings-danger-desc">Remove all upcoming scheduled workouts (keeps completed sessions)</div>
-              </div>
-              <button class="btn-danger" onclick="clearFutureWorkouts()">Clear</button>
             </div>
             <div class="settings-danger-row">
               <div>

@@ -4456,6 +4456,21 @@ button:active {
 
 .settings-danger-row:last-child { border-bottom: none; }
 
+.settings-danger-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 24px;
+  border-bottom: 1px solid var(--color-border);
+}
+.settings-danger-pair .settings-danger-row {
+  border-bottom: none;
+}
+@media (max-width: 500px) {
+  .settings-danger-pair {
+    grid-template-columns: 1fr;
+  }
+}
+
 .settings-danger-label {
   font-size: 0.9rem;
   font-weight: 600;
