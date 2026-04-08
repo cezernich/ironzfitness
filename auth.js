@@ -223,7 +223,7 @@ async function ensureProfile(user) {
 
   if (!existing) {
     // Determine role — only the hardcoded owner email gets admin
-    const adminEmail = 'chasezernich@gmail.com';
+    const adminEmail = 'chase.zernich@gmail.com';
     const isAdmin = user.email && user.email.toLowerCase() === adminEmail;
 
     const { error: insertError } = await client.from('profiles').insert({
