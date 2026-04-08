@@ -111,7 +111,7 @@ function _getSurveyZoneSports() {
   if (s === "running" || s === "triathlon") sports.push("running");
   if (s === "cycling" || s === "triathlon") sports.push("biking");
   if (s === "triathlon") sports.push("swimming");
-  if (s === "hyrox") { sports.push("running"); sports.push("strength"); surveyData.gymStrength = true; }
+  if (s === "hyrox") { sports.push("running"); sports.push("strength"); }
   if (s === "strength" || isEffectivelyStrength()) sports.push("strength");
   // Just-training: check individual activities
   if (s === "just-training") {
@@ -2179,7 +2179,8 @@ function submitSurveyPlan() {
   saveTrainingPlanData([...existingPlan, ...newEntries]);
 
   // Handle gym/strength toggle based on survey answer
-  if (surveyData.gymStrength === true) {
+  // Hyrox plans already include hyroxStrength sessions — skip separate gym generation
+  if (surveyData.gymStrength === true && surveyData.sport !== "hyrox") {
     localStorage.setItem("gymStrengthEnabled", "1"); if (typeof DB !== 'undefined') DB.syncKey('gymStrengthEnabled');
     const gymDowMap = { 1: [2], 2: [2, 5], 3: [2, 4, 6] };
     const gymDows = gymDowMap[surveyData.gymDays] || [2, 5];
