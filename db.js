@@ -526,7 +526,12 @@ const DB = (() => {
   }
 
   function _shapeTrainingSession(s, uid) {
-    return {
+    var extraData = {};
+    var skipKeys = { id:1, plan_id:1, planId:1, user_id:1, date:1, scheduled_date:1, week:1, week_number:1, dayOfWeek:1, day_of_week:1, type:1, session_type:1, name:1, session_name:1, description:1, desc:1, exercises:1, status:1, created_at:1, createdAt:1, data:1 };
+    for (var k in s) {
+      if (s.hasOwnProperty(k) && !skipKeys[k]) extraData[k] = s[k];
+    }
+    var row = {
       id: (_isUUID(s.id) ? s.id : null) || crypto.randomUUID(),
       plan_id: s.planId || s.plan_id || null,
       user_id: uid,
@@ -540,6 +545,8 @@ const DB = (() => {
       status: s.status || 'scheduled',
       created_at: s.createdAt || s.created_at || new Date().toISOString()
     };
+    if (Object.keys(extraData).length > 0) row.data = extraData;
+    return row;
   }
 
   function _shapeTrainingPlan(p, uid) {
