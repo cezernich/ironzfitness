@@ -2218,14 +2218,17 @@ function buildExerciseTableHTML(exercises, opts) {
   }
 
   // Group into segments: { supersetId, exercises[] } or { supersetId: null, exercises: [single] }
+  // Accepts either `supersetId` (logged-workout shape) or `supersetGroup`
+  // (custom-plan shape) as the grouping key.
+  const _gid = ex => ex.supersetId || ex.supersetGroup || null;
   const segments = [];
   let i = 0;
   while (i < exercises.length) {
     const ex = exercises[i];
-    if (ex.supersetId) {
-      const gid = ex.supersetId;
+    const gid = _gid(ex);
+    if (gid) {
       const group = [];
-      while (i < exercises.length && exercises[i].supersetId === gid) {
+      while (i < exercises.length && _gid(exercises[i]) === gid) {
         group.push(exercises[i]);
         i++;
       }

@@ -2467,7 +2467,10 @@
           <div id="cp-manual-cardio-rows"></div>
           <button class="btn-secondary" style="width:100%;margin-top:8px" onclick="cpManualAddCardioRow()">+ Add Interval / Phase</button>
         </div>
-        <button class="btn-primary" style="width:100%;margin-top:12px" onclick="customPlanSaveManual()">Save Session</button>
+        <div class="cp-modal-footer">
+          <button id="cp-manual-delete-btn" class="btn-danger cp-manual-delete-btn" style="display:none" onclick="customPlanDeleteFromModal()">Delete</button>
+          <button id="cp-manual-save-btn" class="btn-primary cp-manual-save-btn" onclick="customPlanSaveManual()">Save Session</button>
+        </div>
       </div>
     </div>
   </div>

@@ -33,13 +33,77 @@ const CP_DAYS = [
   { dow: 0, label: "Sunday" },
 ];
 
-// Stores what the user has assigned to each day of the week template
-// Key = dow (0-6), value = { mode: "ai"|"saved"|"manual"|"rest", data: {...} }
+// Stores what the user has assigned to each day of the week template.
+// Key = dow (0-6), value = ARRAY of sessions. Each session has shape:
+//   { id, mode: "ai"|"saved"|"manual"|"rest", data: {...} }
+// A day may have 1..N sessions (e.g. AM swim + PM lift). Rest days have
+// a single entry with mode "rest".
 let cpWeekTemplate = {};
 
+// ── Data-model helpers ────────────────────────────────────────────────────────
+
+function _cpGenId() {
+  return "cp-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+}
+
+// Coerce a day slot to an array (migrates legacy single-object shape in place).
+function _cpEnsureArray(dow) {
+  const slot = cpWeekTemplate[dow];
+  if (slot == null) {
+    cpWeekTemplate[dow] = [];
+  } else if (!Array.isArray(slot)) {
+    // Legacy: { mode, data } — wrap as array
+    cpWeekTemplate[dow] = [{ id: _cpGenId(), ...slot }];
+  }
+  // Ensure every entry has an id
+  cpWeekTemplate[dow].forEach(s => { if (!s.id) s.id = _cpGenId(); });
+  return cpWeekTemplate[dow];
+}
+
+// Walk the whole template and coerce every day to array shape.
+function _cpMigrateTemplate() {
+  for (const dow of Object.keys(cpWeekTemplate)) _cpEnsureArray(dow);
+}
+
+// Push a session onto a day. If adding a non-rest session to a rest day,
+// clear the rest marker first. If adding a rest session, replace the day.
+function _cpAddSession(dow, session) {
+  const arr = _cpEnsureArray(dow);
+  if (!session.id) session.id = _cpGenId();
+  if (session.mode === "rest") {
+    cpWeekTemplate[dow] = [session];
+    return 0;
+  }
+  // If the day is currently a rest day, clear it first
+  if (arr.length === 1 && arr[0].mode === "rest") {
+    cpWeekTemplate[dow] = [session];
+    return 0;
+  }
+  arr.push(session);
+  return arr.length - 1;
+}
+
+function _cpReplaceSession(dow, idx, session) {
+  const arr = _cpEnsureArray(dow);
+  if (idx < 0 || idx >= arr.length) return;
+  // Preserve id across edits
+  if (!session.id) session.id = arr[idx].id || _cpGenId();
+  arr[idx] = session;
+}
+
+function _cpRemoveSession(dow, idx) {
+  const arr = _cpEnsureArray(dow);
+  if (idx < 0 || idx >= arr.length) return;
+  arr.splice(idx, 1);
+}
+
 function initCustomPlan() {
+  // Migrate any legacy single-object shape before rendering
+  _cpMigrateTemplate();
   // Only reset template if it's empty (preserve in-progress edits across tab switches)
   if (Object.keys(cpWeekTemplate).length === 0) {
+    renderCustomPlanBuilder();
+  } else {
     renderCustomPlanBuilder();
   }
   // Set default start date to next Monday if empty
@@ -61,9 +125,6 @@ function renderCustomPlanBuilder() {
   if (!container) return;
 
   container.innerHTML = CP_DAYS.map(d => {
-    const entry = cpWeekTemplate[d.dow];
-    const contentHtml = entry ? renderDayContent(d.dow, entry) : '<p class="empty-msg">No session planned</p>';
-
     return `
       <div class="custom-plan-day" data-day="${d.dow}">
         <div class="custom-day-header">
@@ -76,73 +137,85 @@ function renderCustomPlanBuilder() {
           </div>
         </div>
         <div class="custom-day-content" id="custom-day-${d.dow}-content">
-          ${contentHtml}
+          ${renderDayContent(d.dow)}
         </div>
       </div>
     `;
   }).join("");
 }
 
-function renderDayContent(dow, entry) {
-  if (!entry) return '<p class="empty-msg">No session planned</p>';
+// Re-render a single day's content area (after an add/edit/remove).
+function _cpRerenderDay(dow) {
+  const contentEl = document.getElementById(`custom-day-${dow}-content`);
+  if (contentEl) contentEl.innerHTML = renderDayContent(dow);
+}
 
+function renderDayContent(dow) {
+  const sessions = _cpEnsureArray(dow);
+  if (sessions.length === 0) return '<p class="empty-msg">No session planned</p>';
+
+  return sessions.map((entry, idx) => renderSessionCard(dow, idx, entry)).join("");
+}
+
+const _CP_TRASH_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>';
+
+function renderSessionCard(dow, idx, entry) {
   if (entry.mode === "rest") {
     return `
       <div class="cp-day-entry cp-day-rest">
         <span>Rest Day</span>
-        <button class="cp-remove-btn" onclick="customPlanClearDay(${dow})" title="Remove"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
+        <button class="cp-remove-btn" onclick="event.stopPropagation();customPlanRemoveSession(${dow}, ${idx})" title="Remove">${_CP_TRASH_SVG}</button>
       </div>`;
   }
+
+  let title = "Session";
+  let type = entry.data?.type || "general";
+  let detail = "";
 
   if (entry.mode === "ai") {
-    const title = entry.data?.title || entry.data?.sessionName || "AI-Generated Session";
-    const type = entry.data?.type || "general";
-    return `
-      <div class="cp-day-entry">
-        <div class="cp-day-entry-info">
-          <span class="cp-day-entry-type">${type}</span>
-          <span class="cp-day-entry-title">${_cpEsc(title)}</span>
-        </div>
-        <button class="cp-remove-btn" onclick="customPlanClearDay(${dow})" title="Remove"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
-      </div>`;
+    title = entry.data?.title || entry.data?.sessionName || "AI-Generated Session";
+  } else if (entry.mode === "saved") {
+    title = entry.data?.sessionName || entry.data?.name || "Saved Workout";
+  } else if (entry.mode === "manual") {
+    title = entry.data?.sessionName || "Custom Session";
   }
 
-  if (entry.mode === "saved") {
-    const name = entry.data?.name || "Saved Workout";
-    const type = entry.data?.type || "general";
-    return `
-      <div class="cp-day-entry">
-        <div class="cp-day-entry-info">
-          <span class="cp-day-entry-type">${type}</span>
-          <span class="cp-day-entry-title">${_cpEsc(name)}</span>
-        </div>
-        <button class="cp-remove-btn" onclick="customPlanClearDay(${dow})" title="Remove"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
-      </div>`;
-  }
+  const exCount = entry.data?.exercises?.length || 0;
+  const ivCount = entry.data?.intervals?.length || entry.data?.aiSession?.intervals?.length || 0;
+  if (exCount) detail = `<span class="cp-day-entry-detail">${exCount} exercise${exCount !== 1 ? "s" : ""}</span>`;
+  else if (ivCount) detail = `<span class="cp-day-entry-detail">${ivCount} interval${ivCount !== 1 ? "s" : ""}</span>`;
 
-  if (entry.mode === "manual") {
-    const name = entry.data?.sessionName || "Custom Session";
-    const type = entry.data?.type || "general";
-    const exCount = entry.data?.exercises?.length || 0;
-    const exSummary = exCount ? `<span class="cp-day-entry-detail">${exCount} exercise${exCount !== 1 ? "s" : ""}</span>` : "";
-    return `
-      <div class="cp-day-entry">
-        <div class="cp-day-entry-info">
-          <span class="cp-day-entry-type">${type}</span>
-          <span class="cp-day-entry-title">${_cpEsc(name)}</span>
-          ${exSummary}
-        </div>
-        <button class="cp-remove-btn" onclick="customPlanClearDay(${dow})" title="Remove"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
-      </div>`;
-  }
-
-  return '<p class="empty-msg">No session planned</p>';
+  return `
+    <div class="cp-day-entry cp-day-entry--tappable" onclick="customPlanEditSession(${dow}, ${idx})" title="Tap to edit">
+      <div class="cp-day-entry-info">
+        <span class="cp-day-entry-type">${type}</span>
+        <span class="cp-day-entry-title">${_cpEsc(title)}</span>
+        ${detail}
+      </div>
+      <button class="cp-remove-btn" onclick="event.stopPropagation();customPlanRemoveSession(${dow}, ${idx})" title="Remove">${_CP_TRASH_SVG}</button>
+    </div>`;
 }
 
+// Remove a specific session from a day.
+function customPlanRemoveSession(dow, idx) {
+  _cpRemoveSession(dow, idx);
+  _cpRerenderDay(dow);
+}
+
+// Back-compat shim: clear all sessions for a day.
 function customPlanClearDay(dow) {
-  delete cpWeekTemplate[dow];
-  const contentEl = document.getElementById(`custom-day-${dow}-content`);
-  if (contentEl) contentEl.innerHTML = '<p class="empty-msg">No session planned</p>';
+  cpWeekTemplate[dow] = [];
+  _cpRerenderDay(dow);
+}
+
+// Dispatch tap on a session card: open the manual editor pre-populated
+// with that session's data. AI/Saved sessions open in the manual editor
+// too, so users can tweak any session uniformly.
+function customPlanEditSession(dow, idx) {
+  const arr = _cpEnsureArray(dow);
+  const entry = arr[idx];
+  if (!entry || entry.mode === "rest") return;
+  customPlanAddManual(dow, idx);
 }
 
 // ── AI Generate for a day ─────────────────────────────────────────────────────
@@ -335,7 +408,8 @@ Include 5-8 exercises or 3-5 intervals.`
     const workout = JSON.parse(cleaned);
 
     const workoutType = workout.type || "strength";
-    cpWeekTemplate[dow] = {
+    _cpAddSession(dow, {
+      id: _cpGenId(),
       mode: "ai",
       data: {
         type: workoutType,
@@ -344,8 +418,8 @@ Include 5-8 exercises or 3-5 intervals.`
         exercises: workout.exercises || null,
         aiSession: workout.intervals ? { title: workout.title, intervals: workout.intervals } : null,
       }
-    };
-    if (contentEl) contentEl.innerHTML = renderDayContent(dow, cpWeekTemplate[dow]);
+    });
+    _cpRerenderDay(dow);
   } catch (err) {
     if (contentEl) contentEl.innerHTML = `<p class="empty-msg" style="color:var(--color-danger)">Error: ${err.message}</p>`;
   }
@@ -357,8 +431,14 @@ Include 5-8 exercises or 3-5 intervals.`
 async function customPlanGenerateAI(dow, workoutType, extraContext) {
   closeCustomPlanAIModal();
 
+  // Show a spinner alongside existing sessions (don't blow them away)
   const contentEl = document.getElementById(`custom-day-${dow}-content`);
-  if (contentEl) contentEl.innerHTML = '<div class="qe-spinner" style="margin:8px auto"></div>';
+  if (contentEl) {
+    const spinner = document.createElement("div");
+    spinner.className = "qe-spinner cp-inline-spinner";
+    spinner.style.margin = "8px auto";
+    contentEl.appendChild(spinner);
+  }
 
   let profileCtx = "";
   try {
@@ -407,7 +487,8 @@ Include 5-8 exercises or 3-5 intervals.`;
     const cleaned = text.replace(/```json|```/g, "").trim();
     const workout = JSON.parse(cleaned);
 
-    cpWeekTemplate[dow] = {
+    _cpAddSession(dow, {
+      id: _cpGenId(),
       mode: "ai",
       data: {
         type: workout.type || workoutType,
@@ -416,19 +497,20 @@ Include 5-8 exercises or 3-5 intervals.`;
         exercises: workout.exercises || null,
         aiSession: workout.intervals ? { title: workout.title, intervals: workout.intervals } : null,
       }
-    };
+    });
   } catch (err) {
-    cpWeekTemplate[dow] = {
+    _cpAddSession(dow, {
+      id: _cpGenId(),
       mode: "ai",
       data: {
         type: workoutType,
         title: `${workoutType.charAt(0).toUpperCase() + workoutType.slice(1)} Session`,
         sessionName: `${workoutType.charAt(0).toUpperCase() + workoutType.slice(1)} Session`,
       }
-    };
+    });
   }
 
-  if (contentEl) contentEl.innerHTML = renderDayContent(dow, cpWeekTemplate[dow]);
+  _cpRerenderDay(dow);
 }
 
 // ── From Saved Workouts ───────────────────────────────────────────────────────
@@ -468,44 +550,117 @@ function customPlanSelectSaved(dow, index) {
   const sw = saved[index];
   if (!sw) return;
 
-  cpWeekTemplate[dow] = {
+  _cpAddSession(dow, {
+    id: _cpGenId(),
     mode: "saved",
     data: {
       ...sw,
       sessionName: sw.name || "Saved Workout",
     }
-  };
-
-  const contentEl = document.getElementById(`custom-day-${dow}-content`);
-  if (contentEl) contentEl.innerHTML = renderDayContent(dow, cpWeekTemplate[dow]);
+  });
+  _cpRerenderDay(dow);
 }
 
 // ── Manual Entry ──────────────────────────────────────────────────────────────
 
 let _cpManualSelectedType = "";
 let _cpManualRowCount = 0;
+// When editing an existing session, this holds the array index. null = add mode.
+let _cpManualEditIdx = null;
 
-function customPlanAddManual(dow) {
+function customPlanAddManual(dow, editIdx) {
   const modal = document.getElementById("cp-manual-modal");
   if (!modal) return;
   modal.classList.add("is-open");
   modal.dataset.dow = dow;
   _cpManualSelectedType = "";
+  _cpManualEditIdx = (typeof editIdx === "number") ? editIdx : null;
 
   // Reset form
   document.getElementById("cp-manual-name").value = "";
   document.getElementById("cp-manual-notes").value = "";
+
+  // Update Save button label and show/hide Delete button based on mode
+  const saveBtn = document.getElementById("cp-manual-save-btn");
+  if (saveBtn) saveBtn.textContent = _cpManualEditIdx != null ? "Update Session" : "Save Session";
+  const delBtn = document.getElementById("cp-manual-delete-btn");
+  if (delBtn) delBtn.style.display = _cpManualEditIdx != null ? "" : "none";
+
+  if (_cpManualEditIdx != null) {
+    // Pre-populate from the existing session
+    const arr = _cpEnsureArray(dow);
+    const entry = arr[_cpManualEditIdx];
+    if (entry) {
+      _cpManualPrefillFromEntry(entry);
+      return;
+    }
+  }
+
   cpManualShowStep(1);
+}
+
+// Pre-populate the manual modal from an existing session entry (any mode).
+function _cpManualPrefillFromEntry(entry) {
+  const d = entry.data || {};
+  const type = d.type || "general";
+  // Jump straight to step 2 with the right type selected
+  _cpManualSelectedType = type;
+
+  document.getElementById("cp-manual-name").value = d.sessionName || d.title || d.name || "";
+  document.getElementById("cp-manual-notes").value = d.details || d.notes || "";
+
+  const isCardio = ["running", "cycling", "swimming"].includes(type);
+  const nameInput = document.getElementById("cp-manual-name");
+  nameInput.placeholder = isCardio ? "e.g. Easy 5K, Recovery Ride" : "e.g. " + (CP_TYPE_LABELS[type] || "Custom") + " Day A";
+  const notesLabel = document.querySelector('label[for="cp-manual-notes"]');
+  if (notesLabel) notesLabel.textContent = isCardio ? "Session Title / Notes (optional)" : "Session Notes (optional)";
+  document.getElementById("cp-manual-exercises").style.display = isCardio ? "none" : "";
+  document.getElementById("cp-manual-cardio").style.display = isCardio ? "" : "none";
+
+  if (isCardio) {
+    _cpManualCardioRowCount = 0;
+    document.getElementById("cp-manual-cardio-rows").innerHTML = "";
+    const intervals = d.intervals || d.aiSession?.intervals || [];
+    if (intervals.length === 0) {
+      cpManualAddCardioRow();
+    } else {
+      intervals.forEach(iv => cpManualAddCardioRow(iv));
+    }
+  } else {
+    _cpManualRowCount = 0;
+    document.getElementById("cp-manual-exercise-rows").innerHTML = "";
+    const exercises = d.exercises || [];
+    if (exercises.length === 0) {
+      cpManualAddExRow();
+      cpManualAddExRow();
+      cpManualAddExRow();
+    } else {
+      exercises.forEach(ex => cpManualAddExRow(ex));
+    }
+  }
+  cpManualShowStep(2);
 }
 
 function cpManualShowStep(step) {
   document.getElementById("cp-manual-step-1").style.display = step === 1 ? "" : "none";
   document.getElementById("cp-manual-step-2").style.display = step === 2 ? "" : "none";
   document.getElementById("cp-manual-back").style.display = step === 2 ? "" : "none";
-  document.getElementById("cp-manual-title").textContent = step === 1 ? "Add Session" : "Add Session";
+  const titleEl = document.getElementById("cp-manual-title");
+  if (titleEl) titleEl.textContent = _cpManualEditIdx != null ? "Edit Session" : "Add Session";
   // Update step dots
   const dots = document.getElementById("cp-manual-dots");
   if (dots) dots.innerHTML = [1, 2].map(s => `<span class="qe-dot${s === step ? " active" : ""}"></span>`).join("");
+}
+
+// Delete the session currently being edited. Only visible in edit mode.
+function customPlanDeleteFromModal() {
+  const modal = document.getElementById("cp-manual-modal");
+  const dow = parseInt(modal?.dataset.dow);
+  if (isNaN(dow) || _cpManualEditIdx == null) return;
+  _cpRemoveSession(dow, _cpManualEditIdx);
+  _cpManualEditIdx = null;
+  closeCustomPlanManualModal();
+  _cpRerenderDay(dow);
 }
 
 const CP_TYPE_LABELS = {
@@ -538,7 +693,9 @@ function cpManualSelectType(type) {
   cpManualShowStep(2);
 }
 
-function cpManualAddExRow() {
+// Add a strength / HIIT / bodyweight exercise row.
+// Optional `prefill` is an existing exercise object — used when editing.
+function cpManualAddExRow(prefill) {
   _cpManualRowCount++;
   const id = _cpManualRowCount;
   const isHiit = _cpManualSelectedType === "hiit";
@@ -546,33 +703,109 @@ function cpManualAddExRow() {
   const div = document.createElement("div");
   div.className = "qe-manual-row" + (isHiit ? " hiit-row" : "");
   div.id = `cp-mrow-${id}`;
+
+  const pName = prefill?.name || "";
+  const pReps = (prefill?.reps != null) ? String(prefill.reps) : "";
+  const pSets = (prefill?.sets != null) ? String(prefill.sets) : "";
+  const pWt = _cpNormalizeWt(prefill?.weight, isBW);
+  const pGroup = prefill?.supersetGroup || prefill?.supersetId || "";
+
   if (isHiit) {
     div.innerHTML = `
       <div><label>Exercise</label>
-        <input type="text" id="cp-mex-${id}" placeholder="e.g. Burpees, Row 500m" /></div>
+        <input type="text" id="cp-mex-${id}" placeholder="e.g. Burpees, Row 500m" value="${_cpEsc(pName)}" /></div>
       <div><label>Reps / Time / Distance</label>
-        <input type="text" id="cp-mreps-${id}" placeholder="e.g. 10, 45s, 500m" /></div>
+        <input type="text" id="cp-mreps-${id}" placeholder="e.g. 10, 45s, 500m" value="${_cpEsc(pReps)}" /></div>
       <div><label>Weight</label>
-        <input type="text" id="cp-mwt-${id}" placeholder="optional" /></div>
-      <button class="remove-exercise-btn" onclick="cpManualRemoveRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
+        <input type="text" id="cp-mwt-${id}" placeholder="optional" value="${_cpEsc(pWt)}" /></div>
+      <button class="remove-exercise-btn" onclick="cpManualRemoveRow(${id})">${_CP_TRASH_SVG}</button>`;
   } else {
     const wtPlaceholder = isBW ? "Bodyweight" : "lbs/kg";
-    const wtValue = isBW ? "Bodyweight" : "";
+    const wtValue = pWt || (isBW ? "Bodyweight" : "");
     const exPlaceholder = isBW ? "e.g. Push-ups, Pull-ups" : "e.g. Bench Press";
     div.innerHTML = `
       <div><label>Exercise</label>
-        <input type="text"   id="cp-mex-${id}"   placeholder="${exPlaceholder}" /></div>
+        <input type="text"   id="cp-mex-${id}"   placeholder="${exPlaceholder}" value="${_cpEsc(pName)}" /></div>
       <div><label>Sets</label>
-        <input type="number" id="cp-msets-${id}" placeholder="3" min="1" max="20" onchange="cpPyramidSetsChanged(${id})" /></div>
+        <input type="number" id="cp-msets-${id}" placeholder="3" min="1" max="20" value="${_cpEsc(pSets)}" onchange="cpPyramidSetsChanged(${id})" /></div>
       <div><label>Reps</label>
-        <input type="text"   id="cp-mreps-${id}" placeholder="10" /></div>
+        <input type="text"   id="cp-mreps-${id}" placeholder="10" value="${_cpEsc(pReps)}" /></div>
       <div><label>Weight</label>
-        <input type="text"   id="cp-mwt-${id}"   placeholder="${wtPlaceholder}" value="${wtValue}"${isBW ? ' readonly' : ''} /></div>
+        <input type="text"   id="cp-mwt-${id}"   placeholder="${wtPlaceholder}" value="${_cpEsc(wtValue)}"${isBW ? ' readonly' : ''} /></div>
       <button class="ex-pyramid-btn" title="Per-set reps &amp; weight" onclick="cpTogglePyramid(${id})">▾</button>
-      <button class="remove-exercise-btn" onclick="cpManualRemoveRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
+      <button class="remove-exercise-btn" onclick="cpManualRemoveRow(${id})">${_CP_TRASH_SVG}</button>
+      <div class="cp-group-row">
+        <label class="cp-group-label">Superset group</label>
+        <select class="cp-mgroup" id="cp-mgroup-${id}" onchange="_cpRefreshGroupLabels()">
+          <option value="">—</option>
+          <option value="A"${pGroup === "A" ? " selected" : ""}>A</option>
+          <option value="B"${pGroup === "B" ? " selected" : ""}>B</option>
+          <option value="C"${pGroup === "C" ? " selected" : ""}>C</option>
+          <option value="D"${pGroup === "D" ? " selected" : ""}>D</option>
+          <option value="E"${pGroup === "E" ? " selected" : ""}>E</option>
+        </select>
+        <button type="button" class="cp-group-prev-btn" title="Group with previous exercise" onclick="_cpGroupWithPrevious(${id})">+ group with previous</button>
+        <span class="cp-group-tag" id="cp-mgroup-tag-${id}"></span>
+      </div>
       <div class="ex-pyramid-detail" id="cp-pyr-${id}" style="display:none"></div>`;
+    // Apply saved group value if present
+    if (pGroup) {
+      const sel = div.querySelector(`#cp-mgroup-${id}`);
+      if (sel) sel.value = pGroup;
+    }
   }
   document.getElementById("cp-manual-exercise-rows").appendChild(div);
+  _cpRefreshGroupLabels();
+}
+
+// Normalize a weight value for display in an input.
+function _cpNormalizeWt(w, isBW) {
+  if (w == null || w === "") return isBW ? "Bodyweight" : "";
+  return String(w);
+}
+
+// Refresh the "A1 / A2 / B1 / B2" preview labels on all strength rows.
+function _cpRefreshGroupLabels() {
+  const container = document.getElementById("cp-manual-exercise-rows");
+  if (!container) return;
+  const rows = Array.from(container.querySelectorAll(".qe-manual-row"));
+  // Track running index per group letter
+  const counts = {};
+  rows.forEach(row => {
+    const sel = row.querySelector(".cp-mgroup");
+    const tag = row.querySelector(".cp-group-tag");
+    if (!sel || !tag) return;
+    const val = sel.value;
+    if (!val) { tag.textContent = ""; return; }
+    counts[val] = (counts[val] || 0) + 1;
+    tag.textContent = `${val}${counts[val]}`;
+  });
+}
+
+// Auto-assign this row to the group of the row directly above it.
+// If the row above has no group, pick the next unused letter.
+function _cpGroupWithPrevious(rowId) {
+  const container = document.getElementById("cp-manual-exercise-rows");
+  if (!container) return;
+  const rows = Array.from(container.querySelectorAll(".qe-manual-row"));
+  const idx = rows.findIndex(r => r.id === `cp-mrow-${rowId}`);
+  if (idx <= 0) return;
+  const prevRow = rows[idx - 1];
+  const prevSel = prevRow.querySelector(".cp-mgroup");
+  const mySel = rows[idx].querySelector(".cp-mgroup");
+  if (!prevSel || !mySel) return;
+  let group = prevSel.value;
+  if (!group) {
+    // Assign the next unused letter
+    const used = new Set(rows.map(r => r.querySelector(".cp-mgroup")?.value).filter(Boolean));
+    for (const letter of ["A", "B", "C", "D", "E"]) {
+      if (!used.has(letter)) { group = letter; break; }
+    }
+    if (!group) group = "A";
+    prevSel.value = group;
+  }
+  mySel.value = group;
+  _cpRefreshGroupLabels();
 }
 
 function cpManualRemoveRow(id) {
@@ -624,46 +857,62 @@ function cpPyramidSetsChanged(id) {
 
 let _cpManualCardioRowCount = 0;
 
-function cpManualAddCardioRow() {
+function cpManualAddCardioRow(prefill) {
   _cpManualCardioRowCount++;
   const id = _cpManualCardioRowCount;
   const unit = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
   const div = document.createElement("div");
   div.className = "qe-manual-row qe-cardio-row";
   div.id = `cp-crow-${id}`;
-  div.dataset.durMode = "time";
+
+  // Parse prefill duration: "5 mi" -> distance mode; "10 min" -> time mode
+  const pName = prefill?.name || "";
+  const pDetails = prefill?.details || "";
+  const pEffort = prefill?.effort || "Z2";
+  let pMode = "time";
+  let pDist = "";
+  let pMin = "";
+  const dur = prefill?.duration || "";
+  if (dur) {
+    const distMatch = String(dur).match(/^\s*([\d.]+)\s*(mi|km|m)\b/i);
+    const minMatch = String(dur).match(/^\s*([\d.]+)\s*min\b/i);
+    if (distMatch) { pMode = "distance"; pDist = distMatch[1]; }
+    else if (minMatch) { pMode = "time"; pMin = minMatch[1]; }
+  }
+  div.dataset.durMode = pMode;
+
   div.innerHTML = `
     <div><label>Phase</label>
-      <input type="text" id="cp-cphase-${id}" placeholder="e.g. Warm-up" /></div>
+      <input type="text" id="cp-cphase-${id}" placeholder="e.g. Warm-up" value="${_cpEsc(pName)}" /></div>
     <div class="qe-dur-col">
       <div class="qe-dur-toggle">
-        <button type="button" class="qe-dur-mode-btn" data-mode="distance"
+        <button type="button" class="qe-dur-mode-btn${pMode === "distance" ? " active" : ""}" data-mode="distance"
           onclick="setCPIntervalMode(${id},'distance')">Distance</button>
-        <button type="button" class="qe-dur-mode-btn active" data-mode="time"
+        <button type="button" class="qe-dur-mode-btn${pMode === "time" ? " active" : ""}" data-mode="time"
           onclick="setCPIntervalMode(${id},'time')">Time</button>
       </div>
-      <div id="cp-dist-wrap-${id}" style="display:none">
-        <input type="number" id="cp-cdist-${id}" placeholder="e.g. 5" min="0" step="0.1" style="width:70px" />
+      <div id="cp-dist-wrap-${id}" style="display:${pMode === "distance" ? "" : "none"}">
+        <input type="number" id="cp-cdist-${id}" placeholder="e.g. 5" min="0" step="0.1" style="width:70px" value="${_cpEsc(pDist)}" />
         <span class="qe-unit-label">${unit}</span>
       </div>
-      <div id="cp-time-wrap-${id}">
-        <input type="number" id="cp-cmin-${id}" placeholder="e.g. 10" min="0" style="width:70px" />
+      <div id="cp-time-wrap-${id}" style="display:${pMode === "time" ? "" : "none"}">
+        <input type="number" id="cp-cmin-${id}" placeholder="e.g. 10" min="0" style="width:70px" value="${_cpEsc(pMin)}" />
         <span class="qe-unit-label">min</span>
       </div>
     </div>
     <div><label>Zone</label>
       <select id="cp-ceffort-${id}">
-        <option value="RW">Rest / Walk</option>
-        <option value="Z1">Z1 Recovery</option>
-        <option value="Z2" selected>Z2 Aerobic</option>
-        <option value="Z3">Z3 Tempo</option>
-        <option value="Z4">Z4 Threshold</option>
-        <option value="Z5">Z5 VO2 Max</option>
-        <option value="Z6">Z6 Max Sprint</option>
+        <option value="RW"${pEffort === "RW" ? " selected" : ""}>Rest / Walk</option>
+        <option value="Z1"${pEffort === "Z1" ? " selected" : ""}>Z1 Recovery</option>
+        <option value="Z2"${pEffort === "Z2" ? " selected" : ""}>Z2 Aerobic</option>
+        <option value="Z3"${pEffort === "Z3" ? " selected" : ""}>Z3 Tempo</option>
+        <option value="Z4"${pEffort === "Z4" ? " selected" : ""}>Z4 Threshold</option>
+        <option value="Z5"${pEffort === "Z5" ? " selected" : ""}>Z5 VO2 Max</option>
+        <option value="Z6"${pEffort === "Z6" ? " selected" : ""}>Z6 Max Sprint</option>
       </select></div>
     <div style="flex:2"><label>Details</label>
-      <input type="text" id="cp-cdetails-${id}" placeholder="e.g. 5:30/km, keep HR under 145" /></div>
-    <button class="remove-exercise-btn" onclick="cpManualRemoveCardioRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
+      <input type="text" id="cp-cdetails-${id}" placeholder="e.g. 5:30/km, keep HR under 145" value="${_cpEsc(pDetails)}" /></div>
+    <button class="remove-exercise-btn" onclick="cpManualRemoveCardioRow(${id})">${_CP_TRASH_SVG}</button>`;
   document.getElementById("cp-manual-cardio-rows").appendChild(div);
 }
 
@@ -709,7 +958,9 @@ function customPlanSaveManual() {
   const notes = document.getElementById("cp-manual-notes")?.value.trim() || "";
 
   const isCardio = ["running", "cycling", "swimming"].includes(type);
+  const now = new Date().toISOString();
 
+  let session;
   if (isCardio) {
     // Collect intervals from cardio rows
     const intervals = [];
@@ -724,7 +975,7 @@ function customPlanSaveManual() {
         details: document.getElementById(`cp-cdetails-${id}`)?.value.trim() || "",
       });
     });
-    cpWeekTemplate[dow] = {
+    session = {
       mode: "manual",
       data: {
         type,
@@ -748,6 +999,11 @@ function customPlanSaveManual() {
       };
       if (!isHiit) ex.sets = document.getElementById(`cp-msets-${id}`)?.value.trim() || "";
 
+      // Superset group (strength/bodyweight — HIIT rows don't have the control)
+      const groupSel = document.getElementById(`cp-mgroup-${id}`);
+      const groupVal = groupSel?.value || "";
+      ex.supersetGroup = groupVal || null;
+
       // Collect per-set pyramid details if expanded
       const pyrDetail = document.getElementById(`cp-pyr-${id}`);
       if (pyrDetail && pyrDetail.style.display !== "none") {
@@ -766,7 +1022,7 @@ function customPlanSaveManual() {
       }
       exercises.push(ex);
     });
-    cpWeekTemplate[dow] = {
+    session = {
       mode: "manual",
       data: {
         type,
@@ -777,40 +1033,65 @@ function customPlanSaveManual() {
     };
   }
 
+  // Edit vs. add
+  if (_cpManualEditIdx != null) {
+    const arr = _cpEnsureArray(dow);
+    const existing = arr[_cpManualEditIdx];
+    session.id = existing?.id || _cpGenId();
+    session.data.createdAt = existing?.data?.createdAt || now;
+    session.data.updatedAt = now;
+    _cpReplaceSession(dow, _cpManualEditIdx, session);
+  } else {
+    session.id = _cpGenId();
+    session.data.createdAt = now;
+    session.data.updatedAt = now;
+    _cpAddSession(dow, session);
+  }
+  _cpManualEditIdx = null;
+
   closeCustomPlanManualModal();
-  const contentEl = document.getElementById(`custom-day-${dow}-content`);
-  if (contentEl) contentEl.innerHTML = renderDayContent(dow, cpWeekTemplate[dow]);
+  _cpRerenderDay(dow);
 }
 
 // ── Rest Day ──────────────────────────────────────────────────────────────────
 
 function customPlanSetRest(dow) {
-  cpWeekTemplate[dow] = { mode: "rest", data: {} };
-  const contentEl = document.getElementById(`custom-day-${dow}-content`);
-  if (contentEl) contentEl.innerHTML = renderDayContent(dow, cpWeekTemplate[dow]);
+  // Setting rest replaces the entire day with a single rest entry.
+  cpWeekTemplate[dow] = [{ id: _cpGenId(), mode: "rest", data: {} }];
+  _cpRerenderDay(dow);
 }
 
 // ── Copy Week ─────────────────────────────────────────────────────────────────
 
 function customPlanCopyWeek() {
-  const assigned = Object.keys(cpWeekTemplate).length;
-  if (assigned === 0) {
+  _cpMigrateTemplate();
+  let total = 0;
+  for (const dow of Object.keys(cpWeekTemplate)) {
+    total += (cpWeekTemplate[dow] || []).filter(e => e.mode !== "rest").length;
+  }
+  if (total === 0) {
     const msg = document.getElementById("custom-plan-msg");
     if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = "No sessions to copy. Add sessions to your week first."; }
     return;
   }
-  // Template is already stored in cpWeekTemplate — copying means reusing it across weeks
-  // The save function handles multi-week expansion
+  // Template is already stored in cpWeekTemplate — copying means reusing it across weeks.
+  // saveCustomPlan() handles multi-week expansion by iterating the full array per day.
   const msg = document.getElementById("custom-plan-msg");
-  if (msg) { msg.style.color = "var(--color-success)"; msg.textContent = "Week template saved. It will repeat for the selected duration."; }
+  if (msg) { msg.style.color = "var(--color-success)"; msg.textContent = `Week template saved (${total} session${total !== 1 ? "s" : ""}). It will repeat for the selected duration.`; }
   setTimeout(() => { if (msg) msg.textContent = ""; }, 3000);
 }
 
 // ── Save & Schedule ───────────────────────────────────────────────────────────
 
 function saveCustomPlan() {
-  const assigned = Object.entries(cpWeekTemplate).filter(([_, v]) => v.mode !== "rest");
-  if (assigned.length === 0) {
+  _cpMigrateTemplate();
+  // Count non-rest sessions across all days
+  let nonRestCount = 0;
+  for (const dowStr of Object.keys(cpWeekTemplate)) {
+    const arr = cpWeekTemplate[dowStr] || [];
+    nonRestCount += arr.filter(e => e.mode !== "rest").length;
+  }
+  if (nonRestCount === 0) {
     const msg = document.getElementById("custom-plan-msg");
     if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = "Add at least one session to your plan."; }
     return;
@@ -833,43 +1114,51 @@ function saveCustomPlan() {
   // Expand the week template across the requested number of weeks
   const newEntries = [];
   for (let w = 0; w < weeks; w++) {
-    for (const [dowStr, entry] of Object.entries(cpWeekTemplate)) {
-      if (entry.mode === "rest") continue;
+    for (const dowStr of Object.keys(cpWeekTemplate)) {
+      const sessions = cpWeekTemplate[dowStr] || [];
+      for (let si = 0; si < sessions.length; si++) {
+        const entry = sessions[si];
+        if (!entry || entry.mode === "rest") continue;
 
-      const dow = parseInt(dowStr);
-      const startDow = start.getDay(); // 0=Sun
-      let dayOffset = (dow - startDow + 7) % 7 + w * 7;
-      const date = new Date(start);
-      date.setDate(date.getDate() + dayOffset);
-      const dateStr = date.toISOString().slice(0, 10);
+        const dow = parseInt(dowStr);
+        const startDow = start.getDay(); // 0=Sun
+        let dayOffset = (dow - startDow + 7) % 7 + w * 7;
+        const date = new Date(start);
+        date.setDate(date.getDate() + dayOffset);
+        const dateStr = date.toISOString().slice(0, 10);
 
-      const scheduleEntry = {
-        id: `custom-${dateStr}-${entry.data?.type || "general"}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        date: dateStr,
-        type: entry.data?.type || "general",
-        sessionName: entry.data?.sessionName || entry.data?.title || "Session",
-        source: "custom",
-        level: "intermediate",
-      };
+        const scheduleEntry = {
+          id: `custom-${dateStr}-${entry.data?.type || "general"}-${si}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          date: dateStr,
+          type: entry.data?.type || "general",
+          sessionName: entry.data?.sessionName || entry.data?.title || "Session",
+          source: "custom",
+          level: "intermediate",
+        };
 
-      // Carry over exercises or intervals
-      if (entry.data?.exercises) scheduleEntry.exercises = entry.data.exercises;
-      if (entry.data?.aiSession) scheduleEntry.aiSession = entry.data.aiSession;
-      if (entry.data?.intervals) scheduleEntry.aiSession = { title: entry.data.sessionName || capitalize(entry.data.type) + " Session", intervals: entry.data.intervals };
-      if (entry.data?.details) scheduleEntry.details = entry.data.details;
+        // Carry over exercises or intervals. For exercises, copy supersetGroup
+        // to supersetId so buildExerciseTableHTML's existing superset rendering
+        // picks up the grouping from custom plans.
+        if (entry.data?.exercises) {
+          scheduleEntry.exercises = entry.data.exercises.map(_cpExerciseToScheduleShape);
+        }
+        if (entry.data?.aiSession) scheduleEntry.aiSession = entry.data.aiSession;
+        if (entry.data?.intervals) scheduleEntry.aiSession = { title: entry.data.sessionName || capitalize(entry.data.type) + " Session", intervals: entry.data.intervals };
+        if (entry.data?.details) scheduleEntry.details = entry.data.details;
 
-      // For cardio types without intervals, add discipline/load for rich rendering
-      const _discMap = { running: "run", cycling: "bike", swimming: "swim" };
-      if (_discMap[scheduleEntry.type] && !scheduleEntry.aiSession) {
-        scheduleEntry.discipline = _discMap[scheduleEntry.type];
-        const nm = (scheduleEntry.sessionName + " " + (scheduleEntry.details || "")).toLowerCase();
-        if (/interval|speed|vo2|fartlek|repeat/.test(nm)) scheduleEntry.load = "hard";
-        else if (/tempo|threshold|sweetspot|race.?pace/.test(nm)) scheduleEntry.load = "moderate";
-        else if (/long|endurance|distance/.test(nm)) scheduleEntry.load = "long";
-        else scheduleEntry.load = "easy";
+        // For cardio types without intervals, add discipline/load for rich rendering
+        const _discMap = { running: "run", cycling: "bike", swimming: "swim" };
+        if (_discMap[scheduleEntry.type] && !scheduleEntry.aiSession) {
+          scheduleEntry.discipline = _discMap[scheduleEntry.type];
+          const nm = (scheduleEntry.sessionName + " " + (scheduleEntry.details || "")).toLowerCase();
+          if (/interval|speed|vo2|fartlek|repeat/.test(nm)) scheduleEntry.load = "hard";
+          else if (/tempo|threshold|sweetspot|race.?pace/.test(nm)) scheduleEntry.load = "moderate";
+          else if (/long|endurance|distance/.test(nm)) scheduleEntry.load = "long";
+          else scheduleEntry.load = "easy";
+        }
+
+        newEntries.push(scheduleEntry);
       }
-
-      newEntries.push(scheduleEntry);
     }
   }
 
@@ -899,4 +1188,36 @@ function saveCustomPlan() {
 
 function _cpEsc(str) {
   return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// Build a schedule-ready exercise object from a template exercise.
+// Copies supersetGroup → supersetId so buildExerciseTableHTML's existing
+// rendering path picks up the grouping. Kept as a named helper so unit
+// tests can exercise the mapping directly.
+function _cpExerciseToScheduleShape(ex) {
+  const out = { ...ex };
+  if (ex && ex.supersetGroup && !out.supersetId) out.supersetId = ex.supersetGroup;
+  return out;
+}
+
+// ── Module export (for Node test harness) ─────────────────────────────────────
+// In the browser these are plain global functions. For the Node-based test
+// runner (see tests/custom-plan.test.js) we also expose them as a CommonJS
+// module so tests can require() and exercise the pure data-layer helpers.
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    _cpGenId,
+    _cpEnsureArray,
+    _cpMigrateTemplate,
+    _cpAddSession,
+    _cpReplaceSession,
+    _cpRemoveSession,
+    _cpExerciseToScheduleShape,
+    _cpResetTemplate: () => { for (const k of Object.keys(cpWeekTemplate)) delete cpWeekTemplate[k]; },
+    _cpGetTemplate: () => cpWeekTemplate,
+    _cpSetTemplate: (t) => {
+      for (const k of Object.keys(cpWeekTemplate)) delete cpWeekTemplate[k];
+      Object.assign(cpWeekTemplate, t);
+    },
+  };
 }
