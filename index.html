@@ -2531,12 +2531,24 @@
   <script src="meals-data.js"></script>
   <script src="threshold-week-scheduler.js"></script>
   <script src="session-type-library.js"></script>
+  <!-- Variant libraries (pure data) — must load before any code that consumes them -->
+  <script src="js/variant-libraries/run.js"></script>
+  <script src="js/variant-libraries/bike.js"></script>
+  <script src="js/variant-libraries/swim.js"></script>
+  <script src="js/variant-libraries/strength.js"></script>
+  <script src="js/variant-libraries/hybrid.js"></script>
+  <script src="js/variant-libraries/index.js"></script>
+  <script src="js/deterministic-variant-rotation.js"></script>
   <script src="planner.js"></script>
   <script src="philosophy-engine.js"></script>
   <script src="exercise-selector.js"></script>
   <script src="nutrition-calculator.js"></script>
   <script src="zone-calculator.js"></script>
   <script src="running-workout-generator.js"></script>
+  <script src="js/bike-workout-generator.js"></script>
+  <script src="js/swim-workout-generator.js"></script>
+  <script src="js/strength-workout-generator.js"></script>
+  <script src="js/ai-variant-selector.js"></script>
   <script src="add-running-session-flow.js"></script>
   <script src="test-result-handler.js"></script>
   <script src="post-test-modal.js"></script>

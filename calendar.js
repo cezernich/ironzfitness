@@ -3401,6 +3401,14 @@ function toggleMoreTypes(btn) {
 
 function qeSelectType(type) {
   _qeSelectedType = type;
+  // Running goes through the new structured 8-type generator (Phase 2 spec).
+  // The legacy intervals/phases form is replaced by AddRunningSessionFlow.
+  if (type === "running" && typeof window !== "undefined" && window.AddRunningSessionFlow) {
+    const dateStr = document.getElementById("qe-date")?.value || _qeDateStr || new Date().toISOString().slice(0, 10);
+    closeQuickEntry();
+    window.AddRunningSessionFlow.open(dateStr);
+    return;
+  }
   if (type === "strength")        qeShowStep(1, "strength");
   else if (type === "restriction") qeShowStep(1, "restriction");
   else if (type === "equipment")  qeShowStep(1, "equipment");
