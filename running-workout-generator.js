@@ -72,7 +72,7 @@
   function _generateSimpleSinglePhase(template, experience, durationOverrideMin, zones, warnings) {
     const range = template.experience_scaling[experience] || template.default_duration_min;
     const defaultMin = (range[0] + range[1]) / 2;
-    const duration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings);
+    const duration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings, template.max_duration_min);
     const paceLabel = zones ? _ePaceLabel(zones) : "conversational, by feel";
     const phases = [
       {
@@ -89,7 +89,7 @@
   function _generateEndurance(template, experience, durationOverrideMin, zones, warnings) {
     const range = template.experience_scaling[experience] || template.default_duration_min;
     const defaultMin = (range[0] + range[1]) / 2;
-    const duration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings);
+    const duration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings, template.max_duration_min);
     const allowsFinish = experience === "intermediate" || experience === "advanced";
     const eMin = Math.round(duration * 0.85);
     const mMin = Math.round(duration * 0.15);
@@ -117,7 +117,7 @@
   function _generateLongRun(template, experience, durationOverrideMin, zones, warnings) {
     const range = template.experience_scaling[experience] || template.default_duration_min;
     const defaultMin = (range[0] + range[1]) / 2;
-    const duration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings);
+    const duration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings, template.max_duration_min);
     const allowsFinish = experience === "intermediate" || experience === "advanced";
     const eMin = Math.round(duration * 0.80);
     const mMin = Math.round(duration * 0.20);
@@ -211,8 +211,21 @@
       repCount = distances.length;
       repDistance = "ladder";
     } else if (tmpl.main_set.rep_distance_m && tmpl.main_set.rep_count) {
-      const count = _resolveRepCount(tmpl.main_set.rep_count, experience);
+      let count = _resolveRepCount(tmpl.main_set.rep_count, experience);
       const dist = tmpl.main_set.rep_distance_m;
+      const midI = zones && zones.i_pace ? (zones.i_pace.sec_per_mi[0] + zones.i_pace.sec_per_mi[1]) / 2 : 360;
+      const repTime = midI * dist / 1609.344;
+      const restTime = tmpl.main_set.rest_distance_m
+        ? midI * tmpl.main_set.rest_distance_m / 1609.344 * 1.4 // jog ~40% slower
+        : (tmpl.main_set.rest_duration_sec || 90);
+      // Honor a duration override by scaling rep count to hit the target.
+      // Each rep "slot" = repTime + restTime (final rep has no trailing rest).
+      if (durationOverrideMin != null) {
+        const targetMainSec = (durationOverrideMin - wuMin - cdMin) * 60;
+        const repSlot = repTime + restTime;
+        const scaled = Math.round((targetMainSec + restTime) / repSlot);
+        count = Math.max(3, Math.min(20, scaled));
+      }
       const paceLabel = _iPaceLabelForDistance(zones, dist);
       let restLabel;
       if (tmpl.main_set.rest_distance_m) {
@@ -224,11 +237,6 @@
         restLabel = "jog rest";
       }
       mainSetText = `${count}×${dist}m @ ${paceLabel}${zones ? "" : " effort"} w/ ${restLabel}.`;
-      const midI = zones && zones.i_pace ? (zones.i_pace.sec_per_mi[0] + zones.i_pace.sec_per_mi[1]) / 2 : 360;
-      const repTime = midI * dist / 1609.344;
-      const restTime = tmpl.main_set.rest_distance_m
-        ? midI * tmpl.main_set.rest_distance_m / 1609.344 * 1.4 // jog ~40% slower
-        : (tmpl.main_set.rest_duration_sec || 90);
       mainSetMinutes = (count * repTime + (count - 1) * restTime) / 60;
       repCount = count;
       repDistance = `${dist}m`;
@@ -278,19 +286,30 @@
     let repCount = null;
 
     if (subTpl.id === "r_pace_repeats") {
-      const count = _resolveRepCount(subTpl.main_set.rep_count, experience);
+      let count = _resolveRepCount(subTpl.main_set.rep_count, experience);
       const dist = subTpl.main_set.rep_distance_m;
-      const paceLabel = _rPaceLabelForDistance(zones, dist);
-      mainSetText = `${count}×${dist}m @ ${paceLabel}${zones ? "" : " effort"} w/ ${subTpl.main_set.rest_distance_m}m walk recovery.`;
       const midR = zones && zones.r_pace ? (zones.r_pace.sec_per_mi[0] + zones.r_pace.sec_per_mi[1]) / 2 : 305;
       const repTime = midR * dist / 1609.344;
       const restTime = 60; // 200m walk ≈ 60 sec
+      if (durationOverrideMin != null) {
+        const targetMainSec = (durationOverrideMin - wuMin - cdMin) * 60;
+        const repSlot = repTime + restTime;
+        count = Math.max(4, Math.min(20, Math.round((targetMainSec + restTime) / repSlot)));
+      }
+      const paceLabel = _rPaceLabelForDistance(zones, dist);
+      mainSetText = `${count}×${dist}m @ ${paceLabel}${zones ? "" : " effort"} w/ ${subTpl.main_set.rest_distance_m}m walk recovery.`;
       mainSetMinutes = (count * repTime + (count - 1) * restTime) / 60;
       repCount = count;
     } else if (subTpl.id === "strides_only") {
-      const count = subTpl.main_set.rep_count;
+      let count = subTpl.main_set.rep_count;
+      // ~45s stride + ~45s walk back ≈ 1.5 min per stride
+      const perStrideMin = 0.75;
+      if (durationOverrideMin != null) {
+        const targetMainMin = durationOverrideMin - wuMin - cdMin;
+        count = Math.max(4, Math.min(15, Math.round(targetMainMin / perStrideMin)));
+      }
       mainSetText = `${count}×${subTpl.main_set.rep_distance_m}m strides at near-sprint w/ full recovery.`;
-      mainSetMinutes = 6; // ~6 min for 8 strides w/ rest
+      mainSetMinutes = count * perStrideMin;
       repCount = count;
     }
 
@@ -325,12 +344,17 @@
   }
 
   function _generateHills(template, experience, durationOverrideMin, zones, warnings) {
-    const repCount = _resolveRepCount(template.main_set.rep_count, experience);
+    let repCount = _resolveRepCount(template.main_set.rep_count, experience);
     const repDurRange = template.main_set.rep_duration_sec;
     const repSecLabel = `${repDurRange[0]}–${repDurRange[1]}s`;
     const wuMin = 15;
     const cdMin = 10;
-    const repMin = repCount * (repDurRange[1] / 60) * 2; // up + down
+    const perRepMin = (repDurRange[1] / 60) * 2; // up + jog down
+    if (durationOverrideMin != null) {
+      const targetMainMin = durationOverrideMin - wuMin - cdMin;
+      repCount = Math.max(4, Math.min(20, Math.round(targetMainMin / perRepMin)));
+    }
+    const repMin = repCount * perRepMin;
     const totalDuration = Math.round(wuMin + repMin + cdMin);
     const eLabel = zones ? _ePaceLabel(zones) : "Z1";
     const phases = [
@@ -363,7 +387,7 @@
   function _generateFunSocial(template, experience, durationOverrideMin, zones, warnings) {
     const range = template.default_duration_min;
     const defaultMin = (range[0] + range[1]) / 2;
-    const duration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings);
+    const duration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings, template.max_duration_min);
     const text = (template.instruction_text || "").replace("{duration}", String(duration));
     return {
       duration,
@@ -379,13 +403,15 @@
     };
   }
 
-  function _clampDurationOverride(defaultMin, override, range, warnings) {
+  function _clampDurationOverride(defaultMin, override, range, warnings, maxOverride) {
     if (override == null) return Math.round(defaultMin);
     const lo = defaultMin * 0.5;
-    const hi = defaultMin * 1.5;
+    // If the template declares an explicit upper bound (e.g. endurance up to
+    // 150 min), honor it. Otherwise default to ±50% of the midpoint.
+    const hi = Math.max(defaultMin * 1.5, maxOverride || 0);
     if (override < lo || override > hi) {
-      warnings.push(`Duration override ${override} min is outside ±50% of the default; clamping.`);
-      return Math.round(Math.max(range[0], Math.min(range[1], override)));
+      warnings.push(`Duration override ${override} min is outside the allowed range; clamping.`);
+      return Math.round(Math.max(lo, Math.min(hi, override)));
     }
     return Math.round(override);
   }

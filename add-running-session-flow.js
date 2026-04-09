@@ -107,8 +107,11 @@
    * `hardBlocks` are non-overridable (today only "Long Run cap = 1/week").
    * Everything else is a warning the user can override per the spec.
    */
-  // Local hard-entry detector — same logic as Planner.isHardEntry, kept here so
-  // the flow keeps working even if planner.js hasn't loaded yet.
+  // Per-session scheduling rules now live in the shared js/workout-validator.js
+  // module. Both this flow and js/workout-import-validator.js consume them
+  // from there so changing a rule in one place changes everywhere.
+  // Tiny local fallback for the rare case where workout-validator.js hasn't
+  // loaded yet at module-eval time.
   const _LOCAL_HARD_TYPES = new Set(["long_run", "tempo_threshold", "track_workout", "speed_work", "hills"]);
   const _LOCAL_HARD_LOADS = new Set(["long", "hard", "moderate"]);
   function _isHardLocal(entry) {
@@ -120,102 +123,44 @@
   }
 
   function evaluateConstraints(candidate, dateStr) {
-    const hardBlocks = [];
-    const warnings = [];
-    const monday = _mondayOf(dateStr);
-    const Planner = (typeof window !== "undefined" && window.Planner) || null;
-    const isHard = (e) => Planner && Planner.isHardEntry ? Planner.isHardEntry(e) : _isHardLocal(e);
-
-    // Combine existing plan + schedule for the week, plus the candidate.
-    const dates = [];
-    for (let i = 0; i < 7; i++) dates.push(_addDays(monday, i));
-    const dateSet = new Set(dates);
-
     let plan = [];
     let schedule = [];
     try { plan = JSON.parse(localStorage.getItem("trainingPlan") || "[]"); } catch {}
     try { schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]"); } catch {}
-    const weekEntries = plan.concat(schedule).filter(e => dateSet.has(e.date));
+    const profile = _readProfile();
+    const experience = _experienceLevel(profile);
 
-    // Long Run hard cap (no override allowed).
+    // Delegate to the shared rule module. This is the single source of truth
+    // for per-session scheduling constraints.
+    const WV = (typeof window !== "undefined" && window.WorkoutValidator) || null;
+    if (WV && WV.evaluateConstraints) {
+      return WV.evaluateConstraints({
+        candidate,
+        dateStr,
+        plan,
+        schedule,
+        experienceLevel: experience,
+      });
+    }
+
+    // Fallback: minimal Long Run cap check so the UI doesn't crash if the
+    // shared module hasn't loaded. Should never trigger in practice because
+    // workout-validator.js loads before add-running-session-flow.js in index.html.
+    const hardBlocks = [];
     if (candidate.type === "long_run") {
+      const monday = _mondayOf(dateStr);
+      const dates = new Set(Array.from({ length: 7 }, (_, i) => _addDays(monday, i)));
+      const weekEntries = plan.concat(schedule).filter(e => dates.has(e.date));
       const existingLong = weekEntries.find(e => (e.type === "long_run") || (e.load === "long"));
       if (existingLong) {
         hardBlocks.push({
           rule: "long_run_cap",
-          message: `Long Run is capped at 1 per week, full stop. You already have a Long Run on ${existingLong.date}.`
+          severity: "block",
+          message: `Long Run is capped at 1 per week, full stop. You already have a Long Run on ${existingLong.date}.`,
         });
       }
     }
-
-    // Hard session count check (warning).
-    const existingHard = weekEntries.filter(e => isHard(e));
-    const candidateIsHard = !!candidate.is_hard;
-    const projectedHard = existingHard.length + (candidateIsHard ? 1 : 0);
-    if (projectedHard > 3) {
-      warnings.push({
-        rule: "weekly_hard_count",
-        message: `This would put ${projectedHard} hard sessions in the week of ${monday}. The recommended max is 3.`,
-        items: existingHard.map(e => ({ date: e.date, title: e.sessionName || e.title || e.type, type: e.type || e.load }))
-      });
-    }
-
-    // No hard session within 24h of a Long Run.
-    // Search the day-before and day-after of the candidate directly — a Long
-    // Run on the previous Sunday is still a 24h-conflict for a Monday candidate
-    // even though it lives in the previous training week.
-    if (candidateIsHard) {
-      const adjacentDates = [_addDays(dateStr, -1), _addDays(dateStr, 1)];
-      const allEntries = plan.concat(schedule);
-      const longRunNearby = allEntries.find(e =>
-        adjacentDates.includes(e.date) && ((e.type === "long_run") || (e.load === "long"))
-      );
-      if (longRunNearby) {
-        warnings.push({
-          rule: "no_hard_around_long_run",
-          message: `${candidate.title || candidate.type} is within 24 hours of your Long Run on ${longRunNearby.date}. Recovery may be compromised.`
-        });
-      }
-    }
-
-    // No back-to-back hard sessions (warning).
-    if (candidateIsHard) {
-      const dayBefore = _addDays(dateStr, -1);
-      const dayAfter  = _addDays(dateStr, 1);
-      const adjacentHard = weekEntries.find(e =>
-        (e.date === dayBefore || e.date === dayAfter) && isHard(e)
-      );
-      if (adjacentHard) {
-        warnings.push({
-          rule: "no_back_to_back_hard",
-          message: `Back-to-back hard sessions: ${adjacentHard.date} (${adjacentHard.sessionName || adjacentHard.type}) and ${dateStr}. Insert an Easy/Recovery day between them if possible.`
-        });
-      }
-    }
-
-    // Track + Speed Work in same week — only allowed for advanced runners.
-    const profile = _readProfile();
-    const experience = _experienceLevel(profile);
-    if (experience !== "advanced") {
-      const hasTrack = weekEntries.some(e => e.type === "track_workout");
-      const hasSpeed = weekEntries.some(e => e.type === "speed_work");
-      if ((candidate.type === "track_workout" && hasSpeed) || (candidate.type === "speed_work" && hasTrack)) {
-        warnings.push({
-          rule: "track_plus_speed_only_advanced",
-          message: "Track Workout AND Speed Work in the same week is generally only programmed for advanced runners."
-        });
-      }
-      // Hills + Track in same week — same restriction.
-      const hasHills = weekEntries.some(e => e.type === "hills");
-      if ((candidate.type === "track_workout" && hasHills) || (candidate.type === "hills" && weekEntries.some(e => e.type === "track_workout"))) {
-        warnings.push({
-          rule: "hills_plus_track_only_advanced",
-          message: "Hills substitute for Track during a hill phase. Both in the same week is generally only programmed for advanced runners."
-        });
-      }
-    }
-
-    return { hardBlocks, warnings };
+    return { hardBlocks, warnings: [] };
   }
 
   // ─── Save paths ──────────────────────────────────────────────────────────────
@@ -436,9 +381,14 @@
       const isArrayRange = Array.isArray(range);
       const lo = isArrayRange ? range[0] : 30;
       const hi = isArrayRange ? range[1] : 90;
-      $dur.min = String(Math.max(15, Math.round(lo * 0.5)));
-      $dur.max = String(Math.round(hi * 1.5));
+      // Slider bounds must match the generator's clamp range, otherwise the
+      // slider can land in territory that gets silently clamped and the
+      // displayed minutes won't match the slider position. Honor a per-template
+      // `max_duration_min` (e.g. endurance up to 150) when present.
       const mid = isArrayRange ? Math.round((lo + hi) / 2) : 45;
+      const sliderMax = Math.max(Math.round(mid * 1.5), tmpl.max_duration_min || 0);
+      $dur.min = String(Math.max(15, Math.round(mid * 0.5)));
+      $dur.max = String(sliderMax);
       if (!$dur.dataset.touched) $dur.value = String(mid);
       const result = RWG.generateRunWorkout({
         sessionTypeId,

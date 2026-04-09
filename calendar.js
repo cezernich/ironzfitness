@@ -878,22 +878,27 @@ function buildIntensityStrip(session, cardId, discipline) {
   const segments = [];
   session.steps.forEach(step => {
     const ex = _isExerciseStep(step, discipline);
+    const isT1 = step.note === "T1";
     if (step.reps && step.rest != null) {
       for (let i = 0; i < step.reps; i++) {
         segments.push({ duration: step.duration, zone: step.zone, exercise: ex });
         if (i < step.reps - 1) segments.push({ duration: step.rest, zone: 1, isRest: true });
       }
     } else {
-      segments.push({ duration: step.duration, zone: step.zone, exercise: ex });
+      segments.push({ duration: step.duration, zone: step.zone, exercise: ex, isTransition: isT1 });
     }
   });
 
   const total = segments.reduce((s, seg) => s + seg.duration, 0);
   const bars  = segments.map(seg => {
     const pct = (seg.duration / total * 100).toFixed(2);
-    const cls = seg.isRest ? "z-rest" : `z${seg.zone}${seg.exercise ? " exercise" : ""}`;
-    let tip = seg.isRest ? "Rest" : (seg.exercise ? "Exercise" : `Z${seg.zone}`);
-    if (!seg.isRest && discipline) {
+    const cls = seg.isTransition ? "z-transition"
+              : seg.isRest ? "z-rest"
+              : `z${seg.zone}${seg.exercise ? " exercise" : ""}`;
+    let tip = seg.isTransition ? "Transition"
+            : seg.isRest ? "Rest"
+            : (seg.exercise ? "Exercise" : `Z${seg.zone}`);
+    if (!seg.isRest && !seg.isTransition && discipline) {
       const label = _getZoneLabel(discipline, seg.zone);
       if (label) tip += `: ${label}`;
     }
@@ -950,9 +955,18 @@ function buildStepsList(session, discipline) {
     if (sport) zones = (all[sport] || {}).zones || null;
   } catch {}
 
+  // For brick sessions, infer bike-vs-run discipline from position around the
+  // T1 transition marker so each step can be tagged with a colored chip.
+  const isBrick = discipline === "brick";
+  let _seenT1 = false;
   return session.steps.map(step => {
     const isT1      = step.note === "T1";
     const typeLabel = isT1 ? "TRANSITION" : (SESSION_TYPE_LABELS[step.type] || (step.type ? step.type.toUpperCase() : "SET"));
+    let brickDisc = null;
+    if (isBrick && !isT1) {
+      brickDisc = _seenT1 ? "run" : "bike";
+    }
+    if (isT1) _seenT1 = true;
     let durationText;
     if (step.reps) {
       durationText = `${step.reps} × ${step.duration} min`;
@@ -960,12 +974,25 @@ function buildStepsList(session, discipline) {
     } else {
       durationText = isT1 ? "~3 min" : `${step.duration} min`;
     }
-    const zData     = zones ? zones[`z${step.zone}`] : null;
+    // For brick run segments, show pace from the running zones rather than
+    // the bike-watts label that the outer `zones` lookup returns.
+    let zData = zones ? zones[`z${step.zone}`] : null;
+    if (brickDisc === "run") {
+      try {
+        const all = JSON.parse(localStorage.getItem("trainingZones")) || {};
+        const runZones = (all.running || {}).zones || null;
+        if (runZones && runZones[`z${step.zone}`]) zData = runZones[`z${step.zone}`];
+      } catch {}
+    }
     const zoneLabel = zData ? (zData.paceRange || zData.wattRange || null) : null;
+    const stepCls = isT1 ? "session-step--transition" : `session-step--z${step.zone}`;
+    const discTag = brickDisc
+      ? `<span class="seg-disc-tag seg-disc-${brickDisc}">${brickDisc === "bike" ? "Bike" : "Run"}</span> `
+      : "";
     return `
-      <div class="session-step session-step--z${step.zone}">
+      <div class="session-step ${stepCls}">
         <div class="session-step-meta">
-          <span class="session-step-type">${typeLabel}</span>
+          <span class="session-step-type">${discTag}${typeLabel}</span>
           ${!isT1 ? `<span class="session-step-zone">Z${step.zone}${zoneLabel ? `<span class="session-step-pace">${zoneLabel}</span>` : ""}</span>` : ""}
           <span class="session-step-duration">${durationText}</span>
         </div>

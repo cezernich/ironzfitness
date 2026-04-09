@@ -37,6 +37,7 @@
       primary_zone: "z1",
       purpose: "Aerobic base building, mitochondrial density",
       default_duration_min: [45, 75],
+      max_duration_min: 150,
       experience_scaling: {
         beginner: [40, 55],
         intermediate: [50, 70],
