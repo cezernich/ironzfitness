@@ -2065,9 +2065,6 @@ function _renderDayDetailInner(dateStr, content) {
   let html = `<div class="day-detail-date-row">
     <div class="day-detail-date">${isToday ? "Today · " : ""}${displayDate}</div>
     ${_totalsHtml}
-  </div>
-  <div class="day-detail-actions-row">
-    <button class="ars-trigger-btn" onclick="window.AddRunningSessionFlow && window.AddRunningSessionFlow.open('${dateStr}')">+ Generate run workout</button>
   </div>`;
 
   // ── Threshold week banner ────────────────────────────────────────────────
