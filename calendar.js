@@ -1568,6 +1568,22 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   // Show rating modal after completion
   setTimeout(() => showRatingModal(String(workoutId), dateStr), 400);
 
+  // Threshold-week post-test modal — if this completed session was a fitness test,
+  // immediately surface the result entry modal so zones get refreshed.
+  // Added 2026-04-09 (PHILOSOPHY_UPDATE_2026-04-09_threshold_weeks).
+  try {
+    const _plan2 = typeof loadTrainingPlan === "function" ? loadTrainingPlan() : [];
+    const _entry = _plan2.find(p => {
+      const cid = `plan-${p.date}-${p.raceId}-${p.discipline}`;
+      return cid === sessionId;
+    });
+    if (_entry && _entry.isThresholdTest && window.PostTestModal) {
+      setTimeout(() => window.PostTestModal.maybeOpenForCompletedWorkout(_entry), 800);
+    }
+  } catch (e) {
+    console.warn("[IronZ] post-test modal trigger failed:", e.message);
+  }
+
   // Show stretch suggestion after completion
   if (typeof renderStretchSuggestion === "function") {
     const stretchContainer = document.getElementById(`stretch-${sessionId}`);
@@ -1961,6 +1977,41 @@ function _renderDayDetailInner(dateStr, content) {
     <div class="day-detail-date">${isToday ? "Today · " : ""}${displayDate}</div>
     ${_totalsHtml}
   </div>`;
+
+  // ── Threshold week banner ────────────────────────────────────────────────
+  // Added 2026-04-09 (PHILOSOPHY_UPDATE_2026-04-09_threshold_weeks).
+  try {
+    const _planForBanner = typeof loadTrainingPlan === "function" ? loadTrainingPlan() : [];
+    const _twDay = _planForBanner.find(p => p.date === dateStr && p.isThresholdWeek);
+    if (_twDay) {
+      const _testDay = _planForBanner.find(p => p.isThresholdWeek && p.isThresholdTest && (function () {
+        // Same week as dateStr (Mon..Sun)
+        const TW = window.ThresholdWeekScheduler;
+        if (!TW) return false;
+        const a = TW.toDateStr(TW.mondayOf(dateStr));
+        const b = TW.toDateStr(TW.mondayOf(p.date));
+        return a === b;
+      })());
+      const _testDateLabel = _testDay ? formatDisplayDate(_testDay.date) : "Day 4 of this week";
+      const _cadenceUsed = (function () {
+        try {
+          const ud = JSON.parse(localStorage.getItem("user_data") || "{}");
+          const pf = JSON.parse(localStorage.getItem("profile") || "{}");
+          return Number(ud.threshold_week_cadence_override || pf.threshold_week_cadence_override) || 6;
+        } catch { return 6; }
+      })();
+      html += `
+        <div class="threshold-week-banner">
+          <div class="threshold-week-banner-title">THRESHOLD WEEK — Reset &amp; Test</div>
+          <div class="threshold-week-banner-body">
+            Volume is down ~35%. ${_testDay ? `Test on <b>${_testDateLabel}</b>.` : "One test this week."}
+            The result will update your training zones for the next ${_cadenceUsed} weeks.
+          </div>
+        </div>`;
+    }
+  } catch (e) {
+    console.warn("[IronZ] threshold-week banner render failed:", e.message);
+  }
 
   // ── Today-only widgets (wrapped individually so one failure doesn't block the render)
   if (isToday) {

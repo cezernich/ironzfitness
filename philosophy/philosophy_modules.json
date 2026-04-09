@@ -503,7 +503,7 @@
     "id": "SPORT_ENDURANCE_RUNNING",
     "category": "sport_endurance",
     "title": "Endurance Running Core",
-    "version": "1.1",
+    "version": "1.2",
     "applies_when": { "sport_profile": "endurance", "workout_type": "running" },
     "principles": [
       "Polarized 80/20 (80% Z1-2, 20% Z4-5, minimal Z3)",
@@ -518,7 +518,10 @@
       "Total interval volume should be 5-8% of weekly mileage for intermediates, up to 10% for advanced",
       "Place interval sessions on a day following an easy day, never after a long run or tempo",
       "Progress repeats from shorter (400-800m) to longer (1K-1600m) as the race approaches",
-      "Reference RUNNING_ZONE_CALCULATIONS module for pacing interval work by HR zones"
+      "Reference RUNNING_ZONE_CALCULATIONS module for pacing interval work by HR zones",
+      "Insert a threshold week into every training plan at the cadence defined by TRAINING_THRESHOLD_WEEK (4/6/8 weeks based on training phase)",
+      "During a threshold week, the week's only hard effort is the 5K test (or 30-min fallback) on Day 4. All other days are Z1 with optional strides.",
+      "After a threshold week test, regenerate all subsequent workout zones from the new VDOT via RUNNING_ZONE_CALCULATIONS."
     ],
     "hard_constraints": [],
     "nutrition_rules": [],
@@ -533,7 +536,7 @@
     "rationale": "Polarized training distribution and context-dependent volume progression form the foundation of evidence-based running programming. Interval repeats for time-goal runners develop VO2max and race-specific fitness.",
     "priority": "high",
     "is_active": true,
-    "change_log": "2026-04-08: Added weekly interval repeat requirement for time-goal runners; linked to zone calculations module"
+    "change_log": "2026-04-08: Added weekly interval repeat requirement for time-goal runners; linked to zone calculations module. 2026-04-09: Added threshold week scheduling and post-test zone regeneration for run-only athletes."
   },
   {
     "id": "EVENT_5K",
@@ -710,7 +713,7 @@
     "id": "SPORT_TRIATHLON",
     "category": "sport_triathlon",
     "title": "Triathlon Training",
-    "version": "1.0",
+    "version": "1.1",
     "applies_when": { "sport_profile": "hybrid", "workout_type": "triathlon" },
     "principles": [],
     "plan_rules": [
@@ -720,7 +723,12 @@
       "3wk build + 1wk recovery",
       "Taper: sprint 7-10d, olympic 10-14d, 70.3 14-21d, ironman 21-28d",
       "All taper reduce 40-60% maintain intensity",
-      "Concurrent training: min 3hr gap strength/endurance same day, strength first when fresh, max 2 HIIT/week, bike/row for HIIT"
+      "Concurrent training: min 3hr gap strength/endurance same day, strength first when fresh, max 2 HIIT/week, bike/row for HIIT",
+      "Insert a threshold week into every triathlon training plan at the cadence defined by TRAINING_THRESHOLD_WEEK (4/6/8 weeks based on training phase)",
+      "During a triathlon threshold week, schedule all three tests in the order swim -> bike -> run, one test per day, with at least one easy day separation between tests",
+      "Default test placement: swim CSS on Thursday, bike FTP on Friday or Saturday, run 5K on Saturday or Sunday. Never stack two tests on the same day.",
+      "After each test in the threshold week, immediately regenerate that sport's zones so the next test is paced against the most current fitness data",
+      "If the user is a triathlete with one weak discipline, allow that discipline's zones to be recalibrated independently more often (e.g., a strong cyclist who wants to retest their run every 4 weeks while keeping bike at every 6)"
     ],
     "hard_constraints": [],
     "nutrition_rules": [],
@@ -729,7 +737,8 @@
     "evidence_sources": [],
     "rationale": "Multi-sport triathlon training with sport-specific volume distribution, brick workouts, and distance-dependent taper protocols.",
     "priority": "high",
-    "is_active": true
+    "is_active": true,
+    "change_log": "2026-04-09: Added triathlon-specific threshold week structure with all three tests spread across the week. Per-discipline cadence override allowed."
   },
   {
     "id": "SPORT_HIIT",
@@ -1521,8 +1530,13 @@
     "id": "RUNNING_ZONE_CALCULATIONS",
     "category": "training_rules",
     "title": "Tiered heart rate zone calculation system",
-    "version": "1.0",
+    "version": "1.1",
     "applies_when": { "level": "any", "sport_profile": ["endurance", "hybrid"], "goal": "any" },
+    "recalculation_hooks": {
+      "trigger_on": ["new_vdot_logged", "new_lthr_logged", "new_resting_hr_logged"],
+      "behavior": "Recalculate all 5 pace zones and all 5 HR zones using the new input. Archive the prior zone snapshot to user_zone_history. Push a notification to the user comparing old vs new Z3 (threshold) boundary as a quick visual.",
+      "called_by": ["TRAINING_THRESHOLD_WEEK post_test_workflow", "manual user input from settings"]
+    },
     "principles": [
       "Progressive accuracy: zones improve as user provides more data",
       "Tier 1 (age only): Max HR = 208 - 0.7*age. Standard error +/-10 bpm.",
@@ -1552,7 +1566,8 @@
     ],
     "rationale": "Progressive accuracy: zones improve as user provides more data. No user is blocked by lack of lab testing, but serious runners get precise zones when they have the data.",
     "priority": "high",
-    "is_active": true
+    "is_active": true,
+    "change_log": "2026-04-09: Added recalculation_hooks field so that threshold week tests automatically refresh cached pace and HR zones. No change to existing zone math."
   },
   {
     "id": "RUNNING_FEEDBACK_CALIBRATION",
@@ -1587,5 +1602,268 @@
     "rationale": "Provides a simple, user-friendly feedback mechanism that helps the app (and user) detect when training load is miscalibrated. Framed as a review tool, not a prescription, so it doesn't conflict with evidence-based programming rules.",
     "priority": "medium",
     "is_active": true
+  },
+  {
+    "id": "SPORT_ENDURANCE_CYCLING",
+    "category": "sport_endurance",
+    "title": "Endurance Cycling Core",
+    "version": "1.0",
+    "applies_when": { "sport_profile": ["endurance", "hybrid"], "workout_type": "cycling" },
+    "principles": [
+      "Coggan power zones drive prescription: Z1 <55% FTP, Z2 56-75%, Z3 76-90%, Z4 91-105%, Z5 106-120%",
+      "Polarized 80/20 distribution applies to cycling as well — most riding is Z1-Z2"
+    ],
+    "plan_rules": [
+      "Insert a threshold week into every training plan at the cadence defined by TRAINING_THRESHOLD_WEEK (4/6/8 weeks based on training phase)",
+      "During a threshold week, the week's only hard effort is the 20-min FTP test on Day 4. All other days are Z1.",
+      "After a successful FTP test, regenerate all subsequent workout zones using Coggan's % FTP table."
+    ],
+    "hard_constraints": [
+      "Never schedule a 20-min FTP test the day after a long ride or hard interval session"
+    ],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [
+      "Coggan, A. & Allen, H. — Training and Racing with a Power Meter",
+      "Friel, J. — Cycling Past 50",
+      "Seiler polarized training research"
+    ],
+    "rationale": "FTP-anchored training is the standard for cyclists. Bundling FTP retesting into a scheduled deload (the threshold week) keeps zones current without relying on the user to remember.",
+    "priority": "high",
+    "is_active": true,
+    "change_log": "2026-04-09: Module created with threshold week scheduling and post-test FTP zone regeneration for cyclists."
+  },
+  {
+    "id": "SPORT_ENDURANCE_SWIMMING",
+    "category": "sport_endurance",
+    "title": "Endurance Swimming Core",
+    "version": "1.0",
+    "applies_when": { "sport_profile": ["endurance", "hybrid"], "workout_type": "swimming" },
+    "principles": [
+      "CSS (Critical Swim Speed) anchors the prescription. Easy = CSS + 12s/100m, threshold = CSS, race pace = CSS - 3 to 5s/100m.",
+      "Technique work belongs in every session — swimming is more technique-limited than fitness-limited for most triathletes"
+    ],
+    "plan_rules": [
+      "Insert a threshold week into every training plan at the cadence defined by TRAINING_THRESHOLD_WEEK (4/6/8 weeks based on training phase)",
+      "During a threshold week, the week's only hard effort is the CSS test (400m + 200m TT) on Day 4. All other days are Z1 technique-focused swimming.",
+      "After a successful CSS test, regenerate swim zones: easy = CSS + 12s/100m, threshold = CSS, race pace = CSS - 3 to 5s/100m."
+    ],
+    "hard_constraints": [
+      "Never schedule a CSS test the day after a long swim or hard threshold session"
+    ],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [
+      "Olbrecht, J. — The Science of Winning",
+      "Maglischo — Swimming Fastest",
+      "TrainingPeaks — Threshold Tests for Swim, Bike and Run (Hayden Scott)"
+    ],
+    "rationale": "CSS-anchored training is the most accessible field-test-driven swim system. Bundling the CSS test into a scheduled threshold week ensures zones stay current.",
+    "priority": "high",
+    "is_active": true,
+    "change_log": "2026-04-09: Module created with threshold week scheduling and post-test CSS zone regeneration for swimmers."
+  },
+  {
+    "id": "TRAINING_THRESHOLD_WEEK",
+    "category": "training_rules",
+    "title": "Threshold week protocol — periodic deload + fitness retesting",
+    "version": "1.0",
+    "applies_when": { "level": "any", "sport_profile": ["endurance", "triathlon", "cycling", "swimming", "hybrid"], "goal": "any" },
+    "principles": [
+      "A threshold week is a deload week that doubles as a fitness assessment.",
+      "Volume drops to 60-70% of the prior peak week and all hard work is removed except the test itself.",
+      "Test results auto-update VDOT (run), FTP (bike), and CSS (swim); zones recalculate immediately.",
+      "Skipping a threshold week slides the cadence forward — never compress."
+    ],
+    "plan_rules": [
+      "Single-sport athletes get one test per threshold week placed on Day 4 (Thursday by default).",
+      "Triathletes get all three tests in the same threshold week, in order swim -> bike -> run, one per day, with at least one easy day between tests.",
+      "Total volume target for the week is 60-70% of the prior week's volume.",
+      "Zero workouts above Z2 during a threshold week except the test efforts themselves."
+    ],
+    "hard_constraints": [
+      "Never schedule two threshold tests on the same day",
+      "Never schedule a test the day after a long run/ride/swim",
+      "Never insert a threshold week within 14 days of a goal A race",
+      "Never schedule two threshold weeks back-to-back (minimum 3 weeks build between)",
+      "Never allow more than 8 weeks to pass without a threshold week unless explicitly disabled by user",
+      "Abort the test and reschedule if user reports RPE > 8 on three consecutive days during the threshold week or reports illness/injury",
+      "Single-sport athletes get one test per threshold week; triathletes get all three spread across the week"
+    ],
+    "cadence_by_phase": {
+      "race_prep": { "weeks_between": 4, "definition": "Within 8 weeks of an A race", "rationale": "Higher load + faster fitness gains require more frequent deloads and recalibration" },
+      "base": { "weeks_between": 6, "definition": "8+ weeks from any A race, general training", "rationale": "Default cadence. Matches Friel's recommendation." },
+      "maintenance": { "weeks_between": 8, "definition": "No race scheduled, fitness preservation", "rationale": "Lower load means less fatigue accumulation and slower zone drift" }
+    },
+    "user_override": {
+      "allowed_range": [4, 8],
+      "default_source": "auto-detected from training_phase, can be manually set in settings"
+    },
+    "week_structure": {
+      "volume_target_pct_of_prior_week": [0.60, 0.70],
+      "intensity_rule": "Zero work above Z2 except the test efforts themselves",
+      "test_day_index_single_sport": 4,
+      "triathlon_test_order": ["swim_css", "bike_ftp", "run_5k"],
+      "triathlon_test_spacing_days": 1,
+      "triathlon_no_stacking": true,
+      "rest_days_minimum": 1
+    },
+    "test_protocols": {
+      "run_5k": {
+        "name": "5K Time Trial",
+        "warmup": "15 min easy + 4x20s strides",
+        "test": "5K all-out on flat course",
+        "cooldown": "10-15 min easy",
+        "output_metric": "vdot",
+        "calculation": "Lookup VDOT from 5K finish time using Daniels VDOT tables",
+        "fallback": "30-minute run test (Friel): avg HR of last 20 min = LTHR, avg pace of last 20 min = T-pace. Use when 5K race effort is unsafe (injury return, masters, beginners)."
+      },
+      "bike_ftp_20min": {
+        "name": "20-Minute FTP Test",
+        "warmup": "15 min easy + 3x1 min progressive (Z2->Z3->Z4) + 5 min easy + 5 min hard primer (~108% expected FTP) + 10 min easy",
+        "test": "20 min all-out at highest sustainable power",
+        "cooldown": "10 min easy spin",
+        "output_metric": "ftp_watts",
+        "calculation": "FTP = 20-min average power * 0.95",
+        "source": "Coggan & Allen, Training and Racing with a Power Meter"
+      },
+      "swim_css": {
+        "name": "Critical Swim Speed Test",
+        "warmup": "400m easy + 4x50m build",
+        "test": "400m all-out TT, 5-10 min recovery, 200m all-out TT",
+        "cooldown": "200m easy",
+        "output_metric": "css_sec_per_100m",
+        "calculation": "CSS = (T_400_seconds - T_200_seconds) / 2, expressed as sec per 100m",
+        "source": "Olbrecht; popularized in triathlon by TrainingPeaks"
+      }
+    },
+    "skip_behavior": {
+      "policy": "slide",
+      "description": "If a threshold week is skipped, reschedule the NEXT threshold week to N weeks after the skip date, not N weeks after the originally planned date.",
+      "rationale": "Compressing two threshold weeks closer together creates an unintended high-recovery cluster and disrupts the build:recover ratio."
+    },
+    "post_test_workflow": [
+      "Prompt user to log test result immediately when test workout is marked complete",
+      "Sanity-check: flag if new value differs from prior by more than 15% (likely logging error or anomalous test day)",
+      "If valid, archive prior value to fitness_history table and write new value to user profile",
+      "Recalculate all cached training zones for that sport using the appropriate calculation module",
+      "Push notification to user with before/after Z3 boundary as a quick visual",
+      "Update all future workouts in the active plan to use the new zones"
+    ],
+    "validation_rules": {
+      "test_result_min_change_pct": -15,
+      "test_result_max_change_pct": 15,
+      "out_of_range_action": "Show confirmation modal: 'This is a [X]% change from your last test. Confirm the result is correct, or retake the test.'"
+    },
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "Lower intensity, intentional. The week is rest plus an honest snapshot, not a peak week. Frame the test as a B race, not an A race.",
+    "evidence_sources": [
+      "Friel, J. — A Quick Guide to Setting Zones (joefrieltraining.com)",
+      "Friel, J. — Determining your LTHR (joefrieltraining.com)",
+      "Friel, J. — The Triathlete's Training Bible",
+      "Coggan, A. & Allen, H. — Training and Racing with a Power Meter (FTP test protocol)",
+      "Daniels, J. — Daniels' Running Formula (VDOT system + 5K-based calibration)",
+      "Olbrecht, J. — The Science of Winning (CSS protocol origins)",
+      "TrainingPeaks — Threshold Tests for Swim, Bike and Run (Hayden Scott)",
+      "Seiler, S. (2010) — Polarized training intensity distribution",
+      "Laursen & Buchheit — Science and Application of High-Intensity Interval Training (overreaching thresholds)",
+      "ACSM Guidelines for Exercise Testing and Prescription, 11th ed. (periodization)"
+    ],
+    "rationale": "Solves two compounding problems: (1) plans without scheduled deloads accumulate fatigue and either crush performance or cause injury; (2) zones drift over weeks of training and ad-hoc retesting is unreliable because users skip it. Bundling the test into a mandatory deload week guarantees both happen on the right cadence.",
+    "priority": "critical",
+    "is_active": true,
+    "change_log": "2026-04-09: Initial threshold week protocol added. Goal-dependent cadence (4/6/8 weeks). Tests spread across the week for triathletes. Slide-on-skip rescheduling. Auto-recalculates zones via RUNNING_ZONE_CALCULATIONS."
+  },
+  {
+    "id": "TESTING_PROTOCOLS",
+    "category": "training_rules",
+    "title": "Field tests for VDOT, FTP, and CSS — workout templates",
+    "version": "1.0",
+    "applies_when": { "level": "any", "sport_profile": ["endurance", "triathlon", "cycling", "swimming", "hybrid"], "context": "threshold_week" },
+    "principles": [
+      "Centralized source of truth for the test workout templates so the planner, the workout viewer, and the result handler all reference the same definitions."
+    ],
+    "plan_rules": [
+      "When the planner is generating a threshold week, it pulls the test workout structure from this module's tests array.",
+      "When a test workout is marked complete, the post-test modal pulls the user_inputs schema from this module to render the right entry fields."
+    ],
+    "tests": [
+      {
+        "id": "RUN_5K_TT",
+        "sport": "run",
+        "duration_min": 35,
+        "structure": [
+          { "phase": "warmup", "duration_min": 15, "intensity": "Z1 + 4x20s strides" },
+          { "phase": "test", "distance": "5km", "intensity": "all-out, even pacing" },
+          { "phase": "cooldown", "duration_min": 12, "intensity": "Z1" }
+        ],
+        "user_inputs": ["finish_time"],
+        "output": "vdot",
+        "calculation_module": "vdot-lookup.js"
+      },
+      {
+        "id": "RUN_30MIN_TT",
+        "sport": "run",
+        "duration_min": 50,
+        "use_when": "5K race effort is contraindicated (injury return, masters, beginners)",
+        "structure": [
+          { "phase": "warmup", "duration_min": 15, "intensity": "Z1 + 4x20s strides" },
+          { "phase": "test", "duration_min": 30, "intensity": "all-out sustainable" },
+          { "phase": "cooldown", "duration_min": 5, "intensity": "Z1" }
+        ],
+        "user_inputs": ["avg_hr_last_20min", "avg_pace_last_20min"],
+        "output": "lthr_and_t_pace"
+      },
+      {
+        "id": "BIKE_FTP_20",
+        "sport": "bike",
+        "duration_min": 60,
+        "structure": [
+          { "phase": "warmup", "duration_min": 15, "intensity": "Z1 easy" },
+          { "phase": "primer", "duration_min": 3, "intensity": "3x1 min progressive Z2->Z3->Z4" },
+          { "phase": "easy", "duration_min": 5, "intensity": "Z1" },
+          { "phase": "hard_primer", "duration_min": 5, "intensity": "~108% expected FTP" },
+          { "phase": "easy", "duration_min": 10, "intensity": "Z1" },
+          { "phase": "test", "duration_min": 20, "intensity": "all-out steady" },
+          { "phase": "cooldown", "duration_min": 10, "intensity": "Z1" }
+        ],
+        "user_inputs": ["avg_power_20min"],
+        "output": "ftp_watts",
+        "calculation": "ftp = avg_power_20min * 0.95"
+      },
+      {
+        "id": "SWIM_CSS",
+        "sport": "swim",
+        "duration_min": 40,
+        "structure": [
+          { "phase": "warmup", "distance_m": 400, "intensity": "easy" },
+          { "phase": "build", "sets": "4x50m", "intensity": "build to test pace" },
+          { "phase": "test_1", "distance_m": 400, "intensity": "all-out TT" },
+          { "phase": "recovery", "duration_min": 8, "intensity": "easy swim or rest" },
+          { "phase": "test_2", "distance_m": 200, "intensity": "all-out TT" },
+          { "phase": "cooldown", "distance_m": 200, "intensity": "easy" }
+        ],
+        "user_inputs": ["time_400m_seconds", "time_200m_seconds"],
+        "output": "css_sec_per_100m",
+        "calculation": "css = (time_400m_seconds - time_200m_seconds) / 2"
+      }
+    ],
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [
+      "Daniels, J. — Daniels' Running Formula",
+      "Coggan, A. & Allen, H. — Training and Racing with a Power Meter",
+      "Friel, J. — Triathlete's Training Bible",
+      "Olbrecht, J. — The Science of Winning"
+    ],
+    "rationale": "Centralizes test workout templates so the planner, the workout viewer, and the result-handler all reference the same source of truth.",
+    "priority": "high",
+    "is_active": true,
+    "change_log": "2026-04-09: Initial test protocols module created."
   }
 ]

@@ -127,6 +127,9 @@ function showTab(name) {
     if (typeof renderTrustCenter === "function") renderTrustCenter();
     if (typeof renderSubscriptionStatus === "function") renderSubscriptionStatus();
     if (typeof renderStravaStatus === "function") renderStravaStatus();
+    if (window.PostTestModal && window.PostTestModal.renderThresholdWeekSettings) {
+      window.PostTestModal.renderThresholdWeekSettings();
+    }
   }
 
   // Refresh nutrition dashboard when opening Nutrition tab

@@ -2072,6 +2072,32 @@ function generateTrainingPlan(race) {
   let phaseIndex = 0;
   let currentPhase = config.phases[0];
 
+  // ── THRESHOLD WEEK SCHEDULING ──────────────────────────────────────────────
+  // Added 2026-04-09 (PHILOSOPHY_UPDATE_2026-04-09_threshold_weeks.md).
+  // Pure deterministic call into ThresholdWeekScheduler — no API calls.
+  const _twSportProfile = triTypes.has(race.type) ? "triathlon" : "endurance";
+  let _scheduledThresholdWeeks = [];
+  try {
+    let _profile = {};
+    let _userData = {};
+    try { _profile = JSON.parse(localStorage.getItem("profile") || "{}"); } catch {}
+    try { _userData = JSON.parse(localStorage.getItem("user_data") || "{}"); } catch {}
+    const _profileForScheduling = Object.assign({}, _profile, {
+      goal_race_date: race.date,
+      active_goal: race.type,
+      threshold_week_cadence_override:
+        _profile.threshold_week_cadence_override || _userData.threshold_week_cadence_override,
+    });
+    const _lastThresh = _userData.last_threshold_week_date || null;
+    if (typeof window !== "undefined" && window.ThresholdWeekScheduler) {
+      _scheduledThresholdWeeks = window.ThresholdWeekScheduler.listThresholdWeeksForPlan(
+        _profileForScheduling, startDate, raceDate, _lastThresh
+      );
+    }
+  } catch (e) {
+    console.warn("[IronZ] threshold-week scheduling skipped:", e.message);
+  }
+
   const cursor = new Date(startDate);
 
   while (cursor < raceDate) {
@@ -2091,7 +2117,50 @@ function generateTrainingPlan(race) {
     const phasePattern = patterns[phaseName] || {};
     const session = phasePattern[dow];
 
-    if (session && dateStr >= todayStr) {
+    // ── Threshold-week override ──────────────────────────────────────────────
+    let _twOverride = null;
+    if (_scheduledThresholdWeeks.length && typeof window !== "undefined" && window.ThresholdWeekScheduler) {
+      const TW = window.ThresholdWeekScheduler;
+      const monday = TW.mondayOf(cursor);
+      if (TW.shouldThisBeAThresholdWeek(monday, _scheduledThresholdWeeks)) {
+        const days = TW.buildThresholdWeekDays(monday, _twSportProfile);
+        _twOverride = days.find(d => d.date === dateStr) || null;
+      }
+    }
+
+    if (_twOverride && dateStr >= todayStr) {
+      const TW = window.ThresholdWeekScheduler;
+      const isTri = _twSportProfile === "triathlon";
+      const t = _twOverride.type;
+      const isTestDay = t === "test" || t === "swim_test" || t === "bike_test" || t === "run_test";
+      const discipline =
+        t === "easy_swim" || t === "swim_test" ? "swim" :
+        t === "easy_bike" || t === "bike_test" ? "bike" :
+        t === "rest" ? "rest" : "run";
+      const testType =
+        t === "swim_test" ? "SWIM_CSS" :
+        t === "bike_test" ? "BIKE_FTP_20" :
+        t === "run_test"  ? "RUN_5K_TT" :
+        t === "test"      ? "RUN_5K_TT" : null;
+      // Apply 60-70% volume target to non-test sessions; tests keep their template length.
+      const duration = isTestDay
+        ? _twOverride.duration_min
+        : (t === "rest" ? undefined : TW.applyThresholdWeekVolume(_twOverride.duration_min, 0.65));
+      plan.push({
+        date: dateStr,
+        raceId: race.id,
+        phase: "Threshold",
+        weekNumber,
+        discipline,
+        load: isTestDay ? "test" : (t === "rest" ? "rest" : "easy"),
+        sessionName: _twOverride.note,
+        ...(duration != null ? { duration } : {}),
+        isThresholdWeek: true,
+        isThresholdTest: isTestDay,
+        thresholdTestType: testType,
+        thresholdNote: _twOverride.note,
+      });
+    } else if (session && dateStr >= todayStr) {
       const LOAD_NAMES = { easy: "Easy", strides: "Strides", moderate: "Tempo", hard: "Threshold", long: "Long" };
       const loadName  = LOAD_NAMES[session.load] || capitalize(session.load);
       // Compute progressive duration for running sessions

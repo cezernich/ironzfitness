@@ -10819,3 +10819,108 @@ button:active {
   transition: background 0.15s;
 }
 .btn-secondary:hover { background: var(--color-surface-2); }
+
+/* =============================================================================
+   THRESHOLD WEEK — banner, settings controls, post-test modal
+   Added 2026-04-09 by PHILOSOPHY_UPDATE_2026-04-09_threshold_weeks.md
+   ============================================================================= */
+.threshold-week-banner {
+  margin: 12px 0 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--color-accent, #6366f1);
+  background: var(--color-accent-glow, rgba(99,102,241,0.08));
+}
+.threshold-week-banner-title {
+  font-weight: 800;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent, #6366f1);
+  margin-bottom: 4px;
+}
+.threshold-week-banner-body {
+  font-size: 0.9rem;
+  color: var(--color-text);
+  line-height: 1.45;
+}
+
+/* Test session card accent — matches isThresholdTest entries */
+.session-card.session-card--threshold-test {
+  border-color: var(--color-accent, #6366f1);
+  box-shadow: 0 0 0 1px var(--color-accent, #6366f1) inset;
+}
+
+/* Post-test modal (re-uses .rating-modal-overlay shell) */
+.post-test-modal {
+  max-width: 420px;
+  width: 90%;
+  padding: 22px 22px 18px;
+}
+.post-test-modal-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.post-test-modal-body p {
+  font-size: 0.9rem;
+  line-height: 1.45;
+  margin: 6px 0;
+  color: var(--color-text);
+}
+.post-test-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 10px 0;
+}
+.post-test-field span {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+.post-test-field input {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 1rem;
+}
+.post-test-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+.post-test-modal-actions button {
+  flex: 1;
+}
+
+/* Settings: Threshold Weeks section */
+.threshold-settings-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+}
+.threshold-settings-row label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.threshold-settings-row select,
+.threshold-settings-row button {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.95rem;
+}
+.threshold-settings-meta {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}

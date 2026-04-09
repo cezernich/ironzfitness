@@ -193,3 +193,217 @@ const LTHR_ESTIMATION_METHODS = [
   { id: 'diy_test', label: '30-minute all-out test', description: 'Run 30 minutes all-out. Your average HR for the last 20 minutes is approximately your LTHR.' },
   { id: 'race_estimate', label: 'Estimate from a recent race', description: 'Enter a recent race result and we\'ll estimate your LTHR using Daniels\' tables.' }
 ];
+
+// ═════════════════════════════════════════════════════════════════════════════
+// BIKE ZONES — Coggan % FTP (added 2026-04-09 by threshold-week update)
+// Reference: Coggan & Allen, Training and Racing with a Power Meter
+// ═════════════════════════════════════════════════════════════════════════════
+
+const BIKE_ZONES_COGGAN = {
+  1: { name: 'Active Recovery', pct: [0.00, 0.55] },
+  2: { name: 'Endurance',       pct: [0.56, 0.75] },
+  3: { name: 'Tempo',           pct: [0.76, 0.90] },
+  4: { name: 'Threshold',       pct: [0.91, 1.05] },
+  5: { name: 'VO2max',          pct: [1.06, 1.20] }
+};
+
+/**
+ * Calculate cycling power zones from FTP using Coggan's % FTP table.
+ * @param {number} ftpWatts
+ * @returns {{ ftp: number, zones: { z1..z5: { name, low, high } } } | null}
+ */
+function calculateBikeZonesFromFTP(ftpWatts) {
+  const ftp = parseInt(ftpWatts);
+  if (!ftp || ftp < 50) return null;
+  const zones = {};
+  for (const [num, z] of Object.entries(BIKE_ZONES_COGGAN)) {
+    zones[`z${num}`] = {
+      name: z.name,
+      low: num === '1' ? null : Math.round(ftp * z.pct[0]),
+      high: Math.round(ftp * z.pct[1])
+    };
+  }
+  return { ftp, zones };
+}
+
+/**
+ * Format bike zone for display: "Z4 Threshold: 228-263 W"
+ */
+function formatBikeZone(zoneKey, zoneData) {
+  const num = zoneKey.replace('z', '');
+  if (zoneData.low === null) {
+    return `Z${num} ${zoneData.name}: < ${zoneData.high} W`;
+  }
+  return `Z${num} ${zoneData.name}: ${zoneData.low}-${zoneData.high} W`;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SWIM ZONES — CSS-derived bands (added 2026-04-09 by threshold-week update)
+// Reference: Olbrecht (Science of Winning); TrainingPeaks Hayden Scott on CSS
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Format seconds-per-100m as "M:SS/100".
+ */
+function formatSwimPace(secPer100m) {
+  const total = Math.round(secPer100m);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, '0')}/100`;
+}
+
+/**
+ * Calculate swim zones from CSS (sec per 100m).
+ * - easy = CSS + 12 s/100m
+ * - threshold = CSS
+ * - race pace = CSS - 4 s/100m (midpoint of the 3-5 s range)
+ * @param {number} cssSecPer100m
+ * @returns {{ css: number, zones: { easy, threshold, race } } | null}
+ */
+function calculateSwimZonesFromCSS(cssSecPer100m) {
+  const css = parseFloat(cssSecPer100m);
+  if (!css || css <= 0) return null;
+  return {
+    css,
+    zones: {
+      easy:      { name: 'Easy',      sec_per_100m: css + 12, label: formatSwimPace(css + 12) },
+      threshold: { name: 'Threshold', sec_per_100m: css,      label: formatSwimPace(css) },
+      race:      { name: 'Race',      sec_per_100m: css - 4,  label: formatSwimPace(css - 4) }
+    }
+  };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// VDOT-derived running pace zones (placeholder lookup for the threshold-week
+// post-test workflow). When vdot-lookup.js is added with the full Daniels table
+// it will replace this. For now we expose a stable interface.
+// ═════════════════════════════════════════════════════════════════════════════
+
+// Minimal Daniels VDOT → pace bridge. Pace values are sec/mile for E/M/T/I/R.
+// Source: Daniels' Running Formula (table excerpts, key VDOT values).
+const VDOT_PACE_TABLE = {
+  30: { E: 720, M: 645, T: 612, I: 553, R: 514 },
+  35: { E: 660, M: 588, T: 558, I: 504, R: 469 },
+  40: { E: 612, M: 542, T: 514, I: 463, R: 431 },
+  45: { E: 571, M: 504, T: 477, I: 429, R: 399 },
+  50: { E: 537, M: 472, T: 446, I: 401, R: 372 },
+  55: { E: 508, M: 444, T: 419, I: 376, R: 349 },
+  60: { E: 482, M: 419, T: 396, I: 354, R: 329 },
+  65: { E: 459, M: 397, T: 375, I: 335, R: 311 },
+  70: { E: 439, M: 378, T: 357, I: 318, R: 295 },
+  75: { E: 421, M: 361, T: 341, I: 303, R: 281 },
+  80: { E: 405, M: 345, T: 326, I: 290, R: 268 },
+  85: { E: 391, M: 331, T: 313, I: 278, R: 257 }
+};
+
+function _formatPaceSecPerMile(sec) {
+  const total = Math.round(sec);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, '0')}/mi`;
+}
+
+/**
+ * Look up the closest VDOT row and return formatted pace zones.
+ * Falls back to nearest neighbor if exact VDOT isn't tabulated.
+ */
+function calculateRunZonesFromVDOT(vdot) {
+  const v = parseFloat(vdot);
+  if (!v || v < 25) return null;
+  const keys = Object.keys(VDOT_PACE_TABLE).map(Number).sort((a, b) => a - b);
+  const nearest = keys.reduce((best, k) => Math.abs(k - v) < Math.abs(best - v) ? k : best, keys[0]);
+  const row = VDOT_PACE_TABLE[nearest];
+  return {
+    vdot: v,
+    nearest_table_vdot: nearest,
+    zones: {
+      E: { name: 'Easy',       sec_per_mile: row.E, label: _formatPaceSecPerMile(row.E) },
+      M: { name: 'Marathon',   sec_per_mile: row.M, label: _formatPaceSecPerMile(row.M) },
+      T: { name: 'Threshold',  sec_per_mile: row.T, label: _formatPaceSecPerMile(row.T) },
+      I: { name: 'Interval',   sec_per_mile: row.I, label: _formatPaceSecPerMile(row.I) },
+      R: { name: 'Repetition', sec_per_mile: row.R, label: _formatPaceSecPerMile(row.R) }
+    }
+  };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Unified zone refresh entry point used by the test-result handler.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Recompute every cached zone from the user's current profile values
+ * (vdot, ftp_watts, css_sec_per_100m, age, restingHR, lthr) and write the
+ * results back to localStorage under `trainingZones`. Returns the new bundle.
+ */
+function recalculateAllZones(userProfile) {
+  let profile = userProfile;
+  if (!profile) {
+    try { profile = JSON.parse(localStorage.getItem('profile') || '{}'); } catch { profile = {}; }
+  }
+
+  const bundle = {};
+
+  // HR — uses existing tiered logic
+  const hr = calculateHRZones(profile);
+  if (hr) {
+    bundle.hr = {
+      tier: hr.tier,
+      method: hr.method,
+      maxHR: hr.maxHR,
+      usingKnownMax: hr.usingKnownMax,
+      zones: hr.zones,
+      calculatedAt: new Date().toISOString()
+    };
+  }
+
+  // Run paces from VDOT
+  const vdot = parseFloat(profile.vdot || profile.run_vdot);
+  if (vdot) {
+    const r = calculateRunZonesFromVDOT(vdot);
+    if (r) bundle.run = { ...r, calculatedAt: new Date().toISOString() };
+  }
+
+  // Bike power from FTP
+  const ftp = parseFloat(profile.ftp_watts || profile.ftp);
+  if (ftp) {
+    const b = calculateBikeZonesFromFTP(ftp);
+    if (b) bundle.bike = { ...b, calculatedAt: new Date().toISOString() };
+  }
+
+  // Swim from CSS
+  const css = parseFloat(profile.css_sec_per_100m || profile.css);
+  if (css) {
+    const s = calculateSwimZonesFromCSS(css);
+    if (s) bundle.swim = { ...s, calculatedAt: new Date().toISOString() };
+  }
+
+  try {
+    localStorage.setItem('trainingZones', JSON.stringify(bundle));
+    if (typeof DB !== 'undefined' && DB.syncKey) DB.syncKey('trainingZones');
+  } catch (e) {
+    console.warn('[IronZ] Failed to persist recalculated zones:', e.message);
+  }
+  return bundle;
+}
+
+// Browser global
+if (typeof window !== 'undefined') {
+  window.ZoneCalculator = {
+    estimateMaxHR,
+    determineZoneTier,
+    calculateHRZones,
+    formatHRZone,
+    storeHRZones,
+    recalculateHRZones,
+    getStoredHRZones,
+    calculateBikeZonesFromFTP,
+    formatBikeZone,
+    calculateSwimZonesFromCSS,
+    formatSwimPace,
+    calculateRunZonesFromVDOT,
+    recalculateAllZones,
+    BIKE_ZONES_COGGAN,
+    VDOT_PACE_TABLE,
+    LTHR_ESTIMATION_METHODS
+  };
+}

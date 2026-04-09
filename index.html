@@ -425,6 +425,18 @@
         </div>
       </section>
 
+      <!-- Threshold Weeks (added 2026-04-09) -->
+      <section class="card collapsible is-collapsed" id="section-threshold-weeks">
+        <div class="card-toggle" onclick="toggleSection('section-threshold-weeks')">
+          <h2>Threshold Weeks</h2>
+          <span class="card-chevron">&#9662;</span>
+        </div>
+        <div class="card-body">
+          <p class="hint">Every few weeks IronZ inserts a deload + test week. The test result auto-updates your training zones.</p>
+          <div id="threshold-week-settings"></div>
+        </div>
+      </section>
+
       <!-- Training Blocks Explained -->
       <section class="card collapsible is-collapsed" id="section-training-blocks">
         <div class="card-toggle" onclick="toggleSection('section-training-blocks')">
@@ -2529,11 +2541,14 @@
   <script src="workouts.js"></script>
   <script src="nutrition.js"></script>
   <script src="meals-data.js"></script>
+  <script src="threshold-week-scheduler.js"></script>
   <script src="planner.js"></script>
   <script src="philosophy-engine.js"></script>
   <script src="exercise-selector.js"></script>
   <script src="nutrition-calculator.js"></script>
   <script src="zone-calculator.js"></script>
+  <script src="test-result-handler.js"></script>
+  <script src="post-test-modal.js"></script>
   <script src="rules-engine.js"></script>
   <script src="validator.js"></script>
   <script src="gap-tracker.js"></script>
