@@ -567,6 +567,10 @@ let _cpManualSelectedType = "";
 let _cpManualRowCount = 0;
 // When editing an existing session, this holds the array index. null = add mode.
 let _cpManualEditIdx = null;
+// When true, cpManualAddExRow suppresses the per-insert badge refresh so
+// the caller can do a single refresh at the end (prevents prematurely
+// clearing single-row superset groups during bulk prefill).
+let _cpManualSuppressBadgeRefresh = false;
 
 function customPlanAddManual(dow, editIdx) {
   const modal = document.getElementById("cp-manual-modal");
@@ -635,7 +639,14 @@ function _cpManualPrefillFromEntry(entry) {
       cpManualAddExRow();
       cpManualAddExRow();
     } else {
-      exercises.forEach(ex => cpManualAddExRow(ex));
+      // Bulk-add without per-row badge refresh, then render badges once
+      _cpManualSuppressBadgeRefresh = true;
+      try {
+        exercises.forEach(ex => cpManualAddExRow(ex));
+      } finally {
+        _cpManualSuppressBadgeRefresh = false;
+      }
+      _cpRefreshSsBadges();
     }
   }
   cpManualShowStep(2);
@@ -695,6 +706,8 @@ function cpManualSelectType(type) {
 
 // Add a strength / HIIT / bodyweight exercise row.
 // Optional `prefill` is an existing exercise object — used when editing.
+// Rows are draggable: drop above/below to reorder, drop into the middle
+// of another row to group them as a superset.
 function cpManualAddExRow(prefill) {
   _cpManualRowCount++;
   const id = _cpManualRowCount;
@@ -703,15 +716,20 @@ function cpManualAddExRow(prefill) {
   const div = document.createElement("div");
   div.className = "qe-manual-row" + (isHiit ? " hiit-row" : "");
   div.id = `cp-mrow-${id}`;
+  div.draggable = true;
 
   const pName = prefill?.name || "";
   const pReps = (prefill?.reps != null) ? String(prefill.reps) : "";
   const pSets = (prefill?.sets != null) ? String(prefill.sets) : "";
   const pWt = _cpNormalizeWt(prefill?.weight, isBW);
   const pGroup = prefill?.supersetGroup || prefill?.supersetId || "";
+  if (pGroup) div.dataset.supersetGroup = pGroup;
+
+  const dragHandleHTML = `<span class="drag-handle" title="Drag to reorder · drop on a row to superset">⠿</span>`;
 
   if (isHiit) {
     div.innerHTML = `
+      ${dragHandleHTML}
       <div><label>Exercise</label>
         <input type="text" id="cp-mex-${id}" placeholder="e.g. Burpees, Row 500m" value="${_cpEsc(pName)}" /></div>
       <div><label>Reps / Time / Distance</label>
@@ -724,6 +742,7 @@ function cpManualAddExRow(prefill) {
     const wtValue = pWt || (isBW ? "Bodyweight" : "");
     const exPlaceholder = isBW ? "e.g. Push-ups, Pull-ups" : "e.g. Bench Press";
     div.innerHTML = `
+      ${dragHandleHTML}
       <div><label>Exercise</label>
         <input type="text"   id="cp-mex-${id}"   placeholder="${exPlaceholder}" value="${_cpEsc(pName)}" /></div>
       <div><label>Sets</label>
@@ -734,28 +753,41 @@ function cpManualAddExRow(prefill) {
         <input type="text"   id="cp-mwt-${id}"   placeholder="${wtPlaceholder}" value="${_cpEsc(wtValue)}"${isBW ? ' readonly' : ''} /></div>
       <button class="ex-pyramid-btn" title="Per-set reps &amp; weight" onclick="cpTogglePyramid(${id})">▾</button>
       <button class="remove-exercise-btn" onclick="cpManualRemoveRow(${id})">${_CP_TRASH_SVG}</button>
-      <div class="cp-group-row">
-        <label class="cp-group-label">Superset group</label>
-        <select class="cp-mgroup" id="cp-mgroup-${id}" onchange="_cpRefreshGroupLabels()">
-          <option value="">—</option>
-          <option value="A"${pGroup === "A" ? " selected" : ""}>A</option>
-          <option value="B"${pGroup === "B" ? " selected" : ""}>B</option>
-          <option value="C"${pGroup === "C" ? " selected" : ""}>C</option>
-          <option value="D"${pGroup === "D" ? " selected" : ""}>D</option>
-          <option value="E"${pGroup === "E" ? " selected" : ""}>E</option>
-        </select>
-        <button type="button" class="cp-group-prev-btn" title="Group with previous exercise" onclick="_cpGroupWithPrevious(${id})">+ group with previous</button>
-        <span class="cp-group-tag" id="cp-mgroup-tag-${id}"></span>
-      </div>
       <div class="ex-pyramid-detail" id="cp-pyr-${id}" style="display:none"></div>`;
-    // Apply saved group value if present
-    if (pGroup) {
-      const sel = div.querySelector(`#cp-mgroup-${id}`);
-      if (sel) sel.value = pGroup;
-    }
   }
-  document.getElementById("cp-manual-exercise-rows").appendChild(div);
-  _cpRefreshGroupLabels();
+
+  // Wire native HTML5 drag-and-drop
+  div.addEventListener("dragstart", _cpRowDragStart);
+  div.addEventListener("dragend", _cpRowDragEnd);
+  div.addEventListener("dragover", _cpRowDragOver);
+  div.addEventListener("dragleave", _cpRowDragLeave);
+  div.addEventListener("drop", _cpRowDrop);
+
+  const container = document.getElementById("cp-manual-exercise-rows");
+  container.appendChild(div);
+
+  // Touch drag support for mobile
+  if (typeof TouchDrag !== "undefined") {
+    TouchDrag.attach(div, container, {
+      hintClasses: ["drag-insert-above", "drag-insert-below", "drag-ss-target"],
+      rowSelector: ".qe-manual-row",
+      handleSelector: ".drag-handle",
+      onDrop(dragEl, targetEl, clientY) {
+        const rect = targetEl.getBoundingClientRect();
+        const pct = (clientY - rect.top) / rect.height;
+        _cpClearAllDragHints();
+        if (pct > 0.3 && pct < 0.7) {
+          _cpGroupSupersetRows(dragEl, targetEl);
+        } else {
+          if (pct <= 0.3) container.insertBefore(dragEl, targetEl);
+          else container.insertBefore(dragEl, targetEl.nextSibling);
+          _cpRefreshSsBadges();
+        }
+      },
+    });
+  }
+
+  if (!_cpManualSuppressBadgeRefresh) _cpRefreshSsBadges();
 }
 
 // Normalize a weight value for display in an input.
@@ -764,48 +796,133 @@ function _cpNormalizeWt(w, isBW) {
   return String(w);
 }
 
-// Refresh the "A1 / A2 / B1 / B2" preview labels on all strength rows.
-function _cpRefreshGroupLabels() {
+// ── Custom plan row drag & drop ───────────────────────────────────────────
+let _cpDragEl = null;
+
+function _cpRowDragStart(e) {
+  _cpDragEl = this;
+  this.classList.add("drag-active");
+  e.dataTransfer.effectAllowed = "move";
+}
+function _cpRowDragEnd() {
+  this.classList.remove("drag-active");
+  _cpDragEl = null;
+  _cpClearAllDragHints();
+}
+function _cpRowDragOver(e) {
+  if (!_cpDragEl || _cpDragEl === this) return;
+  e.preventDefault();
+  const rect = this.getBoundingClientRect();
+  const pct = (e.clientY - rect.top) / rect.height;
+  this.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target");
+  if (pct > 0.3 && pct < 0.7) {
+    this.classList.add("drag-ss-target");
+  } else {
+    this.classList.add(pct <= 0.3 ? "drag-insert-above" : "drag-insert-below");
+  }
+}
+function _cpRowDragLeave() {
+  this.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target");
+}
+function _cpRowDrop(e) {
+  e.preventDefault();
+  _cpClearAllDragHints();
+  if (!_cpDragEl || _cpDragEl === this) return;
+  const rect = this.getBoundingClientRect();
+  const pct = (e.clientY - rect.top) / rect.height;
   const container = document.getElementById("cp-manual-exercise-rows");
-  if (!container) return;
-  const rows = Array.from(container.querySelectorAll(".qe-manual-row"));
-  // Track running index per group letter
-  const counts = {};
-  rows.forEach(row => {
-    const sel = row.querySelector(".cp-mgroup");
-    const tag = row.querySelector(".cp-group-tag");
-    if (!sel || !tag) return;
-    const val = sel.value;
-    if (!val) { tag.textContent = ""; return; }
-    counts[val] = (counts[val] || 0) + 1;
-    tag.textContent = `${val}${counts[val]}`;
-  });
+  if (pct > 0.3 && pct < 0.7) {
+    _cpGroupSupersetRows(_cpDragEl, this);
+  } else {
+    if (pct <= 0.3) container.insertBefore(_cpDragEl, this);
+    else container.insertBefore(_cpDragEl, this.nextSibling);
+    // Dropping outside the middle ejects the drag row from any group it
+    // was in — treat reordering into a new position as "leave superset".
+    if (_cpDragEl.dataset.supersetGroup) {
+      // Only clear if the neighbours are no longer in that group
+      const group = _cpDragEl.dataset.supersetGroup;
+      const above = _cpDragEl.previousElementSibling;
+      const below = _cpDragEl.nextElementSibling;
+      const stillInGroup =
+        (above && above.dataset.supersetGroup === group) ||
+        (below && below.dataset.supersetGroup === group);
+      if (!stillInGroup) delete _cpDragEl.dataset.supersetGroup;
+    }
+    _cpRefreshSsBadges();
+  }
+  _cpDragEl = null;
 }
 
-// Auto-assign this row to the group of the row directly above it.
-// If the row above has no group, pick the next unused letter.
-function _cpGroupWithPrevious(rowId) {
+function _cpClearAllDragHints() {
+  document
+    .querySelectorAll("#cp-manual-exercise-rows .qe-manual-row")
+    .forEach(el => el.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target"));
+}
+
+// Group two rows into a superset by assigning a shared supersetGroup
+// letter. Picks an existing group from either row, or the next unused
+// letter if neither belongs to one.
+function _cpGroupSupersetRows(dragEl, targetEl) {
   const container = document.getElementById("cp-manual-exercise-rows");
-  if (!container) return;
-  const rows = Array.from(container.querySelectorAll(".qe-manual-row"));
-  const idx = rows.findIndex(r => r.id === `cp-mrow-${rowId}`);
-  if (idx <= 0) return;
-  const prevRow = rows[idx - 1];
-  const prevSel = prevRow.querySelector(".cp-mgroup");
-  const mySel = rows[idx].querySelector(".cp-mgroup");
-  if (!prevSel || !mySel) return;
-  let group = prevSel.value;
+  // Move dragged row directly after target
+  container.insertBefore(dragEl, targetEl.nextSibling);
+
+  let group = targetEl.dataset.supersetGroup || dragEl.dataset.supersetGroup || "";
   if (!group) {
-    // Assign the next unused letter
-    const used = new Set(rows.map(r => r.querySelector(".cp-mgroup")?.value).filter(Boolean));
-    for (const letter of ["A", "B", "C", "D", "E"]) {
+    // Pick the next unused letter among existing rows
+    const used = new Set(
+      Array.from(container.querySelectorAll(".qe-manual-row"))
+        .map(r => r.dataset.supersetGroup)
+        .filter(Boolean)
+    );
+    for (const letter of ["A", "B", "C", "D", "E", "F"]) {
       if (!used.has(letter)) { group = letter; break; }
     }
     if (!group) group = "A";
-    prevSel.value = group;
   }
-  mySel.value = group;
-  _cpRefreshGroupLabels();
+  targetEl.dataset.supersetGroup = group;
+  dragEl.dataset.supersetGroup = group;
+  _cpRefreshSsBadges();
+}
+
+// Rebuild the A1/A2/B1 badges on every row. A row's badge is removed if
+// it's no longer adjacent to another member of its group.
+function _cpRefreshSsBadges() {
+  const container = document.getElementById("cp-manual-exercise-rows");
+  if (!container) return;
+  const rows = Array.from(container.querySelectorAll(".qe-manual-row"));
+
+  // First pass: clear groups where a row is isolated from its neighbours.
+  rows.forEach((row, i) => {
+    const g = row.dataset.supersetGroup;
+    if (!g) return;
+    const above = rows[i - 1];
+    const below = rows[i + 1];
+    const neighbourHasGroup =
+      (above && above.dataset.supersetGroup === g) ||
+      (below && below.dataset.supersetGroup === g);
+    if (!neighbourHasGroup) delete row.dataset.supersetGroup;
+  });
+
+  // Second pass: render badges with A1/A2/B1 indices per group letter
+  const counts = {};
+  rows.forEach(row => {
+    const g = row.dataset.supersetGroup;
+    // Remove any stale badge
+    const old = row.querySelector(".cp-ss-badge");
+    if (old) old.remove();
+    if (!g) return;
+    counts[g] = (counts[g] || 0) + 1;
+    const badge = document.createElement("span");
+    badge.className = "cp-ss-badge";
+    badge.textContent = `${g}${counts[g]}`;
+    badge.title = "Click to ungroup";
+    badge.addEventListener("click", () => {
+      delete row.dataset.supersetGroup;
+      _cpRefreshSsBadges();
+    });
+    row.appendChild(badge);
+  });
 }
 
 function cpManualRemoveRow(id) {
@@ -999,10 +1116,8 @@ function customPlanSaveManual() {
       };
       if (!isHiit) ex.sets = document.getElementById(`cp-msets-${id}`)?.value.trim() || "";
 
-      // Superset group (strength/bodyweight — HIIT rows don't have the control)
-      const groupSel = document.getElementById(`cp-mgroup-${id}`);
-      const groupVal = groupSel?.value || "";
-      ex.supersetGroup = groupVal || null;
+      // Superset group from drag-to-group dataset
+      ex.supersetGroup = row.dataset.supersetGroup || null;
 
       // Collect per-set pyramid details if expanded
       const pyrDetail = document.getElementById(`cp-pyr-${id}`);
