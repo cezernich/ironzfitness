@@ -36,6 +36,7 @@ global.SESSION_DESCRIPTIONS = {};
 
 require("./threshold-week-scheduler.js");
 require("./session-type-library.js");
+require("./js/workout-validator.js");
 require("./zone-calculator.js");
 require("./running-workout-generator.js");
 try {

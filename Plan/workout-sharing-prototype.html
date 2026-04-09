@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IronZ — Workout Sharing UX Prototype</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+    background: #0a0a0f;
+    color: #fff;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px 80px;
+  }
+  h1 { font-size: 26px; margin-bottom: 6px; font-weight: 800; letter-spacing: -0.5px; }
+  .subtitle { color: #888; font-size: 14px; margin-bottom: 28px; text-align: center; max-width: 500px; }
+
+  .flow-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 28px;
+    background: #1a1a24;
+    padding: 4px;
+    border-radius: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .flow-tab {
+    padding: 10px 16px;
+    border: none;
+    background: transparent;
+    color: #888;
+    cursor: pointer;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .flow-tab.active {
+    background: #ff6b35;
+    color: #fff;
+  }
+
+  .phone-frame {
+    width: 375px;
+    height: 740px;
+    background: #000;
+    border: 10px solid #1a1a24;
+    border-radius: 48px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.7), 0 0 0 2px #2a2a38;
+  }
+  .phone-notch {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 28px;
+    background: #000;
+    border-radius: 14px;
+    z-index: 100;
+  }
+  .phone-screen {
+    width: 100%;
+    height: 100%;
+    background: #0f0f18;
+    overflow-y: auto;
+    padding-top: 50px;
+    position: relative;
+  }
+  .phone-screen::-webkit-scrollbar { display: none; }
+
+  .status-bar {
+    position: absolute;
+    top: 14px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 28px;
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 101;
+    color: #fff;
+  }
+
+  .screen {
+    padding: 16px 20px 20px;
+    animation: fadeIn 0.25s ease-out;
+    min-height: calc(100% - 50px);
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .nav-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    height: 32px;
+  }
+  .back-btn {
+    background: none;
+    border: none;
+    color: #ff6b35;
+    font-size: 15px;
+    cursor: pointer;
+    font-weight: 500;
+    font-family: inherit;
+    padding: 0;
+  }
+  .nav-title {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .nav-action {
+    color: #ff6b35;
+    cursor: pointer;
+    font-size: 18px;
+  }
+
+  .workout-card {
+    background: #1a1a24;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 12px;
+  }
+  .workout-title {
+    font-size: 22px;
+    font-weight: 800;
+    margin-bottom: 4px;
+    letter-spacing: -0.3px;
+  }
+  .workout-subtitle {
+    color: #888;
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+  .workout-structure {
+    display: flex;
+    flex-direction: column;
+  }
+  .structure-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 11px 0;
+    border-bottom: 1px solid #252530;
+    font-size: 13px;
+  }
+  .structure-row:last-child { border-bottom: none; }
+  .structure-label { color: #aaa; }
+  .structure-value { color: #fff; font-weight: 600; }
+
+  .btn-primary {
+    width: 100%;
+    background: #ff6b35;
+    color: #fff;
+    border: none;
+    padding: 14px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 16px;
+    font-family: inherit;
+  }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-secondary {
+    width: 100%;
+    background: #252530;
+    color: #fff;
+    border: none;
+    padding: 14px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 10px;
+    font-family: inherit;
+  }
+  .btn-ghost {
+    background: none;
+    color: #888;
+    border: none;
+    padding: 12px;
+    cursor: pointer;
+    font-size: 13px;
+    margin-top: 4px;
+    width: 100%;
+    font-family: inherit;
+  }
+
+  .share-sheet {
+    background: #1a1a24;
+    border-radius: 24px 24px 0 0;
+    padding: 18px 20px 24px;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    animation: slideUp 0.3s ease-out;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  .sheet-handle {
+    width: 40px;
+    height: 4px;
+    background: #444;
+    border-radius: 2px;
+    margin: 0 auto 14px;
+  }
+  .sheet-title {
+    font-size: 18px;
+    font-weight: 800;
+    margin-bottom: 4px;
+    text-align: center;
+  }
+  .sheet-subtitle {
+    font-size: 12px;
+    color: #888;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+
+  .privacy-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 13px 0;
+    border-bottom: 1px solid #252530;
+  }
+  .privacy-row:last-child { border-bottom: none; }
+  .privacy-label {
+    font-size: 13px;
+    color: #ccc;
+  }
+  .privacy-status {
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .privacy-status.shared { color: #4ade80; }
+  .privacy-status.private { color: #666; }
+
+  .toggle {
+    width: 44px;
+    height: 26px;
+    background: #ff6b35;
+    border-radius: 13px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle::after {
+    content: '';
+    width: 22px;
+    height: 22px;
+    background: #fff;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    transition: right 0.2s;
+  }
+  .toggle.off { background: #333; }
+  .toggle.off::after { right: 20px; }
+
+  .link-box {
+    background: #0f0f18;
+    padding: 14px;
+    border-radius: 10px;
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    color: #4ade80;
+    margin: 14px 0 8px;
+    word-break: break-all;
+    border: 1px solid #252530;
+  }
+  .link-meta {
+    font-size: 11px;
+    color: #666;
+    text-align: center;
+    margin-bottom: 14px;
+  }
+
+  .share-options {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+    justify-content: space-around;
+  }
+  .share-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #888;
+    cursor: pointer;
+  }
+  .share-icon {
+    width: 52px;
+    height: 52px;
+    background: #252530;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+  }
+  .share-option:active .share-icon { background: #303040; }
+
+  .highlight-badge {
+    background: #ff6b35;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 10px;
+    display: inline-block;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+  }
+  .highlight-badge.success { background: #4ade80; color: #003820; }
+
+  .avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ff6b35, #ff8e5e);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 18px;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .shared-from {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    background: #1a1a24;
+    border-radius: 14px;
+    margin-bottom: 14px;
+  }
+  .shared-from-label {
+    font-size: 11px;
+    color: #888;
+    margin-bottom: 2px;
+  }
+  .shared-from-name {
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .zone-translation {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 14px 0;
+  }
+  .zone-col {
+    background: #0f0f18;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #252530;
+  }
+  .zone-col.you {
+    border-color: #ff6b35;
+    background: #1f1509;
+  }
+  .zone-col-label {
+    font-size: 10px;
+    color: #888;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .zone-col-value {
+    font-size: 18px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .calendar {
+    background: #1a1a24;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .cal-header {
+    text-align: center;
+    font-weight: 700;
+    margin-bottom: 14px;
+    font-size: 14px;
+  }
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+    text-align: center;
+  }
+  .cal-day-label {
+    font-size: 10px;
+    color: #666;
+    padding: 4px 0;
+    font-weight: 600;
+  }
+  .cal-day {
+    padding: 10px 0;
+    font-size: 13px;
+    border-radius: 8px;
+    cursor: pointer;
+    background: #0f0f18;
+    font-weight: 600;
+    position: relative;
+  }
+  .cal-day.has-workout {
+    background: #252530;
+  }
+  .cal-day.has-workout::after {
+    content: '';
+    width: 4px;
+    height: 4px;
+    background: #888;
+    border-radius: 50%;
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .cal-day.suggested {
+    background: #ff6b35;
+    color: #fff;
+  }
+  .cal-day.conflict {
+    background: #3a1a1a;
+    color: #f87171;
+  }
+  .cal-legend {
+    font-size: 10px;
+    color: #666;
+    margin-top: 10px;
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+  }
+  .cal-legend span::before {
+    content: '●';
+    margin-right: 4px;
+  }
+  .legend-suggest::before { color: #ff6b35; }
+  .legend-conflict::before { color: #f87171; }
+  .legend-existing::before { color: #888; }
+
+  .warning-box {
+    background: #2a1515;
+    border: 1px solid #5a2525;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .warning-title {
+    color: #f87171;
+    font-size: 14px;
+    font-weight: 800;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .warning-text {
+    font-size: 13px;
+    color: #ccc;
+    line-height: 1.5;
+  }
+
+  .success-icon {
+    width: 72px;
+    height: 72px;
+    background: #4ade80;
+    border-radius: 50%;
+    margin: 30px auto 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    color: #003820;
+    font-weight: 800;
+  }
+  .success-title {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 800;
+    margin-bottom: 6px;
+    letter-spacing: -0.3px;
+  }
+  .success-subtitle {
+    text-align: center;
+    color: #888;
+    font-size: 13px;
+    margin-bottom: 22px;
+  }
+
+  .web-header {
+    background: #0a0a0f;
+    padding: 14px 20px;
+    text-align: center;
+    border-bottom: 1px solid #252530;
+    margin: -16px -20px 16px;
+  }
+  .web-logo {
+    font-size: 22px;
+    font-weight: 900;
+    color: #ff6b35;
+    letter-spacing: -0.5px;
+  }
+  .web-url {
+    font-size: 10px;
+    color: #555;
+    margin-top: 4px;
+    font-family: "SF Mono", Menlo, monospace;
+  }
+
+  .install-card {
+    background: linear-gradient(135deg, #1a1a24, #252530);
+    padding: 18px;
+    border-radius: 14px;
+    margin-top: 12px;
+    border: 1px solid #333;
+  }
+  .install-title {
+    font-size: 15px;
+    font-weight: 800;
+    margin-bottom: 6px;
+  }
+  .install-text {
+    font-size: 12px;
+    color: #999;
+    line-height: 1.5;
+    margin-bottom: 14px;
+  }
+
+  .setup-step {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid #252530;
+    font-size: 13px;
+  }
+  .setup-step:last-child { border-bottom: none; }
+
+  .bottom-nav {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #1a1a24;
+    border-top: 1px solid #252530;
+    display: flex;
+    justify-content: space-around;
+    padding: 10px 0 24px;
+  }
+  .nav-item {
+    font-size: 10px;
+    color: #666;
+    text-align: center;
+  }
+  .nav-item.active { color: #ff6b35; }
+  .nav-item-icon {
+    font-size: 20px;
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  .controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: 24px;
+  }
+  .ctrl-btn {
+    background: #1a1a24;
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+  }
+  .ctrl-btn:hover { background: #252530; }
+  .ctrl-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .step-dots {
+    display: flex;
+    gap: 6px;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #333;
+    cursor: pointer;
+  }
+  .dot.active {
+    background: #ff6b35;
+    width: 24px;
+    border-radius: 4px;
+  }
+
+  .caption {
+    margin-top: 20px;
+    max-width: 500px;
+    text-align: center;
+    color: #aaa;
+    font-size: 14px;
+    line-height: 1.5;
+    font-weight: 500;
+  }
+  .caption-hint {
+    display: block;
+    font-size: 12px;
+    color: #666;
+    margin-top: 6px;
+    font-weight: 400;
+  }
+</style>
+</head>
+<body>
+  <h1>IronZ · Workout Sharing Prototype</h1>
+  <p class="subtitle">Click through each flow to see how sharing works. Tap the orange buttons or use Next/Prev below.</p>
+
+  <div class="flow-tabs">
+    <button class="flow-tab active" data-flow="sender">1. Sender (Chase)</button>
+    <button class="flow-tab" data-flow="receiver">2. Receiver (has IronZ)</button>
+    <button class="flow-tab" data-flow="nonuser">3. Receiver (no app)</button>
+  </div>
+
+  <div class="phone-frame">
+    <div class="phone-notch"></div>
+    <div class="status-bar">
+      <span>9:41</span>
+      <span>IronZ</span>
+    </div>
+    <div class="phone-screen" id="screen-container"></div>
+  </div>
+
+  <div class="controls">
+    <button class="ctrl-btn" id="prev-btn">‹ Prev</button>
+    <div class="step-dots" id="step-dots"></div>
+    <button class="ctrl-btn" id="next-btn">Next ›</button>
+  </div>
+
+  <p class="caption" id="caption"></p>
+
+<script>
+  const flows = {
+    sender: [
+      { caption: "Chase is looking at the track workout he just finished. He taps the share icon (top right) or the Share button at the bottom.", screen: 'sender1' },
+      { caption: "The share sheet slides up. IronZ explicitly shows what gets shared vs. what stays private. Chase's actual paces and zones never leave his device.", screen: 'sender2' },
+      { caption: "Link is generated. Chase picks how to send it — Messages is probably the most common path.", screen: 'sender3' },
+      { caption: "Back to the workout detail. Small 'SHARED' badge added. Chase will get a notification if his friend actually runs it.", screen: 'sender4' }
+    ],
+    receiver: [
+      { caption: "Friend receives the iMessage link and taps it. IronZ opens directly to the shared workout preview. No login wall, no friction.", screen: 'receiver1' },
+      { caption: "IronZ shows the workout already translated to the friend's zones. The side-by-side makes it clear what changed — Chase's 3:12 is now 3:28 because friend's VDOT is lower.", screen: 'receiver2' },
+      { caption: "Friend picks a day. IronZ pre-highlights the best fit (orange) and flags conflicts (red). Let's see what happens if the friend picks the red day.", screen: 'receiver3' },
+      { caption: "Hard constraint violation: adding a track session 24h before a long run breaks the recovery rule. IronZ explains why and offers concrete alternatives. No silent failures.", screen: 'receiver4' },
+      { caption: "Friend accepts the suggested day. Workout lands in the plan. Option to send a quick thanks back to Chase.", screen: 'receiver5' }
+    ],
+    nonuser: [
+      { caption: "Friend doesn't have IronZ. They see a web preview of the workout with Chase's attribution. The workout structure is public but the pitch is clear: install IronZ to get it in your zones.", screen: 'nonuser1' },
+      { caption: "After install, the friend opens the app and the shared workout is waiting. Onboarding is the normal flow, but IronZ remembers the pending workout and auto-adds it once setup finishes.", screen: 'nonuser2' }
+    ]
+  };
+
+  const screens = {
+    sender1: `
+      <div class="screen">
+        <div class="nav-header">
+          <button class="back-btn">‹ Plan</button>
+          <span class="nav-title">Tue, Apr 7</span>
+          <span class="nav-action" onclick="next()" title="Share">⇪</span>
+        </div>
+        <div class="workout-card">
+          <span class="highlight-badge success">✓ COMPLETED</span>
+          <div class="workout-title">Yasso 800s</div>
+          <div class="workout-subtitle">Track workout · 42:18 total · 5.8mi</div>
+          <div class="workout-structure">
+            <div class="structure-row"><span class="structure-label">Warm-up</span><span class="structure-value">1.5mi @ E-pace</span></div>
+            <div class="structure-row"><span class="structure-label">Main set</span><span class="structure-value">6 × 800m @ I-pace</span></div>
+            <div class="structure-row"><span class="structure-label">Recovery</span><span class="structure-value">400m jog between</span></div>
+            <div class="structure-row"><span class="structure-label">Cool-down</span><span class="structure-value">1mi @ E-pace</span></div>
+          </div>
+          <button class="btn-primary" onclick="next()">⇪  Share this workout</button>
+        </div>
+        <div class="workout-card" style="opacity:0.5;">
+          <div class="workout-subtitle" style="margin:0;">Nutrition log · 2,340 kcal</div>
+        </div>
+      </div>
+    `,
+    sender2: `
+      <div class="screen" style="position:relative;">
+        <div class="nav-header">
+          <button class="back-btn">‹ Plan</button>
+          <span class="nav-title">Tue, Apr 7</span>
+          <span class="nav-action">⇪</span>
+        </div>
+        <div class="workout-card" style="opacity:0.3;">
+          <span class="highlight-badge success">✓ COMPLETED</span>
+          <div class="workout-title">Yasso 800s</div>
+          <div class="workout-subtitle">Track workout · 42:18 · 5.8mi</div>
+        </div>
+        <div class="share-sheet">
+          <div class="sheet-handle"></div>
+          <div class="sheet-title">Share Yasso 800s</div>
+          <div class="sheet-subtitle">Your friend will run this in their zones, not yours</div>
+          <div class="privacy-row">
+            <span class="privacy-label">Workout structure</span>
+            <span class="privacy-status shared">INCLUDED</span>
+          </div>
+          <div class="privacy-row">
+            <span class="privacy-label">Your actual paces</span>
+            <span class="privacy-status private">PRIVATE</span>
+          </div>
+          <div class="privacy-row">
+            <span class="privacy-label">Your VDOT / zones</span>
+            <span class="privacy-status private">PRIVATE</span>
+          </div>
+          <div class="privacy-row">
+            <span class="privacy-label">Include a note</span>
+            <div class="toggle off" onclick="this.classList.toggle('off')"></div>
+          </div>
+          <button class="btn-primary" onclick="next()">Generate link</button>
+        </div>
+      </div>
+    `,
+    sender3: `
+      <div class="screen" style="position:relative;">
+        <div class="nav-header">
+          <button class="back-btn">‹ Plan</button>
+          <span class="nav-title">Tue, Apr 7</span>
+          <span class="nav-action">⇪</span>
+        </div>
+        <div class="workout-card" style="opacity:0.3;">
+          <span class="highlight-badge success">✓ COMPLETED</span>
+          <div class="workout-title">Yasso 800s</div>
+        </div>
+        <div class="share-sheet">
+          <div class="sheet-handle"></div>
+          <div class="sheet-title">Link ready</div>
+          <div class="link-box">ironz.app/w/yasso-800s-xKj9</div>
+          <div class="link-meta">Expires in 30 days · No personal data attached</div>
+          <div class="share-options">
+            <div class="share-option" onclick="next()">
+              <div class="share-icon">💬</div>
+              <span>Messages</span>
+            </div>
+            <div class="share-option" onclick="next()">
+              <div class="share-icon">📋</div>
+              <span>Copy</span>
+            </div>
+            <div class="share-option" onclick="next()">
+              <div class="share-icon">✉️</div>
+              <span>Mail</span>
+            </div>
+            <div class="share-option" onclick="next()">
+              <div class="share-icon">⋯</div>
+              <span>More</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `,
+    sender4: `
+      <div class="screen">
+        <div class="nav-header">
+          <button class="back-btn">‹ Plan</button>
+          <span class="nav-title">Tue, Apr 7</span>
+          <span class="nav-action">⇪</span>
+        </div>
+        <div class="workout-card">
+          <div style="display:flex;gap:6px;margin-bottom:8px;">
+            <span class="highlight-badge success">✓ COMPLETED</span>
+            <span class="highlight-badge" style="background:#4a7bff;">⇪ SHARED</span>
+          </div>
+          <div class="workout-title">Yasso 800s</div>
+          <div class="workout-subtitle">Track workout · 42:18 · 5.8mi</div>
+          <div class="workout-structure">
+            <div class="structure-row"><span class="structure-label">Shared with</span><span class="structure-value">1 friend</span></div>
+            <div class="structure-row"><span class="structure-label">Link expires</span><span class="structure-value">May 7, 2026</span></div>
+            <div class="structure-row"><span class="structure-label">Views</span><span class="structure-value">—</span></div>
+          </div>
+          <button class="btn-secondary">Copy link again</button>
+          <button class="btn-ghost">Revoke share link</button>
+        </div>
+        <p style="text-align:center;color:#666;font-size:12px;margin-top:16px;">You'll get a notification when they add it to their plan.</p>
+      </div>
+    `,
+
+    receiver1: `
+      <div class="screen">
+        <div class="nav-header">
+          <button class="back-btn">× Close</button>
+          <span class="nav-title">Shared with you</span>
+          <span></span>
+        </div>
+        <div class="shared-from">
+          <div class="avatar">C</div>
+          <div>
+            <div class="shared-from-label">Chase shared a workout</div>
+            <div class="shared-from-name">2 minutes ago</div>
+          </div>
+        </div>
+        <div class="workout-card">
+          <span class="highlight-badge">TRACK WORKOUT</span>
+          <div class="workout-title">Yasso 800s</div>
+          <div class="workout-subtitle">Classic VO2max session · ~5.8mi total</div>
+          <div class="workout-structure">
+            <div class="structure-row"><span class="structure-label">Warm-up</span><span class="structure-value">1.5mi easy</span></div>
+            <div class="structure-row"><span class="structure-label">Main set</span><span class="structure-value">6 × 800m @ I-pace</span></div>
+            <div class="structure-row"><span class="structure-label">Recovery</span><span class="structure-value">400m jog between</span></div>
+            <div class="structure-row"><span class="structure-label">Cool-down</span><span class="structure-value">1mi easy</span></div>
+          </div>
+          <button class="btn-primary" onclick="next()">See it in my zones</button>
+          <button class="btn-ghost">Not now</button>
+        </div>
+      </div>
+    `,
+    receiver2: `
+      <div class="screen">
+        <div class="nav-header">
+          <button class="back-btn" onclick="prev()">‹ Back</button>
+          <span class="nav-title">In your zones</span>
+          <span></span>
+        </div>
+        <div class="workout-card">
+          <span class="highlight-badge">SCALED TO YOU</span>
+          <div class="workout-title">Yasso 800s</div>
+          <div class="workout-subtitle">Your VDOT 48 · I-pace 3:28/800</div>
+          <div class="zone-translation">
+            <div class="zone-col">
+              <div class="zone-col-label">Chase's pace</div>
+              <div class="zone-col-value">3:12</div>
+            </div>
+            <div class="zone-col you">
+              <div class="zone-col-label">Your pace</div>
+              <div class="zone-col-value">3:28</div>
+            </div>
+          </div>
+          <div class="workout-structure">
+            <div class="structure-row"><span class="structure-label">Warm-up</span><span class="structure-value">1.5mi @ 9:20/mi</span></div>
+            <div class="structure-row"><span class="structure-label">6 × 800m</span><span class="structure-value">@ 3:28 each</span></div>
+            <div class="structure-row"><span class="structure-label">Recovery</span><span class="structure-value">400m jog (~2:30)</span></div>
+            <div class="structure-row"><span class="structure-label">Cool-down</span><span class="structure-value">1mi @ 9:20/mi</span></div>
+          </div>
+          <button class="btn-primary" onclick="next()">Add to my plan</button>
+        </div>
+      </div>
+    `,
+    receiver3: `
+      <div class="screen">
+        <div class="nav-header">
+          <button class="back-btn" onclick="prev()">‹ Back</button>
+          <span class="nav-title">Pick a day</span>
+          <span></span>
+        </div>
+        <p style="font-size:12px;color:#888;margin-bottom:12px;">We'll check for conflicts with your current plan.</p>
+        <div class="calendar">
+          <div class="cal-header">April 2026</div>
+          <div class="cal-grid">
+            <div class="cal-day-label">S</div>
+            <div class="cal-day-label">M</div>
+            <div class="cal-day-label">T</div>
+            <div class="cal-day-label">W</div>
+            <div class="cal-day-label">T</div>
+            <div class="cal-day-label">F</div>
+            <div class="cal-day-label">S</div>
+            <div class="cal-day">12</div>
+            <div class="cal-day has-workout">13</div>
+            <div class="cal-day suggested" onclick="goToStep(4)">14</div>
+            <div class="cal-day conflict" onclick="next()">15</div>
+            <div class="cal-day has-workout">16</div>
+            <div class="cal-day">17</div>
+            <div class="cal-day has-workout">18</div>
+          </div>
+          <div class="cal-legend">
+            <span class="legend-suggest">Suggested</span>
+            <span class="legend-conflict">Conflict</span>
+            <span class="legend-existing">Has workout</span>
+          </div>
+        </div>
+        <p style="font-size:11px;color:#666;text-align:center;line-height:1.5;">Try tapping Apr 15 (red) to see what happens on conflict<br>or Apr 14 (orange) to accept the suggestion</p>
+      </div>
+    `,
+    receiver4: `
+      <div class="screen">
+        <div class="nav-header">
+          <button class="back-btn" onclick="prev()">‹ Back</button>
+          <span class="nav-title">Conflict</span>
+          <span></span>
+        </div>
+        <div class="warning-box">
+          <div class="warning-title">⚠ Can't add on April 15</div>
+          <div class="warning-text">You have a long run scheduled for April 16. Adding a hard track session 24 hours before a long run violates your recovery rules and risks injury.</div>
+        </div>
+        <div class="workout-card" style="padding:16px;">
+          <div style="font-size:13px;font-weight:700;margin-bottom:12px;">Here's what we can do:</div>
+          <button class="btn-primary" onclick="next()">Move to Apr 14 (suggested)</button>
+          <button class="btn-secondary">Swap with the long run</button>
+          <button class="btn-ghost">Override anyway (not recommended)</button>
+        </div>
+        <p style="font-size:11px;color:#666;text-align:center;margin-top:12px;line-height:1.5;">The validator runs the same rules on shared workouts as on your built-in plan. No exceptions.</p>
+      </div>
+    `,
+    receiver5: `
+      <div class="screen">
+        <div class="success-icon">✓</div>
+        <div class="success-title">Added to your plan</div>
+        <div class="success-subtitle">Yasso 800s · Tue Apr 14 · 6:30 AM</div>
+        <div class="workout-card">
+          <div class="workout-structure">
+            <div class="structure-row"><span class="structure-label">From</span><span class="structure-value">Chase</span></div>
+            <div class="structure-row"><span class="structure-label">Scheduled</span><span class="structure-value">Tue Apr 14, 6:30a</span></div>
+            <div class="structure-row"><span class="structure-label">Your target</span><span class="structure-value">6 × 800 @ 3:28</span></div>
+            <div class="structure-row"><span class="structure-label">Est. duration</span><span class="structure-value">~45 min</span></div>
+          </div>
+          <button class="btn-primary">View in plan</button>
+          <button class="btn-secondary">👋  Thank Chase</button>
+        </div>
+      </div>
+    `,
+
+    nonuser1: `
+      <div class="screen" style="padding:16px 20px;">
+        <div class="web-header">
+          <div class="web-logo">IronZ</div>
+          <div class="web-url">ironz.app/w/yasso-800s-xKj9</div>
+        </div>
+        <div class="shared-from">
+          <div class="avatar">C</div>
+          <div>
+            <div class="shared-from-label">Chase shared a workout</div>
+            <div class="shared-from-name">Yasso 800s</div>
+          </div>
+        </div>
+        <div class="workout-card">
+          <span class="highlight-badge">TRACK WORKOUT</span>
+          <div class="workout-title">Yasso 800s</div>
+          <div class="workout-subtitle">Classic VO2max session · ~5.8mi</div>
+          <div class="workout-structure">
+            <div class="structure-row"><span class="structure-label">Warm-up</span><span class="structure-value">1.5mi easy</span></div>
+            <div class="structure-row"><span class="structure-label">Main set</span><span class="structure-value">6 × 800m @ I-pace</span></div>
+            <div class="structure-row"><span class="structure-label">Recovery</span><span class="structure-value">400m jog</span></div>
+            <div class="structure-row"><span class="structure-label">Cool-down</span><span class="structure-value">1mi easy</span></div>
+          </div>
+        </div>
+        <div class="install-card">
+          <div class="install-title">Run this at your pace</div>
+          <div class="install-text">IronZ scales every workout to your actual VDOT — no guessing, no generic "zone 4". Your friend's paces stay private.</div>
+          <button class="btn-primary" style="margin-top:4px;" onclick="next()">Get IronZ — Free</button>
+        </div>
+      </div>
+    `,
+    nonuser2: `
+      <div class="screen">
+        <div class="success-icon" style="background:#ff6b35;color:#fff;">⇪</div>
+        <div class="success-title">Welcome to IronZ</div>
+        <div class="success-subtitle">Chase's workout is waiting for you</div>
+        <div class="workout-card">
+          <div style="font-size:12px;color:#888;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">Finish setup</div>
+          <div class="setup-step">
+            <span style="color:#4ade80;">✓  Account created</span>
+            <span style="color:#4ade80;font-weight:700;">Done</span>
+          </div>
+          <div class="setup-step">
+            <span style="color:#ff6b35;font-weight:700;">→  Enter a recent race time</span>
+            <span style="color:#ff6b35;">Next</span>
+          </div>
+          <div class="setup-step" style="opacity:0.5;">
+            <span>○  Confirm training days</span>
+            <span></span>
+          </div>
+          <div class="setup-step" style="opacity:0.5;">
+            <span>○  Add Chase's Yasso 800s</span>
+            <span></span>
+          </div>
+          <button class="btn-primary">Continue setup</button>
+        </div>
+        <p style="font-size:11px;color:#666;text-align:center;margin-top:16px;line-height:1.5;">Chase's workout will drop into your first hard day once setup is complete.</p>
+      </div>
+    `
+  };
+
+  let currentFlow = 'sender';
+  let currentStep = 0;
+
+  document.querySelectorAll('.flow-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentFlow = btn.dataset.flow;
+      currentStep = 0;
+      document.querySelectorAll('.flow-tab').forEach(b => b.classList.toggle('active', b === btn));
+      render();
+    });
+  });
+  document.getElementById('next-btn').addEventListener('click', next);
+  document.getElementById('prev-btn').addEventListener('click', prev);
+
+  function next() {
+    if (currentStep < flows[currentFlow].length - 1) {
+      currentStep++;
+      render();
+    }
+  }
+  function prev() {
+    if (currentStep > 0) {
+      currentStep--;
+      render();
+    }
+  }
+  function goToStep(step) {
+    currentStep = step;
+    render();
+  }
+
+  function render() {
+    const step = flows[currentFlow][currentStep];
+    document.getElementById('screen-container').innerHTML = screens[step.screen];
+    document.getElementById('screen-container').scrollTop = 0;
+
+    const dots = document.getElementById('step-dots');
+    dots.innerHTML = flows[currentFlow].map((_, i) =>
+      `<div class="dot ${i === currentStep ? 'active' : ''}" onclick="goToStep(${i})"></div>`
+    ).join('');
+
+    document.getElementById('caption').innerHTML =
+      `<strong>Step ${currentStep + 1} of ${flows[currentFlow].length}</strong><span class="caption-hint">${step.caption}</span>`;
+
+    document.getElementById('prev-btn').disabled = currentStep === 0;
+    document.getElementById('next-btn').disabled = currentStep === flows[currentFlow].length - 1;
+  }
+
+  render();
+</script>
+</body>
+</html>
