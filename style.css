@@ -7050,16 +7050,23 @@ button:active {
 
 /* ===== HYDRATION ===== */
 
-.hydration-tracker { display: flex; align-items: center; gap: 20px; }
-.hydration-visual { flex-shrink: 0; }
-.hydration-info { display: flex; flex-direction: column; gap: 8px; flex: 1; }
-.hydration-count { font-size: 1.2rem; font-weight: 700; }
+.hydration-tracker { display: flex; align-items: center; gap: 14px; }
+.hydration-visual { flex-shrink: 0; display: flex; align-items: center; }
+.hydration-info { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
+.hydration-count {
+  font-size: 1.2rem; font-weight: 700;
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+}
+.hydration-oz-inline {
+  font-size: 0.85rem; font-weight: 500;
+  color: var(--color-text-muted);
+}
 .hydration-oz { font-size: 0.85rem; color: var(--color-text-muted); }
 .hydration-date-nav {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   justify-content: center;
 }
 .hydration-nav-btn {
@@ -7147,11 +7154,12 @@ button:active {
 
 .hydration-context {
   font-size: 0.78rem; color: var(--color-text-muted);
-  margin: 2px 0 4px; line-height: 1.3;
+  margin: 0; line-height: 1.3;
 }
+.hydration-context:empty { display: none; }
 
 .hydration-beverage-picker {
-  display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;
+  display: flex; gap: 6px; flex-wrap: wrap; margin: 0;
 }
 .hydration-bev-btn {
   flex: 1 1 auto; min-width: 70px; padding: 8px 6px; font-size: 0.78rem;

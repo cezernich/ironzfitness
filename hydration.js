@@ -409,22 +409,16 @@ function updateHydrationVisualPct(pct) {
 }
 
 function renderHydrationContext(breakdown) {
-  let el = document.getElementById("hydration-context");
-  if (!el) {
-    // Insert after oz display
-    const ozEl = document.getElementById("hydration-oz-display");
-    if (!ozEl) return;
-    el = document.createElement("div");
-    el.id = "hydration-context";
-    el.className = "hydration-context";
-    ozEl.insertAdjacentElement("afterend", el);
-  }
+  const el = document.getElementById("hydration-context");
+  if (!el) return;
   if (breakdown.bonusOz > 0) {
     el.style.display = "";
-    el.innerHTML = `<span class="hydration-transparency-note">${typeof ICONS !== "undefined" ? ICONS.lightbulb : ""} Your target is ${breakdown.totalOz}oz today (${breakdown.bonusOz}oz above your ${breakdown.baseOz}oz base) because you have a ${escHtml(breakdown.reason ? breakdown.reason.split("for your ").pop() : "workout")} scheduled.</span>`;
+    el.innerHTML = `<span class="hydration-transparency-note">${typeof ICONS !== "undefined" ? ICONS.lightbulb : ""} Target is ${breakdown.totalOz}oz today (+${breakdown.bonusOz}oz for your ${escHtml(breakdown.reason ? breakdown.reason.split("for your ").pop() : "workout")}).</span>`;
   } else {
-    el.style.display = "";
-    el.innerHTML = `<span class="hydration-transparency-note">${typeof ICONS !== "undefined" ? ICONS.lightbulb : ""} Base target of ${breakdown.baseOz}oz from your body weight. Add a workout to see adjusted recommendations.</span>`;
+    // Suppress the base-target note on rest days — it takes up a line of
+    // vertical space with information the user has already seen.
+    el.style.display = "none";
+    el.innerHTML = "";
   }
 }
 

@@ -911,7 +911,7 @@
         </div>
         <div class="hydration-tracker">
           <div class="hydration-visual">
-            <svg viewBox="0 0 80 160" width="80" height="160" id="hydration-bottle-svg">
+            <svg viewBox="0 0 80 160" width="56" height="112" id="hydration-bottle-svg">
               <defs>
                 <clipPath id="bottle-clip">
                   <path d="M25,30 L25,140 Q25,155 40,155 Q55,155 55,140 L55,30 Q55,20 40,20 Q25,20 25,30Z"/>
@@ -924,8 +924,9 @@
           <div class="hydration-info">
             <div class="hydration-count">
               <span id="hydration-current">0</span> / <span id="hydration-target-display">8</span> bottles
+              <span class="hydration-oz-inline" id="hydration-oz-display">0 / 96 oz</span>
             </div>
-            <div class="hydration-oz" id="hydration-oz-display">0 / 96 oz</div>
+            <div class="hydration-context" id="hydration-context" style="display:none"></div>
             <div class="hydration-btn-row">
               <button class="btn-primary hydration-mybottle-btn" onclick="logWater()" id="hydration-mybottle-btn">+ My Bottle</button>
               <button class="btn-secondary hydration-quickadd-btn" onclick="toggleQuickAddWater()">Quick Add</button>
