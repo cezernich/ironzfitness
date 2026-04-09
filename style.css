@@ -3766,7 +3766,10 @@ button:active {
 /* Manual exercise rows */
 .qe-manual-row {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr auto auto;
+  /* Exercise expands to fill remaining width; Sets/Reps/Weight pinned to
+     practical fixed widths so the name field is wide enough for real
+     exercise names like "Romanian Deadlift" or "Bulgarian Split Squat". */
+  grid-template-columns: minmax(180px, 1fr) 64px 72px 96px auto auto;
   gap: 6px;
   align-items: end;
   background: var(--color-surface-2);
@@ -3775,7 +3778,7 @@ button:active {
   margin-bottom: 8px;
 }
 .qe-manual-row.hiit-row {
-  grid-template-columns: 2fr 1.5fr 1fr auto;
+  grid-template-columns: minmax(180px, 1fr) 110px 90px auto;
 }
 .exercise-row.hiit-row {
   grid-template-columns: 28px 2fr 1.5fr 1fr auto 28px;
