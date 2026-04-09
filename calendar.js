@@ -1158,6 +1158,68 @@ function _buildUndoHeaderBtn(sessionId, dateStr) {
   return `<button class="undo-complete-btn-header" title="Undo completion" onclick="event.stopPropagation();undoSessionCompletion('${sessionId}','${dateStr}')">↩ Undo</button>`;
 }
 
+// ─── Share button (workout sharing feature) ────────────────────────────────
+//
+// Returns the share-icon HTML for a workout card if and only if the entry has
+// a canonical variant_id + sport_id + session_type_id triple. Cards without a
+// variant mapping (legacy plan entries that pre-date the variant library) get
+// no share button — sharing requires a canonical variant per the spec.
+function _buildShareBtnFromEntry(entry) {
+  if (!entry) return "";
+  const variantId = entry.variant_id || entry.variantId;
+  const sportId = entry.sport_id || entry.sportId
+    || ({ run: "run", running: "run", bike: "bike", cycling: "bike", swim: "swim", swimming: "swim" })[entry.discipline]
+    || null;
+  const sessionTypeId = entry.session_type_id || entry.sessionTypeId || entry.type || null;
+  if (!variantId || !sportId || !sessionTypeId) return "";
+  const safeId = String(entry.id || "").replace(/'/g, "");
+  return `<button class="share-workout-btn" title="Share this workout" onclick="event.stopPropagation();triggerShareWorkout('${safeId}','${variantId}','${sportId}','${sessionTypeId}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>`;
+}
+
+// Global click handler for the share button. Calls the workout-sharing flow,
+// then opens the link-ready sheet on success.
+async function triggerShareWorkout(_id, variantId, sportId, sessionTypeId) {
+  if (typeof window === "undefined") return;
+  const Flow = window.WorkoutSharingFlow;
+  const LinkReady = window.LinkReadySheet;
+  if (!Flow || !LinkReady) {
+    console.warn("[IronZ] share modules not loaded");
+    return;
+  }
+  // Open the share sheet first so the user can opt into a note before generating.
+  if (window.ShareSheetModal && window.ShareSheetModal.open) {
+    window.ShareSheetModal.open({
+      workoutTitle: variantId,
+      variantId, sportId, sessionTypeId,
+      onGenerated: (result) => {
+        if (result && result.shareToken) {
+          LinkReady.open({
+            shareUrl: result.shareUrl,
+            shareToken: result.shareToken,
+            expiresAt: result.expiresAt,
+            workoutTitle: variantId,
+          });
+        } else if (result && result.error) {
+          alert("Couldn't create share link: " + result.error);
+        }
+      },
+    });
+    return;
+  }
+  // Fallback: skip the share-sheet step and mint directly.
+  const result = await Flow.createShare({ variantId, sportId, sessionTypeId });
+  if (result && result.shareToken) {
+    LinkReady.open({
+      shareUrl: result.shareUrl,
+      shareToken: result.shareToken,
+      expiresAt: result.expiresAt,
+      workoutTitle: variantId,
+    });
+  } else if (result && result.error) {
+    alert("Couldn't create share link: " + result.error);
+  }
+}
+
 /** Returns the completed duration for a session, if available */
 function _getCompletionDuration(sessionId) {
   try {
@@ -2228,6 +2290,7 @@ function _renderDayDetailInner(dateStr, content) {
           const _swDoneIndicator = _swIsComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
           const _swUndoBtn       = _buildUndoHeaderBtn(cardId, dateStr);
           const _swUserAddedCls = w.source === "user_added" ? " session-card--user-added" : "";
+          const _swShareBtn = _buildShareBtnFromEntry(w);
           html += `
             <div class="session-card collapsible${_swIsComplete ? " session-card--completed is-collapsed" : ""}${_swUserAddedCls}" id="${cardId}">
               <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
@@ -2239,7 +2302,7 @@ function _renderDayDetailInner(dateStr, content) {
                 <div class="session-header-right">
                   <span class="session-duration-badge">${_getCompletionDuration(cardId) || targetDuration} min</span>
                   <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
-                  ${_swUndoBtn}${_swMoveBtn}<button class="edit-workout-btn" title="Edit" onclick="event.stopPropagation(); openEditScheduledWorkout('${w.id}')">Edit</button>${_swDelBtn}
+                  ${_swUndoBtn}${_swMoveBtn}${_swShareBtn}<button class="edit-workout-btn" title="Edit" onclick="event.stopPropagation(); openEditScheduledWorkout('${w.id}')">Edit</button>${_swDelBtn}
                   <span class="card-chevron">▾</span>
                 </div>
               </div>
@@ -2333,6 +2396,7 @@ function _renderDayDetailInner(dateStr, content) {
       const _swGenDoneInd    = _swGenCompleted ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
       const _swGenUndoBtn    = _buildUndoHeaderBtn(cardId, dateStr);
       const _swGenUserAddedCls = w.source === "user_added" ? " session-card--user-added" : "";
+      const _swGenShareBtn = _buildShareBtnFromEntry(w);
       html += `
         <div class="session-card collapsible${_swGenCompleted ? " session-card--completed is-collapsed" : ""}${_swGenUserAddedCls}" id="${cardId}">
           <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
@@ -2341,7 +2405,7 @@ function _renderDayDetailInner(dateStr, content) {
               <div class="session-name">${w.sessionName}${_swGenDoneInd}</div>
               <div class="session-phase">${_wTypeLabel(w.type)}</div>
             </div>
-            <div class="session-header-right">${(_getCompletionDuration(cardId) || _swGenDurMin) ? `<span class="session-duration-badge">${_getCompletionDuration(cardId) || _swGenDurMin} min</span>` : ""}${_swGenUndoBtn}${_swGenMoveBtn}${_swGenEditBtn}${_swGenDelBtn}<span class="card-chevron">▾</span></div>
+            <div class="session-header-right">${(_getCompletionDuration(cardId) || _swGenDurMin) ? `<span class="session-duration-badge">${_getCompletionDuration(cardId) || _swGenDurMin} min</span>` : ""}${_swGenUndoBtn}${_swGenMoveBtn}${_swGenShareBtn}${_swGenEditBtn}${_swGenDelBtn}<span class="card-chevron">▾</span></div>
           </div>
           ${_swGenStrip}
           <div class="card-body">${body}${buildWorkoutExplanation(null, dateStr, w.discipline || w.type, w.load || "moderate", w.sessionName)}${_swGenEditPanel}${_swGenMovePanel}${_swGenCompletion}</div>

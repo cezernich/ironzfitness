@@ -151,6 +151,20 @@ function showTab(name) {
     if (typeof renderCommunityWorkouts === "function") renderCommunityWorkouts();
     if (typeof renderChallenges === "function") renderChallenges();
   }
+
+  // Workout sharing — Inbox tab
+  if (name === "inbox") {
+    if (window.InboxTabView && window.InboxTabView.renderInboxTab) {
+      window.InboxTabView.renderInboxTab("tab-inbox-content");
+    }
+  }
+
+  // Workout sharing — Saved Library tab
+  if (name === "saved-library") {
+    if (window.SavedLibraryTabView && window.SavedLibraryTabView.renderSavedLibraryTab) {
+      window.SavedLibraryTabView.renderSavedLibraryTab("tab-saved-library-content");
+    }
+  }
 }
 
 /* =====================================================================
