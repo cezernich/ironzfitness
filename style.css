@@ -10924,3 +10924,138 @@ button:active {
   font-size: 0.8rem;
   color: var(--color-text-muted);
 }
+
+/* =============================================================================
+   ADD RUNNING SESSION FLOW — modal, preview, conflict + stress check
+   Added 2026-04-09 by PHILOSOPHY_UPDATE_2026-04-09_run_session_types.md
+   ============================================================================= */
+.day-detail-actions-row {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+.ars-trigger-btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--color-accent, #6366f1);
+  background: transparent;
+  color: var(--color-accent, #6366f1);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ars-trigger-btn:hover {
+  background: var(--color-accent-glow, rgba(99,102,241,0.08));
+}
+.ars-modal {
+  max-width: 480px;
+  width: 92%;
+}
+.ars-modal select,
+.ars-modal input[type="date"],
+.ars-modal input[type="range"] {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.95rem;
+}
+.ars-modal input[type="range"] { padding: 0; }
+.ars-preview {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+}
+.ars-preview-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 4px;
+}
+.ars-preview-why {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin-bottom: 10px;
+}
+.ars-phases {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.ars-phase {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.ars-phase-num {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-accent, #6366f1);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ars-phase-body {
+  flex: 1;
+  min-width: 0;
+}
+.ars-phase-name {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+.ars-phase-instr {
+  font-size: 0.88rem;
+  color: var(--color-text);
+  line-height: 1.4;
+}
+.ars-meta {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+.ars-warnings {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #f59e0b;
+  background: rgba(245,158,11,0.06);
+  font-size: 0.82rem;
+  color: var(--color-text);
+}
+.ars-list {
+  margin: 4px 0 4px 18px;
+  padding: 0;
+  font-size: 0.85rem;
+  color: var(--color-text);
+}
+
+/* User-added workout badge */
+.session-card--user-added .session-name::before {
+  content: "+";
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 50%;
+  background: var(--color-accent, #6366f1);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.78rem;
+  margin-right: 6px;
+  vertical-align: middle;
+}

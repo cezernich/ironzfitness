@@ -1792,6 +1792,150 @@ function saveTrainingPlanData(plan) {
   localStorage.setItem("trainingPlan", JSON.stringify(plan)); if (typeof DB !== 'undefined') DB.syncTrainingPlan();
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// Add Running Session helpers — added 2026-04-09 by
+// PHILOSOPHY_UPDATE_2026-04-09_run_session_types.md
+// ═════════════════════════════════════════════════════════════════════════════
+
+// Hard session classifier — used by getWeeklyHardSessionCount and the stress check.
+// Recognises BOTH the legacy load tags ("long", "hard", "moderate") and the new
+// session-type ids from SESSION_TYPE_LIBRARY.
+const _HARD_SESSION_TYPE_IDS = new Set([
+  "long_run", "tempo_threshold", "track_workout", "speed_work", "hills"
+]);
+const _HARD_LEGACY_LOADS = new Set(["long", "hard", "moderate"]);
+
+function _isHardEntry(entry) {
+  if (!entry) return false;
+  if (entry.type && _HARD_SESSION_TYPE_IDS.has(entry.type)) return true;
+  if (entry.is_hard === true) return true;
+  if (entry.load && _HARD_LEGACY_LOADS.has(entry.load)) return true;
+  return false;
+}
+
+function _loadSchedule() {
+  try { return JSON.parse(localStorage.getItem("workoutSchedule") || "[]"); } catch { return []; }
+}
+function _saveSchedule(s) {
+  localStorage.setItem("workoutSchedule", JSON.stringify(s));
+  if (typeof DB !== "undefined" && DB.syncSchedule) DB.syncSchedule();
+}
+
+function _mondayOfDateStr(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  const dow = d.getDay();
+  const offset = dow === 0 ? -6 : 1 - dow;
+  d.setDate(d.getDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+
+function _datesInWeek(weekStartDateStr) {
+  const out = [];
+  const start = new Date(_mondayOfDateStr(weekStartDateStr) + "T00:00:00");
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start.getTime());
+    d.setDate(d.getDate() + i);
+    out.push(d.toISOString().slice(0, 10));
+  }
+  return out;
+}
+
+/**
+ * Remove a workout from both the training plan and the schedule, by id.
+ * Returns the removed entry (or null if not found).
+ */
+function removeWorkout(workoutId) {
+  if (!workoutId) return null;
+  let removed = null;
+
+  const plan = loadTrainingPlan();
+  const planIdx = plan.findIndex(e => e.id === workoutId);
+  if (planIdx >= 0) {
+    removed = plan[planIdx];
+    plan.splice(planIdx, 1);
+    saveTrainingPlanData(plan);
+  }
+
+  const schedule = _loadSchedule();
+  const schedIdx = schedule.findIndex(e => e.id === workoutId);
+  if (schedIdx >= 0) {
+    if (!removed) removed = schedule[schedIdx];
+    schedule.splice(schedIdx, 1);
+    _saveSchedule(schedule);
+  }
+  return removed;
+}
+
+/**
+ * Recalculate remaining days of the week to redistribute removed volume across
+ * the easy/endurance sessions. Pure function — no API calls. Does NOT add a
+ * new Long Run if one was removed (the user made an intentional choice).
+ *
+ * Strategy: scan trainingPlan + workoutSchedule for the given week. Compute
+ * `target_total_min` from the entries that exist (sum of durations) plus an
+ * implicit "missing" allowance if the week is now under the historical median
+ * for the user. For v1 we keep this conservative: only re-balance when the
+ * user explicitly removed a Long Run via removeWorkout, by bumping the
+ * remaining easy sessions' duration up by an even share of the removed minutes.
+ */
+function rebalanceWeek(weekStartDateStr, opts) {
+  const dates = new Set(_datesInWeek(weekStartDateStr));
+  const removedMinutes = (opts && opts.removedDurationMin) || 0;
+  if (removedMinutes <= 0) return { adjusted: 0, perSessionDelta: 0 };
+
+  const plan = loadTrainingPlan();
+  // Easy/endurance entries only — we never bump tempo/track/speed/hills/long.
+  const easyEntries = plan.filter(e => dates.has(e.date) && !_isHardEntry(e));
+  if (easyEntries.length === 0) return { adjusted: 0, perSessionDelta: 0 };
+
+  const perSessionDelta = Math.round(removedMinutes / easyEntries.length / 5) * 5;
+  if (perSessionDelta <= 0) return { adjusted: 0, perSessionDelta: 0 };
+
+  for (const e of easyEntries) {
+    e.duration = (parseFloat(e.duration) || 30) + perSessionDelta;
+    e.rebalanced = true;
+  }
+  saveTrainingPlanData(plan);
+  return { adjusted: easyEntries.length, perSessionDelta };
+}
+
+/**
+ * Count the hard sessions currently scheduled in the week containing
+ * `weekStartDateStr`. Used by the weekly stress check.
+ *
+ * Returns: { count, items: [{ date, title, type }] }
+ */
+function getWeeklyHardSessionCount(weekStartDateStr) {
+  const dates = new Set(_datesInWeek(weekStartDateStr));
+  const plan = loadTrainingPlan();
+  const schedule = _loadSchedule();
+  const items = [];
+  for (const e of plan) {
+    if (dates.has(e.date) && _isHardEntry(e)) {
+      items.push({ date: e.date, title: e.sessionName || e.title || e.type || "Hard session", type: e.type || e.load });
+    }
+  }
+  for (const e of schedule) {
+    if (dates.has(e.date) && _isHardEntry(e)) {
+      items.push({ date: e.date, title: e.sessionName || e.title || e.type || "Hard session", type: e.type || e.load });
+    }
+  }
+  return { count: items.length, items };
+}
+
+if (typeof window !== "undefined") {
+  // Expose the new helpers as a small Planner namespace; existing globals
+  // (loadTrainingPlan, etc.) stay reachable on window as before.
+  window.Planner = Object.assign(window.Planner || {}, {
+    removeWorkout,
+    rebalanceWeek,
+    getWeeklyHardSessionCount,
+    loadTrainingPlan,
+    saveTrainingPlanData,
+    isHardEntry: _isHardEntry,
+  });
+}
+
 // ─── Training plan generation ────────────────────────────────────────────────
 
 /**

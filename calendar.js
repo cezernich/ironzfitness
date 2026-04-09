@@ -1976,6 +1976,9 @@ function _renderDayDetailInner(dateStr, content) {
   let html = `<div class="day-detail-date-row">
     <div class="day-detail-date">${isToday ? "Today · " : ""}${displayDate}</div>
     ${_totalsHtml}
+  </div>
+  <div class="day-detail-actions-row">
+    <button class="ars-trigger-btn" onclick="window.AddRunningSessionFlow && window.AddRunningSessionFlow.open('${dateStr}')">+ Generate run workout</button>
   </div>`;
 
   // ── Threshold week banner ────────────────────────────────────────────────
@@ -2197,8 +2200,9 @@ function _renderDayDetailInner(dateStr, content) {
           const _swIsComplete    = isSessionComplete(cardId);
           const _swDoneIndicator = _swIsComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
           const _swUndoBtn       = _buildUndoHeaderBtn(cardId, dateStr);
+          const _swUserAddedCls = w.source === "user_added" ? " session-card--user-added" : "";
           html += `
-            <div class="session-card collapsible${_swIsComplete ? " session-card--completed is-collapsed" : ""}" id="${cardId}">
+            <div class="session-card collapsible${_swIsComplete ? " session-card--completed is-collapsed" : ""}${_swUserAddedCls}" id="${cardId}">
               <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
                 <span class="session-icon" style="color:${color}">${icon}</span>
                 <div class="session-meta">
@@ -2301,8 +2305,9 @@ function _renderDayDetailInner(dateStr, content) {
       const _swGenCompleted  = isSessionComplete(cardId);
       const _swGenDoneInd    = _swGenCompleted ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
       const _swGenUndoBtn    = _buildUndoHeaderBtn(cardId, dateStr);
+      const _swGenUserAddedCls = w.source === "user_added" ? " session-card--user-added" : "";
       html += `
-        <div class="session-card collapsible${_swGenCompleted ? " session-card--completed is-collapsed" : ""}" id="${cardId}">
+        <div class="session-card collapsible${_swGenCompleted ? " session-card--completed is-collapsed" : ""}${_swGenUserAddedCls}" id="${cardId}">
           <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
             <span class="session-icon" style="color:${color}">${icon}</span>
             <div class="session-meta">

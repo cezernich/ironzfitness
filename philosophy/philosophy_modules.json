@@ -503,7 +503,7 @@
     "id": "SPORT_ENDURANCE_RUNNING",
     "category": "sport_endurance",
     "title": "Endurance Running Core",
-    "version": "1.2",
+    "version": "1.3",
     "applies_when": { "sport_profile": "endurance", "workout_type": "running" },
     "principles": [
       "Polarized 80/20 (80% Z1-2, 20% Z4-5, minimal Z3)",
@@ -521,7 +521,11 @@
       "Reference RUNNING_ZONE_CALCULATIONS module for pacing interval work by HR zones",
       "Insert a threshold week into every training plan at the cadence defined by TRAINING_THRESHOLD_WEEK (4/6/8 weeks based on training phase)",
       "During a threshold week, the week's only hard effort is the 5K test (or 30-min fallback) on Day 4. All other days are Z1 with optional strides.",
-      "After a threshold week test, regenerate all subsequent workout zones from the new VDOT via RUNNING_ZONE_CALCULATIONS."
+      "After a threshold week test, regenerate all subsequent workout zones from the new VDOT via RUNNING_ZONE_CALCULATIONS.",
+      "When the user adds a custom session via the Add Running Session flow, generate the workout via RUNNING_WORKOUT_GENERATOR using SESSION_TYPE_LIBRARY templates",
+      "Respect SESSION_TYPE_LIBRARY hard_constraints (max 3 hard sessions/week, no back-to-back hard, no hard after long run)",
+      "Trigger weekly_stress_check on every save (replace or add path)",
+      "If a custom session replaces a planned workout, call planner.rebalanceWeek to redistribute volume across remaining days"
     ],
     "hard_constraints": [],
     "nutrition_rules": [],
@@ -536,7 +540,7 @@
     "rationale": "Polarized training distribution and context-dependent volume progression form the foundation of evidence-based running programming. Interval repeats for time-goal runners develop VO2max and race-specific fitness.",
     "priority": "high",
     "is_active": true,
-    "change_log": "2026-04-08: Added weekly interval repeat requirement for time-goal runners; linked to zone calculations module. 2026-04-09: Added threshold week scheduling and post-test zone regeneration for run-only athletes."
+    "change_log": "2026-04-08: Added weekly interval repeat requirement for time-goal runners; linked to zone calculations module. 2026-04-09: Added threshold week scheduling and post-test zone regeneration for run-only athletes. 2026-04-09: Added Add Running Session generator integration with SESSION_TYPE_LIBRARY and weekly stress check."
   },
   {
     "id": "EVENT_5K",
@@ -1530,12 +1534,26 @@
     "id": "RUNNING_ZONE_CALCULATIONS",
     "category": "training_rules",
     "title": "Tiered heart rate zone calculation system",
-    "version": "1.1",
+    "version": "1.2",
     "applies_when": { "level": "any", "sport_profile": ["endurance", "hybrid"], "goal": "any" },
     "recalculation_hooks": {
       "trigger_on": ["new_vdot_logged", "new_lthr_logged", "new_resting_hr_logged"],
       "behavior": "Recalculate all 5 pace zones and all 5 HR zones using the new input. Archive the prior zone snapshot to user_zone_history. Push a notification to the user comparing old vs new Z3 (threshold) boundary as a quick visual.",
       "called_by": ["TRAINING_THRESHOLD_WEEK post_test_workflow", "manual user input from settings"]
+    },
+    "public_api": {
+      "method": "getZonesForUser(userId)",
+      "returns": {
+        "vdot": "number",
+        "e_pace": "{min_per_mi: [low, high], min_per_km: [low, high]}",
+        "m_pace": "{min_per_mi: [low, high], min_per_km: [low, high]}",
+        "t_pace": "{min_per_mi: [low, high], min_per_km: [low, high]}",
+        "i_pace": "{sec_per_400m: [low, high], sec_per_800m: [low, high], sec_per_km: [low, high]}",
+        "r_pace": "{sec_per_200m: [low, high], sec_per_400m: [low, high]}",
+        "hr_zones": "array of 5 zones with bpm ranges",
+        "tier_used": "max_hr_pct | karvonen | lthr"
+      },
+      "consumed_by": ["RUNNING_WORKOUT_GENERATOR", "Add Running Session UI", "Weekly plan view"]
     },
     "principles": [
       "Progressive accuracy: zones improve as user provides more data",
@@ -1567,7 +1585,7 @@
     "rationale": "Progressive accuracy: zones improve as user provides more data. No user is blocked by lack of lab testing, but serious runners get precise zones when they have the data.",
     "priority": "high",
     "is_active": true,
-    "change_log": "2026-04-09: Added recalculation_hooks field so that threshold week tests automatically refresh cached pace and HR zones. No change to existing zone math."
+    "change_log": "2026-04-09: Added recalculation_hooks field so that threshold week tests automatically refresh cached pace and HR zones. No change to existing zone math. 2026-04-09: Exposed getZonesForUser(userId) public API so the workout generator can pull zones in a single call. No change to zone math."
   },
   {
     "id": "RUNNING_FEEDBACK_CALIBRATION",
@@ -1865,5 +1883,334 @@
     "priority": "high",
     "is_active": true,
     "change_log": "2026-04-09: Initial test protocols module created."
+  },
+  {
+    "id": "SESSION_TYPE_LIBRARY",
+    "category": "training_rules",
+    "title": "Run session type library — workout templates and generator rules",
+    "version": "1.0",
+    "applies_when": { "level": "any", "sport_profile": ["endurance", "triathlon", "hybrid"], "context": "add_running_session" },
+    "principles": [
+      "8 distinct run session types cover 95% of run intents without decision fatigue.",
+      "Long Run is its own category, distinct from Endurance.",
+      "Track Workouts (I-pace) and Speed Work (R-pace) are different stimuli — never merged.",
+      "Cruise intervals are the default Tempo prescription for amateurs."
+    ],
+    "plan_rules": [
+      "When the user picks a session type, generate the workout via RUNNING_WORKOUT_GENERATOR using the matching template from session_types below.",
+      "Apply experience_scaling to rep counts, durations, and rest times.",
+      "Track Workout rotates weekly: rotation_index = (weeks_since_plan_start) mod 4.",
+      "Hills substitute for Track during a defined hill phase. Both in the same week is allowed only for advanced runners."
+    ],
+    "session_types": [
+      {
+        "id": "easy_recovery",
+        "label": "Easy / Recovery",
+        "daniels_intensity": "E",
+        "primary_zone": "z1",
+        "purpose": "Active recovery and aerobic maintenance",
+        "default_duration_min": [30, 45],
+        "experience_scaling": {
+          "beginner": [25, 35],
+          "intermediate": [30, 45],
+          "advanced": [35, 50]
+        },
+        "structure": [
+          { "phase": "main", "intensity": "z1", "duration_pct": 1.0, "pace_source": "vdot.e_pace" }
+        ],
+        "is_hard": false,
+        "frequency_cap_per_week": null,
+        "why_text": "Recovery and aerobic maintenance. Going harder today doesn't make you faster — it makes tomorrow worse."
+      },
+      {
+        "id": "endurance",
+        "label": "Endurance Run",
+        "daniels_intensity": "E + low M",
+        "primary_zone": "z1",
+        "purpose": "Aerobic base building, mitochondrial density",
+        "default_duration_min": [45, 75],
+        "experience_scaling": {
+          "beginner": [40, 55],
+          "intermediate": [50, 70],
+          "advanced": [60, 90]
+        },
+        "structure": [
+          { "phase": "main", "intensity": "z1", "duration_pct": 0.85, "pace_source": "vdot.e_pace" },
+          { "phase": "optional_finish", "intensity": "z2", "duration_pct": 0.15, "pace_source": "vdot.m_pace", "applies_when": { "experience": ["intermediate", "advanced"] } }
+        ],
+        "is_hard": false,
+        "frequency_cap_per_week": 4,
+        "why_text": "Building the aerobic engine that everything else runs on."
+      },
+      {
+        "id": "long_run",
+        "label": "Long Run",
+        "daniels_intensity": "E with optional M finish",
+        "primary_zone": "z1",
+        "purpose": "Capillarization, fueling practice, mental durability",
+        "default_duration_min": [75, 150],
+        "experience_scaling": {
+          "beginner": [60, 90],
+          "intermediate": [90, 120],
+          "advanced": [120, 150]
+        },
+        "structure": [
+          { "phase": "main", "intensity": "z1", "duration_pct": 0.80, "pace_source": "vdot.e_pace" },
+          { "phase": "optional_mp_finish", "intensity": "z2", "duration_pct": 0.20, "pace_source": "vdot.m_pace", "applies_when": { "experience": ["intermediate", "advanced"] } }
+        ],
+        "fueling_reminder_threshold_min": 75,
+        "is_hard": true,
+        "frequency_cap_per_week": 1,
+        "why_text": "Capillaries, fueling practice, mental durability. The single most important workout of the week."
+      },
+      {
+        "id": "tempo_threshold",
+        "label": "Tempo / Threshold",
+        "daniels_intensity": "T",
+        "primary_zone": "z3",
+        "purpose": "Lactate clearance, sustainable pace ceiling",
+        "default_duration_min": [35, 65],
+        "experience_scaling": {
+          "beginner":     { "reps": 2, "rep_duration_min": 8, "rest_sec": 90, "total_t_min": 16 },
+          "intermediate": { "reps": 4, "rep_duration_min": 8, "rest_sec": 90, "total_t_min": 32 },
+          "advanced":     { "reps": 5, "rep_duration_min": 8, "rest_sec": 60, "total_t_min": 40 }
+        },
+        "structure": [
+          { "phase": "warmup", "intensity": "z1", "duration_min": 15, "pace_source": "vdot.e_pace" },
+          { "phase": "main_cruise_intervals", "intensity": "z3", "structure": "reps_at_t_pace", "pace_source": "vdot.t_pace" },
+          { "phase": "cooldown", "intensity": "z1", "duration_min": 10, "pace_source": "vdot.e_pace" }
+        ],
+        "is_hard": true,
+        "frequency_cap_per_week": 1,
+        "why_text": "Raising the pace you can sustain. The goal is comfortably hard, not race effort."
+      },
+      {
+        "id": "track_workout",
+        "label": "Track Workout",
+        "daniels_intensity": "I",
+        "primary_zone": "z4",
+        "purpose": "VO2max development, race-specific speed",
+        "default_duration_min": [50, 75],
+        "rotation_templates": [
+          {
+            "rotation_index": 0,
+            "name": "800m repeats",
+            "main_set": {
+              "rep_distance_m": 800,
+              "rep_count": { "beginner": 6, "intermediate": 8, "advanced": 10 },
+              "rest_type": "jog",
+              "rest_distance_m": 400,
+              "pace_source": "vdot.i_pace"
+            }
+          },
+          {
+            "rotation_index": 1,
+            "name": "1K repeats",
+            "main_set": {
+              "rep_distance_m": 1000,
+              "rep_count": { "beginner": 5, "intermediate": 6, "advanced": 7 },
+              "rest_type": "jog",
+              "rest_duration_sec": 120,
+              "pace_source": "vdot.i_pace"
+            }
+          },
+          {
+            "rotation_index": 2,
+            "name": "1200m repeats",
+            "main_set": {
+              "rep_distance_m": 1200,
+              "rep_count": { "beginner": 4, "intermediate": 5, "advanced": 6 },
+              "rest_type": "jog",
+              "rest_duration_sec": 180,
+              "pace_source": "vdot.i_pace"
+            }
+          },
+          {
+            "rotation_index": 3,
+            "name": "Ladder",
+            "main_set": {
+              "ladder_distances_m": [400, 800, 1200, 800, 400],
+              "rest_type": "equal_time_jog",
+              "pace_source": "vdot.i_pace"
+            }
+          }
+        ],
+        "rotation_logic": "rotation_index = (weeks_since_plan_start) mod 4",
+        "structure": [
+          { "phase": "warmup", "intensity": "z1", "duration_min": 15, "includes": "4x20s strides" },
+          { "phase": "main_set", "intensity": "z4", "structure": "from rotation_templates" },
+          { "phase": "cooldown", "intensity": "z1", "duration_min": 10 }
+        ],
+        "is_hard": true,
+        "frequency_cap_per_week": 1,
+        "why_text": "VO2max work. This is the session that makes race pace feel manageable."
+      },
+      {
+        "id": "speed_work",
+        "label": "Speed Work",
+        "daniels_intensity": "R",
+        "primary_zone": "z5",
+        "purpose": "Neuromuscular speed, running economy",
+        "default_duration_min": [35, 55],
+        "sub_templates": [
+          {
+            "id": "r_pace_repeats",
+            "name": "200m R-pace repeats",
+            "default_for": ["intermediate", "advanced"],
+            "main_set": {
+              "rep_distance_m": 200,
+              "rep_count": { "beginner": 6, "intermediate": 8, "advanced": 10 },
+              "rest_type": "walk",
+              "rest_distance_m": 200,
+              "pace_source": "vdot.r_pace"
+            }
+          },
+          {
+            "id": "strides_only",
+            "name": "Strides",
+            "default_for": ["beginner"],
+            "main_set": {
+              "rep_distance_m": 100,
+              "rep_count": 8,
+              "rest_type": "full_recovery",
+              "pace_target": "near-sprint, controlled form"
+            }
+          }
+        ],
+        "structure": [
+          { "phase": "warmup", "intensity": "z1", "duration_min": 15 },
+          { "phase": "main_set", "intensity": "z5", "structure": "from sub_templates" },
+          { "phase": "cooldown", "intensity": "z1", "duration_min": 10 }
+        ],
+        "is_hard": true,
+        "frequency_cap_per_week": 1,
+        "why_text": "Neuromuscular speed. Short, sharp, full recovery. Not aerobic — pure mechanics."
+      },
+      {
+        "id": "hills",
+        "label": "Hills",
+        "daniels_intensity": "Hard effort, Z4 equivalent",
+        "primary_zone": "z4",
+        "purpose": "Power, strength, injury resilience",
+        "default_duration_min": [40, 60],
+        "main_set": {
+          "rep_duration_sec": [60, 90],
+          "rep_count": { "beginner": 6, "intermediate": 8, "advanced": 12 },
+          "effort": "hard up, easy jog down",
+          "ideal_grade_pct": [4, 8],
+          "pace_target": "effort-based, terrain-dependent"
+        },
+        "structure": [
+          { "phase": "warmup", "intensity": "z1", "duration_min": 15, "instruction": "easy jog to a hill" },
+          { "phase": "main_set", "intensity": "z4_effort", "structure": "from main_set" },
+          { "phase": "cooldown", "intensity": "z1", "duration_min": 10 }
+        ],
+        "is_hard": true,
+        "frequency_cap_per_week": 1,
+        "substitutes_for": "track_workout (during hill phase)",
+        "why_text": "Power, strength, and injury resilience in one workout. Lower impact than flat track."
+      },
+      {
+        "id": "fun_social",
+        "label": "Fun / Social",
+        "daniels_intensity": "Z1 default, user override",
+        "primary_zone": "z1",
+        "purpose": "Enjoyment, autonomy, mental break from structure",
+        "default_duration_min": [30, 60],
+        "structure": [
+          { "phase": "main", "intensity": "z1_default", "duration_pct": 1.0, "pace_target": "by feel, no targets" }
+        ],
+        "is_hard": false,
+        "frequency_cap_per_week": null,
+        "rpe_user_override": true,
+        "why_text": "You earned this. No targets. The point is showing up because you want to.",
+        "instruction_text": "Run by feel for {duration} minutes. No targets. Trail, treadmill, with a friend, with the dog. The point is showing up because you want to."
+      }
+    ],
+    "hard_constraints": [
+      "Maximum 3 hard sessions per 7-day window. Hard = Tempo, Track, Speed Work, Hills, Long Run.",
+      "No back-to-back hard sessions. At least one Easy/Recovery or Endurance day must separate any two hard sessions.",
+      "No hard session within 24 hours of a Long Run.",
+      "Track Workout AND Speed Work in the same week is allowed only for advanced runners.",
+      "Hills substitute for Track during a hill phase. Both in the same week is allowed only for advanced runners.",
+      "Long Run frequency is capped at 1 per week, full stop."
+    ],
+    "conflict_resolution": {
+      "trigger": "user adds session on a day that already has a planned workout",
+      "modal_options": ["replace", "add_as_second", "cancel"],
+      "on_replace": "Remove planned workout. Save new workout. Trigger planner.rebalanceWeek(weekStartDate).",
+      "on_add": "Save new workout as second session for that day. Run weekly stress check.",
+      "on_cancel": "Discard. No state change."
+    },
+    "weekly_stress_check": {
+      "trigger": "before any save (replace or add path)",
+      "rule": "Count hard sessions in the resulting week. If > 3, surface secondary warning modal.",
+      "modal_text": "This would put {N} hard sessions in the week of {date}. The recommended max is 3. Hard sessions in this week so far: {list}. Are you sure?",
+      "options": ["save_anyway", "pick_different_day", "cancel"],
+      "user_can_override": true
+    },
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [
+      "Daniels, J. — Daniels' Running Formula (5 intensities: E/M/T/I/R, cruise intervals)",
+      "Pfitzinger, P. & Douglas, S. — Advanced Marathoning (long run, hill phase, periodization)",
+      "Magness, S. — The Science of Running (track rotation, hill physiology)",
+      "Hudson, B. — Run Faster from the 5K to the Marathon (workout structure)",
+      "Hansons — Hansons Marathon Method (cumulative fatigue and long run capping)"
+    ],
+    "rationale": "Gives users a structured way to add custom sessions that respect the philosophy. The 8-option set covers 95% of run intents without decision fatigue. Track rotation prevents staleness. Conflict resolution and weekly stress check protect users from accidentally overtraining. Generator is fully deterministic — no API calls.",
+    "priority": "high",
+    "is_active": true,
+    "change_log": "2026-04-09: Initial 8-type session library and generator added. Track Workout rotates weekly across 800/1K/1200/ladder. Long Run kept separate from Endurance. Conflict resolution and weekly stress check defined."
+  },
+  {
+    "id": "RUNNING_WORKOUT_GENERATOR",
+    "category": "training_rules",
+    "title": "Deterministic run workout generator — pure function from session type + zones",
+    "version": "1.0",
+    "applies_when": { "level": "any", "sport_profile": ["endurance", "triathlon", "hybrid"], "context": "add_running_session" },
+    "principles": [
+      "Pure function. No API calls. No randomness except the rotation_index for track workouts (deterministic from weeks_since_plan_start)."
+    ],
+    "plan_rules": [
+      "Inputs: session_type_id, user_zones, experience_level, optional duration_override_min, weeks_since_plan_start.",
+      "Outputs: { workout: { title, type, is_hard, estimated_duration_min, phases, why_text, warnings } }.",
+      "If user_zones.vdot is missing, fall back to effort-based descriptions and surface a warning prompting the user to add a recent race result."
+    ],
+    "inputs": {
+      "session_type_id": "one of the 8 from SESSION_TYPE_LIBRARY",
+      "user_zones": "from RUNNING_ZONE_CALCULATIONS — must include vdot, e_pace, m_pace, t_pace, i_pace, r_pace",
+      "experience_level": "beginner | intermediate | advanced",
+      "duration_override_min": "optional integer, user-provided slider value"
+    },
+    "outputs": {
+      "workout": {
+        "title": "human-readable title",
+        "type": "session_type_id",
+        "is_hard": "bool",
+        "estimated_duration_min": "int",
+        "phases": "ordered array of phase objects",
+        "why_text": "from SESSION_TYPE_LIBRARY",
+        "warnings": "array of any constraint warnings to surface to user"
+      }
+    },
+    "determinism": "Pure function. No API calls. No randomness except the rotation_index for track workouts (which is deterministic from weeks_since_plan_start).",
+    "fallback_when_no_vdot": {
+      "behavior": "Generator falls back to effort-based descriptions instead of pace targets",
+      "prompt_user": "For accurate pace targets, add a recent race result in your profile."
+    },
+    "hard_constraints": [],
+    "nutrition_rules": [],
+    "training_adjustments": [],
+    "coaching_tone": "",
+    "evidence_sources": [
+      "SESSION_TYPE_LIBRARY (this update)",
+      "RUNNING_ZONE_CALCULATIONS (existing module)"
+    ],
+    "rationale": "Centralizes the generation logic so the UI, the planner, and any future automation all call the same pure function.",
+    "priority": "high",
+    "is_active": true,
+    "change_log": "2026-04-09: Initial generator module created."
   }
 ]
