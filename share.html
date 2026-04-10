@@ -192,8 +192,9 @@
         'Authorization': `Bearer ${SUPABASE_ANON}`
       };
 
-      // Step 1: Get shared_workouts row + sender profile
-      const shareUrl = `${SUPABASE_URL}/rest/v1/shared_workouts?share_token=eq.${token}&select=*,profiles!shared_workouts_sender_user_id_fkey(full_name)`;
+      // Step 1: Get the shared_workouts row (plain select, no join —
+      // there's no FK from shared_workouts to profiles in the schema).
+      const shareUrl = `${SUPABASE_URL}/rest/v1/shared_workouts?share_token=eq.${encodeURIComponent(token)}&select=*`;
       const shareRes = await fetch(shareUrl, { headers });
 
       if (!shareRes.ok) {
@@ -202,7 +203,7 @@
       }
 
       const rows = await shareRes.json();
-      if (!rows || rows.length === 0) {
+      if (!rows || rows.length === 0 || rows.code) {
         showError('Link not found', 'This workout link doesn\u2019t exist or has been removed.');
         return;
       }
@@ -221,13 +222,32 @@
         return;
       }
 
-      // Step 2: Get the actual training session using variant_id
-      const sessionUrl = `${SUPABASE_URL}/rest/v1/training_sessions?id=eq.${share.variant_id}&select=session_name,session_type,description,exercises,data`;
-      const sessionRes = await fetch(sessionUrl, { headers });
+      // Step 2: Look up sender profile name (separate query since no FK join).
+      if (share.sender_user_id) {
+        try {
+          const profileUrl = `${SUPABASE_URL}/rest/v1/profiles?id=eq.${share.sender_user_id}&select=full_name`;
+          const profileRes = await fetch(profileUrl, { headers });
+          if (profileRes.ok) {
+            const profileRows = await profileRes.json();
+            if (profileRows && profileRows.length > 0 && profileRows[0].full_name) {
+              share._senderName = profileRows[0].full_name;
+            }
+          }
+        } catch (e) { /* non-fatal */ }
+      }
+
+      // Step 3: Get the actual training session using variant_id.
+      // RLS on training_sessions may block anon reads — handle gracefully.
       let session = {};
-      if (sessionRes.ok) {
-        const sessionRows = await sessionRes.json();
-        if (sessionRows && sessionRows.length > 0) session = sessionRows[0];
+      if (share.variant_id) {
+        try {
+          const sessionUrl = `${SUPABASE_URL}/rest/v1/training_sessions?id=eq.${encodeURIComponent(share.variant_id)}&select=session_name,session_type,description,exercises,data`;
+          const sessionRes = await fetch(sessionUrl, { headers });
+          if (sessionRes.ok) {
+            const sessionRows = await sessionRes.json();
+            if (sessionRows && sessionRows.length > 0) session = sessionRows[0];
+          }
+        } catch (e) { /* non-fatal — we'll fall back to share metadata */ }
       }
 
       // Merge share + session data for rendering
@@ -285,7 +305,7 @@
     const name = session.session_name || data.session_type_id || 'Shared Workout';
     const sessionType = session.session_type || data.session_type_id || '';
     const sport = data.sport_id || sessionData.sport || '';
-    const sharer = data.profiles?.full_name || 'An IronZ user';
+    const sharer = data._senderName || (data.profiles && data.profiles.full_name) || 'An IronZ user';
     const notes = session.description || data.share_note || '';
 
     // Sport labels
