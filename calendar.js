@@ -1285,12 +1285,8 @@ async function triggerShareWorkout(variantId, sportId, sessionTypeId) {
   } catch {}
   if (!userId) { alert("Please log in to share workouts."); return; }
 
-  // Generate a unique share token (12-char base62)
-  const chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  let token = "";
-  const bytes = new Uint8Array(12);
-  crypto.getRandomValues(bytes);
-  for (let i = 0; i < 12; i++) token += chars[bytes[i] % 62];
+  // Generate a unique share token
+  const token = crypto.randomUUID();
 
   // Expires 7 days from now
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
