@@ -778,7 +778,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
           </div>
           <div class="session-header-right">
             ${displayDur ? `<span class="session-duration-badge">${isReduced ? "⬇ " : ""}${displayDur} min</span>` : ""}
-            ${_buildUndoHeaderBtn(cardId, dateStr)}${moveBtn}${editBtn}${delBtn}
+            ${_buildUndoHeaderBtn(cardId, dateStr)}${moveBtn}${_buildShareBtnFromEntry(w)}${editBtn}${delBtn}
             <span class="card-chevron">▾</span>
           </div>
         </div>
@@ -842,7 +842,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
             <div class="session-phase">${w.fromSaved ? "Logged · " + _wTypeLabel(w.type) : "Planned"}${(!w.fromSaved && w.notes) ? " · " + w.notes : ""}</div>
           </div>
           <div class="session-header-right">
-            ${_buildUndoHeaderBtn(cardId, dateStr)}${moveBtn}${editBtn}${delBtn}
+            ${_buildUndoHeaderBtn(cardId, dateStr)}${moveBtn}${_buildShareBtnFromEntry(w)}${editBtn}${delBtn}
             <span class="card-chevron">▾</span>
           </div>
         </div>
@@ -1251,65 +1251,98 @@ function _buildUndoHeaderBtn(sessionId, dateStr) {
 function _buildShareBtnFromEntry(entry) {
   try {
     if (!entry) return "";
-    const variantId = entry.variant_id || entry.variantId;
+    // Resolve IDs — accept variant_id, training session id, or the entry's own id.
+    // variant_id in shared_workouts stores the training_session.id per spec.
+    const variantId = entry.variant_id || entry.variantId || entry.training_session_id || entry.id || null;
     const sportId = entry.sport_id || entry.sportId
-      || ({ run: "run", running: "run", bike: "bike", cycling: "bike", swim: "swim", swimming: "swim" })[entry.discipline]
-      || null;
-    const sessionTypeId = entry.session_type_id || entry.sessionTypeId || entry.type || null;
-    if (!variantId || !sportId || !sessionTypeId) return "";
-    const safeId = String(entry.id || "").replace(/'/g, "").replace(/"/g, "");
-    const safeVariant = String(variantId).replace(/'/g, "").replace(/"/g, "");
-    const safeSport = String(sportId).replace(/'/g, "").replace(/"/g, "");
-    const safeType = String(sessionTypeId).replace(/'/g, "").replace(/"/g, "");
-    return `<button class="share-workout-btn" title="Share this workout" onclick="event.stopPropagation();triggerShareWorkout('${safeId}','${safeVariant}','${safeSport}','${safeType}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>`;
+      || ({ run: "run", running: "run", bike: "bike", cycling: "bike", swim: "swim", swimming: "swim",
+            triathlon: "run", brick: "run", general: "strength", hiit: "hybrid",
+            weightlifting: "strength", yoga: "strength", bodyweight: "strength",
+            stairstepper: "run", hyrox: "hybrid" })[entry.discipline || entry.type]
+      || "run";
+    const sessionTypeId = entry.session_type_id || entry.sessionTypeId || entry.type || entry.discipline || "general";
+    if (!variantId) return "";
+    const _s = (v) => String(v || "").replace(/['"\\]/g, "");
+    return `<button class="share-workout-btn" title="Share" onclick="event.stopPropagation();triggerShareWorkout('${_s(variantId)}','${_s(sportId)}','${_s(sessionTypeId)}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>`;
   } catch (e) {
     console.warn("[IronZ] share button render skipped:", e.message);
     return "";
   }
 }
 
-// Global click handler for the share button. Calls the workout-sharing flow,
-// then opens the link-ready sheet on success.
-async function triggerShareWorkout(_id, variantId, sportId, sessionTypeId) {
+// Global click handler for the share button.
+// Simple flow: generate token → INSERT into shared_workouts → copy URL → toast.
+async function triggerShareWorkout(variantId, sportId, sessionTypeId) {
   if (typeof window === "undefined") return;
-  const Flow = window.WorkoutSharingFlow;
-  const LinkReady = window.LinkReadySheet;
-  if (!Flow || !LinkReady) {
-    console.warn("[IronZ] share modules not loaded");
+  const sb = window.supabaseClient;
+  if (!sb) { alert("Not connected to database."); return; }
+
+  // Get current user
+  let userId = null;
+  try {
+    const { data } = await sb.auth.getUser();
+    userId = data && data.user && data.user.id;
+  } catch {}
+  if (!userId) { alert("Please log in to share workouts."); return; }
+
+  // Generate a unique share token (12-char base62)
+  const chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  let token = "";
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  for (let i = 0; i < 12; i++) token += chars[bytes[i] % 62];
+
+  // Expires 7 days from now
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  // INSERT into shared_workouts
+  const { error } = await sb.from("shared_workouts").insert({
+    share_token: token,
+    sender_user_id: userId,
+    variant_id: variantId,
+    sport_id: sportId,
+    session_type_id: sessionTypeId,
+    expires_at: expiresAt,
+  });
+
+  if (error) {
+    console.error("[IronZ] share insert failed:", error);
+    alert("Couldn't create share link. Try again.");
     return;
   }
-  // Open the share sheet first so the user can opt into a note before generating.
-  if (window.ShareSheetModal && window.ShareSheetModal.open) {
-    window.ShareSheetModal.open({
-      workoutTitle: variantId,
-      variantId, sportId, sessionTypeId,
-      onGenerated: (result) => {
-        if (result && result.shareToken) {
-          LinkReady.open({
-            shareUrl: result.shareUrl,
-            shareToken: result.shareToken,
-            expiresAt: result.expiresAt,
-            workoutTitle: variantId,
-          });
-        } else if (result && result.error) {
-          alert("Couldn't create share link: " + result.error);
-        }
-      },
-    });
-    return;
+
+  // Copy share URL to clipboard
+  const shareUrl = `https://ironz.fit/share.html?token=${token}`;
+  try {
+    await navigator.clipboard.writeText(shareUrl);
+  } catch {
+    // Fallback
+    const ta = document.createElement("textarea");
+    ta.value = shareUrl;
+    ta.style.cssText = "position:fixed;opacity:0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
   }
-  // Fallback: skip the share-sheet step and mint directly.
-  const result = await Flow.createShare({ variantId, sportId, sessionTypeId });
-  if (result && result.shareToken) {
-    LinkReady.open({
-      shareUrl: result.shareUrl,
-      shareToken: result.shareToken,
-      expiresAt: result.expiresAt,
-      workoutTitle: variantId,
-    });
-  } else if (result && result.error) {
-    alert("Couldn't create share link: " + result.error);
-  }
+
+  // Toast
+  _showShareToast("Share link copied!");
+}
+
+function _showShareToast(msg) {
+  const existing = document.getElementById("ironz-toast");
+  if (existing) existing.remove();
+  const toast = document.createElement("div");
+  toast.id = "ironz-toast";
+  toast.className = "ironz-toast";
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("visible"));
+  setTimeout(() => {
+    toast.classList.remove("visible");
+    setTimeout(() => toast.remove(), 220);
+  }, 2000);
 }
 
 /** Returns the completed duration for a session, if available */
@@ -2329,7 +2362,7 @@ function _renderDayDetailInner(dateStr, content) {
               <div class="session-header-right">
                 <span class="session-duration-badge">${_getCompletionDuration(cardId) || session.duration} min</span>
                 <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
-                ${_planUndoBtn}<button class="edit-workout-btn" title="Edit" onclick="event.stopPropagation(); openEditPlanSession('${dateStr}','${p.raceId}','${p.discipline}','${p.load}')">Edit</button>${_planDelBtn}
+                ${_planUndoBtn}${_buildShareBtnFromEntry(p)}<button class="edit-workout-btn" title="Edit" onclick="event.stopPropagation(); openEditPlanSession('${dateStr}','${p.raceId}','${p.discipline}','${p.load}')">Edit</button>${_planDelBtn}
                 <span class="card-chevron">▾</span>
               </div>
             </div>
