@@ -3634,6 +3634,7 @@ function qeSelectType(type) {
     return;
   }
   if (type === "strength")        qeShowStep(1, "strength");
+  else if (type === "yoga")       qeShowStep(1, "strength"); // yoga uses exercise rows like Build a Plan
   else if (type === "restriction") qeShowStep(1, "restriction");
   else if (type === "equipment")  qeShowStep(1, "equipment");
   else                            qeShowStep(1, type);
@@ -5228,7 +5229,7 @@ function qeAddCardioRow(iv) {
   div.draggable = true;
   div.innerHTML = `
     <div class="eiv-header">
-      <span class="drag-handle" title="Drag to reorder">⠿</span>
+      <span class="drag-handle" title="Drag to reorder · drop on a row to create repeat block">⠿</span>
       ${isBrick ? `<select id="qe-cdisc-${id}" class="seg-discipline" style="width:auto;padding:4px 24px 4px 6px;font-size:0.82rem">
         <option value="bike"${_dsel("bike")}>Bike</option>
         <option value="transition"${_dsel("transition")}>T</option>
@@ -5484,9 +5485,13 @@ function qeInitManualRows() {
   // Show/hide HIIT metadata
   const hiitMeta = document.getElementById("qe-hiit-meta");
   if (hiitMeta) hiitMeta.style.display = _qeSelectedType === "hiit" ? "" : "none";
-  // Update default name placeholder
+  // Dynamic placeholders matching Build a Plan's cpManualSelectType
+  const _typeLabels = { strength:"Strength",hiit:"HIIT",yoga:"Yoga",bodyweight:"Bodyweight",general:"General" };
   const nameInput = document.getElementById("qe-manual-workout-name");
-  if (nameInput && _qeSelectedType === "hiit") nameInput.placeholder = "e.g. Tabata Burner";
+  if (nameInput) nameInput.placeholder = _qeSelectedType === "hiit" ? "e.g. Tabata Burner"
+    : "e.g. " + (_typeLabels[_qeSelectedType] || "Custom") + " Day A";
+  const notesInput = document.getElementById("qe-manual-notes");
+  if (notesInput) notesInput.placeholder = "e.g. Upper body focus, felt strong";
   qeAddExerciseRow();
   qeAddExerciseRow();
   qeAddExerciseRow();
@@ -5497,10 +5502,11 @@ function qeAddExerciseRow() {
   const id  = _qeManualRowCount;
   const div = document.createElement("div");
   const isHiit = _qeSelectedType === "hiit";
+  const isBW = _qeSelectedType === "bodyweight";
   div.className = "qe-manual-row" + (isHiit ? " hiit-row" : "");
   div.id = `qe-mrow-${id}`;
   div.draggable = true;
-  const dragHandleHTML = `<span class="drag-handle" title="Drag to reorder">⠿</span>`;
+  const dragHandleHTML = `<span class="drag-handle" title="Drag to reorder · drop on a row to superset">⠿</span>`;
   if (isHiit) {
     div.innerHTML = `
       ${dragHandleHTML}
@@ -5512,16 +5518,19 @@ function qeAddExerciseRow() {
         <input type="text" id="qe-mwt-${id}" placeholder="optional" /></div>
       <button class="remove-exercise-btn" onclick="qeRemoveRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   } else {
+    const wtPlaceholder = isBW ? "Bodyweight" : "lbs/kg";
+    const wtValue = isBW ? "Bodyweight" : "";
+    const exPlaceholder = isBW ? "e.g. Push-ups, Pull-ups" : "e.g. Bench Press";
     div.innerHTML = `
       ${dragHandleHTML}
       <div><label>Exercise</label>
-        <input type="text"   id="qe-mex-${id}"   placeholder="e.g. Bench Press" /></div>
+        <input type="text"   id="qe-mex-${id}"   placeholder="${exPlaceholder}" /></div>
       <div><label>Sets</label>
         <input type="number" id="qe-msets-${id}" placeholder="3" min="1" max="20" onchange="qePyramidSetsChanged(${id})" /></div>
       <div><label>Reps</label>
         <input type="text"   id="qe-mreps-${id}" placeholder="10" /></div>
       <div><label>Weight</label>
-        <input type="text"   id="qe-mwt-${id}"   placeholder="lbs/kg" /></div>
+        <input type="text"   id="qe-mwt-${id}"   placeholder="${wtPlaceholder}" value="${wtValue}"${isBW ? " readonly" : ""} /></div>
       <button class="ex-pyramid-btn" title="Per-set reps &amp; weight" onclick="qeTogglePyramid(${id})">▾</button>
       <button class="remove-exercise-btn" onclick="qeRemoveRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
       <div class="ex-pyramid-detail" id="qe-pyr-${id}" style="display:none"></div>`;

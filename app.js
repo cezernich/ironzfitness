@@ -141,9 +141,10 @@ function showTab(name) {
     if (typeof renderLevelProgress === "function") renderLevelProgress();
   }
 
-  // Render saved workouts list
+  // Legacy saved-workouts tab → redirect to unified saved-library
   if (name === "saved-workouts") {
-    if (typeof renderSavedWorkouts === "function") renderSavedWorkouts();
+    showTab("saved-library");
+    return;
   }
 
   // Render community workouts + challenges

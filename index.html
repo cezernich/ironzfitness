@@ -2246,8 +2246,8 @@
           <input type="text" id="qe-manual-workout-name" placeholder="e.g. Push Day A" />
         </div>
         <div class="form-row" style="margin-bottom:10px">
-          <label for="qe-manual-notes">Session Notes (optional)</label>
-          <input type="text" id="qe-manual-notes" placeholder="e.g. Upper body focus, felt strong" />
+          <label for="qe-manual-notes" id="qe-manual-notes-label">Session Notes (optional)</label>
+          <textarea id="qe-manual-notes" rows="2" placeholder="e.g. Upper body focus, felt strong"></textarea>
         </div>
         <div id="qe-hiit-meta" style="display:none;margin-bottom:12px">
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -2290,11 +2290,11 @@
       <div class="qe-step" id="qe-step-2-cardio-manual" style="display:none">
         <div class="form-row" style="margin-bottom:10px">
           <label for="qe-cardio-manual-name">Workout Name (optional)</label>
-          <input type="text" id="qe-cardio-manual-name" placeholder="e.g. Tempo Run, Recovery Ride" />
+          <input type="text" id="qe-cardio-manual-name" placeholder="e.g. Easy 5K, Recovery Ride" />
         </div>
         <div class="form-row" style="margin-bottom:10px">
-          <label for="qe-cardio-manual-notes">Session Notes (optional)</label>
-          <input type="text" id="qe-cardio-manual-notes" placeholder="e.g. Felt good, held Z3 the whole tempo block" />
+          <label for="qe-cardio-manual-notes" id="qe-cardio-manual-notes-label">Session Title / Notes (optional)</label>
+          <textarea id="qe-cardio-manual-notes" rows="2" placeholder="e.g. Easy 5K, Recovery Ride"></textarea>
         </div>
         <p class="cp-ss-hint">Tip: drag rows by the handle to reorder, or drop onto another row to create a repeat block.</p>
         <div id="qe-cardio-interval-rows"></div>

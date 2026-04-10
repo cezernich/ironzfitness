@@ -1,6 +1,8 @@
 // js/ui/saved-library-tab-view.js
 //
-// Saved Library tab content. Filter chips at top + card grid below.
+// Saved Library tab content. Shows the user's personal saved workouts
+// (library bookmarks, shared imports, AND custom user-created workouts)
+// plus a browsable library of canonical variants.
 
 (function () {
   "use strict";
@@ -14,7 +16,7 @@
   let _state = { filterSport: null, sharedOnly: false, showBrowse: true };
 
   async function renderSavedLibraryTab(containerId) {
-    const target = document.getElementById(containerId || "tab-saved-content");
+    const target = document.getElementById(containerId || "tab-saved-library-content");
     if (!target) return;
     const Saved = window.SavedWorkoutsLibrary;
     if (!Saved) {
@@ -25,7 +27,7 @@
     if (_state.filterSport) filter.sport = _state.filterSport;
     if (_state.sharedOnly)  filter.source = "shared";
     const list = await Saved.listSaved(filter);
-    const savedKeys = new Set(list.map(s => `${s.sport_id}::${s.session_type_id}::${s.variant_id}`));
+    const savedKeys = new Set(list.map(s => s.variant_id ? `${s.sport_id}::${s.session_type_id}::${s.variant_id}` : null).filter(Boolean));
 
     const browseHtml = _renderBrowseSection(savedKeys);
 
@@ -34,31 +36,60 @@
         <h2 class="tab-h2">Saved</h2>
         ${_renderFilterRow()}
         <div class="saved-empty">
-          <p>Save workouts from the library or from friends' shares to build your own collection.</p>
+          <p>Save workouts from the library, from friends' shares, or create your own.</p>
+        </div>
+        <div class="saved-new-btn-wrap">
+          <button class="btn-primary" id="sl-new-custom-btn">+ New Workout</button>
         </div>
         ${browseHtml}
       `;
       _wireFilters(target, containerId);
       _wireBrowseButtons(target, containerId);
+      _wireNewCustomBtn(target, containerId);
       return;
     }
 
     target.innerHTML = `
       <h2 class="tab-h2">Saved</h2>
       ${_renderFilterRow()}
+      <div class="saved-new-btn-wrap">
+        <button class="btn-primary" id="sl-new-custom-btn">+ New Workout</button>
+      </div>
       <div class="saved-list">
-        ${list.map(_renderCard).join("")}
+        ${list.map(s => s.source === "custom" ? _renderCustomCard(s) : _renderCard(s)).join("")}
       </div>
       ${browseHtml}
     `;
     _wireFilters(target, containerId);
     _wireBrowseButtons(target, containerId);
+    _wireNewCustomBtn(target, containerId);
+    _wireSavedActions(target, containerId);
+  }
 
+  // ─── New Custom Workout button ──────────────────────────────────────────────
+
+  function _wireNewCustomBtn(target, containerId) {
+    const btn = target.querySelector("#sl-new-custom-btn");
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      if (typeof openSaveWorkoutModal === "function") {
+        // Re-use the existing modal from workouts.js but override save to go
+        // through SavedWorkoutsLibrary instead of legacy localStorage.
+        _openCustomWorkoutModal(null, containerId);
+      }
+    });
+  }
+
+  // ─── Saved item action wiring ───────────────────────────────────────────────
+
+  function _wireSavedActions(target, containerId) {
     target.querySelectorAll("[data-saved-action]").forEach(btn => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
         const action = btn.dataset.savedAction;
         const id = btn.dataset.id;
+        const Saved = window.SavedWorkoutsLibrary;
+        if (!Saved) return;
         if (action === "remove") {
           if (confirm("Remove from saved library?")) {
             await Saved.removeSaved(id);
@@ -66,16 +97,239 @@
           }
         } else if (action === "schedule") {
           _scheduleSaved(id);
+        } else if (action === "edit-custom") {
+          _openCustomWorkoutModal(id, containerId);
         }
       });
     });
   }
 
+  // ─── Custom workout cards ───────────────────────────────────────────────────
+
+  function _renderCustomCard(s) {
+    const p = s.payload || {};
+    const name = s.custom_name || "Untitled";
+    const kind = s.workout_kind || "general";
+    const sportLabel = s.sport_id ? _esc(s.sport_id) : "";
+
+    let detailHtml = "";
+    if (p.segments && p.segments.length) {
+      detailHtml = typeof buildSegmentTableHTML === "function"
+        ? buildSegmentTableHTML(p.segments)
+        : `<p class="hint">${p.segments.length} segment(s)</p>`;
+    } else if (p.exercises && p.exercises.length) {
+      detailHtml = typeof buildExerciseTableHTML === "function"
+        ? buildExerciseTableHTML(p.exercises, { hiit: kind === "hiit" || !!p.hiitMeta })
+        : `<p class="hint">${p.exercises.length} exercise(s)</p>`;
+    }
+    const notesHtml = p.notes ? `<p class="saved-card-notes">${_esc(p.notes)}</p>` : "";
+
+    const cardId = "sl-custom-" + _esc(s.id);
+    return `
+      <div class="saved-card saved-card--custom collapsible is-collapsed" id="${cardId}" data-id="${_esc(s.id)}">
+        <div class="saved-card-header card-toggle" onclick="toggleSection('${cardId}')">
+          <div class="saved-card-header-left">
+            <span class="saved-source-tag saved-source-custom">Custom</span>
+            ${sportLabel ? `<span class="saved-sport-tag">${sportLabel}</span>` : ""}
+            <span class="workout-tag tag-${_esc(kind)}" style="margin-left:4px">${_esc(kind)}</span>
+          </div>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="saved-card-title">${_esc(name)}</div>
+        <div class="card-body" style="display:none;padding:4px 0 0">
+          ${notesHtml}
+          ${detailHtml}
+        </div>
+        <div class="saved-card-actions">
+          <button class="btn-primary"  data-saved-action="schedule"    data-id="${_esc(s.id)}">Schedule</button>
+          <button class="btn-ghost"    data-saved-action="edit-custom" data-id="${_esc(s.id)}">Edit</button>
+          <button class="btn-ghost"    data-saved-action="remove"      data-id="${_esc(s.id)}">${typeof ICONS !== "undefined" && ICONS.trash ? ICONS.trash : "Delete"}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  // ─── Library / shared cards (unchanged) ─────────────────────────────────────
+
+  function _renderCard(s) {
+    const sourceLabel = s.source === "shared" ? "Shared" : "Library";
+    const sourceClass = s.source === "shared" ? "saved-source-shared" : "saved-source-library";
+    const name = s.custom_name || s.variant_id;
+    return `
+      <div class="saved-card" data-id="${_esc(s.id)}">
+        <div class="saved-card-header">
+          <span class="saved-source-tag ${sourceClass}">${sourceLabel}</span>
+          <span class="saved-sport-tag">${_esc(s.sport_id || "")}</span>
+        </div>
+        <div class="saved-card-title">${_esc(name)}</div>
+        <div class="saved-card-meta">${_esc(s.session_type_id || "")}</div>
+        <div class="saved-card-actions">
+          <button class="btn-primary"   data-saved-action="schedule" data-id="${_esc(s.id)}">Schedule</button>
+          <button class="btn-ghost"     data-saved-action="remove"   data-id="${_esc(s.id)}">Remove</button>
+        </div>
+      </div>
+    `;
+  }
+
+  // ─── Custom workout modal (re-uses the existing saved-workout-modal) ────────
+
+  function _openCustomWorkoutModal(editId, containerId) {
+    const Saved = window.SavedWorkoutsLibrary;
+    if (!Saved) return;
+
+    // If we're editing, load the existing data into the modal
+    if (editId) {
+      Saved.listSaved().then(list => {
+        const item = list.find(s => s.id === editId);
+        if (!item || item.source !== "custom") return;
+        _populateModal(item, containerId);
+      });
+    } else {
+      _populateModal(null, containerId);
+    }
+  }
+
+  function _populateModal(item, containerId) {
+    const modal = document.getElementById("saved-workout-modal");
+    if (!modal) return;
+    const title = document.getElementById("sw-modal-title");
+    const nameEl = document.getElementById("sw-name");
+    const typeEl = document.getElementById("sw-type");
+    const notesEl = document.getElementById("sw-notes");
+    const msgEl = document.getElementById("sw-save-msg");
+    const exEntries = document.getElementById("sw-exercise-entries");
+    const segEntries = document.getElementById("sw-segment-entries");
+
+    nameEl.value = "";
+    typeEl.value = "weightlifting";
+    notesEl.value = "";
+    if (exEntries) exEntries.innerHTML = "";
+    if (segEntries) segEntries.innerHTML = "";
+    if (msgEl) msgEl.textContent = "";
+
+    if (item) {
+      const p = item.payload || {};
+      nameEl.value = item.custom_name || "";
+      typeEl.value = item.workout_kind || "weightlifting";
+      notesEl.value = p.notes || "";
+      if (typeof swTypeChanged === "function") swTypeChanged();
+      const SW_ENDURANCE_TYPES = ["running", "cycling", "swimming", "triathlon", "stairstepper"];
+      if (SW_ENDURANCE_TYPES.includes(item.workout_kind)) {
+        (p.segments || []).forEach(s => { if (typeof addSwSegmentRow === "function") addSwSegmentRow(s); });
+        if (!(p.segments && p.segments.length) && typeof addSwSegmentRow === "function") addSwSegmentRow();
+      } else {
+        (p.exercises || []).forEach(() => { if (typeof addSwExerciseRow === "function") addSwExerciseRow(); });
+        document.querySelectorAll("#sw-exercise-entries .exercise-row").forEach((row, i) => {
+          const e = (p.exercises || [])[i];
+          if (!e) return;
+          row.querySelector(".ex-name").value = e.name || "";
+          const setsInput = row.querySelector(".ex-sets");
+          if (setsInput) setsInput.value = e.sets || "";
+          row.querySelector(".ex-reps").value = e.reps || "";
+          row.querySelector(".ex-weight").value = e.weight || "";
+        });
+        if (!p.exercises || !p.exercises.length) {
+          if (typeof addSwExerciseRow === "function") addSwExerciseRow();
+        }
+        if (item.workout_kind === "hiit" && p.hiitMeta) {
+          const m = p.hiitMeta;
+          if (document.getElementById("sw-hiit-format")) document.getElementById("sw-hiit-format").value = m.format || "circuit";
+          if (document.getElementById("sw-hiit-rounds")) document.getElementById("sw-hiit-rounds").value = m.rounds || 3;
+          if (document.getElementById("sw-hiit-rest-ex")) document.getElementById("sw-hiit-rest-ex").value = m.restBetweenExercises || "";
+          if (document.getElementById("sw-hiit-rest-rnd")) document.getElementById("sw-hiit-rest-rnd").value = m.restBetweenRounds || "";
+        }
+      }
+      title.textContent = "Edit Custom Workout";
+    } else {
+      title.textContent = "New Saved Workout";
+      if (typeof swTypeChanged === "function") swTypeChanged();
+      if (typeof addSwExerciseRow === "function") addSwExerciseRow();
+    }
+
+    // Override the save button to route through SavedWorkoutsLibrary
+    const saveBtn = modal.querySelector("#sw-save-btn");
+    if (saveBtn) {
+      const clone = saveBtn.cloneNode(true);
+      saveBtn.parentNode.replaceChild(clone, saveBtn);
+      clone.addEventListener("click", () => _handleCustomSave(item ? item.id : null, containerId));
+    }
+
+    modal.style.display = "flex";
+  }
+
+  function _handleCustomSave(editId, containerId) {
+    const nameVal = document.getElementById("sw-name").value.trim();
+    const typeVal = document.getElementById("sw-type").value;
+    const notesVal = document.getElementById("sw-notes").value.trim();
+    const msgEl = document.getElementById("sw-save-msg");
+
+    if (!nameVal) {
+      if (msgEl) { msgEl.style.color = "#ef4444"; msgEl.textContent = "Please enter a workout name."; }
+      return;
+    }
+
+    const SW_ENDURANCE_TYPES = ["running", "cycling", "swimming", "triathlon", "stairstepper"];
+    let exercises = null, segments = null, hiitMeta = null;
+
+    if (SW_ENDURANCE_TYPES.includes(typeVal)) {
+      segments = [];
+      const isBrick = typeVal === "triathlon";
+      document.querySelectorAll("#sw-segment-entries .sw-segment-row").forEach(row => {
+        const n = row.querySelector(".seg-name")?.value.trim();
+        const seg = {
+          name: n || "",
+          duration: row.querySelector(".seg-duration")?.value.trim() || "",
+          effort: row.querySelector(".seg-effort")?.value || "Easy",
+        };
+        if (isBrick) seg.discipline = row.querySelector(".seg-discipline")?.value || "bike";
+        if (n || seg.duration || isBrick) segments.push(seg);
+      });
+    } else {
+      const isHiit = typeVal === "hiit";
+      exercises = [];
+      document.querySelectorAll("#sw-exercise-entries .exercise-row").forEach(row => {
+        const n = row.querySelector(".ex-name")?.value.trim();
+        if (!n) return;
+        const ex = { name: n, reps: row.querySelector(".ex-reps")?.value, weight: row.querySelector(".ex-weight")?.value.trim() };
+        const setsInput = row.querySelector(".ex-sets");
+        if (setsInput) ex.sets = setsInput.value;
+        exercises.push(ex);
+      });
+      if (isHiit) {
+        hiitMeta = {
+          format: document.getElementById("sw-hiit-format")?.value || "circuit",
+          rounds: parseInt(document.getElementById("sw-hiit-rounds")?.value) || 1,
+          restBetweenExercises: (document.getElementById("sw-hiit-rest-ex")?.value || "").trim() || undefined,
+          restBetweenRounds: (document.getElementById("sw-hiit-rest-rnd")?.value || "").trim() || undefined,
+        };
+      }
+    }
+
+    const sportMap = {
+      running: "run", cycling: "bike", swimming: "swim",
+      triathlon: "hybrid", stairstepper: "run",
+      weightlifting: "strength", bodyweight: "strength",
+      hiit: "strength", general: null, other: null,
+    };
+
+    const Saved = window.SavedWorkoutsLibrary;
+    if (!Saved) return;
+
+    const doSave = editId
+      ? Saved.editCustom(editId, { name: nameVal, workout_kind: typeVal, sport_id: sportMap[typeVal] || null, exercises, segments, hiitMeta, notes: notesVal })
+      : Saved.saveCustom({ name: nameVal, workout_kind: typeVal, sport_id: sportMap[typeVal] || null, exercises, segments, hiitMeta, notes: notesVal });
+
+    Promise.resolve(doSave).then(result => {
+      if (result && result.error === "LIMIT_REACHED") {
+        if (msgEl) { msgEl.style.color = "#ef4444"; msgEl.textContent = "Saved workout limit reached. Remove one first."; }
+        return;
+      }
+      if (typeof closeSaveWorkoutModal === "function") closeSaveWorkoutModal();
+      renderSavedLibraryTab(containerId);
+    });
+  }
+
   // ─── Browse the canonical variant library ─────────────────────────────────
-  //
-  // Renders every variant from the 5 libraries (run / bike / swim / strength /
-  // hybrid) as a bookmark-able card. Tap the bookmark icon to save the variant
-  // to the user's personal library; tap again to remove. Shows a brief toast.
 
   function _renderBrowseSection(savedKeys) {
     const VL = window.VariantLibraries;
@@ -157,7 +411,6 @@
         if (!Saved) return;
         const isSaved = btn.classList.contains("is-saved");
         if (isSaved) {
-          // Remove existing
           const list = await Saved.listSaved();
           const existing = list.find(s =>
             s.variant_id === variant && s.sport_id === sport && s.source === "library"
@@ -165,11 +418,15 @@
           if (existing) await Saved.removeSaved(existing.id);
           _showToast("Removed from library");
         } else {
-          await Saved.saveFromLibrary({
+          const result = await Saved.saveFromLibrary({
             variantId: variant,
             sportId: sport,
             sessionTypeId: sessionType,
           });
+          if (result && result.error === "LIMIT_REACHED") {
+            _showToast("Saved workout limit reached");
+            return;
+          }
           _showToast("Saved to library");
         }
         renderSavedLibraryTab(containerId);
@@ -177,7 +434,6 @@
     });
   }
 
-  // Brief toast notification.
   function _showToast(msg) {
     if (typeof document === "undefined") return;
     const existing = document.getElementById("ironz-toast");
@@ -227,26 +483,6 @@
     }
   }
 
-  function _renderCard(s) {
-    const sourceLabel = s.source === "shared" ? "Shared" : "Library";
-    const sourceIcon = s.source === "shared" ? "⇪" : "📚";
-    const name = s.custom_name || s.variant_id;
-    return `
-      <div class="saved-card" data-id="${_esc(s.id)}">
-        <div class="saved-card-header">
-          <span class="saved-source-tag">${sourceIcon} ${sourceLabel}</span>
-          <span class="saved-sport-tag">${_esc(s.sport_id || "")}</span>
-        </div>
-        <div class="saved-card-title">${_esc(name)}</div>
-        <div class="saved-card-meta">${_esc(s.session_type_id || "")}</div>
-        <div class="saved-card-actions">
-          <button class="btn-primary"   data-saved-action="schedule" data-id="${_esc(s.id)}">Schedule</button>
-          <button class="btn-ghost"     data-saved-action="remove"   data-id="${_esc(s.id)}">Remove</button>
-        </div>
-      </div>
-    `;
-  }
-
   function _scheduleSaved(savedId) {
     const ScheduleCalendar = window.ScheduleCalendarModal;
     const Saved = window.SavedWorkoutsLibrary;
@@ -256,15 +492,15 @@
       const e = list.find(x => x.id === savedId);
       if (!e) return;
       const pseudoSharedWorkout = {
-        variantId: e.variant_id,
+        variantId: e.variant_id || e.id,
         sportId: e.sport_id,
-        sessionTypeId: e.session_type_id,
+        sessionTypeId: e.session_type_id || e.workout_kind,
         senderDisplayName: "Saved Library",
         createdAt: e.saved_at,
       };
       ScheduleCalendar.open({
         sharedWorkout: pseudoSharedWorkout,
-        scaledWorkout: { sport_id: e.sport_id, session_type_id: e.session_type_id, variant_id: e.variant_id },
+        scaledWorkout: { sport_id: e.sport_id, session_type_id: e.session_type_id || e.workout_kind, variant_id: e.variant_id || e.id },
         onPick: ({ date, info }) => {
           if (info && info.isConflict && window.ConflictResolutionModal) {
             const hasHardBlock = info.hardBlocks && info.hardBlocks.length > 0;

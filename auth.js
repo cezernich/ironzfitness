@@ -275,6 +275,10 @@ async function authBoot() {
     // Pull all data from Supabase before initializing UI
     try { await DB.refreshAllKeys(); } catch (e) { console.warn('Auth: refreshAllKeys error', e); }
     try { await DB.refreshAllTables(); } catch (e) { console.warn('Auth: refreshAllTables error', e); }
+    // Migrate legacy savedWorkouts into unified saved library
+    if (window.SavedWorkoutsLibrary && window.SavedWorkoutsLibrary.migrateOldSavedWorkouts) {
+      try { await window.SavedWorkoutsLibrary.migrateOldSavedWorkouts(); } catch (e) { console.warn('Auth: savedWorkouts migration error', e); }
+    }
     hideAuthScreen();
     window._appInitialized = true;
     init();
@@ -288,6 +292,10 @@ async function authBoot() {
       try { await DB.migrateLocalStorage(); } catch (e) { console.warn('Auth: migration error', e); }
       try { await DB.refreshAllKeys(); } catch (e) { console.warn('Auth: refreshAllKeys error', e); }
       try { await DB.refreshAllTables(); } catch (e) { console.warn('Auth: refreshAllTables error', e); }
+      // Migrate legacy savedWorkouts into unified saved library
+      if (window.SavedWorkoutsLibrary && window.SavedWorkoutsLibrary.migrateOldSavedWorkouts) {
+        try { await window.SavedWorkoutsLibrary.migrateOldSavedWorkouts(); } catch (e) { console.warn('Auth: savedWorkouts migration error', e); }
+      }
       hideAuthScreen();
       if (!window._appInitialized) {
         window._appInitialized = true;

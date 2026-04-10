@@ -7,6 +7,7 @@
   "use strict";
 
   const LOCAL_KEY = "ironz_saved_workouts_v1";
+  const MAX_SAVED = 50;
 
   function _readLocal() {
     if (typeof localStorage === "undefined") return [];
@@ -53,6 +54,7 @@
     const list = _readLocal();
     const existing = _findExisting(list, opts.variantId, "library");
     const now = new Date().toISOString();
+    if (!existing && list.length >= MAX_SAVED) return { error: "LIMIT_REACHED" };
     if (existing) {
       existing.saved_at = now;
       _writeLocal(list);
@@ -84,6 +86,7 @@
     const list = _readLocal();
     const existing = _findExisting(list, opts.variantId, "shared");
     const now = new Date().toISOString();
+    if (!existing && list.length >= MAX_SAVED) return { error: "LIMIT_REACHED" };
     if (existing) {
       existing.saved_at = now;
       existing.share_token = opts.shareToken;
@@ -132,33 +135,38 @@
     const e = list.find(s => s.id === savedId);
     if (!e) return { error: "NOT_FOUND" };
 
+    const isCustom = e.source === "custom";
     const Validator = window.WorkoutImportValidator;
-    if (!Validator) return { error: "VALIDATOR_MISSING" };
-    const result = Validator.validateImport({
-      sharedWorkout: {
-        variantId: e.variant_id,
-        sportId: e.sport_id,
-        sessionTypeId: e.session_type_id,
-      },
-      targetDate,
-    });
-    if (!result.canImport) {
-      return { error: "CONFLICT", conflicts: result.conflicts, suggestedDate: result.suggestedDate };
+    // Custom workouts may lack variant_id; skip validator if it would fail
+    if (Validator && e.variant_id) {
+      const result = Validator.validateImport({
+        sharedWorkout: {
+          variantId: e.variant_id,
+          sportId: e.sport_id,
+          sessionTypeId: e.session_type_id,
+        },
+        targetDate,
+      });
+      if (!result.canImport) {
+        return { error: "CONFLICT", conflicts: result.conflicts, suggestedDate: result.suggestedDate };
+      }
     }
 
     // Insert into workoutSchedule
     let schedule = [];
     try { schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]"); } catch {}
-    schedule.push({
+    const entry = {
       id: "saved-" + savedId + "-" + Date.now(),
       date: targetDate,
-      type: e.session_type_id,
-      sessionName: e.custom_name || e.variant_id,
-      variant_id: e.variant_id,
+      type: e.session_type_id || e.workout_kind || "general",
+      sessionName: e.custom_name || e.variant_id || "Custom Workout",
+      variant_id: e.variant_id || null,
       sport_id: e.sport_id,
       source: "user_added",
       saved_workout_id: e.id,
-    });
+    };
+    if (isCustom && e.payload) entry.payload = e.payload;
+    schedule.push(entry);
     try {
       localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
       if (typeof DB !== "undefined" && DB.syncSchedule) DB.syncSchedule();
@@ -168,6 +176,112 @@
     _writeLocal(list);
     _emit("saved_scheduled", { variant_id: e.variant_id });
     return { ok: true };
+  }
+
+  /**
+   * Save a fully custom workout (exercises, segments, HIIT meta, etc.).
+   * These don't reference a variant — the full workout is stored in `payload`.
+   */
+  async function saveCustom(opts) {
+    if (!opts || !opts.name || !opts.workout_kind) return { error: "INVALID_INPUT" };
+    const list = _readLocal();
+    if (list.length >= MAX_SAVED) return { error: "LIMIT_REACHED" };
+    const now = new Date().toISOString();
+    const row = {
+      id: _genId(),
+      variant_id: null,
+      sport_id: opts.sport_id || null,
+      session_type_id: null,
+      source: "custom",
+      saved_at: now,
+      custom_name: String(opts.name).slice(0, 80),
+      workout_kind: opts.workout_kind,
+      payload: {
+        exercises: opts.exercises || null,
+        segments: opts.segments || null,
+        hiitMeta: opts.hiitMeta || null,
+        notes: opts.notes || null,
+        duration: opts.duration || null,
+      },
+    };
+    list.push(row);
+    _writeLocal(list);
+    _emit("saved_custom", { name: opts.name, workout_kind: opts.workout_kind });
+    return row;
+  }
+
+  /**
+   * Edit a custom workout's details in place.
+   */
+  async function editCustom(savedId, updates) {
+    const list = _readLocal();
+    const e = list.find(s => s.id === savedId);
+    if (!e || e.source !== "custom") return null;
+    if (updates.name != null) e.custom_name = String(updates.name).slice(0, 80);
+    if (updates.workout_kind != null) e.workout_kind = updates.workout_kind;
+    if (updates.sport_id !== undefined) e.sport_id = updates.sport_id || null;
+    if (!e.payload) e.payload = {};
+    if (updates.exercises !== undefined) e.payload.exercises = updates.exercises;
+    if (updates.segments !== undefined) e.payload.segments = updates.segments;
+    if (updates.hiitMeta !== undefined) e.payload.hiitMeta = updates.hiitMeta;
+    if (updates.notes !== undefined) e.payload.notes = updates.notes;
+    if (updates.duration !== undefined) e.payload.duration = updates.duration;
+    _writeLocal(list);
+    return e;
+  }
+
+  /**
+   * One-time migration: convert old "savedWorkouts" localStorage entries into
+   * unified library rows with source="custom". Returns count of migrated items.
+   */
+  async function migrateOldSavedWorkouts() {
+    const OLD_KEY = "savedWorkouts";
+    let old;
+    try { old = JSON.parse(localStorage.getItem(OLD_KEY) || "[]"); } catch { return 0; }
+    if (!old.length) return 0;
+    const list = _readLocal();
+    const existingIds = new Set(list.filter(s => s._legacyId).map(s => s._legacyId));
+    let count = 0;
+    for (const sw of old) {
+      if (list.length >= MAX_SAVED) break;
+      if (existingIds.has(sw.id)) continue;
+      const row = {
+        id: _genId(),
+        _legacyId: sw.id,
+        variant_id: null,
+        sport_id: _mapTypeToSport(sw.type),
+        session_type_id: null,
+        source: "custom",
+        saved_at: new Date().toISOString(),
+        custom_name: String(sw.name || "Untitled").slice(0, 80),
+        workout_kind: sw.type || "general",
+        payload: {
+          exercises: sw.exercises || null,
+          segments: sw.segments || null,
+          hiitMeta: sw.hiitMeta || null,
+          notes: sw.notes || null,
+          duration: sw.duration || null,
+        },
+      };
+      list.push(row);
+      count++;
+    }
+    if (count > 0) {
+      _writeLocal(list);
+      localStorage.removeItem(OLD_KEY);
+      if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey(OLD_KEY);
+    }
+    return count;
+  }
+
+  function _mapTypeToSport(type) {
+    const map = {
+      running: "run", cycling: "bike", swimming: "swim",
+      triathlon: "hybrid", stairstepper: "run",
+      weightlifting: "strength", bodyweight: "strength",
+      hiit: "strength", general: null, other: null,
+    };
+    return map[type] || null;
   }
 
   function _emit(event, payload) {
@@ -186,9 +300,13 @@
     listSaved,
     saveFromLibrary,
     saveFromShare,
+    saveCustom,
+    editCustom,
     removeSaved,
     renameSaved,
     scheduleFromSaved,
+    migrateOldSavedWorkouts,
+    MAX_SAVED,
     _resetForTests,
   };
 

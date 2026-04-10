@@ -11951,6 +11951,31 @@ button:active {
   color: var(--color-text-muted);
 }
 
+/* ── Custom saved workout cards ──────────────────────────────────────────── */
+.saved-card--custom .saved-card-header {
+  cursor: pointer;
+}
+.saved-card--custom .saved-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.saved-card--custom.is-collapsed .card-body { display: none; }
+.saved-card--custom:not(.is-collapsed) .card-body { display: block; }
+.saved-card--custom:not(.is-collapsed) .card-chevron { transform: rotate(180deg); }
+.saved-card-notes {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin: 4px 0 8px;
+}
+.saved-source-custom {
+  color: #ff6b35;
+}
+.saved-new-btn-wrap {
+  margin-bottom: 12px;
+}
+
 /* ── Browse the library section ──────────────────────────────────────────── */
 .browse-library-section {
   margin-top: 24px;

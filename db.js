@@ -329,7 +329,7 @@ const DB = (() => {
   const SYNCED_KEYS = [
     // Core data — MUST sync for cross-device
     'workouts', 'workoutSchedule', 'trainingPlan', 'events',
-    'profile', 'meals', 'savedWorkouts', 'goals',
+    'profile', 'meals', 'goals',
     // Training state
     'dayRestrictions', 'completedSessions', 'workoutRatings',
     'importedPlans', 'personalRecords', 'nutritionAdjustments',
