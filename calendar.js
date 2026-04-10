@@ -3201,6 +3201,17 @@ function openQuickEntry(dateStr) {
   overlay.classList.add("is-open");
 }
 
+// Open Quick Entry and jump straight to the cardio manual interval editor
+// for the given type (running / cycling / swimming). Used by
+// AddRunningSessionFlow's "Add Manually" button to hand off to the full
+// interval-row editor without going through the type picker again.
+function openQuickEntryCardioManual(dateStr, type) {
+  openQuickEntry(dateStr);
+  _qeSelectedType = type || "running";
+  qeInitCardioRows();
+  qeShowStep(2, "cardio-manual");
+}
+
 function closeQuickEntry() {
   const overlay = document.getElementById("quick-entry-overlay");
   if (overlay) overlay.classList.remove("is-open");
