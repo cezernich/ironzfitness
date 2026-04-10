@@ -1373,19 +1373,14 @@ async function triggerShareWorkout(cacheKey) {
     // preview page can look it up and render exercises/segments.
     let realVariantId = variantId;
     try {
-      // Columns confirmed via SELECT * on existing row:
-      // id, plan_id, user_id, scheduled_date, week_number, day_of_week,
-      // session_type, session_name, description, exercises, status,
-      // completed_workout_id, created_at, data
-      // After running DROP NOT NULL on plan_id + scheduled_date, those can be null.
       const tsPayload = {
         user_id: userId,
         session_name: workoutName,
-        session_type: sessionTypeId,
+        session_type_id: sessionTypeId,
+        sport_id: sportId,
         status: "shared",
         exercises: _exercises.length > 0 ? _exercises : null,
         description: noteText || null,
-        data: { sport_id: sportId },
       };
       console.log("[IronZ] training_sessions INSERT payload:", tsPayload);
       const { data: tsRow, error: tsErr } = await sb
