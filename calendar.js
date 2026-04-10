@@ -1249,15 +1249,23 @@ function _buildUndoHeaderBtn(sessionId, dateStr) {
 // variant mapping (legacy plan entries that pre-date the variant library) get
 // no share button — sharing requires a canonical variant per the spec.
 function _buildShareBtnFromEntry(entry) {
-  if (!entry) return "";
-  const variantId = entry.variant_id || entry.variantId;
-  const sportId = entry.sport_id || entry.sportId
-    || ({ run: "run", running: "run", bike: "bike", cycling: "bike", swim: "swim", swimming: "swim" })[entry.discipline]
-    || null;
-  const sessionTypeId = entry.session_type_id || entry.sessionTypeId || entry.type || null;
-  if (!variantId || !sportId || !sessionTypeId) return "";
-  const safeId = String(entry.id || "").replace(/'/g, "");
-  return `<button class="share-workout-btn" title="Share this workout" onclick="event.stopPropagation();triggerShareWorkout('${safeId}','${variantId}','${sportId}','${sessionTypeId}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>`;
+  try {
+    if (!entry) return "";
+    const variantId = entry.variant_id || entry.variantId;
+    const sportId = entry.sport_id || entry.sportId
+      || ({ run: "run", running: "run", bike: "bike", cycling: "bike", swim: "swim", swimming: "swim" })[entry.discipline]
+      || null;
+    const sessionTypeId = entry.session_type_id || entry.sessionTypeId || entry.type || null;
+    if (!variantId || !sportId || !sessionTypeId) return "";
+    const safeId = String(entry.id || "").replace(/'/g, "").replace(/"/g, "");
+    const safeVariant = String(variantId).replace(/'/g, "").replace(/"/g, "");
+    const safeSport = String(sportId).replace(/'/g, "").replace(/"/g, "");
+    const safeType = String(sessionTypeId).replace(/'/g, "").replace(/"/g, "");
+    return `<button class="share-workout-btn" title="Share this workout" onclick="event.stopPropagation();triggerShareWorkout('${safeId}','${safeVariant}','${safeSport}','${safeType}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>`;
+  } catch (e) {
+    console.warn("[IronZ] share button render skipped:", e.message);
+    return "";
+  }
 }
 
 // Global click handler for the share button. Calls the workout-sharing flow,
