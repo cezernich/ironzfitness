@@ -2612,7 +2612,7 @@ function _renderDayDetailInner(dateStr, content) {
         const _allSegs = [];
         _expandRepeatGroups(w.aiSession.intervals).forEach(iv => {
           const reps = iv.reps || 1;
-          const mainDur = _distToMin(iv.duration, iv.effort) || _parseDur(iv.duration);
+          const mainDur = _parseDur(iv.duration);
           const restDur = iv.restDuration ? _parseDur(iv.restDuration) : 0;
           const mainCls = _effortToZone[iv.effort] || "z2";
           const restCls = iv.restEffort ? (_effortToZone[iv.restEffort] || "z2") : "z-rest";

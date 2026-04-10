@@ -179,8 +179,51 @@
       }
     }
 
+    // Fetch exercise data to attach as aiSession.intervals so the calendar
+    // renders the full colored bar + step list (same as built-in workouts).
+    let intervals = [];
+
+    // Source 1: training_sessions via Supabase
+    if (e.variant_id && typeof window !== "undefined" && window.supabaseClient) {
+      try {
+        const { data: ts } = await window.supabaseClient
+          .from("training_sessions")
+          .select("session_name, exercises")
+          .eq("id", e.variant_id)
+          .maybeSingle();
+        if (ts && ts.exercises) {
+          let exArr = ts.exercises;
+          if (typeof exArr === "string") { try { exArr = JSON.parse(exArr); } catch { exArr = []; } }
+          intervals = exArr.map(ex => ({
+            name: ex.name || "Interval",
+            duration: ex.duration || "",
+            effort: ex.intensity || ex.effort || "Z2",
+            details: ex.details || "",
+            reps: ex.reps || null,
+            repeatGroup: ex.repeatGroup || ex.supersetGroup || null,
+            groupSets: ex.groupSets || null,
+          }));
+        }
+      } catch (err) { console.warn("[IronZ] training_sessions lookup failed:", err); }
+    }
+
+    // Source 2: local payload (custom workouts)
+    if (!intervals.length && e.payload) {
+      const p = e.payload;
+      const src = p.segments || p.exercises || p.intervals || [];
+      intervals = src.map(s => ({
+        name: s.name || s.type || "Step",
+        duration: s.duration || "",
+        effort: s.effort || s.intensity || s.zone || "Z2",
+        details: s.details || "",
+        reps: s.reps || null,
+        repeatGroup: s.repeatGroup || s.supersetGroup || null,
+        groupSets: s.groupSets || null,
+      }));
+    }
+
     // Insert into workoutSchedule
-    console.log("[IronZ] validation passed, inserting into workoutSchedule for", targetDate);
+    console.log("[IronZ] validation passed, inserting into workoutSchedule for", targetDate, "with", intervals.length, "intervals");
     let schedule = [];
     try { schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]"); } catch {}
     const entry = {
@@ -193,6 +236,14 @@
       source: "user_added",
       saved_workout_id: e.id,
     };
+    // Attach exercise data as aiSession so the calendar renders the full
+    // colored intensity strip + step list — same as built-in plan workouts.
+    if (intervals.length) {
+      entry.aiSession = {
+        title: entry.sessionName,
+        intervals,
+      };
+    }
     if (e.source === "custom" && e.payload) entry.payload = e.payload;
     schedule.push(entry);
     try {
