@@ -2267,18 +2267,60 @@ function renderDailyRings() {
   </div>`;
 }
 
-function renderDayDetail(dateStr) {
+async function renderDayDetail(dateStr) {
   const content = document.getElementById("day-detail-content");
   if (!content) return;
 
-  try { return _renderDayDetailInner(dateStr, content); } catch (e) {
+  try {
+    // Pre-hydrate shared workouts: fetch exercises from training_sessions
+    // for any workoutSchedule entry that has a UUID variant_id but no aiSession.
+    const data = getDataForDate(dateStr);
+    const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const needFetch = data.scheduledWorkouts.filter(w =>
+      !w.aiSession && !w.discipline && w.variant_id && _uuidRe.test(w.variant_id)
+    );
+    if (needFetch.length && window.supabaseClient) {
+      try {
+        const ids = [...new Set(needFetch.map(w => w.variant_id))];
+        const { data: tsRows } = await window.supabaseClient
+          .from("training_sessions")
+          .select("id, session_name, exercises")
+          .in("id", ids);
+        if (tsRows) {
+          const cache = {};
+          tsRows.forEach(row => {
+            let ex = row.exercises || [];
+            if (typeof ex === "string") { try { ex = JSON.parse(ex); } catch { ex = []; } }
+            if (ex.length) {
+              cache[row.id] = ex.map(e => ({
+                name: e.name || "Interval",
+                duration: e.duration || "",
+                effort: e.intensity || e.effort || "Z2",
+                details: e.details || "",
+                reps: e.reps || null,
+                repeatGroup: e.repeatGroup || e.supersetGroup || null,
+                groupSets: e.groupSets || null,
+              }));
+            }
+          });
+          needFetch.forEach(w => {
+            if (cache[w.variant_id]) {
+              w.aiSession = { title: w.sessionName, intervals: cache[w.variant_id] };
+            }
+          });
+        }
+      } catch (e) { console.warn("[IronZ] shared exercise hydration failed:", e); }
+    }
+
+    return _renderDayDetailInner(dateStr, content, data);
+  } catch (e) {
     console.error("renderDayDetail crashed for", dateStr, e);
     content.innerHTML = `<div class="day-detail-date">${dateStr}</div><p style="color:var(--color-text-muted)">Error rendering day detail. Check console.</p>`;
   }
 }
 
-function _renderDayDetailInner(dateStr, content) {
-  const data        = getDataForDate(dateStr);
+function _renderDayDetailInner(dateStr, content, preloadedData) {
+  const data        = preloadedData || getDataForDate(dateStr);
   const displayDate = formatDisplayDate(dateStr);
   const isToday     = dateStr === getTodayString();
   const nutrition   = getDailyNutritionTarget(dateStr);
