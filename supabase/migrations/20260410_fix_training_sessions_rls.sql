@@ -1,20 +1,39 @@
 -- Fix training_sessions RLS for share preview.
---
--- The existing policy "Anyone can read shared training sessions" uses a
--- subquery that compares variant_id to training_sessions.id but the type
--- cast or subquery structure is preventing anon reads. This replaces it
--- with a simpler policy that lets anon read any training_session whose id
--- appears in an active (non-revoked, non-expired) shared_workouts row.
---
--- Run this in the Supabase SQL Editor.
+-- Run this ENTIRE block in the Supabase SQL Editor.
 
--- Drop the broken policy if it exists (name may vary)
-DROP POLICY IF EXISTS "Anyone can read shared training sessions" ON training_sessions;
+-- Step 1: Drop ALL existing SELECT policies on training_sessions so we
+-- start clean. This is a DO block because we don't know the exact names.
+DO $$
+DECLARE
+  pol record;
+BEGIN
+  FOR pol IN
+    SELECT policyname FROM pg_policies
+    WHERE tablename = 'training_sessions'
+      AND schemaname = 'public'
+      AND cmd = 'SELECT'
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON training_sessions', pol.policyname);
+    RAISE NOTICE 'Dropped policy: %', pol.policyname;
+  END LOOP;
+END $$;
 
--- Create a clean policy: anon can SELECT training_sessions rows that are
--- referenced by a live shared_workouts entry.
--- Cast both sides to text to avoid uuid/text mismatch.
-CREATE POLICY "Anon can read training sessions referenced by active shares"
+-- Step 2: Ensure RLS is enabled
+ALTER TABLE training_sessions ENABLE ROW LEVEL SECURITY;
+
+-- Step 3: Create TWO policies:
+
+-- 3a. Authenticated users can read their OWN training sessions
+CREATE POLICY "Users can read own training sessions"
+  ON training_sessions
+  FOR SELECT
+  TO authenticated
+  USING (auth.uid() = user_id);
+
+-- 3b. Anyone (anon or authenticated) can read training sessions that are
+-- referenced by an active shared_workouts row. This is what the share
+-- preview page needs.
+CREATE POLICY "Anyone can read shared training sessions"
   ON training_sessions
   FOR SELECT
   TO anon, authenticated
@@ -28,9 +47,6 @@ CREATE POLICY "Anon can read training sessions referenced by active shares"
     )
   );
 
--- Also ensure RLS is enabled on training_sessions
-ALTER TABLE training_sessions ENABLE ROW LEVEL SECURITY;
-
--- Verify: this should return the test row
+-- Step 4: Verify (run this after the above, should return 1 row):
 -- SELECT id, session_name FROM training_sessions
 -- WHERE id = 'e9771aa3-fbcf-4c38-891d-191f11ff9eb1';

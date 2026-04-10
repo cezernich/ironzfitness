@@ -303,7 +303,18 @@
   function renderCard(data) {
     const session = data.session || {};
     const sessionData = session.data || {};
-    const name = session.session_name || data.session_type_id || 'Shared Workout';
+    // Friendly fallback labels when training_sessions is unavailable (RLS blocks anon)
+    const _typeLabels = {
+      threshold: 'Threshold Test', ftp_test: 'FTP Test', tempo: 'Tempo Run',
+      endurance: 'Endurance Session', interval: 'Interval Session',
+      easy: 'Easy Session', long_run: 'Long Run', speed: 'Speed Work',
+      strength: 'Strength Session', hiit: 'HIIT Session',
+      track_workout: 'Track Workout', hills: 'Hill Repeats',
+    };
+    const name = session.session_name
+      || _typeLabels[data.session_type_id]
+      || data.session_type_id
+      || 'Shared Workout';
     const sessionType = session.session_type || data.session_type_id || '';
     const sport = data.sport_id || sessionData.sport || '';
     const sharer = data._senderName || (data.profiles && data.profiles.full_name) || 'An IronZ user';
