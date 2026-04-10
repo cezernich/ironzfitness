@@ -7444,6 +7444,21 @@ button:active {
 }
 .btn-danger:hover { filter: brightness(1.1); }
 
+/* Repeat-block display in session card body */
+.session-repeat-block {
+  border-left: 3px solid var(--color-accent);
+  padding-left: 10px;
+  margin: 6px 0;
+}
+.session-repeat-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
 /* Superset hint text above the rows list */
 .cp-ss-hint {
   font-size: 0.72rem; color: var(--color-text-muted);

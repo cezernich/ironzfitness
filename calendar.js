@@ -709,14 +709,37 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
       RW: "rw", Z1: "z1", Z2: "z2", Z3: "z3", Z4: "z4", Z5: "z5", Z6: "z6",
       Easy: "z2", Moderate: "z3", Hard: "z4", Max: "z5", T1: "z-transition",
     };
-    const intervals = s.intervals || [];
+    const intervals = _expandRepeatGroups(s.intervals || []);
     const parseDur = str => { const s = String(str || "").toLowerCase(); const m = s.match(/([\d.]+)/); if (!m) return 1; const v = parseFloat(m[1]); return /sec/.test(s) ? v / 60 : v; };
+    // Estimate minutes from a distance string + zone, using user pace if available.
+    const _distToMin = (str, zone) => {
+      const s = String(str || "").toLowerCase();
+      if (!/mi|km|m\b|yd/i.test(s) || /min/.test(s)) return null; // not a distance
+      const v = parseFloat(s.match(/([\d.]+)/)?.[1] || 0);
+      if (!v) return null;
+      const isMi = /mi/i.test(s);
+      const isKm = /km/i.test(s);
+      const distKm = isMi ? v * 1.60934 : isKm ? v : v / 1000;
+      // Rough pace per km by zone (min/km): Z1=7, Z2=6.2, Z3=5.5, Z4=5, Z5=4.5, Z6=4
+      const paceMap = { RW: 8, Z1: 7, Z2: 6.2, Z3: 5.5, Z4: 5, Z5: 4.5, Z6: 4 };
+      // Try user zones for more accurate pace
+      try {
+        const tz = JSON.parse(localStorage.getItem("trainingZones") || "{}");
+        const rz = tz.running || {};
+        if (rz.easyPaceMin && zone === "Z2") {
+          const userPace = parseFloat(rz.easyPaceMin) + (parseFloat(rz.easyPaceSec || 0) / 60);
+          if (userPace > 0) return distKm * userPace / 1.60934 * (isMi ? 1 : 1); // pace is min/mi
+        }
+      } catch {}
+      const pace = paceMap[zone] || 5.5;
+      return distKm * pace;
+    };
 
     // Expand intervals with reps into alternating work/rest segments for the strip
     const allSegs = [];
     intervals.forEach(iv => {
       const reps     = iv.reps || 1;
-      const mainDur  = parseDur(iv.duration);
+      const mainDur  = _distToMin(iv.duration, iv.effort) || parseDur(iv.duration);
       const restDur  = iv.restDuration ? parseDur(iv.restDuration) : 0;
       const mainCls  = effortToZone[iv.effort] || "z2";
       const restCls  = iv.restEffort ? (effortToZone[iv.restEffort] || "z2") : "z-rest";
@@ -865,6 +888,38 @@ function _getZoneLabel(sport, zoneNum) {
     const zData = ((all[key] || {}).zones || {})[`z${zoneNum}`];
     return zData ? (zData.paceRange || zData.wattRange || "") : "";
   } catch { return ""; }
+}
+
+/**
+ * Expand repeat groups in an intervals array. Consecutive intervals that
+ * share the same `repeatGroup` letter are collected and repeated
+ * `groupSets` times (default 1). Non-grouped intervals pass through.
+ */
+function _expandRepeatGroups(intervals) {
+  if (!intervals || !intervals.length) return intervals;
+  // Fast path: skip if no interval uses repeatGroup
+  if (!intervals.some(iv => iv.repeatGroup)) return intervals;
+  const out = [];
+  let i = 0;
+  while (i < intervals.length) {
+    const iv = intervals[i];
+    if (iv.repeatGroup) {
+      const gid = iv.repeatGroup;
+      const group = [];
+      while (i < intervals.length && intervals[i].repeatGroup === gid) {
+        group.push(intervals[i]);
+        i++;
+      }
+      const sets = group[0].groupSets || 1;
+      for (let r = 0; r < sets; r++) {
+        group.forEach(g => out.push(g));
+      }
+    } else {
+      out.push(iv);
+      i++;
+    }
+  }
+  return out;
 }
 
 function buildIntensityStrip(session, cardId, discipline) {
@@ -1024,7 +1079,25 @@ function buildAiIntervalsList(session, type) {
     return (allZones[key] || {}).zones || null;
   }
 
-  return (session.intervals || []).map(iv => {
+  const ivs = session.intervals || [];
+
+  // Group consecutive intervals with the same repeatGroup into blocks
+  const blocks = [];
+  let bi = 0;
+  while (bi < ivs.length) {
+    const iv = ivs[bi];
+    if (iv.repeatGroup) {
+      const gid = iv.repeatGroup;
+      const group = [];
+      while (bi < ivs.length && ivs[bi].repeatGroup === gid) { group.push(ivs[bi]); bi++; }
+      blocks.push({ repeat: true, sets: group[0].groupSets || 1, items: group });
+    } else {
+      blocks.push({ repeat: false, items: [iv] });
+      bi++;
+    }
+  }
+
+  function _renderIv(iv) {
     const isTransition = iv.effort === "T1";
     const isRestWalk   = iv.effort === "RW";
     const zone  = (isTransition || isRestWalk) ? null : (effortToZone[iv.effort] || 2);
@@ -1052,6 +1125,17 @@ function buildAiIntervalsList(session, type) {
         </div>
         ${iv.details ? `<div class="session-step-label">${escHtml(iv.details)}</div>` : ""}
       </div>`;
+  }
+
+  return blocks.map(block => {
+    if (block.repeat && block.sets > 1) {
+      const inner = block.items.map(_renderIv).join("");
+      return `<div class="session-repeat-block">
+        <div class="session-repeat-label">${block.sets}× Repeat</div>
+        ${inner}
+      </div>`;
+    }
+    return block.items.map(_renderIv).join("");
   }).join("");
 }
 
@@ -1780,7 +1864,7 @@ function getDayTotals(dateStr) {
     let sessionKm = 0;
 
     if (w.aiSession?.intervals) {
-      w.aiSession.intervals.forEach(iv => {
+      _expandRepeatGroups(w.aiSession.intervals).forEach(iv => {
         const reps       = iv.reps || 1;
         const mainDur    = _parseDurMin(String(iv.duration || ""));
         const restDur    = iv.restDuration ? _parseDurMin(String(iv.restDuration)) : 0;
@@ -2357,9 +2441,9 @@ function _renderDayDetailInner(dateStr, content) {
         const _effortToZone = { RW:"rw",Z1:"z1",Z2:"z2",Z3:"z3",Z4:"z4",Z5:"z5",Z6:"z6", Easy:"z2",Moderate:"z3",Hard:"z4",Max:"z5",T1:"z-transition" };
         const _parseDur = str => { const s = String(str||"").toLowerCase(); const m = s.match(/([\d.]+)/); if(!m) return 1; const v = parseFloat(m[1]); return /sec/.test(s) ? v/60 : v; };
         const _allSegs = [];
-        w.aiSession.intervals.forEach(iv => {
+        _expandRepeatGroups(w.aiSession.intervals).forEach(iv => {
           const reps = iv.reps || 1;
-          const mainDur = _parseDur(iv.duration);
+          const mainDur = _distToMin(iv.duration, iv.effort) || _parseDur(iv.duration);
           const restDur = iv.restDuration ? _parseDur(iv.restDuration) : 0;
           const mainCls = _effortToZone[iv.effort] || "z2";
           const restCls = iv.restEffort ? (_effortToZone[iv.restEffort] || "z2") : "z-rest";
