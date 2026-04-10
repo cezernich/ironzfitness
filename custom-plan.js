@@ -408,6 +408,10 @@ Include 5-8 exercises or 3-5 intervals.`
     const workout = JSON.parse(cleaned);
 
     const workoutType = workout.type || "strength";
+    const rawExercises = workout.exercises || null;
+    const personalizedExercises = rawExercises && typeof _personalizeWeights === "function"
+      ? _personalizeWeights(rawExercises)
+      : rawExercises;
     _cpAddSession(dow, {
       id: _cpGenId(),
       mode: "ai",
@@ -415,7 +419,7 @@ Include 5-8 exercises or 3-5 intervals.`
         type: workoutType,
         title: workout.title || "IronZ Session",
         sessionName: workout.title || "IronZ Session",
-        exercises: workout.exercises || null,
+        exercises: personalizedExercises,
         aiSession: workout.intervals ? { title: workout.title, intervals: workout.intervals } : null,
       }
     });
@@ -487,6 +491,8 @@ Include 5-8 exercises or 3-5 intervals.`;
     const cleaned = text.replace(/```json|```/g, "").trim();
     const workout = JSON.parse(cleaned);
 
+    const rawEx2 = workout.exercises || null;
+    const persEx2 = rawEx2 && typeof _personalizeWeights === "function" ? _personalizeWeights(rawEx2) : rawEx2;
     _cpAddSession(dow, {
       id: _cpGenId(),
       mode: "ai",
@@ -494,7 +500,7 @@ Include 5-8 exercises or 3-5 intervals.`;
         type: workout.type || workoutType,
         title: workout.title || `${workoutType} Session`,
         sessionName: workout.title || `${workoutType} Session`,
-        exercises: workout.exercises || null,
+        exercises: persEx2,
         aiSession: workout.intervals ? { title: workout.title, intervals: workout.intervals } : null,
       }
     });

@@ -3711,7 +3711,12 @@ Use "Bodyweight" for bodyweight exercises. Strength exercises must have specific
       resultEl.appendChild(btnRow);
     } else {
       // Strength/HIIT — use existing strength display
-      _qeGeneratedExercises = (workout.exercises || []).map(ex => ({ ...ex, weight: _roundExWeight(ex.weight) }));
+      // Personalize weights from the athlete's reference lifts. The AI
+      // often hallucinated low weights — _personalizeWeights scales them
+      // based on actual bench/squat/deadlift/ohp/row from trainingZones.
+      _qeGeneratedExercises = typeof _personalizeWeights === "function"
+        ? _personalizeWeights((workout.exercises || []).map(ex => ({ ...ex, weight: _roundExWeight(ex.weight) })))
+        : (workout.exercises || []).map(ex => ({ ...ex, weight: _roundExWeight(ex.weight) }));
       _qeEditingExerciseIndex = null;
       _qeSelectedType = "strength";
       resultEl.innerHTML = `<div class="qe-generated-workout">
