@@ -11359,22 +11359,35 @@ button:active {
 }
 
 /* ── Share button on workout cards ───────────────────────────────────────── */
+/* Share button — repositioned to bottom-right of expanded card */
+.session-card { position: relative; }
 .share-workout-btn {
   background: none;
-  border: none;
+  border: 1px solid var(--color-border);
   color: var(--color-text-muted);
-  padding: 4px;
+  padding: 6px 10px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  gap: 4px;
+  border-radius: 8px;
   transition: background 0.15s, color 0.15s;
+  font-size: 0.75rem;
+  font-weight: 600;
+  /* Pull out of header flow and pin to bottom-right of card body */
+  position: absolute;
+  bottom: 12px;
+  right: 14px;
+  z-index: 1;
 }
 .share-workout-btn:hover {
   background: var(--color-surface-2);
   color: var(--color-accent, #6366f1);
+  border-color: var(--color-accent, #6366f1);
 }
+/* Hide share button when card is collapsed (body isn't visible) */
+.session-card.is-collapsed .share-workout-btn { display: none; }
 
 /* ── Share sheet modal (sender) ──────────────────────────────────────────── */
 .share-sheet-overlay {
