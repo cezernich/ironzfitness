@@ -5302,6 +5302,8 @@ function _qeCardioGroupRepeat(dragEl, targetEl) {
   }
   targetEl.dataset.repeatGroup = group;
   dragEl.dataset.repeatGroup = group;
+  if (!targetEl.dataset.groupSets) targetEl.dataset.groupSets = "3";
+  if (!dragEl.dataset.groupSets)   dragEl.dataset.groupSets = "3";
   _qeCardioRefreshBadges();
 }
 
@@ -5341,6 +5343,7 @@ function _qeCardioRefreshBadges() {
     if (!seenGroups.has(g)) {
       seenGroups.add(g);
       const curRounds = row.dataset.groupSets || "3";
+      if (!row.dataset.groupSets) row.dataset.groupSets = curRounds;
       const wrap = document.createElement("span");
       wrap.className = "cp-ss-sets-wrap";
       wrap.innerHTML = `<span class="cp-ss-badge" style="cursor:default">${g}</span>` +

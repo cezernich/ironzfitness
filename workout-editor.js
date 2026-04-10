@@ -673,6 +673,11 @@ function _editIvGroupRepeat(dragEl, targetEl) {
   }
   targetEl.dataset.repeatGroup = g;
   dragEl.dataset.repeatGroup = g;
+  // Set default groupSets immediately so it persists to the save path even if
+  // the user never touches the rounds input. Without this, groupSets only gets
+  // set on the "change" event, which never fires if the user accepts the default.
+  if (!targetEl.dataset.groupSets) targetEl.dataset.groupSets = "3";
+  if (!dragEl.dataset.groupSets)   dragEl.dataset.groupSets = "3";
   _editIvRefreshBadges();
 }
 function _editIvEjectIfIsolated(el) {
@@ -706,6 +711,9 @@ function _editIvRefreshBadges() {
     if (!seen.has(g)) {
       seen.add(g);
       const cur = row.dataset.groupSets || "3";
+      // Persist the default to dataset so the save path always finds it,
+      // even if the user never changes the rounds input.
+      if (!row.dataset.groupSets) row.dataset.groupSets = cur;
       const wrap = document.createElement("span");
       wrap.className = "cp-ss-sets-wrap";
       wrap.innerHTML = `<span class="cp-ss-badge" style="cursor:default">${g}</span>` +
