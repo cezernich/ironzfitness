@@ -1301,19 +1301,33 @@ async function triggerShareWorkout(cacheKey) {
     || (entry.aiSession && entry.aiSession.title)
     || (_WORKOUT_TYPE_LABELS[sessionTypeId] || capitalize(sessionTypeId || "Workout"));
 
-  // Build exercises array from the entry's data for training_sessions INSERT
+  // Build exercises array from the entry's data for training_sessions INSERT.
+  // Workout data can live in several places depending on the entry type:
+  //   - Logged cardio: entry.aiSession.intervals
+  //   - Logged strength: entry.exercises
+  //   - Generated plan entries: SESSION_DESCRIPTIONS[discipline][load].steps
+  //   - Generated via Add Session flow: entry.aiSession.intervals (from planEntryFor)
+  //   - Plan entries with generatedSession: entry.generatedSession.steps
   const _exercises = [];
-  if (entry.aiSession && entry.aiSession.intervals) {
-    entry.aiSession.intervals.forEach(iv => {
+
+  // Source 1: aiSession.intervals (logged cardio, Add Running Session flow)
+  const _aiIntervals = entry.aiSession && entry.aiSession.intervals;
+  if (_aiIntervals && _aiIntervals.length) {
+    _aiIntervals.forEach(iv => {
       _exercises.push({
         name: iv.name || "Interval",
         duration: iv.duration || "",
         intensity: iv.effort || iv.intensity || "",
         details: iv.details || "",
         reps: iv.reps || null,
+        repeatGroup: iv.repeatGroup || null,
+        groupSets: iv.groupSets || null,
       });
     });
-  } else if (entry.exercises && entry.exercises.length) {
+  }
+
+  // Source 2: exercises array (logged strength workouts)
+  if (!_exercises.length && entry.exercises && entry.exercises.length) {
     entry.exercises.forEach(ex => {
       _exercises.push({
         name: ex.name || "Exercise",
@@ -1326,29 +1340,61 @@ async function triggerShareWorkout(cacheKey) {
     });
   }
 
+  // Source 3: generatedSession.steps (plan entries with full session data)
+  if (!_exercises.length && entry.generatedSession && entry.generatedSession.steps) {
+    entry.generatedSession.steps.forEach(s => {
+      _exercises.push({
+        name: s.label || s.type || "Step",
+        duration: s.duration ? `${s.duration} min` : "",
+        intensity: s.zone ? `Z${s.zone}` : "",
+        reps: s.reps || null,
+      });
+    });
+  }
+
+  // Source 4: SESSION_DESCRIPTIONS lookup (plan entries with discipline + load)
+  if (!_exercises.length && entry.discipline && entry.load && typeof SESSION_DESCRIPTIONS !== "undefined") {
+    const desc = (SESSION_DESCRIPTIONS[entry.discipline] || {})[entry.load];
+    if (desc && desc.steps) {
+      desc.steps.forEach(s => {
+        _exercises.push({
+          name: s.label || s.type || "Step",
+          duration: s.duration ? `${s.duration} min` : "",
+          intensity: s.zone ? `Z${s.zone}` : "",
+          reps: s.reps || null,
+        });
+      });
+    }
+  }
+
   // Show note prompt modal
   _showShareNotePrompt(workoutName, async (noteText) => {
     // Step 1: INSERT workout data into training_sessions so the share
     // preview page can look it up and render exercises/segments.
     let realVariantId = variantId;
     try {
+      const tsPayload = {
+        user_id: userId,
+        session_name: workoutName,
+        session_type: sessionTypeId,
+        sport: sportId,
+        exercises: _exercises.length > 0 ? _exercises : null,
+        description: noteText || null,
+      };
+      console.log("[IronZ] training_sessions INSERT payload:", tsPayload);
       const { data: tsRow, error: tsErr } = await sb
         .from("training_sessions")
-        .insert({
-          user_id: userId,
-          session_name: workoutName,
-          session_type: sessionTypeId,
-          sport: sportId,
-          exercises: _exercises.length > 0 ? _exercises : null,
-          description: noteText || null,
-        })
+        .insert(tsPayload)
         .select("id")
         .single();
-      if (!tsErr && tsRow && tsRow.id) {
+      if (tsErr) {
+        console.error("[IronZ] training_sessions insert error:", tsErr);
+      } else if (tsRow && tsRow.id) {
         realVariantId = tsRow.id;
+        console.log("[IronZ] training_sessions created:", tsRow.id);
       }
     } catch (e) {
-      console.warn("[IronZ] training_sessions insert failed, using local id:", e.message);
+      console.error("[IronZ] training_sessions insert exception:", e);
     }
 
     // Step 2: INSERT the share row pointing to the training_session

@@ -245,7 +245,10 @@
           const sessionRes = await fetch(sessionUrl, { headers });
           if (sessionRes.ok) {
             const sessionRows = await sessionRes.json();
+            console.log('[share.html] training_sessions response:', sessionRows);
             if (sessionRows && sessionRows.length > 0) session = sessionRows[0];
+          } else {
+            console.warn('[share.html] training_sessions query failed:', sessionRes.status);
           }
         } catch (e) { /* non-fatal — we'll fall back to share metadata */ }
       }
@@ -368,6 +371,7 @@
       try { exercises = JSON.parse(exercises); } catch { exercises = []; }
     }
 
+    console.log('[share.html] renderCard exercises:', exercises.length, exercises);
     if (exercises.length > 0) {
       html += renderExercises(exercises);
     } else {
