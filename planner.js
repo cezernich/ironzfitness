@@ -816,6 +816,17 @@ const WEEKLY_PATTERNS = {
 // For interval steps reps × duration min on, rest min between each rep.
 const SESSION_DESCRIPTIONS = {
   swim: {
+    test: {
+      duration: 40,
+      name: "CSS Test",
+      steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "400m easy mixed strokes — loosen up, settle breathing" },
+        { type: "main",     duration: 8,  zone: 5, label: "400m ALL-OUT time trial — record your finish time" },
+        { type: "rest",     duration: 5,  zone: 0, label: "5 min rest — stay in the water, easy kicking" },
+        { type: "main",     duration: 4,  zone: 5, label: "200m ALL-OUT time trial — record your finish time" },
+        { type: "cooldown", duration: 5,  zone: 1, label: "200m easy cool-down — long strokes, deep breaths" },
+      ],
+    },
     easy: {
       duration: 30,
       steps: [
@@ -851,6 +862,15 @@ const SESSION_DESCRIPTIONS = {
   },
 
   bike: {
+    test: {
+      duration: 45,
+      name: "FTP Test",
+      steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "Easy spin with a few openers — 3×30s building to Z3" },
+        { type: "main",     duration: 20, zone: 5, label: "20 min ALL-OUT sustained effort — the highest power you can hold for the full 20 minutes. Not intervals. One continuous max effort. Record average power." },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy spin-down — let your heart rate come back" },
+      ],
+    },
     easy: {
       duration: 45,
       steps: [
@@ -886,6 +906,15 @@ const SESSION_DESCRIPTIONS = {
   },
 
   run: {
+    test: {
+      duration: 50,
+      name: "5K Time Trial",
+      steps: [
+        { type: "warmup",   duration: 12, zone: 1, label: "10–15 min easy jog + 4×20s strides with full recovery" },
+        { type: "main",     duration: 25, zone: 5, label: "5K ALL-OUT — continuous race-pace effort, not broken into intervals. Run the full 5K as hard as possible. Record your finish time." },
+        { type: "cooldown", duration: 10, zone: 1, label: "10 min easy jog — let your heart rate come down gradually" },
+      ],
+    },
     easy: {
       duration: 35,
       steps: [

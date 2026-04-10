@@ -186,7 +186,7 @@ section("Golden 1: Happy path sender — share creation, link returned, DB row i
     note: "Crushed this one!",
   });
   check("createShare returned a share token", !!result.shareToken);
-  check("share URL matches ironz.app/w/", /^https:\/\/ironz\.app\/w\//.test(result.shareUrl || ""));
+  check("share URL matches ironz.fit/w/", /^https:\/\/ironz\.fit\/w\//.test(result.shareUrl || ""));
   check("expiresAt present", !!result.expiresAt);
   check("DB row inserted", __mockDb.shared_workouts.length === 1);
   const row = __mockDb.shared_workouts[0];
@@ -342,7 +342,7 @@ section("Golden 9: Non-user / no-auth — token parses for web preview");
   // The actual web preview is a server-rendered Edge Function. Here we
   // simulate the client-side parse + pending-share stash that happens when
   // a non-authenticated user clicks the link.
-  const token = DLH.parseToken("https://ironz.app/w/abc123XYZ987");
+  const token = DLH.parseToken("https://ironz.fit/w/abc123XYZ987");
   check("parseToken extracts token from universal link", token === "abc123XYZ987");
   const customScheme = DLH.parseToken("ironz://share/abc123XYZ987");
   check("parseToken extracts token from custom scheme", customScheme === "abc123XYZ987");
@@ -366,7 +366,7 @@ section("Golden 10: Post-install resume from pending_shares");
   });
 
   // Non-user clicks the link → handler stashes a pending share
-  const result = await DLH.route("https://ironz.app/w/post-install-tok");
+  const result = await DLH.route("https://ironz.fit/w/post-install-tok");
   check("route returns stashed_pending", result.action === "stashed_pending");
   check("local pending share recorded", localStorage.getItem("ironz_pending_share_token") === "post-install-tok");
   check("pending_shares row inserted", __mockDb.pending_shares.length === 1);

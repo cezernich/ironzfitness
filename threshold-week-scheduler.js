@@ -268,7 +268,7 @@
     { dayIdx: 0, type: "easy",     duration_min: 35, intensity: "Z1", note: "Easy 30-40 min Z1" },
     { dayIdx: 1, type: "easy",     duration_min: 35, intensity: "Z1", note: "Easy + 4x20s strides" },
     { dayIdx: 2, type: "rest",     duration_min: 20, intensity: "Z1", note: "Rest or 20 min Z1" },
-    { dayIdx: 3, type: "test",     duration_min: 50, intensity: "all-out test", note: "TEST DAY" },
+    { dayIdx: 3, type: "test",     duration_min: 50, intensity: "all-out test", note: "5K Time Trial" },
     { dayIdx: 4, type: "easy",     duration_min: 35, intensity: "Z1", note: "Easy 30-40 min Z1" },
     { dayIdx: 5, type: "optional", duration_min: 50, intensity: "Z1", note: "Optional 45-60 min Z1 (skip if test was hard)" },
     { dayIdx: 6, type: "rest",     duration_min: 0,  intensity: "rest", note: "Rest" },
@@ -279,9 +279,9 @@
     { dayIdx: 0, type: "easy_swim", duration_min: 30, intensity: "Z1", note: "Easy swim 30 min Z1" },
     { dayIdx: 1, type: "easy_bike", duration_min: 45, intensity: "Z1", note: "Easy bike 45 min Z1" },
     { dayIdx: 2, type: "easy_run",  duration_min: 30, intensity: "Z1", note: "Easy run 30 min Z1" },
-    { dayIdx: 3, type: "swim_test", duration_min: 40, intensity: "test", note: "SWIM TEST (CSS)" },
-    { dayIdx: 4, type: "bike_test", duration_min: 60, intensity: "test", note: "BIKE TEST (FTP)" },
-    { dayIdx: 5, type: "run_test",  duration_min: 35, intensity: "test", note: "RUN TEST (5K)" },
+    { dayIdx: 3, type: "swim_test", duration_min: 40, intensity: "test", note: "CSS Test" },
+    { dayIdx: 4, type: "bike_test", duration_min: 45, intensity: "test", note: "FTP Test" },
+    { dayIdx: 5, type: "run_test",  duration_min: 50, intensity: "test", note: "5K Time Trial" },
     { dayIdx: 6, type: "rest",      duration_min: 0,  intensity: "rest", note: "Rest or 30 min easy spin" },
   ];
 
