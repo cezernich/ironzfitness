@@ -3849,11 +3849,17 @@ button:active {
   min-width: 0;
 }
 
-/* Small superset badge shown on rows that belong to a group */
+/* Superset / repeat-block banner — full-width row at top of card */
+.cp-ss-banner {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0 4px 24px;
+  font-size: 0.75rem;
+  order: -1; /* always at top of flex-wrap card */
+}
 .cp-ss-badge {
-  position: absolute;
-  top: 6px;
-  right: 44px;
   background: var(--color-accent);
   color: var(--color-accent-text, #fff);
   font-size: 0.68rem;
@@ -3863,23 +3869,24 @@ button:active {
   border-radius: 10px;
   cursor: pointer;
   user-select: none;
+  flex-shrink: 0;
 }
 .cp-ss-badge:hover::after {
   content: " ×";
 }
 
-/* Sets / rounds control for grouped rows */
+/* Sets / rounds control inline in the banner */
 .cp-ss-sets-wrap {
-  position: absolute;
-  top: 6px;
-  right: 44px;
+  flex: 1 1 100%;
   display: flex;
   align-items: center;
-  gap: 4px;
-  z-index: 1;
+  gap: 6px;
+  padding: 2px 0 4px 24px;
+  font-size: 0.75rem;
+  order: -1; /* always at top of flex-wrap card */
 }
 .cp-ss-sets-wrap .cp-ss-badge {
-  position: static;
+  cursor: default;
 }
 .cp-ss-sets-input {
   width: 40px;
@@ -4009,15 +4016,17 @@ button:active {
   border-left: 3px solid var(--color-accent);
   padding-left: 8px;
 }
+/* In interval cards, the badge/sets-wrap sit in the eiv-header flex row */
 .edit-interval-card .cp-ss-badge {
-  position: static;
   margin-left: auto;
   flex-shrink: 0;
 }
 .edit-interval-card .cp-ss-sets-wrap {
-  position: static;
   margin-left: auto;
   flex-shrink: 0;
+  flex: 0 0 auto;
+  padding: 0;
+  order: 0;
 }
 .eiv-header {
   display: flex;
