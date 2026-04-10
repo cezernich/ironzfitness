@@ -540,11 +540,15 @@ function _addEditIntervalRow(iv) {
   div.className = "edit-interval-card";
   div.id = `edit-iv-${id}`;
   div.dataset.durMode = initMode;
+  div.draggable = true;
+  if (iv?.repeatGroup) div.dataset.repeatGroup = iv.repeatGroup;
+  if (iv?.groupSets) div.dataset.groupSets = String(iv.groupSets);
+  const _trashSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>';
   div.innerHTML = `
     <div class="eiv-header">
-      <span class="eiv-phase-label">Phase</span>
+      <span class="drag-handle" title="Drag to reorder · drop on a row to group">⠿</span>
       <input type="text" id="edit-ivphase-${id}" class="eiv-phase-input" value="${iv?.name || ""}" placeholder="e.g. Warm-up" />
-      <button class="remove-exercise-btn" title="Remove" onclick="removeEditIntervalRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
+      <button class="remove-exercise-btn" title="Remove" onclick="removeEditIntervalRow(${id})">${_trashSvg}</button>
     </div>
     <div class="eiv-fields">
       <div class="eiv-field">
@@ -598,14 +602,136 @@ function _addEditIntervalRow(iv) {
     const restWrap = document.getElementById(`edit-rest-wrap-${id}`);
     if (restWrap) restWrap.style.display = Number(repsInput.value) > 1 ? "" : "none";
   });
-  document.getElementById("edit-interval-rows").appendChild(div);
+
+  // Drag-to-reorder + drop-in-middle grouping
+  const container = document.getElementById("edit-interval-rows");
+  div.addEventListener("dragstart", e => { _editIvDragEl = div; div.classList.add("drag-active"); e.dataTransfer.effectAllowed = "move"; });
+  div.addEventListener("dragend", () => { div.classList.remove("drag-active"); _editIvDragEl = null; _editIvClearHints(); });
+  div.addEventListener("dragover", e => {
+    if (!_editIvDragEl || _editIvDragEl === div) return;
+    e.preventDefault();
+    div.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target");
+    const pct = (e.clientY - div.getBoundingClientRect().top) / div.getBoundingClientRect().height;
+    if (pct > 0.3 && pct < 0.7) div.classList.add("drag-ss-target");
+    else div.classList.add(pct <= 0.3 ? "drag-insert-above" : "drag-insert-below");
+  });
+  div.addEventListener("dragleave", () => div.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target"));
+  div.addEventListener("drop", e => {
+    e.preventDefault();
+    _editIvClearHints();
+    if (!_editIvDragEl || _editIvDragEl === div) return;
+    const pct = (e.clientY - div.getBoundingClientRect().top) / div.getBoundingClientRect().height;
+    if (pct > 0.3 && pct < 0.7) {
+      _editIvGroupRepeat(_editIvDragEl, div);
+    } else {
+      if (pct <= 0.3) container.insertBefore(_editIvDragEl, div);
+      else container.insertBefore(_editIvDragEl, div.nextSibling);
+      _editIvEjectIfIsolated(_editIvDragEl);
+      _editIvRefreshBadges();
+    }
+    _editIvDragEl = null;
+  });
+  if (typeof TouchDrag !== "undefined") {
+    TouchDrag.attach(div, container, {
+      hintClasses: ["drag-insert-above", "drag-insert-below", "drag-ss-target"],
+      rowSelector: ".edit-interval-card",
+      handleSelector: ".drag-handle",
+      onDrop(dragEl, targetEl, clientY) {
+        _editIvClearHints();
+        const pct = (clientY - targetEl.getBoundingClientRect().top) / targetEl.getBoundingClientRect().height;
+        if (pct > 0.3 && pct < 0.7) _editIvGroupRepeat(dragEl, targetEl);
+        else {
+          if (pct <= 0.3) container.insertBefore(dragEl, targetEl);
+          else container.insertBefore(dragEl, targetEl.nextSibling);
+          _editIvEjectIfIsolated(dragEl);
+          _editIvRefreshBadges();
+        }
+      },
+    });
+  }
+  container.appendChild(div);
+  _editIvRefreshBadges();
+}
+
+let _editIvDragEl = null;
+function _editIvClearHints() {
+  document.querySelectorAll("#edit-interval-rows .edit-interval-card").forEach(el =>
+    el.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target", "drag-active"));
+}
+function _editIvGroupRepeat(dragEl, targetEl) {
+  const container = document.getElementById("edit-interval-rows");
+  container.insertBefore(dragEl, targetEl.nextSibling);
+  let g = targetEl.dataset.repeatGroup || dragEl.dataset.repeatGroup || "";
+  if (!g) {
+    const used = new Set(Array.from(container.querySelectorAll(".edit-interval-card")).map(r => r.dataset.repeatGroup).filter(Boolean));
+    for (const l of ["A","B","C","D","E","F"]) { if (!used.has(l)) { g = l; break; } }
+    if (!g) g = "A";
+  }
+  targetEl.dataset.repeatGroup = g;
+  dragEl.dataset.repeatGroup = g;
+  _editIvRefreshBadges();
+}
+function _editIvEjectIfIsolated(el) {
+  const g = el.dataset.repeatGroup;
+  if (!g) return;
+  const above = el.previousElementSibling;
+  const below = el.nextElementSibling;
+  if (!(above && above.dataset.repeatGroup === g) && !(below && below.dataset.repeatGroup === g)) {
+    delete el.dataset.repeatGroup; delete el.dataset.groupSets;
+  }
+}
+function _editIvRefreshBadges() {
+  const container = document.getElementById("edit-interval-rows");
+  if (!container) return;
+  const rows = Array.from(container.querySelectorAll(".edit-interval-card"));
+  rows.forEach((row, i) => {
+    const g = row.dataset.repeatGroup;
+    if (!g) return;
+    const above = rows[i - 1], below = rows[i + 1];
+    if (!(above && above.dataset.repeatGroup === g) && !(below && below.dataset.repeatGroup === g))
+      { delete row.dataset.repeatGroup; delete row.dataset.groupSets; }
+  });
+  const counts = {};
+  const seen = new Set();
+  rows.forEach(row => {
+    row.querySelectorAll(".cp-ss-badge, .cp-ss-sets-wrap").forEach(el => el.remove());
+    const g = row.dataset.repeatGroup;
+    if (!g) return;
+    counts[g] = (counts[g] || 0) + 1;
+    const header = row.querySelector(".eiv-header");
+    if (!seen.has(g)) {
+      seen.add(g);
+      const cur = row.dataset.groupSets || "3";
+      const wrap = document.createElement("span");
+      wrap.className = "cp-ss-sets-wrap";
+      wrap.innerHTML = `<span class="cp-ss-badge" style="cursor:default">${g}</span>` +
+        `<input type="number" class="cp-ss-sets-input" min="1" max="20" value="${cur}" title="Rounds" />` +
+        `<span class="cp-ss-sets-label">rounds</span>` +
+        `<button class="cp-ss-ungroup-btn" title="Ungroup">×</button>`;
+      wrap.querySelector("input").addEventListener("change", function () {
+        rows.filter(r => r.dataset.repeatGroup === g).forEach(r => r.dataset.groupSets = this.value);
+      });
+      wrap.querySelector(".cp-ss-ungroup-btn").addEventListener("click", () => {
+        rows.filter(r => r.dataset.repeatGroup === g).forEach(r => { delete r.dataset.repeatGroup; delete r.dataset.groupSets; });
+        _editIvRefreshBadges();
+      });
+      header.appendChild(wrap);
+    } else {
+      const badge = document.createElement("span");
+      badge.className = "cp-ss-badge";
+      badge.textContent = `${g}${counts[g]}`;
+      badge.title = "Click to ungroup";
+      badge.addEventListener("click", () => { delete row.dataset.repeatGroup; delete row.dataset.groupSets; _editIvRefreshBadges(); });
+      header.appendChild(badge);
+    }
+  });
 }
 
 function addEditIntervalRow() { _addEditIntervalRow(); }
 
 function removeEditIntervalRow(id) {
   const el = document.getElementById(`edit-iv-${id}`);
-  if (el) el.remove();
+  if (el) { el.remove(); _editIvRefreshBadges(); }
 }
 
 // ── Swap (AI-powered, strength only) ──────────────────────────────────────────
@@ -704,6 +830,12 @@ function saveEditedWorkout() {
         if (restVal) iv.restDuration = `${restVal} min`;
         const restZone = document.getElementById(`edit-ivrestzone-${id}`)?.value;
         if (restZone) iv.restEffort = restZone;
+      }
+      // Repeat-block grouping
+      const rowEl = document.getElementById(`edit-iv-${id}`);
+      if (rowEl?.dataset.repeatGroup) {
+        iv.repeatGroup = rowEl.dataset.repeatGroup;
+        if (rowEl.dataset.groupSets) iv.groupSets = parseInt(rowEl.dataset.groupSets) || 3;
       }
       intervals.push(iv);
     });
