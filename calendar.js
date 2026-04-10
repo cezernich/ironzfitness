@@ -1376,7 +1376,7 @@ async function triggerShareWorkout(cacheKey) {
       const tsPayload = {
         user_id: userId,
         session_name: workoutName,
-        session_type_id: sessionTypeId,
+        session_type: sessionTypeId,
         sport_id: sportId,
         status: "shared",
         exercises: _exercises.length > 0 ? _exercises : null,
