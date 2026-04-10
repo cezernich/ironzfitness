@@ -5140,47 +5140,118 @@ function qeAddCardioRow(iv) {
       <input type="text" id="qe-cdetails-${id}" value="${escHtml(iv?.details || "")}" placeholder="e.g. 5:30/km, keep HR under 145" />
     </div>`;
 
-  // Wire drag-to-reorder
+  // Wire drag-to-reorder + drop-in-middle to group as repeat block
   const container = document.getElementById("qe-cardio-interval-rows");
   div.addEventListener("dragstart", e => { _qeCardioDragEl = div; div.classList.add("drag-active"); e.dataTransfer.effectAllowed = "move"; });
   div.addEventListener("dragend", () => { div.classList.remove("drag-active"); _qeCardioDragEl = null; _qeClearCardioHints(); });
   div.addEventListener("dragover", e => {
     if (!_qeCardioDragEl || _qeCardioDragEl === div) return;
     e.preventDefault();
-    div.classList.remove("drag-insert-above", "drag-insert-below");
+    div.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target");
     const pct = (e.clientY - div.getBoundingClientRect().top) / div.getBoundingClientRect().height;
-    div.classList.add(pct <= 0.5 ? "drag-insert-above" : "drag-insert-below");
+    if (pct > 0.3 && pct < 0.7) div.classList.add("drag-ss-target");
+    else div.classList.add(pct <= 0.3 ? "drag-insert-above" : "drag-insert-below");
   });
-  div.addEventListener("dragleave", () => div.classList.remove("drag-insert-above", "drag-insert-below"));
+  div.addEventListener("dragleave", () => div.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target"));
   div.addEventListener("drop", e => {
     e.preventDefault();
     _qeClearCardioHints();
     if (!_qeCardioDragEl || _qeCardioDragEl === div) return;
     const pct = (e.clientY - div.getBoundingClientRect().top) / div.getBoundingClientRect().height;
-    if (pct <= 0.5) container.insertBefore(_qeCardioDragEl, div);
-    else container.insertBefore(_qeCardioDragEl, div.nextSibling);
+    if (pct > 0.3 && pct < 0.7) {
+      _qeCardioGroupRepeat(_qeCardioDragEl, div);
+    } else {
+      if (pct <= 0.3) container.insertBefore(_qeCardioDragEl, div);
+      else container.insertBefore(_qeCardioDragEl, div.nextSibling);
+      _qeCardioEjectIfIsolated(_qeCardioDragEl);
+      _qeCardioRefreshBadges();
+    }
     _qeCardioDragEl = null;
   });
   if (typeof TouchDrag !== "undefined") {
     TouchDrag.attach(div, container, {
-      hintClasses: ["drag-insert-above", "drag-insert-below"],
+      hintClasses: ["drag-insert-above", "drag-insert-below", "drag-ss-target"],
       rowSelector: ".edit-interval-card",
       handleSelector: ".drag-handle",
       onDrop(dragEl, targetEl, clientY) {
         _qeClearCardioHints();
         const pct = (clientY - targetEl.getBoundingClientRect().top) / targetEl.getBoundingClientRect().height;
-        if (pct <= 0.5) container.insertBefore(dragEl, targetEl);
-        else container.insertBefore(dragEl, targetEl.nextSibling);
+        if (pct > 0.3 && pct < 0.7) {
+          _qeCardioGroupRepeat(dragEl, targetEl);
+        } else {
+          if (pct <= 0.3) container.insertBefore(dragEl, targetEl);
+          else container.insertBefore(dragEl, targetEl.nextSibling);
+          _qeCardioEjectIfIsolated(dragEl);
+          _qeCardioRefreshBadges();
+        }
       },
     });
   }
   container.appendChild(div);
+  _qeCardioRefreshBadges();
 }
 
 let _qeCardioDragEl = null;
 function _qeClearCardioHints() {
   document.querySelectorAll("#qe-cardio-interval-rows .edit-interval-card").forEach(el =>
-    el.classList.remove("drag-insert-above", "drag-insert-below", "drag-active"));
+    el.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target", "drag-active"));
+}
+
+// Group two cardio rows into a repeat block (shared repeatGroup letter).
+function _qeCardioGroupRepeat(dragEl, targetEl) {
+  const container = document.getElementById("qe-cardio-interval-rows");
+  container.insertBefore(dragEl, targetEl.nextSibling);
+  let group = targetEl.dataset.repeatGroup || dragEl.dataset.repeatGroup || "";
+  if (!group) {
+    const used = new Set(Array.from(container.querySelectorAll(".edit-interval-card"))
+      .map(r => r.dataset.repeatGroup).filter(Boolean));
+    for (const letter of ["A","B","C","D","E","F"]) { if (!used.has(letter)) { group = letter; break; } }
+    if (!group) group = "A";
+  }
+  targetEl.dataset.repeatGroup = group;
+  dragEl.dataset.repeatGroup = group;
+  _qeCardioRefreshBadges();
+}
+
+// If a row is no longer adjacent to any row in the same group, eject it.
+function _qeCardioEjectIfIsolated(el) {
+  const g = el.dataset.repeatGroup;
+  if (!g) return;
+  const above = el.previousElementSibling;
+  const below = el.nextElementSibling;
+  if (!(above && above.dataset.repeatGroup === g) && !(below && below.dataset.repeatGroup === g)) {
+    delete el.dataset.repeatGroup;
+  }
+}
+
+// Rebuild repeat-block badges on all cardio rows.
+function _qeCardioRefreshBadges() {
+  const container = document.getElementById("qe-cardio-interval-rows");
+  if (!container) return;
+  const rows = Array.from(container.querySelectorAll(".edit-interval-card"));
+  // Pass 1: eject isolated rows
+  rows.forEach((row, i) => {
+    const g = row.dataset.repeatGroup;
+    if (!g) return;
+    const above = rows[i - 1], below = rows[i + 1];
+    if (!(above && above.dataset.repeatGroup === g) && !(below && below.dataset.repeatGroup === g))
+      delete row.dataset.repeatGroup;
+  });
+  // Pass 2: render badges
+  const counts = {};
+  rows.forEach(row => {
+    const old = row.querySelector(".cp-ss-badge");
+    if (old) old.remove();
+    const g = row.dataset.repeatGroup;
+    if (!g) return;
+    counts[g] = (counts[g] || 0) + 1;
+    const badge = document.createElement("span");
+    badge.className = "cp-ss-badge";
+    badge.textContent = `${g}${counts[g]}`;
+    badge.title = "Click to ungroup";
+    badge.addEventListener("click", () => { delete row.dataset.repeatGroup; _qeCardioRefreshBadges(); });
+    row.querySelector(".eiv-header").appendChild(badge);
+  });
 }
 
 function qeRemoveCardioRow(id) {
@@ -5212,6 +5283,9 @@ function qeSaveCardioManual() {
     };
     const discEl = document.getElementById(`qe-cdisc-${idx}`);
     if (discEl) interval.discipline = discEl.value || "bike";
+    // Repeat-block grouping from drag-to-group
+    const rowEl = document.getElementById(`qe-crow-${idx}`);
+    if (rowEl && rowEl.dataset.repeatGroup) interval.repeatGroup = rowEl.dataset.repeatGroup;
     intervals.push(interval);
   });
 

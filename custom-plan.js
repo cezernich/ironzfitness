@@ -1035,47 +1035,112 @@ function cpManualAddCardioRow(prefill) {
       <input type="text" id="cp-cdetails-${id}" placeholder="e.g. 5:30/km, keep HR under 145" value="${_cpEsc(pDetails)}" />
     </div>`;
 
-  // Drag-to-reorder
+  // Drag-to-reorder + drop-in-middle to group as repeat block
   const container = document.getElementById("cp-manual-cardio-rows");
   div.addEventListener("dragstart", e => { _cpCardioDragEl = div; div.classList.add("drag-active"); e.dataTransfer.effectAllowed = "move"; });
   div.addEventListener("dragend", () => { div.classList.remove("drag-active"); _cpCardioDragEl = null; _cpClearCardioHints(); });
   div.addEventListener("dragover", e => {
     if (!_cpCardioDragEl || _cpCardioDragEl === div) return;
     e.preventDefault();
-    div.classList.remove("drag-insert-above", "drag-insert-below");
+    div.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target");
     const pct = (e.clientY - div.getBoundingClientRect().top) / div.getBoundingClientRect().height;
-    div.classList.add(pct <= 0.5 ? "drag-insert-above" : "drag-insert-below");
+    if (pct > 0.3 && pct < 0.7) div.classList.add("drag-ss-target");
+    else div.classList.add(pct <= 0.3 ? "drag-insert-above" : "drag-insert-below");
   });
-  div.addEventListener("dragleave", () => div.classList.remove("drag-insert-above", "drag-insert-below"));
+  div.addEventListener("dragleave", () => div.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target"));
   div.addEventListener("drop", e => {
     e.preventDefault();
     _cpClearCardioHints();
     if (!_cpCardioDragEl || _cpCardioDragEl === div) return;
     const pct = (e.clientY - div.getBoundingClientRect().top) / div.getBoundingClientRect().height;
-    if (pct <= 0.5) container.insertBefore(_cpCardioDragEl, div);
-    else container.insertBefore(_cpCardioDragEl, div.nextSibling);
+    if (pct > 0.3 && pct < 0.7) {
+      _cpCardioGroupRepeat(_cpCardioDragEl, div);
+    } else {
+      if (pct <= 0.3) container.insertBefore(_cpCardioDragEl, div);
+      else container.insertBefore(_cpCardioDragEl, div.nextSibling);
+      _cpCardioEjectIfIsolated(_cpCardioDragEl);
+      _cpCardioRefreshBadges();
+    }
     _cpCardioDragEl = null;
   });
   if (typeof TouchDrag !== "undefined") {
     TouchDrag.attach(div, container, {
-      hintClasses: ["drag-insert-above", "drag-insert-below"],
+      hintClasses: ["drag-insert-above", "drag-insert-below", "drag-ss-target"],
       rowSelector: ".edit-interval-card",
       handleSelector: ".drag-handle",
       onDrop(dragEl, targetEl, clientY) {
         _cpClearCardioHints();
         const pct = (clientY - targetEl.getBoundingClientRect().top) / targetEl.getBoundingClientRect().height;
-        if (pct <= 0.5) container.insertBefore(dragEl, targetEl);
-        else container.insertBefore(dragEl, targetEl.nextSibling);
+        if (pct > 0.3 && pct < 0.7) {
+          _cpCardioGroupRepeat(dragEl, targetEl);
+        } else {
+          if (pct <= 0.3) container.insertBefore(dragEl, targetEl);
+          else container.insertBefore(dragEl, targetEl.nextSibling);
+          _cpCardioEjectIfIsolated(dragEl);
+          _cpCardioRefreshBadges();
+        }
       },
     });
   }
   container.appendChild(div);
+  _cpCardioRefreshBadges();
 }
 
 let _cpCardioDragEl = null;
 function _cpClearCardioHints() {
   document.querySelectorAll("#cp-manual-cardio-rows .edit-interval-card").forEach(el =>
-    el.classList.remove("drag-insert-above", "drag-insert-below", "drag-active"));
+    el.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target", "drag-active"));
+}
+
+function _cpCardioGroupRepeat(dragEl, targetEl) {
+  const container = document.getElementById("cp-manual-cardio-rows");
+  container.insertBefore(dragEl, targetEl.nextSibling);
+  let group = targetEl.dataset.repeatGroup || dragEl.dataset.repeatGroup || "";
+  if (!group) {
+    const used = new Set(Array.from(container.querySelectorAll(".edit-interval-card"))
+      .map(r => r.dataset.repeatGroup).filter(Boolean));
+    for (const letter of ["A","B","C","D","E","F"]) { if (!used.has(letter)) { group = letter; break; } }
+    if (!group) group = "A";
+  }
+  targetEl.dataset.repeatGroup = group;
+  dragEl.dataset.repeatGroup = group;
+  _cpCardioRefreshBadges();
+}
+
+function _cpCardioEjectIfIsolated(el) {
+  const g = el.dataset.repeatGroup;
+  if (!g) return;
+  const above = el.previousElementSibling;
+  const below = el.nextElementSibling;
+  if (!(above && above.dataset.repeatGroup === g) && !(below && below.dataset.repeatGroup === g))
+    delete el.dataset.repeatGroup;
+}
+
+function _cpCardioRefreshBadges() {
+  const container = document.getElementById("cp-manual-cardio-rows");
+  if (!container) return;
+  const rows = Array.from(container.querySelectorAll(".edit-interval-card"));
+  rows.forEach((row, i) => {
+    const g = row.dataset.repeatGroup;
+    if (!g) return;
+    const above = rows[i - 1], below = rows[i + 1];
+    if (!(above && above.dataset.repeatGroup === g) && !(below && below.dataset.repeatGroup === g))
+      delete row.dataset.repeatGroup;
+  });
+  const counts = {};
+  rows.forEach(row => {
+    const old = row.querySelector(".cp-ss-badge");
+    if (old) old.remove();
+    const g = row.dataset.repeatGroup;
+    if (!g) return;
+    counts[g] = (counts[g] || 0) + 1;
+    const badge = document.createElement("span");
+    badge.className = "cp-ss-badge";
+    badge.textContent = `${g}${counts[g]}`;
+    badge.title = "Click to ungroup";
+    badge.addEventListener("click", () => { delete row.dataset.repeatGroup; _cpCardioRefreshBadges(); });
+    row.querySelector(".eiv-header").appendChild(badge);
+  });
 }
 
 function cpManualRemoveCardioRow(id) {
@@ -1130,12 +1195,14 @@ function customPlanSaveManual() {
       const id = row.id.replace("cp-crow-", "");
       const duration = _cpCardioRowDuration(id);
       if (!duration) return;
-      intervals.push({
+      const iv = {
         name: document.getElementById(`cp-cphase-${id}`)?.value.trim() || `Interval ${intervals.length + 1}`,
         duration,
         effort: document.getElementById(`cp-ceffort-${id}`)?.value || "Z2",
         details: document.getElementById(`cp-cdetails-${id}`)?.value.trim() || "",
-      });
+      };
+      if (row.dataset.repeatGroup) iv.repeatGroup = row.dataset.repeatGroup;
+      intervals.push(iv);
     });
     session = {
       mode: "manual",

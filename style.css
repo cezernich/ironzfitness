@@ -3896,6 +3896,21 @@ button:active {
 .edit-interval-card.drag-active { opacity: 0.35; }
 .edit-interval-card.drag-insert-above { border-top: 2.5px solid var(--color-accent); margin-top: -1px; }
 .edit-interval-card.drag-insert-below { border-bottom: 2.5px solid var(--color-accent); margin-bottom: -1px; }
+.edit-interval-card.drag-ss-target {
+  outline: 2.5px solid var(--color-accent);
+  outline-offset: -2px;
+  background: var(--color-accent-glow);
+  transition: outline 0.15s, background 0.15s;
+}
+.edit-interval-card[data-repeat-group] {
+  border-left: 3px solid var(--color-accent);
+  padding-left: 8px;
+}
+.edit-interval-card .cp-ss-badge {
+  position: static;
+  margin-left: auto;
+  flex-shrink: 0;
+}
 .eiv-header {
   display: flex;
   align-items: center;
