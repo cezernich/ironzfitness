@@ -362,13 +362,15 @@ function renderHydration() {
 function _renderHydrationDateNav(dateStr, isToday) {
   let nav = document.getElementById("hydration-date-nav");
   if (!nav) {
-    const header = document.querySelector("#hydration-card > div:first-child");
+    const header = document.querySelector("#hydration-card .hydration-header");
     if (!header) return;
     nav = document.createElement("div");
     nav.id = "hydration-date-nav";
     nav.className = "hydration-date-nav";
     header.insertAdjacentElement("afterend", nav);
   }
+  // Hide the date nav when showing today — hydration is always "today"
+  nav.style.display = isToday ? "none" : "";
 
   // Format date label
   const d = new Date(dateStr + "T12:00:00");
@@ -389,22 +391,18 @@ function updateHydrationVisual(current, target) {
 }
 
 function updateHydrationVisualPct(pct) {
-  const fillHeight = 135 * pct;
-  const fillY = 155 - fillHeight;
+  // Horizontal progress bar (primary visual)
+  const bar = document.getElementById("hydration-bar-fill");
+  if (bar) {
+    bar.style.width = Math.min(pct * 100, 100) + "%";
+    bar.style.background = pct >= 1 ? "var(--color-success, #22c55e)" : "var(--color-accent)";
+  }
+  // Legacy SVG fill (kept for animation JS that targets it)
   const rect = document.getElementById("hydration-fill-rect");
-  const bottlePath = document.querySelector("#hydration-bottle-svg > path:not([clip-path])");
   if (rect) {
-    rect.setAttribute("y", fillY);
+    const fillHeight = 135 * pct;
+    rect.setAttribute("y", 155 - fillHeight);
     rect.setAttribute("height", fillHeight);
-    if (pct >= 1) {
-      rect.setAttribute("fill", "var(--color-success, #22c55e)");
-      rect.setAttribute("opacity", "0.45");
-      if (bottlePath) bottlePath.setAttribute("stroke", "var(--color-success, #22c55e)");
-    } else {
-      rect.setAttribute("fill", "var(--color-accent)");
-      rect.setAttribute("opacity", "0.3");
-      if (bottlePath) bottlePath.setAttribute("stroke", "var(--color-border)");
-    }
   }
 }
 
@@ -425,13 +423,13 @@ function renderHydrationContext(breakdown) {
 function renderBeveragePicker() {
   let picker = document.getElementById("hydration-beverage-picker");
   if (!picker) {
-    // Insert before the button row
-    const btnRow = document.querySelector(".hydration-btn-row");
-    if (!btnRow) return;
+    // Insert before the primary action button
+    const btn = document.getElementById("hydration-mybottle-btn");
+    if (!btn) return;
     picker = document.createElement("div");
     picker.id = "hydration-beverage-picker";
     picker.className = "hydration-beverage-picker";
-    btnRow.insertAdjacentElement("beforebegin", picker);
+    btn.insertAdjacentElement("beforebegin", picker);
   }
 
   let html = "";
