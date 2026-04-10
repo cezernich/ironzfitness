@@ -407,37 +407,29 @@
   }
 
   function renderExercises(exercises) {
-    // Group by supersetGroup
-    const groups = [];
-    let currentGroup = null;
+    // Group consecutive exercises by any superset/repeat grouping field
+    const _gid = (ex) => ex.supersetGroup || ex.superset_group || ex.superset_id || ex.repeatGroup || null;
 
-    exercises.forEach(ex => {
-      if (ex.supersetGroup) {
-        if (!currentGroup || currentGroup.id !== ex.supersetGroup) {
-          currentGroup = { id: ex.supersetGroup, exercises: [ex] };
-          groups.push(currentGroup);
-        } else {
-          currentGroup.exercises.push(ex);
+    let html = `<div class="section"><div class="section-title">Workout Structure</div>`;
+    let i = 0;
+    while (i < exercises.length) {
+      const gid = _gid(exercises[i]);
+      if (gid) {
+        const group = [];
+        while (i < exercises.length && _gid(exercises[i]) === gid) {
+          group.push(exercises[i]);
+          i++;
         }
-      } else {
-        groups.push({ id: null, exercises: [ex] });
-        currentGroup = null;
-      }
-    });
-
-    let html = `<div class="section"><div class="section-title">Exercises</div>`;
-
-    groups.forEach(group => {
-      if (group.id && group.exercises.length > 1) {
+        const sets = group[0].groupSets || group[0].sets || "";
         html += `<div class="superset-group">`;
-        html += `<div class="superset-label">Superset ${esc(group.id)}</div>`;
-        group.exercises.forEach(ex => { html += exerciseRow(ex); });
+        html += `<div class="superset-label">${sets ? esc(String(sets)) + '\u00d7 ' : ''}Superset ${esc(gid)}</div>`;
+        group.forEach(ex => { html += exerciseRow(ex); });
         html += `</div>`;
       } else {
-        group.exercises.forEach(ex => { html += exerciseRow(ex); });
+        html += exerciseRow(exercises[i]);
+        i++;
       }
-    });
-
+    }
     html += `</div>`;
     return html;
   }

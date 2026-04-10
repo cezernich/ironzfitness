@@ -182,82 +182,120 @@
   // Lazy-load workout details from training_sessions when a card is expanded
   const _detailLoaded = new Set();
   window._slLoadDetail = async function (cardId, variantId) {
-    if (_detailLoaded.has(cardId) || !variantId) return;
+    if (_detailLoaded.has(cardId)) return;
     _detailLoaded.add(cardId);
     const detailEl = document.getElementById(cardId + "-detail");
     if (!detailEl) return;
 
-    const sb = window.supabaseClient;
-    if (!sb) { detailEl.innerHTML = "<p class='hint'>Not connected.</p>"; return; }
+    // Try multiple sources for exercise data:
+    // 1. training_sessions (Supabase) by variant_id
+    // 2. The saved entry's local payload data (custom workouts)
+    // 3. The saved entry's local exercises field
+    let exercises = [];
+    let description = "";
 
-    try {
-      const { data, error } = await sb
-        .from("training_sessions")
-        .select("session_name, description, exercises, data")
-        .eq("id", variantId)
-        .maybeSingle();
-
-      if (error || !data) {
-        detailEl.innerHTML = "<p class='hint'>Workout details not available.</p>";
-        return;
-      }
-
-      let exercises = data.exercises || [];
-      if (typeof exercises === "string") {
-        try { exercises = JSON.parse(exercises); } catch { exercises = []; }
-      }
-
-      let html = "";
-      if (data.description) {
-        html += `<p class="saved-detail-desc">${_esc(data.description)}</p>`;
-      }
-      if (exercises.length > 0) {
-        html += '<div class="saved-detail-exercises">';
-        // Group consecutive exercises by repeatGroup/supersetGroup
-        let i = 0;
-        while (i < exercises.length) {
-          const ex = exercises[i];
-          const gid = ex.repeatGroup || ex.supersetGroup;
-          if (gid) {
-            // Collect all consecutive exercises in the same group
-            const group = [];
-            while (i < exercises.length && (exercises[i].repeatGroup === gid || exercises[i].supersetGroup === gid)) {
-              group.push(exercises[i]);
-              i++;
-            }
-            const sets = group[0].groupSets || group[0].sets || "";
-            html += `<div class="saved-detail-group">`;
-            html += `<div class="saved-detail-group-label">${sets ? sets + "\u00d7 " : ""}Superset ${_esc(gid)}</div>`;
-            group.forEach(g => { html += _renderDetailRow(g); });
-            html += `</div>`;
-          } else {
-            html += _renderDetailRow(ex);
-            i++;
+    // Source 1: Supabase training_sessions
+    if (variantId) {
+      const sb = window.supabaseClient;
+      if (sb) {
+        try {
+          const { data } = await sb
+            .from("training_sessions")
+            .select("session_name, description, exercises, data")
+            .eq("id", variantId)
+            .maybeSingle();
+          if (data) {
+            let ex = data.exercises || [];
+            if (typeof ex === "string") { try { ex = JSON.parse(ex); } catch { ex = []; } }
+            if (ex.length) exercises = ex;
+            if (data.description) description = data.description;
           }
-        }
-        html += '</div>';
-      } else {
-        html += "<p class='hint'>No exercise details stored.</p>";
+        } catch {}
       }
-
-      function _renderDetailRow(ex) {
-        const name = ex.name || "Exercise";
-        const parts = [];
-        if (ex.sets && ex.reps) parts.push(`${ex.sets} \u00d7 ${ex.reps}`);
-        else if (ex.reps) parts.push(`${ex.reps} reps`);
-        if (ex.duration) parts.push(ex.duration);
-        if (ex.weight) parts.push(`@ ${ex.weight}`);
-        if (ex.intensity) parts.push(ex.intensity);
-        if (ex.details) parts.push(ex.details);
-        return `<div class="saved-detail-row">
-          <span class="saved-detail-name">${_esc(name)}</span>
-          <span class="saved-detail-info">${_esc(parts.join(" \u00b7 "))}</span>
-        </div>`;
-      }
-      detailEl.innerHTML = html;
-    } catch (e) {
-      detailEl.innerHTML = "<p class='hint'>Could not load details.</p>";
     }
+
+    // Source 2: local saved entry payload (custom workouts store data locally)
+    if (!exercises.length) {
+      const Saved = window.SavedWorkoutsLibrary;
+      if (Saved) {
+        try {
+          const list = await Saved.listSaved();
+          // Match by cardId which contains the saved entry id
+          const savedId = cardId.replace("sl-card-", "").replace("sl-custom-", "");
+          const entry = list.find(s => s.id === savedId);
+          if (entry) {
+            const p = entry.payload || {};
+            if (p.exercises && p.exercises.length) exercises = p.exercises;
+            else if (p.segments && p.segments.length) {
+              exercises = p.segments.map(s => ({
+                name: s.name || s.type || "Segment",
+                duration: s.duration || "",
+                intensity: s.effort || s.intensity || "",
+                details: s.details || "",
+                repeatGroup: s.repeatGroup || null,
+                groupSets: s.groupSets || null,
+              }));
+            }
+            if (p.notes && !description) description = p.notes;
+            // Also check entry-level exercises
+            if (!exercises.length && entry.exercises) {
+              let ex = entry.exercises;
+              if (typeof ex === "string") { try { ex = JSON.parse(ex); } catch { ex = []; } }
+              if (ex.length) exercises = ex;
+            }
+          }
+        } catch {}
+      }
+    }
+
+    function _renderDetailRow(ex) {
+      const name = ex.name || "Exercise";
+      const parts = [];
+      if (ex.sets && ex.reps) parts.push(`${ex.sets} \u00d7 ${ex.reps}`);
+      else if (ex.reps) parts.push(`${ex.reps} reps`);
+      if (ex.duration) parts.push(ex.duration);
+      if (ex.weight) parts.push(`@ ${ex.weight}`);
+      if (ex.intensity) parts.push(ex.intensity);
+      if (ex.details) parts.push(ex.details);
+      return `<div class="saved-detail-row">
+        <span class="saved-detail-name">${_esc(name)}</span>
+        <span class="saved-detail-info">${_esc(parts.join(" \u00b7 "))}</span>
+      </div>`;
+    }
+
+    let html = "";
+    if (description) {
+      html += `<p class="saved-detail-desc">${_esc(description)}</p>`;
+    }
+    if (exercises.length > 0) {
+      html += '<div class="saved-detail-exercises">';
+      let i = 0;
+      while (i < exercises.length) {
+        const ex = exercises[i];
+        const gid = ex.repeatGroup || ex.supersetGroup || ex.superset_group || ex.superset_id;
+        if (gid) {
+          const group = [];
+          while (i < exercises.length) {
+            const g = exercises[i];
+            if ((g.repeatGroup || g.supersetGroup || g.superset_group || g.superset_id) === gid) {
+              group.push(g); i++;
+            } else break;
+          }
+          const sets = group[0].groupSets || "";
+          html += `<div class="saved-detail-group">`;
+          html += `<div class="saved-detail-group-label">${sets ? sets + "\u00d7 " : ""}Superset ${_esc(gid)}</div>`;
+          group.forEach(g => { html += _renderDetailRow(g); });
+          html += `</div>`;
+        } else {
+          html += _renderDetailRow(ex);
+          i++;
+        }
+      }
+      html += '</div>';
+    } else {
+      html += "<p class='hint'>No exercise details stored.</p>";
+    }
+    detailEl.innerHTML = html;
   };
 
   // ─── Custom workout modal (re-uses the existing saved-workout-modal) ────────

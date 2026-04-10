@@ -222,8 +222,12 @@
     // check for these sources — they're already validated at creation time.
     const source = sw.source || opts.source || null;
     const isNonLibrary = source === "shared" || source === "custom" || source === "user_added";
+    // Also detect UUIDs: if variant_id looks like a UUID (has dashes + 32 hex chars),
+    // it's from training_sessions, not from the built-in library.
+    const looksLikeUUID = variantId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(variantId);
+    const skipLibraryCheck = isNonLibrary || looksLikeUUID;
 
-    if (!isNonLibrary && !_variantExists(sportId, sessionTypeId, variantId)) {
+    if (!skipLibraryCheck && !_variantExists(sportId, sessionTypeId, variantId)) {
       return {
         canImport: false,
         canSave: false,
@@ -234,7 +238,7 @@
       };
     }
 
-    const variant = isNonLibrary ? null : _resolveVariant(sportId, sessionTypeId, variantId);
+    const variant = skipLibraryCheck ? null : _resolveVariant(sportId, sessionTypeId, variantId);
     const scaledWorkout = _scaleForReceiver(sw, variant);
 
     // Save path is always allowed (variant exists).
