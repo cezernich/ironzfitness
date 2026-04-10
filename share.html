@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shared workout · IronZ</title>
+<!-- Generic OG tags — client-side fetch can't populate these dynamically for link
+     preview crawlers (iMessage, Slack, etc.), so they stay generic. -->
+<meta property="og:title" content="Someone shared a workout on IronZ">
+<meta property="og:description" content="Run this workout in your own zones. Your friend's paces stay private.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background: #0f0f18;
+    color: #fff;
+    min-height: 100vh;
+    padding: 24px 16px;
+  }
+  .wrap { max-width: 480px; margin: 0 auto; }
+  .logo { font-size: 22px; font-weight: 900; color: #ff6b35; letter-spacing: -0.5px; text-align: center; }
+  .url  { font-size: 10px; color: #555; text-align: center; margin: 4px 0 24px;
+          font-family: "SF Mono", Menlo, monospace; }
+  .from { display: flex; align-items: center; gap: 12px; padding: 14px;
+          background: #1a1a24; border-radius: 14px; margin-bottom: 14px; }
+  .avatar { width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+            background: linear-gradient(135deg, #ff6b35, #ff8e5e);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 18px; color: #fff; }
+  .from-label { font-size: 11px; color: #888; }
+  .from-name  { font-size: 14px; font-weight: 700; }
+  .card { background: #1a1a24; border-radius: 16px; padding: 20px; margin-bottom: 14px; }
+  .badge { background: #ff6b35; color: #fff; font-size: 10px; font-weight: 700;
+           padding: 4px 10px; border-radius: 10px; display: inline-block;
+           margin-bottom: 8px; letter-spacing: 0.5px; text-transform: uppercase; }
+  .title { font-size: 22px; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.3px; }
+  .subtitle { color: #888; font-size: 12px; margin-bottom: 16px; }
+  .row { display: flex; justify-content: space-between; padding: 11px 0;
+         border-bottom: 1px solid #252530; font-size: 13px; }
+  .row:last-child { border-bottom: none; }
+  .label { color: #aaa; }
+  .value { color: #fff; font-weight: 600; }
+  .note { font-size: 13px; color: #ccc; font-style: italic;
+          padding: 12px; background: #0f0f18; border-radius: 10px;
+          border: 1px solid #252530; margin: 12px 0; }
+  .install { background: linear-gradient(135deg, #1a1a24, #252530); padding: 18px;
+             border-radius: 14px; border: 1px solid #333; margin-top: 12px; }
+  .install h2 { font-size: 15px; font-weight: 800; margin-bottom: 6px; }
+  .install p  { font-size: 12px; color: #999; line-height: 1.5; margin-bottom: 14px; }
+  .cta { display: block; width: 100%; background: #ff6b35; color: #fff;
+         text-decoration: none; padding: 14px; border-radius: 12px;
+         font-size: 15px; font-weight: 700; text-align: center; }
+  .cta:active { transform: scale(0.98); }
+  .privacy { font-size: 11px; color: #666; text-align: center; margin-top: 16px;
+             line-height: 1.5; }
+  .loading { text-align: center; padding: 60px 20px; color: #888; }
+  .error-msg { text-align: center; padding: 60px 20px; }
+  .error-msg h1 { font-size: 22px; margin-bottom: 8px; }
+  .error-msg p { color: #888; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap" id="content">
+  <div class="loading">Loading workout...</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+(function () {
+  const SUPABASE_URL      = 'https://dagdpdcwqdlibxbitdgr.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRhZ2RwZGN3cWRsaWJ4Yml0ZGdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1Mjk4NjQsImV4cCI6MjA5MTEwNTg2NH0.vc-fvFgZNEvusGgc3yhCzMRmuKrXUHW5uxHHMx1JV44';
+
+  // Generic structure descriptions per session type. NO concrete paces — ever.
+  const STRUCTURE = {
+    track_workout:        { warmup: "1.5mi easy", main: "Repeats at I-pace",           cooldown: "1mi easy" },
+    tempo_threshold:      { warmup: "15 min easy", main: "Cruise intervals at T-pace", cooldown: "10 min easy" },
+    speed_work:           { warmup: "15 min easy", main: "Short repeats at R-pace",    cooldown: "10 min easy" },
+    hills:                { warmup: "15 min easy", main: "Hill repeats hard up / easy down", cooldown: "10 min easy" },
+    long_run:             { warmup: "\u2014", main: "Sustained effort at E-pace",      cooldown: "\u2014" },
+    endurance:            { warmup: "\u2014", main: "Steady aerobic effort",            cooldown: "\u2014" },
+    easy_recovery:        { warmup: "\u2014", main: "Conversational easy effort",       cooldown: "\u2014" },
+    bike_intervals_ftp:   { warmup: "15 min easy spin", main: "Intervals at FTP",      cooldown: "10 min easy spin" },
+    bike_intervals_vo2:   { warmup: "15 min easy spin", main: "Intervals at VO2max effort", cooldown: "10 min easy spin" },
+    bike_intervals_sweet_spot: { warmup: "15 min easy spin", main: "Sweet spot intervals",  cooldown: "10 min easy spin" },
+    swim_css_intervals:   { warmup: "400m easy + 4\u00d750m build", main: "Repeats at CSS pace", cooldown: "200m easy" },
+    swim_speed:           { warmup: "400m easy + 4\u00d750m build", main: "Sprints",   cooldown: "200m easy" },
+  };
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  // Parse token from: /w/:token, /share.html?token=, or ?token=
+  function getToken() {
+    var params = new URLSearchParams(window.location.search);
+    var fromQuery = params.get("token") || params.get("w");
+    if (fromQuery) return fromQuery.trim();
+    // Try path: /w/:token
+    var pathMatch = window.location.pathname.match(/\/w\/([\w-]{6,64})/);
+    if (pathMatch) return pathMatch[1];
+    // Try path: /share.html/:token (some rewrite configs)
+    var altMatch = window.location.pathname.match(/\/share\.html\/([\w-]{6,64})/);
+    if (altMatch) return altMatch[1];
+    return null;
+  }
+
+  function renderError(title, msg) {
+    document.getElementById("content").innerHTML =
+      '<div class="logo">IronZ</div>' +
+      '<div class="error-msg"><h1>' + esc(title) + '</h1><p>' + esc(msg) + '</p></div>';
+  }
+
+  function renderShare(share) {
+    var senderName = (share.sender && share.sender.full_name) || "A friend";
+    var initial    = senderName.trim().slice(0, 1).toUpperCase();
+    var variantName = share.variant_id || "Workout";
+    var sportLabel  = (share.sport_id || "").toUpperCase();
+    var s = STRUCTURE[share.session_type_id] || { warmup: "\u2014", main: "Workout structure", cooldown: "\u2014" };
+    var noteHtml = share.share_note
+      ? '<div class="note">\u201c' + esc(share.share_note) + '\u201d</div>'
+      : "";
+
+    // Build deep link for the CTA — tries custom scheme first (opens app if installed),
+    // falls back to the current page URL.
+    var deepLink = "ironz://share/" + esc(share.share_token);
+    var pageUrl  = window.location.href;
+
+    document.getElementById("content").innerHTML =
+      '<div class="logo">IronZ</div>' +
+      '<div class="url">ironz.fit/w/' + esc(share.share_token) + '</div>' +
+      '<div class="from">' +
+        '<div class="avatar">' + esc(initial) + '</div>' +
+        '<div>' +
+          '<div class="from-label">' + esc(senderName) + ' shared a workout</div>' +
+          '<div class="from-name">' + esc(variantName) + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="card">' +
+        '<span class="badge">' + esc(sportLabel) + '</span>' +
+        '<div class="title">' + esc(variantName) + '</div>' +
+        '<div class="subtitle">' + esc(share.session_type_id || "") + '</div>' +
+        '<div class="row"><span class="label">Warm-up</span><span class="value">' + esc(s.warmup) + '</span></div>' +
+        '<div class="row"><span class="label">Main set</span><span class="value">' + esc(s.main) + '</span></div>' +
+        '<div class="row"><span class="label">Cool-down</span><span class="value">' + esc(s.cooldown) + '</span></div>' +
+        noteHtml +
+      '</div>' +
+      '<div class="install">' +
+        '<h2>Run this in your zones</h2>' +
+        '<p>IronZ scales every workout to your actual VDOT, FTP, and CSS \u2014 no guessing, no generic \u201czone 4\u201d. Your friend\u2019s paces stay private.</p>' +
+        '<a class="cta" href="' + esc(deepLink) + '">Open in IronZ</a>' +
+      '</div>' +
+      '<p class="privacy">Your friend\u2019s paces, VDOT, and zones never left their device.<br>This preview shows generic structure only.</p>';
+
+    // Update OG title now that we have the data (helps if the page is re-shared
+    // from a browser that reads the live DOM, though most crawlers won't benefit).
+    try {
+      document.title = senderName + " shared " + variantName + " \u00b7 IronZ";
+    } catch (e) {}
+  }
+
+  async function main() {
+    var token = getToken();
+    if (!token) {
+      renderError("Link not found", "We couldn\u2019t find a workout token in this URL.");
+      return;
+    }
+
+    try {
+      var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+      var result = await sb
+        .from("shared_workouts")
+        .select("share_token, variant_id, sport_id, session_type_id, share_note, created_at, expires_at, revoked_at, sender_user_id, sender:profiles!shared_workouts_sender_user_id_fkey ( full_name )")
+        .eq("share_token", token)
+        .maybeSingle();
+
+      if (result.error) {
+        // Retry without the join in case the FK relationship isn't set up
+        var fallback = await sb
+          .from("shared_workouts")
+          .select("share_token, variant_id, sport_id, session_type_id, share_note, created_at, expires_at, revoked_at, sender_user_id")
+          .eq("share_token", token)
+          .maybeSingle();
+        if (fallback.error || !fallback.data) {
+          renderError("Link not found", "This shared workout doesn\u2019t exist or has been removed.");
+          return;
+        }
+        result = fallback;
+      }
+
+      var data = result.data;
+      if (!data) {
+        renderError("Link not found", "This shared workout doesn\u2019t exist or has been removed.");
+        return;
+      }
+      if (data.revoked_at) {
+        renderError("Link revoked", "This link was revoked by the sender.");
+        return;
+      }
+      if (data.expires_at && new Date(data.expires_at) < new Date()) {
+        renderError("Link expired", "This link has expired.");
+        return;
+      }
+
+      renderShare(data);
+    } catch (e) {
+      renderError("Something went wrong", "Please try again later.");
+      console.error("[share.html]", e);
+    }
+  }
+
+  main();
+})();
+</script>
+</body>
+</html>

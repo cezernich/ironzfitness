@@ -13,7 +13,7 @@
 
   const BASE62 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const TOKEN_LENGTH = 12;
-  const SHARE_URL_BASE = "https://ironz.app/w/";
+  const SHARE_URL_BASE = "https://ironz.fit/w/";
 
   // Resolve a usable random byte source. Browser → window.crypto.
   // Node test harness → globalThis.crypto (Node 19+) or fallback to Math.random.

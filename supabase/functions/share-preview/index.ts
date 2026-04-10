@@ -136,14 +136,16 @@ function renderHtml(share: any): string {
 </html>`;
 }
 
-function renderError(message: string, status: number): Response {
+// Status 200 workaround: Supabase Edge Runtime overrides Content-Type to text/plain
+// on 4xx/5xx responses for --no-verify-jwt functions, causing browsers to render
+// raw HTML source. Error info is conveyed in the HTML body instead.
+function renderError(message: string, _status: number): Response {
   const html = `<!doctype html><html><head><meta charset="UTF-8"><title>${escapeHtml(message)}</title>
 <style>body{font-family:system-ui;background:#0f0f18;color:#fff;padding:40px;text-align:center;}</style>
 </head><body><h1>${escapeHtml(message)}</h1></body></html>`;
-  return new Response(html, {
-    status,
-    headers: { ...CORS, "content-type": "text/html; charset=utf-8" },
-  });
+  const headers = new Headers(CORS);
+  headers.set("Content-Type", "text/html; charset=utf-8");
+  return new Response(html, { status: 200, headers });
 }
 
 serve(async (req: Request) => {
@@ -183,8 +185,7 @@ serve(async (req: Request) => {
     await sb.rpc("increment_share_view", { token_arg: token });
   } catch {}
 
-  return new Response(renderHtml(data), {
-    status: 200,
-    headers: { ...CORS, "content-type": "text/html; charset=utf-8" },
-  });
+  const headers = new Headers(CORS);
+  headers.set("Content-Type", "text/html; charset=utf-8");
+  return new Response(renderHtml(data), { status: 200, headers });
 });

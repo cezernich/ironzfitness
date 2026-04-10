@@ -32,8 +32,8 @@
           const m2 = (url.host + url.pathname).match(/share\/([\w-]{1,64})/);
           if (m2) return m2[1];
         }
-        // https://ironz.app/w/{token}
-        if (/ironz\.app$/i.test(url.hostname)) {
+        // https://ironz.fit/w/{token} or https://ironz.app/w/{token}
+        if (/ironz\.(fit|app)$/i.test(url.hostname)) {
           const m = url.pathname.match(/^\/w\/([\w-]{1,64})$/);
           if (m) return m[1];
         }

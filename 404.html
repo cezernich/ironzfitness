@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<script>
+  // GitHub Pages SPA routing workaround.
+  // When a user hits /w/:token, GitHub Pages serves this 404.html.
+  // We detect the /w/ path and redirect to /share.html?token=:token,
+  // which the client-side share preview page handles.
+  (function () {
+    var match = window.location.pathname.match(/^\/w\/([\w-]{6,64})/);
+    if (match) {
+      window.location.replace("/share.html?token=" + match[1]);
+    }
+  })();
+</script>
+</head>
+<body>
+  <p>Page not found. <a href="/">Go home</a></p>
+</body>
+</html>
