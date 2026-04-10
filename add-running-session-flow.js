@@ -81,7 +81,40 @@
   /**
    * Convert a generator output to a workoutSchedule entry.
    */
+  // Map generator intensity labels to the effort format the card renderer expects
+  function _intensityToEffort(intensity) {
+    if (!intensity) return "Z2";
+    const s = String(intensity).toLowerCase().replace(/[^a-z0-9_]/g, "");
+    if (s === "z1" || s === "z1_default") return "Z1";
+    if (s === "z2") return "Z2";
+    if (s === "z3") return "Z3";
+    if (s === "z4" || s === "z4_effort") return "Z4";
+    if (s === "z5") return "Z5";
+    if (s === "z6") return "Z6";
+    if (/rest|rw|walk/.test(s)) return "RW";
+    return "Z2";
+  }
+
+  // Convert generator phases → aiSession.intervals so the existing card
+  // renderer (buildAiIntervalsList + buildIntensityStrip) can display them.
+  function _phasesToIntervals(phases) {
+    if (!Array.isArray(phases)) return [];
+    const nameMap = {
+      warmup: "Warm Up", cooldown: "Cool Down", main: "Main Set",
+      main_set: "Main Set", main_cruise_intervals: "Cruise Intervals",
+      optional_finish: "M-Pace Finish", optional_mp_finish: "M-Pace Finish",
+    };
+    return phases.map(p => ({
+      name: nameMap[p.phase] || (p.phase || "Interval").replace(/_/g, " "),
+      duration: p.duration_min ? `${p.duration_min} min` : (p.distance_m ? `${p.distance_m}m` : ""),
+      effort: _intensityToEffort(p.intensity),
+      details: p.instruction || p.target || "",
+      ...(p.rep_count && p.rep_count > 1 ? { reps: p.rep_count } : {}),
+    }));
+  }
+
   function planEntryFor(workout, dateStr) {
+    const intervals = _phasesToIntervals(workout.phases);
     return {
       id: "user-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e6).toString(36),
       date: dateStr,
@@ -90,6 +123,12 @@
       duration: workout.estimated_duration_min,
       is_hard: workout.is_hard,
       source: "user_added",
+      // Store as aiSession so the card renderer shows the intensity strip
+      // + step list via buildAiIntervalsList / buildIntensityStrip.
+      aiSession: {
+        title: workout.title,
+        intervals,
+      },
       phases: workout.phases,
       why_text: workout.why_text,
       rotation_index: workout.rotation_index,

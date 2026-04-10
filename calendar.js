@@ -1943,7 +1943,7 @@ function getDayTotals(dateStr) {
 
 // ─── Day detail panel ─────────────────────────────────────────────────────────
 
-const _WORKOUT_TYPE_LABELS = { hiit: "HIIT", hyrox: "Hyrox", weightlifting: "Weightlifting", running: "Running", cycling: "Cycling", swimming: "Swimming", yoga: "Yoga", general: "General Fitness", bodyweight: "Bodyweight", brick: "Brick (Bike + Run)", wellness: "Wellness" };
+const _WORKOUT_TYPE_LABELS = { hiit: "HIIT", hyrox: "Hyrox", weightlifting: "Weightlifting", running: "Running", cycling: "Cycling", swimming: "Swimming", yoga: "Yoga", general: "General Fitness", bodyweight: "Bodyweight", brick: "Brick (Bike + Run)", wellness: "Wellness", track_workout: "Track · Running", tempo_threshold: "Tempo · Running", speed_work: "Speed · Running", hills: "Hills · Running", long_run: "Long Run", endurance: "Endurance Run", easy_recovery: "Easy / Recovery", fun_social: "Fun Run" };
 function _wTypeLabel(type) { return _WORKOUT_TYPE_LABELS[type] || capitalize(type); }
 
 /**
