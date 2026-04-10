@@ -472,6 +472,96 @@ function init() {
     const banner = document.getElementById('philosophy-plan-outdated');
     if (banner) banner.style.display = '';
   }
+
+  // Handle ?import=TOKEN from share preview CTA
+  _handleImportParam();
+}
+
+async function _handleImportParam() {
+  const params = new URLSearchParams(window.location.search);
+  const importToken = params.get("import");
+  if (!importToken) return;
+
+  // Clean the URL so refreshing doesn't re-trigger
+  const cleanUrl = window.location.pathname + window.location.hash;
+  history.replaceState(null, "", cleanUrl);
+
+  const sb = window.supabaseClient;
+  if (!sb) return;
+
+  // Check auth — if not logged in, stash and prompt
+  let userId = null;
+  try {
+    const { data } = await sb.auth.getUser();
+    userId = data && data.user && data.user.id;
+  } catch {}
+  if (!userId) {
+    // Stash the token for after login
+    try { localStorage.setItem("ironz_pending_import", importToken); } catch {}
+    alert("Sign in to save this workout to your library.");
+    return;
+  }
+
+  // Fetch the shared workout
+  const { data: rows, error } = await sb
+    .from("shared_workouts")
+    .select("*")
+    .eq("share_token", importToken)
+    .maybeSingle();
+
+  if (error || !rows) {
+    _showShareToast("Workout not found or link expired.");
+    return;
+  }
+  if (rows.revoked_at || (rows.expires_at && new Date(rows.expires_at) < new Date())) {
+    _showShareToast("This share link has expired.");
+    return;
+  }
+
+  // Save via SavedWorkoutsLibrary
+  const Saved = window.SavedWorkoutsLibrary;
+  if (Saved && Saved.saveFromShare) {
+    await Saved.saveFromShare({
+      shareToken: importToken,
+      variantId: rows.variant_id,
+      sportId: rows.sport_id,
+      sessionTypeId: rows.session_type_id,
+      senderUserId: rows.sender_user_id,
+    });
+    _showShareToast("Workout saved!");
+    // Switch to the Saved Library tab
+    if (typeof showTab === "function") showTab("saved-library");
+  } else {
+    _showShareToast("Workout imported!");
+  }
+}
+
+// Check for a stashed import after login completes
+function _checkPendingImport() {
+  try {
+    const token = localStorage.getItem("ironz_pending_import");
+    if (token) {
+      localStorage.removeItem("ironz_pending_import");
+      _handleImportParam.call(null);
+      // Re-trigger by temporarily setting the param
+      const url = new URL(window.location);
+      url.searchParams.set("import", token);
+      history.replaceState(null, "", url);
+      _handleImportParam();
+    }
+  } catch {}
+}
+
+function _showShareToast(msg) {
+  const existing = document.getElementById("ironz-toast");
+  if (existing) existing.remove();
+  const toast = document.createElement("div");
+  toast.id = "ironz-toast";
+  toast.className = "ironz-toast";
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("visible"));
+  setTimeout(() => { toast.classList.remove("visible"); setTimeout(() => toast.remove(), 220); }, 2000);
 }
 
 window.onload = init;

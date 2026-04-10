@@ -292,45 +292,64 @@
     app.innerHTML = `
       ${renderCard(data)}
       <div class="cta">
-        <a href="https://ironz.fit">Save Workout in IronZ</a>
-        <div class="sub">Free \u2022 No account required to view</div>
+        <a href="https://ironz.fit?import=${esc(data.share_token || '')}">Save Workout in IronZ</a>
+        <div class="sub">Free \u2022 Opens in the app</div>
       </div>`;
 
-    const name = data.session?.session_name || data.session_type_id || 'Workout';
+    const name = data.session?.session_name || _friendlyTypeLabel(data.session_type_id) || 'Workout';
     document.title = `${name} — IronZ`;
   }
+
+  // Friendly labels for session_type_id values
+  const _TYPE_LABELS = {
+    threshold: 'Threshold Test', ftp_test: 'FTP Test', tempo: 'Tempo Run',
+    tempo_threshold: 'Tempo / Threshold', endurance: 'Endurance Session',
+    interval: 'Interval Session', easy: 'Easy Session', easy_recovery: 'Easy / Recovery',
+    long_run: 'Long Run', speed: 'Speed Work', speed_work: 'Speed Work',
+    strength: 'Strength Session', hiit: 'HIIT Session',
+    track_workout: 'Track Workout', hills: 'Hill Repeats',
+    running: 'Running Session', cycling: 'Cycling Session',
+    swimming: 'Swim Session', general: 'General Workout',
+    bike: 'Cycling Session', swim: 'Swim Session', run: 'Running Session',
+  };
+  function _friendlyTypeLabel(typeId) {
+    if (!typeId) return null;
+    if (_TYPE_LABELS[typeId]) return _TYPE_LABELS[typeId];
+    // Capitalize and clean underscores as last resort
+    return typeId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // Sport display labels
+  const _SPORT_LABELS = {
+    run: 'Running', bike: 'Cycling', swim: 'Swimming',
+    strength: 'Strength', hybrid: 'Hybrid', running: 'Running',
+    cycling: 'Cycling', swimming: 'Swimming',
+  };
 
   function renderCard(data) {
     const session = data.session || {};
     const sessionData = session.data || {};
-    // Friendly fallback labels when training_sessions is unavailable (RLS blocks anon)
-    const _typeLabels = {
-      threshold: 'Threshold Test', ftp_test: 'FTP Test', tempo: 'Tempo Run',
-      endurance: 'Endurance Session', interval: 'Interval Session',
-      easy: 'Easy Session', long_run: 'Long Run', speed: 'Speed Work',
-      strength: 'Strength Session', hiit: 'HIIT Session',
-      track_workout: 'Track Workout', hills: 'Hill Repeats',
-    };
     const name = session.session_name
-      || _typeLabels[data.session_type_id]
-      || data.session_type_id
+      || _friendlyTypeLabel(data.session_type_id)
       || 'Shared Workout';
     const sessionType = session.session_type || data.session_type_id || '';
     const sport = data.sport_id || sessionData.sport || '';
     const sharer = data._senderName || (data.profiles && data.profiles.full_name) || 'An IronZ user';
-    const notes = session.description || data.share_note || '';
 
-    // Sport labels
-    const sportLabels = { run: 'Running', bike: 'Cycling', swim: 'Swimming', strength: 'Strength', hybrid: 'Hybrid' };
+    const sportLabel = _SPORT_LABELS[sport] || '';
+    const typeLabel = _friendlyTypeLabel(sessionType) || '';
 
     let html = `<div class="card">`;
 
-    // Header
+    // Header — deduplicate badges: if sport and type would show the same thing, only show sport
     html += `<div class="card-header">
       <h1>${esc(name)}</h1>
       <div class="card-meta">`;
-    if (sport) html += `<span class="badge">${esc(sportLabels[sport] || sport)}</span>`;
-    if (sessionType) html += `<span class="badge">${esc(sessionType)}</span>`;
+    if (sportLabel) html += `<span class="badge">${esc(sportLabel)}</span>`;
+    // Only show type badge if it adds information beyond the sport badge
+    if (typeLabel && typeLabel !== sportLabel && typeLabel !== name) {
+      html += `<span class="badge">${esc(typeLabel)}</span>`;
+    }
     if (sessionData.duration_minutes) html += `<span class="badge">${sessionData.duration_minutes} min</span>`;
     html += `</div></div>`;
 
@@ -339,14 +358,39 @@
 
     // Share note
     if (data.share_note) {
-      html += `<div class="notes">"${esc(data.share_note)}"</div>`;
+      html += `<div class="notes">\u201c${esc(data.share_note)}\u201d</div>`;
     }
 
-    // Exercises from training_sessions.exercises (jsonb array)
-    const exercises = session.exercises || [];
+    // Exercises: try training_sessions.exercises first, then fall back to
+    // a generic structure summary from the session_type_id
+    let exercises = session.exercises || [];
+    if (typeof exercises === 'string') {
+      try { exercises = JSON.parse(exercises); } catch { exercises = []; }
+    }
 
     if (exercises.length > 0) {
       html += renderExercises(exercises);
+    } else {
+      // No training_sessions data — show a generic structure from session_type_id
+      const structures = {
+        track_workout:    ['Warm-up: 15 min easy + strides', 'Main: Repeats at I-pace', 'Cool-down: 10 min easy'],
+        tempo_threshold:  ['Warm-up: 15 min easy', 'Main: Cruise intervals at T-pace', 'Cool-down: 10 min easy'],
+        speed_work:       ['Warm-up: 15 min easy', 'Main: Short repeats at R-pace', 'Cool-down: 10 min easy'],
+        hills:            ['Warm-up: 15 min easy', 'Main: Hill repeats, hard up / easy down', 'Cool-down: 10 min easy'],
+        long_run:         ['Sustained aerobic effort at E-pace'],
+        endurance:        ['Steady aerobic effort'],
+        easy_recovery:    ['Conversational easy effort'],
+        threshold:        ['Warm-up: 10 min', 'Test: 20 min all-out', 'Cool-down: 10 min'],
+        running:          ['Running session'],
+        cycling:          ['Cycling session'],
+        swimming:         ['Swim session'],
+      };
+      const lines = structures[data.session_type_id];
+      if (lines) {
+        html += `<div class="section"><div class="section-title">Structure</div>`;
+        lines.forEach(l => { html += `<div class="exercise-row"><span class="exercise-name">${esc(l)}</span></div>`; });
+        html += `</div>`;
+      }
     }
 
     // Description as notes
