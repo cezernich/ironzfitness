@@ -1377,10 +1377,10 @@ async function triggerShareWorkout(cacheKey) {
         user_id: userId,
         session_name: workoutName,
         session_type: sessionTypeId,
-        sport_id: sportId,
         status: "shared",
         exercises: _exercises.length > 0 ? _exercises : null,
         description: noteText || null,
+        data: { sport_id: sportId },
       };
       console.log("[IronZ] training_sessions INSERT payload:", tsPayload);
       const { data: tsRow, error: tsErr } = await sb
