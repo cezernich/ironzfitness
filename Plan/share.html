@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shared Workout — IronZ</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #0f0f18;
+    color: #e0e0e0;
+    min-height: 100vh;
+    padding: 24px 16px;
+  }
+  .container { max-width: 480px; margin: 0 auto; }
+
+  /* Loading state */
+  .loading { text-align: center; padding: 80px 0; }
+  .loading .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid rgba(168,85,247,0.2);
+    border-top-color: #a855f7;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Error state */
+  .error-page { text-align: center; padding: 80px 0; }
+  .error-page h1 { font-size: 24px; margin-bottom: 12px; color: #fff; }
+  .error-page p { color: #999; font-size: 15px; }
+
+  /* Card */
+  .card {
+    background: #1a1a2e;
+    border-radius: 16px;
+    border: 1px solid rgba(168,85,247,0.15);
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .card-header {
+    padding: 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .card-header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+  .card-meta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: #999;
+  }
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: rgba(168,85,247,0.15);
+    color: #c084fc;
+  }
+  .shared-by {
+    padding: 14px 20px;
+    font-size: 14px;
+    color: #bbb;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .shared-by strong { color: #fff; }
+
+  /* Sections (exercises, segments, etc.) */
+  .section {
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .section:last-child { border-bottom: none; }
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #a855f7;
+    margin-bottom: 10px;
+  }
+  .exercise-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    font-size: 14px;
+  }
+  .exercise-name { color: #e0e0e0; flex: 1; }
+  .exercise-detail { color: #999; font-size: 13px; text-align: right; margin-left: 12px; }
+
+  /* Superset grouping */
+  .superset-group {
+    border-left: 3px solid #a855f7;
+    padding-left: 12px;
+    margin: 6px 0;
+  }
+  .superset-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #a855f7;
+    margin-bottom: 4px;
+  }
+
+  /* Notes */
+  .notes {
+    padding: 14px 20px;
+    font-size: 13px;
+    color: #999;
+    font-style: italic;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+
+  /* CTA */
+  .cta {
+    text-align: center;
+    padding: 24px 0;
+  }
+  .cta a {
+    display: inline-block;
+    padding: 14px 32px;
+    background: linear-gradient(135deg, #a855f7, #7c3aed);
+    color: #fff;
+    font-weight: 600;
+    font-size: 15px;
+    border-radius: 12px;
+    text-decoration: none;
+    transition: transform 0.15s;
+  }
+  .cta a:active { transform: scale(0.97); }
+  .cta .sub { font-size: 12px; color: #777; margin-top: 8px; }
+
+  /* Expired overlay */
+  .expired-banner {
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+    margin-bottom: 16px;
+    color: #f87171;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="container" id="app">
+  <div class="loading" id="loading-state">
+    <div class="spinner"></div>
+    <p>Loading workout...</p>
+  </div>
+</div>
+
+<script>
+(function() {
+  const SUPABASE_URL = 'https://dagdpdcwqdlibxbitdgr.supabase.co';
+  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRhZ2RwZGN3cWRsaWJ4Yml0ZGdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQwMTQ2NjQsImV4cCI6MjA1OTU5MDY2NH0.jq4hVKAWiVnJmfJL2SBVpLrv22n4bKMbOFa3gAdLqHY';
+
+  const app = document.getElementById('app');
+
+  // Extract token from URL path: /share.html -> /w/TOKEN or ?token=TOKEN
+  let token = null;
+  const pathMatch = window.location.pathname.match(/\/w\/([^\/]+)/);
+  if (pathMatch) {
+    token = pathMatch[1];
+  } else {
+    const params = new URLSearchParams(window.location.search);
+    token = params.get('token');
+  }
+
+  if (!token || !/^[\w-]{6,64}$/.test(token)) {
+    showError('Invalid share link', 'This link appears to be malformed.');
+    return;
+  }
+
+  // Fetch workout data from Supabase directly (REST API)
+  fetchWorkout(token);
+
+  async function fetchWorkout(token) {
+    try {
+      const headers = {
+        'apikey': SUPABASE_ANON,
+        'Authorization': `Bearer ${SUPABASE_ANON}`
+      };
+
+      // Step 1: Get shared_workouts row + sender profile
+      const shareUrl = `${SUPABASE_URL}/rest/v1/shared_workouts?share_token=eq.${token}&select=*,profiles!shared_workouts_sender_user_id_fkey(full_name)`;
+      const shareRes = await fetch(shareUrl, { headers });
+
+      if (!shareRes.ok) {
+        showError('Something went wrong', 'Could not load this workout.');
+        return;
+      }
+
+      const rows = await shareRes.json();
+      if (!rows || rows.length === 0) {
+        showError('Link not found', 'This workout link doesn\u2019t exist or has been removed.');
+        return;
+      }
+
+      const share = rows[0];
+
+      // Check revoked
+      if (share.revoked_at) {
+        showError('Link revoked', 'This share link is no longer available.');
+        return;
+      }
+
+      // Check expiry
+      if (share.expires_at && new Date(share.expires_at) < new Date()) {
+        showExpired(share);
+        return;
+      }
+
+      // Step 2: Get the actual training session using variant_id
+      const sessionUrl = `${SUPABASE_URL}/rest/v1/training_sessions?id=eq.${share.variant_id}&select=session_name,session_type,description,exercises,data`;
+      const sessionRes = await fetch(sessionUrl, { headers });
+      let session = {};
+      if (sessionRes.ok) {
+        const sessionRows = await sessionRes.json();
+        if (sessionRows && sessionRows.length > 0) session = sessionRows[0];
+      }
+
+      // Merge share + session data for rendering
+      const merged = { ...share, session };
+
+      // Best-effort view increment
+      fetch(`${SUPABASE_URL}/rest/v1/rpc/increment_share_view`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token_arg: token })
+      }).catch(() => {});
+
+      renderWorkout(merged);
+    } catch (e) {
+      showError('Connection error', 'Could not reach the server. Please try again.');
+    }
+  }
+
+  function showError(title, message) {
+    app.innerHTML = `
+      <div class="error-page">
+        <h1>${esc(title)}</h1>
+        <p>${esc(message)}</p>
+        <div class="cta" style="margin-top:32px">
+          <a href="https://ironz.fit">Open IronZ</a>
+        </div>
+      </div>`;
+  }
+
+  function showExpired(data) {
+    app.innerHTML = `
+      <div class="expired-banner">This share link has expired.</div>
+      ${renderCard(data)}
+      <div class="cta">
+        <a href="https://ironz.fit">Open IronZ</a>
+        <div class="sub">Get the full workout in the app</div>
+      </div>`;
+  }
+
+  function renderWorkout(data) {
+    app.innerHTML = `
+      ${renderCard(data)}
+      <div class="cta">
+        <a href="https://ironz.fit">Save Workout in IronZ</a>
+        <div class="sub">Free \u2022 No account required to view</div>
+      </div>`;
+
+    const name = data.session?.session_name || data.session_type_id || 'Workout';
+    document.title = `${name} — IronZ`;
+  }
+
+  function renderCard(data) {
+    const session = data.session || {};
+    const sessionData = session.data || {};
+    const name = session.session_name || data.session_type_id || 'Shared Workout';
+    const sessionType = session.session_type || data.session_type_id || '';
+    const sport = data.sport_id || sessionData.sport || '';
+    const sharer = data.profiles?.full_name || 'An IronZ user';
+    const notes = session.description || data.share_note || '';
+
+    // Sport labels
+    const sportLabels = { run: 'Running', bike: 'Cycling', swim: 'Swimming', strength: 'Strength', hybrid: 'Hybrid' };
+
+    let html = `<div class="card">`;
+
+    // Header
+    html += `<div class="card-header">
+      <h1>${esc(name)}</h1>
+      <div class="card-meta">`;
+    if (sport) html += `<span class="badge">${esc(sportLabels[sport] || sport)}</span>`;
+    if (sessionType) html += `<span class="badge">${esc(sessionType)}</span>`;
+    if (sessionData.duration_minutes) html += `<span class="badge">${sessionData.duration_minutes} min</span>`;
+    html += `</div></div>`;
+
+    // Shared by
+    html += `<div class="shared-by">Shared by <strong>${esc(sharer)}</strong></div>`;
+
+    // Share note
+    if (data.share_note) {
+      html += `<div class="notes">"${esc(data.share_note)}"</div>`;
+    }
+
+    // Exercises from training_sessions.exercises (jsonb array)
+    const exercises = session.exercises || [];
+
+    if (exercises.length > 0) {
+      html += renderExercises(exercises);
+    }
+
+    // Description as notes
+    if (session.description) {
+      html += `<div class="notes">${esc(session.description)}</div>`;
+    }
+
+    html += `</div>`;
+    return html;
+  }
+
+  function renderExercises(exercises) {
+    // Group by supersetGroup
+    const groups = [];
+    let currentGroup = null;
+
+    exercises.forEach(ex => {
+      if (ex.supersetGroup) {
+        if (!currentGroup || currentGroup.id !== ex.supersetGroup) {
+          currentGroup = { id: ex.supersetGroup, exercises: [ex] };
+          groups.push(currentGroup);
+        } else {
+          currentGroup.exercises.push(ex);
+        }
+      } else {
+        groups.push({ id: null, exercises: [ex] });
+        currentGroup = null;
+      }
+    });
+
+    let html = `<div class="section"><div class="section-title">Exercises</div>`;
+
+    groups.forEach(group => {
+      if (group.id && group.exercises.length > 1) {
+        html += `<div class="superset-group">`;
+        html += `<div class="superset-label">Superset ${esc(group.id)}</div>`;
+        group.exercises.forEach(ex => { html += exerciseRow(ex); });
+        html += `</div>`;
+      } else {
+        group.exercises.forEach(ex => { html += exerciseRow(ex); });
+      }
+    });
+
+    html += `</div>`;
+    return html;
+  }
+
+  function exerciseRow(ex) {
+    const name = ex.name || ex.exercise || 'Exercise';
+    let detail = '';
+    if (ex.sets && ex.reps) detail = `${ex.sets} × ${ex.reps}`;
+    else if (ex.sets) detail = `${ex.sets} sets`;
+    else if (ex.duration) detail = ex.duration;
+    if (ex.weight) detail += ` @ ${ex.weight}`;
+    return `<div class="exercise-row">
+      <span class="exercise-name">${esc(name)}</span>
+      <span class="exercise-detail">${esc(detail)}</span>
+    </div>`;
+  }
+
+  function renderSegments(segments) {
+    let html = `<div class="section"><div class="section-title">Segments</div>`;
+    segments.forEach(seg => {
+      const name = seg.name || seg.type || 'Segment';
+      let detail = '';
+      if (seg.distance) detail = seg.distance;
+      if (seg.duration) detail = detail ? `${detail} / ${seg.duration}` : seg.duration;
+      if (seg.pace) detail += ` @ ${seg.pace}`;
+      html += `<div class="exercise-row">
+        <span class="exercise-name">${esc(name)}</span>
+        <span class="exercise-detail">${esc(detail)}</span>
+      </div>`;
+    });
+    html += `</div>`;
+    return html;
+  }
+
+  function esc(str) {
+    if (!str) return '';
+    const d = document.createElement('div');
+    d.textContent = String(str);
+    return d.innerHTML;
+  }
+})();
+</script>
+</body>
+</html>
