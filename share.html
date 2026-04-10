@@ -133,6 +133,10 @@
     // Exercise details from training_sessions.exercises (JSONB array)
     var exerciseHtml = "";
     var exercises = session.exercises;
+    // JSONB may arrive as a string if the client doesn't auto-parse
+    if (typeof exercises === "string") {
+      try { exercises = JSON.parse(exercises); } catch (e) { exercises = null; }
+    }
     if (Array.isArray(exercises) && exercises.length > 0) {
       exerciseHtml = '<div class="exercises">';
       for (var i = 0; i < exercises.length; i++) {
