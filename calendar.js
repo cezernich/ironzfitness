@@ -1377,7 +1377,7 @@ async function triggerShareWorkout(cacheKey) {
         user_id: userId,
         session_name: workoutName,
         session_type: sessionTypeId,
-        plan_id: "shared",
+        plan_id: "00000000-0000-0000-0000-000000000000",
         exercises: _exercises.length > 0 ? _exercises : null,
         description: noteText || null,
         data: { sport_id: sportId },
