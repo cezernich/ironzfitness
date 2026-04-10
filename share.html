@@ -440,14 +440,18 @@
 
   function exerciseRow(ex) {
     const name = ex.name || ex.exercise || 'Exercise';
-    let detail = '';
-    if (ex.sets && ex.reps) detail = `${ex.sets} × ${ex.reps}`;
-    else if (ex.sets) detail = `${ex.sets} sets`;
-    else if (ex.duration) detail = ex.duration;
-    if (ex.weight) detail += ` @ ${ex.weight}`;
+    const parts = [];
+    if (ex.sets && ex.reps) parts.push(`${ex.sets} \u00d7 ${ex.reps}`);
+    else if (ex.sets) parts.push(`${ex.sets} sets`);
+    if (ex.duration) parts.push(ex.duration);
+    if (ex.weight) parts.push(`@ ${ex.weight}`);
+    if (ex.intensity) parts.push(ex.intensity);
+    if (ex.details) parts.push(ex.details);
+    if (ex.reps && !ex.sets) parts.push(`${ex.reps} reps`);
+    const detail = parts.join(' \u00b7 ');
     return `<div class="exercise-row">
       <span class="exercise-name">${esc(name)}</span>
-      <span class="exercise-detail">${esc(detail)}</span>
+      ${detail ? `<span class="exercise-detail">${esc(detail)}</span>` : ''}
     </div>`;
   }
 

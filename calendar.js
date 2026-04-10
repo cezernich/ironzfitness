@@ -1301,14 +1301,63 @@ async function triggerShareWorkout(cacheKey) {
     || (entry.aiSession && entry.aiSession.title)
     || (_WORKOUT_TYPE_LABELS[sessionTypeId] || capitalize(sessionTypeId || "Workout"));
 
+  // Build exercises array from the entry's data for training_sessions INSERT
+  const _exercises = [];
+  if (entry.aiSession && entry.aiSession.intervals) {
+    entry.aiSession.intervals.forEach(iv => {
+      _exercises.push({
+        name: iv.name || "Interval",
+        duration: iv.duration || "",
+        intensity: iv.effort || iv.intensity || "",
+        details: iv.details || "",
+        reps: iv.reps || null,
+      });
+    });
+  } else if (entry.exercises && entry.exercises.length) {
+    entry.exercises.forEach(ex => {
+      _exercises.push({
+        name: ex.name || "Exercise",
+        sets: ex.sets || null,
+        reps: ex.reps || null,
+        weight: ex.weight || null,
+        duration: ex.duration || null,
+        supersetGroup: ex.supersetGroup || null,
+      });
+    });
+  }
+
   // Show note prompt modal
   _showShareNotePrompt(workoutName, async (noteText) => {
+    // Step 1: INSERT workout data into training_sessions so the share
+    // preview page can look it up and render exercises/segments.
+    let realVariantId = variantId;
+    try {
+      const { data: tsRow, error: tsErr } = await sb
+        .from("training_sessions")
+        .insert({
+          user_id: userId,
+          session_name: workoutName,
+          session_type: sessionTypeId,
+          sport: sportId,
+          exercises: _exercises.length > 0 ? _exercises : null,
+          description: noteText || null,
+        })
+        .select("id")
+        .single();
+      if (!tsErr && tsRow && tsRow.id) {
+        realVariantId = tsRow.id;
+      }
+    } catch (e) {
+      console.warn("[IronZ] training_sessions insert failed, using local id:", e.message);
+    }
+
+    // Step 2: INSERT the share row pointing to the training_session
     const token = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
     const { error } = await sb.from("shared_workouts").insert({
       share_token: token,
       sender_user_id: userId,
-      variant_id: variantId,
+      variant_id: realVariantId,
       sport_id: sportId,
       session_type_id: sessionTypeId,
       share_note: noteText || null,

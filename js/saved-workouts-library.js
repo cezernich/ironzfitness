@@ -83,6 +83,29 @@
     if (!opts || !opts.shareToken || !opts.variantId) {
       return { error: "INVALID_INPUT" };
     }
+    // Resolve a display name: caller-provided name > lookup from training_sessions > friendly label > raw ID
+    let displayName = opts.name || opts.sessionName || null;
+    if (!displayName && opts.variantId && typeof window !== "undefined" && window.supabaseClient) {
+      try {
+        const { data: ts } = await window.supabaseClient
+          .from("training_sessions")
+          .select("session_name")
+          .eq("id", opts.variantId)
+          .maybeSingle();
+        if (ts && ts.session_name) displayName = ts.session_name;
+      } catch {}
+    }
+    if (!displayName) {
+      const _labels = {
+        track_workout: "Track Workout", tempo_threshold: "Tempo Run",
+        speed_work: "Speed Work", hills: "Hill Repeats", long_run: "Long Run",
+        endurance: "Endurance Run", easy_recovery: "Easy Recovery",
+        running: "Running Session", cycling: "Cycling Session",
+        swimming: "Swim Session", threshold: "Threshold Test",
+      };
+      displayName = _labels[opts.sessionTypeId] || (opts.sessionTypeId || "Shared Workout").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    }
+
     const list = _readLocal();
     const existing = _findExisting(list, opts.variantId, "shared");
     const now = new Date().toISOString();
@@ -91,6 +114,7 @@
       existing.saved_at = now;
       existing.share_token = opts.shareToken;
       existing.shared_from_user_id = opts.senderUserId || existing.shared_from_user_id;
+      if (displayName) existing.custom_name = displayName;
       _writeLocal(list);
       _emit("saved_from_share", { share_token: opts.shareToken, deduped: true });
       return existing;
@@ -100,6 +124,7 @@
       variant_id: opts.variantId,
       sport_id: opts.sportId,
       session_type_id: opts.sessionTypeId,
+      custom_name: displayName,
       source: "shared",
       shared_from_user_id: opts.senderUserId || null,
       share_token: opts.shareToken,

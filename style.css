@@ -11984,6 +11984,38 @@ button:active {
   margin-bottom: 12px;
   text-transform: capitalize;
 }
+/* Saved workout detail view (tap-to-expand) */
+.saved-detail-desc {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+.saved-detail-exercises {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+.saved-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 12px;
+}
+.saved-detail-row:last-child { border-bottom: none; }
+.saved-detail-name {
+  font-weight: 600;
+  color: var(--color-text);
+}
+.saved-detail-info {
+  color: var(--color-text-muted);
+  text-align: right;
+  max-width: 60%;
+}
+
 .saved-card-actions {
   display: flex;
   gap: 6px;

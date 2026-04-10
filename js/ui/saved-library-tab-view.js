@@ -155,14 +155,22 @@
     const sourceLabel = s.source === "shared" ? "Shared" : "Library";
     const sourceClass = s.source === "shared" ? "saved-source-shared" : "saved-source-library";
     const name = s.custom_name || s.variant_id;
+    const cardId = "sl-card-" + _esc(s.id);
+    const typeLabel = (s.session_type_id || "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
     return `
-      <div class="saved-card" data-id="${_esc(s.id)}">
-        <div class="saved-card-header">
-          <span class="saved-source-tag ${sourceClass}">${sourceLabel}</span>
-          <span class="saved-sport-tag">${_esc(s.sport_id || "")}</span>
+      <div class="saved-card collapsible is-collapsed" id="${cardId}" data-id="${_esc(s.id)}" data-variant="${_esc(s.variant_id || "")}">
+        <div class="saved-card-header card-toggle" onclick="toggleSection('${cardId}'); _slLoadDetail('${cardId}','${_esc(s.variant_id || "")}')">
+          <div class="saved-card-header-left">
+            <span class="saved-source-tag ${sourceClass}">${sourceLabel}</span>
+            <span class="saved-sport-tag">${_esc(s.sport_id || "")}</span>
+          </div>
+          <span class="card-chevron">\u25be</span>
         </div>
         <div class="saved-card-title">${_esc(name)}</div>
-        <div class="saved-card-meta">${_esc(s.session_type_id || "")}</div>
+        <div class="saved-card-meta">${_esc(typeLabel)}</div>
+        <div class="card-body" id="${cardId}-detail" style="display:none">
+          <p class="hint">Loading workout details...</p>
+        </div>
         <div class="saved-card-actions">
           <button class="btn-primary"   data-saved-action="schedule" data-id="${_esc(s.id)}">Schedule</button>
           <button class="btn-ghost"     data-saved-action="remove"   data-id="${_esc(s.id)}">Remove</button>
@@ -170,6 +178,64 @@
       </div>
     `;
   }
+
+  // Lazy-load workout details from training_sessions when a card is expanded
+  const _detailLoaded = new Set();
+  window._slLoadDetail = async function (cardId, variantId) {
+    if (_detailLoaded.has(cardId) || !variantId) return;
+    _detailLoaded.add(cardId);
+    const detailEl = document.getElementById(cardId + "-detail");
+    if (!detailEl) return;
+
+    const sb = window.supabaseClient;
+    if (!sb) { detailEl.innerHTML = "<p class='hint'>Not connected.</p>"; return; }
+
+    try {
+      const { data, error } = await sb
+        .from("training_sessions")
+        .select("session_name, description, exercises, data")
+        .eq("id", variantId)
+        .maybeSingle();
+
+      if (error || !data) {
+        detailEl.innerHTML = "<p class='hint'>Workout details not available.</p>";
+        return;
+      }
+
+      let exercises = data.exercises || [];
+      if (typeof exercises === "string") {
+        try { exercises = JSON.parse(exercises); } catch { exercises = []; }
+      }
+
+      let html = "";
+      if (data.description) {
+        html += `<p class="saved-detail-desc">${_esc(data.description)}</p>`;
+      }
+      if (exercises.length > 0) {
+        html += '<div class="saved-detail-exercises">';
+        exercises.forEach(ex => {
+          const name = ex.name || "Exercise";
+          const parts = [];
+          if (ex.sets && ex.reps) parts.push(`${ex.sets} \u00d7 ${ex.reps}`);
+          if (ex.duration) parts.push(ex.duration);
+          if (ex.weight) parts.push(`@ ${ex.weight}`);
+          if (ex.intensity) parts.push(ex.intensity);
+          if (ex.details) parts.push(ex.details);
+          if (ex.supersetGroup) parts.push(`Superset ${ex.supersetGroup}`);
+          html += `<div class="saved-detail-row">
+            <span class="saved-detail-name">${_esc(name)}</span>
+            <span class="saved-detail-info">${_esc(parts.join(" \u00b7 "))}</span>
+          </div>`;
+        });
+        html += '</div>';
+      } else {
+        html += "<p class='hint'>No exercise details stored.</p>";
+      }
+      detailEl.innerHTML = html;
+    } catch (e) {
+      detailEl.innerHTML = "<p class='hint'>Could not load details.</p>";
+    }
+  };
 
   // ─── Custom workout modal (re-uses the existing saved-workout-modal) ────────
 
