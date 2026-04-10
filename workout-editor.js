@@ -10,6 +10,7 @@ let _editSsCount       = 0;
 let _editSource        = "workouts"; // "workouts", "workoutSchedule", or "trainingPlan"
 let _editPlanKey       = null;      // For plan entries: { date, raceId, discipline, load }
 // _editSsMode and _editSsDragId removed — superset now triggered by drop zone
+let _editIvSuppressBadges = false;  // suppress per-row badge refresh during bulk load
 
 // ── Open ──────────────────────────────────────────────────────────────────────
 
@@ -53,7 +54,10 @@ function openEditWorkout(id, source) {
     const container = document.getElementById("edit-interval-rows");
     container.innerHTML = "";
     const intervals = w.aiSession?.intervals || [];
-    intervals.forEach(iv => _addEditIntervalRow(iv));
+    _editIvSuppressBadges = true;
+    try { intervals.forEach(iv => _addEditIntervalRow(iv)); }
+    finally { _editIvSuppressBadges = false; }
+    _editIvRefreshBadges();
     if (!intervals.length) _addEditIntervalRow();
   } else {
     if (exSection) exSection.style.display = "";
@@ -650,7 +654,7 @@ function _addEditIntervalRow(iv) {
     });
   }
   container.appendChild(div);
-  _editIvRefreshBadges();
+  if (!_editIvSuppressBadges) _editIvRefreshBadges();
 }
 
 let _editIvDragEl = null;
