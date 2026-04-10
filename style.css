@@ -11015,9 +11015,28 @@ button:active {
   max-width: 480px;
   width: 92%;
 }
+.ars-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: -6px 0 8px;
+}
+.ars-modal-title {
+  flex: 1;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+.ars-modal .qe-back-btn { min-width: 60px; text-align: left; }
+.ars-modal .qe-close-btn { min-width: 28px; }
 .ars-modal select,
 .ars-modal input[type="date"],
-.ars-modal input[type="range"] {
+.ars-modal input[type="text"],
+.ars-modal input[type="number"],
+.ars-modal input[type="range"],
+.ars-modal textarea {
   width: 100%;
   padding: 10px 12px;
   border-radius: 8px;
@@ -11025,7 +11044,10 @@ button:active {
   background: var(--color-surface);
   color: var(--color-text);
   font-size: 0.95rem;
+  box-sizing: border-box;
+  font-family: inherit;
 }
+.ars-modal textarea { resize: vertical; min-height: 60px; }
 .ars-modal input[type="range"] { padding: 0; }
 .ars-preview {
   margin-top: 12px;

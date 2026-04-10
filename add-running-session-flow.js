@@ -209,6 +209,57 @@
     return entry;
   }
 
+  /**
+   * Save a free-form manual run entry (no session-type generator, no
+   * structured phases). Used by the "Add Manually" path on the modal.
+   * `form` = { name, duration, distance, notes }
+   */
+  function saveManual(form, dateStr, mode) {
+    const Planner = (typeof window !== "undefined" && window.Planner) || null;
+    const monday = _mondayOf(dateStr);
+    const entry = {
+      id: "user-manual-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e6).toString(36),
+      date: dateStr,
+      type: "running",
+      sessionName: form.name || "Running Session",
+      duration: form.duration || null,
+      distance: form.distance || undefined,
+      details: form.notes || undefined,
+      source: "user_added",
+      created_at: new Date().toISOString(),
+    };
+
+    if (mode === "replace") {
+      const existing = plannedWorkoutForDate(dateStr);
+      if (existing && Planner && Planner.removeWorkout && existing.id) {
+        const removed = Planner.removeWorkout(existing.id);
+        if (removed && Planner.rebalanceWeek) {
+          Planner.rebalanceWeek(monday, { removedDurationMin: parseFloat(removed.duration) || 0 });
+        }
+      } else if (existing && existing.source === "trainingPlan") {
+        try {
+          const plan = JSON.parse(localStorage.getItem("trainingPlan") || "[]");
+          const filtered = plan.filter(e => e.date !== dateStr);
+          localStorage.setItem("trainingPlan", JSON.stringify(filtered));
+          if (typeof DB !== "undefined" && DB.syncTrainingPlan) DB.syncTrainingPlan();
+          if (Planner && Planner.rebalanceWeek) {
+            Planner.rebalanceWeek(monday, { removedDurationMin: parseFloat(existing.duration) || 0 });
+          }
+        } catch (e) { console.warn("[IronZ] manual replace fallback failed:", e.message); }
+      }
+    }
+
+    const schedule = _readSchedule();
+    schedule.push(entry);
+    _writeSchedule(schedule);
+
+    try {
+      if (typeof renderCalendar === "function") renderCalendar();
+      if (typeof renderDayDetail === "function") renderDayDetail(dateStr);
+    } catch {}
+    return entry;
+  }
+
   // ─── Modal: workout preview ─────────────────────────────────────────────────
 
   function _renderPhasesHtml(phases) {
@@ -339,8 +390,14 @@
 
     overlay.innerHTML = `
       <div class="rating-modal post-test-modal ars-modal">
-        <div class="post-test-modal-title">Add Running Session</div>
-        <div class="post-test-modal-body">
+        <div class="ars-modal-header">
+          <button class="qe-back-btn" id="ars-back" type="button">&larr; Back</button>
+          <span class="ars-modal-title">Add Running Session</span>
+          <button class="qe-close-btn" id="ars-close" type="button">&#10005;</button>
+        </div>
+
+        <!-- Generator view (default) -->
+        <div class="post-test-modal-body" id="ars-body-generator">
           <label class="post-test-field">
             <span>Date</span>
             <input type="date" id="ars-date" value="${_esc(initialDateStr || _todayStr())}">
@@ -355,9 +412,38 @@
           </label>
           <div id="ars-preview" class="ars-preview"></div>
         </div>
-        <div class="post-test-modal-actions">
-          <button class="rating-skip-btn" id="ars-cancel">Cancel</button>
-          <button class="rating-save-btn" id="ars-save">Save</button>
+
+        <!-- Manual entry view (toggled via "Add Manually") -->
+        <div class="post-test-modal-body" id="ars-body-manual" style="display:none">
+          <label class="post-test-field">
+            <span>Date</span>
+            <input type="date" id="ars-manual-date" value="${_esc(initialDateStr || _todayStr())}">
+          </label>
+          <label class="post-test-field">
+            <span>Workout name (optional)</span>
+            <input type="text" id="ars-manual-name" placeholder="e.g. Easy 5K, Long run, Hill repeats">
+          </label>
+          <label class="post-test-field">
+            <span>Duration (min)</span>
+            <input type="number" id="ars-manual-duration" min="1" max="600" placeholder="e.g. 45">
+          </label>
+          <label class="post-test-field">
+            <span>Distance (optional)</span>
+            <input type="text" id="ars-manual-distance" placeholder="e.g. 5 mi, 10 km">
+          </label>
+          <label class="post-test-field">
+            <span>Notes (optional)</span>
+            <textarea id="ars-manual-notes" rows="3" placeholder="Route, pace, how it felt…"></textarea>
+          </label>
+        </div>
+
+        <div class="post-test-modal-actions" id="ars-actions-generator">
+          <button class="rating-skip-btn" id="ars-manual-toggle" type="button">Add Manually</button>
+          <button class="rating-save-btn" id="ars-save" type="button">Save</button>
+        </div>
+        <div class="post-test-modal-actions" id="ars-actions-manual" style="display:none">
+          <button class="rating-skip-btn" id="ars-generator-toggle" type="button">Use generator</button>
+          <button class="rating-save-btn" id="ars-save-manual" type="button">Save</button>
         </div>
       </div>
     `;
@@ -418,7 +504,71 @@
     $date.onchange = () => refreshPreview();
     refreshPreview();
 
-    overlay.querySelector("#ars-cancel").onclick = () => _close(id);
+    // Header: Back returns to Quick Entry type picker; X closes outright.
+    overlay.querySelector("#ars-back").onclick = () => {
+      _close(id);
+      try {
+        if (typeof window.openQuickEntry === "function") {
+          const d = overlay.querySelector("#ars-date")?.value || initialDateStr || _todayStr();
+          window.openQuickEntry(d);
+        }
+      } catch {}
+    };
+    overlay.querySelector("#ars-close").onclick = () => _close(id);
+
+    // Generator ↔ Manual toggle
+    const $genBody = overlay.querySelector("#ars-body-generator");
+    const $manBody = overlay.querySelector("#ars-body-manual");
+    const $genActions = overlay.querySelector("#ars-actions-generator");
+    const $manActions = overlay.querySelector("#ars-actions-manual");
+    function showManual() {
+      $genBody.style.display = "none";
+      $manBody.style.display = "";
+      $genActions.style.display = "none";
+      $manActions.style.display = "";
+      // Sync date from generator view if the user had changed it
+      const srcDate = overlay.querySelector("#ars-date")?.value;
+      const manDateEl = overlay.querySelector("#ars-manual-date");
+      if (srcDate && manDateEl && !manDateEl.dataset.touched) manDateEl.value = srcDate;
+    }
+    function showGenerator() {
+      $manBody.style.display = "none";
+      $genBody.style.display = "";
+      $manActions.style.display = "none";
+      $genActions.style.display = "";
+    }
+    overlay.querySelector("#ars-manual-toggle").onclick = showManual;
+    overlay.querySelector("#ars-generator-toggle").onclick = showGenerator;
+    overlay.querySelector("#ars-manual-date").addEventListener("change", function () {
+      this.dataset.touched = "1";
+    });
+
+    // Manual save path — free-form entry, no session-type generator involved.
+    overlay.querySelector("#ars-save-manual").onclick = () => {
+      const name = (overlay.querySelector("#ars-manual-name")?.value || "").trim();
+      const dur = parseInt(overlay.querySelector("#ars-manual-duration")?.value || "", 10);
+      const dist = (overlay.querySelector("#ars-manual-distance")?.value || "").trim();
+      const notes = (overlay.querySelector("#ars-manual-notes")?.value || "").trim();
+      const date = overlay.querySelector("#ars-manual-date")?.value;
+      if (!date) { alert("Please pick a date."); return; }
+      if (!dur || dur <= 0) { alert("Please enter a duration."); return; }
+      const form = { name, duration: dur, distance: dist, notes };
+
+      const existing = plannedWorkoutForDate(date);
+      const doSave = (mode) => {
+        saveManual(form, date, mode);
+        _close(id);
+      };
+      if (existing) {
+        _showConflictModal(existing, { title: name || "Manual run", type: "running" }, date, decision => {
+          if (decision === "cancel") return;
+          doSave(decision === "replace" ? "replace" : "add");
+        });
+      } else {
+        doSave("add");
+      }
+    };
+
     overlay.querySelector("#ars-save").onclick = () => {
       const w = overlay._currentWorkout;
       const date = $date.value;
@@ -470,6 +620,7 @@
   const api = {
     open,
     save,
+    saveManual,
     plannedWorkoutForDate,
     planEntryFor,
     evaluateConstraints,
