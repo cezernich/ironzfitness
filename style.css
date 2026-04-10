@@ -12006,6 +12006,9 @@ button:active {
   font-size: 12px;
 }
 .saved-detail-row:last-child { border-bottom: none; }
+.saved-card.is-collapsed .card-body {
+  display: none;
+}
 .saved-detail-group {
   border-left: 3px solid var(--color-accent, #6366f1);
   padding-left: 10px;

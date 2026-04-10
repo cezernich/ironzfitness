@@ -168,8 +168,8 @@
         </div>
         <div class="saved-card-title">${_esc(name)}</div>
         <div class="saved-card-meta">${_esc(typeLabel)}</div>
-        <div class="card-body" id="${cardId}-detail" style="display:none">
-          <p class="hint">Loading workout details...</p>
+        <div class="card-body" id="${cardId}-detail">
+          <p class="hint">Tap to see workout details</p>
         </div>
         <div class="saved-card-actions">
           <button class="btn-primary"   data-saved-action="schedule" data-id="${_esc(s.id)}">Schedule</button>
@@ -622,6 +622,8 @@
         variantId: e.variant_id || e.id,
         sportId: e.sport_id,
         sessionTypeId: e.session_type_id || e.workout_kind,
+        source: e.source || "shared",
+        sessionName: e.custom_name,
         senderDisplayName: "Saved Library",
         createdAt: e.saved_at,
       };

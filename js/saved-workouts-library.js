@@ -156,9 +156,10 @@
    * the inbox path — saved is not exempt from conflict checks.
    */
   async function scheduleFromSaved(savedId, targetDate) {
+    console.log("[IronZ] scheduleFromSaved called:", savedId, targetDate);
     const list = _readLocal();
     const e = list.find(s => s.id === savedId);
-    if (!e) return { error: "NOT_FOUND" };
+    if (!e) { console.warn("[IronZ] saved entry not found:", savedId); return { error: "NOT_FOUND" }; }
 
     const Validator = window.WorkoutImportValidator;
     if (Validator) {
@@ -179,6 +180,7 @@
     }
 
     // Insert into workoutSchedule
+    console.log("[IronZ] validation passed, inserting into workoutSchedule for", targetDate);
     let schedule = [];
     try { schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]"); } catch {}
     const entry = {
@@ -191,13 +193,14 @@
       source: "user_added",
       saved_workout_id: e.id,
     };
-    if (isCustom && e.payload) entry.payload = e.payload;
+    if (e.source === "custom" && e.payload) entry.payload = e.payload;
     schedule.push(entry);
     try {
       localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
       if (typeof DB !== "undefined" && DB.syncSchedule) DB.syncSchedule();
     } catch {}
 
+    console.log("[IronZ] workoutSchedule entry added:", entry);
     e.last_used_at = new Date().toISOString();
     _writeLocal(list);
     _emit("saved_scheduled", { variant_id: e.variant_id });
