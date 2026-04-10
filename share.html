@@ -1,289 +1,403 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Shared workout · IronZ</title>
-<!-- Generic OG tags — client-side fetch can't populate these dynamically for link
-     preview crawlers (iMessage, Slack, etc.), so they stay generic. -->
-<meta property="og:title" content="Someone shared a workout on IronZ">
-<meta property="og:description" content="Run this workout in your own zones. Your friend's paces stay private.">
-<meta property="og:type" content="website">
-<meta name="twitter:card" content="summary">
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shared Workout — IronZ</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-family: system-ui, -apple-system, sans-serif;
     background: #0f0f18;
-    color: #fff;
+    color: #e0e0e0;
     min-height: 100vh;
     padding: 24px 16px;
   }
-  .wrap { max-width: 480px; margin: 0 auto; }
-  .logo { font-size: 22px; font-weight: 900; color: #ff6b35; letter-spacing: -0.5px; text-align: center; }
-  .url  { font-size: 10px; color: #555; text-align: center; margin: 4px 0 24px;
-          font-family: "SF Mono", Menlo, monospace; }
-  .from { display: flex; align-items: center; gap: 12px; padding: 14px;
-          background: #1a1a24; border-radius: 14px; margin-bottom: 14px; }
-  .avatar { width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
-            background: linear-gradient(135deg, #ff6b35, #ff8e5e);
-            display: flex; align-items: center; justify-content: center;
-            font-weight: 800; font-size: 18px; color: #fff; }
-  .from-label { font-size: 11px; color: #888; }
-  .from-name  { font-size: 14px; font-weight: 700; }
-  .card { background: #1a1a24; border-radius: 16px; padding: 20px; margin-bottom: 14px; }
-  .badge { background: #ff6b35; color: #fff; font-size: 10px; font-weight: 700;
-           padding: 4px 10px; border-radius: 10px; display: inline-block;
-           margin-bottom: 8px; letter-spacing: 0.5px; text-transform: uppercase; }
-  .title { font-size: 22px; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.3px; }
-  .subtitle { color: #888; font-size: 12px; margin-bottom: 16px; }
-  .row { display: flex; justify-content: space-between; padding: 11px 0;
-         border-bottom: 1px solid #252530; font-size: 13px; }
-  .row:last-child { border-bottom: none; }
-  .label { color: #aaa; }
-  .value { color: #fff; font-weight: 600; }
-  .note { font-size: 13px; color: #ccc; font-style: italic;
-          padding: 12px; background: #0f0f18; border-radius: 10px;
-          border: 1px solid #252530; margin: 12px 0; }
-  .install { background: linear-gradient(135deg, #1a1a24, #252530); padding: 18px;
-             border-radius: 14px; border: 1px solid #333; margin-top: 12px; }
-  .install h2 { font-size: 15px; font-weight: 800; margin-bottom: 6px; }
-  .install p  { font-size: 12px; color: #999; line-height: 1.5; margin-bottom: 14px; }
-  .cta { display: block; width: 100%; background: #ff6b35; color: #fff;
-         text-decoration: none; padding: 14px; border-radius: 12px;
-         font-size: 15px; font-weight: 700; text-align: center; }
-  .cta:active { transform: scale(0.98); }
-  .privacy { font-size: 11px; color: #666; text-align: center; margin-top: 16px;
-             line-height: 1.5; }
-  .loading { text-align: center; padding: 60px 20px; color: #888; }
-  .error-msg { text-align: center; padding: 60px 20px; }
-  .error-msg h1 { font-size: 22px; margin-bottom: 8px; }
-  .error-msg p { color: #888; font-size: 14px; }
+  .container { max-width: 480px; margin: 0 auto; }
+
+  /* Loading state */
+  .loading { text-align: center; padding: 80px 0; }
+  .loading .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid rgba(168,85,247,0.2);
+    border-top-color: #a855f7;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Error state */
+  .error-page { text-align: center; padding: 80px 0; }
+  .error-page h1 { font-size: 24px; margin-bottom: 12px; color: #fff; }
+  .error-page p { color: #999; font-size: 15px; }
+
+  /* Card */
+  .card {
+    background: #1a1a2e;
+    border-radius: 16px;
+    border: 1px solid rgba(168,85,247,0.15);
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .card-header {
+    padding: 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .card-header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+  .card-meta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: #999;
+  }
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: rgba(168,85,247,0.15);
+    color: #c084fc;
+  }
+  .shared-by {
+    padding: 14px 20px;
+    font-size: 14px;
+    color: #bbb;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .shared-by strong { color: #fff; }
+
+  /* Sections (exercises, segments, etc.) */
+  .section {
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .section:last-child { border-bottom: none; }
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #a855f7;
+    margin-bottom: 10px;
+  }
+  .exercise-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    font-size: 14px;
+  }
+  .exercise-name { color: #e0e0e0; flex: 1; }
+  .exercise-detail { color: #999; font-size: 13px; text-align: right; margin-left: 12px; }
+
+  /* Superset grouping */
+  .superset-group {
+    border-left: 3px solid #a855f7;
+    padding-left: 12px;
+    margin: 6px 0;
+  }
+  .superset-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #a855f7;
+    margin-bottom: 4px;
+  }
+
+  /* Notes */
+  .notes {
+    padding: 14px 20px;
+    font-size: 13px;
+    color: #999;
+    font-style: italic;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+
+  /* CTA */
+  .cta {
+    text-align: center;
+    padding: 24px 0;
+  }
+  .cta a {
+    display: inline-block;
+    padding: 14px 32px;
+    background: linear-gradient(135deg, #a855f7, #7c3aed);
+    color: #fff;
+    font-weight: 600;
+    font-size: 15px;
+    border-radius: 12px;
+    text-decoration: none;
+    transition: transform 0.15s;
+  }
+  .cta a:active { transform: scale(0.97); }
+  .cta .sub { font-size: 12px; color: #777; margin-top: 8px; }
+
+  /* Expired overlay */
+  .expired-banner {
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+    margin-bottom: 16px;
+    color: #f87171;
+    font-size: 14px;
+  }
 </style>
 </head>
 <body>
-<div class="wrap" id="content">
-  <div class="loading">Loading workout...</div>
+<div class="container" id="app">
+  <div class="loading" id="loading-state">
+    <div class="spinner"></div>
+    <p>Loading workout...</p>
+  </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
-(function () {
-  const SUPABASE_URL      = 'https://dagdpdcwqdlibxbitdgr.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRhZ2RwZGN3cWRsaWJ4Yml0ZGdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1Mjk4NjQsImV4cCI6MjA5MTEwNTg2NH0.vc-fvFgZNEvusGgc3yhCzMRmuKrXUHW5uxHHMx1JV44';
+(function() {
+  const SUPABASE_URL = 'https://dagdpdcwqdlibxbitdgr.supabase.co';
+  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRhZ2RwZGN3cWRsaWJ4Yml0ZGdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1Mjk4NjQsImV4cCI6MjA5MTEwNTg2NH0.vc-fvFgZNEvusGgc3yhCzMRmuKrXUHW5uxHHMx1JV44';
 
-  // Generic structure descriptions per session type. NO concrete paces — ever.
-  const STRUCTURE = {
-    track_workout:        { warmup: "1.5mi easy", main: "Repeats at I-pace",           cooldown: "1mi easy" },
-    tempo_threshold:      { warmup: "15 min easy", main: "Cruise intervals at T-pace", cooldown: "10 min easy" },
-    speed_work:           { warmup: "15 min easy", main: "Short repeats at R-pace",    cooldown: "10 min easy" },
-    hills:                { warmup: "15 min easy", main: "Hill repeats hard up / easy down", cooldown: "10 min easy" },
-    long_run:             { warmup: "\u2014", main: "Sustained effort at E-pace",      cooldown: "\u2014" },
-    endurance:            { warmup: "\u2014", main: "Steady aerobic effort",            cooldown: "\u2014" },
-    easy_recovery:        { warmup: "\u2014", main: "Conversational easy effort",       cooldown: "\u2014" },
-    bike_intervals_ftp:   { warmup: "15 min easy spin", main: "Intervals at FTP",      cooldown: "10 min easy spin" },
-    bike_intervals_vo2:   { warmup: "15 min easy spin", main: "Intervals at VO2max effort", cooldown: "10 min easy spin" },
-    bike_intervals_sweet_spot: { warmup: "15 min easy spin", main: "Sweet spot intervals",  cooldown: "10 min easy spin" },
-    swim_css_intervals:   { warmup: "400m easy + 4\u00d750m build", main: "Repeats at CSS pace", cooldown: "200m easy" },
-    swim_speed:           { warmup: "400m easy + 4\u00d750m build", main: "Sprints",   cooldown: "200m easy" },
-  };
+  const app = document.getElementById('app');
 
-  function esc(s) {
-    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-    });
+  // Extract token from URL path: /share.html -> /w/TOKEN or ?token=TOKEN
+  let token = null;
+  const pathMatch = window.location.pathname.match(/\/w\/([^\/]+)/);
+  if (pathMatch) {
+    token = pathMatch[1];
+  } else {
+    const params = new URLSearchParams(window.location.search);
+    token = params.get('token');
   }
 
-  // Parse token from: /w/:token, /share.html?token=, or ?token=
-  function getToken() {
-    var params = new URLSearchParams(window.location.search);
-    var fromQuery = params.get("token") || params.get("w");
-    if (fromQuery) return fromQuery.trim();
-    // Try path: /w/:token
-    var pathMatch = window.location.pathname.match(/\/w\/([\w-]{6,64})/);
-    if (pathMatch) return pathMatch[1];
-    // Try path: /share.html/:token (some rewrite configs)
-    var altMatch = window.location.pathname.match(/\/share\.html\/([\w-]{6,64})/);
-    if (altMatch) return altMatch[1];
-    return null;
+  if (!token || !/^[\w-]{6,64}$/.test(token)) {
+    showError('Invalid share link', 'This link appears to be malformed.');
+    return;
   }
 
-  function renderError(title, msg) {
-    document.getElementById("content").innerHTML =
-      '<div class="logo">IronZ</div>' +
-      '<div class="error-msg"><h1>' + esc(title) + '</h1><p>' + esc(msg) + '</p></div>';
-  }
+  // Fetch workout data from Supabase directly (REST API)
+  fetchWorkout(token);
 
-  function renderShare(share) {
-    // Sender name: from the separate profile lookup (share._senderProfile),
-    // the FK join (share.sender), or fallback.
-    var senderName = (share._senderProfile && share._senderProfile.full_name)
-      || (share.sender && share.sender.full_name)
-      || "A friend";
-    var initial = senderName.trim().slice(0, 1).toUpperCase();
-
-    // Workout name: from the training_sessions lookup (share._session),
-    // NOT from variant_id (which is a UUID).
-    var session = share._session || {};
-    var workoutName = session.session_name || "Workout";
-    var workoutDesc = session.description || "";
-    var sportLabel  = (share.sport_id || "").toUpperCase();
-
-    // Exercise details from training_sessions.exercises (JSONB array)
-    var exerciseHtml = "";
-    var exercises = session.exercises;
-    // JSONB may arrive as a string if the client doesn't auto-parse
-    if (typeof exercises === "string") {
-      try { exercises = JSON.parse(exercises); } catch (e) { exercises = null; }
-    }
-    if (Array.isArray(exercises) && exercises.length > 0) {
-      exerciseHtml = '<div class="exercises">';
-      for (var i = 0; i < exercises.length; i++) {
-        var ex = exercises[i];
-        var name = ex.name || ex.exercise_name || "Exercise";
-        var detail = "";
-        if (ex.sets && ex.reps) detail = ex.sets + " \u00d7 " + ex.reps;
-        else if (ex.duration) detail = ex.duration;
-        else if (ex.distance) detail = ex.distance;
-        if (ex.intensity) detail += (detail ? " @ " : "") + ex.intensity;
-        exerciseHtml += '<div class="row"><span class="label">' + esc(name) + '</span><span class="value">' + esc(detail) + '</span></div>';
-      }
-      exerciseHtml += '</div>';
-    }
-
-    // Fallback to generic structure labels if no exercises
-    var structureHtml = "";
-    if (!exerciseHtml) {
-      var s = STRUCTURE[share.session_type_id] || { warmup: "\u2014", main: "Workout structure", cooldown: "\u2014" };
-      structureHtml =
-        '<div class="row"><span class="label">Warm-up</span><span class="value">' + esc(s.warmup) + '</span></div>' +
-        '<div class="row"><span class="label">Main set</span><span class="value">' + esc(s.main) + '</span></div>' +
-        '<div class="row"><span class="label">Cool-down</span><span class="value">' + esc(s.cooldown) + '</span></div>';
-    }
-
-    var noteHtml = share.share_note
-      ? '<div class="note">\u201c' + esc(share.share_note) + '\u201d</div>'
-      : "";
-
-    var deepLink = "ironz://share/" + esc(share.share_token);
-
-    document.getElementById("content").innerHTML =
-      '<div class="logo">IronZ</div>' +
-      '<div class="url">ironz.fit/w/' + esc(share.share_token) + '</div>' +
-      '<div class="from">' +
-        '<div class="avatar">' + esc(initial) + '</div>' +
-        '<div>' +
-          '<div class="from-label">' + esc(senderName) + ' shared a workout</div>' +
-          '<div class="from-name">' + esc(workoutName) + '</div>' +
-        '</div>' +
-      '</div>' +
-      '<div class="card">' +
-        '<span class="badge">' + esc(sportLabel) + '</span>' +
-        '<div class="title">' + esc(workoutName) + '</div>' +
-        (workoutDesc ? '<div class="subtitle">' + esc(workoutDesc) + '</div>' : '') +
-        exerciseHtml +
-        structureHtml +
-        noteHtml +
-      '</div>' +
-      '<div class="install">' +
-        '<h2>Run this in your zones</h2>' +
-        '<p>IronZ scales every workout to your actual VDOT, FTP, and CSS \u2014 no guessing, no generic \u201czone 4\u201d. Your friend\u2019s paces stay private.</p>' +
-        '<a class="cta" href="' + esc(deepLink) + '">Open in IronZ</a>' +
-      '</div>' +
-      '<p class="privacy">Your friend\u2019s paces, VDOT, and zones never left their device.<br>This preview shows generic structure only.</p>';
-
+  async function fetchWorkout(token) {
     try {
-      document.title = senderName + " shared " + workoutName + " \u00b7 IronZ";
-    } catch (e) {}
-  }
+      const headers = {
+        'apikey': SUPABASE_ANON,
+        'Authorization': `Bearer ${SUPABASE_ANON}`
+      };
 
-  async function main() {
-    var token = getToken();
-    if (!token) {
-      renderError("Link not found", "We couldn\u2019t find a workout token in this URL.");
-      return;
-    }
+      // Step 1: Get shared_workouts row + sender profile
+      const shareUrl = `${SUPABASE_URL}/rest/v1/shared_workouts?share_token=eq.${token}&select=*,profiles!shared_workouts_sender_user_id_fkey(full_name)`;
+      const shareRes = await fetch(shareUrl, { headers });
 
-    try {
-      var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-      var result = await sb
-        .from("shared_workouts")
-        .select("share_token, variant_id, sport_id, session_type_id, share_note, created_at, expires_at, revoked_at, sender_user_id, sender:profiles!shared_workouts_sender_user_id_fkey ( full_name )")
-        .eq("share_token", token)
-        .maybeSingle();
-
-      if (result.error) {
-        // Retry without the join in case the FK relationship isn't set up
-        var fallback = await sb
-          .from("shared_workouts")
-          .select("share_token, variant_id, sport_id, session_type_id, share_note, created_at, expires_at, revoked_at, sender_user_id")
-          .eq("share_token", token)
-          .maybeSingle();
-        if (fallback.error || !fallback.data) {
-          renderError("Link not found", "This shared workout doesn\u2019t exist or has been removed.");
-          return;
-        }
-        result = fallback;
-      }
-
-      var data = result.data;
-      if (!data) {
-        renderError("Link not found", "This shared workout doesn\u2019t exist or has been removed.");
-        return;
-      }
-      if (data.revoked_at) {
-        renderError("Link revoked", "This link was revoked by the sender.");
-        return;
-      }
-      if (data.expires_at && new Date(data.expires_at) < new Date()) {
-        renderError("Link expired", "This link has expired.");
+      if (!shareRes.ok) {
+        showError('Something went wrong', 'Could not load this workout.');
         return;
       }
 
-      // Look up the actual workout details from training_sessions by variant_id.
-      // variant_id is a text reference to training_sessions.id.
-      if (data.variant_id) {
-        try {
-          var sessionResult = await sb
-            .from("training_sessions")
-            .select("id, session_name, session_type, description, exercises")
-            .eq("id", data.variant_id)
-            .maybeSingle();
-          if (sessionResult.data) {
-            data._session = sessionResult.data;
-          }
-        } catch (e) {
-          console.warn("[share.html] training_sessions lookup failed:", e);
-        }
+      const rows = await shareRes.json();
+      if (!rows || rows.length === 0) {
+        showError('Link not found', 'This workout link doesn\u2019t exist or has been removed.');
+        return;
       }
 
-      // Look up the sender's profile name directly (more reliable than the FK
-      // join which depends on the relationship name matching exactly).
-      if (data.sender_user_id && !(data.sender && data.sender.full_name)) {
-        try {
-          var profileResult = await sb
-            .from("profiles")
-            .select("full_name")
-            .eq("id", data.sender_user_id)
-            .maybeSingle();
-          if (profileResult.data) {
-            data._senderProfile = profileResult.data;
-          }
-        } catch (e) {
-          console.warn("[share.html] profile lookup failed:", e);
-        }
+      const share = rows[0];
+
+      // Check revoked
+      if (share.revoked_at) {
+        showError('Link revoked', 'This share link is no longer available.');
+        return;
       }
 
-      renderShare(data);
+      // Check expiry
+      if (share.expires_at && new Date(share.expires_at) < new Date()) {
+        showExpired(share);
+        return;
+      }
+
+      // Step 2: Get the actual training session using variant_id
+      const sessionUrl = `${SUPABASE_URL}/rest/v1/training_sessions?id=eq.${share.variant_id}&select=session_name,session_type,description,exercises,data`;
+      const sessionRes = await fetch(sessionUrl, { headers });
+      let session = {};
+      if (sessionRes.ok) {
+        const sessionRows = await sessionRes.json();
+        if (sessionRows && sessionRows.length > 0) session = sessionRows[0];
+      }
+
+      // Merge share + session data for rendering
+      const merged = { ...share, session };
+
+      // Best-effort view increment
+      fetch(`${SUPABASE_URL}/rest/v1/rpc/increment_share_view`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token_arg: token })
+      }).catch(() => {});
+
+      renderWorkout(merged);
     } catch (e) {
-      renderError("Something went wrong", "Please try again later.");
-      console.error("[share.html]", e);
+      showError('Connection error', 'Could not reach the server. Please try again.');
     }
   }
 
-  main();
+  function showError(title, message) {
+    app.innerHTML = `
+      <div class="error-page">
+        <h1>${esc(title)}</h1>
+        <p>${esc(message)}</p>
+        <div class="cta" style="margin-top:32px">
+          <a href="https://ironz.fit">Open IronZ</a>
+        </div>
+      </div>`;
+  }
+
+  function showExpired(data) {
+    app.innerHTML = `
+      <div class="expired-banner">This share link has expired.</div>
+      ${renderCard(data)}
+      <div class="cta">
+        <a href="https://ironz.fit">Open IronZ</a>
+        <div class="sub">Get the full workout in the app</div>
+      </div>`;
+  }
+
+  function renderWorkout(data) {
+    app.innerHTML = `
+      ${renderCard(data)}
+      <div class="cta">
+        <a href="https://ironz.fit">Save Workout in IronZ</a>
+        <div class="sub">Free \u2022 No account required to view</div>
+      </div>`;
+
+    const name = data.session?.session_name || data.session_type_id || 'Workout';
+    document.title = `${name} — IronZ`;
+  }
+
+  function renderCard(data) {
+    const session = data.session || {};
+    const sessionData = session.data || {};
+    const name = session.session_name || data.session_type_id || 'Shared Workout';
+    const sessionType = session.session_type || data.session_type_id || '';
+    const sport = data.sport_id || sessionData.sport || '';
+    const sharer = data.profiles?.full_name || 'An IronZ user';
+    const notes = session.description || data.share_note || '';
+
+    // Sport labels
+    const sportLabels = { run: 'Running', bike: 'Cycling', swim: 'Swimming', strength: 'Strength', hybrid: 'Hybrid' };
+
+    let html = `<div class="card">`;
+
+    // Header
+    html += `<div class="card-header">
+      <h1>${esc(name)}</h1>
+      <div class="card-meta">`;
+    if (sport) html += `<span class="badge">${esc(sportLabels[sport] || sport)}</span>`;
+    if (sessionType) html += `<span class="badge">${esc(sessionType)}</span>`;
+    if (sessionData.duration_minutes) html += `<span class="badge">${sessionData.duration_minutes} min</span>`;
+    html += `</div></div>`;
+
+    // Shared by
+    html += `<div class="shared-by">Shared by <strong>${esc(sharer)}</strong></div>`;
+
+    // Share note
+    if (data.share_note) {
+      html += `<div class="notes">"${esc(data.share_note)}"</div>`;
+    }
+
+    // Exercises from training_sessions.exercises (jsonb array)
+    const exercises = session.exercises || [];
+
+    if (exercises.length > 0) {
+      html += renderExercises(exercises);
+    }
+
+    // Description as notes
+    if (session.description) {
+      html += `<div class="notes">${esc(session.description)}</div>`;
+    }
+
+    html += `</div>`;
+    return html;
+  }
+
+  function renderExercises(exercises) {
+    // Group by supersetGroup
+    const groups = [];
+    let currentGroup = null;
+
+    exercises.forEach(ex => {
+      if (ex.supersetGroup) {
+        if (!currentGroup || currentGroup.id !== ex.supersetGroup) {
+          currentGroup = { id: ex.supersetGroup, exercises: [ex] };
+          groups.push(currentGroup);
+        } else {
+          currentGroup.exercises.push(ex);
+        }
+      } else {
+        groups.push({ id: null, exercises: [ex] });
+        currentGroup = null;
+      }
+    });
+
+    let html = `<div class="section"><div class="section-title">Exercises</div>`;
+
+    groups.forEach(group => {
+      if (group.id && group.exercises.length > 1) {
+        html += `<div class="superset-group">`;
+        html += `<div class="superset-label">Superset ${esc(group.id)}</div>`;
+        group.exercises.forEach(ex => { html += exerciseRow(ex); });
+        html += `</div>`;
+      } else {
+        group.exercises.forEach(ex => { html += exerciseRow(ex); });
+      }
+    });
+
+    html += `</div>`;
+    return html;
+  }
+
+  function exerciseRow(ex) {
+    const name = ex.name || ex.exercise || 'Exercise';
+    let detail = '';
+    if (ex.sets && ex.reps) detail = `${ex.sets} × ${ex.reps}`;
+    else if (ex.sets) detail = `${ex.sets} sets`;
+    else if (ex.duration) detail = ex.duration;
+    if (ex.weight) detail += ` @ ${ex.weight}`;
+    return `<div class="exercise-row">
+      <span class="exercise-name">${esc(name)}</span>
+      <span class="exercise-detail">${esc(detail)}</span>
+    </div>`;
+  }
+
+  function renderSegments(segments) {
+    let html = `<div class="section"><div class="section-title">Segments</div>`;
+    segments.forEach(seg => {
+      const name = seg.name || seg.type || 'Segment';
+      let detail = '';
+      if (seg.distance) detail = seg.distance;
+      if (seg.duration) detail = detail ? `${detail} / ${seg.duration}` : seg.duration;
+      if (seg.pace) detail += ` @ ${seg.pace}`;
+      html += `<div class="exercise-row">
+        <span class="exercise-name">${esc(name)}</span>
+        <span class="exercise-detail">${esc(detail)}</span>
+      </div>`;
+    });
+    html += `</div>`;
+    return html;
+  }
+
+  function esc(str) {
+    if (!str) return '';
+    const d = document.createElement('div');
+    d.textContent = String(str);
+    return d.innerHTML;
+  }
 })();
 </script>
 </body>
