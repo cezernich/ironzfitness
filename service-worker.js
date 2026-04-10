@@ -1,7 +1,7 @@
 // service-worker.js — Basic PWA service worker for IronZ
 // Provides offline support and enables "Add to Home Screen"
 
-const CACHE_NAME = "ironz-v1";
+const CACHE_NAME = "ironz-v2";
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html",
