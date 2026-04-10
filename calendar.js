@@ -5237,20 +5237,40 @@ function _qeCardioRefreshBadges() {
     if (!(above && above.dataset.repeatGroup === g) && !(below && below.dataset.repeatGroup === g))
       delete row.dataset.repeatGroup;
   });
-  // Pass 2: render badges
+  // Pass 2: render badges + rounds control on first row of each group
   const counts = {};
+  const seenGroups = new Set();
   rows.forEach(row => {
-    const old = row.querySelector(".cp-ss-badge");
-    if (old) old.remove();
+    row.querySelectorAll(".cp-ss-badge, .cp-ss-sets-wrap").forEach(el => el.remove());
     const g = row.dataset.repeatGroup;
     if (!g) return;
     counts[g] = (counts[g] || 0) + 1;
-    const badge = document.createElement("span");
-    badge.className = "cp-ss-badge";
-    badge.textContent = `${g}${counts[g]}`;
-    badge.title = "Click to ungroup";
-    badge.addEventListener("click", () => { delete row.dataset.repeatGroup; _qeCardioRefreshBadges(); });
-    row.querySelector(".eiv-header").appendChild(badge);
+    const header = row.querySelector(".eiv-header");
+    if (!seenGroups.has(g)) {
+      seenGroups.add(g);
+      const curRounds = row.dataset.groupSets || "3";
+      const wrap = document.createElement("span");
+      wrap.className = "cp-ss-sets-wrap";
+      wrap.innerHTML = `<span class="cp-ss-badge" style="cursor:default">${g}</span>` +
+        `<input type="number" class="cp-ss-sets-input" min="1" max="20" value="${curRounds}" title="Rounds for this repeat block" />` +
+        `<span class="cp-ss-sets-label">rounds</span>` +
+        `<button class="cp-ss-ungroup-btn" title="Ungroup">×</button>`;
+      wrap.querySelector("input").addEventListener("change", function () {
+        rows.filter(r => r.dataset.repeatGroup === g).forEach(r => r.dataset.groupSets = this.value);
+      });
+      wrap.querySelector(".cp-ss-ungroup-btn").addEventListener("click", () => {
+        rows.filter(r => r.dataset.repeatGroup === g).forEach(r => { delete r.dataset.repeatGroup; delete r.dataset.groupSets; });
+        _qeCardioRefreshBadges();
+      });
+      header.appendChild(wrap);
+    } else {
+      const badge = document.createElement("span");
+      badge.className = "cp-ss-badge";
+      badge.textContent = `${g}${counts[g]}`;
+      badge.title = "Click to ungroup this interval";
+      badge.addEventListener("click", () => { delete row.dataset.repeatGroup; delete row.dataset.groupSets; _qeCardioRefreshBadges(); });
+      header.appendChild(badge);
+    }
   });
 }
 
@@ -5285,7 +5305,10 @@ function qeSaveCardioManual() {
     if (discEl) interval.discipline = discEl.value || "bike";
     // Repeat-block grouping from drag-to-group
     const rowEl = document.getElementById(`qe-crow-${idx}`);
-    if (rowEl && rowEl.dataset.repeatGroup) interval.repeatGroup = rowEl.dataset.repeatGroup;
+    if (rowEl && rowEl.dataset.repeatGroup) {
+      interval.repeatGroup = rowEl.dataset.repeatGroup;
+      if (rowEl.dataset.groupSets) interval.groupSets = parseInt(rowEl.dataset.groupSets) || 3;
+    }
     intervals.push(interval);
   });
 

@@ -3806,6 +3806,48 @@ button:active {
 .cp-ss-badge:hover::after {
   content: " ×";
 }
+
+/* Sets / rounds control for grouped rows */
+.cp-ss-sets-wrap {
+  position: absolute;
+  top: 6px;
+  right: 44px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 1;
+}
+.cp-ss-sets-wrap .cp-ss-badge {
+  position: static;
+}
+.cp-ss-sets-input {
+  width: 40px;
+  padding: 2px 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: center;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.cp-ss-sets-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+.cp-ss-ungroup-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+.cp-ss-ungroup-btn:hover {
+  color: var(--color-danger, #ef4444);
+}
 .qe-manual-row[data-superset-group]:not([data-superset-group=""]) {
   border-left: 3px solid var(--color-accent);
   padding-left: 8px;
@@ -3907,6 +3949,11 @@ button:active {
   padding-left: 8px;
 }
 .edit-interval-card .cp-ss-badge {
+  position: static;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.edit-interval-card .cp-ss-sets-wrap {
   position: static;
   margin-left: auto;
   flex-shrink: 0;

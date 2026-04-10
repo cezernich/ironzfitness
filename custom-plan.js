@@ -723,7 +723,10 @@ function cpManualAddExRow(prefill) {
   const pSets = (prefill?.sets != null) ? String(prefill.sets) : "";
   const pWt = _cpNormalizeWt(prefill?.weight, isBW);
   const pGroup = prefill?.supersetGroup || prefill?.supersetId || "";
-  if (pGroup) div.dataset.supersetGroup = pGroup;
+  if (pGroup) {
+    div.dataset.supersetGroup = pGroup;
+    if (prefill?.groupSets) div.dataset.groupSets = String(prefill.groupSets);
+  }
 
   const dragHandleHTML = `<span class="drag-handle" title="Drag to reorder · drop on a row to superset">⠿</span>`;
 
@@ -904,25 +907,57 @@ function _cpRefreshSsBadges() {
     if (!neighbourHasGroup) delete row.dataset.supersetGroup;
   });
 
-  // Second pass: render badges with A1/A2/B1 indices per group letter
+  // Second pass: render badges + sets control on first row of each group
   const counts = {};
+  const seenGroups = new Set();
   rows.forEach(row => {
     const g = row.dataset.supersetGroup;
-    // Remove any stale badge
-    const old = row.querySelector(".cp-ss-badge");
-    if (old) old.remove();
+    // Remove any stale badge / sets control
+    row.querySelectorAll(".cp-ss-badge, .cp-ss-sets-wrap").forEach(el => el.remove());
     if (!g) return;
     counts[g] = (counts[g] || 0) + 1;
-    const badge = document.createElement("span");
-    badge.className = "cp-ss-badge";
-    badge.textContent = `${g}${counts[g]}`;
-    badge.title = "Click to ungroup";
-    badge.addEventListener("click", () => {
-      delete row.dataset.supersetGroup;
-      _cpRefreshSsBadges();
-    });
-    row.appendChild(badge);
+
+    // Sets control on the first row of this group
+    if (!seenGroups.has(g)) {
+      seenGroups.add(g);
+      const curSets = row.dataset.groupSets || "3";
+      const wrap = document.createElement("span");
+      wrap.className = "cp-ss-sets-wrap";
+      wrap.innerHTML = `<span class="cp-ss-badge" style="cursor:default">${g}</span>` +
+        `<input type="number" class="cp-ss-sets-input" min="1" max="20" value="${curSets}" title="Sets for this superset" />` +
+        `<span class="cp-ss-sets-label">sets</span>` +
+        `<button class="cp-ss-ungroup-btn" title="Ungroup">×</button>`;
+      wrap.querySelector("input").addEventListener("change", function () {
+        _cpSetGroupSets(g, this.value);
+      });
+      wrap.querySelector(".cp-ss-ungroup-btn").addEventListener("click", () => {
+        rows.filter(r => r.dataset.supersetGroup === g).forEach(r => {
+          delete r.dataset.supersetGroup;
+          delete r.dataset.groupSets;
+        });
+        _cpRefreshSsBadges();
+      });
+      row.appendChild(wrap);
+    } else {
+      // Subsequent rows just get a small index badge
+      const badge = document.createElement("span");
+      badge.className = "cp-ss-badge";
+      badge.textContent = `${g}${counts[g]}`;
+      badge.title = "Click to ungroup this exercise";
+      badge.addEventListener("click", () => {
+        delete row.dataset.supersetGroup;
+        delete row.dataset.groupSets;
+        _cpRefreshSsBadges();
+      });
+      row.appendChild(badge);
+    }
   });
+}
+
+// Set groupSets on every row in a superset group.
+function _cpSetGroupSets(group, value) {
+  const rows = document.querySelectorAll("#cp-manual-exercise-rows .qe-manual-row");
+  rows.forEach(r => { if (r.dataset.supersetGroup === group) r.dataset.groupSets = value; });
 }
 
 function cpManualRemoveRow(id) {
@@ -1128,18 +1163,38 @@ function _cpCardioRefreshBadges() {
       delete row.dataset.repeatGroup;
   });
   const counts = {};
+  const seenGroups = new Set();
   rows.forEach(row => {
-    const old = row.querySelector(".cp-ss-badge");
-    if (old) old.remove();
+    row.querySelectorAll(".cp-ss-badge, .cp-ss-sets-wrap").forEach(el => el.remove());
     const g = row.dataset.repeatGroup;
     if (!g) return;
     counts[g] = (counts[g] || 0) + 1;
-    const badge = document.createElement("span");
-    badge.className = "cp-ss-badge";
-    badge.textContent = `${g}${counts[g]}`;
-    badge.title = "Click to ungroup";
-    badge.addEventListener("click", () => { delete row.dataset.repeatGroup; _cpCardioRefreshBadges(); });
-    row.querySelector(".eiv-header").appendChild(badge);
+    const header = row.querySelector(".eiv-header");
+    if (!seenGroups.has(g)) {
+      seenGroups.add(g);
+      const curRounds = row.dataset.groupSets || "3";
+      const wrap = document.createElement("span");
+      wrap.className = "cp-ss-sets-wrap";
+      wrap.innerHTML = `<span class="cp-ss-badge" style="cursor:default">${g}</span>` +
+        `<input type="number" class="cp-ss-sets-input" min="1" max="20" value="${curRounds}" title="Rounds" />` +
+        `<span class="cp-ss-sets-label">rounds</span>` +
+        `<button class="cp-ss-ungroup-btn" title="Ungroup">×</button>`;
+      wrap.querySelector("input").addEventListener("change", function () {
+        rows.filter(r => r.dataset.repeatGroup === g).forEach(r => r.dataset.groupSets = this.value);
+      });
+      wrap.querySelector(".cp-ss-ungroup-btn").addEventListener("click", () => {
+        rows.filter(r => r.dataset.repeatGroup === g).forEach(r => { delete r.dataset.repeatGroup; delete r.dataset.groupSets; });
+        _cpCardioRefreshBadges();
+      });
+      header.appendChild(wrap);
+    } else {
+      const badge = document.createElement("span");
+      badge.className = "cp-ss-badge";
+      badge.textContent = `${g}${counts[g]}`;
+      badge.title = "Click to ungroup";
+      badge.addEventListener("click", () => { delete row.dataset.repeatGroup; delete row.dataset.groupSets; _cpCardioRefreshBadges(); });
+      header.appendChild(badge);
+    }
   });
 }
 
@@ -1201,7 +1256,10 @@ function customPlanSaveManual() {
         effort: document.getElementById(`cp-ceffort-${id}`)?.value || "Z2",
         details: document.getElementById(`cp-cdetails-${id}`)?.value.trim() || "",
       };
-      if (row.dataset.repeatGroup) iv.repeatGroup = row.dataset.repeatGroup;
+      if (row.dataset.repeatGroup) {
+        iv.repeatGroup = row.dataset.repeatGroup;
+        if (row.dataset.groupSets) iv.groupSets = parseInt(row.dataset.groupSets) || 3;
+      }
       intervals.push(iv);
     });
     session = {
@@ -1230,6 +1288,7 @@ function customPlanSaveManual() {
 
       // Superset group from drag-to-group dataset
       ex.supersetGroup = row.dataset.supersetGroup || null;
+      if (row.dataset.groupSets) ex.groupSets = parseInt(row.dataset.groupSets) || 3;
 
       // Collect per-set pyramid details if expanded
       const pyrDetail = document.getElementById(`cp-pyr-${id}`);
