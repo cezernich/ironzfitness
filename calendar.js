@@ -5081,62 +5081,106 @@ function qeAddCardioRow(iv) {
   const unit = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
   const isBrick = _qeSelectedType === "brick";
   const disc = iv?.discipline || "";
-  // Parse existing duration if populating from saved data
   let initMode = "time", initDist = "", initMin = "";
   if (iv?.duration) {
     const durStr = String(iv.duration);
-    if (/mi|km|m\b|yd/i.test(durStr)) {
-      initMode = "distance";
-      initDist = durStr.match(/[\d.]+/)?.[0] || "";
-    } else {
-      initMin = durStr.match(/[\d.]+/)?.[0] || "";
-    }
+    if (/mi|km|m\b|yd/i.test(durStr)) { initMode = "distance"; initDist = durStr.match(/[\d.]+/)?.[0] || ""; }
+    else { initMin = durStr.match(/[\d.]+/)?.[0] || ""; }
   }
   const eff = iv?.effort || "Z2";
+  const _esel = v => eff === v || (v === "Z1" && eff === "Easy") || (v === "Z2" && eff === "Moderate") || (v === "Z4" && eff === "Hard") || (v === "Z5" && eff === "Max") ? " selected" : "";
+  const _dsel = v => disc === v ? " selected" : "";
+  const trashSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>';
   const div = document.createElement("div");
-  div.className = "qe-manual-row qe-cardio-row";
+  div.className = "edit-interval-card";
   div.id = `qe-crow-${id}`;
   div.dataset.durMode = initMode;
-  const _dsel = v => disc === v ? " selected" : "";
+  div.draggable = true;
   div.innerHTML = `
-    ${isBrick ? `<div class="seg-discipline-wrap"><label>Leg</label>
-      <select id="qe-cdisc-${id}" class="seg-discipline">
+    <div class="eiv-header">
+      <span class="drag-handle" title="Drag to reorder">⠿</span>
+      ${isBrick ? `<select id="qe-cdisc-${id}" class="seg-discipline" style="width:auto;padding:4px 24px 4px 6px;font-size:0.82rem">
         <option value="bike"${_dsel("bike")}>Bike</option>
-        <option value="transition"${_dsel("transition")}>Transition</option>
+        <option value="transition"${_dsel("transition")}>T</option>
         <option value="run"${_dsel("run")}>Run</option>
-      </select></div>` : ""}
-    <div><label>Phase</label>
-      <input type="text" id="qe-cphase-${id}" value="${iv?.name || ""}" placeholder="${isBrick ? "e.g. Steady Ride" : "e.g. Warm-up"}" /></div>
-    <div class="qe-dur-col">
-      <div class="qe-dur-toggle">
-        <button class="qe-dur-mode-btn${initMode==="distance"?" active":""}" data-mode="distance"
-          onclick="setQEIntervalMode(${id},'distance')">Distance</button>
-        <button class="qe-dur-mode-btn${initMode==="time"?" active":""}" data-mode="time"
-          onclick="setQEIntervalMode(${id},'time')">Time</button>
+      </select>` : ""}
+      <input type="text" class="eiv-phase-input" id="qe-cphase-${id}" value="${escHtml(iv?.name || "")}" placeholder="${isBrick ? "e.g. Steady Ride" : "e.g. Warm-up"}" />
+      <button class="remove-exercise-btn" onclick="qeRemoveCardioRow(${id})">${trashSvg}</button>
+    </div>
+    <div class="eiv-fields">
+      <div class="eiv-field">
+        <div class="qe-dur-toggle">
+          <button type="button" class="qe-dur-mode-btn${initMode==="distance"?" active":""}" data-mode="distance"
+            onclick="setQEIntervalMode(${id},'distance')">Dist</button>
+          <button type="button" class="qe-dur-mode-btn${initMode==="time"?" active":""}" data-mode="time"
+            onclick="setQEIntervalMode(${id},'time')">Time</button>
+        </div>
+        <div id="qe-dist-wrap-${id}" style="${initMode==="distance"?"":"display:none"}">
+          <input type="number" id="qe-cdist-${id}" value="${initDist}" placeholder="e.g. 5" min="0" step="0.1" style="width:60px" />
+          <span class="qe-unit-label">${unit}</span>
+        </div>
+        <div id="qe-time-wrap-${id}" style="${initMode==="time"?"":"display:none"}">
+          <input type="number" id="qe-cmin-${id}" value="${initMin}" placeholder="10" min="0" style="width:60px" />
+          <span class="qe-unit-label">min</span>
+        </div>
       </div>
-      <div id="qe-dist-wrap-${id}" style="${initMode==="distance"?"":"display:none"}">
-        <input type="number" id="qe-cdist-${id}" value="${initDist}" placeholder="e.g. 5" min="0" step="0.1" style="width:70px" />
-        <span class="qe-unit-label">${unit}</span>
-      </div>
-      <div id="qe-time-wrap-${id}" style="${initMode==="time"?"":"display:none"}">
-        <input type="number" id="qe-cmin-${id}" value="${initMin}" placeholder="e.g. 10" min="0" style="width:70px" />
-        <span class="qe-unit-label">min</span>
+      <div class="eiv-field">
+        <select id="qe-ceffort-${id}">
+          <option value="RW"${_esel("RW")}>Rest / Walk</option>
+          <option value="Z1"${_esel("Z1")}>Z1 Recovery</option>
+          <option value="Z2"${_esel("Z2")}>Z2 Aerobic</option>
+          <option value="Z3"${_esel("Z3")}>Z3 Tempo</option>
+          <option value="Z4"${_esel("Z4")}>Z4 Threshold</option>
+          <option value="Z5"${_esel("Z5")}>Z5 VO2 Max</option>
+          <option value="Z6"${_esel("Z6")}>Z6 Sprint</option>
+        </select>
       </div>
     </div>
-    <div><label>Zone</label>
-      <select id="qe-ceffort-${id}">
-        <option value="RW" ${eff==="RW"?"selected":""}>Rest / Walk</option>
-        <option value="Z1" ${eff==="Z1"||eff==="Easy"?"selected":""}>Z1 Recovery</option>
-        <option value="Z2" ${eff==="Z2"||eff==="Moderate"?"selected":""}>Z2 Aerobic</option>
-        <option value="Z3" ${eff==="Z3"?"selected":""}>Z3 Tempo</option>
-        <option value="Z4" ${eff==="Z4"||eff==="Hard"?"selected":""}>Z4 Threshold</option>
-        <option value="Z5" ${eff==="Z5"||eff==="Max"?"selected":""}>Z5 VO2 Max</option>
-        <option value="Z6" ${eff==="Z6"?"selected":""}>Z6 Max Sprint</option>
-      </select></div>
-    <div style="flex:2"><label>Details</label>
-      <input type="text" id="qe-cdetails-${id}" value="${iv?.details || ""}" placeholder="e.g. 5:30/km, keep HR under 145" /></div>
-    <button class="remove-exercise-btn" onclick="qeRemoveCardioRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
-  document.getElementById("qe-cardio-interval-rows").appendChild(div);
+    <div class="eiv-details">
+      <input type="text" id="qe-cdetails-${id}" value="${escHtml(iv?.details || "")}" placeholder="e.g. 5:30/km, keep HR under 145" />
+    </div>`;
+
+  // Wire drag-to-reorder
+  const container = document.getElementById("qe-cardio-interval-rows");
+  div.addEventListener("dragstart", e => { _qeCardioDragEl = div; div.classList.add("drag-active"); e.dataTransfer.effectAllowed = "move"; });
+  div.addEventListener("dragend", () => { div.classList.remove("drag-active"); _qeCardioDragEl = null; _qeClearCardioHints(); });
+  div.addEventListener("dragover", e => {
+    if (!_qeCardioDragEl || _qeCardioDragEl === div) return;
+    e.preventDefault();
+    div.classList.remove("drag-insert-above", "drag-insert-below");
+    const pct = (e.clientY - div.getBoundingClientRect().top) / div.getBoundingClientRect().height;
+    div.classList.add(pct <= 0.5 ? "drag-insert-above" : "drag-insert-below");
+  });
+  div.addEventListener("dragleave", () => div.classList.remove("drag-insert-above", "drag-insert-below"));
+  div.addEventListener("drop", e => {
+    e.preventDefault();
+    _qeClearCardioHints();
+    if (!_qeCardioDragEl || _qeCardioDragEl === div) return;
+    const pct = (e.clientY - div.getBoundingClientRect().top) / div.getBoundingClientRect().height;
+    if (pct <= 0.5) container.insertBefore(_qeCardioDragEl, div);
+    else container.insertBefore(_qeCardioDragEl, div.nextSibling);
+    _qeCardioDragEl = null;
+  });
+  if (typeof TouchDrag !== "undefined") {
+    TouchDrag.attach(div, container, {
+      hintClasses: ["drag-insert-above", "drag-insert-below"],
+      rowSelector: ".edit-interval-card",
+      handleSelector: ".drag-handle",
+      onDrop(dragEl, targetEl, clientY) {
+        _qeClearCardioHints();
+        const pct = (clientY - targetEl.getBoundingClientRect().top) / targetEl.getBoundingClientRect().height;
+        if (pct <= 0.5) container.insertBefore(dragEl, targetEl);
+        else container.insertBefore(dragEl, targetEl.nextSibling);
+      },
+    });
+  }
+  container.appendChild(div);
+}
+
+let _qeCardioDragEl = null;
+function _qeClearCardioHints() {
+  document.querySelectorAll("#qe-cardio-interval-rows .edit-interval-card").forEach(el =>
+    el.classList.remove("drag-insert-above", "drag-insert-below", "drag-active"));
 }
 
 function qeRemoveCardioRow(id) {

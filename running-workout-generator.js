@@ -435,7 +435,21 @@
     const zones = opts.userZones || null;
     const warnings = [];
 
-    if (!zones || !zones.vdot) {
+    // Only warn about missing pace data if the user has NO running zones
+    // at all (no VDOT from getZonesForUser AND no manual zones in
+    // trainingZones.running). Users who have entered zones manually
+    // shouldn't see this prompt.
+    let _hasRunZones = !!(zones && zones.vdot);
+    if (!_hasRunZones) {
+      try {
+        const _tz = JSON.parse(localStorage.getItem("trainingZones") || "{}");
+        const _rz = _tz.running || {};
+        _hasRunZones = !!(
+          _rz.easyPaceMin || _rz.easy || _rz.thresholdPaceMin || _rz.tempo || _rz.vo2max
+        );
+      } catch {}
+    }
+    if (!_hasRunZones) {
       warnings.push("For accurate pace targets, add a recent race result.");
     }
 

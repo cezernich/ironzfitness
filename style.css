@@ -3891,7 +3891,11 @@ button:active {
   border-radius: 8px;
   padding: 8px 10px;
   margin-bottom: 6px;
+  transition: opacity 0.15s;
 }
+.edit-interval-card.drag-active { opacity: 0.35; }
+.edit-interval-card.drag-insert-above { border-top: 2.5px solid var(--color-accent); margin-top: -1px; }
+.edit-interval-card.drag-insert-below { border-bottom: 2.5px solid var(--color-accent); margin-bottom: -1px; }
 .eiv-header {
   display: flex;
   align-items: center;

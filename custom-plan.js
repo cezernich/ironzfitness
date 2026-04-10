@@ -978,17 +978,10 @@ function cpManualAddCardioRow(prefill) {
   _cpManualCardioRowCount++;
   const id = _cpManualCardioRowCount;
   const unit = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
-  const div = document.createElement("div");
-  div.className = "qe-manual-row qe-cardio-row";
-  div.id = `cp-crow-${id}`;
-
-  // Parse prefill duration: "5 mi" -> distance mode; "10 min" -> time mode
   const pName = prefill?.name || "";
   const pDetails = prefill?.details || "";
   const pEffort = prefill?.effort || "Z2";
-  let pMode = "time";
-  let pDist = "";
-  let pMin = "";
+  let pMode = "time", pDist = "", pMin = "";
   const dur = prefill?.duration || "";
   if (dur) {
     const distMatch = String(dur).match(/^\s*([\d.]+)\s*(mi|km|m)\b/i);
@@ -996,41 +989,93 @@ function cpManualAddCardioRow(prefill) {
     if (distMatch) { pMode = "distance"; pDist = distMatch[1]; }
     else if (minMatch) { pMode = "time"; pMin = minMatch[1]; }
   }
-  div.dataset.durMode = pMode;
+  const _esel = v => pEffort === v ? " selected" : "";
 
+  const div = document.createElement("div");
+  div.className = "edit-interval-card";
+  div.id = `cp-crow-${id}`;
+  div.dataset.durMode = pMode;
+  div.draggable = true;
   div.innerHTML = `
-    <div><label>Phase</label>
-      <input type="text" id="cp-cphase-${id}" placeholder="e.g. Warm-up" value="${_cpEsc(pName)}" /></div>
-    <div class="qe-dur-col">
-      <div class="qe-dur-toggle">
-        <button type="button" class="qe-dur-mode-btn${pMode === "distance" ? " active" : ""}" data-mode="distance"
-          onclick="setCPIntervalMode(${id},'distance')">Distance</button>
-        <button type="button" class="qe-dur-mode-btn${pMode === "time" ? " active" : ""}" data-mode="time"
-          onclick="setCPIntervalMode(${id},'time')">Time</button>
+    <div class="eiv-header">
+      <span class="drag-handle" title="Drag to reorder">⠿</span>
+      <input type="text" class="eiv-phase-input" id="cp-cphase-${id}" placeholder="e.g. Warm-up" value="${_cpEsc(pName)}" />
+      <button class="remove-exercise-btn" onclick="cpManualRemoveCardioRow(${id})">${_CP_TRASH_SVG}</button>
+    </div>
+    <div class="eiv-fields">
+      <div class="eiv-field">
+        <div class="qe-dur-toggle">
+          <button type="button" class="qe-dur-mode-btn${pMode === "distance" ? " active" : ""}" data-mode="distance"
+            onclick="setCPIntervalMode(${id},'distance')">Dist</button>
+          <button type="button" class="qe-dur-mode-btn${pMode === "time" ? " active" : ""}" data-mode="time"
+            onclick="setCPIntervalMode(${id},'time')">Time</button>
+        </div>
+        <div id="cp-dist-wrap-${id}" style="display:${pMode === "distance" ? "" : "none"}">
+          <input type="number" id="cp-cdist-${id}" placeholder="e.g. 5" min="0" step="0.1" style="width:60px" value="${_cpEsc(pDist)}" />
+          <span class="qe-unit-label">${unit}</span>
+        </div>
+        <div id="cp-time-wrap-${id}" style="display:${pMode === "time" ? "" : "none"}">
+          <input type="number" id="cp-cmin-${id}" placeholder="10" min="0" style="width:60px" value="${_cpEsc(pMin)}" />
+          <span class="qe-unit-label">min</span>
+        </div>
       </div>
-      <div id="cp-dist-wrap-${id}" style="display:${pMode === "distance" ? "" : "none"}">
-        <input type="number" id="cp-cdist-${id}" placeholder="e.g. 5" min="0" step="0.1" style="width:70px" value="${_cpEsc(pDist)}" />
-        <span class="qe-unit-label">${unit}</span>
-      </div>
-      <div id="cp-time-wrap-${id}" style="display:${pMode === "time" ? "" : "none"}">
-        <input type="number" id="cp-cmin-${id}" placeholder="e.g. 10" min="0" style="width:70px" value="${_cpEsc(pMin)}" />
-        <span class="qe-unit-label">min</span>
+      <div class="eiv-field">
+        <select id="cp-ceffort-${id}">
+          <option value="RW"${_esel("RW")}>Rest / Walk</option>
+          <option value="Z1"${_esel("Z1")}>Z1 Recovery</option>
+          <option value="Z2"${_esel("Z2")}>Z2 Aerobic</option>
+          <option value="Z3"${_esel("Z3")}>Z3 Tempo</option>
+          <option value="Z4"${_esel("Z4")}>Z4 Threshold</option>
+          <option value="Z5"${_esel("Z5")}>Z5 VO2 Max</option>
+          <option value="Z6"${_esel("Z6")}>Z6 Sprint</option>
+        </select>
       </div>
     </div>
-    <div><label>Zone</label>
-      <select id="cp-ceffort-${id}">
-        <option value="RW"${pEffort === "RW" ? " selected" : ""}>Rest / Walk</option>
-        <option value="Z1"${pEffort === "Z1" ? " selected" : ""}>Z1 Recovery</option>
-        <option value="Z2"${pEffort === "Z2" ? " selected" : ""}>Z2 Aerobic</option>
-        <option value="Z3"${pEffort === "Z3" ? " selected" : ""}>Z3 Tempo</option>
-        <option value="Z4"${pEffort === "Z4" ? " selected" : ""}>Z4 Threshold</option>
-        <option value="Z5"${pEffort === "Z5" ? " selected" : ""}>Z5 VO2 Max</option>
-        <option value="Z6"${pEffort === "Z6" ? " selected" : ""}>Z6 Max Sprint</option>
-      </select></div>
-    <div style="flex:2"><label>Details</label>
-      <input type="text" id="cp-cdetails-${id}" placeholder="e.g. 5:30/km, keep HR under 145" value="${_cpEsc(pDetails)}" /></div>
-    <button class="remove-exercise-btn" onclick="cpManualRemoveCardioRow(${id})">${_CP_TRASH_SVG}</button>`;
-  document.getElementById("cp-manual-cardio-rows").appendChild(div);
+    <div class="eiv-details">
+      <input type="text" id="cp-cdetails-${id}" placeholder="e.g. 5:30/km, keep HR under 145" value="${_cpEsc(pDetails)}" />
+    </div>`;
+
+  // Drag-to-reorder
+  const container = document.getElementById("cp-manual-cardio-rows");
+  div.addEventListener("dragstart", e => { _cpCardioDragEl = div; div.classList.add("drag-active"); e.dataTransfer.effectAllowed = "move"; });
+  div.addEventListener("dragend", () => { div.classList.remove("drag-active"); _cpCardioDragEl = null; _cpClearCardioHints(); });
+  div.addEventListener("dragover", e => {
+    if (!_cpCardioDragEl || _cpCardioDragEl === div) return;
+    e.preventDefault();
+    div.classList.remove("drag-insert-above", "drag-insert-below");
+    const pct = (e.clientY - div.getBoundingClientRect().top) / div.getBoundingClientRect().height;
+    div.classList.add(pct <= 0.5 ? "drag-insert-above" : "drag-insert-below");
+  });
+  div.addEventListener("dragleave", () => div.classList.remove("drag-insert-above", "drag-insert-below"));
+  div.addEventListener("drop", e => {
+    e.preventDefault();
+    _cpClearCardioHints();
+    if (!_cpCardioDragEl || _cpCardioDragEl === div) return;
+    const pct = (e.clientY - div.getBoundingClientRect().top) / div.getBoundingClientRect().height;
+    if (pct <= 0.5) container.insertBefore(_cpCardioDragEl, div);
+    else container.insertBefore(_cpCardioDragEl, div.nextSibling);
+    _cpCardioDragEl = null;
+  });
+  if (typeof TouchDrag !== "undefined") {
+    TouchDrag.attach(div, container, {
+      hintClasses: ["drag-insert-above", "drag-insert-below"],
+      rowSelector: ".edit-interval-card",
+      handleSelector: ".drag-handle",
+      onDrop(dragEl, targetEl, clientY) {
+        _cpClearCardioHints();
+        const pct = (clientY - targetEl.getBoundingClientRect().top) / targetEl.getBoundingClientRect().height;
+        if (pct <= 0.5) container.insertBefore(dragEl, targetEl);
+        else container.insertBefore(dragEl, targetEl.nextSibling);
+      },
+    });
+  }
+  container.appendChild(div);
+}
+
+let _cpCardioDragEl = null;
+function _cpClearCardioHints() {
+  document.querySelectorAll("#cp-manual-cardio-rows .edit-interval-card").forEach(el =>
+    el.classList.remove("drag-insert-above", "drag-insert-below", "drag-active"));
 }
 
 function cpManualRemoveCardioRow(id) {
@@ -1081,7 +1126,7 @@ function customPlanSaveManual() {
   if (isCardio) {
     // Collect intervals from cardio rows
     const intervals = [];
-    document.querySelectorAll("#cp-manual-cardio-rows .qe-cardio-row").forEach(row => {
+    document.querySelectorAll("#cp-manual-cardio-rows .edit-interval-card").forEach(row => {
       const id = row.id.replace("cp-crow-", "");
       const duration = _cpCardioRowDuration(id);
       if (!duration) return;
