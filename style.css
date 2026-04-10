@@ -12006,6 +12006,19 @@ button:active {
   font-size: 12px;
 }
 .saved-detail-row:last-child { border-bottom: none; }
+.saved-detail-group {
+  border-left: 3px solid var(--color-accent, #6366f1);
+  padding-left: 10px;
+  margin: 6px 0;
+}
+.saved-detail-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-accent, #6366f1);
+  margin-bottom: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
 .saved-detail-name {
   font-weight: 600;
   color: var(--color-text);

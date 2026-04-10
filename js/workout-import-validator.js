@@ -169,13 +169,18 @@
     }
 
     // Minimal scaled object the validator + UI both consume.
+    const displayName = (variant && variant.name)
+      || (workout && workout.title)
+      || sharedWorkout.sessionName || sharedWorkout.session_name || sharedWorkout.custom_name
+      || "Workout";
     return {
       variant_id: variantId,
-      variant_name: (variant && variant.name) || (workout && workout.title) || "Workout",
+      variant_name: displayName,
       sport_id: sportId,
       session_type_id: sessionTypeId,
       is_hard,
-      title: (workout && workout.title) || (variant && variant.name) || "Workout",
+      title: displayName,
+      source: sharedWorkout.source || null,
       phases: workout && workout.phases ? workout.phases : null,
       estimated_duration_min: (workout && workout.estimated_duration_min) || null,
       scaled_to_receiver: true,
@@ -211,8 +216,14 @@
     const variantId = sw.variantId || sw.variant_id;
     const targetDate = opts.targetDate || null;
 
-    // Step 1: variant existence — applies to BOTH save and schedule paths.
-    if (!_variantExists(sportId, sessionTypeId, variantId)) {
+    // Step 1: variant existence check.
+    // Shared and custom workouts use training_sessions UUIDs as variant_id,
+    // which won't exist in the built-in variant library. Skip the library
+    // check for these sources — they're already validated at creation time.
+    const source = sw.source || opts.source || null;
+    const isNonLibrary = source === "shared" || source === "custom" || source === "user_added";
+
+    if (!isNonLibrary && !_variantExists(sportId, sessionTypeId, variantId)) {
       return {
         canImport: false,
         canSave: false,
@@ -223,7 +234,7 @@
       };
     }
 
-    const variant = _resolveVariant(sportId, sessionTypeId, variantId);
+    const variant = isNonLibrary ? null : _resolveVariant(sportId, sessionTypeId, variantId);
     const scaledWorkout = _scaleForReceiver(sw, variant);
 
     // Save path is always allowed (variant exists).

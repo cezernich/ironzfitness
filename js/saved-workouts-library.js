@@ -160,16 +160,17 @@
     const e = list.find(s => s.id === savedId);
     if (!e) return { error: "NOT_FOUND" };
 
-    const isCustom = e.source === "custom";
     const Validator = window.WorkoutImportValidator;
-    // Custom workouts may lack variant_id; skip validator if it would fail
-    if (Validator && e.variant_id) {
+    if (Validator) {
       const result = Validator.validateImport({
         sharedWorkout: {
           variantId: e.variant_id,
           sportId: e.sport_id,
           sessionTypeId: e.session_type_id,
+          source: e.source,
+          sessionName: e.custom_name,
         },
+        source: e.source,
         targetDate,
       });
       if (!result.canImport) {
