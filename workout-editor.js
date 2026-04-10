@@ -178,7 +178,7 @@ function _addEditRow(ex) {
   div.id = `edit-row-${id}`;
   const weightVal = typeof _normalizeWeightDisplay === 'function' ? _normalizeWeightDisplay(ex?.weight || '') : (ex?.weight || '');
   const hasSetDetails = ex?.setDetails && ex.setDetails.length > 0;
-  const dragHandleHTML = `<span class="drag-handle" title="Drag to reorder">⠿</span>`;
+  const dragHandleHTML = `<span class="drag-handle" title="Drag to reorder · drop on a row to superset">⠿</span>`;
   if (_editIsHiit) {
     div.innerHTML = `
       ${dragHandleHTML}
