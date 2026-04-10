@@ -1034,6 +1034,43 @@ button:active {
   transition: outline 0.15s, background 0.15s;
 }
 
+/* ── Exercise rows inside modals: stack name on own row ── */
+.quick-entry-modal .exercise-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  position: relative;
+  padding-right: 36px;
+}
+.quick-entry-modal .exercise-row .drag-handle {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+}
+.quick-entry-modal .exercise-row > div {
+  flex: 1 1 calc(50% - 6px);
+  min-width: calc(50% - 6px);
+}
+.quick-entry-modal .exercise-row > div:first-of-type {
+  flex: 1 1 100%;
+  min-width: 100%;
+  padding-left: 24px;
+}
+.quick-entry-modal .exercise-row .remove-exercise-btn {
+  position: absolute;
+  top: 8px;
+  right: 6px;
+  padding: 6px 10px;
+  font-size: 1rem;
+}
+.quick-entry-modal .exercise-row label { display: block; }
+.quick-entry-modal .exercise-row-header,
+.quick-entry-modal .log-row-header { display: none; }
+.quick-entry-modal .exercise-row .ex-pyramid-btn { display: none; }
+.quick-entry-modal .exercise-row .ex-pyramid-detail { flex: 1 1 100%; }
+
 /* Edit exercise header — matches edit row grid with drag-handle spacer */
 .edit-row-header {
   grid-template-columns: 28px 2fr 1fr 1fr 1fr 28px;
@@ -3765,27 +3802,51 @@ button:active {
 
 /* Manual exercise rows */
 .qe-manual-row {
-  display: grid;
-  /* Sized to fit inside the 440px modal (≈400px content area). Leading
-     28px column is the drag handle; exercise name takes 1fr; numeric
-     fields use compact fixed widths so the row doesn't overflow on
-     phones above the 430px mobile breakpoint. */
-  grid-template-columns: 28px minmax(0, 1fr) 50px 56px 72px auto auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   align-items: end;
   background: var(--color-surface-2);
   border-radius: 8px;
   padding: 10px;
+  padding-right: 36px;
   margin-bottom: 8px;
   position: relative;
 }
+.qe-manual-row .drag-handle {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+}
+/* Exercise name: full width on its own row */
+.qe-manual-row > div:first-of-type {
+  flex: 1 1 100%;
+  min-width: 100%;
+  padding-left: 24px;
+}
+/* Sets / Reps / Weight: equal columns on second row */
+.qe-manual-row > div:not(:first-of-type):not(.ex-pyramid-detail) {
+  flex: 1 1 0;
+  min-width: 0;
+}
 .qe-manual-row > div { min-width: 0; }
+.qe-manual-row .remove-exercise-btn {
+  position: absolute;
+  top: 8px;
+  right: 6px;
+}
+.qe-manual-row .ex-pyramid-btn { display: none; }
+.qe-manual-row .ex-pyramid-detail { flex: 1 1 100%; }
 .qe-manual-row input {
   padding: 8px 6px;
   font-size: 0.85rem;
+  width: 100%;
 }
-.qe-manual-row.hiit-row {
-  grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 0.9fr) auto;
+.qe-manual-row.hiit-row > div:not(:first-of-type):not(.ex-pyramid-detail) {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 /* Small superset badge shown on rows that belong to a group */
