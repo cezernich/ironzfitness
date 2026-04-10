@@ -262,7 +262,8 @@
 
       renderWorkout(merged);
     } catch (e) {
-      showError('Connection error', 'Could not reach the server. Please try again.');
+      console.error('[share.html] Fatal error:', e);
+      showError('Something went wrong', e.message || 'Could not load this workout.');
     }
   }
 
