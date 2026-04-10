@@ -1373,12 +1373,15 @@ async function triggerShareWorkout(cacheKey) {
     // preview page can look it up and render exercises/segments.
     let realVariantId = variantId;
     try {
+      // Columns confirmed via SELECT * on existing row:
+      // id, plan_id, user_id, scheduled_date, week_number, day_of_week,
+      // session_type, session_name, description, exercises, status,
+      // completed_workout_id, created_at, data
+      // After running DROP NOT NULL on plan_id + scheduled_date, those can be null.
       const tsPayload = {
         user_id: userId,
         session_name: workoutName,
         session_type: sessionTypeId,
-        plan_id: "b0000000-0000-0000-0000-000000000001",
-        scheduled_date: new Date().toISOString().slice(0, 10),
         status: "shared",
         exercises: _exercises.length > 0 ? _exercises : null,
         description: noteText || null,
