@@ -162,7 +162,7 @@
         </button>
         <div class="nav-dropdown" id="nav-profile-dropdown">
           <button onclick="closeProfileDropdown(); showTab('settings')">Settings</button>
-          <button onclick="closeProfileDropdown(); showTab('saved-workouts')">Saved Workouts</button>
+          <button onclick="closeProfileDropdown(); showTab('saved-library')">Saved Workouts</button>
           <button onclick="closeProfileDropdown(); showTab('community')">Community</button>
           <button onclick="closeProfileDropdown(); openSupportEmail()">Contact Support</button>
           <button id="admin-dropdown-btn" style="display:none" onclick="closeProfileDropdown(); showTab('admin')">Admin Panel</button>
@@ -1048,99 +1048,78 @@
     </div>
 
 
-    <!-- ===================================================
-         SAVED WORKOUTS TAB
-    ===================================================== -->
-    <div id="tab-saved-workouts" class="tab-content">
-      <section class="card" id="section-saved-workouts-header">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-          <div>
-            <h2 style="margin:0">Saved Workouts <span id="sw-counter" class="sw-counter"></span></h2>
-            <p class="hint" style="margin:4px 0 0">Up to 20 reusable workout templates. Assign any to a specific day.</p>
-          </div>
-          <button class="btn-primary" onclick="openSaveWorkoutModal()">+ New</button>
+    <!-- Save Workout Modal (shared by saved-library tab) -->
+    <div id="saved-workout-modal" style="display:none" class="sw-modal-overlay" onclick="if(event.target===this)closeSaveWorkoutModal()">
+      <div class="sw-modal">
+        <div class="sw-modal-header">
+          <h3 id="sw-modal-title">New Saved Workout</h3>
+          <button class="sw-modal-close" onclick="closeSaveWorkoutModal()">×</button>
         </div>
-      </section>
-      <div class="sw-search-wrap">
-        <input type="text" id="sw-search" class="sw-search-input" placeholder="Search saved workouts..." oninput="filterSavedWorkouts(this.value)" />
-      </div>
-      <div id="saved-workouts-list">
-        <p class="empty-msg">No saved workouts yet. Create one to get started.</p>
-      </div>
-
-      <!-- Save Workout Modal -->
-      <div id="saved-workout-modal" style="display:none" class="sw-modal-overlay" onclick="if(event.target===this)closeSaveWorkoutModal()">
-        <div class="sw-modal">
-          <div class="sw-modal-header">
-            <h3 id="sw-modal-title">New Saved Workout</h3>
-            <button class="sw-modal-close" onclick="closeSaveWorkoutModal()">×</button>
-          </div>
-          <div class="form-row">
-            <label for="sw-name">Workout Name</label>
-            <input type="text" id="sw-name" placeholder="e.g. Push Day A" />
-          </div>
-          <div class="form-row">
-            <label for="sw-type">Type</label>
-            <select id="sw-type" onchange="swTypeChanged()">
-              <option value="weightlifting">Strength / Lifting</option>
-              <option value="bodyweight">Bodyweight</option>
-              <option value="hiit">HIIT</option>
-              <option value="running">Running</option>
-              <option value="cycling">Cycling</option>
-              <option value="swimming">Swimming</option>
-              <option value="triathlon">Triathlon / Brick</option>
-              <option value="stairstepper">Stair Stepper</option>
-              <option value="general">General Fitness</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-          <div class="form-row">
-            <label for="sw-notes">Notes (optional)</label>
-            <input type="text" id="sw-notes" placeholder="e.g. 4 sets, focus on form" />
-          </div>
-          <div id="sw-strength-section">
-            <div id="sw-hiit-meta" style="display:none;margin-bottom:12px">
-              <div style="display:flex;gap:8px;flex-wrap:wrap">
-                <div style="flex:1;min-width:120px">
-                  <label for="sw-hiit-format">Format</label>
-                  <select id="sw-hiit-format">
-                    <option value="circuit">Circuit</option>
-                    <option value="tabata">Tabata</option>
-                    <option value="emom">EMOM</option>
-                    <option value="amrap">AMRAP</option>
-                    <option value="for-time">For Time</option>
-                  </select>
-                </div>
-                <div style="flex:1;min-width:70px">
-                  <label for="sw-hiit-rounds">Rounds</label>
-                  <input type="number" id="sw-hiit-rounds" value="3" min="1" max="50" />
-                </div>
+        <div class="form-row">
+          <label for="sw-name">Workout Name</label>
+          <input type="text" id="sw-name" placeholder="e.g. Push Day A" />
+        </div>
+        <div class="form-row">
+          <label for="sw-type">Type</label>
+          <select id="sw-type" onchange="swTypeChanged()">
+            <option value="weightlifting">Strength / Lifting</option>
+            <option value="bodyweight">Bodyweight</option>
+            <option value="hiit">HIIT</option>
+            <option value="running">Running</option>
+            <option value="cycling">Cycling</option>
+            <option value="swimming">Swimming</option>
+            <option value="triathlon">Triathlon / Brick</option>
+            <option value="stairstepper">Stair Stepper</option>
+            <option value="general">General Fitness</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="sw-notes">Notes (optional)</label>
+          <input type="text" id="sw-notes" placeholder="e.g. 4 sets, focus on form" />
+        </div>
+        <div id="sw-strength-section">
+          <div id="sw-hiit-meta" style="display:none;margin-bottom:12px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <div style="flex:1;min-width:120px">
+                <label for="sw-hiit-format">Format</label>
+                <select id="sw-hiit-format">
+                  <option value="circuit">Circuit</option>
+                  <option value="tabata">Tabata</option>
+                  <option value="emom">EMOM</option>
+                  <option value="amrap">AMRAP</option>
+                  <option value="for-time">For Time</option>
+                </select>
               </div>
-              <div style="display:flex;gap:8px;margin-top:8px">
-                <div style="flex:1">
-                  <label for="sw-hiit-rest-ex">Rest b/w exercises</label>
-                  <input type="text" id="sw-hiit-rest-ex" placeholder="e.g. 15s" />
-                </div>
-                <div style="flex:1">
-                  <label for="sw-hiit-rest-rnd">Rest b/w rounds</label>
-                  <input type="text" id="sw-hiit-rest-rnd" placeholder="e.g. 60s" />
-                </div>
+              <div style="flex:1;min-width:70px">
+                <label for="sw-hiit-rounds">Rounds</label>
+                <input type="number" id="sw-hiit-rounds" value="3" min="1" max="50" />
               </div>
             </div>
-            <div id="sw-exercise-entries"></div>
-            <button class="btn-secondary" onclick="addSwExerciseRow()" style="margin-bottom:8px">+ Add Exercise</button>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <div style="flex:1">
+                <label for="sw-hiit-rest-ex">Rest b/w exercises</label>
+                <input type="text" id="sw-hiit-rest-ex" placeholder="e.g. 15s" />
+              </div>
+              <div style="flex:1">
+                <label for="sw-hiit-rest-rnd">Rest b/w rounds</label>
+                <input type="text" id="sw-hiit-rest-rnd" placeholder="e.g. 60s" />
+              </div>
+            </div>
           </div>
-          <div id="sw-endurance-section" style="display:none">
-            <p class="sw-section-label">Workout Structure</p>
-            <div id="sw-segment-entries"></div>
-            <button class="btn-secondary" onclick="addSwSegmentRow()" style="margin-bottom:8px">+ Add Segment</button>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:4px">
-            <button class="btn-primary" style="flex:1" onclick="saveSavedWorkout()">Save</button>
-            <button class="btn-secondary" style="flex:1" onclick="closeSaveWorkoutModal()">Cancel</button>
-          </div>
-          <p id="sw-save-msg" class="save-msg"></p>
+          <div id="sw-exercise-entries"></div>
+          <button class="btn-secondary" onclick="addSwExerciseRow()" style="margin-bottom:8px">+ Add Exercise</button>
         </div>
+        <div id="sw-endurance-section" style="display:none">
+          <p class="sw-section-label">Workout Structure</p>
+          <div id="sw-segment-entries"></div>
+          <button class="btn-secondary" onclick="addSwSegmentRow()" style="margin-bottom:8px">+ Add Segment</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="btn-primary" style="flex:1" id="sw-save-btn" onclick="saveSavedWorkout()">Save</button>
+          <button class="btn-secondary" style="flex:1" onclick="closeSaveWorkoutModal()">Cancel</button>
+        </div>
+        <p id="sw-save-msg" class="save-msg"></p>
       </div>
     </div>
 
@@ -2298,6 +2277,7 @@
             </div>
           </div>
         </div>
+        <p class="cp-ss-hint">Tip: drag rows by the handle to reorder, or drop onto another row to create a superset.</p>
         <div id="qe-exercise-rows"></div>
         <div style="display:flex;gap:6px;margin-top:6px">
           <button class="btn-secondary" style="flex:1" onclick="qeAddExerciseRow()">+ Add Exercise</button>
@@ -2309,9 +2289,14 @@
       <!-- STEP 2c: Cardio manual entry -->
       <div class="qe-step" id="qe-step-2-cardio-manual" style="display:none">
         <div class="form-row" style="margin-bottom:10px">
-          <label for="qe-cardio-manual-notes">Session Title / Notes (optional)</label>
-          <input type="text" id="qe-cardio-manual-notes" placeholder="e.g. Easy 5K, Recovery Ride" />
+          <label for="qe-cardio-manual-name">Workout Name (optional)</label>
+          <input type="text" id="qe-cardio-manual-name" placeholder="e.g. Tempo Run, Recovery Ride" />
         </div>
+        <div class="form-row" style="margin-bottom:10px">
+          <label for="qe-cardio-manual-notes">Session Notes (optional)</label>
+          <input type="text" id="qe-cardio-manual-notes" placeholder="e.g. Felt good, held Z3 the whole tempo block" />
+        </div>
+        <p class="cp-ss-hint">Tip: drag rows by the handle to reorder, or drop onto another row to create a repeat block.</p>
         <div id="qe-cardio-interval-rows"></div>
         <button class="btn-secondary" style="width:100%;margin-top:6px"  onclick="qeAddCardioRow()">+ Add Interval / Phase</button>
         <button class="btn-primary"   style="width:100%;margin-top:14px" onclick="qeSaveCardioManual()">Save Session</button>

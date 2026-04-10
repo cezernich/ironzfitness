@@ -5421,7 +5421,8 @@ function qeSaveCardioManual() {
   const msgEl   = document.getElementById("qe-cardio-manual-msg");
   if (!dateStr) { if (msgEl) msgEl.textContent = "Please select a date."; return; }
 
-  const notes     = document.getElementById("qe-cardio-manual-notes")?.value.trim() || "";
+  const workoutName = document.getElementById("qe-cardio-manual-name")?.value.trim() || "";
+  const notes       = document.getElementById("qe-cardio-manual-notes")?.value.trim() || "";
   const intervals = [];
   document.querySelectorAll("[id^='qe-cphase-']").forEach(inp => {
     const idx      = inp.id.replace("qe-cphase-", "");
@@ -5457,11 +5458,13 @@ function qeSaveCardioManual() {
     localStorage.setItem("dayRestrictions", JSON.stringify(restrictions)); if (typeof DB !== 'undefined') DB.syncKey('dayRestrictions');
   }
 
+  const displayName = workoutName || capitalize(type) + " Session";
   let workouts = [];
   try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
   workouts.unshift({
     id: generateId(), date: dateStr, type, notes, exercises: [],
-    ...(intervals.length ? { aiSession: { title: notes || capitalize(type) + " Session", intervals } } : {})
+    fromSaved: workoutName || undefined,
+    ...(intervals.length ? { aiSession: { title: displayName, intervals } } : {})
   });
   localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
 
