@@ -45,9 +45,9 @@ const STRUCTURE_LABELS: Record<string, { warmup: string; main: string; cooldown:
 };
 
 function renderHtml(share: any): string {
-  const senderName  = (share.sender && share.sender.full_name) || "A friend";
+  const senderName  = (share._senderName) || (share.sender && share.sender.full_name) || "A friend";
   const initial     = senderName.trim().slice(0, 1).toUpperCase();
-  const variantName = share.variant_id || "Workout";
+  const variantName = (share._sessionName) || share.variant_id || "Workout";
   const sportLabel  = (share.sport_id || "").toUpperCase();
   const structure   = STRUCTURE_LABELS[share.session_type_id] || {
     warmup: "—", main: "Generic structure", cooldown: "—",
@@ -108,7 +108,7 @@ function renderHtml(share: any): string {
 <body>
   <div class="wrap">
     <div class="logo">IronZ</div>
-    <div class="url">ironz.app/w/${escapeHtml(share.share_token)}</div>
+    <div class="url">ironz.fit/w/${escapeHtml(share.share_token)}</div>
     <div class="from">
       <div class="avatar">${escapeHtml(initial)}</div>
       <div>
@@ -179,6 +179,30 @@ serve(async (req: Request) => {
   if (error || !data) return renderError("Link not found", 404);
   if (data.revoked_at) return renderError("Link revoked", 410);
   if (data.expires_at && new Date(data.expires_at) < new Date()) return renderError("Link expired", 410);
+
+  // Look up actual workout name from training_sessions by variant_id.
+  if (data.variant_id) {
+    try {
+      const { data: session } = await sb
+        .from("training_sessions")
+        .select("session_name")
+        .eq("id", data.variant_id)
+        .maybeSingle();
+      if (session && session.session_name) data._sessionName = session.session_name;
+    } catch {}
+  }
+
+  // Look up sender profile name directly (more reliable than FK join).
+  if (data.sender_user_id && !(data.sender && data.sender.full_name)) {
+    try {
+      const { data: profile } = await sb
+        .from("profiles")
+        .select("full_name")
+        .eq("id", data.sender_user_id)
+        .maybeSingle();
+      if (profile && profile.full_name) data._senderName = profile.full_name;
+    } catch {}
+  }
 
   // Bump view_count via RPC (best-effort, never block render).
   try {

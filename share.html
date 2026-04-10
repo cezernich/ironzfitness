@@ -116,19 +116,53 @@
   }
 
   function renderShare(share) {
-    var senderName = (share.sender && share.sender.full_name) || "A friend";
-    var initial    = senderName.trim().slice(0, 1).toUpperCase();
-    var variantName = share.variant_id || "Workout";
+    // Sender name: from the separate profile lookup (share._senderProfile),
+    // the FK join (share.sender), or fallback.
+    var senderName = (share._senderProfile && share._senderProfile.full_name)
+      || (share.sender && share.sender.full_name)
+      || "A friend";
+    var initial = senderName.trim().slice(0, 1).toUpperCase();
+
+    // Workout name: from the training_sessions lookup (share._session),
+    // NOT from variant_id (which is a UUID).
+    var session = share._session || {};
+    var workoutName = session.session_name || "Workout";
+    var workoutDesc = session.description || "";
     var sportLabel  = (share.sport_id || "").toUpperCase();
-    var s = STRUCTURE[share.session_type_id] || { warmup: "\u2014", main: "Workout structure", cooldown: "\u2014" };
+
+    // Exercise details from training_sessions.exercises (JSONB array)
+    var exerciseHtml = "";
+    var exercises = session.exercises;
+    if (Array.isArray(exercises) && exercises.length > 0) {
+      exerciseHtml = '<div class="exercises">';
+      for (var i = 0; i < exercises.length; i++) {
+        var ex = exercises[i];
+        var name = ex.name || ex.exercise_name || "Exercise";
+        var detail = "";
+        if (ex.sets && ex.reps) detail = ex.sets + " \u00d7 " + ex.reps;
+        else if (ex.duration) detail = ex.duration;
+        else if (ex.distance) detail = ex.distance;
+        if (ex.intensity) detail += (detail ? " @ " : "") + ex.intensity;
+        exerciseHtml += '<div class="row"><span class="label">' + esc(name) + '</span><span class="value">' + esc(detail) + '</span></div>';
+      }
+      exerciseHtml += '</div>';
+    }
+
+    // Fallback to generic structure labels if no exercises
+    var structureHtml = "";
+    if (!exerciseHtml) {
+      var s = STRUCTURE[share.session_type_id] || { warmup: "\u2014", main: "Workout structure", cooldown: "\u2014" };
+      structureHtml =
+        '<div class="row"><span class="label">Warm-up</span><span class="value">' + esc(s.warmup) + '</span></div>' +
+        '<div class="row"><span class="label">Main set</span><span class="value">' + esc(s.main) + '</span></div>' +
+        '<div class="row"><span class="label">Cool-down</span><span class="value">' + esc(s.cooldown) + '</span></div>';
+    }
+
     var noteHtml = share.share_note
       ? '<div class="note">\u201c' + esc(share.share_note) + '\u201d</div>'
       : "";
 
-    // Build deep link for the CTA — tries custom scheme first (opens app if installed),
-    // falls back to the current page URL.
     var deepLink = "ironz://share/" + esc(share.share_token);
-    var pageUrl  = window.location.href;
 
     document.getElementById("content").innerHTML =
       '<div class="logo">IronZ</div>' +
@@ -137,16 +171,15 @@
         '<div class="avatar">' + esc(initial) + '</div>' +
         '<div>' +
           '<div class="from-label">' + esc(senderName) + ' shared a workout</div>' +
-          '<div class="from-name">' + esc(variantName) + '</div>' +
+          '<div class="from-name">' + esc(workoutName) + '</div>' +
         '</div>' +
       '</div>' +
       '<div class="card">' +
         '<span class="badge">' + esc(sportLabel) + '</span>' +
-        '<div class="title">' + esc(variantName) + '</div>' +
-        '<div class="subtitle">' + esc(share.session_type_id || "") + '</div>' +
-        '<div class="row"><span class="label">Warm-up</span><span class="value">' + esc(s.warmup) + '</span></div>' +
-        '<div class="row"><span class="label">Main set</span><span class="value">' + esc(s.main) + '</span></div>' +
-        '<div class="row"><span class="label">Cool-down</span><span class="value">' + esc(s.cooldown) + '</span></div>' +
+        '<div class="title">' + esc(workoutName) + '</div>' +
+        (workoutDesc ? '<div class="subtitle">' + esc(workoutDesc) + '</div>' : '') +
+        exerciseHtml +
+        structureHtml +
         noteHtml +
       '</div>' +
       '<div class="install">' +
@@ -156,10 +189,8 @@
       '</div>' +
       '<p class="privacy">Your friend\u2019s paces, VDOT, and zones never left their device.<br>This preview shows generic structure only.</p>';
 
-    // Update OG title now that we have the data (helps if the page is re-shared
-    // from a browser that reads the live DOM, though most crawlers won't benefit).
     try {
-      document.title = senderName + " shared " + variantName + " \u00b7 IronZ";
+      document.title = senderName + " shared " + workoutName + " \u00b7 IronZ";
     } catch (e) {}
   }
 
@@ -205,6 +236,40 @@
       if (data.expires_at && new Date(data.expires_at) < new Date()) {
         renderError("Link expired", "This link has expired.");
         return;
+      }
+
+      // Look up the actual workout details from training_sessions by variant_id.
+      // variant_id is a text reference to training_sessions.id.
+      if (data.variant_id) {
+        try {
+          var sessionResult = await sb
+            .from("training_sessions")
+            .select("id, session_name, session_type, description, exercises")
+            .eq("id", data.variant_id)
+            .maybeSingle();
+          if (sessionResult.data) {
+            data._session = sessionResult.data;
+          }
+        } catch (e) {
+          console.warn("[share.html] training_sessions lookup failed:", e);
+        }
+      }
+
+      // Look up the sender's profile name directly (more reliable than the FK
+      // join which depends on the relationship name matching exactly).
+      if (data.sender_user_id && !(data.sender && data.sender.full_name)) {
+        try {
+          var profileResult = await sb
+            .from("profiles")
+            .select("full_name")
+            .eq("id", data.sender_user_id)
+            .maybeSingle();
+          if (profileResult.data) {
+            data._senderProfile = profileResult.data;
+          }
+        } catch (e) {
+          console.warn("[share.html] profile lookup failed:", e);
+        }
       }
 
       renderShare(data);
