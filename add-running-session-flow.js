@@ -104,13 +104,29 @@
       main_set: "Main Set", main_cruise_intervals: "Cruise Intervals",
       optional_finish: "M-Pace Finish", optional_mp_finish: "M-Pace Finish",
     };
-    return phases.map(p => ({
-      name: nameMap[p.phase] || (p.phase || "Interval").replace(/_/g, " "),
-      duration: p.duration_min ? `${p.duration_min} min` : (p.distance_m ? `${p.distance_m}m` : ""),
-      effort: _intensityToEffort(p.intensity),
-      details: p.instruction || p.target || "",
-      ...(p.rep_count && p.rep_count > 1 ? { reps: p.rep_count } : {}),
-    }));
+    return phases.map(p => {
+      // Determine per-rep duration string:
+      // - rep_distance (e.g. "800m") → use distance as duration label
+      // - rep_duration_min (e.g. 20) → use per-rep minutes
+      // - Otherwise fall back to total duration_min
+      let dur;
+      if (p.rep_count && p.rep_count > 1 && p.rep_distance) {
+        dur = p.rep_distance;
+      } else if (p.rep_duration_min) {
+        dur = `${p.rep_duration_min} min`;
+      } else {
+        dur = p.duration_min ? `${p.duration_min} min` : (p.distance_m ? `${p.distance_m}m` : "");
+      }
+      // Use reps from rep_count (track) or reps (tempo)
+      const repCount = p.rep_count || p.reps || 0;
+      return {
+        name: nameMap[p.phase] || (p.phase || "Interval").replace(/_/g, " "),
+        duration: dur,
+        effort: _intensityToEffort(p.intensity),
+        details: p.instruction || p.target || "",
+        ...(repCount > 1 ? { reps: repCount } : {}),
+      };
+    });
   }
 
   function planEntryFor(workout, dateStr) {

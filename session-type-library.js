@@ -155,8 +155,28 @@
             pace_source: "vdot.i_pace",
           },
         },
+        {
+          rotation_index: 4,
+          name: "400m repeats",
+          main_set: {
+            rep_distance_m: 400,
+            rep_count: { beginner: 8, intermediate: 12, advanced: 16 },
+            rest_type: "jog",
+            rest_duration_sec: 60,
+            pace_source: "vdot.i_pace",
+          },
+        },
+        {
+          rotation_index: 5,
+          name: "Cut-downs",
+          main_set: {
+            ladder_distances_m: [1600, 1200, 800, 400],
+            rest_type: "equal_time_jog",
+            pace_source: "vdot.i_pace",
+          },
+        },
       ],
-      rotation_logic: "rotation_index = (weeks_since_plan_start) mod 4",
+      rotation_logic: "rotation_index = (weeks_since_plan_start) mod 6",
       structure: [
         { phase: "warmup", intensity: "z1", duration_min: 15, includes: "4x20s strides" },
         { phase: "main_set", intensity: "z4", structure: "from rotation_templates" },
@@ -175,14 +195,26 @@
       default_duration_min: [35, 55],
       sub_templates: [
         {
-          id: "r_pace_repeats",
+          id: "r_pace_200s",
           name: "200m R-pace repeats",
-          default_for: ["intermediate", "advanced"],
+          default_for: ["intermediate"],
           main_set: {
             rep_distance_m: 200,
             rep_count: { beginner: 6, intermediate: 8, advanced: 10 },
             rest_type: "walk",
             rest_distance_m: 200,
+            pace_source: "vdot.r_pace",
+          },
+        },
+        {
+          id: "r_pace_400s",
+          name: "400m R-pace repeats",
+          default_for: ["advanced"],
+          main_set: {
+            rep_distance_m: 400,
+            rep_count: { beginner: 4, intermediate: 6, advanced: 8 },
+            rest_type: "walk",
+            rest_duration_sec: 90,
             pace_source: "vdot.r_pace",
           },
         },

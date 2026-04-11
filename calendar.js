@@ -739,7 +739,14 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
     const allSegs = [];
     intervals.forEach(iv => {
       const reps     = iv.reps || 1;
-      const mainDur  = _distToMin(iv.duration, iv.effort) || parseDur(iv.duration);
+      let _dur = iv.duration;
+      // Fix legacy data: if reps > 1 and duration is total minutes, extract per-rep distance or divide
+      if (reps > 1 && /\d+\s*min/.test(_dur)) {
+        const dm = (iv.details || "").match(/(\d+)\s*[x×]\s*(\d+)\s*m\b/i);
+        if (dm) { _dur = `${dm[2]}m`; }
+        else { const t = parseFloat(_dur); if (t > 0) _dur = `${Math.round(t / reps)} min`; }
+      }
+      const mainDur  = _distToMin(_dur, iv.effort) || parseDur(_dur);
       const restDur  = iv.restDuration ? parseDur(iv.restDuration) : 0;
       const mainCls  = effortToZone[iv.effort] || "z2";
       const restCls  = iv.restEffort ? (effortToZone[iv.restEffort] || "z2") : "z-rest";
@@ -1116,7 +1123,22 @@ function buildAiIntervalsList(session, type) {
     const zData = zone && zones ? zones[`z${zone}`] : null;
     const zoneLabel = zData ? (zData.paceRange || zData.wattRange || null) : null;
     const reps  = iv.reps || 1;
-    let durText = reps > 1 ? `${reps} × ${iv.duration}` : iv.duration;
+    // Fix legacy data: if reps > 1 and duration is total minutes (not per-rep),
+    // try to extract per-rep distance from the details text.
+    let perRepDur = iv.duration;
+    if (reps > 1 && /\d+\s*min/.test(iv.duration)) {
+      const distMatch = (iv.details || "").match(/(\d+)\s*[x×]\s*(\d+)\s*m\b/i);
+      if (distMatch) {
+        perRepDur = `${distMatch[2]}m`;
+      } else {
+        // Divide total by reps as fallback
+        const totalMin = parseFloat(iv.duration);
+        if (totalMin > 0) {
+          perRepDur = `${Math.round(totalMin / reps)} min`;
+        }
+      }
+    }
+    let durText = reps > 1 ? `${reps} × ${perRepDur}` : iv.duration;
     if (reps > 1 && iv.restDuration) durText += ` (${iv.restDuration} rest)`;
     const nameLow   = (iv.name || "").toLowerCase();
     const sportTag  = iv.sport ? `<span class="qe-brick-sport qe-brick-${iv.sport}">${iv.sport === "bike" ? "Bike" : "Run"}</span> ` : "";
@@ -2669,12 +2691,32 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       let _swGenDurMin = w.duration || null;
       if (w.aiSession && w.aiSession.intervals && w.aiSession.intervals.length) {
         const _effortToZone = { RW:"rw",Z1:"z1",Z2:"z2",Z3:"z3",Z4:"z4",Z5:"z5",Z6:"z6", Easy:"z2",Moderate:"z3",Hard:"z4",Max:"z5",T1:"z-transition" };
-        const _parseDur = str => { const s = String(str||"").toLowerCase(); const m = s.match(/([\d.]+)/); if(!m) return 1; const v = parseFloat(m[1]); return /sec/.test(s) ? v/60 : v; };
+        const _parseDur = (str, effort) => {
+          const s = String(str||"").toLowerCase();
+          const m = s.match(/([\d.]+)/); if(!m) return 1;
+          const v = parseFloat(m[1]);
+          if (/sec/.test(s)) return v / 60;
+          // Distance-based: convert to minutes using zone pace
+          if (/\bm\b/.test(s) && !/min/.test(s)) {
+            const paceMap = { RW:8, Z1:7, Z2:6.2, Z3:5.5, Z4:5, Z5:4.5, Z6:4 };
+            return (v / 1000) * (paceMap[effort] || 5.5);
+          }
+          if (/\bkm\b/.test(s)) { const paceMap = { RW:8,Z1:7,Z2:6.2,Z3:5.5,Z4:5,Z5:4.5,Z6:4 }; return v * (paceMap[effort]||5.5); }
+          if (/\bmi/i.test(s)) { const paceMap = { RW:8,Z1:7,Z2:6.2,Z3:5.5,Z4:5,Z5:4.5,Z6:4 }; return v * 1.60934 * (paceMap[effort]||5.5); }
+          return v;
+        };
         const _allSegs = [];
         _expandRepeatGroups(w.aiSession.intervals).forEach(iv => {
           const reps = iv.reps || 1;
-          const mainDur = _parseDur(iv.duration);
-          const restDur = iv.restDuration ? _parseDur(iv.restDuration) : 0;
+          let _ivDur = iv.duration;
+          // Fix legacy data: if reps > 1 and duration is total minutes, extract per-rep distance or divide
+          if (reps > 1 && /\d+\s*min/.test(_ivDur)) {
+            const dm = (iv.details || "").match(/(\d+)\s*[x×]\s*(\d+)\s*m\b/i);
+            if (dm) { _ivDur = `${dm[2]}m`; }
+            else { const t = parseFloat(_ivDur); if (t > 0) _ivDur = `${Math.round(t / reps)} min`; }
+          }
+          const mainDur = _parseDur(_ivDur, iv.effort);
+          const restDur = iv.restDuration ? _parseDur(iv.restDuration, iv.restEffort) : 0;
           const mainCls = _effortToZone[iv.effort] || "z2";
           const restCls = iv.restEffort ? (_effortToZone[iv.restEffort] || "z2") : "z-rest";
           for (let i = 0; i < reps; i++) {

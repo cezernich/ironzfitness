@@ -119,6 +119,56 @@
     const defaultMin = (range[0] + range[1]) / 2;
     const duration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings, template.max_duration_min);
     const allowsFinish = experience === "intermediate" || experience === "advanced";
+    const eLabel = zones ? _ePaceLabel(zones) : "Z1 (conversational)";
+    const mLabel = zones ? _mPaceLabel(zones) : "Z2 marathon";
+
+    // Pick variant based on day-of-year
+    const doy = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+    const variant = doy % 3; // 0=standard, 1=negative split, 2=with surges
+
+    if (variant === 1 && allowsFinish) {
+      // Negative split long run: first half easy, second half at marathon pace
+      const firstHalf = Math.round(duration * 0.55);
+      const secondHalf = duration - firstHalf;
+      const phases = [
+        { phase: "main", intensity: "z1", duration_min: firstHalf,
+          target: zones ? `${eLabel}/mi` : "Z1",
+          instruction: `First ${firstHalf} min easy @ ${eLabel}${zones ? "/mi" : ""}. Relaxed, conversational.` },
+        { phase: "main_set", intensity: "z2", duration_min: secondHalf,
+          target: zones ? `${mLabel}/mi` : "Z2 marathon",
+          instruction: `Last ${secondHalf} min @ ${mLabel}${zones ? "/mi" : ""}. Negative split — finish faster than you started.` }
+      ];
+      if (duration >= (template.fueling_reminder_threshold_min || 75)) {
+        warnings.push("Carry fuel: 30-60g carbs/hr after the first 60 minutes.");
+      }
+      return { duration, phases, subTemplate: "negative_split" };
+    }
+
+    if (variant === 2 && allowsFinish && duration >= 70) {
+      // Long run with surges: mostly easy with 4-6 pickups
+      const surgeCount = experience === "advanced" ? 6 : 4;
+      const surgeDur = 2; // 2 min each
+      const easyDur = duration - (surgeCount * surgeDur);
+      const phases = [
+        { phase: "main", intensity: "z1", duration_min: Math.round(easyDur * 0.3),
+          target: zones ? `${eLabel}/mi` : "Z1",
+          instruction: `${Math.round(easyDur * 0.3)} min easy @ ${eLabel}${zones ? "/mi" : ""} to warm up.` },
+        { phase: "main_set", intensity: "z3", duration_min: Math.round(surgeCount * surgeDur + easyDur * 0.5),
+          target: zones ? `${_tPaceLabel(zones)}/mi surges` : "tempo surges",
+          rep_count: surgeCount,
+          rep_duration_min: surgeDur,
+          instruction: `${surgeCount}×${surgeDur} min surges @ ${zones ? _tPaceLabel(zones) + "/mi" : "tempo"} w/ 5–8 min easy between. Spread evenly through the run.` },
+        { phase: "cooldown", intensity: "z1", duration_min: Math.round(easyDur * 0.2),
+          target: zones ? `${eLabel}/mi` : "Z1",
+          instruction: `Last ${Math.round(easyDur * 0.2)} min easy @ ${eLabel}${zones ? "/mi" : ""}.` }
+      ];
+      if (duration >= (template.fueling_reminder_threshold_min || 75)) {
+        warnings.push("Carry fuel: 30-60g carbs/hr after the first 60 minutes.");
+      }
+      return { duration, phases, subTemplate: "with_surges" };
+    }
+
+    // Standard long run with optional M-pace finish
     const eMin = Math.round(duration * 0.80);
     const mMin = Math.round(duration * 0.20);
     const phases = [
@@ -126,8 +176,8 @@
         phase: "main",
         intensity: "z1",
         duration_min: eMin,
-        target: zones ? `${_ePaceLabel(zones)}/mi` : "Z1",
-        instruction: `${eMin} min @ ${zones ? _ePaceLabel(zones) + "/mi (Z1)" : "Z1 (conversational)"}.`
+        target: zones ? `${eLabel}/mi` : "Z1",
+        instruction: `${eMin} min @ ${zones ? eLabel + "/mi (Z1)" : "Z1 (conversational)"}.`
       }
     ];
     if (allowsFinish && mMin >= 10) {
@@ -135,8 +185,8 @@
         phase: "optional_mp_finish",
         intensity: "z2",
         duration_min: mMin,
-        target: zones ? `${_mPaceLabel(zones)}/mi` : "Z2 marathon",
-        instruction: `Last ${mMin} min @ ${zones ? _mPaceLabel(zones) + "/mi (Z2 marathon finish)" : "Z2 marathon finish"}.`
+        target: zones ? `${mLabel}/mi` : "Z2 marathon",
+        instruction: `Last ${mMin} min @ ${zones ? mLabel + "/mi (Z2 marathon finish)" : "Z2 marathon finish"}.`
       });
     }
     if (duration >= (template.fueling_reminder_threshold_min || 75)) {
@@ -147,18 +197,64 @@
 
   function _generateTempo(template, experience, durationOverrideMin, zones, warnings) {
     const scaling = template.experience_scaling[experience] || template.experience_scaling.intermediate;
+    const wuMin = 15;
+    const cdMin = 10;
+    const tLabel = zones ? _tPaceLabel(zones) : "comfortably hard";
+    const eLabel = zones ? _ePaceLabel(zones) : "Z1";
+    const mLabel = zones ? _mPaceLabel(zones) : "marathon effort";
+
+    // Pick variant based on day-of-year for variety
+    const doy = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+    const variant = doy % 3; // 0=cruise intervals, 1=continuous tempo, 2=progression
+
+    if (variant === 1 && (experience === "intermediate" || experience === "advanced")) {
+      // Continuous tempo
+      const tempoMin = experience === "advanced" ? 25 : 20;
+      const totalDuration = wuMin + tempoMin + cdMin;
+      const phases = [
+        { phase: "warmup", intensity: "z1", duration_min: wuMin,
+          target: zones ? `${eLabel}/mi` : "Z1",
+          instruction: `WU ${wuMin} min easy @ ${eLabel}${zones ? "/mi" : ""}.` },
+        { phase: "main_set", intensity: "z3", duration_min: tempoMin,
+          target: zones ? `${tLabel}/mi` : "T effort",
+          instruction: `${tempoMin} min continuous @ ${tLabel}${zones ? "/mi" : ""}. Steady, no breaks.` },
+        { phase: "cooldown", intensity: "z1", duration_min: cdMin,
+          target: zones ? `${eLabel}/mi` : "Z1",
+          instruction: `CD ${cdMin} min easy @ ${eLabel}${zones ? "/mi" : ""}.` }
+      ];
+      return { duration: Math.round(totalDuration), phases, subTemplate: "continuous_tempo" };
+    }
+
+    if (variant === 2 && (experience === "intermediate" || experience === "advanced")) {
+      // Progression run: easy → marathon → tempo
+      const eMin = 15, mMin = 10, tMin = experience === "advanced" ? 15 : 10;
+      const totalDuration = eMin + mMin + tMin + cdMin;
+      const phases = [
+        { phase: "warmup", intensity: "z1", duration_min: eMin,
+          target: zones ? `${eLabel}/mi` : "Z1",
+          instruction: `${eMin} min easy @ ${eLabel}${zones ? "/mi" : ""}.` },
+        { phase: "main_set", intensity: "z2", duration_min: mMin,
+          target: zones ? `${mLabel}/mi` : "Z2 marathon",
+          instruction: `${mMin} min @ ${mLabel}${zones ? "/mi" : ""} (marathon effort).` },
+        { phase: "main_set", intensity: "z3", duration_min: tMin,
+          target: zones ? `${tLabel}/mi` : "T effort",
+          instruction: `${tMin} min @ ${tLabel}${zones ? "/mi" : ""} (threshold effort).` },
+        { phase: "cooldown", intensity: "z1", duration_min: cdMin,
+          target: zones ? `${eLabel}/mi` : "Z1",
+          instruction: `CD ${cdMin} min easy @ ${eLabel}${zones ? "/mi" : ""}.` }
+      ];
+      return { duration: Math.round(totalDuration), phases, subTemplate: "progression" };
+    }
+
+    // Default: cruise intervals
     const reps = scaling.reps;
     const repMin = scaling.rep_duration_min;
     const restSec = scaling.rest_sec;
-    const wuMin = 15;
-    const cdMin = 10;
     const restMin = ((reps - 1) * restSec) / 60;
     const totalDuration = wuMin + reps * repMin + restMin + cdMin;
     if (durationOverrideMin && Math.abs(durationOverrideMin - totalDuration) > totalDuration * 0.5) {
       warnings.push(`Duration override ignored — outside ±50% of ${Math.round(totalDuration)} min.`);
     }
-    const tLabel = zones ? _tPaceLabel(zones) : "comfortably hard";
-    const eLabel = zones ? _ePaceLabel(zones) : "Z1";
     const phases = [
       {
         phase: "warmup",
@@ -185,11 +281,19 @@
         instruction: `CD ${cdMin} min easy @ ${eLabel}${zones ? "/mi" : ""}.`
       }
     ];
-    return { duration: Math.round(totalDuration), phases };
+    return { duration: Math.round(totalDuration), phases, subTemplate: "cruise_intervals" };
   }
 
   function _generateTrack(template, experience, durationOverrideMin, zones, warnings, weeksSincePlanStart) {
-    const rotationIndex = ((weeksSincePlanStart || 0) % 4 + 4) % 4;
+    const rotCount = template.rotation_templates.length;
+    // Use weeksSincePlanStart if available (plan context), otherwise use day-of-year for variety
+    let rotationIndex;
+    if (weeksSincePlanStart != null && weeksSincePlanStart > 0) {
+      rotationIndex = ((weeksSincePlanStart) % rotCount + rotCount) % rotCount;
+    } else {
+      const doy = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+      rotationIndex = doy % rotCount;
+    }
     const tmpl = template.rotation_templates.find(t => t.rotation_index === rotationIndex)
       || template.rotation_templates[0];
     const wuMin = 15;
@@ -256,7 +360,7 @@
         phase: "main_set",
         intensity: "z4",
         duration_min: Math.round(mainSetMinutes),
-        target: zones ? `I-pace (${_iPaceLabelForDistance(zones, 800)}/800m)` : "I-pace effort",
+        target: zones && repDistance ? `I-pace (${_iPaceLabelForDistance(zones, parseInt(repDistance))})` : "I-pace effort",
         rotation_index: rotationIndex,
         rotation_name: tmpl.name,
         rep_count: repCount,
@@ -276,28 +380,42 @@
   }
 
   function _generateSpeedWork(template, experience, durationOverrideMin, zones, warnings) {
-    // Pick sub-template
-    const subTpl = template.sub_templates.find(s => (s.default_for || []).includes(experience))
-      || template.sub_templates[0];
+    // Pick sub-template — cycle between matching options for variety
+    const matching = template.sub_templates.filter(s => (s.default_for || []).includes(experience));
+    let subTpl;
+    if (matching.length > 1) {
+      const doy = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+      subTpl = matching[doy % matching.length];
+    } else {
+      subTpl = matching[0] || template.sub_templates[0];
+    }
     const wuMin = 15;
     const cdMin = subTpl.id === "strides_only" ? 5 : 10;
     let mainSetText = "";
     let mainSetMinutes = 0;
     let repCount = null;
 
-    if (subTpl.id === "r_pace_repeats") {
+    if (subTpl.id === "r_pace_200s" || subTpl.id === "r_pace_400s" || subTpl.id === "r_pace_repeats") {
       let count = _resolveRepCount(subTpl.main_set.rep_count, experience);
       const dist = subTpl.main_set.rep_distance_m;
       const midR = zones && zones.r_pace ? (zones.r_pace.sec_per_mi[0] + zones.r_pace.sec_per_mi[1]) / 2 : 305;
       const repTime = midR * dist / 1609.344;
-      const restTime = 60; // 200m walk ≈ 60 sec
+      const restTime = subTpl.main_set.rest_duration_sec || (subTpl.main_set.rest_distance_m ? 60 : 60);
       if (durationOverrideMin != null) {
         const targetMainSec = (durationOverrideMin - wuMin - cdMin) * 60;
         const repSlot = repTime + restTime;
         count = Math.max(4, Math.min(20, Math.round((targetMainSec + restTime) / repSlot)));
       }
       const paceLabel = _rPaceLabelForDistance(zones, dist);
-      mainSetText = `${count}×${dist}m @ ${paceLabel}${zones ? "" : " effort"} w/ ${subTpl.main_set.rest_distance_m}m walk recovery.`;
+      let restLabel;
+      if (subTpl.main_set.rest_distance_m) {
+        restLabel = `${subTpl.main_set.rest_distance_m}m walk recovery`;
+      } else if (subTpl.main_set.rest_duration_sec) {
+        restLabel = `${subTpl.main_set.rest_duration_sec}s walk recovery`;
+      } else {
+        restLabel = "walk recovery";
+      }
+      mainSetText = `${count}×${dist}m @ ${paceLabel}${zones ? "" : " effort"} w/ ${restLabel}.`;
       mainSetMinutes = (count * repTime + (count - 1) * restTime) / 60;
       repCount = count;
     } else if (subTpl.id === "strides_only") {
@@ -445,6 +563,7 @@
         const _tz = JSON.parse(localStorage.getItem("trainingZones") || "{}");
         const _rz = _tz.running || {};
         _hasRunZones = !!(
+          _rz.vdot || _rz.zones ||
           _rz.easyPaceMin || _rz.easy || _rz.thresholdPaceMin || _rz.tempo || _rz.vo2max
         );
       } catch {}
@@ -489,8 +608,21 @@
       // E.g. "Track Workout — 8×800m repeats" / "Track Workout — Ladder"
       title = `Track Workout — ${result.rotationName}`;
     } else if (template.id === "tempo_threshold") {
-      const scaling = template.experience_scaling[experience] || {};
-      title = `Tempo / Threshold — ${scaling.reps || ""}×${scaling.rep_duration_min || ""} min`;
+      if (result.subTemplate === "continuous_tempo") {
+        title = "Tempo — Continuous";
+      } else if (result.subTemplate === "progression") {
+        title = "Tempo — Progression Run";
+      } else {
+        const scaling = template.experience_scaling[experience] || {};
+        title = `Tempo / Threshold — ${scaling.reps || ""}×${scaling.rep_duration_min || ""} min`;
+      }
+    } else if (template.id === "speed_work" && result.subTemplate) {
+      if (result.subTemplate === "r_pace_400s") title = "Speed Work — 400m repeats";
+      else if (result.subTemplate === "r_pace_200s") title = "Speed Work — 200m repeats";
+      else if (result.subTemplate === "strides_only") title = "Speed Work — Strides";
+    } else if (template.id === "long_run" && result.subTemplate) {
+      if (result.subTemplate === "negative_split") title = "Long Run — Negative Split";
+      else if (result.subTemplate === "with_surges") title = "Long Run — With Surges";
     }
 
     return {
