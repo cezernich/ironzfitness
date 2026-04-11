@@ -1234,20 +1234,27 @@ button:active {
 .history-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 10px;
 }
 
-.history-header-left {
+.history-header-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-sub {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
+  margin-top: 3px;
+  flex-wrap: wrap;
 }
 
 .workout-tag {
-  font-size: 0.7rem;
+  font-size: 0.6rem;
   font-weight: 700;
-  padding: 3px 10px;
+  padding: 2px 7px;
   border-radius: 999px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -8502,12 +8509,14 @@ button:active {
 .star-btn:hover { color: #f59e0b; transform: scale(1.15); }
 .star-btn.is-starred { color: #f59e0b; }
 
-/* Workout name inline in history */
+/* Workout name in history */
 .history-workout-name {
-  font-weight: 600;
-  font-size: 0.85rem;
+  font-weight: 700;
+  font-size: 1rem;
   color: var(--color-text);
-  margin-left: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 
@@ -8976,6 +8985,7 @@ button:active {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 /* ── Swap picker ─────────────────────────────────────────────────────────────── */
@@ -9511,36 +9521,10 @@ button:active {
   }
 
   /* Workout history: prevent horizontal overflow */
-  #workout-history {
-    overflow-x: hidden;
-    max-width: 100%;
-  }
   .history-entry {
     overflow: hidden;
     max-width: 100%;
     box-sizing: border-box;
-  }
-  .history-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  .history-header-left {
-    width: 100%;
-    min-width: 0;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .history-header-right {
-    width: 100%;
-    justify-content: flex-end;
-  }
-  .history-workout-name {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 45vw;
   }
 
   /* Live tracker: full width on mobile */

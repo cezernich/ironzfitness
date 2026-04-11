@@ -1989,7 +1989,8 @@ function _renderWorkoutHistoryList(workouts) {
     const cardId     = `hist-card-${w.id}`;
     const notesHtml  = w.notes ? `<p class="history-notes">"${escHtml(w.notes)}"</p>` : "";
     const _fallbackName = !w.name ? capitalize(w.type || "Workout") : "";
-    const nameHtml   = `<span class="history-workout-name">${escHtml(w.name || _fallbackName)}</span>`;
+    const nameHtml   = `<div class="history-workout-name">${escHtml(w.name || _fallbackName)}</div>`;
+    const tagDateHtml = `<span class="workout-tag tag-${w.type}">${w.type}</span><span class="history-date">${formatDate(w.date)}</span>`;
     const starred    = isWorkoutStarred(w.id);
     const hasContent = (w.exercises && w.exercises.length) || (w.segments && w.segments.length);
     const _eid = escHtml(String(w.id));
@@ -2021,10 +2022,9 @@ function _renderWorkoutHistoryList(workouts) {
       return `
         <div class="history-entry collapsible is-collapsed" id="${cardId}">
           <div class="history-header card-toggle" onclick="toggleSection('${cardId}')">
-            <div class="history-header-left">
-              <span class="workout-tag tag-${w.type}">${w.type}</span>
-              <span class="history-date">${formatDate(w.date)}</span>
-              ${nameHtml}${summaryHtml}
+            <div class="history-header-info">
+              ${nameHtml}
+              <div class="history-sub">${tagDateHtml}${summaryHtml}</div>
             </div>
             <div class="history-header-right" onclick="event.stopPropagation()">${btnHtml}</div>
           </div>
@@ -2049,10 +2049,9 @@ function _renderWorkoutHistoryList(workouts) {
       return `
         <div class="history-entry collapsible is-collapsed" id="${cardId}">
           <div class="history-header card-toggle" onclick="toggleSection('${cardId}')">
-            <div class="history-header-left">
-              <span class="workout-tag tag-${w.type}">${w.type}</span>
-              <span class="history-date">${formatDate(w.date)}</span>
-              ${nameHtml}${summaryHtml}
+            <div class="history-header-info">
+              ${nameHtml}
+              <div class="history-sub">${tagDateHtml}${summaryHtml}</div>
             </div>
             <div class="history-header-right" onclick="event.stopPropagation()">${btnHtml}</div>
           </div>
@@ -2105,10 +2104,9 @@ function _renderWorkoutHistoryList(workouts) {
       return `
         <div class="history-entry collapsible is-collapsed" id="${cardId}">
           <div class="history-header card-toggle" onclick="toggleSection('${cardId}')">
-            <div class="history-header-left">
-              <span class="workout-tag tag-${w.type}">${w.type}</span>
-              <span class="history-date">${formatDate(w.date)}</span>
-              ${nameHtml}${summaryHtml}
+            <div class="history-header-info">
+              ${nameHtml}
+              <div class="history-sub">${tagDateHtml}${summaryHtml}</div>
             </div>
             <div class="history-header-right" onclick="event.stopPropagation()">${btnHtml}</div>
           </div>
@@ -2126,10 +2124,9 @@ function _renderWorkoutHistoryList(workouts) {
       return `
         <div class="history-entry collapsible is-collapsed" id="${cardId}">
           <div class="history-header card-toggle" onclick="toggleSection('${cardId}')">
-            <div class="history-header-left">
-              <span class="workout-tag tag-${w.type}">${w.type}</span>
-              <span class="history-date">${formatDate(w.date)}</span>
-              ${nameHtml}${summaryHtml}
+            <div class="history-header-info">
+              ${nameHtml}
+              <div class="history-sub">${tagDateHtml}${summaryHtml}</div>
             </div>
             <div class="history-header-right" onclick="event.stopPropagation()">${btnHtml}</div>
           </div>
@@ -2146,10 +2143,9 @@ function _renderWorkoutHistoryList(workouts) {
     return `
       <div class="history-entry collapsible is-collapsed" id="${cardId}">
         <div class="history-header card-toggle" onclick="toggleSection('${cardId}')">
-          <div class="history-header-left">
-            <span class="workout-tag tag-${w.type}">${w.type}</span>
-            <span class="history-date">${formatDate(w.date)}</span>
-            ${nameHtml}${summaryHtml}
+          <div class="history-header-info">
+            ${nameHtml}
+            <div class="history-sub">${tagDateHtml}${summaryHtml}</div>
           </div>
           <div class="history-header-right" onclick="event.stopPropagation()">${btnHtml}</div>
         </div>
