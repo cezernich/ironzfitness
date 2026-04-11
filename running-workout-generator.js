@@ -114,7 +114,7 @@
     return { duration, phases };
   }
 
-  function _generateLongRun(template, experience, durationOverrideMin, zones, warnings) {
+  function _generateLongRun(template, experience, durationOverrideMin, zones, warnings, variantOffset) {
     const range = template.experience_scaling[experience] || template.default_duration_min;
     const defaultMin = (range[0] + range[1]) / 2;
     const duration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings, template.max_duration_min);
@@ -122,9 +122,7 @@
     const eLabel = zones ? _ePaceLabel(zones) : "Z1 (conversational)";
     const mLabel = zones ? _mPaceLabel(zones) : "Z2 marathon";
 
-    // Pick variant based on day-of-year
-    const doy = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
-    const variant = doy % 3; // 0=standard, 1=negative split, 2=with surges
+    const variant = _variantIndex(variantOffset) % 3; // 0=standard, 1=negative split, 2=with surges
 
     if (variant === 1 && allowsFinish) {
       // Negative split long run: first half easy, second half at marathon pace
@@ -195,7 +193,7 @@
     return { duration, phases };
   }
 
-  function _generateTempo(template, experience, durationOverrideMin, zones, warnings) {
+  function _generateTempo(template, experience, durationOverrideMin, zones, warnings, variantOffset) {
     const scaling = template.experience_scaling[experience] || template.experience_scaling.intermediate;
     const wuMin = 15;
     const cdMin = 10;
@@ -203,9 +201,7 @@
     const eLabel = zones ? _ePaceLabel(zones) : "Z1";
     const mLabel = zones ? _mPaceLabel(zones) : "marathon effort";
 
-    // Pick variant based on day-of-year for variety
-    const doy = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
-    const variant = doy % 3; // 0=cruise intervals, 1=continuous tempo, 2=progression
+    const variant = _variantIndex(variantOffset) % 3; // 0=cruise intervals, 1=continuous tempo, 2=progression
 
     if (variant === 1 && (experience === "intermediate" || experience === "advanced")) {
       // Continuous tempo
@@ -284,15 +280,13 @@
     return { duration: Math.round(totalDuration), phases, subTemplate: "cruise_intervals" };
   }
 
-  function _generateTrack(template, experience, durationOverrideMin, zones, warnings, weeksSincePlanStart) {
+  function _generateTrack(template, experience, durationOverrideMin, zones, warnings, weeksSincePlanStart, variantOffset) {
     const rotCount = template.rotation_templates.length;
-    // Use weeksSincePlanStart if available (plan context), otherwise use day-of-year for variety
     let rotationIndex;
-    if (weeksSincePlanStart != null && weeksSincePlanStart > 0) {
+    if (weeksSincePlanStart != null && weeksSincePlanStart > 0 && !variantOffset) {
       rotationIndex = ((weeksSincePlanStart) % rotCount + rotCount) % rotCount;
     } else {
-      const doy = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
-      rotationIndex = doy % rotCount;
+      rotationIndex = _variantIndex(variantOffset) % rotCount;
     }
     const tmpl = template.rotation_templates.find(t => t.rotation_index === rotationIndex)
       || template.rotation_templates[0];
@@ -380,13 +374,12 @@
     return { duration: totalDuration, phases, rotationIndex, rotationName: tmpl.name };
   }
 
-  function _generateSpeedWork(template, experience, durationOverrideMin, zones, warnings) {
+  function _generateSpeedWork(template, experience, durationOverrideMin, zones, warnings, variantOffset) {
     // Pick sub-template — cycle between matching options for variety
     const matching = template.sub_templates.filter(s => (s.default_for || []).includes(experience));
     let subTpl;
     if (matching.length > 1) {
-      const doy = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
-      subTpl = matching[doy % matching.length];
+      subTpl = matching[_variantIndex(variantOffset) % matching.length];
     } else {
       subTpl = matching[0] || template.sub_templates[0];
     }
@@ -522,6 +515,12 @@
     };
   }
 
+  // Deterministic variant index based on day-of-year + optional offset
+  function _variantIndex(offset) {
+    const doy = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+    return doy + (offset || 0);
+  }
+
   function _clampDurationOverride(defaultMin, override, range, warnings, maxOverride) {
     if (override == null) return Math.round(defaultMin);
     const lo = defaultMin * 0.5;
@@ -538,8 +537,8 @@
   // ─── Public entry point ──────────────────────────────────────────────────────
 
   /**
-   * generateRunWorkout({ sessionTypeId, userZones, experienceLevel, durationOverrideMin, weeksSincePlanStart })
-   * Pure function. NO API calls.
+   * generateRunWorkout({ sessionTypeId, userZones, experienceLevel, durationOverrideMin, weeksSincePlanStart, variantOffset })
+   * Pure function. NO API calls. variantOffset shifts the day-of-year based variant selection.
    */
   function generateRunWorkout(opts) {
     if (!opts || !opts.sessionTypeId) {
@@ -573,6 +572,7 @@
       warnings.push("For accurate pace targets, add a recent race result.");
     }
 
+    const vOff = opts.variantOffset || 0;
     let result;
     switch (template.id) {
       case "easy_recovery":
@@ -582,16 +582,16 @@
         result = _generateEndurance(template, experience, opts.durationOverrideMin, zones, warnings);
         break;
       case "long_run":
-        result = _generateLongRun(template, experience, opts.durationOverrideMin, zones, warnings);
+        result = _generateLongRun(template, experience, opts.durationOverrideMin, zones, warnings, vOff);
         break;
       case "tempo_threshold":
-        result = _generateTempo(template, experience, opts.durationOverrideMin, zones, warnings);
+        result = _generateTempo(template, experience, opts.durationOverrideMin, zones, warnings, vOff);
         break;
       case "track_workout":
-        result = _generateTrack(template, experience, opts.durationOverrideMin, zones, warnings, opts.weeksSincePlanStart || 0);
+        result = _generateTrack(template, experience, opts.durationOverrideMin, zones, warnings, opts.weeksSincePlanStart || 0, vOff);
         break;
       case "speed_work":
-        result = _generateSpeedWork(template, experience, opts.durationOverrideMin, zones, warnings);
+        result = _generateSpeedWork(template, experience, opts.durationOverrideMin, zones, warnings, vOff);
         break;
       case "hills":
         result = _generateHills(template, experience, opts.durationOverrideMin, zones, warnings);

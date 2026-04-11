@@ -432,6 +432,8 @@
     const $durDisplay = overlay.querySelector("#ars-duration-display");
     const $preview = overlay.querySelector("#ars-preview");
 
+    let _variantOffset = 0;
+
     function refreshPreview() {
       const profile = _readProfile();
       const experience = _experienceLevel(profile);
@@ -457,7 +459,8 @@
         userZones: zones,
         experienceLevel: experience,
         durationOverrideMin: parseInt($dur.value, 10),
-        weeksSincePlanStart: _weeksSincePlanStart()
+        weeksSincePlanStart: _weeksSincePlanStart(),
+        variantOffset: _variantOffset
       });
       const w = result.workout;
       $durDisplay.textContent = `(${w.estimated_duration_min} min)`;
@@ -465,17 +468,21 @@
         ? `<div class="ars-warnings">${w.warnings.map(x => `• ${_esc(x)}`).join("<br>")}</div>`
         : "";
       $preview.innerHTML = `
-        <div class="ars-preview-title">${_esc(w.title)}</div>
+        <div class="ars-preview-header">
+          <div class="ars-preview-title">${_esc(w.title)}</div>
+          <button type="button" class="ars-shuffle-btn" id="ars-shuffle" title="Try a different workout"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg></button>
+        </div>
         <div class="ars-preview-why">${_esc(w.why_text || "")}</div>
         <div class="ars-phases">${_renderPhasesHtml(w.phases)}</div>
         <div class="ars-meta">~${w.estimated_duration_min} min · ${w.is_hard ? "Hard" : "Easy"}</div>
         ${warnHtml}
       `;
+      overlay.querySelector("#ars-shuffle").onclick = () => { _variantOffset++; refreshPreview(); };
       // Stash the current generated workout on the modal for save().
       overlay._currentWorkout = w;
     }
 
-    $type.onchange = () => { delete $dur.dataset.touched; refreshPreview(); };
+    $type.onchange = () => { _variantOffset = 0; delete $dur.dataset.touched; refreshPreview(); };
     $dur.oninput = () => { $dur.dataset.touched = "1"; refreshPreview(); };
     $date.onchange = () => refreshPreview();
     refreshPreview();

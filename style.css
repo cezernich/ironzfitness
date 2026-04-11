@@ -11244,11 +11244,31 @@ button:active {
   border: 1px solid var(--color-border);
   background: var(--color-surface-2);
 }
+.ars-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
 .ars-preview-title {
   font-size: 1rem;
   font-weight: 700;
   color: var(--color-text);
-  margin-bottom: 4px;
+}
+.ars-shuffle-btn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 5px 7px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  transition: color 0.15s, border-color 0.15s;
+}
+.ars-shuffle-btn:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
 }
 .ars-preview-why {
   font-size: 0.82rem;
