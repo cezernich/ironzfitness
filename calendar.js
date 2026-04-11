@@ -2691,18 +2691,15 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       let _swGenDurMin = w.duration || null;
       if (w.aiSession && w.aiSession.intervals && w.aiSession.intervals.length) {
         const _effortToZone = { RW:"rw",Z1:"z1",Z2:"z2",Z3:"z3",Z4:"z4",Z5:"z5",Z6:"z6", Easy:"z2",Moderate:"z3",Hard:"z4",Max:"z5",T1:"z-transition" };
+        const _paceMap = { RW:8, Z1:7, Z2:6.2, Z3:5.5, Z4:5, Z5:4.5, Z6:4 };
         const _parseDur = (str, effort) => {
-          const s = String(str||"").toLowerCase();
-          const m = s.match(/([\d.]+)/); if(!m) return 1;
-          const v = parseFloat(m[1]);
+          const s = String(str||"").toLowerCase().trim();
+          const n = s.match(/([\d.]+)/); if(!n) return 1;
+          const v = parseFloat(n[1]);
           if (/sec/.test(s)) return v / 60;
-          // Distance-based: convert to minutes using zone pace
-          if (/\bm\b/.test(s) && !/min/.test(s)) {
-            const paceMap = { RW:8, Z1:7, Z2:6.2, Z3:5.5, Z4:5, Z5:4.5, Z6:4 };
-            return (v / 1000) * (paceMap[effort] || 5.5);
-          }
-          if (/\bkm\b/.test(s)) { const paceMap = { RW:8,Z1:7,Z2:6.2,Z3:5.5,Z4:5,Z5:4.5,Z6:4 }; return v * (paceMap[effort]||5.5); }
-          if (/\bmi/i.test(s)) { const paceMap = { RW:8,Z1:7,Z2:6.2,Z3:5.5,Z4:5,Z5:4.5,Z6:4 }; return v * 1.60934 * (paceMap[effort]||5.5); }
+          if (/km/.test(s)) return v * (_paceMap[effort]||5.5);
+          if (/mi/.test(s) && !/min/.test(s)) return v * 1.60934 * (_paceMap[effort]||5.5);
+          if (/\d+m$/.test(s)) return (v / 1000) * (_paceMap[effort]||5.5);
           return v;
         };
         const _allSegs = [];
