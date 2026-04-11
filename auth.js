@@ -285,6 +285,9 @@ async function authBoot() {
     if (typeof initPushNotifications === 'function') {
       try { await initPushNotifications(); } catch (e) { console.warn('Auth: push init error', e); }
     }
+    if (typeof initUniversalLinks === 'function') {
+      try { initUniversalLinks(); } catch (e) { console.warn('Auth: universal links init error', e); }
+    }
   } else {
     showAuthScreen();
   }

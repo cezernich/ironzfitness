@@ -118,6 +118,35 @@ function handlePushNavigation(data) {
 }
 
 /* =====================================================================
+   UNIVERSAL LINKS — handle ironz.fit URLs opened in the native app
+   ===================================================================== */
+
+function initUniversalLinks() {
+  if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
+
+  const CapApp = window.Capacitor.Plugins.App;
+  if (!CapApp) return;
+
+  CapApp.addListener('appUrlOpen', (event) => {
+    try {
+      const url = new URL(event.url);
+      if (url.pathname.includes('share')) {
+        const token = url.searchParams.get('token');
+        if (token && typeof _handleImportParam === 'function') {
+          // Inject the token into the URL so the existing import handler picks it up
+          const current = new URL(window.location.href);
+          current.searchParams.set('import', token);
+          history.replaceState(null, '', current.toString());
+          _handleImportParam();
+        }
+      }
+    } catch (e) {
+      console.warn('Universal link handling error:', e);
+    }
+  });
+}
+
+/* =====================================================================
    PUSH NOTIFICATION PREFERENCES (Supabase)
    ===================================================================== */
 
