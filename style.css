@@ -9521,18 +9521,19 @@ button:active {
     box-sizing: border-box;
   }
   .history-header {
-    flex-wrap: wrap;
-    gap: 6px 8px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
   .history-header-left {
-    flex: 1 1 100%;
+    width: 100%;
     min-width: 0;
     flex-wrap: wrap;
     gap: 6px;
   }
   .history-header-right {
-    flex-shrink: 0;
-    margin-left: auto;
+    width: 100%;
+    justify-content: flex-end;
   }
   .history-workout-name {
     min-width: 0;
