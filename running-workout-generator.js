@@ -312,8 +312,9 @@
       // Time estimate: assume mid-I-pace
       const midI = zones && zones.i_pace ? (zones.i_pace.sec_per_mi[0] + zones.i_pace.sec_per_mi[1]) / 2 : 360;
       mainSetMinutes = distances.reduce((acc, d) => acc + (midI * d / 1609.344), 0) * 2 / 60; // double for jog rest
-      repCount = distances.length;
-      repDistance = "ladder";
+      // Ladder is a single set — don't split into reps
+      repCount = null;
+      repDistance = null;
     } else if (tmpl.main_set.rep_distance_m && tmpl.main_set.rep_count) {
       let count = _resolveRepCount(tmpl.main_set.rep_count, experience);
       const dist = tmpl.main_set.rep_distance_m;

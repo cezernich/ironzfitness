@@ -738,8 +738,13 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
     // Expand intervals with reps into alternating work/rest segments for the strip
     const allSegs = [];
     intervals.forEach(iv => {
-      const reps     = iv.reps || 1;
+      let reps     = iv.reps || 1;
       let _dur = iv.duration;
+      // Fix legacy ladder data
+      if (_dur === "ladder" || (reps > 1 && !/\d/.test(_dur))) {
+        reps = 1;
+        _dur = iv.duration_min ? `${iv.duration_min} min` : "15 min";
+      }
       // Fix legacy data: if reps > 1 and duration is total minutes, extract per-rep distance or divide
       if (reps > 1 && /\d+\s*min/.test(_dur)) {
         const dm = (iv.details || "").match(/(\d+)\s*[x×]\s*(\d+)\s*m\b/i);
@@ -1122,23 +1127,29 @@ function buildAiIntervalsList(session, type) {
     const zones = _getIntervalZones(iv.sport);
     const zData = zone && zones ? zones[`z${zone}`] : null;
     const zoneLabel = zData ? (zData.paceRange || zData.wattRange || null) : null;
-    const reps  = iv.reps || 1;
+    let reps  = iv.reps || 1;
+    let perRepDur = iv.duration;
+    // Fix legacy ladder data: "ladder" is not a per-rep duration — show as single set
+    if (perRepDur === "ladder" || (reps > 1 && !/\d/.test(perRepDur))) {
+      reps = 1;
+      // Try to extract total duration from details (e.g., "Ladder 1600m / 1200m / ...")
+      perRepDur = "";
+    }
     // Fix legacy data: if reps > 1 and duration is total minutes (not per-rep),
     // try to extract per-rep distance from the details text.
-    let perRepDur = iv.duration;
-    if (reps > 1 && /\d+\s*min/.test(iv.duration)) {
+    if (reps > 1 && /\d+\s*min/.test(perRepDur)) {
       const distMatch = (iv.details || "").match(/(\d+)\s*[x×]\s*(\d+)\s*m\b/i);
       if (distMatch) {
         perRepDur = `${distMatch[2]}m`;
       } else {
         // Divide total by reps as fallback
-        const totalMin = parseFloat(iv.duration);
+        const totalMin = parseFloat(perRepDur);
         if (totalMin > 0) {
           perRepDur = `${Math.round(totalMin / reps)} min`;
         }
       }
     }
-    let durText = reps > 1 ? `${reps} × ${perRepDur}` : iv.duration;
+    let durText = reps > 1 ? `${reps} × ${perRepDur}` : (perRepDur || iv.duration);
     if (reps > 1 && iv.restDuration) durText += ` (${iv.restDuration} rest)`;
     const nameLow   = (iv.name || "").toLowerCase();
     const sportTag  = iv.sport ? `<span class="qe-brick-sport qe-brick-${iv.sport}">${iv.sport === "bike" ? "Bike" : "Run"}</span> ` : "";
@@ -2704,8 +2715,14 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         };
         const _allSegs = [];
         _expandRepeatGroups(w.aiSession.intervals).forEach(iv => {
-          const reps = iv.reps || 1;
+          let reps = iv.reps || 1;
           let _ivDur = iv.duration;
+          // Fix legacy ladder data: "ladder" is not a per-rep duration
+          if (_ivDur === "ladder" || (reps > 1 && !/\d/.test(_ivDur))) {
+            reps = 1;
+            // Use total duration_min from the phase if available, otherwise estimate
+            _ivDur = iv.duration_min ? `${iv.duration_min} min` : "15 min";
+          }
           // Fix legacy data: if reps > 1 and duration is total minutes, extract per-rep distance or divide
           if (reps > 1 && /\d+\s*min/.test(_ivDur)) {
             const dm = (iv.details || "").match(/(\d+)\s*[x×]\s*(\d+)\s*m\b/i);
