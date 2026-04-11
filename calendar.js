@@ -869,6 +869,8 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
 
   // Minimal card (no exercises, no generated session)
   const _minCompletion = buildCompletionSection(cardId, w.type, null, dateStr, w.duration || null);
+  const _minMovePanel = buildSessionMovePanel(cardId, "logged", w.id, dateStr);
+  const _minMoveBtn = `<button class="btn-move-session" title="Move / Duplicate" onclick="event.stopPropagation();toggleMovePanel('${cardId}')">⇄</button>`;
   return `
     <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
       <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
@@ -877,9 +879,9 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
           <div class="session-name">${w.fromSaved || _wTypeLabel(w.type)}</div>
           ${w.fromSaved ? `<div class="session-phase">Logged · ${_wTypeLabel(w.type)}</div>` : (w.notes ? `<div class="session-phase">${escHtml(w.notes)}</div>` : "")}
         </div>
-        <div class="session-header-right">${_buildUndoHeaderBtn(cardId, dateStr)}${editBtn}${delBtn}<span class="card-chevron">▾</span></div>
+        <div class="session-header-right">${_buildUndoHeaderBtn(cardId, dateStr)}${_minMoveBtn}${_buildShareBtnFromEntry(w)}${editBtn}${delBtn}<span class="card-chevron">▾</span></div>
       </div>
-      <div class="card-body">${_minCompletion}</div>
+      <div class="card-body">${_minMovePanel}${_minCompletion}</div>
     </div>`;
 }
 

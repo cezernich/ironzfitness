@@ -1234,20 +1234,27 @@ button:active {
 .history-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 10px;
 }
 
-.history-header-left {
+.history-header-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-sub {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
+  margin-top: 3px;
+  flex-wrap: wrap;
 }
 
 .workout-tag {
-  font-size: 0.7rem;
+  font-size: 0.6rem;
   font-weight: 700;
-  padding: 3px 10px;
+  padding: 2px 7px;
   border-radius: 999px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -8502,12 +8509,14 @@ button:active {
 .star-btn:hover { color: #f59e0b; transform: scale(1.15); }
 .star-btn.is-starred { color: #f59e0b; }
 
-/* Workout name inline in history */
+/* Workout name in history */
 .history-workout-name {
-  font-weight: 600;
-  font-size: 0.85rem;
+  font-weight: 700;
+  font-size: 1rem;
   color: var(--color-text);
-  margin-left: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 
@@ -8976,6 +8985,7 @@ button:active {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 /* ── Swap picker ─────────────────────────────────────────────────────────────── */
@@ -9508,6 +9518,13 @@ button:active {
     display: block;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  /* Workout history: prevent horizontal overflow */
+  .history-entry {
+    overflow: hidden;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
   /* Live tracker: full width on mobile */
@@ -11379,7 +11396,6 @@ button:active {
 }
 
 /* ── Share button on workout cards ───────────────────────────────────────── */
-/* Share button — repositioned to bottom-right of expanded card */
 .session-card { position: relative; }
 .share-workout-btn {
   background: none;
@@ -11395,19 +11411,12 @@ button:active {
   transition: background 0.15s, color 0.15s;
   font-size: 0.75rem;
   font-weight: 600;
-  /* Pull out of header flow and pin to bottom-right of card body */
-  position: absolute;
-  bottom: 12px;
-  right: 14px;
-  z-index: 1;
 }
 .share-workout-btn:hover {
   background: var(--color-surface-2);
   color: var(--color-accent, #6366f1);
   border-color: var(--color-accent, #6366f1);
 }
-/* Hide share button when card is collapsed (body isn't visible) */
-.session-card.is-collapsed .share-workout-btn { display: none; }
 
 /* ── Share sheet modal (sender) ──────────────────────────────────────────── */
 .share-sheet-overlay {
