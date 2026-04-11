@@ -9511,27 +9511,35 @@ button:active {
   }
 
   /* Workout history: prevent horizontal overflow */
+  #workout-history {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
   .history-entry {
     overflow: hidden;
+    max-width: 100%;
+    box-sizing: border-box;
   }
   .history-header {
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px 8px;
   }
   .history-header-left {
-    flex-wrap: wrap;
+    flex: 1 1 100%;
     min-width: 0;
+    flex-wrap: wrap;
     gap: 6px;
   }
   .history-header-right {
     flex-shrink: 0;
+    margin-left: auto;
   }
   .history-workout-name {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 140px;
+    max-width: 45vw;
   }
 
   /* Live tracker: full width on mobile */
