@@ -9510,6 +9510,30 @@ button:active {
     -webkit-overflow-scrolling: touch;
   }
 
+  /* Workout history: prevent horizontal overflow */
+  .history-entry {
+    overflow: hidden;
+  }
+  .history-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .history-header-left {
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: 6px;
+  }
+  .history-header-right {
+    flex-shrink: 0;
+  }
+  .history-workout-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 140px;
+  }
+
   /* Live tracker: full width on mobile */
   .live-tracker {
     max-width: 100vw;
