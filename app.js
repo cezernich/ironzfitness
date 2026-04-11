@@ -90,6 +90,7 @@ function showTab(name) {
   if (navBtn) navBtn.classList.add("active");
 
   localStorage.setItem("activeTab", name);
+  if (typeof trackEvent === "function") trackEvent("tab_viewed", { tab: name });
 
   // Refresh calendar + today panel when returning home — always jump to today
   if (name === "home") {
@@ -127,6 +128,7 @@ function showTab(name) {
     if (typeof renderTrustCenter === "function") renderTrustCenter();
     if (typeof renderSubscriptionStatus === "function") renderSubscriptionStatus();
     if (typeof renderStravaStatus === "function") renderStravaStatus();
+    if (typeof renderPushNotifPrefs === "function") renderPushNotifPrefs();
   }
 
   // Refresh nutrition dashboard when opening Nutrition tab
@@ -254,6 +256,7 @@ function isNutritionEnabled() {
 
 function setNutritionEnabled(enabled) {
   localStorage.setItem("nutritionEnabled", enabled ? "1" : "0"); if (typeof DB !== 'undefined') DB.syncKey('nutritionEnabled');
+  if (typeof trackEvent === "function") trackEvent("feature_toggled", { feature: "nutrition", enabled });
   applyNutritionToggle();
   // Re-render day detail if open so nutrition sections appear/disappear immediately
   if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
@@ -364,6 +367,8 @@ function init() {
     DB.profile.get().catch(() => {});
     DB.refreshAllKeys().catch(() => {});
   }
+  if (typeof trackEvent === "function") trackEvent("app_opened");
+  if (typeof updateLastActive === "function") updateLastActive();
   cleanupOrphanedCompletions();
   const today = getTodayString();
   document.getElementById("log-date").value  = today;
@@ -959,6 +964,7 @@ const ZONE_CONFIG = [
   { num: 3, name: "Tempo",     pcts: [0.83, 0.88], desc: "Comfortably hard · RPE 6–7" },
   { num: 4, name: "Threshold", pcts: [0.95, 1.00], desc: "Hard intervals · RPE 8" },
   { num: 5, name: "Speed",     pcts: [1.05, 1.15], desc: "Short reps · Race-specific" },
+  { num: 6, name: "Max Sprint", pcts: [1.15, 1.30], desc: "All-out sprints · Neuromuscular" },
 ];
 
 const ZONE_DISTANCES = {
@@ -996,6 +1002,24 @@ function loadTrainingZones(sport) {
     if (!all.running) {
       const old = JSON.parse(localStorage.getItem("runningZones"));
       if (old) { all.running = old; localStorage.setItem("trainingZones", JSON.stringify(all)); if (typeof DB !== 'undefined') DB.syncKey('trainingZones'); }
+    }
+    // Backfill Z6 if running zones exist but z6 is missing
+    if (all.running && all.running.zones && !all.running.zones.z6 && all.running.vdot) {
+      const vdot = all.running.vdot;
+      const z6Cfg = ZONE_CONFIG.find(z => z.num === 6);
+      if (z6Cfg) {
+        const T = 30; // dummy race duration — only vdot matters for velocity inversion
+        const vo2 = vdot; // vdot ≈ VO2max for this purpose
+        const a = 0.000104, b = 0.182258;
+        const velAt = (p) => { const c = -(4.60 + p * vdot); return (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a); };
+        const toPace = (vel) => 1609.344 / vel;
+        const fmt = (mp) => { let m = Math.floor(mp); let s = Math.round((mp - m) * 60); if (s >= 60) { m++; s -= 60; } return `${m}:${s < 10 ? "0" : ""}${s}`; };
+        const vFast = velAt(z6Cfg.pcts[1]);
+        const vSlow = velAt(z6Cfg.pcts[0]);
+        all.running.zones.z6 = { paceRange: `${fmt(toPace(vFast))}–${fmt(toPace(vSlow))} /mi` };
+        localStorage.setItem("trainingZones", JSON.stringify(all));
+        if (typeof DB !== 'undefined') DB.syncKey('trainingZones');
+      }
     }
     return all[sport] || null;
   } catch { return null; }

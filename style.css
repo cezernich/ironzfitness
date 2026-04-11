@@ -12198,3 +12198,33 @@ button:active {
   opacity: 1;
   transform: translate(-50%, 0);
 }
+
+/* ── Push notification toast ────────────────────────────────────────── */
+.push-toast {
+  position: fixed;
+  top: env(safe-area-inset-top, 12px);
+  left: 12px;
+  right: 12px;
+  z-index: 99999;
+  background: var(--card-bg, #1e1e1e);
+  border: 1px solid var(--border, #333);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.4);
+  animation: pushToastIn .3s ease-out;
+  cursor: pointer;
+}
+.push-toast-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary, #fff);
+}
+.push-toast-body {
+  font-size: 13px;
+  color: var(--text-secondary, #aaa);
+  margin-top: 4px;
+}
+@keyframes pushToastIn {
+  from { opacity: 0; transform: translateY(-20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

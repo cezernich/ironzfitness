@@ -67,6 +67,7 @@ function isHydrationEnabled() {
 
 function setHydrationEnabled(enabled) {
   localStorage.setItem("hydrationEnabled", enabled ? "1" : "0"); if (typeof DB !== 'undefined') DB.syncKey('hydrationEnabled');
+  if (typeof trackEvent === "function") trackEvent("feature_toggled", { feature: "hydration", enabled });
   applyHydrationToggle();
 }
 
@@ -210,6 +211,7 @@ function logWater(beverageType) {
 
   log[dateStr] = day;
   localStorage.setItem("hydrationLog", JSON.stringify(log)); if (typeof DB !== 'undefined') DB.syncKey('hydrationLog');
+  if (typeof trackEvent === "function") trackEvent("hydration_logged", { beverage: type, total: day.total });
 
   renderHydration();
 

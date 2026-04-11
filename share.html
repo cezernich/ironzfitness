@@ -371,6 +371,11 @@
       try { exercises = JSON.parse(exercises); } catch { exercises = []; }
     }
 
+    // Colored segment bar for running/cardio workouts
+    if (exercises.length > 0) {
+      html += renderSegmentBar(exercises);
+    }
+
     console.log('[share.html] renderCard exercises:', exercises.length, exercises);
     if (exercises.length > 0) {
       html += renderExercises(exercises);
@@ -403,6 +408,65 @@
     }
 
     html += `</div>`;
+    return html;
+  }
+
+  function renderSegmentBar(exercises) {
+    const ZONE_COLORS = {
+      z1: '#4FC3F7', z2: '#4FC3F7', easy: '#4FC3F7', warmup: '#4FC3F7',
+      'warm-up': '#4FC3F7', 'warm up': '#4FC3F7', cooldown: '#4FC3F7',
+      'cool-down': '#4FC3F7', 'cool down': '#4FC3F7', recovery: '#E0E0E0',
+      z3: '#FFB74D', tempo: '#FFB74D', steady: '#FFB74D',
+      z4: '#FF7043', threshold: '#FF7043',
+      z5: '#E53935', z6: '#E53935', vo2max: '#E53935', vo2: '#E53935',
+      sprint: '#E53935', hard: '#E53935',
+      rest: '#E0E0E0', rw: '#E0E0E0', walk: '#E0E0E0',
+    };
+
+    function getColor(ex) {
+      // Check name and intensity fields for zone keywords
+      const text = ((ex.name || '') + ' ' + (ex.intensity || '') + ' ' + (ex.zone || '')).toLowerCase();
+      for (const [key, color] of Object.entries(ZONE_COLORS)) {
+        if (text.includes(key)) return color;
+      }
+      // Default: moderate effort
+      return '#FFB74D';
+    }
+
+    function getDuration(ex) {
+      // Try numeric duration_minutes or parse duration string
+      if (ex.duration_minutes) return Number(ex.duration_minutes);
+      if (ex.duration) {
+        const str = String(ex.duration).toLowerCase();
+        const minMatch = str.match(/([\d.]+)\s*min/);
+        if (minMatch) return parseFloat(minMatch[1]);
+        const secMatch = str.match(/([\d.]+)\s*sec/);
+        if (secMatch) return parseFloat(secMatch[1]) / 60;
+        const bare = parseFloat(str);
+        if (!isNaN(bare)) return bare;
+      }
+      // Fallback: 1 unit so it still shows
+      return 1;
+    }
+
+    // Build flat segment list, expanding repeats
+    const segments = [];
+    for (const ex of exercises) {
+      const repeats = ex.repeats || ex.repeat || 1;
+      const dur = getDuration(ex);
+      const color = getColor(ex);
+      for (let r = 0; r < repeats; r++) {
+        segments.push({ flex: dur, color });
+      }
+    }
+
+    if (segments.length === 0) return '';
+
+    let html = '<div style="display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px;margin:16px 20px 0;">';
+    for (const seg of segments) {
+      html += `<div style="flex:${seg.flex};background:${seg.color};border-radius:3px;"></div>`;
+    }
+    html += '</div>';
     return html;
   }
 

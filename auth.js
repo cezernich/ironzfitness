@@ -282,6 +282,9 @@ async function authBoot() {
     hideAuthScreen();
     window._appInitialized = true;
     init();
+    if (typeof initPushNotifications === 'function') {
+      try { await initPushNotifications(); } catch (e) { console.warn('Auth: push init error', e); }
+    }
   } else {
     showAuthScreen();
   }
@@ -301,6 +304,9 @@ async function authBoot() {
         window._appInitialized = true;
         localStorage.removeItem("activeTab");
         init();
+      }
+      if (typeof initPushNotifications === 'function') {
+        try { await initPushNotifications(); } catch (e) { console.warn('Auth: push init error', e); }
       }
     } else if (event === 'PASSWORD_RECOVERY') {
       showNewPasswordPanel();

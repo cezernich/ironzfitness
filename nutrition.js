@@ -54,6 +54,8 @@ function saveMeal() {
   meals.unshift(meal);  // add to the front (newest first)
   localStorage.setItem("meals", JSON.stringify(meals)); if (typeof DB !== 'undefined') DB.syncKey('meals');
 
+  if (typeof trackEvent === "function") trackEvent("meal_logged", { calories, protein, carbs, fat });
+
   // Show success feedback
   msg.style.color = "#22c55e";
   msg.textContent = "Meal logged!";

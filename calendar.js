@@ -1066,6 +1066,17 @@ function buildAiIntervalsList(session, type) {
   try {
     allZones = JSON.parse(localStorage.getItem("trainingZones")) || {};
     if (!allZones.running) { const old = JSON.parse(localStorage.getItem("runningZones")); if (old) allZones.running = old; }
+    // Backfill Z6 pace if missing
+    if (allZones.running && allZones.running.zones && !allZones.running.zones.z6 && allZones.running.vdot) {
+      const vdot = allZones.running.vdot;
+      const a = 0.000104, b = 0.182258;
+      const velAt = (p) => { const c = -(4.60 + p * vdot); return (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a); };
+      const toPace = (vel) => 1609.344 / vel;
+      const fmt = (mp) => { let m = Math.floor(mp); let s = Math.round((mp - m) * 60); if (s >= 60) { m++; s -= 60; } return `${m}:${s < 10 ? "0" : ""}${s}`; };
+      const vFast = velAt(1.30), vSlow = velAt(1.15);
+      allZones.running.zones.z6 = { paceRange: `${fmt(toPace(vFast))}–${fmt(toPace(vSlow))} /mi` };
+      localStorage.setItem("trainingZones", JSON.stringify(allZones));
+    }
   } catch {}
 
   function _getIntervalZones(ivSport) {
@@ -1423,6 +1434,13 @@ async function triggerShareWorkout(cacheKey) {
       document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
     }
     _showShareToast("Share link copied!");
+
+    // Analytics
+    if (typeof trackWorkoutShared === "function") trackWorkoutShared({ sport: sportId, session_type: sessionTypeId });
+
+    // Push notification to recipient (fire-and-forget)
+    // Note: notify-share needs a recipient_user_id — shares via link don't have one.
+    // This will be called from the import/accept flow instead if sharing to a specific user.
   });
 }
 
@@ -1883,6 +1901,7 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
     isCompletion:       true,
   });
   localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
+  if (typeof trackWorkoutLogged === "function") trackWorkoutLogged({ type, date: dateStr, source: "session_complete" });
 
   // Mark session as completed
   const meta = loadCompletionMeta();
@@ -4166,7 +4185,7 @@ function qeWizardBack() {
   document.querySelectorAll(".qe-muscle-btn.selected").forEach(btn => btn.classList.remove("selected"));
   if (_qeWizardStep === "library") {
     qeShowStep(0, null);
-  } else if (_qeWizardStep === 2 && _qeSelectedType && _qeSelectedType !== "strength" && _qeSelectedType !== "restriction") {
+  } else if (_qeWizardStep === 2 && _qeSelectedType === "strength") {
     qeShowStep(1, _qeSelectedType);
   } else {
     qeShowStep(0, null);
@@ -6026,6 +6045,7 @@ function saveQuickActivity() {
   try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
   workouts.unshift({ id: generateId(), date: dateStr, type, notes, exercises: [], ...(generatedSession ? { generatedSession } : {}) });
   localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
+  if (typeof trackWorkoutLogged === "function") trackWorkoutLogged({ type, date: dateStr, source: "quick_entry" });
 
   renderCalendar();
   if (selectedDate === dateStr) renderDayDetail(dateStr);

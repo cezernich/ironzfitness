@@ -18,6 +18,7 @@ function _setLivePref(key, val) {
 // ── Launch ───────────────────────────────────────────────────────────────────
 
 function startLiveWorkout(sessionId, dateStr, type, stepsJson, exercisesJson) {
+  if (typeof trackEvent === "function") trackEvent("workout_started", { type, date: dateStr });
   const steps = stepsJson ? JSON.parse(stepsJson) : null;
   const exercises = exercisesJson ? JSON.parse(exercisesJson) : null;
   const isHyrox = type === "hyrox" && exercises && exercises.length > 0;
