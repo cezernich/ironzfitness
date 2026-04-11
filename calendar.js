@@ -1456,7 +1456,22 @@ async function triggerShareWorkout(cacheKey) {
     });
     if (error) {
       console.error("[IronZ] share insert failed:", error);
-      alert("Couldn't create share link. Try again.");
+      // Fallback: copy workout as text
+      const lines = [workoutName];
+      if (noteText) lines.push(noteText);
+      _exercises.forEach(ex => {
+        let line = ex.name || "Interval";
+        if (ex.duration) line += ` · ${ex.duration}`;
+        if (ex.intensity) line += ` @ ${ex.intensity}`;
+        if (ex.reps) line += ` (${ex.reps}x)`;
+        if (ex.details) line += ` — ${ex.details}`;
+        lines.push(line);
+      });
+      lines.push("", "Shared from IronZ Fitness");
+      const textSummary = lines.join("\n");
+      try { navigator.clipboard.writeText(textSummary); }
+      catch { /* ignore */ }
+      _showShareToast("Workout copied to clipboard!");
       return;
     }
     const shareUrl = `https://ironz.fit/share.html?token=${token}`;
