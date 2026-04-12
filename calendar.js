@@ -5652,6 +5652,15 @@ function qeAddExerciseRow() {
     }
   });
   qeContainer.appendChild(div);
+  // TEMP DIAGNOSTIC — print the rendered toggle so we can verify the attrs.
+  try {
+    const _dbgToggle = div.querySelector(".ex-row-customize-toggle");
+    if (_dbgToggle) {
+      console.log("[PYR-DEBUG] qeAddExerciseRow rendered toggle id=", id, "outerHTML=", _dbgToggle.outerHTML);
+    } else {
+      console.log("[PYR-DEBUG] qeAddExerciseRow id=", id, "— no .ex-row-customize-toggle found in div");
+    }
+  } catch (_e) {}
 }
 
 function _qeClearAllHints() {
@@ -5767,10 +5776,13 @@ function qeRemoveRow(id) {
 
 // Toggle the per-set customization panel for a row. Collapsed by default.
 function qeTogglePerSet(id) {
+  console.log("[PYR-DEBUG] qeTogglePerSet called with id=", id, "type=", typeof id);
   const detail = document.getElementById(`qe-pyr-${id}`);
   const toggle = document.getElementById(`qe-pyr-toggle-${id}`);
+  console.log("[PYR-DEBUG] qeTogglePerSet lookup", { detail, toggle, detailId: `qe-pyr-${id}`, toggleId: `qe-pyr-toggle-${id}` });
   if (!detail || !toggle) return;
   const isHidden = detail.style.display === "none" || !detail.style.display;
+  console.log("[PYR-DEBUG] qeTogglePerSet isHidden=", isHidden, "current display=", detail.style.display);
   if (isHidden) {
     detail.style.display = "";
     toggle.textContent = "Collapse ▴";

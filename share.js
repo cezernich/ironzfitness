@@ -390,14 +390,24 @@ function _wirePerSetToggleDelegator() {
   if (document.__pyrToggleWired) return;
   document.__pyrToggleWired = true;
 
+  console.log("[PYR-DEBUG] share.js: per-set click delegator registered");
+
   // ── Click: "Customize per set" / "Collapse" toggle ─────────────────────
   document.addEventListener("click", function (e) {
+    // TEMP DIAGNOSTIC — see ironz issue trace. Remove after verifying fix.
+    console.log("[PYR-DEBUG] click delegator fired", {
+      target: e.target,
+      tag: e.target && e.target.tagName,
+      className: e.target && e.target.className,
+    });
     const btn = e.target && e.target.closest && e.target.closest(".ex-row-customize-toggle");
+    console.log("[PYR-DEBUG] closest .ex-row-customize-toggle →", btn);
     if (!btn) return;
     e.stopPropagation();
     e.preventDefault();
     // Prefer the data-pyr-toggle attribute; fall back to legacy id parsing.
     const attr = btn.getAttribute("data-pyr-toggle") || "";
+    console.log("[PYR-DEBUG] data-pyr-toggle attr =", JSON.stringify(attr), "btn.id =", btn.id);
     let scope = "", rowId = "";
     if (attr) {
       const parts = attr.split(":");
@@ -407,6 +417,11 @@ function _wirePerSetToggleDelegator() {
       const m = btn.id.match(/^(qe|cp|edit)-pyr-toggle-(.+)$/);
       if (m) { scope = m[1]; rowId = m[2]; }
     }
+    console.log("[PYR-DEBUG] dispatch scope=", scope, "rowId=", rowId,
+      "window.qeTogglePerSet?", typeof window.qeTogglePerSet,
+      "window.cpTogglePerSet?", typeof window.cpTogglePerSet,
+      "window.editTogglePerSet?", typeof window.editTogglePerSet,
+      "window.exTogglePerSet?", typeof window.exTogglePerSet);
     if (scope === "qe" && typeof window.qeTogglePerSet === "function") {
       window.qeTogglePerSet(rowId);
     } else if (scope === "cp" && typeof window.cpTogglePerSet === "function") {
@@ -444,7 +459,9 @@ function _wirePerSetToggleDelegator() {
     }
   });
 }
+console.log("[PYR-DEBUG] share.js: about to call _wirePerSetToggleDelegator()");
 _wirePerSetToggleDelegator();
+console.log("[PYR-DEBUG] share.js: _wirePerSetToggleDelegator() returned, document.__pyrToggleWired=", typeof document !== "undefined" ? document.__pyrToggleWired : "no-document");
 
 // Wire every existing share button under `root` (or the whole document).
 function _wireAllShareButtons(root) {
