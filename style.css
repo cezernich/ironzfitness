@@ -12236,10 +12236,12 @@ button:active {
   cursor: pointer;
 }
 .saved-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 12px;
-  margin-bottom: 24px;
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto 24px;
 }
 .saved-card {
   background: var(--color-surface);
