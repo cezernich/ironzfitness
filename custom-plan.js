@@ -755,14 +755,13 @@ function cpManualAddExRow(prefill) {
       <div><label>Exercise</label>
         <input type="text"   id="cp-mex-${id}"   placeholder="${exPlaceholder}" value="${_cpEsc(pName)}" /></div>
       <div><label>Sets</label>
-        <input type="number" id="cp-msets-${id}" placeholder="3" min="1" max="20" value="${_cpEsc(pSets)}" onchange="cpPyramidSetsChanged(${id})" /></div>
-      <div><label>Reps</label>
-        <input type="text"   id="cp-mreps-${id}" placeholder="10" value="${_cpEsc(pReps)}" /></div>
-      <div><label>Weight</label>
-        <input type="text"   id="cp-mwt-${id}"   placeholder="${wtPlaceholder}" value="${_cpEsc(wtValue)}"${isBW ? ' readonly' : ''} /></div>
-      <button class="ex-pyramid-btn" title="Per-set reps &amp; weight" onclick="cpTogglePyramid(${id})">▾</button>
+        <input type="number" id="cp-msets-${id}" placeholder="3" min="1" max="20" value="${_cpEsc(pSets)}" oninput="cpPyramidSetsChanged(${id})" /></div>
+      <div><label>Default Reps</label>
+        <input type="text"   id="cp-mreps-${id}" placeholder="10" value="${_cpEsc(pReps)}" oninput="cpPyramidDefaultsChanged(${id})" /></div>
+      <div><label>Default Weight</label>
+        <input type="text"   id="cp-mwt-${id}"   placeholder="${wtPlaceholder}" value="${_cpEsc(wtValue)}"${isBW ? ' readonly' : ''} oninput="cpPyramidDefaultsChanged(${id})" /></div>
       <button class="remove-exercise-btn" onclick="cpManualRemoveRow(${id})">${_CP_TRASH_SVG}</button>
-      <div class="ex-pyramid-detail" id="cp-pyr-${id}" style="display:none"></div>`;
+      <div class="ex-pyramid-detail" id="cp-pyr-${id}"></div>`;
   }
 
   // Wire native HTML5 drag-and-drop
@@ -971,45 +970,58 @@ function cpManualRemoveRow(id) {
   if (row) row.remove();
 }
 
-function cpTogglePyramid(id) {
+// Auto-render per-set rows whenever the Sets input changes. Top-level Reps/
+// Weight fields act as defaults; per-set rows can be edited individually.
+function cpPyramidSetsChanged(id) {
   const detail = document.getElementById(`cp-pyr-${id}`);
-  const row = document.getElementById(`cp-mrow-${id}`);
-  const btn = row?.querySelector(".ex-pyramid-btn");
   if (!detail) return;
-  const isOpen = detail.style.display !== "none";
-  if (isOpen) {
-    detail.style.display = "none";
-    if (btn) { btn.textContent = "▾"; btn.classList.remove("is-active"); }
-    return;
-  }
-  const setsVal = parseInt(document.getElementById(`cp-msets-${id}`)?.value) || 3;
+  const setsVal = parseInt(document.getElementById(`cp-msets-${id}`)?.value) || 0;
   const defaultReps = document.getElementById(`cp-mreps-${id}`)?.value || "";
   const defaultWeight = document.getElementById(`cp-mwt-${id}`)?.value || "";
-  const existing = detail.querySelectorAll(".ex-pyr-row");
-  if (existing.length === setsVal) {
-    detail.style.display = "";
-    if (btn) { btn.textContent = "▴"; btn.classList.add("is-active"); }
-    return;
-  }
+
+  if (setsVal < 1) { detail.innerHTML = ""; return; }
+
+  // Preserve any existing per-set values
+  const existing = [];
+  detail.querySelectorAll(".ex-pyr-row").forEach(pr => {
+    existing.push({
+      reps: pr.querySelector(".ex-pyr-reps")?.value || "",
+      weight: pr.querySelector(".ex-pyr-weight")?.value || "",
+    });
+  });
+
   let html = '<div class="ex-pyr-header"><span>Set</span><span>Reps</span><span>Weight</span></div>';
   for (let i = 0; i < setsVal; i++) {
+    const prev = existing[i] || {};
+    const reps = prev.reps || defaultReps;
+    const weight = prev.weight || defaultWeight;
     html += `<div class="ex-pyr-row">
       <span class="ex-pyr-label">${i + 1}</span>
-      <input type="text" class="ex-pyr-reps" placeholder="${defaultReps || '10'}" value="${defaultReps}" />
-      <input type="text" class="ex-pyr-weight" placeholder="${defaultWeight || 'lbs'}" value="${defaultWeight}" />
+      <input type="text" class="ex-pyr-reps" placeholder="${defaultReps || '10'}" value="${reps}" />
+      <input type="text" class="ex-pyr-weight" placeholder="${defaultWeight || 'lbs'}" value="${weight}" />
     </div>`;
   }
   detail.innerHTML = html;
-  detail.style.display = "";
-  if (btn) { btn.textContent = "▴"; btn.classList.add("is-active"); }
 }
 
-function cpPyramidSetsChanged(id) {
+function cpPyramidDefaultsChanged(id) {
   const detail = document.getElementById(`cp-pyr-${id}`);
-  if (!detail || detail.style.display === "none") return;
-  detail.innerHTML = "";
-  cpTogglePyramid(id);
+  if (!detail) return;
+  const defaultReps = document.getElementById(`cp-mreps-${id}`)?.value || "";
+  const defaultWeight = document.getElementById(`cp-mwt-${id}`)?.value || "";
+  detail.querySelectorAll(".ex-pyr-row").forEach(pr => {
+    const rInp = pr.querySelector(".ex-pyr-reps");
+    const wInp = pr.querySelector(".ex-pyr-weight");
+    if (rInp && !rInp.value) rInp.value = defaultReps;
+    if (wInp && !wInp.value) wInp.value = defaultWeight;
+    if (rInp) rInp.placeholder = defaultReps || "10";
+    if (wInp) wInp.placeholder = defaultWeight || "lbs";
+  });
+  if (!detail.querySelector(".ex-pyr-row")) cpPyramidSetsChanged(id);
 }
+
+// Back-compat shim
+function cpTogglePyramid(id) { cpPyramidSetsChanged(id); }
 
 // ── Cardio interval rows for running/cycling/swimming ─────────────────────────
 
@@ -1296,20 +1308,18 @@ function customPlanSaveManual() {
       ex.supersetGroup = row.dataset.supersetGroup || null;
       if (row.dataset.groupSets) ex.groupSets = parseInt(row.dataset.groupSets) || 3;
 
-      // Collect per-set pyramid details if expanded
+      // Collect per-set details (panel auto-renders as user enters sets)
       const pyrDetail = document.getElementById(`cp-pyr-${id}`);
-      if (pyrDetail && pyrDetail.style.display !== "none") {
+      if (pyrDetail) {
         const pyrRows = pyrDetail.querySelectorAll(".ex-pyr-row");
         if (pyrRows.length > 0) {
           const setDetails = [];
-          let hasDiff = false;
           pyrRows.forEach(pr => {
             const r = pr.querySelector(".ex-pyr-reps")?.value.trim() || ex.reps;
             const w = pr.querySelector(".ex-pyr-weight")?.value.trim() || ex.weight;
             setDetails.push({ reps: r, weight: w });
-            if (r !== ex.reps || w !== ex.weight) hasDiff = true;
           });
-          if (hasDiff) ex.setDetails = setDetails;
+          ex.setDetails = setDetails;
         }
       }
       exercises.push(ex);

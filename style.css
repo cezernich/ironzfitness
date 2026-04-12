@@ -802,6 +802,9 @@ input[type="date"] {
   color: var(--color-text);
   background: var(--color-surface-2);
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   cursor: pointer;
 }
 
@@ -1106,6 +1109,8 @@ button:active {
 
 /* Per-set editing in workout editor */
 .edit-set-detail-wrap { grid-column: 1 / -1; }
+.edit-set-details:empty { display: none; }
+.edit-set-details { padding-top: 6px; }
 .edit-perset-toggle {
   background: none; border: none; color: var(--color-text-muted);
   font-size: 0.78rem; cursor: pointer; padding: 2px 0; margin-top: 2px;
@@ -1142,6 +1147,7 @@ button:active {
   grid-column: 1 / -1;
   padding: 8px 0 0;
 }
+.ex-pyramid-detail:empty { display: none; }
 .ex-pyr-header {
   display: grid; grid-template-columns: 40px 1fr 1fr; gap: 8px;
   font-size: 0.72rem; font-weight: 600; color: var(--color-text-muted);
@@ -1233,43 +1239,79 @@ button:active {
 
 .history-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  margin-bottom: 0;
+  min-width: 0;
 }
 
+/* Top row: workout name (grows) + action icons (right) */
+.history-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Legacy left-side wrapper (still used by saved-workouts list) */
 .history-header-left {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+  flex: 1;
 }
 
+/* Meta row: date · summary */
+.history-meta-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  min-width: 0;
+}
+.history-meta-row .history-summary {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+.history-meta-row .history-summary::before {
+  content: "·";
+  margin-right: 6px;
+  opacity: 0.6;
+}
+
+/* Small category badge, bottom-left */
 .workout-tag {
-  font-size: 0.7rem;
+  font-size: 0.62rem;
   font-weight: 700;
-  padding: 3px 10px;
+  padding: 2px 8px;
   border-radius: 999px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #fff;
+  letter-spacing: 0.06em;
+  align-self: flex-start;
+  max-width: fit-content;
 }
 
-.tag-weightlifting { background-color: var(--color-violet); }
-.tag-running       { background-color: var(--color-amber); }
-.tag-triathlon     { background-color: var(--color-cyan); }
-.tag-cycling       { background-color: var(--color-teal); }
-.tag-hyrox         { background-color: var(--color-amber); }
-.tag-wellness      { background-color: var(--color-success); }
+/* Subtle sport-specific badges — light tinted bg, darker text */
+.tag-weightlifting { background: rgba(168,85,247,0.15); color: #c084fc; }
+.tag-running       { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.tag-triathlon     { background: rgba(6,182,212,0.15);  color: #22d3ee; }
+.tag-cycling       { background: rgba(20,184,166,0.15); color: #2dd4bf; }
+.tag-hyrox         { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.tag-wellness      { background: rgba(34,197,94,0.15);  color: #4ade80; }
 .tag-general,
-.tag-other         { background-color: var(--color-text-muted); }
+.tag-other         { background: rgba(148,163,184,0.15); color: #94a3b8; }
 
 .history-summary {
   font-size: 0.75rem;
   color: var(--color-text-muted);
-  background: rgba(255,255,255,0.06);
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  padding: 2px 8px;
   white-space: nowrap;
 }
 
@@ -8504,10 +8546,15 @@ button:active {
 
 /* Workout name inline in history */
 .history-workout-name {
-  font-weight: 600;
-  font-size: 0.85rem;
+  font-weight: 700;
+  font-size: 1.05rem;
   color: var(--color-text);
-  margin-left: 6px;
+  margin-left: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 
@@ -8976,6 +9023,7 @@ button:active {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 /* ── Swap picker ─────────────────────────────────────────────────────────────── */

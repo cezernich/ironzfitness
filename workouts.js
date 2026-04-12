@@ -1305,20 +1305,24 @@ function _createExerciseRowWithValues(name, sets, reps, weight) {
     </div>
     <div>
       <label>Sets</label>
-      <input type="number" class="ex-sets" value="${sets || 1}" placeholder="3" min="1" onchange="exPyramidSetsChanged(this)" />
+      <input type="number" class="ex-sets" value="${sets || 1}" placeholder="3" min="1" oninput="exPyramidSetsChanged(this)" />
     </div>
     <div>
-      <label>Reps</label>
-      <input type="number" class="ex-reps" value="${reps || 0}" placeholder="10" min="0" />
+      <label>Default Reps</label>
+      <input type="number" class="ex-reps" value="${reps || 0}" placeholder="10" min="0" oninput="exPyramidDefaultsChanged(this)" />
     </div>
     <div>
-      <label>Weight</label>
-      <input type="text" class="ex-weight" value="${(weight || '').replace(/"/g, '&quot;')}" placeholder="45lbs" />
+      <label>Default Weight</label>
+      <input type="text" class="ex-weight" value="${(weight || '').replace(/"/g, '&quot;')}" placeholder="45lbs" oninput="exPyramidDefaultsChanged(this)" />
     </div>
-    <button class="ex-pyramid-btn" title="Per-set reps & weight" onclick="exTogglePyramid(this)">▾</button>
     <button class="remove-exercise-btn" title="Remove" onclick="removeExerciseRow(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
-    <div class="ex-pyramid-detail" style="display:none"></div>
+    <div class="ex-pyramid-detail"></div>
   `;
+  // Auto-render per-set rows from the seeded sets value
+  setTimeout(() => {
+    const setsInput = row.querySelector(".ex-sets");
+    if (setsInput && parseInt(setsInput.value) > 0) exPyramidSetsChanged(setsInput);
+  }, 0);
   return row;
 }
 
@@ -1527,75 +1531,81 @@ function addExerciseRow() {
     </div>
     <div>
       <label>Sets</label>
-      <input type="number" class="ex-sets" placeholder="3" min="1" onchange="exPyramidSetsChanged(this)" />
+      <input type="number" class="ex-sets" placeholder="3" min="1" oninput="exPyramidSetsChanged(this)" />
     </div>
     <div>
-      <label>Reps</label>
-      <input type="number" class="ex-reps" placeholder="10" min="1" />
+      <label>Default Reps</label>
+      <input type="number" class="ex-reps" placeholder="10" min="1" oninput="exPyramidDefaultsChanged(this)" />
     </div>
     <div>
-      <label>Weight</label>
-      <input type="text" class="ex-weight" placeholder="45lbs" />
+      <label>Default Weight</label>
+      <input type="text" class="ex-weight" placeholder="45lbs" oninput="exPyramidDefaultsChanged(this)" />
     </div>
-    <button class="ex-pyramid-btn" title="Per-set reps & weight" onclick="exTogglePyramid(this)">▾</button>
     <button class="remove-exercise-btn" title="Remove" onclick="removeExerciseRow(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
-    <div class="ex-pyramid-detail" style="display:none"></div>
+    <div class="ex-pyramid-detail"></div>
   `;
 
   _initRowDrag(row, container);
   container.appendChild(row);
 }
 
-function exTogglePyramid(btn) {
-  const row = btn.closest(".exercise-row");
+// Auto-render per-set rows whenever Sets input changes. Preserves existing
+// user-entered values; seeds new rows from default reps/weight.
+function exPyramidSetsChanged(input) {
+  const row = input.closest(".exercise-row");
+  if (!row) return;
   const detail = row.querySelector(".ex-pyramid-detail");
-  const isOpen = detail.style.display !== "none";
-
-  if (isOpen) {
-    detail.style.display = "none";
-    btn.textContent = "▾";
-    btn.classList.remove("is-active");
-    return;
-  }
-
-  // Build per-set rows based on current sets count
-  const setsVal = parseInt(row.querySelector(".ex-sets")?.value) || 3;
+  if (!detail) return;
+  const setsVal = parseInt(row.querySelector(".ex-sets")?.value) || 0;
   const defaultReps = row.querySelector(".ex-reps")?.value || "";
   const defaultWeight = row.querySelector(".ex-weight")?.value || "";
+  if (setsVal < 1) { detail.innerHTML = ""; return; }
 
-  // Preserve existing values if re-opening
-  const existing = detail.querySelectorAll(".ex-pyr-row");
-  if (existing.length === setsVal) {
-    detail.style.display = "";
-    btn.textContent = "▴";
-    btn.classList.add("is-active");
-    return;
-  }
+  const existing = [];
+  detail.querySelectorAll(".ex-pyr-row").forEach(pr => {
+    existing.push({
+      reps: pr.querySelector(".ex-pyr-reps")?.value || "",
+      weight: pr.querySelector(".ex-pyr-weight")?.value || "",
+    });
+  });
 
   let html = '<div class="ex-pyr-header"><span>Set</span><span>Reps</span><span>Weight</span></div>';
   for (let i = 0; i < setsVal; i++) {
+    const prev = existing[i] || {};
+    const reps = prev.reps || defaultReps;
+    const weight = prev.weight || defaultWeight;
     html += `<div class="ex-pyr-row">
       <span class="ex-pyr-label">${i + 1}</span>
-      <input type="text" class="ex-pyr-reps" placeholder="${defaultReps || '10'}" value="${defaultReps}" oninput="_syncPyramidToMain(this)" />
-      <input type="text" class="ex-pyr-weight" placeholder="${defaultWeight || 'lbs'}" value="${defaultWeight}" oninput="_syncPyramidToMain(this)" />
+      <input type="text" class="ex-pyr-reps" placeholder="${defaultReps || '10'}" value="${reps}" />
+      <input type="text" class="ex-pyr-weight" placeholder="${defaultWeight || 'lbs'}" value="${weight}" />
     </div>`;
   }
   detail.innerHTML = html;
-  detail.style.display = "";
-  btn.textContent = "▴";
-  btn.classList.add("is-active");
 }
 
-function exPyramidSetsChanged(input) {
+function exPyramidDefaultsChanged(input) {
   const row = input.closest(".exercise-row");
+  if (!row) return;
   const detail = row.querySelector(".ex-pyramid-detail");
-  if (detail.style.display === "none") return;
-  // Re-generate pyramid rows with new set count
-  exTogglePyramid(row.querySelector(".ex-pyramid-btn"));
-  // Force re-open since toggle would have closed it
-  if (detail.style.display === "none") {
-    exTogglePyramid(row.querySelector(".ex-pyramid-btn"));
-  }
+  if (!detail) return;
+  const defaultReps = row.querySelector(".ex-reps")?.value || "";
+  const defaultWeight = row.querySelector(".ex-weight")?.value || "";
+  detail.querySelectorAll(".ex-pyr-row").forEach(pr => {
+    const rInp = pr.querySelector(".ex-pyr-reps");
+    const wInp = pr.querySelector(".ex-pyr-weight");
+    if (rInp && !rInp.value) rInp.value = defaultReps;
+    if (wInp && !wInp.value) wInp.value = defaultWeight;
+    if (rInp) rInp.placeholder = defaultReps || "10";
+    if (wInp) wInp.placeholder = defaultWeight || "lbs";
+  });
+  if (!detail.querySelector(".ex-pyr-row")) exPyramidSetsChanged(input);
+}
+
+// Back-compat shim for any callers still using the toggle
+function exTogglePyramid(btn) {
+  const row = btn?.closest(".exercise-row");
+  if (!row) return;
+  exPyramidSetsChanged(row.querySelector(".ex-sets"));
 }
 
 /** Syncs pyramid per-set values up to the main reps/weight fields as a range */
@@ -1700,21 +1710,18 @@ function saveWorkout() {
       const ex = { name, sets, reps, weight };
       if (row.dataset.ssId) ex.supersetId = row.dataset.ssId;
 
-      // Collect per-set pyramid details if expanded
+      // Collect per-set details (panel auto-renders as user enters sets)
       const detail = row.querySelector(".ex-pyramid-detail");
-      if (detail && detail.style.display !== "none") {
+      if (detail) {
         const pyrRows = detail.querySelectorAll(".ex-pyr-row");
         if (pyrRows.length > 0) {
           const setDetails = [];
-          let hasDiff = false;
           pyrRows.forEach(pr => {
             const r = pr.querySelector(".ex-pyr-reps")?.value.trim() || reps;
             const w = pr.querySelector(".ex-pyr-weight")?.value.trim() || weight;
             setDetails.push({ reps: r, weight: w });
-            if (r !== reps || w !== weight) hasDiff = true;
           });
-          // Only save setDetails if values actually differ across sets
-          if (hasDiff) ex.setDetails = setDetails;
+          ex.setDetails = setDetails;
         }
       }
       exercises.push(ex);
@@ -2021,12 +2028,14 @@ function _renderWorkoutHistoryList(workouts) {
       return `
         <div class="history-entry collapsible is-collapsed" id="${cardId}">
           <div class="history-header card-toggle" onclick="toggleSection('${cardId}')">
-            <div class="history-header-left">
-              <span class="workout-tag tag-${w.type}">${w.type}</span>
-              <span class="history-date">${formatDate(w.date)}</span>
-              ${nameHtml}${summaryHtml}
+            <div class="history-top-row">
+              ${nameHtml}
+              <div class="history-header-right" onclick="event.stopPropagation()">${btnHtml}</div>
             </div>
-            <div class="history-header-right" onclick="event.stopPropagation()">${btnHtml}</div>
+            <div class="history-meta-row">
+              <span class="history-date">${formatDate(w.date)}</span>${summaryHtml}
+            </div>
+            <span class="workout-tag tag-${w.type}">${w.type}</span>
           </div>
           <div class="card-body"><div style="margin-top:8px">${intervals || notesHtml}</div></div>
         </div>`;
@@ -2049,12 +2058,14 @@ function _renderWorkoutHistoryList(workouts) {
       return `
         <div class="history-entry collapsible is-collapsed" id="${cardId}">
           <div class="history-header card-toggle" onclick="toggleSection('${cardId}')">
-            <div class="history-header-left">
-              <span class="workout-tag tag-${w.type}">${w.type}</span>
-              <span class="history-date">${formatDate(w.date)}</span>
-              ${nameHtml}${summaryHtml}
+            <div class="history-top-row">
+              ${nameHtml}
+              <div class="history-header-right" onclick="event.stopPropagation()">${btnHtml}</div>
             </div>
-            <div class="history-header-right" onclick="event.stopPropagation()">${btnHtml}</div>
+            <div class="history-meta-row">
+              <span class="history-date">${formatDate(w.date)}</span>${summaryHtml}
+            </div>
+            <span class="workout-tag tag-${w.type}">${w.type}</span>
           </div>
           <div class="card-body">${notesHtml}${segTable}</div>
         </div>`;
@@ -2105,12 +2116,14 @@ function _renderWorkoutHistoryList(workouts) {
       return `
         <div class="history-entry collapsible is-collapsed" id="${cardId}">
           <div class="history-header card-toggle" onclick="toggleSection('${cardId}')">
-            <div class="history-header-left">
-              <span class="workout-tag tag-${w.type}">${w.type}</span>
-              <span class="history-date">${formatDate(w.date)}</span>
-              ${nameHtml}${summaryHtml}
+            <div class="history-top-row">
+              ${nameHtml}
+              <div class="history-header-right" onclick="event.stopPropagation()">${btnHtml}</div>
             </div>
-            <div class="history-header-right" onclick="event.stopPropagation()">${btnHtml}</div>
+            <div class="history-meta-row">
+              <span class="history-date">${formatDate(w.date)}</span>${summaryHtml}
+            </div>
+            <span class="workout-tag tag-${w.type}">${w.type}</span>
           </div>
           <div class="card-body">${notesHtml}${splitSummary}${hyroxTable}</div>
         </div>`;
@@ -2126,12 +2139,14 @@ function _renderWorkoutHistoryList(workouts) {
       return `
         <div class="history-entry collapsible is-collapsed" id="${cardId}">
           <div class="history-header card-toggle" onclick="toggleSection('${cardId}')">
-            <div class="history-header-left">
-              <span class="workout-tag tag-${w.type}">${w.type}</span>
-              <span class="history-date">${formatDate(w.date)}</span>
-              ${nameHtml}${summaryHtml}
+            <div class="history-top-row">
+              ${nameHtml}
+              <div class="history-header-right" onclick="event.stopPropagation()">${btnHtml}</div>
             </div>
-            <div class="history-header-right" onclick="event.stopPropagation()">${btnHtml}</div>
+            <div class="history-meta-row">
+              <span class="history-date">${formatDate(w.date)}</span>${summaryHtml}
+            </div>
+            <span class="workout-tag tag-${w.type}">${w.type}</span>
           </div>
           <div class="card-body">${notesHtml}${buildExerciseTableHTML(w.exercises, { hiit: w.type === "hiit" || !!w.hiitMeta })}</div>
         </div>`;
@@ -2146,12 +2161,14 @@ function _renderWorkoutHistoryList(workouts) {
     return `
       <div class="history-entry collapsible is-collapsed" id="${cardId}">
         <div class="history-header card-toggle" onclick="toggleSection('${cardId}')">
-          <div class="history-header-left">
-            <span class="workout-tag tag-${w.type}">${w.type}</span>
-            <span class="history-date">${formatDate(w.date)}</span>
-            ${nameHtml}${summaryHtml}
+          <div class="history-top-row">
+            ${nameHtml}
+            <div class="history-header-right" onclick="event.stopPropagation()">${btnHtml}</div>
           </div>
-          <div class="history-header-right" onclick="event.stopPropagation()">${btnHtml}</div>
+          <div class="history-meta-row">
+            <span class="history-date">${formatDate(w.date)}</span>${summaryHtml}
+          </div>
+          <span class="workout-tag tag-${w.type}">${w.type}</span>
         </div>
         <div class="card-body">${notesHtml}</div>
       </div>`;

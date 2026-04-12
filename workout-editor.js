@@ -195,11 +195,11 @@ function _addEditRow(ex) {
       <div><label>Exercise</label>
         <input type="text"   id="edit-ex-${id}"    value="${ex?.name   || ""}" placeholder="e.g. Bench Press" /></div>
       <div><label>Sets</label>
-        <input type="number" id="edit-sets-${id}"  value="${ex?.sets   || ""}" placeholder="3" min="1" max="99" onchange="editSetCountChanged(${id})" /></div>
-      <div class="edit-summary-fields" id="edit-summary-${id}"><label>Reps</label>
-        <input type="text"   id="edit-reps-${id}"  value="${ex?.reps   || ""}" placeholder="10" /></div>
-      <div class="edit-summary-fields" id="edit-summary-wt-${id}"><label>Weight</label>
-        <input type="text"   id="edit-wt-${id}"    value="${weightVal}" placeholder="lbs / BW" /></div>
+        <input type="number" id="edit-sets-${id}"  value="${ex?.sets   || ""}" placeholder="3" min="1" max="99" oninput="editSetCountChanged(${id})" /></div>
+      <div><label>Default Reps</label>
+        <input type="text"   id="edit-reps-${id}"  value="${ex?.reps   || ""}" placeholder="10" oninput="editDefaultsChanged(${id})" /></div>
+      <div><label>Default Weight</label>
+        <input type="text"   id="edit-wt-${id}"    value="${weightVal}" placeholder="lbs / BW" oninput="editDefaultsChanged(${id})" /></div>
       <button class="remove-exercise-btn" title="Remove" onclick="removeEditRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
   }
   // Per-set detail section (skip for HIIT — rounds are at workout level)
@@ -207,8 +207,7 @@ function _addEditRow(ex) {
     const detailWrap = document.createElement("div");
     detailWrap.className = "edit-set-detail-wrap";
     detailWrap.id = `edit-sd-wrap-${id}`;
-    detailWrap.innerHTML = `<button class="edit-perset-toggle" id="edit-sd-btn-${id}" onclick="editTogglePerSet(${id})">${hasSetDetails ? "▾ Per-set details" : "▸ Edit per set"}</button>
-      <div class="edit-set-details" id="edit-sd-${id}" style="display:${hasSetDetails ? "" : "none"}"></div>`;
+    detailWrap.innerHTML = `<div class="edit-set-details" id="edit-sd-${id}"></div>`;
     div.appendChild(detailWrap);
   }
   if (hasSetDetails) {
@@ -270,15 +269,15 @@ function _addEditRow(ex) {
     }
   });
   editContainer.appendChild(div);
-  // Render pending setDetails now that the element is in the DOM
-  if (hasSetDetails) {
-    _editRenderSetDetails(id, ex.setDetails);
-    // Hide summary reps/weight when per-set is open
-    const sf1 = document.getElementById(`edit-summary-${id}`);
-    const sf2 = document.getElementById(`edit-summary-wt-${id}`);
-    if (sf1) sf1.style.display = "none";
-    if (sf2) sf2.style.display = "none";
-    delete div.dataset.pendingSetDetails;
+  // Always auto-render per-set rows if we have sets and this isn't HIIT
+  if (!_editIsHiit) {
+    if (hasSetDetails) {
+      _editRenderSetDetails(id, ex.setDetails);
+      delete div.dataset.pendingSetDetails;
+    } else {
+      // Seed per-set rows from the summary sets/reps/weight
+      editSetCountChanged(id);
+    }
   }
 }
 
@@ -289,32 +288,8 @@ function removeEditRow(id) {
   if (el) el.remove();
 }
 
-function editTogglePerSet(rowId) {
-  const detailsEl = document.getElementById(`edit-sd-${rowId}`);
-  const btn       = document.getElementById(`edit-sd-btn-${rowId}`);
-  const sf1       = document.getElementById(`edit-summary-${rowId}`);
-  const sf2       = document.getElementById(`edit-summary-wt-${rowId}`);
-  if (!detailsEl) return;
-  const opening = detailsEl.style.display === "none";
-  detailsEl.style.display = opening ? "" : "none";
-  if (btn) btn.textContent = opening ? "▾ Per-set details" : "▸ Edit per set";
-  if (opening) {
-    // If no rows yet, generate from current sets/reps/weight
-    if (!detailsEl.querySelector(".edit-set-row")) {
-      const numSets = parseInt(document.getElementById(`edit-sets-${rowId}`)?.value) || 3;
-      const reps    = document.getElementById(`edit-reps-${rowId}`)?.value || "";
-      const weight  = document.getElementById(`edit-wt-${rowId}`)?.value || "";
-      const details = [];
-      for (let s = 0; s < numSets; s++) details.push({ reps, weight });
-      _editRenderSetDetails(rowId, details);
-    }
-    if (sf1) sf1.style.display = "none";
-    if (sf2) sf2.style.display = "none";
-  } else {
-    if (sf1) sf1.style.display = "";
-    if (sf2) sf2.style.display = "";
-  }
-}
+// Back-compat shim — toggle is no longer needed since per-set rows auto-render
+function editTogglePerSet(rowId) { editSetCountChanged(rowId); }
 
 function _editRenderSetDetails(rowId, details) {
   const el = document.getElementById(`edit-sd-${rowId}`);
@@ -330,11 +305,16 @@ function _editRenderSetDetails(rowId, details) {
   el.innerHTML = html;
 }
 
+// Auto-render/refresh per-set rows whenever Sets input changes. Preserves any
+// user edits in existing rows and seeds new rows from the defaults.
 function editSetCountChanged(rowId) {
   const detailsEl = document.getElementById(`edit-sd-${rowId}`);
-  if (!detailsEl || detailsEl.style.display === "none") return;
-  // Re-render per-set rows to match new set count
-  const numSets = parseInt(document.getElementById(`edit-sets-${rowId}`)?.value) || 3;
+  if (!detailsEl) return;
+  const numSets = parseInt(document.getElementById(`edit-sets-${rowId}`)?.value) || 0;
+  const defaultReps = document.getElementById(`edit-reps-${rowId}`)?.value || "";
+  const defaultWeight = document.getElementById(`edit-wt-${rowId}`)?.value || "";
+  if (numSets < 1) { detailsEl.innerHTML = ""; return; }
+  // Preserve existing values
   const existing = [];
   for (let s = 0; ; s++) {
     const r = document.getElementById(`edit-sd-reps-${rowId}-${s}`);
@@ -343,14 +323,36 @@ function editSetCountChanged(rowId) {
   }
   const details = [];
   for (let s = 0; s < numSets; s++) {
-    details.push(existing[s] || existing[existing.length - 1] || { reps: "", weight: "" });
+    const prev = existing[s];
+    if (prev) {
+      details.push(prev);
+    } else {
+      details.push({ reps: defaultReps, weight: defaultWeight });
+    }
   }
   _editRenderSetDetails(rowId, details);
 }
 
+// When default reps/weight inputs change, propagate to any empty per-set cells
+function editDefaultsChanged(rowId) {
+  const detailsEl = document.getElementById(`edit-sd-${rowId}`);
+  if (!detailsEl) return;
+  const defaultReps = document.getElementById(`edit-reps-${rowId}`)?.value || "";
+  const defaultWeight = document.getElementById(`edit-wt-${rowId}`)?.value || "";
+  for (let s = 0; ; s++) {
+    const rInp = document.getElementById(`edit-sd-reps-${rowId}-${s}`);
+    if (!rInp) break;
+    const wInp = document.getElementById(`edit-sd-wt-${rowId}-${s}`);
+    if (!rInp.value) rInp.value = defaultReps;
+    if (wInp && !wInp.value) wInp.value = defaultWeight;
+  }
+  // If there are no rows yet (user typed defaults before sets), render them now
+  if (!detailsEl.querySelector(".edit-set-row")) editSetCountChanged(rowId);
+}
+
 function _editReadSetDetails(rowId) {
   const detailsEl = document.getElementById(`edit-sd-${rowId}`);
-  if (!detailsEl || detailsEl.style.display === "none") return null;
+  if (!detailsEl) return null;
   const details = [];
   for (let s = 0; ; s++) {
     const r = document.getElementById(`edit-sd-reps-${rowId}-${s}`);
@@ -361,8 +363,7 @@ function _editReadSetDetails(rowId) {
     });
   }
   if (!details.length) return null;
-  const allSame = details.every(d => d.reps === details[0].reps && d.weight === details[0].weight);
-  return allSame ? null : details;
+  return details;
 }
 
 function _editClearAllHints() {

@@ -5786,14 +5786,13 @@ function qeAddExerciseRow() {
       <div><label>Exercise</label>
         <input type="text"   id="qe-mex-${id}"   placeholder="${exPlaceholder}" /></div>
       <div><label>Sets</label>
-        <input type="number" id="qe-msets-${id}" placeholder="3" min="1" max="20" onchange="qePyramidSetsChanged(${id})" /></div>
-      <div><label>Reps</label>
-        <input type="text"   id="qe-mreps-${id}" placeholder="10" /></div>
-      <div><label>Weight</label>
-        <input type="text"   id="qe-mwt-${id}"   placeholder="${wtPlaceholder}" value="${wtValue}"${isBW ? " readonly" : ""} /></div>
-      <button class="ex-pyramid-btn" title="Per-set reps &amp; weight" onclick="qeTogglePyramid(${id})">▾</button>
+        <input type="number" id="qe-msets-${id}" placeholder="3" min="1" max="20" oninput="qePyramidSetsChanged(${id})" /></div>
+      <div class="qe-default-reps"><label>Default Reps</label>
+        <input type="text"   id="qe-mreps-${id}" placeholder="10" oninput="qePyramidDefaultsChanged(${id})" /></div>
+      <div class="qe-default-wt"><label>Default Weight</label>
+        <input type="text"   id="qe-mwt-${id}"   placeholder="${wtPlaceholder}" value="${wtValue}"${isBW ? " readonly" : ""} oninput="qePyramidDefaultsChanged(${id})" /></div>
       <button class="remove-exercise-btn" onclick="qeRemoveRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
-      <div class="ex-pyramid-detail" id="qe-pyr-${id}" style="display:none"></div>`;
+      <div class="ex-pyramid-detail" id="qe-pyr-${id}"></div>`;
   }
   let _qeHoverTimer = null;
   div.addEventListener("dragstart", (e) => { _qeManualDragId = id; div.classList.add("drag-active"); e.dataTransfer.effectAllowed = "move"; });
@@ -5959,44 +5958,62 @@ function qeRemoveRow(id) {
   if (el) el.remove();
 }
 
-function qeTogglePyramid(id) {
+// Auto-render per-set rows whenever the Sets input changes. The top-level
+// Reps/Weight fields act as defaults that populate any new per-set rows;
+// per-set rows can then be edited individually.
+function qePyramidSetsChanged(id) {
   const detail = document.getElementById(`qe-pyr-${id}`);
-  const btn = detail?.previousElementSibling?.previousElementSibling;
   if (!detail) return;
-  const isOpen = detail.style.display !== "none";
-  if (isOpen) {
-    detail.style.display = "none";
-    if (btn) { btn.textContent = "▾"; btn.classList.remove("is-active"); }
-    return;
-  }
-  const setsVal = parseInt(document.getElementById(`qe-msets-${id}`)?.value) || 3;
+  const setsVal = parseInt(document.getElementById(`qe-msets-${id}`)?.value) || 0;
   const defaultReps = document.getElementById(`qe-mreps-${id}`)?.value || "";
   const defaultWeight = document.getElementById(`qe-mwt-${id}`)?.value || "";
-  const existing = detail.querySelectorAll(".ex-pyr-row");
-  if (existing.length === setsVal) {
-    detail.style.display = "";
-    if (btn) { btn.textContent = "▴"; btn.classList.add("is-active"); }
-    return;
-  }
+
+  if (setsVal < 1) { detail.innerHTML = ""; return; }
+
+  // Preserve any existing per-set values so typing into Sets doesn't wipe edits
+  const existing = [];
+  detail.querySelectorAll(".ex-pyr-row").forEach(pr => {
+    existing.push({
+      reps: pr.querySelector(".ex-pyr-reps")?.value || "",
+      weight: pr.querySelector(".ex-pyr-weight")?.value || "",
+    });
+  });
+
   let html = '<div class="ex-pyr-header"><span>Set</span><span>Reps</span><span>Weight</span></div>';
   for (let i = 0; i < setsVal; i++) {
+    const prev = existing[i] || {};
+    const reps = prev.reps || defaultReps;
+    const weight = prev.weight || defaultWeight;
     html += `<div class="ex-pyr-row">
       <span class="ex-pyr-label">${i + 1}</span>
-      <input type="text" class="ex-pyr-reps" placeholder="${defaultReps || '10'}" value="${defaultReps}" />
-      <input type="text" class="ex-pyr-weight" placeholder="${defaultWeight || 'lbs'}" value="${defaultWeight}" />
+      <input type="text" class="ex-pyr-reps" placeholder="${defaultReps || '10'}" value="${reps}" />
+      <input type="text" class="ex-pyr-weight" placeholder="${defaultWeight || 'lbs'}" value="${weight}" />
     </div>`;
   }
   detail.innerHTML = html;
-  detail.style.display = "";
-  if (btn) { btn.textContent = "▴"; btn.classList.add("is-active"); }
 }
 
-function qePyramidSetsChanged(id) {
+// When the default Reps or Weight field changes, propagate into any per-set
+// rows that are still at the old default (empty or matching prior default).
+function qePyramidDefaultsChanged(id) {
   const detail = document.getElementById(`qe-pyr-${id}`);
-  if (!detail || detail.style.display === "none") return;
-  detail.innerHTML = "";
-  qeTogglePyramid(id);
+  if (!detail) return;
+  const defaultReps = document.getElementById(`qe-mreps-${id}`)?.value || "";
+  const defaultWeight = document.getElementById(`qe-mwt-${id}`)?.value || "";
+  detail.querySelectorAll(".ex-pyr-row").forEach(pr => {
+    const rInp = pr.querySelector(".ex-pyr-reps");
+    const wInp = pr.querySelector(".ex-pyr-weight");
+    if (rInp && !rInp.value) rInp.value = defaultReps;
+    if (wInp && !wInp.value) wInp.value = defaultWeight;
+    if (rInp) rInp.placeholder = defaultReps || "10";
+    if (wInp) wInp.placeholder = defaultWeight || "lbs";
+  });
+  // If there are no rows yet but sets is set, render them now
+  if (!detail.querySelector(".ex-pyr-row")) qePyramidSetsChanged(id);
 }
+
+// Back-compat shim in case anything still calls qeTogglePyramid
+function qeTogglePyramid(id) { qePyramidSetsChanged(id); }
 
 function qeSaveManual() {
   const dateStr = document.getElementById("qe-date").value;
@@ -6018,20 +6035,18 @@ function qeSaveManual() {
     if (!isHiit) ex.sets = document.getElementById(`qe-msets-${idx}`)?.value || "";
     if (row?.dataset.ssId) ex.supersetId = row.dataset.ssId;
 
-    // Collect per-set pyramid details if expanded
+    // Collect per-set details (the pyramid panel auto-renders as user enters sets)
     const pyrDetail = document.getElementById(`qe-pyr-${idx}`);
-    if (pyrDetail && pyrDetail.style.display !== "none") {
+    if (pyrDetail) {
       const pyrRows = pyrDetail.querySelectorAll(".ex-pyr-row");
       if (pyrRows.length > 0) {
         const setDetails = [];
-        let hasDiff = false;
         pyrRows.forEach(pr => {
           const r = pr.querySelector(".ex-pyr-reps")?.value.trim() || ex.reps;
           const w = pr.querySelector(".ex-pyr-weight")?.value.trim() || ex.weight;
           setDetails.push({ reps: r, weight: w });
-          if (r !== ex.reps || w !== ex.weight) hasDiff = true;
         });
-        if (hasDiff) ex.setDetails = setDetails;
+        ex.setDetails = setDetails;
       }
     }
     exercises.push(ex);
