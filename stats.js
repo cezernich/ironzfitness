@@ -755,19 +755,12 @@ function loadCompletedSessions() {
   let logged   = [];
   try { logged = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
 
-  const pastLogged = logged.filter(w => w.date <= today);
-
-  // Build set of session IDs that have a completion record so we can skip the original
-  const completedOriginals = new Set();
-  pastLogged.forEach(w => {
-    if (w.isCompletion && w.completedSessionId) {
-      completedOriginals.add(w.completedSessionId);
-    }
-  });
-
-  // Skip originals that were completed (the completion record already represents them)
-  return pastLogged
-    .filter(w => !completedOriginals.has(`session-log-${w.id}`))
+  // Match Workout History filter exactly: past/today entries, excluding completion records.
+  // Completion records (isCompletion:true) are metadata attached to scheduled sessions by
+  // the live tracker; they must not be counted as standalone workouts or Stats will
+  // over-count compared to the History list.
+  return logged
+    .filter(w => !w.isCompletion && w.date <= today)
     .map(w => ({ id: w.id, date: w.date, type: w.type, minutes: _extractWorkoutMinutes(w) }));
 }
 
