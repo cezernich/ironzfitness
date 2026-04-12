@@ -77,6 +77,20 @@ function __mockTable(name) {
       return chain;
     },
     update(patch) { chain._patch = patch; return chain; },
+    // Minimal upsert: resolves conflicts on the id column — updates the row
+    // in place if an id match exists, otherwise inserts. Good enough for the
+    // per-row SavedWorkoutsLibrary sync calls exercised by these tests.
+    upsert(row, _opts) {
+      const rows = Array.isArray(row) ? row : [row];
+      rows.forEach(r => {
+        if (!r.id) r.id = "id-" + Math.random().toString(36).slice(2, 10);
+        const existingIdx = table.findIndex(t => t.id === r.id);
+        if (existingIdx >= 0) Object.assign(table[existingIdx], r);
+        else table.push(Object.assign({}, r));
+      });
+      chain._inserted = rows.map(r => table.find(t => t.id === r.id));
+      return chain;
+    },
     delete() { chain._delete = true; return chain; },
     select(cols) { _select = cols || "*"; return chain; },
     eq(col, val) { _filter.push(r => r[col] === val); return chain; },

@@ -231,18 +231,6 @@ function updateNavInitials() {
   if (el) el.textContent = initials;
 }
 
-function toggleProfileDropdown() {
-  const dd = document.getElementById("nav-profile-dropdown");
-  if (!dd) return;
-  const isOpen = dd.classList.contains("is-open");
-  dd.classList.toggle("is-open", !isOpen);
-}
-
-function closeProfileDropdown() {
-  const dd = document.getElementById("nav-profile-dropdown");
-  if (dd) dd.classList.remove("is-open");
-}
-
 const SUPPORT_EMAIL = "ironzsupport@gmail.com";
 
 function openSupportEmail() {
@@ -252,16 +240,6 @@ function openSupportEmail() {
   const body    = encodeURIComponent(`Hi IronZ Support,\n\n[Please describe your issue here]\n\n---\nName: ${name}`);
   window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
 }
-
-// Close dropdown when clicking outside
-document.addEventListener("click", function(e) {
-  const wrap = document.getElementById("nav-profile-wrap") ||
-               e.target.closest?.(".nav-profile-wrap");
-  if (!e.target.closest || !e.target.closest(".nav-profile-wrap")) {
-    closeProfileDropdown();
-  }
-});
-
 
 /* =====================================================================
    NUTRITION TOGGLE

@@ -342,6 +342,10 @@ async function authBoot() {
     if (window.SavedWorkoutsLibrary && window.SavedWorkoutsLibrary.migrateOldSavedWorkouts) {
       try { await window.SavedWorkoutsLibrary.migrateOldSavedWorkouts(); } catch (e) { console.warn('Auth: savedWorkouts migration error', e); }
     }
+    // One-time backfill + cross-device merge against the saved_workouts table
+    if (window.SavedWorkoutsLibrary && window.SavedWorkoutsLibrary.bootSyncSupabase) {
+      try { await window.SavedWorkoutsLibrary.bootSyncSupabase(); } catch (e) { console.warn('Auth: savedWorkouts supabase sync error', e); }
+    }
     hideAuthScreen();
     window._appInitialized = true;
     init();
@@ -364,6 +368,10 @@ async function authBoot() {
       // Migrate legacy savedWorkouts into unified saved library
       if (window.SavedWorkoutsLibrary && window.SavedWorkoutsLibrary.migrateOldSavedWorkouts) {
         try { await window.SavedWorkoutsLibrary.migrateOldSavedWorkouts(); } catch (e) { console.warn('Auth: savedWorkouts migration error', e); }
+      }
+      // One-time backfill + cross-device merge against the saved_workouts table
+      if (window.SavedWorkoutsLibrary && window.SavedWorkoutsLibrary.bootSyncSupabase) {
+        try { await window.SavedWorkoutsLibrary.bootSyncSupabase(); } catch (e) { console.warn('Auth: savedWorkouts supabase sync error', e); }
       }
       hideAuthScreen();
       if (!window._appInitialized) {

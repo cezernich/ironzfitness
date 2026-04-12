@@ -7,7 +7,9 @@
   "use strict";
 
   const LOCAL_KEY = "ironz_saved_workouts_v1";
+  const MIGRATION_FLAG = "savedWorkoutsSupabaseMigrated";
   const MAX_SAVED = 50;
+  const TABLE = "saved_workouts";
 
   function _readLocal() {
     if (typeof localStorage === "undefined") return [];
@@ -17,12 +19,169 @@
     if (typeof localStorage === "undefined") return;
     try {
       localStorage.setItem(LOCAL_KEY, JSON.stringify(list));
+      // DB.syncKey mirrors the whole array into the generic user_data
+      // key-value table. Kept as a safety net during the transition to
+      // per-row Supabase writes — harmless duplication.
       if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey(LOCAL_KEY);
     } catch {}
   }
 
+  // All rows (new and migrated) use a UUID for their id so they can be used
+  // directly as the Supabase saved_workouts.id primary key.
   function _genId() {
-    return "saved-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e6).toString(36);
+    if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+    // Fallback: RFC4122-ish v4 built from Math.random
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+    });
+  }
+
+  function _isUUID(s) {
+    return typeof s === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+  }
+
+  /* ────────────────────────────────────────────────────────────────────────
+     Supabase bridge
+     ──────────────────────────────────────────────────────────────────────── */
+
+  function _client() {
+    return (typeof window !== "undefined" && window.supabaseClient) || null;
+  }
+
+  async function _getUserId() {
+    const c = _client();
+    if (!c) return null;
+    try {
+      const { data } = await c.auth.getSession();
+      return data?.session?.user?.id || null;
+    } catch { return null; }
+  }
+
+  // Build the Supabase row shape from a local row. Keeps only columns that
+  // exist on saved_workouts — strips local-only fields like _legacyId and
+  // pendingSync so they don't cause insert errors.
+  function _toRemoteRow(localRow, userId) {
+    return {
+      id: localRow.id,
+      user_id: userId,
+      variant_id: localRow.variant_id || null,
+      sport_id: localRow.sport_id || null,
+      session_type_id: localRow.session_type_id || null,
+      source: localRow.source,
+      shared_from_user_id: localRow.shared_from_user_id || null,
+      share_token: localRow.share_token || null,
+      custom_name: localRow.custom_name != null ? String(localRow.custom_name).slice(0, 80) : null,
+      saved_at: localRow.saved_at || new Date().toISOString(),
+      last_used_at: localRow.last_used_at || null,
+      payload: localRow.payload || null,
+      workout_kind: localRow.workout_kind || null,
+    };
+  }
+
+  // Map a Supabase row back into the local-row shape (inverse of _toRemoteRow).
+  function _fromRemoteRow(remote) {
+    return {
+      id: remote.id,
+      variant_id: remote.variant_id,
+      sport_id: remote.sport_id,
+      session_type_id: remote.session_type_id,
+      source: remote.source,
+      shared_from_user_id: remote.shared_from_user_id,
+      share_token: remote.share_token,
+      custom_name: remote.custom_name,
+      saved_at: remote.saved_at,
+      last_used_at: remote.last_used_at,
+      payload: remote.payload,
+      workout_kind: remote.workout_kind,
+    };
+  }
+
+  // Mark a local row as needing a retry on the next boot sync. Used when a
+  // per-row Supabase write fails so the row isn't silently wiped by a later
+  // refresh-from-Supabase pass (which treats "not present remotely" as stale).
+  function _flagPending(rowId) {
+    const list = _readLocal();
+    const r = list.find(x => x.id === rowId);
+    if (r) {
+      r.pendingSync = true;
+      _writeLocal(list);
+    }
+  }
+
+  function _clearPending(rowId) {
+    const list = _readLocal();
+    const r = list.find(x => x.id === rowId);
+    if (r && r.pendingSync) {
+      delete r.pendingSync;
+      _writeLocal(list);
+    }
+  }
+
+  async function _remoteInsert(localRow) {
+    const c = _client();
+    const uid = await _getUserId();
+    if (!c || !uid) { _flagPending(localRow.id); return; }
+    try {
+      const { error } = await c.from(TABLE).insert(_toRemoteRow(localRow, uid));
+      if (error) {
+        console.warn("[SavedWorkouts] insert failed:", error.message);
+        _flagPending(localRow.id);
+      } else {
+        _clearPending(localRow.id);
+      }
+    } catch (e) {
+      console.warn("[SavedWorkouts] insert offline:", e);
+      _flagPending(localRow.id);
+    }
+  }
+
+  async function _remoteUpsert(localRow) {
+    const c = _client();
+    const uid = await _getUserId();
+    if (!c || !uid) { _flagPending(localRow.id); return; }
+    try {
+      const { error } = await c.from(TABLE).upsert(_toRemoteRow(localRow, uid), { onConflict: "id" });
+      if (error) {
+        console.warn("[SavedWorkouts] upsert failed:", error.message);
+        _flagPending(localRow.id);
+      } else {
+        _clearPending(localRow.id);
+      }
+    } catch (e) {
+      console.warn("[SavedWorkouts] upsert offline:", e);
+      _flagPending(localRow.id);
+    }
+  }
+
+  async function _remoteUpdate(rowId, patch) {
+    const c = _client();
+    const uid = await _getUserId();
+    if (!c || !uid) { _flagPending(rowId); return; }
+    try {
+      const { error } = await c.from(TABLE).update(patch).eq("id", rowId).eq("user_id", uid);
+      if (error) {
+        console.warn("[SavedWorkouts] update failed:", error.message);
+        _flagPending(rowId);
+      } else {
+        _clearPending(rowId);
+      }
+    } catch (e) {
+      console.warn("[SavedWorkouts] update offline:", e);
+      _flagPending(rowId);
+    }
+  }
+
+  async function _remoteDelete(rowId) {
+    const c = _client();
+    const uid = await _getUserId();
+    if (!c || !uid) return;
+    try {
+      const { error } = await c.from(TABLE).delete().eq("id", rowId).eq("user_id", uid);
+      if (error) console.warn("[SavedWorkouts] delete failed:", error.message);
+    } catch (e) {
+      console.warn("[SavedWorkouts] delete offline:", e);
+    }
   }
 
   /**
@@ -85,6 +244,7 @@
         }
       }
       _writeLocal(list);
+      _remoteUpsert(existing);
       _emit("saved_from_library", { variant_id: opts.variantId, sport_id: opts.sportId, deduped: true });
       return existing;
     }
@@ -101,6 +261,7 @@
     };
     list.push(row);
     _writeLocal(list);
+    _remoteInsert(row);
     _emit("saved_from_library", { variant_id: opts.variantId, sport_id: opts.sportId });
     return row;
   }
@@ -285,6 +446,7 @@
       existing.shared_from_user_id = opts.senderUserId || existing.shared_from_user_id;
       if (displayName) existing.custom_name = displayName;
       _writeLocal(list);
+      _remoteUpsert(existing);
       _emit("saved_from_share", { share_token: opts.shareToken, deduped: true });
       return existing;
     }
@@ -301,14 +463,17 @@
     };
     list.push(row);
     _writeLocal(list);
+    _remoteInsert(row);
     _emit("saved_from_share", { share_token: opts.shareToken });
     return row;
   }
 
   async function removeSaved(savedId) {
     const list = _readLocal();
+    const before = list.length;
     const next = list.filter(s => s.id !== savedId);
     _writeLocal(next);
+    if (next.length !== before) _remoteDelete(savedId);
   }
 
   async function renameSaved(savedId, customName) {
@@ -317,6 +482,7 @@
     if (!e) return null;
     e.custom_name = String(customName || "").slice(0, 80);
     _writeLocal(list);
+    _remoteUpdate(savedId, { custom_name: e.custom_name });
     return e;
   }
 
@@ -426,6 +592,7 @@
     console.log("[IronZ] workoutSchedule entry added:", entry);
     e.last_used_at = new Date().toISOString();
     _writeLocal(list);
+    _remoteUpdate(e.id, { last_used_at: e.last_used_at });
     _emit("saved_scheduled", { variant_id: e.variant_id });
     return { ok: true };
   }
@@ -458,6 +625,7 @@
     };
     list.push(row);
     _writeLocal(list);
+    _remoteInsert(row);
     _emit("saved_custom", { name: opts.name, workout_kind: opts.workout_kind });
     return row;
   }
@@ -479,6 +647,12 @@
     if (updates.notes !== undefined) e.payload.notes = updates.notes;
     if (updates.duration !== undefined) e.payload.duration = updates.duration;
     _writeLocal(list);
+    _remoteUpdate(savedId, {
+      custom_name: e.custom_name,
+      workout_kind: e.workout_kind,
+      sport_id: e.sport_id,
+      payload: e.payload,
+    });
     return e;
   }
 
@@ -542,6 +716,181 @@
     }
   }
 
+  /* ────────────────────────────────────────────────────────────────────────
+     Boot sync — one-time migration + refresh merge
+     ──────────────────────────────────────────────────────────────────────── */
+
+  // One-time migration: back-fills existing localStorage rows into the
+  // saved_workouts table. Replaces any non-UUID local ids with a fresh UUID
+  // so the same id can be used as the Supabase primary key. Runs once per
+  // (device, user) pair — the flag is namespaced by user id so a different
+  // account on the same device re-runs the migration against its own data.
+  async function _migrateLocalToSupabase() {
+    if (typeof localStorage === "undefined") return 0;
+    const client = _client();
+    const uid = await _getUserId();
+    if (!client || !uid) return 0;
+
+    const flagKey = `${MIGRATION_FLAG}:${uid}`;
+    if (localStorage.getItem(flagKey) === "true") return 0;
+
+    const list = _readLocal();
+    if (!list.length) {
+      localStorage.setItem(flagKey, "true");
+      return 0;
+    }
+
+    // Fetch existing remote rows so we can dedupe by (variant_id, source)
+    // for non-custom rows — the partial unique index would reject a naive
+    // insert if the same variant is already saved under a different id.
+    let remoteRows = [];
+    try {
+      const { data } = await client
+        .from(TABLE)
+        .select("id, variant_id, source")
+        .eq("user_id", uid);
+      remoteRows = data || [];
+    } catch (e) {
+      console.warn("[SavedWorkouts] migration preflight failed:", e);
+      return 0;
+    }
+    const remoteByVariant = new Map();
+    remoteRows.forEach(r => {
+      if (r.source !== "custom" && r.variant_id) {
+        remoteByVariant.set(`${r.source}|${r.variant_id}`, r.id);
+      }
+    });
+
+    let localMutated = false;
+    const toUpsert = [];
+
+    for (const row of list) {
+      // Align id to the existing remote row if this variant is already saved.
+      if (row.source !== "custom" && row.variant_id) {
+        const key = `${row.source}|${row.variant_id}`;
+        const remoteId = remoteByVariant.get(key);
+        if (remoteId && row.id !== remoteId) {
+          row.id = remoteId;
+          localMutated = true;
+          continue; // already exists remotely, no upsert needed
+        }
+      }
+      // Ensure the id is a UUID so it's accepted by Supabase.
+      if (!_isUUID(row.id)) {
+        row.id = _genId();
+        localMutated = true;
+      }
+      toUpsert.push(_toRemoteRow(row, uid));
+    }
+
+    if (localMutated) _writeLocal(list);
+
+    if (toUpsert.length) {
+      try {
+        const { error } = await client
+          .from(TABLE)
+          .upsert(toUpsert, { onConflict: "id", ignoreDuplicates: false });
+        if (error) {
+          console.warn("[SavedWorkouts] migration upsert failed:", error.message);
+          return 0;
+        }
+      } catch (e) {
+        console.warn("[SavedWorkouts] migration upsert offline:", e);
+        return 0;
+      }
+    }
+
+    localStorage.setItem(flagKey, "true");
+    console.log(`[SavedWorkouts] Migrated ${toUpsert.length} saved workouts to Supabase`);
+    return toUpsert.length;
+  }
+
+  // Pull the saved_workouts rows for the current user and merge them into
+  // localStorage. Rows in the remote set that aren't local get added; local
+  // rows that aren't in the remote set are considered deleted-elsewhere and
+  // removed — UNLESS they have pendingSync set (meaning an earlier per-row
+  // write failed and the row hasn't been pushed yet).
+  async function _refreshFromSupabase() {
+    const client = _client();
+    const uid = await _getUserId();
+    if (!client || !uid) return;
+
+    let remoteRows = [];
+    try {
+      const { data, error } = await client
+        .from(TABLE)
+        .select("*")
+        .eq("user_id", uid)
+        .order("saved_at", { ascending: false })
+        .limit(MAX_SAVED);
+      if (error) {
+        console.warn("[SavedWorkouts] refresh fetch failed:", error.message);
+        return;
+      }
+      remoteRows = data || [];
+    } catch (e) {
+      console.warn("[SavedWorkouts] refresh offline:", e);
+      return;
+    }
+
+    const remoteById = new Map(remoteRows.map(r => [r.id, r]));
+    const local = _readLocal();
+
+    // Keep local rows that either exist remotely (refreshed) or are pending
+    // a remote write (protected from stale-deletion).
+    const kept = local.filter(l => remoteById.has(l.id) || l.pendingSync === true);
+
+    // Overlay the remote copy on top of local for rows that exist in both,
+    // so a rename/edit on another device wins. Rows flagged pendingSync are
+    // preserved as-is — the local edit hasn't reached the remote yet and
+    // must not be clobbered by a stale fetch.
+    const keptById = new Map(kept.map(r => [r.id, r]));
+    for (const l of kept) {
+      if (l.pendingSync === true) continue;
+      const r = remoteById.get(l.id);
+      if (r) {
+        keptById.set(l.id, _fromRemoteRow(r));
+      }
+    }
+
+    // Add rows that exist remotely but not locally (saved on another device).
+    for (const r of remoteRows) {
+      if (!keptById.has(r.id)) {
+        keptById.set(r.id, _fromRemoteRow(r));
+      }
+    }
+
+    const merged = Array.from(keptById.values())
+      .sort((a, b) => (b.saved_at || "").localeCompare(a.saved_at || ""));
+
+    _writeLocal(merged);
+  }
+
+  // Retry any local rows whose previous per-row write failed. Runs at the
+  // end of bootSyncSupabase so the refresh already has the latest remote
+  // state and pendingSync rows can be pushed without stepping on fresh data.
+  async function _retryPendingSync() {
+    const list = _readLocal();
+    const pending = list.filter(r => r.pendingSync === true);
+    if (!pending.length) return;
+    for (const r of pending) {
+      await _remoteUpsert(r);
+    }
+  }
+
+  // Entry point called once by auth.js after the session is confirmed.
+  async function bootSyncSupabase() {
+    try {
+      await _migrateLocalToSupabase();
+    } catch (e) { console.warn("[SavedWorkouts] migration error:", e); }
+    try {
+      await _refreshFromSupabase();
+    } catch (e) { console.warn("[SavedWorkouts] refresh error:", e); }
+    try {
+      await _retryPendingSync();
+    } catch (e) { console.warn("[SavedWorkouts] retry error:", e); }
+  }
+
   function _resetForTests() {
     if (typeof localStorage !== "undefined") {
       try { localStorage.removeItem(LOCAL_KEY); } catch {}
@@ -558,6 +907,7 @@
     renameSaved,
     scheduleFromSaved,
     migrateOldSavedWorkouts,
+    bootSyncSupabase,
     MAX_SAVED,
     _resetForTests,
   };
