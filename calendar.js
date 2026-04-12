@@ -5587,18 +5587,18 @@ function qeAddExerciseRow() {
       <div class="ex-row-defaults">
         <div class="ex-row-field">
           <label>Sets</label>
-          <input type="number" id="qe-msets-${id}" min="1" max="20" placeholder="3" oninput="qePyramidSetsChanged(${id})" />
+          <input type="number" id="qe-msets-${id}" min="1" max="20" placeholder="3" data-pyr-field="qe:sets:${id}" />
         </div>
         <div class="ex-row-field">
           <label>Reps</label>
-          <input type="text" id="qe-mreps-${id}" placeholder="10" oninput="qePyramidDefaultsChanged(${id})" />
+          <input type="text" id="qe-mreps-${id}" placeholder="10" data-pyr-field="qe:default:${id}" />
         </div>
         <div class="ex-row-field">
           <label>Weight (lbs)</label>
-          <input type="text" id="qe-mwt-${id}" placeholder="${wtPlaceholder}" value="${wtValue}"${isBW ? " readonly" : ""} oninput="qePyramidDefaultsChanged(${id})" />
+          <input type="text" id="qe-mwt-${id}" placeholder="${wtPlaceholder}" value="${wtValue}"${isBW ? " readonly" : ""} data-pyr-field="qe:default:${id}" />
         </div>
       </div>
-      <button type="button" class="ex-row-customize-toggle" id="qe-pyr-toggle-${id}" onclick="qeTogglePerSet(${id})">Customize per set ▾</button>
+      <button type="button" class="ex-row-customize-toggle" id="qe-pyr-toggle-${id}" data-pyr-toggle="qe:${id}">Customize per set ▾</button>
       <div class="ex-pyramid-detail" id="qe-pyr-${id}" style="display:none"></div>`;
   }
   let _qeHoverTimer = null;

@@ -764,18 +764,18 @@ function cpManualAddExRow(prefill) {
       <div class="ex-row-defaults">
         <div class="ex-row-field">
           <label>Sets</label>
-          <input type="number" id="cp-msets-${id}" min="1" max="20" placeholder="3" value="${_cpEsc(pSets)}" oninput="cpPyramidSetsChanged(${id})" />
+          <input type="number" id="cp-msets-${id}" min="1" max="20" placeholder="3" value="${_cpEsc(pSets)}" data-pyr-field="cp:sets:${id}" />
         </div>
         <div class="ex-row-field">
           <label>Reps</label>
-          <input type="text" id="cp-mreps-${id}" placeholder="10" value="${_cpEsc(pReps)}" oninput="cpPyramidDefaultsChanged(${id})" />
+          <input type="text" id="cp-mreps-${id}" placeholder="10" value="${_cpEsc(pReps)}" data-pyr-field="cp:default:${id}" />
         </div>
         <div class="ex-row-field">
           <label>Weight (lbs)</label>
-          <input type="text" id="cp-mwt-${id}" placeholder="${wtPlaceholder}" value="${_cpEsc(wtValue)}"${isBW ? ' readonly' : ''} oninput="cpPyramidDefaultsChanged(${id})" />
+          <input type="text" id="cp-mwt-${id}" placeholder="${wtPlaceholder}" value="${_cpEsc(wtValue)}"${isBW ? ' readonly' : ''} data-pyr-field="cp:default:${id}" />
         </div>
       </div>
-      <button type="button" class="ex-row-customize-toggle" id="cp-pyr-toggle-${id}" onclick="cpTogglePerSet(${id})">${startExpanded ? "Collapse ▴" : "Customize per set ▾"}</button>
+      <button type="button" class="ex-row-customize-toggle" id="cp-pyr-toggle-${id}" data-pyr-toggle="cp:${id}">${startExpanded ? "Collapse ▴" : "Customize per set ▾"}</button>
       <div class="ex-pyramid-detail" id="cp-pyr-${id}" style="display:${startExpanded ? "" : "none"}"></div>`;
     if (startExpanded) {
       // Defer render until the element is actually in the DOM

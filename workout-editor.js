@@ -207,18 +207,18 @@ function _addEditRow(ex) {
       <div class="ex-row-defaults">
         <div class="ex-row-field">
           <label>Sets</label>
-          <input type="number" id="edit-sets-${id}" min="1" max="99" value="${escAttr(ex?.sets)}" placeholder="3" oninput="editSetCountChanged(${id})" />
+          <input type="number" id="edit-sets-${id}" min="1" max="99" value="${escAttr(ex?.sets)}" placeholder="3" data-pyr-field="edit:sets:${id}" />
         </div>
         <div class="ex-row-field">
           <label>Reps</label>
-          <input type="text" id="edit-reps-${id}" value="${escAttr(ex?.reps)}" placeholder="10" oninput="editDefaultsChanged(${id})" />
+          <input type="text" id="edit-reps-${id}" value="${escAttr(ex?.reps)}" placeholder="10" data-pyr-field="edit:default:${id}" />
         </div>
         <div class="ex-row-field">
           <label>Weight (lbs)</label>
-          <input type="text" id="edit-wt-${id}" value="${escAttr(weightVal)}" placeholder="lbs" oninput="editDefaultsChanged(${id})" />
+          <input type="text" id="edit-wt-${id}" value="${escAttr(weightVal)}" placeholder="lbs" data-pyr-field="edit:default:${id}" />
         </div>
       </div>
-      <button type="button" class="ex-row-customize-toggle" id="edit-pyr-toggle-${id}" onclick="editTogglePerSet(${id})">${startExpanded ? "Collapse ▴" : "Customize per set ▾"}</button>
+      <button type="button" class="ex-row-customize-toggle" id="edit-pyr-toggle-${id}" data-pyr-toggle="edit:${id}">${startExpanded ? "Collapse ▴" : "Customize per set ▾"}</button>
       <div class="ex-pyramid-detail edit-set-details" id="edit-sd-${id}" style="display:${startExpanded ? "" : "none"}"></div>`;
   }
   if (startExpanded) {

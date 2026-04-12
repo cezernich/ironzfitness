@@ -372,6 +372,80 @@ function _wireShareButton(btn) {
   });
 }
 
+// ─── Per-set exercise-row toggle delegator ───────────────────────────────────
+//
+// The "Customize per set" / "Collapse" button on manual strength-entry rows
+// (calendar.js qeAddExerciseRow, custom-plan.js cpManualAddExRow,
+// workout-editor.js _addEditRow, workouts.js addExerciseRow) was using
+// inline onclick="qeTogglePerSet(...)" which was silently not firing on the
+// live site. Routing through a document-level listener bypasses whatever
+// inline-onclick resolution issue was blocking the click.
+//
+// Each builder tags its toggle with data-pyr-toggle="<scope>:<id>" where
+// scope is "qe"|"cp"|"edit"|"ex" and id identifies the row. The handler
+// looks up the corresponding toggle function on window and calls it with
+// the id (or the row element for "ex" which uses element-based routing).
+function _wirePerSetToggleDelegator() {
+  if (typeof document === "undefined") return;
+  if (document.__pyrToggleWired) return;
+  document.__pyrToggleWired = true;
+
+  // ── Click: "Customize per set" / "Collapse" toggle ─────────────────────
+  document.addEventListener("click", function (e) {
+    const btn = e.target && e.target.closest && e.target.closest(".ex-row-customize-toggle");
+    if (!btn) return;
+    e.stopPropagation();
+    e.preventDefault();
+    // Prefer the data-pyr-toggle attribute; fall back to legacy id parsing.
+    const attr = btn.getAttribute("data-pyr-toggle") || "";
+    let scope = "", rowId = "";
+    if (attr) {
+      const parts = attr.split(":");
+      scope = parts[0]; rowId = parts[1] || "";
+    } else if (btn.id) {
+      // Legacy: e.g. "qe-pyr-toggle-3" → scope="qe", rowId="3"
+      const m = btn.id.match(/^(qe|cp|edit)-pyr-toggle-(.+)$/);
+      if (m) { scope = m[1]; rowId = m[2]; }
+    }
+    if (scope === "qe" && typeof window.qeTogglePerSet === "function") {
+      window.qeTogglePerSet(rowId);
+    } else if (scope === "cp" && typeof window.cpTogglePerSet === "function") {
+      window.cpTogglePerSet(rowId);
+    } else if (scope === "edit" && typeof window.editTogglePerSet === "function") {
+      window.editTogglePerSet(rowId);
+    } else if (typeof window.exTogglePerSet === "function") {
+      // workouts.js path — pass the button element
+      window.exTogglePerSet(btn);
+    } else {
+      console.warn("[IronZ] per-set toggle: no handler for scope", scope, "attr", attr);
+    }
+  });
+
+  // ── Input: Sets / Reps / Weight fields drive per-set row rebuild ──────
+  // Inputs are tagged with data-pyr-field="<scope>:<kind>:<id>" where kind
+  // is "sets" or "default" (Reps/Weight both count as defaults).
+  document.addEventListener("input", function (e) {
+    const inp = e.target && e.target.closest && e.target.closest("[data-pyr-field]");
+    if (!inp) return;
+    const parts = inp.getAttribute("data-pyr-field").split(":");
+    const scope = parts[0], kind = parts[1], rowId = parts[2] || "";
+    if (scope === "qe") {
+      if (kind === "sets" && typeof window.qePyramidSetsChanged === "function") window.qePyramidSetsChanged(rowId);
+      else if (kind === "default" && typeof window.qePyramidDefaultsChanged === "function") window.qePyramidDefaultsChanged(rowId);
+    } else if (scope === "cp") {
+      if (kind === "sets" && typeof window.cpPyramidSetsChanged === "function") window.cpPyramidSetsChanged(rowId);
+      else if (kind === "default" && typeof window.cpPyramidDefaultsChanged === "function") window.cpPyramidDefaultsChanged(rowId);
+    } else if (scope === "edit") {
+      if (kind === "sets" && typeof window.editSetCountChanged === "function") window.editSetCountChanged(rowId);
+      else if (kind === "default" && typeof window.editDefaultsChanged === "function") window.editDefaultsChanged(rowId);
+    } else if (scope === "ex") {
+      if (kind === "sets" && typeof window.exPyramidSetsChanged === "function") window.exPyramidSetsChanged(inp);
+      else if (kind === "default" && typeof window.exPyramidDefaultsChanged === "function") window.exPyramidDefaultsChanged(inp);
+    }
+  });
+}
+_wirePerSetToggleDelegator();
+
 // Wire every existing share button under `root` (or the whole document).
 function _wireAllShareButtons(root) {
   const target = root || document;

@@ -1306,18 +1306,18 @@ function _createExerciseRowWithValues(name, sets, reps, weight) {
     <div class="ex-row-defaults">
       <div class="ex-row-field">
         <label>Sets</label>
-        <input type="number" class="ex-sets" min="1" max="20" value="${esc(sets || 1)}" placeholder="3" oninput="exPyramidSetsChanged(this)" />
+        <input type="number" class="ex-sets" min="1" max="20" value="${esc(sets || 1)}" placeholder="3" data-pyr-field="ex:sets" />
       </div>
       <div class="ex-row-field">
         <label>Reps</label>
-        <input type="text" class="ex-reps" value="${esc(reps)}" placeholder="10" oninput="exPyramidDefaultsChanged(this)" />
+        <input type="text" class="ex-reps" value="${esc(reps)}" placeholder="10" data-pyr-field="ex:default" />
       </div>
       <div class="ex-row-field">
         <label>Weight (lbs)</label>
-        <input type="text" class="ex-weight" value="${esc(weight)}" placeholder="lbs" oninput="exPyramidDefaultsChanged(this)" />
+        <input type="text" class="ex-weight" value="${esc(weight)}" placeholder="lbs" data-pyr-field="ex:default" />
       </div>
     </div>
-    <button type="button" class="ex-row-customize-toggle" onclick="exTogglePerSet(this)">Customize per set ▾</button>
+    <button type="button" class="ex-row-customize-toggle" data-pyr-toggle="ex">Customize per set ▾</button>
     <div class="ex-pyramid-detail" style="display:none"></div>
   `;
   return row;
@@ -1527,18 +1527,18 @@ function addExerciseRow() {
     <div class="ex-row-defaults">
       <div class="ex-row-field">
         <label>Sets</label>
-        <input type="number" class="ex-sets" min="1" max="20" placeholder="3" oninput="exPyramidSetsChanged(this)" />
+        <input type="number" class="ex-sets" min="1" max="20" placeholder="3" data-pyr-field="ex:sets" />
       </div>
       <div class="ex-row-field">
         <label>Reps</label>
-        <input type="text" class="ex-reps" placeholder="10" oninput="exPyramidDefaultsChanged(this)" />
+        <input type="text" class="ex-reps" placeholder="10" data-pyr-field="ex:default" />
       </div>
       <div class="ex-row-field">
         <label>Weight (lbs)</label>
-        <input type="text" class="ex-weight" placeholder="lbs" oninput="exPyramidDefaultsChanged(this)" />
+        <input type="text" class="ex-weight" placeholder="lbs" data-pyr-field="ex:default" />
       </div>
     </div>
-    <button type="button" class="ex-row-customize-toggle" onclick="exTogglePerSet(this)">Customize per set ▾</button>
+    <button type="button" class="ex-row-customize-toggle" data-pyr-toggle="ex">Customize per set ▾</button>
     <div class="ex-pyramid-detail" style="display:none"></div>
   `;
 
@@ -2886,18 +2886,18 @@ function addSwExerciseRow() {
       <div class="ex-row-defaults">
         <div class="ex-row-field">
           <label>Sets</label>
-          <input type="number" class="ex-sets" min="1" max="20" placeholder="3" oninput="exPyramidSetsChanged(this)" />
+          <input type="number" class="ex-sets" min="1" max="20" placeholder="3" data-pyr-field="ex:sets" />
         </div>
         <div class="ex-row-field">
           <label>Reps</label>
-          <input type="text" class="ex-reps" placeholder="10" oninput="exPyramidDefaultsChanged(this)" />
+          <input type="text" class="ex-reps" placeholder="10" data-pyr-field="ex:default" />
         </div>
         <div class="ex-row-field">
           <label>Weight (lbs)</label>
-          <input type="text" class="ex-weight" placeholder="lbs" oninput="exPyramidDefaultsChanged(this)" />
+          <input type="text" class="ex-weight" placeholder="lbs" data-pyr-field="ex:default" />
         </div>
       </div>
-      <button type="button" class="ex-row-customize-toggle" onclick="exTogglePerSet(this)">Customize per set ▾</button>
+      <button type="button" class="ex-row-customize-toggle" data-pyr-toggle="ex">Customize per set ▾</button>
       <div class="ex-pyramid-detail" style="display:none"></div>`;
   }
   _initRowDrag(row, container);
