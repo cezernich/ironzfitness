@@ -126,12 +126,14 @@
       const { error } = await c.from(TABLE).insert(_toRemoteRow(localRow, uid));
       if (error) {
         console.warn("[SavedWorkouts] insert failed:", error.message);
+        if (typeof reportCaughtError === "function") reportCaughtError(error, { context: "saved_workouts_library", action: "remote_insert" });
         _flagPending(localRow.id);
       } else {
         _clearPending(localRow.id);
       }
     } catch (e) {
       console.warn("[SavedWorkouts] insert offline:", e);
+      if (typeof reportCaughtError === "function") reportCaughtError(e, { context: "saved_workouts_library", action: "remote_insert_exception" });
       _flagPending(localRow.id);
     }
   }
@@ -144,12 +146,14 @@
       const { error } = await c.from(TABLE).upsert(_toRemoteRow(localRow, uid), { onConflict: "id" });
       if (error) {
         console.warn("[SavedWorkouts] upsert failed:", error.message);
+        if (typeof reportCaughtError === "function") reportCaughtError(error, { context: "saved_workouts_library", action: "remote_upsert" });
         _flagPending(localRow.id);
       } else {
         _clearPending(localRow.id);
       }
     } catch (e) {
       console.warn("[SavedWorkouts] upsert offline:", e);
+      if (typeof reportCaughtError === "function") reportCaughtError(e, { context: "saved_workouts_library", action: "remote_upsert_exception" });
       _flagPending(localRow.id);
     }
   }
@@ -162,12 +166,14 @@
       const { error } = await c.from(TABLE).update(patch).eq("id", rowId).eq("user_id", uid);
       if (error) {
         console.warn("[SavedWorkouts] update failed:", error.message);
+        if (typeof reportCaughtError === "function") reportCaughtError(error, { context: "saved_workouts_library", action: "remote_update" });
         _flagPending(rowId);
       } else {
         _clearPending(rowId);
       }
     } catch (e) {
       console.warn("[SavedWorkouts] update offline:", e);
+      if (typeof reportCaughtError === "function") reportCaughtError(e, { context: "saved_workouts_library", action: "remote_update_exception" });
       _flagPending(rowId);
     }
   }
@@ -178,9 +184,13 @@
     if (!c || !uid) return;
     try {
       const { error } = await c.from(TABLE).delete().eq("id", rowId).eq("user_id", uid);
-      if (error) console.warn("[SavedWorkouts] delete failed:", error.message);
+      if (error) {
+        console.warn("[SavedWorkouts] delete failed:", error.message);
+        if (typeof reportCaughtError === "function") reportCaughtError(error, { context: "saved_workouts_library", action: "remote_delete" });
+      }
     } catch (e) {
       console.warn("[SavedWorkouts] delete offline:", e);
+      if (typeof reportCaughtError === "function") reportCaughtError(e, { context: "saved_workouts_library", action: "remote_delete_exception" });
     }
   }
 
@@ -882,13 +892,22 @@
   async function bootSyncSupabase() {
     try {
       await _migrateLocalToSupabase();
-    } catch (e) { console.warn("[SavedWorkouts] migration error:", e); }
+    } catch (e) {
+      console.warn("[SavedWorkouts] migration error:", e);
+      if (typeof reportCaughtError === "function") reportCaughtError(e, { context: "saved_workouts_library", action: "boot_sync_migrate" });
+    }
     try {
       await _refreshFromSupabase();
-    } catch (e) { console.warn("[SavedWorkouts] refresh error:", e); }
+    } catch (e) {
+      console.warn("[SavedWorkouts] refresh error:", e);
+      if (typeof reportCaughtError === "function") reportCaughtError(e, { context: "saved_workouts_library", action: "boot_sync_refresh" });
+    }
     try {
       await _retryPendingSync();
-    } catch (e) { console.warn("[SavedWorkouts] retry error:", e); }
+    } catch (e) {
+      console.warn("[SavedWorkouts] retry error:", e);
+      if (typeof reportCaughtError === "function") reportCaughtError(e, { context: "saved_workouts_library", action: "boot_sync_retry" });
+    }
   }
 
   function _resetForTests() {

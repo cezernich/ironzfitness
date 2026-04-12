@@ -1,5 +1,10 @@
 // app.js — General app initialization and tab navigation
 
+// App version — included in every client_error report via error-reporting.js
+// so we can tell which build a bug came from. Bump on each meaningful release.
+const IRONZ_VERSION = "1.0.0";
+if (typeof window !== "undefined") window.IRONZ_VERSION = IRONZ_VERSION;
+
 // Global helper: compute age from birthday string (YYYY-MM-DD)
 function _calcAgeFromBirthday(dateStr) {
   if (!dateStr) return 0;

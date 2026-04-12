@@ -189,8 +189,9 @@ function _lookupBarcode(barcode) {
         showBarcodeNotFound(barcode);
       }
     })
-    .catch(() => {
+    .catch((err) => {
       if (typeof trackEvent === "function") trackEvent("barcode_scan_not_found", { barcode, reason: "fetch_failed" });
+      if (typeof reportCaughtError === "function") reportCaughtError(err, { context: "barcode_scanner", action: "openfoodfacts_fetch", barcode });
       showBarcodeNotFound(barcode);
     });
 }

@@ -25,6 +25,7 @@ async function loadPhilosophyModules() {
     }
   } catch (e) {
     console.warn('[IronZ] Supabase module load failed, using fallback:', e.message);
+    if (typeof reportCaughtError === 'function') reportCaughtError(e, { context: 'philosophy_engine', action: 'load_from_supabase' });
   }
 
   // Fall back to localStorage cache
@@ -38,6 +39,7 @@ async function loadPhilosophyModules() {
     }
   } catch (e) {
     console.warn('[IronZ] Cache parse failed:', e.message);
+    if (typeof reportCaughtError === 'function') reportCaughtError(e, { context: 'philosophy_engine', action: 'parse_cache' });
   }
 
   // Fall back to static JSON file
@@ -50,6 +52,7 @@ async function loadPhilosophyModules() {
     }
   } catch (e) {
     console.error('[IronZ] All module loading methods failed:', e.message);
+    if (typeof reportCaughtError === 'function') reportCaughtError(e, { context: 'philosophy_engine', action: 'load_static_json' });
     philosophyModules = [];
   }
 }

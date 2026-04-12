@@ -188,7 +188,10 @@ async function handleLogin() {
   btn.disabled    = false;
   btn.textContent = 'Log In';
 
-  if (error) setAuthMsg('auth-msg', error.message, true);
+  if (error) {
+    setAuthMsg('auth-msg', error.message, true);
+    if (typeof reportCaughtError === 'function') reportCaughtError(error, { context: 'auth', action: 'sign_in' });
+  }
   // On success, onAuthStateChange handles the transition
 }
 
@@ -227,6 +230,7 @@ async function handleSignup() {
 
   if (error) {
     setAuthMsg('auth-signup-msg', error.message, true);
+    if (typeof reportCaughtError === 'function') reportCaughtError(error, { context: 'auth', action: 'sign_up' });
   } else {
     setAuthMsg('auth-signup-msg', 'Account created! Check your email to confirm, then log in.', false);
   }
@@ -324,6 +328,7 @@ async function authBoot() {
     console.log('[Auth] getSession resolved, session=', !!session);
   } catch (e) {
     console.error('[Auth] getSession threw error:', e);
+    if (typeof reportCaughtError === 'function') reportCaughtError(e, { context: 'auth', action: 'get_session' });
     clearTimeout(splashTimeout);
     hideSplashScreen();
     showAuthScreen();
