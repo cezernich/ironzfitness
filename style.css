@@ -11650,8 +11650,13 @@ button:active {
 }
 
 /* ── Share button on workout cards ───────────────────────────────────────── */
-/* Share button — inline icon in the card header next to Edit/Delete */
+/* Icon-only share button used everywhere (calendar, history, saved library).
+   .share-icon-btn is the canonical class built by share.js; the legacy
+   .share-workout-btn alias is kept so old inline markup still renders the
+   same. Both use the same spec: 44x44 tap target on mobile, 32x32 visual
+   size on desktop, 20px SVG glyph centered inside. */
 .session-card { position: relative; }
+.share-icon-btn,
 .share-workout-btn {
   background: none;
   border: 1px solid var(--color-border);
@@ -11661,27 +11666,94 @@ button:active {
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-  /* 44x44 tap target for mobile, 28x28 visual size via padding */
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s;
   min-width: 44px;
   min-height: 44px;
   padding: 8px;
+  -webkit-tap-highlight-color: transparent;
 }
 @media (min-width: 769px) {
+  .share-icon-btn,
   .share-workout-btn {
     min-width: 32px;
     min-height: 32px;
     padding: 6px 8px;
   }
 }
+.share-icon-btn svg,
 .share-workout-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
+  display: block;
 }
+.share-icon-btn:hover,
 .share-workout-btn:hover {
-  background: var(--color-surface-2);
-  color: var(--color-accent, #6366f1);
-  border-color: var(--color-accent, #6366f1);
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
+}
+.share-icon-btn:active,
+.share-workout-btn:active {
+  opacity: 0.7;
+  transform: scale(0.96);
+}
+
+/* Community bookmark toggle — outline when not saved, filled when saved */
+.comm-bookmark-btn {
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (min-width: 769px) {
+  .comm-bookmark-btn {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 6px 8px;
+  }
+}
+.comm-bookmark-btn svg { width: 20px; height: 20px; display: block; }
+.comm-bookmark-btn:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
+}
+.comm-bookmark-btn.is-saved {
+  color: var(--color-accent, #ff6b35);
+  border-color: var(--color-accent, #ff6b35);
+}
+.comm-bookmark-btn:active { opacity: 0.7; transform: scale(0.96); }
+
+/* Share-toast (bottom-center, 2s auto-dismiss) */
+.ironz-share-toast {
+  position: fixed;
+  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translate(-50%, 20px);
+  background: rgba(0, 0, 0, 0.88);
+  color: #ffffff;
+  border-radius: 24px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transition: opacity 0.22s, transform 0.22s;
+  z-index: 10000;
+  pointer-events: none;
+  max-width: min(90vw, 360px);
+  text-align: center;
+}
+.ironz-share-toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 /* ── Share sheet modal (sender) ──────────────────────────────────────────── */
@@ -12804,4 +12876,283 @@ body.auth-visible #bottom-nav { display: none !important; }
 @media (max-width: 360px) {
   .ex-row-field input { padding: 10px 4px; }
   .ex-row-field label { font-size: 0.62rem; }
+}
+
+/* ============================================================================
+   SHARING PHASE 2 — Action sheet + Send-to-friend modal + Inbox direct cards
+   ============================================================================ */
+
+/* ── Action sheet (bottom-anchored) ─────────────────────────────────────── */
+.share-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 10050;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease-out;
+  padding: 0 12px calc(20px + env(safe-area-inset-bottom, 0px));
+}
+.share-sheet-overlay.is-open { opacity: 1; }
+.share-sheet {
+  width: 100%;
+  max-width: 440px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  padding: 12px 14px 14px;
+  box-shadow: 0 -8px 32px rgba(0,0,0,0.4);
+  transform: translateY(40px);
+  transition: transform 0.22s ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.share-sheet-overlay.is-open .share-sheet { transform: translateY(0); }
+.share-sheet-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-border);
+  margin: 0 auto 6px;
+}
+.share-sheet-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--color-text);
+  width: 100%;
+  transition: background 0.15s, border-color 0.15s;
+}
+.share-sheet-btn:hover {
+  background: var(--color-surface);
+  border-color: var(--color-accent);
+}
+.share-sheet-btn-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(129,140,248,0.12);
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.share-sheet-btn-label { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.share-sheet-btn-title { font-size: 15px; font-weight: 700; color: var(--color-text); }
+.share-sheet-btn-sub   { font-size: 12px; color: var(--color-text-muted); }
+.share-sheet-cancel {
+  margin-top: 4px;
+  padding: 12px;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.share-sheet-cancel:hover { background: var(--color-surface-2); color: var(--color-text); }
+
+/* ── Send-to-friend modal ───────────────────────────────────────────────── */
+.send-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 10051;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  opacity: 0;
+  transition: opacity 0.2s ease-out;
+}
+.send-modal-overlay.is-open { opacity: 1; }
+.send-modal {
+  width: 100%;
+  max-width: 420px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+  transform: scale(0.96);
+  transition: transform 0.2s ease-out;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+.send-modal-overlay.is-open .send-modal { transform: scale(1); }
+.send-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 8px;
+}
+.send-modal-header h2 {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--color-text);
+  margin: 0;
+}
+.send-modal-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0 6px;
+  line-height: 1;
+}
+.send-modal-body {
+  padding: 4px 18px 10px;
+  overflow-y: auto;
+  flex: 1;
+}
+.send-modal-workout {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-accent);
+  padding: 10px 12px;
+  background: rgba(129,140,248,0.08);
+  border-radius: 10px;
+  margin-bottom: 14px;
+}
+.send-modal-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.send-modal-field span {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+.send-modal-field input,
+.send-modal-field textarea {
+  padding: 10px 12px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-size: 0.95rem;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+.send-modal-field textarea { resize: vertical; min-height: 52px; }
+.send-recent-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: -6px 0 6px;
+}
+.send-recent-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.send-recent-chip {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.send-recent-chip:hover {
+  background: rgba(129,140,248,0.12);
+  border-color: var(--color-accent);
+}
+.send-modal-msg {
+  font-size: 13px;
+  margin-top: 4px;
+  min-height: 18px;
+}
+.send-modal-msg--error { color: var(--color-danger, #ef4444); }
+.send-modal-msg--warn  { color: #f59e0b; }
+.send-modal-link-fallback {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+  margin-left: 4px;
+}
+.send-modal-actions {
+  display: flex;
+  gap: 10px;
+  padding: 10px 18px 18px;
+  border-top: 1px solid var(--color-border);
+}
+.send-modal-actions button { flex: 1; }
+
+/* ── Inbox direct-send cards (Phase 2) ──────────────────────────────────── */
+.inbox-view-switcher {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--color-surface-2);
+  border-radius: 10px;
+  margin: 8px 0 14px;
+}
+.inbox-view-btn {
+  flex: 1;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.inbox-view-btn.is-active {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.inbox-card--direct { border-left: 3px solid var(--color-accent); }
+.inbox-card--direct.is-accepted { opacity: 0.6; }
+.inbox-card-saved {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-success, #22c55e);
+  padding: 6px 10px;
+}
+.inbox-card--sent { border-left: 3px solid var(--color-text-muted); }
+.inbox-sent-status {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+.inbox-sent-status--unread    { background: rgba(129,140,248,0.15); color: var(--color-accent); }
+.inbox-sent-status--read      { background: rgba(148,163,184,0.15); color: var(--color-text-muted); }
+.inbox-sent-status--accepted  { background: rgba(34,197,94,0.15);   color: var(--color-success, #22c55e); }
+.inbox-sent-status--dismissed { background: rgba(239,68,68,0.12);   color: var(--color-danger, #ef4444); }
+
+/* ── Inbox badge dot pulse ──────────────────────────────────────────────── */
+.nav-circle-badge.is-pulsing {
+  animation: inbox-badge-pulse 0.6s ease-out 2;
+}
+@keyframes inbox-badge-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.3); }
 }

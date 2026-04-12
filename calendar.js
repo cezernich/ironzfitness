@@ -1286,258 +1286,28 @@ function _buildUndoHeaderBtn(sessionId, dateStr) {
   return `<button class="undo-complete-btn-header" title="Undo completion" onclick="event.stopPropagation();undoSessionCompletion('${sessionId}','${dateStr}')">↩ Undo</button>`;
 }
 
-// ─── Share button (workout sharing feature) ────────────────────────────────
+// ─── Share button (delegates to share.js) ──────────────────────────────────
 //
-// Returns the share-icon HTML for a workout card if and only if the entry has
-// a canonical variant_id + sport_id + session_type_id triple. Cards without a
-// variant mapping (legacy plan entries that pre-date the variant library) get
-// no share button — sharing requires a canonical variant per the spec.
-// ─── Workout Sharing ────────────────────────────────────────────────────────
-// Stash the full entry object so triggerShareWorkout can read name + intervals.
-const _shareEntryCache = {};
-let _shareEntryCacheSeq = 0;
-
+// One-tap icon that opens the native share sheet or copies the share-preview
+// URL to the clipboard. All heavy lifting lives in share.js so styling and
+// behavior stay identical across every card type.
 function _buildShareBtnFromEntry(entry) {
   try {
     if (!entry) return "";
-    const variantId = entry.variant_id || entry.variantId || entry.training_session_id || entry.id || null;
-    const sportId = entry.sport_id || entry.sportId
-      || ({ run: "run", running: "run", bike: "bike", cycling: "bike", swim: "swim", swimming: "swim",
-            triathlon: "run", brick: "run", general: "strength", hiit: "hybrid",
-            weightlifting: "strength", yoga: "strength", bodyweight: "strength",
-            stairstepper: "run", hyrox: "hybrid" })[entry.discipline || entry.type]
-      || "run";
-    const sessionTypeId = entry.session_type_id || entry.sessionTypeId || entry.type || entry.discipline || "general";
-    if (!variantId) return "";
-    // Cache the full entry so the share handler can read the name + intervals
-    const cacheKey = "se" + (++_shareEntryCacheSeq);
-    _shareEntryCache[cacheKey] = entry;
-    const _s = (v) => String(v || "").replace(/['"\\]/g, "");
-    return `<button class="share-workout-btn" title="Share" onclick="event.stopPropagation();triggerShareWorkout('${_s(cacheKey)}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>`;
+    if (typeof buildShareIconButton === "function") {
+      return buildShareIconButton(entry, "calendar");
+    }
+    return "";
   } catch (e) {
     console.warn("[IronZ] share button render skipped:", e.message);
     return "";
   }
 }
 
-// Opens a note prompt, then shares.
-async function triggerShareWorkout(cacheKey) {
-  const entry = _shareEntryCache[cacheKey];
-  if (!entry) { console.warn("[IronZ] share: entry not in cache"); return; }
-  const sb = window.supabaseClient;
-  if (!sb) { alert("Not connected to database."); return; }
-
-  let userId = null;
-  try {
-    const { data } = await sb.auth.getUser();
-    userId = data && data.user && data.user.id;
-  } catch {}
-  if (!userId) { alert("Please log in to share workouts."); return; }
-
-  // Resolve IDs from the cached entry
-  const variantId = entry.variant_id || entry.variantId || entry.training_session_id || entry.id || "";
-  const sportMap = { run: "run", running: "run", bike: "bike", cycling: "bike", swim: "swim", swimming: "swim",
-    triathlon: "run", brick: "run", general: "strength", hiit: "hybrid",
-    weightlifting: "strength", yoga: "strength", bodyweight: "strength", stairstepper: "run", hyrox: "hybrid" };
-  const sportId = entry.sport_id || entry.sportId || sportMap[entry.discipline || entry.type] || "run";
-  const sessionTypeId = entry.session_type_id || entry.sessionTypeId || entry.type || entry.discipline || "general";
-  const workoutName = entry.sessionName || entry.name || entry.title
-    || (entry.aiSession && entry.aiSession.title)
-    || (_WORKOUT_TYPE_LABELS[sessionTypeId] || capitalize(sessionTypeId || "Workout"));
-
-  // Build exercises array from the entry's data for training_sessions INSERT.
-  // Workout data can live in several places depending on the entry type:
-  //   - Logged cardio: entry.aiSession.intervals
-  //   - Logged strength: entry.exercises
-  //   - Generated plan entries: SESSION_DESCRIPTIONS[discipline][load].steps
-  //   - Generated via Add Session flow: entry.aiSession.intervals (from planEntryFor)
-  //   - Plan entries with generatedSession: entry.generatedSession.steps
-  const _exercises = [];
-
-  // Source 1: aiSession.intervals (logged cardio, Add Running Session flow)
-  const _aiIntervals = entry.aiSession && entry.aiSession.intervals;
-  if (_aiIntervals && _aiIntervals.length) {
-    _aiIntervals.forEach(iv => {
-      _exercises.push({
-        name: iv.name || "Interval",
-        duration: iv.duration || "",
-        intensity: iv.effort || iv.intensity || "",
-        details: iv.details || "",
-        reps: iv.reps || null,
-        repeatGroup: iv.repeatGroup || null,
-        groupSets: iv.groupSets || null,
-      });
-    });
-  }
-
-  // Source 2: exercises array (logged strength workouts)
-  if (!_exercises.length && entry.exercises && entry.exercises.length) {
-    entry.exercises.forEach(ex => {
-      _exercises.push({
-        name: ex.name || "Exercise",
-        sets: ex.sets || null,
-        reps: ex.reps || null,
-        weight: ex.weight || null,
-        duration: ex.duration || null,
-        supersetGroup: ex.supersetGroup || null,
-      });
-    });
-  }
-
-  // Source 3: generatedSession.steps (plan entries with full session data)
-  if (!_exercises.length && entry.generatedSession && entry.generatedSession.steps) {
-    entry.generatedSession.steps.forEach(s => {
-      _exercises.push({
-        name: s.label || s.type || "Step",
-        duration: s.duration ? `${s.duration} min` : "",
-        intensity: s.zone ? `Z${s.zone}` : "",
-        reps: s.reps || null,
-      });
-    });
-  }
-
-  // Source 4: SESSION_DESCRIPTIONS lookup (plan entries with discipline + load)
-  if (!_exercises.length && entry.discipline && entry.load && typeof SESSION_DESCRIPTIONS !== "undefined") {
-    const desc = (SESSION_DESCRIPTIONS[entry.discipline] || {})[entry.load];
-    if (desc && desc.steps) {
-      desc.steps.forEach(s => {
-        _exercises.push({
-          name: s.label || s.type || "Step",
-          duration: s.duration ? `${s.duration} min` : "",
-          intensity: s.zone ? `Z${s.zone}` : "",
-          reps: s.reps || null,
-        });
-      });
-    }
-  }
-
-  // Show note prompt modal
-  _showShareNotePrompt(workoutName, async (noteText) => {
-    // Step 1: INSERT workout data into training_sessions so the share
-    // preview page can look it up and render exercises/segments.
-    let realVariantId = variantId;
-    try {
-      const tsPayload = {
-        user_id: userId,
-        session_name: workoutName,
-        session_type: sessionTypeId,
-        status: "shared",
-        exercises: _exercises.length > 0 ? _exercises : null,
-        description: noteText || null,
-        data: { sport_id: sportId },
-      };
-      console.log("[IronZ] training_sessions INSERT payload:", tsPayload);
-      const { data: tsRow, error: tsErr } = await sb
-        .from("training_sessions")
-        .insert(tsPayload)
-        .select("id")
-        .single();
-      if (tsErr) {
-        console.error("[IronZ] training_sessions insert error:", tsErr);
-      } else if (tsRow && tsRow.id) {
-        realVariantId = tsRow.id;
-        console.log("[IronZ] training_sessions created:", tsRow.id);
-      }
-    } catch (e) {
-      console.error("[IronZ] training_sessions insert exception:", e);
-    }
-
-    // Step 2: INSERT the share row pointing to the training_session
-    const token = crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
-    const { error } = await sb.from("shared_workouts").insert({
-      share_token: token,
-      sender_user_id: userId,
-      variant_id: realVariantId,
-      sport_id: sportId,
-      session_type_id: sessionTypeId,
-      share_note: noteText || null,
-      expires_at: expiresAt,
-    });
-    if (error) {
-      console.error("[IronZ] share insert failed:", error);
-      // Fallback: copy workout as text
-      const lines = [workoutName];
-      if (noteText) lines.push(noteText);
-      _exercises.forEach(ex => {
-        let line = ex.name || "Interval";
-        if (ex.duration) line += ` · ${ex.duration}`;
-        if (ex.intensity) line += ` @ ${ex.intensity}`;
-        if (ex.reps) line += ` (${ex.reps}x)`;
-        if (ex.details) line += ` — ${ex.details}`;
-        lines.push(line);
-      });
-      lines.push("", "Shared from IronZ Fitness");
-      const textSummary = lines.join("\n");
-      try { navigator.clipboard.writeText(textSummary); }
-      catch { /* ignore */ }
-      _showShareToast("Workout copied to clipboard!");
-      return;
-    }
-    const shareUrl = `https://ironz.fit/share.html?token=${token}`;
-    try { await navigator.clipboard.writeText(shareUrl); }
-    catch {
-      const ta = document.createElement("textarea");
-      ta.value = shareUrl; ta.style.cssText = "position:fixed;opacity:0";
-      document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
-    }
-    _showShareToast("Share link copied!");
-
-    // Analytics
-    if (typeof trackWorkoutShared === "function") trackWorkoutShared({ sport: sportId, session_type: sessionTypeId });
-
-    // Push notification to recipient (fire-and-forget)
-    // Note: notify-share needs a recipient_user_id — shares via link don't have one.
-    // This will be called from the import/accept flow instead if sharing to a specific user.
-  });
-}
-
-function _showShareNotePrompt(workoutName, onConfirm) {
-  const id = "share-note-prompt";
-  const old = document.getElementById(id);
-  if (old) old.remove();
-  const overlay = document.createElement("div");
-  overlay.id = id;
-  overlay.className = "rating-modal-overlay";
-  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
-  overlay.innerHTML = `
-    <div class="rating-modal post-test-modal" style="max-width:380px">
-      <div class="post-test-modal-title">Share "${escHtml(workoutName)}"</div>
-      <div class="post-test-modal-body">
-        <textarea id="share-note-input" rows="2" maxlength="280" placeholder="Add a note (optional)"
-          style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);font-size:0.9rem;resize:none;font-family:inherit"></textarea>
-      </div>
-      <div class="post-test-modal-actions">
-        <button class="rating-skip-btn" id="share-note-skip">Skip</button>
-        <button class="rating-save-btn" id="share-note-send">Share</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  requestAnimationFrame(() => overlay.classList.add("visible"));
-  overlay.querySelector("#share-note-skip").onclick = () => { overlay.remove(); onConfirm(""); };
-  overlay.querySelector("#share-note-send").onclick = () => {
-    const note = (document.getElementById("share-note-input")?.value || "").trim();
-    overlay.remove();
-    onConfirm(note);
-  };
-  document.getElementById("share-note-input")?.focus();
-}
-
-function _showShareToast(msg) {
-  const existing = document.getElementById("ironz-toast");
-  if (existing) existing.remove();
-  const toast = document.createElement("div");
-  toast.id = "ironz-toast";
-  toast.className = "ironz-toast";
-  toast.textContent = msg;
-  document.body.appendChild(toast);
-  requestAnimationFrame(() => toast.classList.add("visible"));
-  setTimeout(() => {
-    toast.classList.remove("visible");
-    setTimeout(() => toast.remove(), 220);
-  }, 2000);
-}
+// Legacy share entry cache — still referenced by the new share.js via a
+// back-compat shim in case older inline onclicks somewhere call it. Kept
+// empty to avoid breakage.
+const _shareEntryCache = {};
 
 /** Returns the completed duration for a session, if available */
 function _getCompletionDuration(sessionId) {

@@ -2050,9 +2050,12 @@ function _renderWorkoutHistoryList(workouts) {
     const starred    = isWorkoutStarred(w.id);
     const hasContent = (w.exercises && w.exercises.length) || (w.segments && w.segments.length);
     const _eid = escHtml(String(w.id));
+    const _shareBtn = (hasContent && typeof buildShareIconButton === "function")
+      ? buildShareIconButton(w, "history")
+      : "";
     const btnHtml   = `
       <button class="star-btn ${starred ? "is-starred" : ""}" title="${starred ? "Remove from saved" : "Save workout"}" onclick="toggleWorkoutStar('${_eid}')">★</button>
-      ${hasContent ? `<button class="edit-workout-btn" title="Share to Community" onclick="openShareWorkout('${_eid}')">Share</button>` : ""}
+      ${_shareBtn}
       <button class="edit-workout-btn" title="Edit" onclick="openEditWorkout('${_eid}')">Edit</button>
       <button class="delete-btn" title="Delete" onclick="deleteWorkout('${_eid}')">${ICONS.trash}</button>
       <span class="card-chevron">▾</span>`;
@@ -3348,7 +3351,11 @@ function _commGetAll() {
   const fromDefaults = COMMUNITY_WORKOUTS.filter(w => !dbIds.has(w.id));
   let userShared = [];
   try { userShared = JSON.parse(localStorage.getItem("userSharedWorkouts") || "[]"); } catch {}
-  return [...fromDefaults, ..._commDbWorkouts, ...userShared].filter(w => !hidden.has(w.id));
+  return [...fromDefaults, ..._commDbWorkouts, ...userShared]
+    // Hide per-device dismissals (legacy feature) AND any row explicitly
+    // flagged as hidden === true in the Supabase community_workouts table
+    // (moderation field — added for future admin takedowns, no UI yet).
+    .filter(w => !hidden.has(w.id) && w.hidden !== true);
 }
 
 // TODO: remove before launch
@@ -3442,6 +3449,12 @@ async function renderCommunityWorkouts(filter) {
         ? `<button class="btn-secondary comm-del-btn" onclick="event.stopPropagation(); unshareWorkout('${w.id}')" title="Remove your shared workout">Unshare</button>`
         : "";
 
+      // Bookmark icon toggle — outline when not saved, filled when saved
+      const bookmarkIcon = isSaved
+        ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>'
+        : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
+      const bookmarkBtn = isUserShared ? "" : `<button class="comm-bookmark-btn${isSaved ? " is-saved" : ""}" title="${isSaved ? "Remove from saved" : "Save workout"}" aria-pressed="${isSaved ? "true" : "false"}" onclick="event.stopPropagation(); toggleCommunityBookmark('${w.id}')">${bookmarkIcon}</button>`;
+
       return `<div class="comm-card">
         <div class="comm-card-header" onclick="this.parentElement.classList.toggle('expanded')">
           <div class="comm-card-info">
@@ -3451,7 +3464,7 @@ async function renderCommunityWorkouts(filter) {
           <div class="comm-card-actions">
             ${adminDel}
             ${unshareBtn}
-            ${isUserShared ? "" : `<button class="btn-secondary comm-save-btn${isSaved ? " comm-saved" : ""}" onclick="event.stopPropagation(); saveCommunityWorkout('${w.id}')">${isSaved ? "Saved" : "Save"}</button>`}
+            ${bookmarkBtn}
             <button class="btn-secondary comm-hide-btn" onclick="event.stopPropagation(); hideCommWorkout('${w.id}')" title="Remove"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
           </div>
         </div>
@@ -3462,6 +3475,27 @@ async function renderCommunityWorkouts(filter) {
   }
 
   list.innerHTML = html;
+}
+
+// Bookmark toggle wrapper for community cards. Delegates to the existing
+// saveCommunityWorkout flow (legacy localStorage) and also emits analytics +
+// a toast so the user gets feedback on a single icon tap.
+function toggleCommunityBookmark(communityId) {
+  const beforeSaved = (() => {
+    try { return JSON.parse(localStorage.getItem("savedWorkouts") || "[]")
+      .some(s => s.communityId === communityId); } catch { return false; }
+  })();
+  saveCommunityWorkout(communityId);
+  const afterSaved = (() => {
+    try { return JSON.parse(localStorage.getItem("savedWorkouts") || "[]")
+      .some(s => s.communityId === communityId); } catch { return false; }
+  })();
+  if (!beforeSaved && afterSaved) {
+    if (typeof _showShareToast === "function") _showShareToast("Saved to library");
+    if (typeof trackEvent === "function") trackEvent("workout_bookmarked", { source: "community", variant_id: communityId });
+  } else if (beforeSaved && !afterSaved) {
+    if (typeof _showShareToast === "function") _showShareToast("Removed from saved");
+  }
 }
 
 function saveCommunityWorkout(communityId) {
@@ -3498,7 +3532,31 @@ function saveCommunityWorkout(communityId) {
 
 /* ── Share logged workout to Community ───────────────────────────────── */
 
+// Minimum workouts required before a user can post to the public community.
+// Enforced on both "Share logged workout to community" and "Create community
+// workout" entry points. Counts user-logged workouts in localStorage.
+const COMMUNITY_MIN_WORKOUTS = 5;
+
+function _userLoggedWorkoutCount() {
+  try {
+    const list = JSON.parse(localStorage.getItem("workouts") || "[]");
+    // Exclude isCompletion metadata rows — only count real logged workouts
+    return list.filter(w => !w.isCompletion).length;
+  } catch { return 0; }
+}
+
+function _requireCommunityMinimum() {
+  const count = _userLoggedWorkoutCount();
+  if (count >= COMMUNITY_MIN_WORKOUTS) return true;
+  const msg = `Log at least ${COMMUNITY_MIN_WORKOUTS} workouts before sharing to the community. (${count}/${COMMUNITY_MIN_WORKOUTS})`;
+  if (typeof _showShareToast === "function") _showShareToast(msg);
+  else alert(msg);
+  return false;
+}
+
 function openShareWorkout(workoutId) {
+  if (!_requireCommunityMinimum()) return;
+
   const workouts = JSON.parse(localStorage.getItem("workouts") || "[]");
   const w = workouts.find(x => x.id === workoutId);
   if (!w) return;
@@ -3539,6 +3597,8 @@ function closeShareWorkout() {
 }
 
 function submitShareWorkout() {
+  if (!_requireCommunityMinimum()) return;
+
   const workoutId = parseInt(document.getElementById("share-workout-id").value);
   const workouts = JSON.parse(localStorage.getItem("workouts") || "[]");
   const w = workouts.find(x => x.id === workoutId);
@@ -3561,6 +3621,7 @@ function submitShareWorkout() {
     author,
     difficulty,
     type: w.type || "general",
+    hidden: false,
   };
   if (w.exercises && w.exercises.length) {
     communityEntry.exercises = JSON.parse(JSON.stringify(w.exercises));
@@ -3573,6 +3634,10 @@ function submitShareWorkout() {
   const shared = JSON.parse(localStorage.getItem("userSharedWorkouts") || "[]");
   shared.push(communityEntry);
   localStorage.setItem("userSharedWorkouts", JSON.stringify(shared)); if (typeof DB !== 'undefined') DB.syncKey('userSharedWorkouts');
+
+  if (typeof trackEvent === "function") {
+    trackEvent("community_workout_posted", { type: w.type || "general", category, difficulty });
+  }
 
   closeShareWorkout();
   renderWorkoutHistory();
@@ -3594,6 +3659,8 @@ function unshareWorkout(id) {
 let _ccRowCount = 0;
 
 function openCreateCommunityWorkout() {
+  if (!_requireCommunityMinimum()) return;
+
   const modal = document.getElementById("create-comm-modal");
   if (!modal) return;
 

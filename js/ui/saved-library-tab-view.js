@@ -142,6 +142,7 @@
         </div>
         <div class="saved-card-actions">
           <button class="btn-primary"  data-saved-action="schedule"    data-id="${_esc(s.id)}">Schedule</button>
+          ${typeof window.buildShareIconButton === "function" ? window.buildShareIconButton(s, "saved") : ""}
           <button class="btn-ghost"    data-saved-action="edit-custom" data-id="${_esc(s.id)}">Edit</button>
           <button class="btn-ghost"    data-saved-action="remove"      data-id="${_esc(s.id)}">${typeof ICONS !== "undefined" && ICONS.trash ? ICONS.trash : "Delete"}</button>
         </div>
@@ -157,6 +158,9 @@
     const name = s.custom_name || s.variant_id;
     const cardId = "sl-card-" + _esc(s.id);
     const typeLabel = (s.session_type_id || "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    const shareBtn = typeof window.buildShareIconButton === "function"
+      ? window.buildShareIconButton(s, "saved")
+      : "";
     return `
       <div class="saved-card collapsible is-collapsed" id="${cardId}" data-id="${_esc(s.id)}" data-variant="${_esc(s.variant_id || "")}">
         <div class="saved-card-header card-toggle" onclick="toggleSection('${cardId}'); _slLoadDetail('${cardId}','${_esc(s.variant_id || "")}')">
@@ -173,6 +177,7 @@
         </div>
         <div class="saved-card-actions">
           <button class="btn-primary"   data-saved-action="schedule" data-id="${_esc(s.id)}">Schedule</button>
+          ${shareBtn}
           <button class="btn-ghost"     data-saved-action="remove"   data-id="${_esc(s.id)}">Remove</button>
         </div>
       </div>
