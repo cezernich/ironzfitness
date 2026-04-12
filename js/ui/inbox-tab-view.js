@@ -31,6 +31,92 @@
     return `${days}d ago`;
   }
 
+  // Humanize a raw workout_type like "track_workout" → "Track · Running".
+  // Prefers the global _WORKOUT_TYPE_LABELS map from calendar.js when
+  // available; otherwise title-cases the identifier with underscores
+  // replaced by spaces.
+  function _formatWorkoutType(type) {
+    if (!type) return "";
+    if (typeof _WORKOUT_TYPE_LABELS !== "undefined" && _WORKOUT_TYPE_LABELS[type]) {
+      return _WORKOUT_TYPE_LABELS[type];
+    }
+    return String(type).replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // Build a collapsible workout-preview block from a workout_payload. Uses
+  // buildExerciseTableHTML / buildSegmentTableHTML when they're loaded
+  // globally (workouts.js), otherwise falls back to a minimal inline
+  // renderer so the preview still works if workouts.js hasn't loaded.
+  function _buildWorkoutPreview(payload, cardKey) {
+    if (!payload) return "";
+    const hasExercises = payload.exercises && payload.exercises.length;
+    const hasSegments  = payload.segments && payload.segments.length;
+    const hasIntervals = payload.intervals && payload.intervals.length;
+    const isHiit = payload.type === "hiit" || !!payload.hiitMeta;
+    if (!hasExercises && !hasSegments && !hasIntervals) return "";
+
+    let bodyHtml = "";
+    if (hasSegments) {
+      if (typeof buildSegmentTableHTML === "function") {
+        bodyHtml = buildSegmentTableHTML(payload.segments);
+      } else {
+        bodyHtml = _simpleSegmentTable(payload.segments);
+      }
+    } else if (hasIntervals) {
+      // Intervals from the sender's aiSession — same shape as segments.
+      const segs = payload.intervals.map(iv => ({
+        name: iv.name || "Interval",
+        duration: iv.duration || "",
+        effort: iv.effort || iv.intensity || "Z2",
+      }));
+      bodyHtml = _simpleSegmentTable(segs);
+    } else if (hasExercises) {
+      if (typeof buildExerciseTableHTML === "function") {
+        bodyHtml = buildExerciseTableHTML(payload.exercises, { hiit: isHiit });
+      } else {
+        bodyHtml = _simpleExerciseTable(payload.exercises);
+      }
+    }
+
+    // HIIT metadata header (format, rounds, rests)
+    let metaHtml = "";
+    if (isHiit && payload.hiitMeta) {
+      const m = payload.hiitMeta;
+      const fmtLabels = { circuit: "Circuit", tabata: "Tabata", emom: "EMOM", amrap: "AMRAP", "for-time": "For Time" };
+      const parts = [fmtLabels[m.format] || m.format || "HIIT"];
+      if (m.rounds) parts.push(`${m.rounds} rounds`);
+      if (m.restBetweenRounds) parts.push(`${m.restBetweenRounds} between rounds`);
+      metaHtml = `<div class="inbox-preview-meta">${_esc(parts.join(" · "))}</div>`;
+    }
+
+    const key = cardKey || Math.random().toString(36).slice(2, 8);
+    return `
+      <div class="inbox-preview-wrap">
+        <button type="button" class="inbox-preview-toggle" data-inbox-preview-toggle="${_esc(key)}">Show details \u25be</button>
+        <div class="inbox-preview-body" id="inbox-preview-${_esc(key)}" style="display:none">
+          ${metaHtml}
+          ${bodyHtml}
+        </div>
+      </div>`;
+  }
+
+  function _simpleSegmentTable(segments) {
+    const rows = segments.map(s =>
+      `<tr><td>${_esc(s.name || "—")}</td><td>${_esc(s.duration || "—")}</td><td>${_esc(s.effort || s.intensity || "—")}</td></tr>`
+    ).join("");
+    return `<table class="exercise-table"><thead><tr><th>Phase</th><th>Duration</th><th>Effort</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  function _simpleExerciseTable(exercises) {
+    const rows = exercises.map(e => {
+      const sets = e.sets != null ? e.sets : "—";
+      const reps = e.reps != null ? e.reps : "—";
+      const weight = e.weight != null && e.weight !== "" ? e.weight : "—";
+      return `<tr><td>${_esc(e.name || "—")}</td><td>${_esc(String(sets))}</td><td>${_esc(String(reps))}</td><td>${_esc(String(weight))}</td></tr>`;
+    }).join("");
+    return `<table class="exercise-table"><thead><tr><th>Exercise</th><th>Sets</th><th>Reps</th><th>Weight</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
   // Inbox view state: "received" or "sent"
   let _inboxView = "received";
 
@@ -138,6 +224,19 @@
       });
     });
 
+    // Workout preview expand/collapse toggles
+    target.querySelectorAll("[data-inbox-preview-toggle]").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const key = btn.dataset.inboxPreviewToggle;
+        const body = document.getElementById("inbox-preview-" + key);
+        if (!body) return;
+        const isHidden = body.style.display === "none" || !body.style.display;
+        body.style.display = isHidden ? "" : "none";
+        btn.textContent = isHidden ? "Hide details \u25b4" : "Show details \u25be";
+      });
+    });
+
     _refreshBadge();
   }
 
@@ -171,6 +270,8 @@
     const isAccepted = item.status === "accepted";
     const noteHtml = item.message ? `<div class="inbox-card-note">"${_esc(item.message)}"</div>` : "";
     const sender = item.sender_display_name || "A friend";
+    const typeLabel = _formatWorkoutType(item.workout_type);
+    const previewHtml = _buildWorkoutPreview(item.workout_payload, "d-" + item.id);
     const actionsHtml = isAccepted
       ? `<div class="inbox-card-saved">Saved ${"\u2713"}</div>`
       : `
@@ -187,8 +288,9 @@
           </div>
         </div>
         <div class="inbox-card-title">${_esc(item.workout_name || "Workout")}</div>
-        ${item.workout_type ? `<div class="inbox-card-sport">${_esc(item.workout_type)}</div>` : ""}
+        ${typeLabel ? `<div class="inbox-card-sport">${_esc(typeLabel)}</div>` : ""}
         ${noteHtml}
+        ${previewHtml}
         <div class="inbox-card-actions">
           ${actionsHtml}
         </div>
@@ -205,6 +307,8 @@
     };
     const statusClass = "inbox-sent-status inbox-sent-status--" + item.status;
     const recipient = item.recipient_display_name || "recipient";
+    const typeLabel = _formatWorkoutType(item.workout_type);
+    const previewHtml = _buildWorkoutPreview(item.workout_payload, "s-" + item.id);
     return `
       <div class="inbox-card inbox-card--sent">
         <div class="inbox-card-header">
@@ -215,8 +319,9 @@
           <span class="${statusClass}">${_esc(statusLabels[item.status] || item.status)}</span>
         </div>
         <div class="inbox-card-title">${_esc(item.workout_name || "Workout")}</div>
-        ${item.workout_type ? `<div class="inbox-card-sport">${_esc(item.workout_type)}</div>` : ""}
+        ${typeLabel ? `<div class="inbox-card-sport">${_esc(typeLabel)}</div>` : ""}
         ${item.message ? `<div class="inbox-card-note">"${_esc(item.message)}"</div>` : ""}
+        ${previewHtml}
       </div>
     `;
   }
@@ -227,7 +332,9 @@
     const item = (cachedList || []).find(x => x.id === itemId);
     if (!item) return;
     // Save the full payload to the Saved library, then flip status to accepted.
-    Direct.saveItemPayloadToLibrary(item);
+    // saveItemPayloadToLibrary is now async (routes through
+    // SavedWorkoutsLibrary.saveCustom).
+    await Direct.saveItemPayloadToLibrary(item);
     await Direct.acceptItem(itemId);
     if (typeof trackEvent === "function") {
       trackEvent("inbox_workout_accepted", {

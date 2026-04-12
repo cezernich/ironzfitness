@@ -249,39 +249,100 @@
   }
 
   // ── Save accepted item to Library ────────────────────────────────────────
-
-  // workout_inbox stores the full workout payload inline (not a share token),
-  // so the existing SavedWorkoutsLibrary.saveFromShare path doesn't fit.
-  // We append directly to the local savedWorkouts store using the same shape
-  // that Saved Library expects for "custom" source entries.
-  function saveItemPayloadToLibrary(item) {
+  //
+  // Routes through SavedWorkoutsLibrary.saveCustom so the entry lands in the
+  // same `ironz_saved_workouts_v1` store the Saved tab reads from. Previously
+  // this wrote directly to the legacy `savedWorkouts` key — which hasn't been
+  // the source of truth since the library migration — so accepted inbox
+  // workouts never appeared in the Saved Workouts tab.
+  //
+  // Input `item.workout_payload` shape (set by share-action-sheet.js at send
+  // time via _buildPayloadFromEntry):
+  //   { name, type, duration, notes, exercises?, segments?, intervals?, hiitMeta? }
+  //
+  // We unpack it into the fields saveCustom expects. Returns a promise that
+  // resolves to the created saved-workout row (or null on failure).
+  async function saveItemPayloadToLibrary(item) {
     if (!item || !item.workout_payload) return null;
 
-    let saved = [];
-    try { saved = JSON.parse(localStorage.getItem("savedWorkouts") || "[]"); } catch {}
-
-    const entry = {
-      id: "inbox-" + item.id,
-      name: item.workout_name,
-      type: item.workout_type || "general",
-      source: "shared",
-      shared_from_user_id: item.sender_id,
-      shared_from_name: item.sender_display_name,
-      shared_from_inbox_id: item.id,
-      payload: item.workout_payload,
-      saved_at: new Date().toISOString(),
-    };
-    // Dedupe: if we've already saved this inbox item, don't duplicate.
-    if (saved.some(s => s.shared_from_inbox_id === item.id)) return entry;
-
-    saved.unshift(entry);
-    try {
-      localStorage.setItem("savedWorkouts", JSON.stringify(saved));
-      if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("savedWorkouts");
-    } catch (e) {
-      console.warn("[InboxDirect] saveItemPayloadToLibrary write failed:", e);
+    const Saved = (typeof window !== "undefined") ? window.SavedWorkoutsLibrary : null;
+    if (!Saved || typeof Saved.saveCustom !== "function") {
+      console.warn("[InboxDirect] SavedWorkoutsLibrary not loaded — cannot save to library");
+      return null;
     }
-    return entry;
+
+    // Dedupe: if this inbox item was already accepted into the library, bail.
+    try {
+      const existing = await Saved.listSaved({ source: "custom" });
+      if (existing && existing.some(s => s._sharedFromInboxId === item.id)) {
+        return existing.find(s => s._sharedFromInboxId === item.id);
+      }
+    } catch {}
+
+    const p = item.workout_payload || {};
+    const type = item.workout_type || p.type || "general";
+
+    // Map workout type → sport_id used by saveCustom
+    const sportMap = {
+      run: "run", running: "run",
+      bike: "bike", cycling: "bike",
+      swim: "swim", swimming: "swim",
+      track_workout: "run", tempo_threshold: "run", speed_work: "run",
+      hills: "run", long_run: "run", endurance: "run", easy_recovery: "run",
+      fun_social: "run",
+      weightlifting: "strength", bodyweight: "strength",
+      hiit: "strength", hyrox: "strength",
+      yoga: "strength",
+    };
+    const sportId = sportMap[type] || null;
+
+    // If the sender sent aiSession.intervals, map them into a "segments"
+    // shape so the Saved card's _renderCustomCard can render them via
+    // buildSegmentTableHTML. Also include the raw intervals for the
+    // calendar path that reads payload.intervals.
+    let segments = p.segments || null;
+    if (!segments && p.intervals && p.intervals.length) {
+      segments = p.intervals.map(iv => ({
+        name: iv.name || "Interval",
+        duration: iv.duration || "",
+        effort: iv.effort || iv.intensity || "Z2",
+        details: iv.details || "",
+      }));
+    }
+
+    const senderTag = item.sender_display_name ? `Shared by ${item.sender_display_name}` : "Shared workout";
+    const notes = [senderTag, p.notes, item.message].filter(Boolean).join(" · ");
+
+    const row = await Saved.saveCustom({
+      name: item.workout_name || p.name || "Shared Workout",
+      workout_kind: type,
+      sport_id: sportId,
+      exercises: p.exercises || null,
+      segments: segments,
+      hiitMeta: p.hiitMeta || null,
+      notes: notes,
+      duration: p.duration || null,
+    });
+
+    // Tag the row with the inbox ID so we can dedupe on subsequent accepts
+    // and attribute the sender in the UI.
+    if (row && !row.error) {
+      try {
+        const list = JSON.parse(localStorage.getItem("ironz_saved_workouts_v1") || "[]");
+        const entry = list.find(s => s.id === row.id);
+        if (entry) {
+          entry._sharedFromInboxId = item.id;
+          entry.shared_from_user_id = item.sender_id;
+          entry.shared_from_name = item.sender_display_name;
+          localStorage.setItem("ironz_saved_workouts_v1", JSON.stringify(list));
+          if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("ironz_saved_workouts_v1");
+        }
+      } catch (e) {
+        console.warn("[InboxDirect] failed to tag saved entry with inbox id:", e);
+      }
+    }
+
+    return row;
   }
 
   // ── Recent recipients (localStorage) ─────────────────────────────────────

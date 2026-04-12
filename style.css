@@ -12242,6 +12242,56 @@ button:active {
   border-radius: 6px;
   margin-bottom: 10px;
 }
+
+/* Inbox workout preview (collapsible) */
+.inbox-preview-wrap {
+  margin: 0 0 10px;
+}
+.inbox-preview-toggle {
+  background: none;
+  border: none;
+  color: var(--color-accent, #6366f1);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 0;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+.inbox-preview-toggle:hover { text-decoration: underline; }
+.inbox-preview-body {
+  padding: 8px 0 0;
+}
+.inbox-preview-body .exercise-table {
+  width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+.inbox-preview-body .exercise-table th {
+  text-align: left;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--color-border);
+}
+.inbox-preview-body .exercise-table td {
+  padding: 5px 6px;
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+}
+.inbox-preview-body .exercise-table tr:last-child td {
+  border-bottom: none;
+}
+.inbox-preview-meta {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 .inbox-card-actions {
   display: flex;
   gap: 8px;
