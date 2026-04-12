@@ -158,11 +158,15 @@ serve(async (req: Request) => {
   const token = (pathToken && pathToken !== "share-preview" ? pathToken : queryToken).trim();
 
   if (!token || !/^[\w-]{6,64}$/.test(token)) {
-    return renderError("Link not found", 404);
+    // Status 200 workaround: Supabase Edge Runtime overrides Content-Type on 4xx/5xx
+    // for --no-verify-jwt functions
+    return renderError("Link not found", 200);
   }
 
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    return renderError("Server misconfigured", 500);
+    // Status 200 workaround: Supabase Edge Runtime overrides Content-Type on 4xx/5xx
+    // for --no-verify-jwt functions
+    return renderError("Server misconfigured", 200);
   }
 
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -176,9 +180,15 @@ serve(async (req: Request) => {
     .eq("share_token", token)
     .maybeSingle();
 
-  if (error || !data) return renderError("Link not found", 404);
-  if (data.revoked_at) return renderError("Link revoked", 410);
-  if (data.expires_at && new Date(data.expires_at) < new Date()) return renderError("Link expired", 410);
+  // Status 200 workaround: Supabase Edge Runtime overrides Content-Type on 4xx/5xx
+  // for --no-verify-jwt functions
+  if (error || !data) return renderError("Link not found", 200);
+  // Status 200 workaround: Supabase Edge Runtime overrides Content-Type on 4xx/5xx
+  // for --no-verify-jwt functions
+  if (data.revoked_at) return renderError("Link revoked", 200);
+  // Status 200 workaround: Supabase Edge Runtime overrides Content-Type on 4xx/5xx
+  // for --no-verify-jwt functions
+  if (data.expires_at && new Date(data.expires_at) < new Date()) return renderError("Link expired", 200);
 
   // Look up actual workout name from training_sessions by variant_id.
   if (data.variant_id) {
