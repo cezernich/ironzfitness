@@ -194,8 +194,22 @@
     let exercises = [];
     let description = "";
 
-    // Source 1: Supabase training_sessions
-    if (variantId) {
+    // Source 1: Supabase training_sessions — only for shared-workout cards,
+    // whose variant_id is a real row UUID. Library variants use local IDs
+    // like "track_yasso_800s" and will never resolve in training_sessions.
+    // Detect the saved source before trying the network round-trip.
+    let savedSource = null;
+    try {
+      const Saved = window.SavedWorkoutsLibrary;
+      if (Saved) {
+        const savedId = cardId.replace("sl-card-", "").replace("sl-custom-", "");
+        const _list = await Saved.listSaved();
+        const _entry = _list.find(s => s.id === savedId);
+        if (_entry) savedSource = _entry.source;
+      }
+    } catch {}
+
+    if (variantId && savedSource === "shared") {
       const sb = window.supabaseClient;
       if (sb) {
         try {

@@ -26,11 +26,25 @@
   }
 
   /**
-   * List saved workouts, optionally filtered.
-   * @param {Object} [filter] — { sport, sessionType, source }
+   * List saved workouts, optionally filtered. Also backfills payloads for
+   * library-source entries that were saved before the variant-snapshot fix
+   * landed — so old saves start showing exercise/segment details on the
+   * next render.
    */
   async function listSaved(filter) {
     let list = _readLocal();
+    let backfilled = false;
+    for (const s of list) {
+      if (s.source === "library" && s.variant_id && (!s.payload || !s.payload.exercises)) {
+        const bf = _buildVariantSnapshot(s.variant_id, s.sport_id, s.session_type_id);
+        if (bf) {
+          s.payload = bf.payload;
+          if (!s.custom_name && bf.name) s.custom_name = bf.name;
+          backfilled = true;
+        }
+      }
+    }
+    if (backfilled) _writeLocal(list);
     if (filter) {
       if (filter.sport)       list = list.filter(s => s.sport_id === filter.sport);
       if (filter.sessionType) list = list.filter(s => s.session_type_id === filter.sessionType);
@@ -46,6 +60,10 @@
   /**
    * Save a variant from the built-in library. Idempotent — saving the same
    * variant twice updates saved_at but does not create a duplicate.
+   *
+   * Snapshots the full variant definition into `payload` so the saved card
+   * can render exercises/segments without a Supabase round-trip and the
+   * schedule path has everything it needs to build aiSession.intervals.
    */
   async function saveFromLibrary(opts) {
     if (!opts || !opts.variantId || !opts.sportId || !opts.sessionTypeId) {
@@ -57,10 +75,20 @@
     if (!existing && list.length >= MAX_SAVED) return { error: "LIMIT_REACHED" };
     if (existing) {
       existing.saved_at = now;
+      // Backfill payload on re-save if it's missing (for entries saved
+      // before this fix shipped).
+      if (!existing.payload || !existing.payload.exercises) {
+        const bf = _buildVariantSnapshot(opts.variantId, opts.sportId, opts.sessionTypeId);
+        if (bf) {
+          existing.payload = bf.payload;
+          if (!existing.custom_name && bf.name) existing.custom_name = bf.name;
+        }
+      }
       _writeLocal(list);
       _emit("saved_from_library", { variant_id: opts.variantId, sport_id: opts.sportId, deduped: true });
       return existing;
     }
+    const snapshot = _buildVariantSnapshot(opts.variantId, opts.sportId, opts.sessionTypeId);
     const row = {
       id: _genId(),
       variant_id: opts.variantId,
@@ -68,11 +96,152 @@
       session_type_id: opts.sessionTypeId,
       source: "library",
       saved_at: now,
+      custom_name: snapshot ? snapshot.name : null,
+      payload: snapshot ? snapshot.payload : null,
     };
     list.push(row);
     _writeLocal(list);
     _emit("saved_from_library", { variant_id: opts.variantId, sport_id: opts.sportId });
     return row;
+  }
+
+  /**
+   * Look up a variant in VariantLibraries and return { name, payload } or
+   * null if the variant can't be found. The payload contains:
+   *   - variant: deep copy of the full variant definition
+   *   - description: human-readable summary string
+   *   - notes: develops/best_for combined
+   *   - exercises: array of segments (cardio) or single exercise entries
+   *     (strength), shaped so _slLoadDetail + scheduleFromSaved can consume
+   *     them directly.
+   */
+  function _buildVariantSnapshot(variantId, sportId, sessionTypeId) {
+    try {
+      const VL = (typeof window !== "undefined" && window.VariantLibraries) || null;
+      if (!VL || typeof VL.getLibraryFor !== "function") return null;
+      const variants = VL.getLibraryFor(sportId, sessionTypeId);
+      if (!Array.isArray(variants)) return null;
+      const variant = variants.find(v => v.id === variantId);
+      if (!variant) return null;
+
+      const name = variant.name || variantId;
+      const isStrength = sportId === "strength" || sportId === "weightlifting";
+      const notes = [variant.develops, variant.best_for].filter(Boolean).join(" · ") || null;
+
+      let exercises;
+      if (isStrength) {
+        exercises = _strengthVariantToExercises(variant);
+      } else {
+        exercises = _cardioVariantToSegments(variant);
+      }
+
+      return {
+        name,
+        payload: {
+          variant: JSON.parse(JSON.stringify(variant)),
+          description: variant.description || "",
+          notes,
+          exercises,
+        },
+      };
+    } catch (e) {
+      console.warn("[IronZ] _buildVariantSnapshot failed", e);
+      return null;
+    }
+  }
+
+  function _strengthVariantToExercises(variant) {
+    // Strength variants are single-exercise accessories: one row with
+    // the exercise name and its sets/reps text.
+    const row = {
+      name: variant.name || variant.id,
+      sets_reps: variant.sets_reps || "",
+      reps: variant.sets_reps || "",
+    };
+    // Try to split "3 x 12" → sets/reps
+    const m = String(variant.sets_reps || "").match(/^(\d+)\s*[x×]\s*(.+)$/i);
+    if (m) {
+      row.sets = m[1];
+      row.reps = m[2].trim();
+    }
+    if (variant.primary_muscle) row.details = `Targets: ${variant.primary_muscle}`;
+    if (variant.equipment) {
+      row.details = (row.details ? row.details + " · " : "") + `Equipment: ${variant.equipment}`;
+    }
+    return [row];
+  }
+
+  function _cardioVariantToSegments(variant) {
+    // Build a 3-segment warmup / main set / cooldown structure. The segments
+    // share the shape that _slLoadDetail and scheduleFromSaved already know
+    // how to render — name/duration/intensity/details.
+    const segments = [];
+    segments.push({
+      name: "Warm Up",
+      duration: "10 min",
+      intensity: "Z1",
+      details: "Easy effort + dynamic mobility",
+    });
+
+    const ms = variant.main_set || {};
+    let mainDuration = "";
+    let mainDetails = variant.description || variant.name || "Main set";
+
+    if (ms.rep_distance_m && ms.rep_count != null) {
+      const count = _pickRepCount(ms.rep_count);
+      mainDuration = `${count} × ${ms.rep_distance_m}m`;
+      if (ms.rest_type === "jog_distance" && ms.rest_m) {
+        mainDetails += ` · Rest: ${ms.rest_m}m jog`;
+      } else if (ms.rest_type === "jog_time" && ms.rest_sec) {
+        mainDetails += ` · Rest: ${Math.round(ms.rest_sec / 60)} min jog`;
+      } else if (ms.rest_type === "equal_time_jog") {
+        mainDetails += " · Rest: equal-time jog";
+      }
+    } else if (ms.rep_duration_sec && ms.rep_count != null) {
+      const count = _pickRepCount(ms.rep_count);
+      const minutes = Math.round(ms.rep_duration_sec / 60);
+      mainDuration = `${count} × ${minutes} min`;
+      if (ms.rest_sec) mainDetails += ` · ${Math.round(ms.rest_sec / 60)} min jog rest`;
+    } else if (ms.type === "continuous" && ms.duration_sec) {
+      mainDuration = `${Math.round(ms.duration_sec / 60)} min continuous`;
+    } else if (ms.type === "ladder" && Array.isArray(ms.rungs_m)) {
+      mainDuration = ms.rungs_m.map(m => `${m}m`).join(" / ");
+      mainDetails = "Ladder pyramid · " + mainDetails;
+    } else if (ms.type === "alternation" && Array.isArray(ms.pattern)) {
+      const count = _pickRepCount(ms.cycles);
+      const parts = ms.pattern.map(p => `${p.distance_m || p.duration_sec}${p.distance_m ? "m" : "s"}`).join("/");
+      mainDuration = `${count} × ${parts}`;
+    } else if (ms.type === "alternation_block" && Array.isArray(ms.blocks)) {
+      const count = _pickRepCount(ms.reps);
+      const totalSec = ms.blocks.reduce((t, b) => t + (b.duration_sec || 0), 0);
+      mainDuration = `${count} × ${Math.round(totalSec / 60)} min blocks`;
+    } else if (ms.interval_count && ms.interval_sec) {
+      mainDuration = `${ms.interval_count} × ${Math.round(ms.interval_sec / 60)} min`;
+    }
+
+    segments.push({
+      name: "Main Set",
+      duration: mainDuration || "Main effort",
+      intensity: "Z4",
+      details: mainDetails,
+    });
+
+    segments.push({
+      name: "Cool Down",
+      duration: "10 min",
+      intensity: "Z1",
+      details: "Easy jog",
+    });
+
+    return segments;
+  }
+
+  function _pickRepCount(spec) {
+    if (typeof spec === "number") return spec;
+    if (spec && typeof spec === "object") {
+      return spec.intermediate || spec.beginner || spec.advanced || "—";
+    }
+    return "—";
   }
 
   /**
@@ -183,8 +352,11 @@
     // renders the full colored bar + step list (same as built-in workouts).
     let intervals = [];
 
-    // Source 1: training_sessions via Supabase
-    if (e.variant_id && typeof window !== "undefined" && window.supabaseClient) {
+    // Source 1: training_sessions via Supabase — only for shared workouts,
+    // whose variant_id is a real row UUID. Library variants use local IDs
+    // like "track_yasso_800s" and will never hit training_sessions; skip
+    // the round-trip so the offline payload path runs immediately.
+    if (e.variant_id && e.source === "shared" && typeof window !== "undefined" && window.supabaseClient) {
       try {
         const { data: ts } = await window.supabaseClient
           .from("training_sessions")
