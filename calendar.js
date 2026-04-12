@@ -817,7 +817,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
           </div>
           <div class="session-header-right">
             <span class="session-duration-badge">${_getCompletionDuration(cardId) || s.duration} min</span>
-            ${_buildUndoHeaderBtn(cardId, dateStr)}${delBtn}
+            ${_buildUndoHeaderBtn(cardId, dateStr)}${_buildShareBtnFromEntry(w)}${delBtn}
             <span class="card-chevron">▾</span>
           </div>
         </div>
@@ -877,7 +877,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
           <div class="session-name">${w.fromSaved || _wTypeLabel(w.type)}</div>
           ${w.fromSaved ? `<div class="session-phase">Logged · ${_wTypeLabel(w.type)}</div>` : (w.notes ? `<div class="session-phase">${escHtml(w.notes)}</div>` : "")}
         </div>
-        <div class="session-header-right">${_buildUndoHeaderBtn(cardId, dateStr)}${editBtn}${delBtn}<span class="card-chevron">▾</span></div>
+        <div class="session-header-right">${_buildUndoHeaderBtn(cardId, dateStr)}${_buildShareBtnFromEntry(w)}${editBtn}${delBtn}<span class="card-chevron">▾</span></div>
       </div>
       <div class="card-body">${_minCompletion}</div>
     </div>`;
@@ -1288,16 +1288,22 @@ function _buildUndoHeaderBtn(sessionId, dateStr) {
 
 // ─── Share button (delegates to share.js) ──────────────────────────────────
 //
-// One-tap icon that opens the native share sheet or copies the share-preview
-// URL to the clipboard. All heavy lifting lives in share.js so styling and
-// behavior stay identical across every card type.
+// One-tap icon that opens the share action sheet (Copy link / Send to
+// friend). All state + click handling lives in share.js — this helper just
+// produces the inline HTML for each card renderer. Always returns a button
+// as long as `entry` is truthy; never silently hides the icon.
 function _buildShareBtnFromEntry(entry) {
   try {
     if (!entry) return "";
-    if (typeof buildShareIconButton === "function") {
-      return buildShareIconButton(entry, "calendar");
+    if (typeof window !== "undefined" && typeof window.buildShareIconButton === "function") {
+      return window.buildShareIconButton(entry, "calendar");
     }
-    return "";
+    // share.js not loaded yet — render an inert placeholder so the user
+    // still sees the icon slot (rather than a gap). Clicking it will no-op
+    // until share.js is ready; this path should never fire in practice.
+    return '<button class="share-icon-btn" title="Share" aria-label="Share workout" disabled>'
+         + '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>'
+         + '</button>';
   } catch (e) {
     console.warn("[IronZ] share button render skipped:", e.message);
     return "";
@@ -2387,7 +2393,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
               </div>
               <div class="session-header-right">
                 <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
-                ${_planUndoBtn}${_planDelBtn}
+                ${_planUndoBtn}${_buildShareBtnFromEntry(p)}${_planDelBtn}
                 <span class="card-chevron">▾</span>
               </div>
             </div>
