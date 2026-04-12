@@ -2394,7 +2394,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
               </div>
             </div>
             ${buildIntensityStrip(session, cardId, p.discipline)}
-            <div class="card-body">${buildStepsList(session, p.discipline)}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(session.duration, session.name) : ""}${buildWorkoutExplanation(session, dateStr, p.discipline, effectLoad, p.sessionName)}${_planCompletion}</div>
+            <div class="card-body">${buildStepsList(session, p.discipline)}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(session.duration, session.name) : ""}${buildWorkoutExplanation(session, dateStr, p.discipline, effectLoad, p.sessionName, p)}${_planCompletion}</div>
           </div>`;
       } else {
         html += `
@@ -2411,7 +2411,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
                 <span class="card-chevron">▾</span>
               </div>
             </div>
-            <div class="card-body"><p class="session-details">${p.details || ""}</p>${buildWorkoutExplanation(null, dateStr, p.discipline, effectLoad, p.sessionName)}${_planCompletion}</div>
+            <div class="card-body"><p class="session-details">${p.details || ""}</p>${buildWorkoutExplanation(null, dateStr, p.discipline, effectLoad, p.sessionName, p)}${_planCompletion}</div>
           </div>`;
       }
     }
@@ -2456,7 +2456,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
                 </div>
               </div>
               ${buildIntensityStrip(session, cardId, w.discipline)}
-              <div class="card-body">${buildStepsList(session, w.discipline)}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(session.duration, session.name) : ""}${buildWorkoutExplanation(session, dateStr, w.discipline, effectLoad, w.sessionName)}${_swMovePanel}${_swCompletion}</div>
+              <div class="card-body">${buildStepsList(session, w.discipline)}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(session.duration, session.name) : ""}${buildWorkoutExplanation(session, dateStr, w.discipline, effectLoad, w.sessionName, w)}${_swMovePanel}${_swCompletion}</div>
             </div>`;
           return;
         }
@@ -2580,7 +2580,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
             <div class="session-header-right">${(_getCompletionDuration(cardId) || _swGenDurMin) ? `<span class="session-duration-badge">${_getCompletionDuration(cardId) || _swGenDurMin} min</span>` : ""}${_swGenUndoBtn}${_swGenMoveBtn}${_swGenShareBtn}${_swGenEditBtn}${_swGenDelBtn}<span class="card-chevron">▾</span></div>
           </div>
           ${_swGenStrip}
-          <div class="card-body">${body}${buildWorkoutExplanation(null, dateStr, w.discipline || w.type, w.load || "moderate", w.sessionName)}${_swGenEditPanel}${_swGenMovePanel}${_swGenCompletion}</div>
+          <div class="card-body">${body}${buildWorkoutExplanation(null, dateStr, w.discipline || w.type, w.load || "moderate", w.sessionName, w)}${_swGenEditPanel}${_swGenMovePanel}${_swGenCompletion}</div>
         </div>`;
     });
 
@@ -2831,73 +2831,231 @@ function getRestrictedExercises(exercises, restriction) {
 }
 
 // ─── Transparency layer — "Why this?" explanations ──────────────────────────
-
-function buildWorkoutExplanation(session, dateStr, discipline, load, sessionName) {
-  let profile = {};
-  let onboarding = {};
-  try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
-  try { onboarding = JSON.parse(localStorage.getItem("onboardingData")) || {}; } catch {}
-
-  const goal = profile.goal || onboarding.goal || "";
-  const level = onboarding.level || "intermediate";
-
-  const discLabel = ({ run: "running", bike: "cycling", swim: "swimming", brick: "brick", weightlifting: "strength", yoga: "mobility", hiit: "HIIT" })[discipline] || discipline || "training";
-  const loadLabel = ({ easy: "easy", moderate: "moderate", hard: "hard", long: "long", race: "race-pace", rest: "recovery" })[load] || load || "";
-
-  const points = [];
-
-  // Progressive overload / load reasoning
-  if (loadLabel && load !== "rest") {
-    if (load === "easy") {
-      points.push("Scheduled as a lighter session to support recovery between harder efforts.");
-    } else if (load === "hard") {
-      points.push("High-intensity session to push your fitness forward. Hard days are balanced by easier days around them.");
-    } else if (load === "long") {
-      points.push("Long sessions build aerobic endurance and are placed to allow recovery afterward.");
-    } else if (load === "moderate") {
-      points.push("Moderate intensity develops your aerobic base without excessive fatigue.");
-    }
+//
+// Generates 2–3 contextual sentences explaining why a given workout is on
+// today's plan. Pulls from:
+//   - The entry's source (plan / manual / saved / community / shared)
+//   - Training phase + week from the plan metadata
+//   - Yesterday's and tomorrow's workouts to explain placement
+//   - This week's sessions for strength split rationale
+//   - The user's goal / level from the profile
+//
+// Everything is computed locally — no API calls. Caches the generated text
+// on the button's dataset so re-expand doesn't regenerate.
+function buildWorkoutExplanation(session, dateStr, discipline, load, sessionName, entry) {
+  let rationale;
+  try {
+    rationale = _generateWorkoutRationale(dateStr, discipline, load, sessionName, entry);
+  } catch (e) {
+    console.warn("[IronZ] rationale generation failed", e);
+    rationale = "";
   }
+  if (!rationale) return "";
 
-  // Goal alignment
-  if (goal) {
-    const goalLabel = escHtml(goal).replace(/([A-Z])/g, " $1").trim().toLowerCase();
-    points.push(`Aligned with your ${goalLabel} goal${discLabel !== "training" ? `, using ${discLabel} to build the fitness you need` : ""}.`);
-  }
-
-  // Level consideration
-  const levelLabels = { beginner: "beginner", intermediate: "intermediate", advanced: "advanced" };
-  if (levelLabels[level]) {
-    points.push(`Volume and intensity calibrated for a${level === "advanced" ? "n" : ""} ${levelLabels[level]} athlete.`);
-  }
-
-  // Recovery consideration — check yesterday and tomorrow
-  const dayMs = 86400000;
-  const d = new Date(dateStr + "T12:00:00");
-  const yesterday = new Date(d.getTime() - dayMs).toISOString().slice(0, 10);
-  const tomorrow  = new Date(d.getTime() + dayMs).toISOString().slice(0, 10);
-  let schedule = [];
-  try { schedule = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
-  const plan = typeof loadTrainingPlan === "function" ? loadTrainingPlan() : [];
-  const yEntry = plan.find(e => e.date === yesterday) || schedule.find(s => s.date === yesterday);
-  const tEntry = plan.find(e => e.date === tomorrow)  || schedule.find(s => s.date === tomorrow);
-  if (yEntry && (yEntry.load === "hard" || yEntry.load === "long")) {
-    points.push("Yesterday was a hard effort, so today is programmed to allow partial recovery.");
-  }
-  if (tEntry && (tEntry.load === "hard" || tEntry.load === "long")) {
-    points.push("Tomorrow has a demanding session, so today stays controlled.");
-  }
-
-  if (points.length === 0) return "";
-
-  const id = "why-" + (sessionName || "s").replace(/\W+/g, "-").slice(0, 30) + "-" + dateStr + "-" + Math.random().toString(36).slice(2, 6);
+  // Unique ID for this card's "Why this?" panel. We don't use random IDs —
+  // the ID is stable based on date + discipline + sessionName so a re-render
+  // matches the same element and the collapse/expand state can persist.
+  const rawKey = [dateStr, discipline || "", sessionName || "", load || ""].join("-");
+  const id = "why-" + rawKey.replace(/\W+/g, "-").slice(0, 60);
   return `
-    <button class="transparency-toggle" onclick="this.classList.toggle('is-open');document.getElementById('${id}').classList.toggle('is-open')">
+    <button class="transparency-toggle" data-why-target="${id}">
       ${ICONS.lightbulb} Why this workout? <span class="chevron-why">&#9662;</span>
     </button>
     <div class="transparency-section" id="${id}">
-      <ul>${points.map(p => `<li>${p}</li>`).join("")}</ul>
+      <p>${rationale}</p>
     </div>`;
+}
+
+function _generateWorkoutRationale(dateStr, discipline, load, sessionName, entry) {
+  // Figure out where this workout came from. Priority: explicit source flag
+  // → community → saved → manually added → plan-generated.
+  const source = _detectWorkoutSource(entry);
+
+  // Manually added — short attribution and done
+  if (source === "manual") {
+    const addedAt = entry && entry.created_at ? entry.created_at.slice(0, 10) : null;
+    return addedAt && addedAt !== dateStr
+      ? `You added this workout manually on ${_formatShortDate(addedAt)}.`
+      : "You added this workout manually.";
+  }
+  if (source === "community") {
+    const author = entry && (entry.author || entry.community_author);
+    return author
+      ? `Scheduled from the community — shared by ${_escEsc(author)}.`
+      : "Scheduled from a community workout.";
+  }
+  if (source === "saved") {
+    const sharedBy = entry && (entry.shared_from_name || entry.shared_from);
+    return sharedBy
+      ? `Scheduled from your saved library — originally shared by ${_escEsc(sharedBy)}.`
+      : "Scheduled from your saved workout library.";
+  }
+  if (source === "shared") {
+    const sharedBy = entry && (entry.shared_from_name || entry.sender_display_name);
+    return sharedBy
+      ? `A friend sent this to you. Originally from ${_escEsc(sharedBy)}.`
+      : "A friend sent this to you.";
+  }
+
+  // AI-generated / plan-scheduled — build contextual rationale
+  const parts = [];
+
+  // Part 1 — training phase / week context (if available)
+  if (entry && entry.phase) {
+    const phase = _escEsc(entry.phase);
+    if (entry.weekNumber) {
+      parts.push(`You're in the ${phase} phase, week ${entry.weekNumber} of your plan.`);
+    } else {
+      parts.push(`You're in the ${phase} phase of your plan.`);
+    }
+  }
+
+  // Part 2 — load-specific sentence, tailored to yesterday/tomorrow
+  const dayMs = 86400000;
+  const d = new Date(dateStr + "T12:00:00");
+  const yesterdayStr = new Date(d.getTime() - dayMs).toISOString().slice(0, 10);
+  const tomorrowStr  = new Date(d.getTime() + dayMs).toISOString().slice(0, 10);
+  const neighbors = _neighborWorkouts(yesterdayStr, tomorrowStr);
+
+  const loadKey = String(load || "").toLowerCase();
+  if (loadKey === "rest" || discipline === "rest") {
+    parts.push("This is a recovery day. Rest is when adaptation happens — today's lack of stress is what makes tomorrow's session effective.");
+  } else if (loadKey === "easy" || loadKey === "recovery") {
+    if (neighbors.y && (neighbors.y.load === "hard" || neighbors.y.load === "long")) {
+      const yDisc = _discLabel(neighbors.y.discipline || neighbors.y.type);
+      parts.push(`Yesterday's ${yDisc} was high intensity, so today stays easy to let your body adapt without piling on stress.`);
+    } else {
+      parts.push("Easy effort today — aerobic base work that builds fitness without adding fatigue.");
+    }
+  } else if (loadKey === "hard" || loadKey === "race") {
+    parts.push("High-intensity session today. This is the one that actually makes you fitter — surrounded by easier days so you can go all in.");
+  } else if (loadKey === "long") {
+    parts.push("Long endurance session. Builds the durability and aerobic capacity that race day demands.");
+  } else if (loadKey === "moderate") {
+    parts.push("Steady, controlled effort. Moderate days are where most of your fitness gets built.");
+  }
+
+  // Part 3 — strength split / weekly balance, or tomorrow preview
+  const isStrength = discipline === "weightlifting" || discipline === "bodyweight" || discipline === "hiit";
+  if (isStrength) {
+    const split = _strengthWeekContext(dateStr, entry);
+    if (split) parts.push(split);
+  } else if (neighbors.t && (neighbors.t.load === "hard" || neighbors.t.load === "long")) {
+    parts.push(`Tomorrow's ${_discLabel(neighbors.t.discipline || neighbors.t.type)} is a hard effort, so today is programmed to stay controlled.`);
+  }
+
+  // Trim to 2–3 sentences max
+  return parts.slice(0, 3).join(" ");
+}
+
+// Classify the origin of a workout entry.
+function _detectWorkoutSource(entry) {
+  if (!entry) return "plan";
+  if (entry.source === "user_added" && !entry.saved_workout_id && !entry.variant_id) return "manual";
+  if (entry.communityId || entry.community_id) return "community";
+  if (entry.shared_from_inbox_id || entry._sharedFromInboxId || entry.sender_display_name) return "shared";
+  if (entry.saved_workout_id || entry.source === "custom") return "saved";
+  if (entry.fromSaved) return "manual"; // logged workout that was started from a template
+  return "plan";
+}
+
+// Look up yesterday / tomorrow entries from plan or workoutSchedule.
+function _neighborWorkouts(yesterdayStr, tomorrowStr) {
+  let schedule = [];
+  try { schedule = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
+  const plan = typeof loadTrainingPlan === "function" ? loadTrainingPlan() : [];
+  const y = plan.find(e => e.date === yesterdayStr) || schedule.find(s => s.date === yesterdayStr);
+  const t = plan.find(e => e.date === tomorrowStr)  || schedule.find(s => s.date === tomorrowStr);
+  return { y, t };
+}
+
+// Count this week's strength sessions by muscle focus / type for the split rationale.
+function _strengthWeekContext(dateStr, entry) {
+  try {
+    const d = new Date(dateStr + "T12:00:00");
+    const dow = d.getDay(); // 0 = Sun
+    const weekStart = new Date(d);
+    weekStart.setDate(d.getDate() - ((dow + 6) % 7)); // Monday
+    const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
+    const wsStr = weekStart.toISOString().slice(0, 10);
+    const weStr = weekEnd.toISOString().slice(0, 10);
+
+    const logged = JSON.parse(localStorage.getItem("workouts") || "[]")
+      .filter(w => !w.isCompletion && w.date >= wsStr && w.date <= weStr && (w.type === "weightlifting" || w.type === "bodyweight" || w.type === "hiit"));
+    const scheduled = JSON.parse(localStorage.getItem("workoutSchedule") || "[]")
+      .filter(w => w.date >= wsStr && w.date <= weStr && (w.type === "weightlifting" || w.type === "bodyweight" || w.type === "hiit"));
+    const count = logged.length + scheduled.length;
+
+    // Try to detect a muscle focus from the session name
+    const name = String((entry && entry.sessionName) || "").toLowerCase();
+    const muscleFocus =
+      /\bpush\b|\bchest\b|\bbench/.test(name) ? "push muscles"
+      : /\bpull\b|\bback\b|\blat/.test(name) ? "pull muscles"
+      : /\bleg\b|\bquad\b|\bhamstring\b|\bsquat/.test(name) ? "legs"
+      : /\bcore\b|\babs\b/.test(name) ? "core"
+      : /\bfull.?body\b|\btotal.?body\b/.test(name) ? "full body"
+      : null;
+
+    if (muscleFocus) {
+      if (count >= 3) {
+        return `This is your ${_ordinal(count)} strength session this week — today's focus is ${muscleFocus} to keep your weekly split balanced.`;
+      }
+      return `Today's focus is ${muscleFocus}, balancing the rest of this week's strength work.`;
+    }
+    if (count >= 3) {
+      return `This is your ${_ordinal(count)} strength session this week.`;
+    }
+    return "";
+  } catch { return ""; }
+}
+
+function _discLabel(disc) {
+  const map = {
+    run: "run", running: "run",
+    bike: "ride", cycling: "ride",
+    swim: "swim", swimming: "swim",
+    brick: "brick session",
+    weightlifting: "strength session",
+    bodyweight: "bodyweight workout",
+    hiit: "HIIT session",
+    yoga: "yoga session",
+  };
+  return map[disc] || "session";
+}
+
+function _ordinal(n) {
+  const s = ["th", "st", "nd", "rd"], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function _escEsc(v) {
+  return String(v == null ? "" : v).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
+}
+
+function _formatShortDate(iso) {
+  try {
+    const d = new Date(iso + "T12:00:00");
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  } catch { return iso; }
+}
+
+// Document-level delegator for "Why this workout?" toggles. Single listener
+// handles every instance across every card renderer — matches the pattern
+// used for share buttons and per-set toggles. Prevents the parent card
+// header's onclick="toggleSection(...)" from firing.
+if (typeof document !== "undefined" && !document.__whyToggleWired) {
+  document.__whyToggleWired = true;
+  document.addEventListener("click", function (e) {
+    const btn = e.target && e.target.closest && e.target.closest(".transparency-toggle[data-why-target]");
+    if (!btn) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const targetId = btn.getAttribute("data-why-target");
+    const panel = targetId && document.getElementById(targetId);
+    if (!panel) return;
+    btn.classList.toggle("is-open");
+    panel.classList.toggle("is-open");
+  });
 }
 
 function buildMealExplanation(dateStr, nutrition) {
