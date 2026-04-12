@@ -8478,16 +8478,16 @@ button:active {
 
   .session-card-header { flex-wrap: wrap; }
 
-  /* Week view on mobile: scroll horizontally */
+  /* Week view on mobile: 7 equal columns, always fit viewport */
   .calendar-grid--week {
-    grid-template-columns: repeat(7, minmax(80px, 1fr));
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    overflow-x: hidden;
   }
 
-  .week-cell { min-height: 100px; padding: 8px 6px; }
+  .week-cell { min-height: 100px; padding: 4px; min-width: 0; }
 
-  .week-cell-date { font-size: 0.9rem; }
+  .week-cell-date { font-size: 0.82rem; }
 
   /* Calendar controls: tighter on mobile */
   .cal-controls { gap: 6px; }
@@ -9412,15 +9412,37 @@ button:active {
   .cell-day-num { font-size: 0.7rem; }
   .dot { width: 4px; height: 4px; }
 
-  /* ── Week view: narrower cells, still scrollable ── */
+  /* ── Week view: 7 equal columns, always fit viewport ── */
   .calendar-grid--week {
-    grid-template-columns: repeat(7, minmax(58px, 1fr));
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    overflow-x: hidden;
   }
-  .week-cell { min-height: 80px; padding: 6px 4px; }
-  .week-cell-date { font-size: 0.82rem; }
-  .week-cell-dow { font-size: 0.68rem; }
+  .week-cell {
+    min-height: 80px;
+    padding: 4px;
+    min-width: 0;
+    gap: 3px;
+  }
+  .week-cell-date {
+    font-size: 0.78rem;
+    width: 20px;
+    height: 20px;
+  }
+  .week-cell-dow { font-size: 0.62rem; letter-spacing: 0.02em; }
+  .week-cell-header { gap: 1px; }
+  .week-cell-sessions { gap: 2px; }
+  /* Narrow cells can't fit session labels — show icon + color stripe only */
+  .week-cell .session-bubble {
+    padding: 2px;
+    font-size: 0.55rem;
+    gap: 0;
+    border-left-width: 2px;
+  }
+  .week-cell .session-bubble-label { display: none; }
+  .week-cell .session-bubble-icon { font-size: 0.75rem; }
+  .week-cell-rest-label { font-size: 0.6rem; }
+  .week-cell-intensity { font-size: 0.55rem; padding: 1px 3px; }
 
   /* ── Heatmap: smaller cells ── */
   .heatmap-cell { width: 11px; height: 11px; border-radius: 2px; }
