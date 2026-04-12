@@ -9,16 +9,33 @@ const DEV_BYPASS_AUTH = false;
 
 // ── Show / hide helpers ────────────────────────────────────────────────────────
 
+function hideSplashScreen() {
+  const splash = document.getElementById('splash-screen');
+  if (!splash || splash.dataset.hidden === '1') return;
+  splash.dataset.hidden = '1';
+  splash.classList.add('is-hiding');
+  // Remove from flow after fade completes so it never intercepts taps
+  setTimeout(() => { splash.style.display = 'none'; }, 220);
+}
+
 function showAuthScreen() {
+  hideSplashScreen();
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('app-header').style.display  = 'none';
   document.getElementById('app-main').style.display    = 'none';
+  const bn = document.getElementById('bottom-nav');
+  if (bn) bn.style.display = 'none';
+  document.body.classList.add('auth-visible');
 }
 
 function hideAuthScreen() {
+  hideSplashScreen();
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app-header').style.display  = '';
   document.getElementById('app-main').style.display    = '';
+  const bn = document.getElementById('bottom-nav');
+  if (bn) bn.style.display = '';
+  document.body.classList.remove('auth-visible');
 }
 
 // ── Auth tab switching ─────────────────────────────────────────────────────────
@@ -63,6 +80,9 @@ function showNewPasswordPanel() {
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('app-header').style.display  = 'none';
   document.getElementById('app-main').style.display    = 'none';
+  const bn = document.getElementById('bottom-nav');
+  if (bn) bn.style.display = 'none';
+  document.body.classList.add('auth-visible');
   document.getElementById('auth-panel-newpw').style.display = '';
   document.getElementById('auth-tab-login').classList.remove('active');
   document.getElementById('auth-tab-signup').classList.remove('active');
@@ -251,7 +271,17 @@ async function ensureProfile(user) {
 // ── Boot sequence ──────────────────────────────────────────────────────────────
 
 async function authBoot() {
+  // Safety net: if getSession() stalls, fall back to login screen after 3s
+  // so the user is never stuck staring at the splash indefinitely.
+  const splashTimeout = setTimeout(() => {
+    if (!window._appInitialized) {
+      console.warn('Auth: session check timed out after 3s, showing login');
+      showAuthScreen();
+    }
+  }, 3000);
+
   if (DEV_BYPASS_AUTH) {
+    clearTimeout(splashTimeout);
     hideAuthScreen();
     window._appInitialized = true;
     window._userRole = "admin";
@@ -268,6 +298,8 @@ async function authBoot() {
   } catch (e) {
     console.warn('Auth: getSession error', e);
   }
+
+  clearTimeout(splashTimeout);
 
   if (session) {
     try { await ensureProfile(session.user); } catch (e) { console.warn('Auth: ensureProfile error', e); }

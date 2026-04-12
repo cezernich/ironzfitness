@@ -81,13 +81,29 @@ function openBuildPlanTab(tabName) {
 
 function showTab(name) {
   document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
-  document.querySelectorAll(".nav-circle[data-tab]").forEach(btn => btn.classList.remove("active"));
+  document.querySelectorAll(".bottom-nav-tab[data-tab]").forEach(btn => btn.classList.remove("active"));
 
   const tabEl = document.getElementById(`tab-${name}`);
   if (tabEl) tabEl.classList.add("active");
 
-  const navBtn = document.querySelector(`.nav-circle[data-tab="${name}"]`);
-  if (navBtn) navBtn.classList.add("active");
+  // Highlight the matching bottom-nav tab. Tabs that don't have their own
+  // nav entry (inbox, saved-library, admin, nutrition when disabled, etc.)
+  // map to the closest peer so users keep a visible anchor.
+  const navTabFor = {
+    home: "home",
+    training: "training",
+    nutrition: "nutrition",
+    stats: "stats",
+    community: "community",
+    settings: "settings",
+    // Secondary destinations highlight a peer
+    "saved-library": "training",
+    inbox: "community",
+    admin: "settings",
+  };
+  const bottomTabName = navTabFor[name] || name;
+  const bottomBtn = document.querySelector(`.bottom-nav-tab[data-tab="${bottomTabName}"]`);
+  if (bottomBtn) bottomBtn.classList.add("active");
 
   localStorage.setItem("activeTab", name);
   if (typeof trackEvent === "function") trackEvent("tab_viewed", { tab: name });
@@ -210,8 +226,9 @@ function getNavInitials() {
 }
 
 function updateNavInitials() {
-  const el = document.getElementById("nav-initials");
-  if (el) el.textContent = getNavInitials();
+  const initials = getNavInitials();
+  const el = document.getElementById("bottom-nav-initials");
+  if (el) el.textContent = initials;
 }
 
 function toggleProfileDropdown() {
@@ -266,12 +283,12 @@ function setNutritionEnabled(enabled) {
 
 function applyNutritionToggle() {
   const enabled = isNutritionEnabled();
-  const navBtn         = document.getElementById("nav-nutrition-btn");
-  const summarySection = document.getElementById("section-todays-summary");
-  const toggle         = document.getElementById("pref-nutrition-toggle");
-  if (navBtn)         navBtn.style.display         = enabled ? "" : "none";
-  if (summarySection) summarySection.style.display  = enabled ? "" : "none";
-  if (toggle)         toggle.checked               = enabled;
+  const bottomNutritionBtn = document.getElementById("bottom-nav-nutrition");
+  const summarySection     = document.getElementById("section-todays-summary");
+  const toggle             = document.getElementById("pref-nutrition-toggle");
+  if (bottomNutritionBtn) bottomNutritionBtn.style.display = enabled ? "" : "none";
+  if (summarySection)     summarySection.style.display      = enabled ? "" : "none";
+  if (toggle)             toggle.checked                    = enabled;
 }
 
 function getMeasurementSystem() {
