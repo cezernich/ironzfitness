@@ -755,12 +755,25 @@ function loadCompletedSessions() {
   let logged   = [];
   try { logged = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
 
-  // Match Workout History filter exactly: past/today entries, excluding completion records.
-  // Completion records (isCompletion:true) are metadata attached to scheduled sessions by
-  // the live tracker; they must not be counted as standalone workouts or Stats will
-  // over-count compared to the History list.
-  return logged
-    .filter(w => !w.isCompletion && w.date <= today)
+  // Past/today only
+  const past = logged.filter(w => w.date <= today);
+
+  // Hand-logged workouts (no isCompletion flag) — always counted
+  const handLogged = past.filter(w => !w.isCompletion);
+
+  // Dedup key: date + type. If a hand-logged workout exists for a (date, type),
+  // any matching isCompletion record is considered a duplicate and skipped.
+  const handLoggedKeys = new Set(handLogged.map(w => `${w.date}|${w.type}`));
+
+  // Include completion records (from live tracker or day-detail save form)
+  // ONLY when there's no matching hand-logged workout for the same date+type.
+  // This preserves live-tracker / scheduled-session completions in stats without
+  // double-counting manual logs.
+  const standaloneCompletions = past.filter(w =>
+    w.isCompletion && !handLoggedKeys.has(`${w.date}|${w.type}`)
+  );
+
+  return [...handLogged, ...standaloneCompletions]
     .map(w => ({ id: w.id, date: w.date, type: w.type, minutes: _extractWorkoutMinutes(w) }));
 }
 

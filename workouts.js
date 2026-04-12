@@ -1944,18 +1944,28 @@ function filterWorkoutHistory(query) {
   const q = (query || "").toLowerCase().trim();
   const today = new Date().toISOString().slice(0, 10);
   const allWorkouts = loadWorkouts();
-  // Build a map of completion records keyed by the original session they completed
-  const completionMap = {};
-  allWorkouts.forEach(w => {
+
+  // Past/today only
+  const past = allWorkouts.filter(w => w.date <= today);
+
+  // Hand-logged workouts (no isCompletion flag) — always shown
+  const handLogged = past.filter(w => !w.isCompletion);
+  const handLoggedKeys = new Set(handLogged.map(w => `${w.date}|${w.type}`));
+
+  // Map of live-tracker completion records keyed by their session-log target,
+  // used to overlay richer exercise data onto an existing hand-logged workout.
+  const liveOverlayMap = {};
+  past.forEach(w => {
     if (w.isCompletion && w.completedSessionId && w.liveTracked) {
-      completionMap[w.completedSessionId] = w;
+      liveOverlayMap[w.completedSessionId] = w;
     }
   });
-  // Show only past/today workouts, exclude completion records
-  // But overlay live-tracked completion data onto the original workout
-  const all = allWorkouts.filter(w => !w.isCompletion && w.date <= today).map(w => {
+
+  // Overlay live-tracker data onto hand-logged workouts where it applies
+  // (user started a live session from an existing manual log).
+  const handLoggedWithOverlay = handLogged.map(w => {
     const sessionKey = `session-log-${w.id}`;
-    const comp = completionMap[sessionKey];
+    const comp = liveOverlayMap[sessionKey];
     if (comp && comp.exercises && comp.exercises.length) {
       return Object.assign({}, w, {
         exercises: comp.exercises,
@@ -1965,6 +1975,17 @@ function filterWorkoutHistory(query) {
     }
     return w;
   });
+
+  // Include isCompletion records that don't duplicate a hand-logged workout
+  // for the same (date, type). These represent scheduled-session completions
+  // (via live tracker or day-detail Save) that would otherwise never appear.
+  const standaloneCompletions = past.filter(w =>
+    w.isCompletion && !handLoggedKeys.has(`${w.date}|${w.type}`)
+  );
+
+  const all = [...handLoggedWithOverlay, ...standaloneCompletions]
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
   const filtered = q
     ? all.filter(w => (w.name||"").toLowerCase().includes(q) || (w.type||"").toLowerCase().includes(q) || (w.notes||"").toLowerCase().includes(q))
     : all;
