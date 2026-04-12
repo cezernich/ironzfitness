@@ -8303,25 +8303,37 @@ button:active {
   font-weight: 700;
   min-height: 16px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .weekly-track {
   width: 100%;
   max-width: 48px;
   height: 96px;
-  background: var(--color-surface-2);
+  /* Subtle neutral track, visible on both light and dark themes */
+  background: rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--color-border);
   border-radius: 8px 8px 0 0;
   overflow: hidden;
   display: flex;
   align-items: flex-end;
 }
+:root[data-theme="blackout"] .weekly-track,
+:root[data-theme="iron"]    .weekly-track,
+:root[data-theme="midnight"] .weekly-track {
+  background: rgba(255, 255, 255, 0.06);
+}
 
 .weekly-fill {
   width: 100%;
-  background: rgba(129, 140, 248, 0.45);
-  border-radius: 8px 8px 0 0;
+  /* Past weeks: muted accent at 60% opacity — clearly visible on every theme */
+  background: color-mix(in srgb, var(--color-accent) 60%, transparent);
+  border-radius: 7px 7px 0 0;
   transition: height 0.4s ease;
-  min-height: 2px;
+}
+/* Fallback for engines without color-mix() */
+@supports not (background: color-mix(in srgb, red, blue)) {
+  .weekly-fill { background: rgba(129, 140, 248, 0.65); }
 }
 
 .weekly-fill--now {

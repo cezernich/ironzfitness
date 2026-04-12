@@ -109,21 +109,53 @@ function buildStatsOverview(total, streaks, thisWeek, thisMonth) {
 
 /* ─── Totals Section ──────────────────────────────────────────────────── */
 
+// Types that conceptually track distance. Everything else is time-only.
+const _DIST_TYPES = new Set([
+  "running", "run",
+  "cycling", "bike", "bicycling",
+  "swimming", "swim",
+  "walking", "walk",
+  "rowing", "row",
+  "hiking", "hike",
+  "triathlon", "brick",
+  "stairstepper",
+  "hyrox",
+]);
+
+// Types grouped as "lifting" for display consolidation. Bodyweight and
+// weightlifting roll up to a single row because most users think of them
+// together. Everything else keeps its own row.
+function _normalizeType(t) {
+  const x = (t || "").toLowerCase();
+  if (x === "bodyweight") return "weightlifting";
+  if (x === "run")  return "running";
+  if (x === "bike" || x === "bicycling") return "cycling";
+  if (x === "swim") return "swimming";
+  if (x === "walk") return "walking";
+  if (x === "row")  return "rowing";
+  if (x === "hike") return "hiking";
+  return x || "general";
+}
+
 function _computeTotals(workouts) {
-  const totals = { runMin: 0, bikeMin: 0, swimMin: 0, liftMin: 0, hiitMin: 0, cardioMin: 0, yogaMin: 0, totalMin: 0, runKm: 0, bikeKm: 0, swimKm: 0 };
+  const byType = {};
+  let totalMin = 0;
+
+  function _ensure(t) {
+    if (!byType[t]) byType[t] = { timeMin: 0, km: 0 };
+    return byType[t];
+  }
 
   workouts.forEach(w => {
-    const type = (w.type || "").toLowerCase();
+    const type = _normalizeType(w.type);
     const mins = _extractWorkoutMinutes(w);
-    totals.totalMin += mins;
+    const bucket = _ensure(type);
+    bucket.timeMin += mins;
+    totalMin += mins;
 
-    if (type === "running")                                    totals.runMin  += mins;
-    else if (type === "cycling")                               totals.bikeMin += mins;
-    else if (type === "swimming")                              totals.swimMin += mins;
-    else if (type === "weightlifting" || type === "bodyweight") totals.liftMin += mins;
-    else if (type === "hiit")                                  totals.hiitMin += mins;
-    else if (type === "yoga")                                  totals.yogaMin += mins;
-    else                                                       totals.cardioMin += mins;
+    // Only accumulate distance for types that conceptually support it.
+    const tracksDist = _DIST_TYPES.has(type);
+    if (!tracksDist) return;
 
     // Distance from intervals
     if (w.aiSession?.intervals) {
@@ -136,11 +168,7 @@ function _computeTotals(workouts) {
         if (miMatch) km = parseFloat(miMatch[1]) * 1.60934;
         else if (kmMatch) km = parseFloat(kmMatch[1]);
         km *= reps;
-        if (km > 0) {
-          if (type === "running") totals.runKm += km;
-          else if (type === "cycling") totals.bikeKm += km;
-          else if (type === "swimming") totals.swimKm += km;
-        }
+        if (km > 0) bucket.km += km;
       });
     }
     // Distance from direct field
@@ -151,14 +179,10 @@ function _computeTotals(workouts) {
       let km = 0;
       if (miM) km = parseFloat(miM[1]) * 1.60934;
       else if (kmM) km = parseFloat(kmM[1]);
-      if (km > 0) {
-        if (type === "running") totals.runKm += km;
-        else if (type === "cycling") totals.bikeKm += km;
-        else if (type === "swimming") totals.swimKm += km;
-      }
+      if (km > 0) bucket.km += km;
     }
   });
-  return totals;
+  return { byType, totalMin };
 }
 
 function _parseDurMinFromStr(str) {
@@ -190,6 +214,42 @@ function _fmtSwimDist(km) {
   return yd < 1760 ? `${Math.round(yd)} yd` : `${(yd / 1760).toFixed(1)} mi`;
 }
 
+// Per-type display metadata for the Totals section. The label is what
+// the user sees; the icon is from icons.js. Types not listed here fall
+// back to a title-cased version of the key + ICONS.activity.
+const _TOTALS_TYPE_META = {
+  running:      { label: "Running",       icon: () => ICONS.run     },
+  cycling:      { label: "Cycling",       icon: () => ICONS.bike    },
+  swimming:     { label: "Swimming",      icon: () => ICONS.swim    },
+  weightlifting:{ label: "Lifting",       icon: () => ICONS.weights },
+  hiit:         { label: "HIIT",          icon: () => ICONS.flame   },
+  yoga:         { label: "Yoga",          icon: () => ICONS.activity},
+  walking:      { label: "Walking",       icon: () => ICONS.activity},
+  rowing:       { label: "Rowing",        icon: () => ICONS.activity},
+  hiking:       { label: "Hiking",        icon: () => ICONS.activity},
+  triathlon:    { label: "Triathlon",     icon: () => ICONS.swim    },
+  brick:        { label: "Brick",         icon: () => ICONS.bike    },
+  hyrox:        { label: "Hyrox",         icon: () => ICONS.flame   },
+  stairstepper: { label: "Stair Stepper", icon: () => ICONS.run     },
+  pilates:      { label: "Pilates",       icon: () => ICONS.activity},
+  mobility:     { label: "Mobility",      icon: () => ICONS.activity},
+  wellness:     { label: "Wellness",      icon: () => ICONS.activity},
+  sauna:        { label: "Sauna",         icon: () => ICONS.activity},
+  sport:        { label: "Sport",         icon: () => ICONS.activity},
+  general:      { label: "General",       icon: () => ICONS.activity},
+};
+
+function _totalsLabelFor(type) {
+  const meta = _TOTALS_TYPE_META[type];
+  if (meta) return meta.label;
+  return type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, " ");
+}
+function _totalsIconFor(type) {
+  const meta = _TOTALS_TYPE_META[type];
+  if (meta && typeof meta.icon === "function") return meta.icon();
+  return ICONS.activity;
+}
+
 function buildStatsTotals() {
   let allWorkouts = [];
   try { allWorkouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
@@ -205,25 +265,54 @@ function buildStatsTotals() {
   const yearTotals  = _computeTotals(thisYear);
   const monthTotals = _computeTotals(thisMonth);
 
-  function _row(icon, label, monthTime, yearTime, allTime, monthDist, yearDist, allDist) {
-    const hasTime = monthTime !== "0 min" || yearTime !== "0 min" || allTime !== "0 min";
-    const hasDist = monthDist || yearDist || allDist;
-    if (!hasTime && !hasDist) return "";
-    return `<div class="totals-row">
+  // Collect every type that has any time in any timeframe — "starts blank,
+  // fills up as you log workouts."
+  const typeSet = new Set([
+    ...Object.keys(allTotals.byType),
+    ...Object.keys(yearTotals.byType),
+    ...Object.keys(monthTotals.byType),
+  ]);
+  const typesWithTime = [...typeSet].filter(t =>
+    (allTotals.byType[t]?.timeMin || 0) > 0
+    || (yearTotals.byType[t]?.timeMin || 0) > 0
+    || (monthTotals.byType[t]?.timeMin || 0) > 0
+  );
+  // Sort by all-time minutes desc so the biggest activity shows first.
+  typesWithTime.sort((a, b) =>
+    (allTotals.byType[b]?.timeMin || 0) - (allTotals.byType[a]?.timeMin || 0)
+  );
+
+  function _row(type) {
+    const icon  = _totalsIconFor(type);
+    const label = _totalsLabelFor(type);
+    const mT = allTotals.byType;
+    const monthMin = monthTotals.byType[type]?.timeMin || 0;
+    const yearMin  = yearTotals.byType[type]?.timeMin  || 0;
+    const allMin   = allTotals.byType[type]?.timeMin   || 0;
+    const monthKm  = monthTotals.byType[type]?.km      || 0;
+    const yearKm   = yearTotals.byType[type]?.km       || 0;
+    const allKm    = allTotals.byType[type]?.km        || 0;
+    const hasDist  = (monthKm + yearKm + allKm) > 0;
+    const fmtDist  = type === "swimming" ? _fmtSwimDist : _fmtDist;
+
+    const mTimeStr = _fmtHours(monthMin);
+    const yTimeStr = _fmtHours(yearMin);
+    const aTimeStr = _fmtHours(allMin);
+    const mDistStr = hasDist ? fmtDist(monthKm) : "";
+    const yDistStr = hasDist ? fmtDist(yearKm)  : "";
+    const aDistStr = hasDist ? fmtDist(allKm)   : "";
+
+    return `<div class="totals-row" data-type="${type}"${hasDist ? ' data-has-dist="1"' : ''}>
       <span class="totals-icon">${icon}</span>
       <span class="totals-label">${label}</span>
-      <span class="totals-value" data-month="${monthTime}" data-year="${yearTime}" data-all="${allTime}"${hasDist ? ` data-month-dist="${monthDist}" data-year-dist="${yearDist}" data-all-dist="${allDist}"` : ""}>${monthTime}</span>
+      <span class="totals-value"
+        data-month="${mTimeStr}" data-year="${yTimeStr}" data-all="${aTimeStr}"
+        ${hasDist ? `data-month-dist="${mDistStr}" data-year-dist="${yDistStr}" data-all-dist="${aDistStr}"` : ""}
+      >${mTimeStr}</span>
     </div>`;
   }
 
-  const rows =
-    _row(ICONS.run, "Running",    _fmtHours(monthTotals.runMin),  _fmtHours(yearTotals.runMin),  _fmtHours(allTotals.runMin),  _fmtDist(monthTotals.runKm),  _fmtDist(yearTotals.runKm),  _fmtDist(allTotals.runKm)) +
-    _row(ICONS.bike, "Cycling",   _fmtHours(monthTotals.bikeMin), _fmtHours(yearTotals.bikeMin), _fmtHours(allTotals.bikeMin), _fmtDist(monthTotals.bikeKm), _fmtDist(yearTotals.bikeKm), _fmtDist(allTotals.bikeKm)) +
-    _row(ICONS.swim, "Swimming",  _fmtHours(monthTotals.swimMin), _fmtHours(yearTotals.swimMin), _fmtHours(allTotals.swimMin), _fmtSwimDist(monthTotals.swimKm), _fmtSwimDist(yearTotals.swimKm), _fmtSwimDist(allTotals.swimKm)) +
-    _row(ICONS.weights, "Lifting", _fmtHours(monthTotals.liftMin), _fmtHours(yearTotals.liftMin), _fmtHours(allTotals.liftMin)) +
-    _row(ICONS.flame, "HIIT",     _fmtHours(monthTotals.hiitMin), _fmtHours(yearTotals.hiitMin), _fmtHours(allTotals.hiitMin)) +
-    _row(ICONS.activity, "Cardio", _fmtHours(monthTotals.cardioMin), _fmtHours(yearTotals.cardioMin), _fmtHours(allTotals.cardioMin)) +
-    (monthTotals.yogaMin || yearTotals.yogaMin || allTotals.yogaMin ? _row(ICONS.yoga || ICONS.activity, "Yoga", _fmtHours(monthTotals.yogaMin), _fmtHours(yearTotals.yogaMin), _fmtHours(allTotals.yogaMin)) : "");
+  const rows = typesWithTime.map(_row).join("");
 
   if (!rows) return "";
 
@@ -276,6 +365,32 @@ function switchTotalsUnit(unit, btn) {
 function _updateTotalsValues(section) {
   const view = _totalsCurrentView;
   const unit = _totalsCurrentUnit;
+
+  // In Distance mode, hide rows that don't track distance (strength, HIIT,
+  // yoga, etc.). In Time mode, every row is visible.
+  section.querySelectorAll(".totals-row").forEach(row => {
+    const hasDist = row.dataset.hasDist === "1";
+    row.style.display = (unit === "distance" && !hasDist) ? "none" : "";
+  });
+
+  // Show an empty message if Distance mode has zero visible rows.
+  const grid = section.querySelector(".totals-grid");
+  let emptyEl = section.querySelector(".totals-empty-msg");
+  if (grid) {
+    const anyVisible = !!grid.querySelector('.totals-row:not([style*="display: none"])');
+    if (unit === "distance" && !anyVisible) {
+      if (!emptyEl) {
+        emptyEl = document.createElement("p");
+        emptyEl.className = "totals-empty-msg empty-msg";
+        emptyEl.textContent = "No distance logged yet. Log a run, ride, or swim to fill this in.";
+        grid.appendChild(emptyEl);
+      }
+      emptyEl.style.display = "";
+    } else if (emptyEl) {
+      emptyEl.style.display = "none";
+    }
+  }
+
   section.querySelectorAll(".totals-value").forEach(el => {
     const hasDist = el.dataset.monthDist;
     if (unit === "distance" && hasDist) {
@@ -412,19 +527,23 @@ function buildStatsWeekly(workouts) {
     const ms = new Date(thisMonday); ms.setDate(ms.getDate() - i*7);
     const me = new Date(ms); me.setDate(me.getDate()+6);
     const msS = localDateStr(ms), meS = localDateStr(me);
-    const inWeek  = workouts.filter(w => w.date >= msS && w.date <= meS);
-    const minutes = inWeek.reduce((sum, w) => sum + (w.minutes || 0), 0);
+    const inWeek = workouts.filter(w => w.date >= msS && w.date <= meS);
     weekData.push({
       label: ms.toLocaleDateString("en-US", { month:"short", day:"numeric" }),
-      minutes, isCurrent: i === 0,
+      count: inWeek.length,
+      isCurrent: i === 0,
     });
   }
-  const maxMin = Math.max(...weekData.map(w => w.minutes), 1);
+  // Scale bar heights relative to the max workout count across the 4 weeks.
+  const maxCount = Math.max(...weekData.map(w => w.count), 1);
   const bars = weekData.map(w => {
-    const pct = Math.round((w.minutes / maxMin) * 100);
+    // Floor at 12% so non-zero weeks are always clearly visible; zero weeks
+    // show just the track background.
+    const pct = w.count === 0 ? 0 : Math.max(12, Math.round((w.count / maxCount) * 100));
+    const countLabel = w.count === 0 ? "" : (w.count === 1 ? "1 workout" : `${w.count} workouts`);
     return `
       <div class="weekly-col">
-        <div class="weekly-count">${_fmtMinutes(w.minutes)}</div>
+        <div class="weekly-count">${countLabel}</div>
         <div class="weekly-track">
           <div class="weekly-fill${w.isCurrent?" weekly-fill--now":""}" style="height:${pct}%"></div>
         </div>
