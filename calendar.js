@@ -1329,11 +1329,6 @@ function _buildShareBtnFromEntry(entry) {
   }
 }
 
-// Legacy share entry cache — still referenced by the new share.js via a
-// back-compat shim in case older inline onclicks somewhere call it. Kept
-// empty to avoid breakage.
-const _shareEntryCache = {};
-
 /** Returns the completed duration for a session, if available */
 function _getCompletionDuration(sessionId) {
   try {
