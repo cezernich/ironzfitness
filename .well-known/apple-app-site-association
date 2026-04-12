@@ -3,9 +3,12 @@
     "apps": [],
     "details": [
       {
-        "appID": "REPLACE_WITH_TEAM_ID.com.ironz.app",
-        "paths": ["/share.html*", "/share*"]
+        "appID": "PLACEHOLDER_TEAMID.com.ironz.app",
+        "paths": ["/share/*", "/workout/*", "/invite/*"]
       }
     ]
+  },
+  "webcredentials": {
+    "apps": ["PLACEHOLDER_TEAMID.com.ironz.app"]
   }
 }
