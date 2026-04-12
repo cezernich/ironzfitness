@@ -1030,11 +1030,14 @@ function cpTogglePerSet(id) {
 function cpPyramidSetsChanged(id) {
   const detail = document.getElementById(`cp-pyr-${id}`);
   if (!detail || detail.style.display === "none") return;
-  const setsVal = parseInt(document.getElementById(`cp-msets-${id}`)?.value) || 0;
+  const setsInput = document.getElementById(`cp-msets-${id}`);
+  let setsVal = parseInt(setsInput?.value) || 0;
+  if (setsVal < 1) {
+    setsVal = parseInt(setsInput?.placeholder) || 3;
+    if (setsInput && !setsInput.value) setsInput.value = String(setsVal);
+  }
   const defaultReps = document.getElementById(`cp-mreps-${id}`)?.value || "";
   const defaultWeight = document.getElementById(`cp-mwt-${id}`)?.value || "";
-
-  if (setsVal < 1) { detail.innerHTML = ""; return; }
 
   const existing = [];
   detail.querySelectorAll(".ex-pyr-row").forEach(pr => {

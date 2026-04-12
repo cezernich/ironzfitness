@@ -5652,15 +5652,6 @@ function qeAddExerciseRow() {
     }
   });
   qeContainer.appendChild(div);
-  // TEMP DIAGNOSTIC — print the rendered toggle so we can verify the attrs.
-  try {
-    const _dbgToggle = div.querySelector(".ex-row-customize-toggle");
-    if (_dbgToggle) {
-      console.log("[PYR-DEBUG] qeAddExerciseRow rendered toggle id=", id, "outerHTML=", _dbgToggle.outerHTML);
-    } else {
-      console.log("[PYR-DEBUG] qeAddExerciseRow id=", id, "— no .ex-row-customize-toggle found in div");
-    }
-  } catch (_e) {}
 }
 
 function _qeClearAllHints() {
@@ -5776,13 +5767,10 @@ function qeRemoveRow(id) {
 
 // Toggle the per-set customization panel for a row. Collapsed by default.
 function qeTogglePerSet(id) {
-  console.log("[PYR-DEBUG] qeTogglePerSet called with id=", id, "type=", typeof id);
   const detail = document.getElementById(`qe-pyr-${id}`);
   const toggle = document.getElementById(`qe-pyr-toggle-${id}`);
-  console.log("[PYR-DEBUG] qeTogglePerSet lookup", { detail, toggle, detailId: `qe-pyr-${id}`, toggleId: `qe-pyr-toggle-${id}` });
   if (!detail || !toggle) return;
   const isHidden = detail.style.display === "none" || !detail.style.display;
-  console.log("[PYR-DEBUG] qeTogglePerSet isHidden=", isHidden, "current display=", detail.style.display);
   if (isHidden) {
     detail.style.display = "";
     toggle.textContent = "Collapse ▴";
@@ -5798,11 +5786,17 @@ function qeTogglePerSet(id) {
 function qePyramidSetsChanged(id) {
   const detail = document.getElementById(`qe-pyr-${id}`);
   if (!detail || detail.style.display === "none") return;
-  const setsVal = parseInt(document.getElementById(`qe-msets-${id}`)?.value) || 0;
+  const setsInput = document.getElementById(`qe-msets-${id}`);
+  let setsVal = parseInt(setsInput?.value) || 0;
+  // Fall back to the placeholder default so tapping "Customize per set"
+  // always produces rows even when the user hasn't typed a Sets count yet.
+  // The placeholder is the implied default (usually "3").
+  if (setsVal < 1) {
+    setsVal = parseInt(setsInput?.placeholder) || 3;
+    if (setsInput && !setsInput.value) setsInput.value = String(setsVal);
+  }
   const defaultReps = document.getElementById(`qe-mreps-${id}`)?.value || "";
   const defaultWeight = document.getElementById(`qe-mwt-${id}`)?.value || "";
-
-  if (setsVal < 1) { detail.innerHTML = ""; return; }
 
   // Preserve any existing per-set values so typing into Sets doesn't wipe edits
   const existing = [];

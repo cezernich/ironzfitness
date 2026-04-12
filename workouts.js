@@ -1571,10 +1571,14 @@ function exPyramidSetsChanged(input) {
   if (!row) return;
   const detail = row.querySelector(".ex-pyramid-detail");
   if (!detail || detail.style.display === "none") return;
-  const setsVal = parseInt(row.querySelector(".ex-sets")?.value) || 0;
+  const setsInput = row.querySelector(".ex-sets");
+  let setsVal = parseInt(setsInput?.value) || 0;
+  if (setsVal < 1) {
+    setsVal = parseInt(setsInput?.placeholder) || 3;
+    if (setsInput && !setsInput.value) setsInput.value = String(setsVal);
+  }
   const defaultReps = row.querySelector(".ex-reps")?.value || "";
   const defaultWeight = row.querySelector(".ex-weight")?.value || "";
-  if (setsVal < 1) { detail.innerHTML = ""; return; }
 
   const existing = [];
   detail.querySelectorAll(".ex-pyr-row").forEach(pr => {

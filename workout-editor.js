@@ -337,10 +337,14 @@ function _editRenderSetDetails(rowId, details) {
 function editSetCountChanged(rowId) {
   const detailsEl = document.getElementById(`edit-sd-${rowId}`);
   if (!detailsEl || detailsEl.style.display === "none") return;
-  const numSets = parseInt(document.getElementById(`edit-sets-${rowId}`)?.value) || 0;
+  const setsInput = document.getElementById(`edit-sets-${rowId}`);
+  let numSets = parseInt(setsInput?.value) || 0;
+  if (numSets < 1) {
+    numSets = parseInt(setsInput?.placeholder) || 3;
+    if (setsInput && !setsInput.value) setsInput.value = String(numSets);
+  }
   const defaultReps = document.getElementById(`edit-reps-${rowId}`)?.value || "";
   const defaultWeight = document.getElementById(`edit-wt-${rowId}`)?.value || "";
-  if (numSets < 1) { detailsEl.innerHTML = ""; return; }
   // Preserve existing values
   const existing = [];
   for (let s = 0; ; s++) {
