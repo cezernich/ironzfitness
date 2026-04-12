@@ -345,20 +345,20 @@ function _resolveWorkoutById(workoutId) {
   } catch { return null; }
 }
 
-// Document-level delegator: every .share-icon-btn click anywhere in the app
-// resolves through this one handler. Capturing-phase listener so it runs
-// BEFORE any parent card-toggle handlers, and we stopPropagation + prevent
-// the default bubble before toggleSection/etc. can fire.
-if (typeof document !== "undefined") {
-  document.addEventListener("click", function (e) {
-    const btn = e.target && e.target.closest && e.target.closest(".share-icon-btn[data-share-key]");
-    if (!btn) return;
+// Direct click handler attached per-button. Document-level delegation proved
+// unreliable against card headers with inline onclick="toggleSection(...)".
+// Attaching the handler directly to the button element runs at target phase
+// and stopPropagation prevents the parent's bubble-phase inline handler
+// from firing.
+function _wireShareButton(btn) {
+  if (!btn || btn.dataset.shareWired === "1") return;
+  btn.dataset.shareWired = "1";
+  btn.addEventListener("click", function (e) {
     e.stopPropagation();
     e.preventDefault();
-    const key = btn.getAttribute("data-share-key");
-    const source = btn.getAttribute("data-share-source") || "unknown";
-    // Look up the entry in share.js's cache first; fall back to any
-    // caller-provided cache on window.__calShareFallbackCache.
+    const key = this.getAttribute("data-share-key");
+    const source = this.getAttribute("data-share-source") || "unknown";
+    // Resolve entry from share.js's cache or the calendar fallback cache
     let entry = _shareEntryCache[key];
     if (!entry && typeof window !== "undefined" && window.__calShareFallbackCache) {
       entry = window.__calShareFallbackCache[key];
@@ -366,10 +366,51 @@ if (typeof document !== "undefined") {
     if (!entry) { console.warn("[IronZ] share: entry not in cache for key", key); return; }
     if (window.ShareActionSheet && window.ShareActionSheet.open) {
       window.ShareActionSheet.open(entry, source);
-    } else if (typeof shareWorkoutLinkDirect === "function") {
+    } else {
       shareWorkoutLinkDirect(entry, source);
     }
-  }, true); // use capture so it wins over card-header click handlers
+  });
+}
+
+// Wire every existing share button under `root` (or the whole document).
+function _wireAllShareButtons(root) {
+  const target = root || document;
+  if (!target || typeof target.querySelectorAll !== "function") return;
+  target.querySelectorAll(".share-icon-btn[data-share-key]").forEach(_wireShareButton);
+}
+
+// Auto-wire any new share buttons added to the DOM. Uses a MutationObserver
+// so every render path in the app (calendar day-detail, workout history,
+// saved library, community cards, completion badge) gets wired for free
+// without needing to call a helper after every innerHTML assignment.
+if (typeof document !== "undefined") {
+  // Initial sweep for anything already in the DOM when share.js loads.
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () { _wireAllShareButtons(document); });
+  } else {
+    _wireAllShareButtons(document);
+  }
+
+  // Watch for future insertions. This fires on every renderDayDetail,
+  // renderWorkoutHistory, renderSavedLibraryTab, etc.
+  if (typeof MutationObserver !== "undefined") {
+    const obs = new MutationObserver(function (mutations) {
+      for (let i = 0; i < mutations.length; i++) {
+        const m = mutations[i];
+        if (!m.addedNodes) continue;
+        for (let j = 0; j < m.addedNodes.length; j++) {
+          const node = m.addedNodes[j];
+          if (node.nodeType !== 1) continue; // element nodes only
+          if (node.matches && node.matches(".share-icon-btn[data-share-key]")) {
+            _wireShareButton(node);
+          } else if (node.querySelectorAll) {
+            node.querySelectorAll(".share-icon-btn[data-share-key]").forEach(_wireShareButton);
+          }
+        }
+      }
+    });
+    obs.observe(document.body || document.documentElement, { childList: true, subtree: true });
+  }
 }
 
 // Expose for module-less script use

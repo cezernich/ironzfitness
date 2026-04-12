@@ -2643,6 +2643,8 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
   }
 
   content.innerHTML = html;
+  // Share icon click handlers auto-attach via the MutationObserver in
+  // share.js — no per-render wiring needed here.
   if (typeof isNutritionEnabled === "function" && isNutritionEnabled()) {
     renderMealPlan(dateStr);
     renderNutritionProgressBars(dateStr);
