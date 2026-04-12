@@ -223,7 +223,8 @@ function getCoachingInsights() {
   }
 
   // Nutrition engagement
-  if (typeof isNutritionEnabled === "function" && isNutritionEnabled()) {
+  if (typeof isNutritionEnabled === "function" && isNutritionEnabled()
+      && !_isCoachingDismissed("nutrition")) {
     const nutrition = analyzeNutritionEngagement();
     if (!nutrition.engaged) {
       const msg = nutrition.message.replace("${daysLogged}", nutrition.daysLogged || 0);
@@ -309,17 +310,27 @@ function applyCoachingAction(action) {
   }
 }
 
-/** Persist dismissed/actioned insights so they don't reappear the same day */
+/** Persist dismissed/actioned insights so they don't reappear for 7 days.
+ *  Storage: localStorage.coachingDismissed = { [key]: <ms-timestamp> }
+ *  Legacy: older installs stored date strings here — those are treated as
+ *  expired on read so the format flips cleanly on first dismissal. */
+const _COACHING_DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 function _dismissCoachingInsight(key) {
   let dismissed = {};
   try { dismissed = JSON.parse(localStorage.getItem("coachingDismissed") || "{}"); } catch {}
-  dismissed[key] = getTodayString();
-  localStorage.setItem("coachingDismissed", JSON.stringify(dismissed));
+  dismissed[key] = Date.now();
+  try {
+    localStorage.setItem("coachingDismissed", JSON.stringify(dismissed));
+    if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("coachingDismissed");
+  } catch {}
 }
 
 function _isCoachingDismissed(key) {
   try {
     const dismissed = JSON.parse(localStorage.getItem("coachingDismissed") || "{}");
-    return dismissed[key] === getTodayString();
+    const val = dismissed[key];
+    if (typeof val !== "number") return false; // missing or legacy string → treat as expired
+    return (Date.now() - val) < _COACHING_DISMISS_TTL_MS;
   } catch { return false; }
 }
