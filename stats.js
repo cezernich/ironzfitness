@@ -9,7 +9,7 @@ function localDateStr(d) {
 /* ─── Computations ─────────────────────────────────────────────────────── */
 
 function computeByType(workouts) {
-  const order  = ["weightlifting","bodyweight","hiit","running","triathlon","cycling","stairstepper","general","other"];
+  const order  = ["weightlifting","bodyweight","hiit","running","swimming","cycling","triathlon","stairstepper","hyrox","yoga","wellness","general","other"];
   const counts = {};
   order.forEach(t => counts[t] = 0);
   workouts.forEach(w => {
@@ -283,8 +283,13 @@ function buildStatsBreakdown(byType, total) {
     bodyweight:    { label:"Bodyweight",     icon:ICONS.activity, color:"var(--color-accent)" },
     hiit:          { label:"HIIT",           icon:ICONS.flame,    color:"var(--color-danger)" },
     running:       { label:"Running",        icon:ICONS.run,      color:"var(--color-amber)"  },
-    triathlon:     { label:"Triathlon",      icon:ICONS.swim,     color:"var(--color-cyan)"   },
+    swimming:      { label:"Swimming",       icon:ICONS.swim,     color:"var(--color-cyan)"   },
     cycling:       { label:"Cycling",        icon:ICONS.bike,     color:"var(--color-teal)"   },
+    triathlon:     { label:"Triathlon",      icon:ICONS.swim,     color:"var(--color-cyan)"   },
+    stairstepper:  { label:"Stair Stepper",  icon:ICONS.run,      color:"var(--color-amber)"  },
+    hyrox:         { label:"Hyrox",          icon:ICONS.flame,    color:"var(--color-danger)" },
+    yoga:          { label:"Yoga",           icon:ICONS.activity, color:"var(--color-teal)"   },
+    wellness:      { label:"Wellness",       icon:ICONS.activity, color:"var(--color-success)"},
     general:       { label:"General Fitness",icon:ICONS.activity, color:"var(--color-success)"},
     other:         { label:"Other",          icon:ICONS.zap,      color:"var(--color-text-muted)"},
   };
@@ -855,17 +860,22 @@ function buildStatsPlanConsistency() {
   const overall = _grade(overallPct);
 
   const TYPE_META = {
-    weightlifting: { label: "Strength",  icon: ICONS.weights },
-    running:       { label: "Running",   icon: ICONS.run },
-    cycling:       { label: "Cycling",   icon: ICONS.bike },
-    swimming:      { label: "Swimming",  icon: ICONS.swim },
-    swim:          { label: "Swimming",  icon: ICONS.swim },
-    run:           { label: "Running",   icon: ICONS.run },
-    bike:          { label: "Cycling",   icon: ICONS.bike },
-    brick:         { label: "Brick",     icon: ICONS.zap },
-    yoga:          { label: "Yoga",      icon: ICONS.yoga || ICONS.activity },
-    general:       { label: "General",   icon: ICONS.activity },
-    hiit:          { label: "HIIT",      icon: ICONS.flame },
+    weightlifting: { label: "Strength",   icon: ICONS.weights },
+    bodyweight:    { label: "Bodyweight", icon: ICONS.activity },
+    running:       { label: "Running",    icon: ICONS.run },
+    cycling:       { label: "Cycling",    icon: ICONS.bike },
+    swimming:      { label: "Swimming",   icon: ICONS.swim },
+    swim:          { label: "Swimming",   icon: ICONS.swim },
+    run:           { label: "Running",    icon: ICONS.run },
+    bike:          { label: "Cycling",    icon: ICONS.bike },
+    triathlon:     { label: "Triathlon",  icon: ICONS.swim },
+    brick:         { label: "Brick",      icon: ICONS.zap },
+    stairstepper:  { label: "Stair Stepper", icon: ICONS.run },
+    hyrox:         { label: "Hyrox",      icon: ICONS.flame },
+    yoga:          { label: "Yoga",       icon: ICONS.yoga || ICONS.activity },
+    wellness:      { label: "Wellness",   icon: ICONS.activity },
+    general:       { label: "General",    icon: ICONS.activity },
+    hiit:          { label: "HIIT",       icon: ICONS.flame },
   };
 
   const typeRows = Object.entries(byType)
