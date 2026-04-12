@@ -8,6 +8,9 @@
 // All share buttons across the app route through buildShareIconButton +
 // shareWorkoutLink so styling and behavior stay identical everywhere.
 
+// Diagnostic — verify the script actually parsed and executed.
+console.log("[IronZ] share.js loaded");
+
 const SHARE_PREVIEW_BASE = "https://dagdpdcwqdlibxbitdgr.supabase.co/functions/v1/share-preview";
 
 // SVG used for every share icon in the app. 20px square, currentColor so
@@ -353,23 +356,49 @@ function _resolveWorkoutById(workoutId) {
 function _wireShareButton(btn) {
   if (!btn || btn.dataset.shareWired === "1") return;
   btn.dataset.shareWired = "1";
-  btn.addEventListener("click", function (e) {
-    e.stopPropagation();
-    e.preventDefault();
-    const key = this.getAttribute("data-share-key");
-    const source = this.getAttribute("data-share-source") || "unknown";
-    // Resolve entry from share.js's cache or the calendar fallback cache
-    let entry = _shareEntryCache[key];
-    if (!entry && typeof window !== "undefined" && window.__calShareFallbackCache) {
-      entry = window.__calShareFallbackCache[key];
-    }
-    if (!entry) { console.warn("[IronZ] share: entry not in cache for key", key); return; }
-    if (window.ShareActionSheet && window.ShareActionSheet.open) {
-      window.ShareActionSheet.open(entry, source);
-    } else {
-      shareWorkoutLinkDirect(entry, source);
-    }
-  });
+  btn.addEventListener("click", _handleShareClick);
+}
+
+// Shared click handler used by both the per-button wiring and the document
+// delegate below. `this` may be undefined when called from delegation, so we
+// read the button from e.currentTarget (per-button) or from e.target.closest
+// (delegated).
+function _handleShareClick(e) {
+  e.stopPropagation();
+  e.preventDefault();
+  const btn = (e.currentTarget && e.currentTarget.classList && e.currentTarget.classList.contains("share-icon-btn"))
+    ? e.currentTarget
+    : (e.target && e.target.closest && e.target.closest(".share-icon-btn[data-share-key]"));
+  if (!btn) { console.warn("[IronZ] share click: no button element resolved"); return; }
+  const key = btn.getAttribute("data-share-key");
+  const source = btn.getAttribute("data-share-source") || "unknown";
+  console.log("[IronZ] share icon clicked", { key, source, btn });
+  let entry = _shareEntryCache[key];
+  if (!entry && typeof window !== "undefined" && window.__calShareFallbackCache) {
+    entry = window.__calShareFallbackCache[key];
+  }
+  if (!entry) { console.warn("[IronZ] share: entry not in cache for key", key); return; }
+  if (window.ShareActionSheet && window.ShareActionSheet.open) {
+    window.ShareActionSheet.open(entry, source);
+  } else {
+    shareWorkoutLinkDirect(entry, source);
+  }
+}
+
+// Document-level delegated fallback. Even if the per-button addEventListener
+// wiring never happens (because the MutationObserver didn't fire, or the
+// button was rendered before share.js parsed), this handler still catches
+// every click on any .share-icon-btn[data-share-key] in the document.
+if (typeof document !== "undefined" && !document.__shareDelegateWired) {
+  document.__shareDelegateWired = true;
+  document.addEventListener("click", function (e) {
+    const btn = e.target && e.target.closest && e.target.closest(".share-icon-btn[data-share-key]");
+    if (!btn) return;
+    // Per-button wiring also runs on this click — bail out if it already
+    // handled the event so we don't fire the action sheet twice.
+    if (btn.dataset.shareWired === "1") return;
+    _handleShareClick(e);
+  }, true); // capture phase — runs before any bubble-phase ancestor handlers
 }
 
 // ─── Per-set exercise-row toggle delegator ───────────────────────────────────
