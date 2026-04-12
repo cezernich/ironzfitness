@@ -21,6 +21,12 @@ let _shareCacheSeq = 0;
 /**
  * Build the icon-only share button. Use this everywhere — don't roll your own.
  *
+ * Emits a `data-share-key` + `data-share-source` pair instead of an inline
+ * onclick. A document-level delegator (see below) resolves the click. This
+ * avoids inline-onclick scope-resolution bugs on nested clickable parents
+ * (card headers with toggleSection) and keeps the button working even when
+ * the template renders into an otherwise-event-greedy container.
+ *
  * @param {Object} entry  The workout/session/plan entry to share. Must carry
  *                        enough shape for shareWorkoutLink to build a payload
  *                        (name, exercises/segments/intervals, etc.).
@@ -31,8 +37,8 @@ function buildShareIconButton(entry, source) {
   if (!entry) return "";
   const cacheKey = "se" + (++_shareCacheSeq);
   _shareEntryCache[cacheKey] = entry;
-  return '<button class="share-icon-btn" title="Share" aria-label="Share workout"'
-       + ' onclick="event.stopPropagation();shareWorkoutLink(\'' + cacheKey + '\',\'' + (source || "unknown") + '\')">'
+  return '<button type="button" class="share-icon-btn" title="Share" aria-label="Share workout"'
+       + ' data-share-key="' + cacheKey + '" data-share-source="' + (source || "unknown") + '">'
        + _SHARE_ICON_SVG
        + '</button>';
 }
@@ -326,6 +332,24 @@ function _resolveWorkoutById(workoutId) {
     const list = JSON.parse(localStorage.getItem("workouts") || "[]");
     return list.find(w => String(w.id) === String(workoutId)) || null;
   } catch { return null; }
+}
+
+// Document-level delegator: every .share-icon-btn click anywhere in the app
+// resolves through this one handler. Capturing-phase listener so it runs
+// BEFORE any parent card-toggle handlers, and we stopPropagation + prevent
+// the default bubble before toggleSection/etc. can fire.
+if (typeof document !== "undefined") {
+  document.addEventListener("click", function (e) {
+    const btn = e.target && e.target.closest && e.target.closest(".share-icon-btn[data-share-key]");
+    if (!btn) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const key = btn.getAttribute("data-share-key");
+    const source = btn.getAttribute("data-share-source") || "unknown";
+    if (typeof shareWorkoutLink === "function") {
+      shareWorkoutLink(key, source);
+    }
+  }, true); // use capture so it wins over card-header click handlers
 }
 
 // Expose for module-less script use
