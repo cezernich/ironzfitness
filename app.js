@@ -604,6 +604,10 @@ window.onload = init;
 /* ── Philosophy Engine UI Glue ─────────────────────────────────────────── */
 
 async function generatePhilosophyPlan() {
+  if (window.Subscription && typeof window.Subscription.requirePremium === "function") {
+    const allowed = await window.Subscription.requirePremium("ai_plan");
+    if (!allowed) return;
+  }
   const msg = document.getElementById('plan-save-msg');
   if (msg) { msg.textContent = 'Generating philosophy-based plan...'; msg.style.color = 'var(--color-accent)'; }
 

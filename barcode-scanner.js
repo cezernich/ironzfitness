@@ -7,7 +7,11 @@ let _scanState = null; // { native, stream, video, rafId, html5 }
 
 /* ─── Entry / exit ─────────────────────────────────────────────────────── */
 
-function openBarcodeScanner() {
+async function openBarcodeScanner() {
+  if (window.Subscription && typeof window.Subscription.requirePremium === "function") {
+    const allowed = await window.Subscription.requirePremium("barcode_scanner");
+    if (!allowed) return;
+  }
   const modal = document.getElementById("barcode-scanner-modal");
   if (!modal) return;
   modal.style.display = "flex";

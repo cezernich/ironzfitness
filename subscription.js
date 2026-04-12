@@ -1,298 +1,284 @@
-// subscription.js — Subscription & Pricing Infrastructure
-// Phase 3.3: Free/premium tiers, trial, feature gating, paywall.
+// subscription.js — Premium subscription gating via Supabase + Stripe Checkout.
+//
+// Replaces the prior localStorage-only mock. Keeps the global
+// `renderSubscriptionStatus()` entry point because app.js:150 calls it
+// directly from the Settings-tab open handler.
+//
+// ───────────────────────────────────────────────────────────────────────────
+// Launch-mode gate: when PREMIUM_ENABLED is false, isPremium() short-circuits
+// to true and every requirePremium() call becomes a pass-through. Flip it to
+// true once we're ready to start enforcing paywalls — no other code needs to
+// change.
+// ───────────────────────────────────────────────────────────────────────────
 
-/* =====================================================================
-   TIER DEFINITIONS
-   ===================================================================== */
+const PREMIUM_ENABLED = false;
 
-const SUBSCRIPTION_TIERS = {
-  free: {
-    name: "Free",
-    price: 0,
-    features: [
-      "1 active training plan",
-      "Basic nutrition logging (manual + quick-add)",
-      "Hydration tracking",
-      "Community workout browse",
-      "Weekly check-in",
-    ],
-    limits: {
-      activePlans: 1,
-      savedWorkouts: 5,
-      aiGenerationsPerDay: 0,
-      photoMealLogging: false,
-      barcodeScan: false,
-      groceryList: false,
-      advancedStats: false,
-    },
-  },
-  premium: {
-    name: "Premium",
-    monthlyPrice: 7.99,
-    annualPrice: 59.99,
-    features: [
-      "Unlimited training plans",
-      "AI workout generation",
-      "AI meal suggestions & grocery lists",
-      "Photo AI meal logging",
-      "Barcode scanning",
-      "20 saved workout templates",
-      "Advanced stats & insights",
-      "Weekly check-in insights",
-      "Priority support",
-    ],
-    limits: {
-      activePlans: 999,
-      savedWorkouts: 20,
-      aiGenerationsPerDay: 50,
-      photoMealLogging: true,
-      barcodeScan: true,
-      groceryList: true,
-      advancedStats: true,
-    },
-  },
-};
+// Hosted Stripe Checkout payment links. Public URLs — safe to commit. The
+// userId is appended as ?client_reference_id=... at click time so the
+// stripe-webhook Edge Function can tie the completed checkout session back
+// to our auth user.
+const STRIPE_MONTHLY_LINK = "https://buy.stripe.com/8x2fZi9Ne9lAefe1jo0gw00";
+const STRIPE_ANNUAL_LINK  = "https://buy.stripe.com/28E9AUaRibtI3AA2ns0gw01";
 
-/* =====================================================================
-   SUBSCRIPTION STATE
-   ===================================================================== */
+const PREMIUM_MONTHLY_PRICE   = "$7.99";
+const PREMIUM_ANNUAL_PRICE    = "$59.99";
+const PREMIUM_ANNUAL_SAVINGS  = "Save 37%";
 
-function getSubscription() {
-  try {
-    return JSON.parse(localStorage.getItem("subscription") || "null") || {
-      tier: "free",
-      trialStarted: null,
-      trialEnded: false,
-      subscribedAt: null,
-      billingCycle: null,
-      cancelledAt: null,
+(function () {
+  "use strict";
+
+  // 5-minute in-memory cache for isPremium() — avoids hammering Supabase on
+  // every gated click. Invalidated by refreshStatus() or on sign-out.
+  let _cache = null; // { value: boolean, expires: number }
+  const CACHE_MS = 5 * 60 * 1000;
+
+  function _client() {
+    return (typeof window !== "undefined" && window.supabaseClient) || null;
+  }
+
+  async function _getUserId() {
+    const c = _client();
+    if (!c) return null;
+    try {
+      const { data } = await c.auth.getSession();
+      return data?.session?.user?.id || null;
+    } catch { return null; }
+  }
+
+  function _escHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    }[c]));
+  }
+
+  function _escAttr(s) { return _escHtml(s); }
+
+  function _prettyFeature(feature) {
+    const map = {
+      barcode_scanner: "Barcode scanner",
+      ai_plan:         "AI-generated workout plans",
+      workout_sharing: "Sharing workouts to friends",
+      workout_inbox:   "Sending workouts to friends",
     };
-  } catch {
-    return { tier: "free", trialStarted: null, trialEnded: false };
-  }
-}
-
-function saveSubscription(sub) {
-  localStorage.setItem("subscription", JSON.stringify(sub));
-}
-
-function getCurrentTier() {
-  const sub = getSubscription();
-
-  // Active premium subscription
-  if (sub.tier === "premium" && !sub.cancelledAt) return "premium";
-
-  // Active trial (7 days from start)
-  if (sub.trialStarted && !sub.trialEnded) {
-    const trialEnd = new Date(sub.trialStarted);
-    trialEnd.setDate(trialEnd.getDate() + 7);
-    if (new Date() < trialEnd) return "premium";
-    // Trial expired
-    sub.trialEnded = true;
-    saveSubscription(sub);
+    return map[feature] || "This feature";
   }
 
-  return "free";
-}
-
-function isPremium() {
-  return getCurrentTier() === "premium";
-}
-
-function getTrialDaysRemaining() {
-  const sub = getSubscription();
-  if (!sub.trialStarted || sub.trialEnded) return 0;
-  const trialEnd = new Date(sub.trialStarted);
-  trialEnd.setDate(trialEnd.getDate() + 7);
-  const remaining = Math.ceil((trialEnd - new Date()) / 86400000);
-  return Math.max(0, remaining);
-}
-
-function isInTrial() {
-  const sub = getSubscription();
-  return sub.trialStarted && !sub.trialEnded && getTrialDaysRemaining() > 0;
-}
-
-/* =====================================================================
-   FEATURE GATING
-   ===================================================================== */
-
-/**
- * Check if a specific feature is available in the current tier.
- * Returns true if available, false if paywalled.
- */
-function hasFeature(featureName) {
-  const tier = getCurrentTier();
-  const limits = SUBSCRIPTION_TIERS[tier]?.limits;
-  if (!limits) return true;
-
-  switch (featureName) {
-    case "aiGeneration": return limits.aiGenerationsPerDay > 0;
-    case "photoMeal": return limits.photoMealLogging;
-    case "barcodeScan": return limits.barcodeScan;
-    case "groceryList": return limits.groceryList;
-    case "advancedStats": return limits.advancedStats;
-    case "unlimitedPlans": return limits.activePlans > 1;
-    case "unlimitedSaved": return limits.savedWorkouts > 5;
-    default: return true;
-  }
-}
-
-/**
- * Gate a feature — if not available, show paywall and return false.
- * Use before executing premium actions.
- */
-function requireFeature(featureName, context) {
-  if (hasFeature(featureName)) return true;
-  showPaywall(context || featureName);
-  return false;
-}
-
-/* =====================================================================
-   TRIAL ACTIVATION
-   ===================================================================== */
-
-function startFreeTrial() {
-  const sub = getSubscription();
-  if (sub.trialStarted) return; // Already started
-  sub.trialStarted = new Date().toISOString();
-  sub.trialEnded = false;
-  saveSubscription(sub);
-  closePaywall();
-  renderSubscriptionStatus();
-}
-
-/* =====================================================================
-   SUBSCRIPTION ACTIONS (simulated — no real payment)
-   ===================================================================== */
-
-function subscribePremium(cycle) {
-  const sub = getSubscription();
-  sub.tier = "premium";
-  sub.billingCycle = cycle; // "monthly" or "annual"
-  sub.subscribedAt = new Date().toISOString();
-  sub.cancelledAt = null;
-  sub.trialEnded = true;
-  saveSubscription(sub);
-  closePaywall();
-  renderSubscriptionStatus();
-}
-
-function cancelSubscription() {
-  if (!confirm("Cancel your Premium subscription? You'll keep access until the end of your billing period.")) return;
-  const sub = getSubscription();
-  sub.cancelledAt = new Date().toISOString();
-  saveSubscription(sub);
-  renderSubscriptionStatus();
-}
-
-/* =====================================================================
-   PAYWALL MODAL
-   ===================================================================== */
-
-function showPaywall(context) {
-  const overlay = document.getElementById("paywall-overlay");
-  if (!overlay) return;
-
-  const sub = getSubscription();
-  const canTrial = !sub.trialStarted;
-  const annualMonthly = (SUBSCRIPTION_TIERS.premium.annualPrice / 12).toFixed(2);
-  const annualSavings = Math.round((1 - SUBSCRIPTION_TIERS.premium.annualPrice / (SUBSCRIPTION_TIERS.premium.monthlyPrice * 12)) * 100);
-
-  const contextMessages = {
-    aiGeneration: "AI workout generation is a Premium feature",
-    photoMeal: "Photo meal logging is a Premium feature",
-    barcodeScan: "Barcode scanning is a Premium feature",
-    groceryList: "Grocery lists are a Premium feature",
-    advancedStats: "Advanced stats are a Premium feature",
-    unlimitedPlans: "Multiple training plans require Premium",
-    unlimitedSaved: "More than 5 saved workouts requires Premium",
-  };
-
-  const content = document.getElementById("paywall-content");
-  if (!content) return;
-
-  content.innerHTML = `
-    <div class="pw-header">
-      <div class="pw-logo">${ICONS.zap} IronZ Premium</div>
-      <p class="pw-context">${escHtml(contextMessages[context] || "Upgrade to Premium to unlock all features")}</p>
-    </div>
-
-    <div class="pw-features">
-      ${SUBSCRIPTION_TIERS.premium.features.map(f =>
-        `<div class="pw-feature">${ICONS.check} <span>${escHtml(f)}</span></div>`
-      ).join("")}
-    </div>
-
-    <div class="pw-pricing">
-      <button class="pw-plan pw-plan--annual" onclick="subscribePremium('annual')">
-        <div class="pw-plan-badge">Best Value</div>
-        <div class="pw-plan-name">Annual</div>
-        <div class="pw-plan-price">$${annualMonthly}<span>/mo</span></div>
-        <div class="pw-plan-total">$${SUBSCRIPTION_TIERS.premium.annualPrice}/year · Save ${annualSavings}%</div>
-      </button>
-      <button class="pw-plan" onclick="subscribePremium('monthly')">
-        <div class="pw-plan-name">Monthly</div>
-        <div class="pw-plan-price">$${SUBSCRIPTION_TIERS.premium.monthlyPrice}<span>/mo</span></div>
-        <div class="pw-plan-total">Billed monthly</div>
-      </button>
-    </div>
-
-    ${canTrial ? `
-      <button class="btn-primary pw-trial-btn" onclick="startFreeTrial()">
-        Start 7-Day Free Trial
-      </button>
-      <p class="pw-trial-note">No payment required. Full Premium access for 7 days.</p>
-    ` : ""}
-
-    <button class="pw-skip-btn" onclick="closePaywall()">Maybe Later</button>
-  `;
-
-  overlay.style.display = "flex";
-}
-
-function closePaywall() {
-  const overlay = document.getElementById("paywall-overlay");
-  if (overlay) overlay.style.display = "none";
-}
-
-/* =====================================================================
-   SUBSCRIPTION STATUS (Settings)
-   ===================================================================== */
-
-function renderSubscriptionStatus() {
-  const container = document.getElementById("subscription-status");
-  if (!container) return;
-
-  const sub = getSubscription();
-  const tier = getCurrentTier();
-  const trialDays = getTrialDaysRemaining();
-
-  let html = "";
-
-  if (tier === "premium" && isInTrial()) {
-    html = `
-      <div class="sub-status sub-status--trial">
-        <div class="sub-status-badge">Premium Trial</div>
-        <p class="sub-status-detail">${trialDays} day${trialDays !== 1 ? "s" : ""} remaining</p>
-        <button class="btn-primary btn-sm" onclick="showPaywall()">Subscribe Now</button>
-      </div>`;
-  } else if (tier === "premium") {
-    const cycle = sub.billingCycle === "annual" ? "Annual" : "Monthly";
-    html = `
-      <div class="sub-status sub-status--premium">
-        <div class="sub-status-badge">${ICONS.zap} Premium ${cycle}</div>
-        <p class="sub-status-detail">Active since ${new Date(sub.subscribedAt).toLocaleDateString()}</p>
-        <button class="btn-secondary btn-sm" onclick="cancelSubscription()">Cancel Subscription</button>
-      </div>`;
-  } else {
-    html = `
-      <div class="sub-status sub-status--free">
-        <div class="sub-status-badge">Free Plan</div>
-        <p class="sub-status-detail">Upgrade to unlock AI features, barcode scanning, and more.</p>
-        <button class="btn-primary btn-sm" onclick="showPaywall()">Upgrade to Premium</button>
-      </div>`;
+  function _appendClientRef(url, uid) {
+    if (!uid || !url) return url;
+    const sep = url.includes("?") ? "&" : "?";
+    return url + sep + "client_reference_id=" + encodeURIComponent(uid);
   }
 
-  container.innerHTML = html;
-}
+  /* ─── Public API ──────────────────────────────────────────────────────── */
+
+  // isPremium — async boolean. Reads the subscriptions table for the current
+  // user and returns true iff status = 'active' AND current_period_end is in
+  // the future. Cached 5 min. Short-circuits to true while PREMIUM_ENABLED
+  // is false so launch mode ships every feature unlocked.
+  async function isPremium() {
+    if (!PREMIUM_ENABLED) return true;
+    if (_cache && _cache.expires > Date.now()) return _cache.value;
+
+    const client = _client();
+    const uid = await _getUserId();
+    if (!client || !uid) {
+      _cache = { value: false, expires: Date.now() + CACHE_MS };
+      return false;
+    }
+
+    try {
+      const { data, error } = await client
+        .from("subscriptions")
+        .select("status, current_period_end")
+        .eq("user_id", uid)
+        .maybeSingle();
+      if (error) {
+        console.warn("[Subscription] isPremium query error:", error.message);
+        _cache = { value: false, expires: Date.now() + CACHE_MS };
+        return false;
+      }
+      const active = !!(
+        data &&
+        data.status === "active" &&
+        data.current_period_end &&
+        new Date(data.current_period_end) > new Date()
+      );
+      _cache = { value: active, expires: Date.now() + CACHE_MS };
+      return active;
+    } catch (e) {
+      console.warn("[Subscription] isPremium exception:", e);
+      _cache = { value: false, expires: Date.now() + CACHE_MS };
+      return false;
+    }
+  }
+
+  // Force a fresh read on the next call. Use after a successful checkout
+  // so the UI reflects the new premium state without waiting for the cache
+  // window to expire.
+  async function refreshStatus() {
+    _cache = null;
+    return await isPremium();
+  }
+
+  // Gate helper:
+  //   if (!(await Subscription.requirePremium("barcode_scanner"))) return;
+  // Returns true when the caller may proceed, false when the upsell was
+  // shown and the caller should abort.
+  async function requirePremium(featureName) {
+    const ok = await isPremium();
+    if (ok) return true;
+    await showPremiumUpsell(featureName);
+    return false;
+  }
+
+  // Renders the premium upsell modal into document.body. Tracks the impression,
+  // pre-bakes the Stripe URLs with client_reference_id, and resolves once the
+  // modal is in the DOM.
+  async function showPremiumUpsell(featureName) {
+    try {
+      if (typeof trackEvent === "function") {
+        trackEvent("premium_upsell_shown", { feature: featureName });
+      }
+    } catch {}
+
+    const existing = document.getElementById("premium-upsell-modal");
+    if (existing) existing.remove();
+
+    const uid = await _getUserId();
+    const monthlyUrl = _appendClientRef(STRIPE_MONTHLY_LINK, uid);
+    const annualUrl  = _appendClientRef(STRIPE_ANNUAL_LINK, uid);
+    const pretty = _prettyFeature(featureName);
+
+    const modal = document.createElement("div");
+    modal.id = "premium-upsell-modal";
+    modal.className = "premium-upsell-overlay";
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) _closePremiumUpsell();
+    });
+
+    modal.innerHTML = `
+      <div class="premium-upsell-card" role="dialog" aria-labelledby="premium-upsell-title">
+        <button class="premium-upsell-close" type="button" onclick="_closePremiumUpsell()" aria-label="Close">&times;</button>
+        <span class="premium-upsell-badge">Premium</span>
+        <h2 id="premium-upsell-title" class="premium-upsell-title">Unlock IronZ Premium</h2>
+        <p class="premium-upsell-feature">${_escHtml(pretty)} is a Premium feature.</p>
+        <ul class="premium-upsell-list">
+          <li>AI-generated workout plans</li>
+          <li>Barcode food scanning</li>
+          <li>Send workouts to friends</li>
+          <li>Priority support</li>
+        </ul>
+        <div class="premium-upsell-plans">
+          <a class="premium-plan premium-plan--annual"
+             href="${_escAttr(annualUrl)}"
+             target="_blank" rel="noopener"
+             onclick="_trackCheckoutStarted('annual')">
+            <span class="premium-plan-save">${PREMIUM_ANNUAL_SAVINGS}</span>
+            <span class="premium-plan-label">Annual</span>
+            <span class="premium-plan-price">${PREMIUM_ANNUAL_PRICE}<small>/yr</small></span>
+          </a>
+          <a class="premium-plan"
+             href="${_escAttr(monthlyUrl)}"
+             target="_blank" rel="noopener"
+             onclick="_trackCheckoutStarted('monthly')">
+            <span class="premium-plan-label">Monthly</span>
+            <span class="premium-plan-price">${PREMIUM_MONTHLY_PRICE}<small>/mo</small></span>
+          </a>
+        </div>
+        <button class="premium-upsell-dismiss" type="button" onclick="_closePremiumUpsell()">Maybe later</button>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    requestAnimationFrame(() => modal.classList.add("is-open"));
+  }
+
+  function _closePremiumUpsell() {
+    const m = document.getElementById("premium-upsell-modal");
+    if (!m) return;
+    m.classList.remove("is-open");
+    setTimeout(() => { try { m.remove(); } catch {} }, 200);
+  }
+
+  function _trackCheckoutStarted(plan) {
+    try {
+      if (typeof trackEvent === "function") {
+        trackEvent("premium_checkout_started", { plan });
+      }
+    } catch {}
+  }
+
+  /* ─── Settings tab renderer ──────────────────────────────────────────────
+     Populates the existing `#subscription-status` container in the Settings
+     tab. Async: app.js calls us synchronously from the tab-open handler and
+     doesn't await — we just write into the DOM when we know. */
+
+  async function renderSubscriptionStatus() {
+    const el = document.getElementById("subscription-status");
+    if (!el) return;
+    el.innerHTML = '<p class="hint">Loading…</p>';
+
+    const premium = await isPremium();
+
+    // Launch mode: everything is unlocked. Tell the user that truthfully
+    // rather than pretending they're "Premium" in a world where premium
+    // doesn't yet exist.
+    if (!PREMIUM_ENABLED) {
+      el.innerHTML = `
+        <p><strong>All features included</strong></p>
+        <p class="hint">We're not charging during launch — every feature is unlocked.</p>
+      `;
+      return;
+    }
+
+    if (premium) {
+      // Pull the period end date so we can show it. Ignore failures — we
+      // already know they're premium, so worst case we just omit the date.
+      let periodEnd = null;
+      try {
+        const c = _client();
+        const uid = await _getUserId();
+        if (c && uid) {
+          const { data } = await c.from("subscriptions")
+            .select("current_period_end, plan")
+            .eq("user_id", uid)
+            .maybeSingle();
+          if (data?.current_period_end) periodEnd = new Date(data.current_period_end);
+        }
+      } catch {}
+
+      const dateStr = periodEnd
+        ? periodEnd.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
+        : null;
+
+      el.innerHTML = `
+        <p><strong>Premium active</strong></p>
+        ${dateStr ? `<p class="hint">Renews ${_escHtml(dateStr)}</p>` : ""}
+        <a class="btn-secondary btn-sm" href="pricing.html">Manage subscription</a>
+      `;
+      return;
+    }
+
+    el.innerHTML = `
+      <p><strong>Free plan</strong></p>
+      <p class="hint">Upgrade to unlock AI plans, barcode scanning, and sharing.</p>
+      <a class="btn-primary btn-sm" href="pricing.html">Upgrade to Premium</a>
+    `;
+  }
+
+  /* ─── Exports ─────────────────────────────────────────────────────────── */
+
+  if (typeof window !== "undefined") {
+    window.Subscription = {
+      isPremium,
+      requirePremium,
+      showPremiumUpsell,
+      refreshStatus,
+    };
+    // Legacy global: app.js:150 calls this from the Settings-tab open handler.
+    window.renderSubscriptionStatus = renderSubscriptionStatus;
+    // Inline onclick handlers in the upsell modal need these on window.
+    window._closePremiumUpsell = _closePremiumUpsell;
+    window._trackCheckoutStarted = _trackCheckoutStarted;
+  }
+})();

@@ -965,7 +965,11 @@ function _applyGoalToExercises(exercises, goal) {
   });
 }
 
-function generatePlan() {
+async function generatePlan() {
+  if (window.Subscription && typeof window.Subscription.requirePremium === "function") {
+    const allowed = await window.Subscription.requirePremium("ai_plan");
+    if (!allowed) return;
+  }
   // Read the values from the form
   const type           = document.getElementById("workout-type").value;
   const selectedDays   = type === "weightlifting" ? getSelectedPlanDays() : _getOtherPlanDays();

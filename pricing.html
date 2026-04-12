@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>IronZ Pricing</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+  <meta name="theme-color" content="#818cf8" />
+  <meta name="description" content="IronZ Premium pricing — AI-generated workouts, barcode food scanning, and workout sharing." />
+  <meta property="og:title" content="IronZ Pricing" />
+  <meta property="og:description" content="Unlock IronZ Premium — AI workouts, barcode food scanning, and workout sharing." />
+  <meta property="og:image" content="https://ironz.fit/icons/icon-512.png" />
+  <meta property="og:url" content="https://ironz.fit/pricing.html" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet" />
+  <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'stone');</script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="supabase-init.js"></script>
+</head>
+<body class="pricing-body">
+
+  <header class="pricing-header">
+    <a class="pricing-back" href="index.html" aria-label="Back to app">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      <span>Back</span>
+    </a>
+    <div class="pricing-logo">
+      <span class="logo-mark">
+        <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      </span>
+      <span class="logo-text">IronZ</span>
+    </div>
+  </header>
+
+  <main class="pricing-main">
+    <h1 class="pricing-h1">Choose your plan</h1>
+    <p class="pricing-sub">Start free. Unlock AI coaching, barcode scanning, and sharing when you're ready.</p>
+
+    <!-- Injected by bootstrap script when the user already has an active Premium subscription. -->
+    <div id="pricing-premium-banner" class="pricing-premium-banner" style="display:none">
+      <strong>You're on Premium!</strong>
+      <span id="pricing-premium-renews"></span>
+      <a class="btn-secondary btn-sm" href="index.html#settings">Manage subscription</a>
+    </div>
+
+    <div class="pricing-cards">
+
+      <!-- Free plan -->
+      <section class="pricing-card pricing-card--free">
+        <div class="pricing-card-header">
+          <h2>Free</h2>
+          <div class="pricing-price">$0<small>/mo</small></div>
+          <div class="pricing-card-badge" id="free-current-badge" style="display:none">Current Plan</div>
+        </div>
+        <ul class="pricing-features">
+          <li>Manual workout logging</li>
+          <li>Basic stats dashboard</li>
+          <li>Saved workouts library</li>
+          <li>Calendar + plan tracking</li>
+          <li>Nutrition &amp; hydration tracking</li>
+        </ul>
+        <a class="btn-secondary pricing-cta" href="index.html">Use Free</a>
+      </section>
+
+      <!-- Premium plan -->
+      <section class="pricing-card pricing-card--premium">
+        <div class="pricing-card-flag">Most Popular</div>
+        <div class="pricing-card-header">
+          <h2>Premium</h2>
+          <div class="pricing-price">$7.99<small>/mo</small></div>
+          <div class="pricing-sub-price">or $59.99/year · <span class="pricing-save">Save 37%</span></div>
+        </div>
+        <ul class="pricing-features">
+          <li><strong>Everything in Free, plus:</strong></li>
+          <li>AI-generated training plans</li>
+          <li>Barcode food scanning</li>
+          <li>Send workouts to friends</li>
+          <li>Priority support</li>
+        </ul>
+        <div class="pricing-ctas">
+          <a id="pricing-annual-btn"
+             class="btn-primary pricing-cta pricing-cta--annual"
+             href="https://buy.stripe.com/28E9AUaRibtI3AA2ns0gw01"
+             target="_blank" rel="noopener">
+            Annual · $59.99/yr
+            <span class="pricing-save-badge">Save 37%</span>
+          </a>
+          <a id="pricing-monthly-btn"
+             class="btn-secondary pricing-cta"
+             href="https://buy.stripe.com/8x2fZi9Ne9lAefe1jo0gw00"
+             target="_blank" rel="noopener">
+            Monthly · $7.99/mo
+          </a>
+        </div>
+      </section>
+
+    </div>
+
+    <p class="pricing-fineprint">
+      Payments processed securely by Stripe. Cancel anytime from your Stripe customer portal.
+      <br />
+      Questions? <a href="mailto:ironzsupport@gmail.com">ironzsupport@gmail.com</a>
+    </p>
+  </main>
+
+  <script>
+    // Append ?client_reference_id=<uid> to both Stripe links so the webhook
+    // can tie the completed checkout session back to this user. If the user
+    // isn't signed in we leave the links bare — Stripe will still accept the
+    // payment but the webhook won't be able to match it automatically and
+    // Chase will need to reconcile manually.
+    (async function () {
+      try {
+        if (!window.supabaseClient) return;
+        const { data: { session } } = await window.supabaseClient.auth.getSession();
+        const uid = session?.user?.id;
+        if (uid) {
+          const suffix = "client_reference_id=" + encodeURIComponent(uid);
+          ["pricing-monthly-btn", "pricing-annual-btn"].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const href = el.getAttribute("href");
+            const sep = href.includes("?") ? "&" : "?";
+            el.setAttribute("href", href + sep + suffix);
+          });
+
+          // Check if they already have an active Premium subscription. If so
+          // swap the page into "You're on Premium" mode.
+          const { data: sub } = await window.supabaseClient
+            .from("subscriptions")
+            .select("status, current_period_end, plan")
+            .eq("user_id", uid)
+            .maybeSingle();
+          const isActive = !!(
+            sub &&
+            sub.status === "active" &&
+            sub.current_period_end &&
+            new Date(sub.current_period_end) > new Date()
+          );
+          if (isActive) {
+            const banner = document.getElementById("pricing-premium-banner");
+            const renews = document.getElementById("pricing-premium-renews");
+            if (banner) banner.style.display = "";
+            if (renews && sub.current_period_end) {
+              const d = new Date(sub.current_period_end);
+              renews.textContent = "Renews " + d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+            }
+          } else {
+            // Mark Free as the current plan if they're signed in but not premium
+            const badge = document.getElementById("free-current-badge");
+            if (badge) badge.style.display = "";
+          }
+        }
+      } catch (e) {
+        console.warn("[pricing] bootstrap error:", e);
+      }
+    })();
+  </script>
+</body>
+</html>

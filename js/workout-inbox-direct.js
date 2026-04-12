@@ -86,6 +86,14 @@
     const sb = _client();
     if (!sb) return { ok: false, reason: "error", message: "Not connected" };
 
+    // Premium gate. When PREMIUM_ENABLED is false in subscription.js this is a
+    // pass-through; when it flips on, the caller sees { ok:false, reason:"premium_required" }
+    // after the upsell modal has already been shown.
+    if (typeof window !== "undefined" && window.Subscription && typeof window.Subscription.requirePremium === "function") {
+      const allowed = await window.Subscription.requirePremium("workout_inbox");
+      if (!allowed) return { ok: false, reason: "premium_required" };
+    }
+
     const senderId = await _currentUserId();
     if (!senderId) return { ok: false, reason: "error", message: "Please log in" };
 
