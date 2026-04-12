@@ -12882,8 +12882,10 @@ body.auth-visible #bottom-nav { display: none !important; }
    SHARING PHASE 2 — Action sheet + Send-to-friend modal + Inbox direct cards
    ============================================================================ */
 
-/* ── Action sheet (bottom-anchored) ─────────────────────────────────────── */
-.share-sheet-overlay {
+/* ── Share Action Sheet (Phase 2: copy-link vs send-to-friend picker) ──── */
+/* Note: class prefix is `share-action-*` to avoid collision with the
+   existing `.share-sheet-overlay` used by js/ui/share-sheet-modal.js */
+.share-action-sheet-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.55);
@@ -12895,8 +12897,8 @@ body.auth-visible #bottom-nav { display: none !important; }
   transition: opacity 0.2s ease-out;
   padding: 0 12px calc(20px + env(safe-area-inset-bottom, 0px));
 }
-.share-sheet-overlay.is-open { opacity: 1; }
-.share-sheet {
+.share-action-sheet-overlay.is-open { opacity: 1; }
+.share-action-sheet {
   width: 100%;
   max-width: 440px;
   background: var(--color-surface);
@@ -12910,15 +12912,15 @@ body.auth-visible #bottom-nav { display: none !important; }
   flex-direction: column;
   gap: 8px;
 }
-.share-sheet-overlay.is-open .share-sheet { transform: translateY(0); }
-.share-sheet-handle {
+.share-action-sheet-overlay.is-open .share-action-sheet { transform: translateY(0); }
+.share-action-sheet-handle {
   width: 40px;
   height: 4px;
   border-radius: 2px;
   background: var(--color-border);
   margin: 0 auto 6px;
 }
-.share-sheet-btn {
+.share-action-sheet-btn {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -12932,11 +12934,11 @@ body.auth-visible #bottom-nav { display: none !important; }
   width: 100%;
   transition: background 0.15s, border-color 0.15s;
 }
-.share-sheet-btn:hover {
+.share-action-sheet-btn:hover {
   background: var(--color-surface);
   border-color: var(--color-accent);
 }
-.share-sheet-btn-icon {
+.share-action-sheet-btn-icon {
   flex-shrink: 0;
   width: 40px;
   height: 40px;
@@ -12947,10 +12949,10 @@ body.auth-visible #bottom-nav { display: none !important; }
   align-items: center;
   justify-content: center;
 }
-.share-sheet-btn-label { display: flex; flex-direction: column; gap: 2px; flex: 1; }
-.share-sheet-btn-title { font-size: 15px; font-weight: 700; color: var(--color-text); }
-.share-sheet-btn-sub   { font-size: 12px; color: var(--color-text-muted); }
-.share-sheet-cancel {
+.share-action-sheet-btn-label { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.share-action-sheet-btn-title { font-size: 15px; font-weight: 700; color: var(--color-text); }
+.share-action-sheet-btn-sub   { font-size: 12px; color: var(--color-text-muted); }
+.share-action-sheet-cancel {
   margin-top: 4px;
   padding: 12px;
   background: transparent;
@@ -12961,7 +12963,7 @@ body.auth-visible #bottom-nav { display: none !important; }
   font-weight: 600;
   cursor: pointer;
 }
-.share-sheet-cancel:hover { background: var(--color-surface-2); color: var(--color-text); }
+.share-action-sheet-cancel:hover { background: var(--color-surface-2); color: var(--color-text); }
 
 /* ── Send-to-friend modal ───────────────────────────────────────────────── */
 .send-modal-overlay {

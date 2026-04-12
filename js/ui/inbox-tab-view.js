@@ -31,39 +31,72 @@
     return `${days}d ago`;
   }
 
+  // Inbox view state: "received" or "sent"
+  let _inboxView = "received";
+
   /**
-   * Render the inbox tab into a target element.
+   * Render the inbox tab into a target element. Shows a Received/Sent
+   * toggle at the top. The Received view merges:
+   *   - Phase 1 link-shared inbox items (SharedWorkoutsInbox, localStorage)
+   *   - Phase 2 direct-sent items (WorkoutInboxDirect, Supabase workout_inbox)
+   * The Sent view shows outgoing Phase 2 direct sends only.
    * @param {string} containerId — DOM id of the tab body
    */
   async function renderInboxTab(containerId) {
     const target = document.getElementById(containerId || "tab-inbox-content");
     if (!target) return;
-    const Inbox = window.SharedWorkoutsInbox;
-    if (!Inbox) {
-      target.innerHTML = `<p class="hint">Inbox not loaded.</p>`;
-      return;
-    }
-    const entries = (await Inbox.listInbox()).filter(e => e.status !== "dismissed");
 
-    if (entries.length === 0) {
-      target.innerHTML = `
-        <div class="inbox-empty">
-          <h2>Inbox</h2>
-          <p>No shared workouts yet. When a friend shares a workout with you, it'll show up here.</p>
-        </div>
-      `;
-      _refreshBadge();
-      return;
+    const LinkInbox = window.SharedWorkoutsInbox;
+    const Direct    = window.WorkoutInboxDirect;
+
+    // Capture unread count BEFORE markAllRead so analytics reflect what the
+    // user actually saw as new.
+    let directUnread = 0;
+    if (Direct && Direct.getUnreadCount) {
+      try { directUnread = await Direct.getUnreadCount(true); } catch {}
     }
+
+    // Mark Supabase workout_inbox items as read when the inbox tab is opened.
+    if (Direct && Direct.markAllRead) {
+      try { await Direct.markAllRead(); } catch {}
+    }
+
+    const receivedLinks = LinkInbox
+      ? (await LinkInbox.listInbox()).filter(e => e.status !== "dismissed")
+      : [];
+    const receivedDirect = Direct ? await Direct.listReceived() : [];
+    const sentDirect     = Direct ? await Direct.listSent()     : [];
+
+    const linksUnread  = receivedLinks.filter(e => e.status === "unread").length;
+    const unreadCount  = directUnread + linksUnread;
+
+    if (typeof trackEvent === "function") {
+      trackEvent("inbox_opened", { unread_count: unreadCount });
+    }
+
+    const receivedHtml = _renderReceivedList(receivedLinks, receivedDirect);
+    const sentHtml     = _renderSentList(sentDirect);
 
     target.innerHTML = `
       <h2 class="tab-h2">Inbox</h2>
-      <div class="inbox-list">
-        ${entries.map(_renderCard).join("")}
+      <div class="inbox-view-switcher">
+        <button class="inbox-view-btn${_inboxView === "received" ? " is-active" : ""}" data-view="received">Received</button>
+        <button class="inbox-view-btn${_inboxView === "sent" ? " is-active" : ""}" data-view="sent">Sent</button>
+      </div>
+      <div class="inbox-view-body">
+        ${_inboxView === "received" ? receivedHtml : sentHtml}
       </div>
     `;
 
-    // Wire actions
+    // Toggle handlers
+    target.querySelectorAll(".inbox-view-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        _inboxView = btn.dataset.view || "received";
+        renderInboxTab(containerId);
+      });
+    });
+
+    // Link-share card actions (Phase 1)
     target.querySelectorAll("[data-inbox-action]").forEach(btn => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
@@ -75,21 +108,146 @@
           await _schedule(token);
         } else if (action === "dismiss") {
           if (confirm("Dismiss this workout from your inbox?")) {
-            await Inbox.dismiss(token);
+            await LinkInbox.dismiss(token);
             renderInboxTab(containerId);
           }
         }
       });
     });
     target.querySelectorAll(".inbox-card").forEach(card => {
+      const token = card.dataset.token;
+      if (!token) return;
       card.addEventListener("click", async () => {
-        const token = card.dataset.token;
-        await Inbox.markAsRead(token);
+        if (LinkInbox && LinkInbox.markAsRead) await LinkInbox.markAsRead(token);
         _openPreview(token);
       });
     });
 
+    // Direct (Phase 2) card actions
+    target.querySelectorAll("[data-direct-action]").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const action = btn.dataset.directAction;
+        const itemId = btn.dataset.itemId;
+        if (action === "accept") {
+          await _acceptDirect(itemId, receivedDirect);
+        } else if (action === "dismiss") {
+          await _dismissDirect(itemId, receivedDirect);
+        }
+        renderInboxTab(containerId);
+      });
+    });
+
     _refreshBadge();
+  }
+
+  function _renderReceivedList(links, direct) {
+    if (!links.length && !direct.length) {
+      return `
+        <div class="inbox-empty">
+          <p>No shared workouts yet. When a friend shares a workout with you, it'll show up here.</p>
+        </div>`;
+    }
+    let html = '<div class="inbox-list">';
+    // Phase 2 direct sends first (newer, richer)
+    direct.forEach(item => { html += _renderDirectCard(item); });
+    // Phase 1 link-share items after
+    links.forEach(e => { html += _renderCard(e); });
+    html += "</div>";
+    return html;
+  }
+
+  function _renderSentList(sent) {
+    if (!sent.length) {
+      return `<div class="inbox-empty"><p>You haven't sent any workouts yet. Tap the share button on any workout to send it to a friend.</p></div>`;
+    }
+    let html = '<div class="inbox-list">';
+    sent.forEach(item => { html += _renderSentCard(item); });
+    html += "</div>";
+    return html;
+  }
+
+  function _renderDirectCard(item) {
+    const isAccepted = item.status === "accepted";
+    const noteHtml = item.message ? `<div class="inbox-card-note">"${_esc(item.message)}"</div>` : "";
+    const sender = item.sender_display_name || "A friend";
+    const actionsHtml = isAccepted
+      ? `<div class="inbox-card-saved">Saved ${"\u2713"}</div>`
+      : `
+        <button class="btn-primary" data-direct-action="accept"  data-item-id="${_esc(item.id)}">Save to Library</button>
+        <button class="btn-ghost"   data-direct-action="dismiss" data-item-id="${_esc(item.id)}">Dismiss</button>
+      `;
+    return `
+      <div class="inbox-card inbox-card--direct${isAccepted ? " is-accepted" : ""}">
+        <div class="inbox-card-header">
+          <div class="avatar">${_esc(_initials(sender))}</div>
+          <div class="inbox-card-meta">
+            <div class="inbox-card-sender">${_esc(sender)}</div>
+            <div class="inbox-card-time">${_esc(_formatRelative(item.created_at))}</div>
+          </div>
+        </div>
+        <div class="inbox-card-title">${_esc(item.workout_name || "Workout")}</div>
+        ${item.workout_type ? `<div class="inbox-card-sport">${_esc(item.workout_type)}</div>` : ""}
+        ${noteHtml}
+        <div class="inbox-card-actions">
+          ${actionsHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  function _renderSentCard(item) {
+    const statusLabels = {
+      unread: "Delivered",
+      read: "Seen",
+      accepted: "Saved",
+      dismissed: "Dismissed",
+    };
+    const statusClass = "inbox-sent-status inbox-sent-status--" + item.status;
+    const recipient = item.recipient_display_name || "recipient";
+    return `
+      <div class="inbox-card inbox-card--sent">
+        <div class="inbox-card-header">
+          <div class="inbox-card-meta">
+            <div class="inbox-card-sender">To ${_esc(recipient)}</div>
+            <div class="inbox-card-time">${_esc(_formatRelative(item.created_at))}</div>
+          </div>
+          <span class="${statusClass}">${_esc(statusLabels[item.status] || item.status)}</span>
+        </div>
+        <div class="inbox-card-title">${_esc(item.workout_name || "Workout")}</div>
+        ${item.workout_type ? `<div class="inbox-card-sport">${_esc(item.workout_type)}</div>` : ""}
+        ${item.message ? `<div class="inbox-card-note">"${_esc(item.message)}"</div>` : ""}
+      </div>
+    `;
+  }
+
+  async function _acceptDirect(itemId, cachedList) {
+    const Direct = window.WorkoutInboxDirect;
+    if (!Direct) return;
+    const item = (cachedList || []).find(x => x.id === itemId);
+    if (!item) return;
+    // Save the full payload to the Saved library, then flip status to accepted.
+    Direct.saveItemPayloadToLibrary(item);
+    await Direct.acceptItem(itemId);
+    if (typeof trackEvent === "function") {
+      trackEvent("inbox_workout_accepted", {
+        workout_type: item.workout_type,
+        sender_id: item.sender_id,
+      });
+    }
+    if (typeof _showShareToast === "function") _showShareToast("Saved to library!");
+  }
+
+  async function _dismissDirect(itemId, cachedList) {
+    const Direct = window.WorkoutInboxDirect;
+    if (!Direct) return;
+    const item = (cachedList || []).find(x => x.id === itemId);
+    await Direct.dismissItem(itemId);
+    if (typeof trackEvent === "function") {
+      trackEvent("inbox_workout_dismissed", {
+        workout_type: item?.workout_type,
+      });
+    }
   }
 
   function _renderCard(e) {
@@ -227,19 +385,38 @@
     renderInboxTab();
   }
 
-  function _refreshBadge() {
-    const Inbox = window.SharedWorkoutsInbox;
-    if (!Inbox) return;
-    Inbox.getUnreadCount().then(n => {
-      const badge = document.getElementById("inbox-tab-badge");
-      if (!badge) return;
-      if (n > 0) {
-        badge.textContent = String(n);
-        badge.style.display = "";
-      } else {
-        badge.style.display = "none";
+  async function _refreshBadge() {
+    const Inbox  = window.SharedWorkoutsInbox;
+    const Direct = window.WorkoutInboxDirect;
+    const badge  = document.getElementById("inbox-tab-badge");
+    if (!badge) return;
+
+    let total = 0;
+    try {
+      if (Inbox && Inbox.getUnreadCount) {
+        const n = await Inbox.getUnreadCount();
+        total += n || 0;
       }
-    });
+    } catch {}
+    try {
+      if (Direct && Direct.getUnreadCount) {
+        const n = await Direct.getUnreadCount();
+        total += n || 0;
+      }
+    } catch {}
+
+    if (total > 0) {
+      badge.textContent = total > 99 ? "99+" : String(total);
+      badge.style.display = "";
+      // Pulse animation on appearance
+      if (!badge.classList.contains("has-count")) {
+        badge.classList.add("has-count", "is-pulsing");
+        setTimeout(() => badge.classList.remove("is-pulsing"), 1200);
+      }
+    } else {
+      badge.style.display = "none";
+      badge.classList.remove("has-count");
+    }
   }
 
   const api = { renderInboxTab, refreshBadge: _refreshBadge };

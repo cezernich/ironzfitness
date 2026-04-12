@@ -43,25 +43,25 @@
     _removeSheet(SHEET_ID);
     const overlay = document.createElement("div");
     overlay.id = SHEET_ID;
-    overlay.className = "share-sheet-overlay";
+    overlay.className = "share-action-sheet-overlay";
     overlay.innerHTML = `
-      <div class="share-sheet">
-        <div class="share-sheet-handle"></div>
-        <button class="share-sheet-btn" data-action="copy-link">
-          <span class="share-sheet-btn-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
-          <span class="share-sheet-btn-label">
-            <span class="share-sheet-btn-title">Copy link</span>
-            <span class="share-sheet-btn-sub">Share anywhere via a preview URL</span>
+      <div class="share-action-sheet">
+        <div class="share-action-sheet-handle"></div>
+        <button class="share-action-sheet-btn" data-action="copy-link">
+          <span class="share-action-sheet-btn-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+          <span class="share-action-sheet-btn-label">
+            <span class="share-action-sheet-btn-title">Copy link</span>
+            <span class="share-action-sheet-btn-sub">Share anywhere via a preview URL</span>
           </span>
         </button>
-        <button class="share-sheet-btn" data-action="send-friend">
-          <span class="share-sheet-btn-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg></span>
-          <span class="share-sheet-btn-label">
-            <span class="share-sheet-btn-title">Send to friend</span>
-            <span class="share-sheet-btn-sub">Direct to their IronZ inbox</span>
+        <button class="share-action-sheet-btn" data-action="send-friend">
+          <span class="share-action-sheet-btn-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg></span>
+          <span class="share-action-sheet-btn-label">
+            <span class="share-action-sheet-btn-title">Send to friend</span>
+            <span class="share-action-sheet-btn-sub">Direct to their IronZ inbox</span>
           </span>
         </button>
-        <button class="share-sheet-cancel" data-action="cancel">Cancel</button>
+        <button class="share-action-sheet-cancel" data-action="cancel">Cancel</button>
       </div>
     `;
     document.body.appendChild(overlay);

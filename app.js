@@ -405,6 +405,17 @@ function init() {
   });
   if (typeof trackSessionStarted === "function") trackSessionStarted();
   if (typeof updateLastActive === "function") updateLastActive();
+
+  // Inbox badge — refresh now and every 60s so the dot appears without a tab switch.
+  if (window.InboxTabView && window.InboxTabView.refreshBadge) {
+    try { window.InboxTabView.refreshBadge(); } catch {}
+    if (!window._inboxBadgeInterval) {
+      window._inboxBadgeInterval = setInterval(() => {
+        try { window.InboxTabView.refreshBadge(); } catch {}
+      }, 60000);
+    }
+  }
+
   cleanupOrphanedCompletions();
   const today = getTodayString();
   document.getElementById("log-date").value  = today;

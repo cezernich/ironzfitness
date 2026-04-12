@@ -9,7 +9,7 @@ function localDateStr(d) {
 /* ─── Computations ─────────────────────────────────────────────────────── */
 
 function computeByType(workouts) {
-  const order  = ["weightlifting","running","triathlon","cycling","stairstepper","general","other"];
+  const order  = ["weightlifting","bodyweight","hiit","running","triathlon","cycling","stairstepper","general","other"];
   const counts = {};
   order.forEach(t => counts[t] = 0);
   workouts.forEach(w => {
@@ -280,6 +280,8 @@ function _updateTotalsValues(section) {
 function buildStatsBreakdown(byType, total) {
   const META = {
     weightlifting: { label:"Weight Lifting", icon:ICONS.weights,  color:"var(--color-violet)" },
+    bodyweight:    { label:"Bodyweight",     icon:ICONS.activity, color:"var(--color-accent)" },
+    hiit:          { label:"HIIT",           icon:ICONS.flame,    color:"var(--color-danger)" },
     running:       { label:"Running",        icon:ICONS.run,      color:"var(--color-amber)"  },
     triathlon:     { label:"Triathlon",      icon:ICONS.swim,     color:"var(--color-cyan)"   },
     cycling:       { label:"Cycling",        icon:ICONS.bike,     color:"var(--color-teal)"   },
