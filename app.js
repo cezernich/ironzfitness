@@ -367,6 +367,24 @@ function init() {
     DB.profile.get().catch(() => {});
     DB.refreshAllKeys().catch(() => {});
   }
+
+  // Cross-device sync: re-pull data when user returns to the tab
+  // Throttled to prevent thrashing if user tab-switches rapidly
+  let _lastVisibilityRefresh = 0;
+  document.addEventListener("visibilitychange", async () => {
+    if (document.visibilityState !== "visible") return;
+    const now = Date.now();
+    if (now - _lastVisibilityRefresh < 5000) return; // throttle to once per 5s
+    _lastVisibilityRefresh = now;
+    if (typeof DB === 'undefined' || !DB.refreshAllKeys) return;
+    try {
+      await DB.refreshAllKeys();
+      if (typeof renderCalendar === "function") renderCalendar();
+      if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
+        renderDayDetail(selectedDate);
+      }
+    } catch (e) { console.warn("[IronZ] visibility refresh failed:", e); }
+  });
   if (typeof trackEvent === "function") trackEvent("app_opened");
   if (typeof updateLastActive === "function") updateLastActive();
   cleanupOrphanedCompletions();

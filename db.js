@@ -354,27 +354,34 @@ const DB = (() => {
 
   const _keyTimers = {};
 
+  // Critical keys sync immediately (no debounce) so cross-device sync is fast.
+  const _IMMEDIATE_SYNC_KEYS = new Set(['workoutSchedule', 'workouts', 'trainingPlan', 'events', 'meals']);
+
+  async function _doSyncKey(lsKey) {
+    const uid = await _userId();
+    if (!uid) return;
+    const raw = localStorage.getItem(lsKey);
+    if (raw === null) return;
+    let val;
+    try { val = JSON.parse(raw); } catch { val = raw; }
+    try {
+      const { error } = await _client()
+        .from('user_data')
+        .upsert({
+          user_id: uid,
+          data_key: lsKey,
+          data_value: val,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,data_key' });
+      if (error) console.warn(`DB: syncKey ${lsKey} error`, error.message);
+    } catch (e) { console.warn(`DB: syncKey ${lsKey} offline`, e); }
+  }
+
   function syncKey(lsKey) {
     clearTimeout(_keyTimers[lsKey]);
-    _keyTimers[lsKey] = setTimeout(async () => {
-      const uid = await _userId();
-      if (!uid) return;
-      const raw = localStorage.getItem(lsKey);
-      if (raw === null) return;
-      let val;
-      try { val = JSON.parse(raw); } catch { val = raw; }
-      try {
-        const { error } = await _client()
-          .from('user_data')
-          .upsert({
-            user_id: uid,
-            data_key: lsKey,
-            data_value: val,
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'user_id,data_key' });
-        if (error) console.warn(`DB: syncKey ${lsKey} error`, error.message);
-      } catch (e) { console.warn(`DB: syncKey ${lsKey} offline`, e); }
-    }, 2000);
+    // Critical keys fire immediately; others debounce 2s to batch rapid writes
+    const delay = _IMMEDIATE_SYNC_KEYS.has(lsKey) ? 200 : 2000;
+    _keyTimers[lsKey] = setTimeout(() => _doSyncKey(lsKey), delay);
   }
 
   // Pull all user_data rows from Supabase and populate localStorage cache
