@@ -19,6 +19,18 @@ const _shareEntryCache = {};
 let _shareCacheSeq = 0;
 
 /**
+ * Stash an entry in the share cache and return its lookup key. Exposed so
+ * callers that build their own button HTML can still register an entry
+ * with the share subsystem.
+ */
+function stashShareEntry(entry) {
+  if (!entry) return null;
+  const cacheKey = "se" + (++_shareCacheSeq);
+  _shareEntryCache[cacheKey] = entry;
+  return cacheKey;
+}
+
+/**
  * Build the icon-only share button. Use this everywhere — don't roll your own.
  *
  * Emits a `data-share-key` + `data-share-source` pair instead of an inline
@@ -35,8 +47,7 @@ let _shareCacheSeq = 0;
  */
 function buildShareIconButton(entry, source) {
   if (!entry) return "";
-  const cacheKey = "se" + (++_shareCacheSeq);
-  _shareEntryCache[cacheKey] = entry;
+  const cacheKey = stashShareEntry(entry);
   return '<button type="button" class="share-icon-btn" title="Share" aria-label="Share workout"'
        + ' data-share-key="' + cacheKey + '" data-share-source="' + (source || "unknown") + '">'
        + _SHARE_ICON_SVG
@@ -346,14 +357,24 @@ if (typeof document !== "undefined") {
     e.preventDefault();
     const key = btn.getAttribute("data-share-key");
     const source = btn.getAttribute("data-share-source") || "unknown";
-    if (typeof shareWorkoutLink === "function") {
-      shareWorkoutLink(key, source);
+    // Look up the entry in share.js's cache first; fall back to any
+    // caller-provided cache on window.__calShareFallbackCache.
+    let entry = _shareEntryCache[key];
+    if (!entry && typeof window !== "undefined" && window.__calShareFallbackCache) {
+      entry = window.__calShareFallbackCache[key];
+    }
+    if (!entry) { console.warn("[IronZ] share: entry not in cache for key", key); return; }
+    if (window.ShareActionSheet && window.ShareActionSheet.open) {
+      window.ShareActionSheet.open(entry, source);
+    } else if (typeof shareWorkoutLinkDirect === "function") {
+      shareWorkoutLinkDirect(entry, source);
     }
   }, true); // use capture so it wins over card-header click handlers
 }
 
 // Expose for module-less script use
 if (typeof window !== "undefined") {
+  window.stashShareEntry = stashShareEntry;
   window.buildShareIconButton = buildShareIconButton;
   window.shareWorkoutLink = shareWorkoutLink;
   window.shareWorkoutLinkDirect = shareWorkoutLinkDirect;

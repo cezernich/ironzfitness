@@ -1291,15 +1291,38 @@ function _buildUndoHeaderBtn(sessionId, dateStr) {
 // Icon-only button that opens the share action sheet. The click is handled
 // by a document-level delegator in share.js (via [data-share-key]), so the
 // inline onclick attribute is unnecessary — this helper just emits the
-// button markup. share.js is always loaded before the first render, so
-// there's no load-order race to worry about.
+// button markup. The button HTML is generated INLINE here so rendering
+// never silently fails because of a missing share.js symbol — we only
+// need the entry-cache helper, and even that falls back to a local cache.
+const _calShareSvg = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>';
+let _calShareSeq = 0;
+const _calShareFallbackCache = {};
+
 function _buildShareBtnFromEntry(entry) {
   try {
     if (!entry) return "";
-    if (typeof window !== "undefined" && typeof window.buildShareIconButton === "function") {
-      return window.buildShareIconButton(entry, "calendar");
+    // Preferred: go through share.js's cache so the delegator there
+    // can resolve the click. Fall back to a local cache + window.__calShare
+    // lookup if share.js isn't loaded for any reason — the button always
+    // renders, and the click still works as long as share.js is eventually
+    // loaded (it is, via index.html).
+    let cacheKey = null;
+    if (typeof window !== "undefined" && typeof window.stashShareEntry === "function") {
+      cacheKey = window.stashShareEntry(entry);
     }
-    return "";
+    if (!cacheKey) {
+      cacheKey = "cal" + (++_calShareSeq);
+      _calShareFallbackCache[cacheKey] = entry;
+      // Attach the fallback cache to window so share.js's delegator
+      // (registered in a different script) can still resolve it.
+      if (typeof window !== "undefined") {
+        window.__calShareFallbackCache = _calShareFallbackCache;
+      }
+    }
+    return '<button type="button" class="share-icon-btn" title="Share" aria-label="Share workout"'
+         + ' data-share-key="' + cacheKey + '" data-share-source="calendar">'
+         + _calShareSvg
+         + '</button>';
   } catch (e) {
     console.warn("[IronZ] share button render skipped:", e.message);
     return "";
