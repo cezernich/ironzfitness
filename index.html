@@ -38,8 +38,19 @@
   <!-- ===== SPLASH SCREEN (visible on load, hidden once auth resolves) ===== -->
   <div id="splash-screen" class="splash-screen">
     <div class="splash-inner">
-      <span class="logo-mark"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
-      <div class="logo-text">IronZ</div>
+      <svg class="splash-bolt" viewBox="0 0 24 24" width="72" height="72" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <clipPath id="bolt-fill-clip" clipPathUnits="userSpaceOnUse">
+            <rect x="0" y="24" width="24" height="24" class="bolt-fill-rect"/>
+          </clipPath>
+        </defs>
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"
+          fill="none" stroke="var(--color-accent)" stroke-width="1.5"
+          stroke-linejoin="round" stroke-linecap="round"/>
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"
+          fill="var(--color-accent)" clip-path="url(#bolt-fill-clip)"/>
+      </svg>
+      <div class="splash-text">IRONZ</div>
     </div>
   </div>
 

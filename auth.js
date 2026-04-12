@@ -10,12 +10,26 @@ const DEV_BYPASS_AUTH = false;
 // ── Show / hide helpers ────────────────────────────────────────────────────────
 
 function hideSplashScreen() {
+  console.log('[Auth] hideSplashScreen: called');
   const splash = document.getElementById('splash-screen');
-  if (!splash || splash.dataset.hidden === '1') return;
+  if (!splash) {
+    console.warn('[Auth] hideSplashScreen: #splash-screen not in DOM');
+    return;
+  }
+  if (splash.dataset.hidden === '1') return;
   splash.dataset.hidden = '1';
   splash.classList.add('is-hiding');
-  // Remove from flow after fade completes so it never intercepts taps
-  setTimeout(() => { splash.style.display = 'none'; }, 220);
+  // Hard-hide as a safety net — even if the CSS transition misbehaves, the
+  // splash MUST go away. 240ms gives the 200ms opacity fade room to finish.
+  setTimeout(() => {
+    if (splash && splash.parentNode) splash.style.display = 'none';
+  }, 240);
+  // Extra safety — also hide after 1s even if the above setTimeout gets
+  // delayed by a heavy init() on the main thread.
+  setTimeout(() => {
+    const s = document.getElementById('splash-screen');
+    if (s) s.style.display = 'none';
+  }, 1000);
 }
 
 function showAuthScreen() {
@@ -271,12 +285,14 @@ async function ensureProfile(user) {
 // ── Boot sequence ──────────────────────────────────────────────────────────────
 
 async function authBoot() {
+  console.log('[Auth] authBoot: starting');
+
   // Safety net: if getSession() stalls, fall back to login screen after 3s
   // so the user is never stuck staring at the splash indefinitely.
   const splashTimeout = setTimeout(() => {
     if (!window._appInitialized) {
-      console.warn('Auth: session check timed out after 3s, showing login');
-      showAuthScreen();
+      console.warn('[Auth] timeout fired, showing auth screen');
+      try { showAuthScreen(); } catch (e) { console.error('[Auth] showAuthScreen failed', e); hideSplashScreen(); }
     }
   }, 3000);
 
@@ -291,12 +307,27 @@ async function authBoot() {
     return;
   }
 
+  // Sanity check: Supabase client must exist
+  if (!window.supabaseClient) {
+    console.error('[Auth] window.supabaseClient is undefined — check supabase-init.js');
+    clearTimeout(splashTimeout);
+    hideSplashScreen();
+    showAuthScreen();
+    return;
+  }
+
+  console.log('[Auth] calling getSession()');
   let session;
   try {
     const { data } = await window.supabaseClient.auth.getSession();
     session = data?.session;
+    console.log('[Auth] getSession resolved, session=', !!session);
   } catch (e) {
-    console.warn('Auth: getSession error', e);
+    console.error('[Auth] getSession threw error:', e);
+    clearTimeout(splashTimeout);
+    hideSplashScreen();
+    showAuthScreen();
+    return;
   }
 
   clearTimeout(splashTimeout);
@@ -352,5 +383,13 @@ async function authBoot() {
   });
 }
 
-// Override window.onload set by app.js
-window.onload = authBoot;
+// Override window.onload set by app.js.
+// Handle the case where the load event has already fired (e.g. async script,
+// cached page, Capacitor WebView) — in that case window.onload = ... would
+// silently never run.
+if (document.readyState === 'complete') {
+  console.log('[Auth] document already loaded — running authBoot immediately');
+  setTimeout(authBoot, 0);
+} else {
+  window.onload = authBoot;
+}

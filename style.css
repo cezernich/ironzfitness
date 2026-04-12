@@ -8846,20 +8846,37 @@ button:active {
   text-align: center;
   color: var(--color-text, #fff);
 }
-.splash-inner .logo-mark {
-  display: inline-flex;
-  font-size: 2.5rem;
-  color: var(--color-accent, #818cf8);
+
+/* Animated lightning bolt — outline appears instantly, fill rises from bottom */
+.splash-bolt {
+  display: block;
+  margin: 0 auto;
+  animation: bolt-glow 1.4s ease-in-out 2s infinite alternate;
 }
-.splash-inner .logo-mark .icon {
-  width: 2.5rem;
-  height: 2.5rem;
+.bolt-fill-rect {
+  animation: bolt-fill 2s ease-out forwards;
 }
-.splash-inner .logo-text {
+@keyframes bolt-fill {
+  from { y: 24; height: 0; }
+  to   { y: 0;  height: 24; }
+}
+@keyframes bolt-glow {
+  from { filter: drop-shadow(0 0 0 var(--color-accent)); }
+  to   { filter: drop-shadow(0 0 12px var(--color-accent)); }
+}
+
+.splash-text {
   font-size: 2rem;
   font-weight: 800;
-  margin-top: 8px;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.12em;
+  margin-top: 14px;
+  color: var(--color-text, #fff);
+  opacity: 0;
+  animation: splash-text-fade 0.5s ease-out 0.5s forwards;
+}
+@keyframes splash-text-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .auth-card {
