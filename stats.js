@@ -67,6 +67,13 @@ function getThisWeekCount(workouts) {
   return workouts.filter(w => w.date >= ws).length;
 }
 
+function getThisMonthCount(workouts) {
+  const now = new Date();
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const ms = localDateStr(firstOfMonth);
+  return workouts.filter(w => w.date >= ms).length;
+}
+
 function getDowCounts(workouts) {
   const counts = new Array(7).fill(0);
   workouts.forEach(w => counts[new Date(w.date+"T00:00:00").getDay()]++);
@@ -75,25 +82,27 @@ function getDowCounts(workouts) {
 
 /* ─── Section builders ─────────────────────────────────────────────────── */
 
-function buildStatsOverview(total, streaks, thisWeek) {
-  const flame = streaks.currentWeek > 0 ? ` ${ICONS.flame}` : "";
+function buildStatsOverview(total, streaks, thisWeek, thisMonth) {
+  const activeStreak = streaks.currentDay > 0;
+  const streakClass = activeStreak ? " stat-hero--active" : "";
+  const flame = activeStreak ? ` <span class="stat-hero-flame">${ICONS.flame}</span>` : "";
   return `
     <div class="stats-overview">
-      <div class="stat-hero stat-hero--link" onclick="selectStatsView('history')">
+      <div class="stat-hero stat-hero--total stat-hero--link" onclick="selectStatsView('history')">
         <div class="stat-hero-value">${total}</div>
         <div class="stat-hero-label">Total Workouts</div>
       </div>
-      <div class="stat-hero">
-        <div class="stat-hero-value">${streaks.currentWeek}${flame}</div>
-        <div class="stat-hero-label">Week Streak</div>
+      <div class="stat-hero stat-hero--streak${streakClass}">
+        <div class="stat-hero-value">${streaks.currentDay}${flame}</div>
+        <div class="stat-hero-label">Day Streak</div>
       </div>
-      <div class="stat-hero">
-        <div class="stat-hero-value">${streaks.bestWeek}</div>
-        <div class="stat-hero-label">Best Streak</div>
-      </div>
-      <div class="stat-hero">
+      <div class="stat-hero stat-hero--week">
         <div class="stat-hero-value">${thisWeek}</div>
         <div class="stat-hero-label">This Week</div>
+      </div>
+      <div class="stat-hero stat-hero--month">
+        <div class="stat-hero-value">${thisMonth}</div>
+        <div class="stat-hero-label">This Month</div>
       </div>
     </div>`;
 }
@@ -396,7 +405,7 @@ function buildStatsHeatmap(workouts, streaks) {
 }
 
 function buildStatsWeekly(workouts) {
-  const WEEKS = 8;
+  const WEEKS = 4;
   const thisMonday = getWeekStart(new Date());
   const weekData = [];
   for (let i = WEEKS-1; i >= 0; i--) {
@@ -450,13 +459,13 @@ function buildStatsStreaks(streaks, workouts) {
   }).join("");
 
   const boxes = [
-    { val: streaks.currentDay,  label: "Current Day Streak",  sub: "days in a row"  },
-    { val: streaks.bestDay,     label: "Best Day Streak",     sub: "days in a row"  },
-    { val: streaks.currentWeek, label: "Current Week Streak", sub: "weeks in a row" },
-    { val: streaks.bestWeek,    label: "Best Week Streak",    sub: "weeks in a row" },
+    { val: streaks.currentDay,  label: "Current Day Streak",  sub: "days in a row",  active: streaks.currentDay > 0 },
+    { val: streaks.bestDay,     label: "Best Day Streak",     sub: "days in a row",  active: false },
+    { val: streaks.currentWeek, label: "Current Week Streak", sub: "weeks in a row", active: streaks.currentWeek > 0 },
+    { val: streaks.bestWeek,    label: "Best Week Streak",    sub: "weeks in a row", active: false },
   ].map(r => `
-    <div class="streak-box">
-      <div class="streak-val">${r.val}</div>
+    <div class="streak-box${r.active ? " streak-box--active" : ""}">
+      <div class="streak-val">${r.val}${r.active ? ` <span class="streak-flame">${ICONS.flame}</span>` : ""}</div>
       <div class="streak-label">${r.label}</div>
       <div class="streak-sub">${r.sub}</div>
     </div>`).join("");
@@ -1077,12 +1086,13 @@ function renderStats() {
   let   meals    = [];
   try { meals = JSON.parse(localStorage.getItem("meals")) || []; } catch {}
 
-  const streaks  = computeStreaks(workouts);
-  const byType   = computeByType(workouts);
-  const thisWeek = getThisWeekCount(workouts);
+  const streaks   = computeStreaks(workouts);
+  const byType    = computeByType(workouts);
+  const thisWeek  = getThisWeekCount(workouts);
+  const thisMonth = getThisMonthCount(workouts);
 
   container.innerHTML =
-    buildStatsOverview(workouts.length, streaks, thisWeek) +
+    buildStatsOverview(workouts.length, streaks, thisWeek, thisMonth) +
     buildStatsRatingTrend() +
     buildStatsProgressiveOverload() +
     buildStatsPlanConsistency() +
