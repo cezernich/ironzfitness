@@ -274,6 +274,7 @@ function isNutritionEnabled() {
 function setNutritionEnabled(enabled) {
   localStorage.setItem("nutritionEnabled", enabled ? "1" : "0"); if (typeof DB !== 'undefined') DB.syncKey('nutritionEnabled');
   if (typeof trackEvent === "function") trackEvent("feature_toggled", { feature: "nutrition", enabled });
+  if (typeof syncFeatureToggles === "function") syncFeatureToggles();
   applyNutritionToggle();
   // Re-render day detail if open so nutrition sections appear/disappear immediately
   if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {

@@ -10,6 +10,7 @@ function isFuelingEnabled() {
 function setFuelingEnabled(enabled) {
   localStorage.setItem("fuelingEnabled", enabled ? "1" : "0"); if (typeof DB !== 'undefined') DB.syncKey('fuelingEnabled');
   if (typeof trackEvent === "function") trackEvent("feature_toggled", { feature: "fueling", enabled });
+  if (typeof syncFeatureToggles === "function") syncFeatureToggles();
   const toggle = document.getElementById("pref-fueling-toggle");
   if (toggle) toggle.checked = enabled;
   if (typeof renderCalendar === "function") renderCalendar();

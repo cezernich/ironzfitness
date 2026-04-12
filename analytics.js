@@ -80,6 +80,38 @@ function trackSessionStarted() {
    PROFILE UPDATES
    ===================================================================== */
 
+// Mirror the current local state of the nutrition / hydration / fueling
+// toggles into profiles.feature_toggles. Call after flipping any toggle —
+// reads fresh values from localStorage so the caller doesn't need to pass
+// anything in. The whole JSON object is replaced on each write.
+function syncFeatureToggles() {
+  try {
+    const toggles = {
+      nutrition: localStorage.getItem("nutritionEnabled") !== "0",
+      hydration: localStorage.getItem("hydrationEnabled") !== "0",
+      fueling:   localStorage.getItem("fuelingEnabled")   !== "0",
+    };
+
+    if (_isAnalyticsDebug()) {
+      try { console.log("syncFeatureToggles:", toggles); } catch {}
+    }
+
+    const client = window.supabaseClient;
+    if (!client) return;
+
+    client.auth.getSession().then(({ data }) => {
+      const userId = data?.session?.user?.id;
+      if (!userId) return;
+
+      client.from("profiles").update({
+        feature_toggles: toggles,
+      }).eq("id", userId).then(() => {}, () => {});
+    }).catch(() => {});
+  } catch {
+    // never throw
+  }
+}
+
 function updateLastActive() {
   try {
     const client = window.supabaseClient;

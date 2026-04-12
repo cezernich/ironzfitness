@@ -68,6 +68,7 @@ function isHydrationEnabled() {
 function setHydrationEnabled(enabled) {
   localStorage.setItem("hydrationEnabled", enabled ? "1" : "0"); if (typeof DB !== 'undefined') DB.syncKey('hydrationEnabled');
   if (typeof trackEvent === "function") trackEvent("feature_toggled", { feature: "hydration", enabled });
+  if (typeof syncFeatureToggles === "function") syncFeatureToggles();
   applyHydrationToggle();
 }
 
