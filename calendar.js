@@ -2871,13 +2871,10 @@ function _generateWorkoutRationale(dateStr, discipline, load, sessionName, entry
   // → community → saved → manually added → plan-generated.
   const source = _detectWorkoutSource(entry);
 
-  // Manually added — short attribution and done
-  if (source === "manual") {
-    const addedAt = entry && entry.created_at ? entry.created_at.slice(0, 10) : null;
-    return addedAt && addedAt !== dateStr
-      ? `You added this workout manually on ${_formatShortDate(addedAt)}.`
-      : "You added this workout manually.";
-  }
+  // Manually added — the user already knows they added it. Returning ""
+  // suppresses the whole "Why this workout?" toggle (buildWorkoutExplanation
+  // skips rendering when rationale is empty).
+  if (source === "manual") return "";
   if (source === "community") {
     const author = entry && (entry.author || entry.community_author);
     return author
