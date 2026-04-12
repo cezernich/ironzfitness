@@ -47,6 +47,8 @@ function startLiveWorkout(sessionId, dateStr, type, stepsJson, exercisesJson) {
         return { done: false, reps: sd ? sd.reps : (ex.reps || ""), weight: sd ? sd.weight : (ex.weight || "") };
       });
     }) : [],
+    // Cached superset groupings (computed once at start)
+    _groups: null,
     // For Hyrox: track split time per station/run
     stationTimes: isHyrox ? exercises.map(() => null) : [],
     currentExercise: 0,
@@ -55,9 +57,55 @@ function startLiveWorkout(sessionId, dateStr, type, stepsJson, exercisesJson) {
     inRest: false,
   };
 
+  if (isStrength) _liveTracker._groups = _computeLiveGroups();
+
   _requestWakeLock();
   _renderLiveTracker();
   _startLiveTimer();
+}
+
+// ── Superset groupings ───────────────────────────────────────────────────────
+//
+// Consecutive exercises sharing the same supersetId (or supersetGroup) form one
+// superset — the user performs them as alternating rounds (A1 → B1 → rest → A2 → B2).
+// A lone exercise with a superset tag falls back to a single-exercise group.
+
+function _computeLiveGroups() {
+  const t = _liveTracker;
+  if (!t || !t.exercises) return [];
+  const gidOf = ex => ex.supersetId || ex.supersetGroup || null;
+  const groups = [];
+  let i = 0;
+  while (i < t.exercises.length) {
+    const gid = gidOf(t.exercises[i]);
+    if (gid) {
+      const indices = [];
+      while (i < t.exercises.length && gidOf(t.exercises[i]) === gid) {
+        indices.push(i);
+        i++;
+      }
+      if (indices.length >= 2) {
+        const rounds = Math.max(...indices.map(ix => (t.sets[ix] || []).length));
+        groups.push({ kind: "superset", gid, indices, rounds });
+        continue;
+      }
+      groups.push({ kind: "single", index: indices[0] });
+    } else {
+      groups.push({ kind: "single", index: i });
+      i++;
+    }
+  }
+  return groups;
+}
+
+function _findLiveGroupContaining(exIdx) {
+  const groups = _liveTracker?._groups;
+  if (!groups) return null;
+  for (const g of groups) {
+    if (g.kind === "single" && g.index === exIdx) return g;
+    if (g.kind === "superset" && g.indices.includes(exIdx)) return g;
+  }
+  return null;
 }
 
 // ── Timer ────────────────────────────────────────────────────────────────────
@@ -217,36 +265,97 @@ function _renderLiveTracker() {
 
 function _buildStrengthView() {
   const t = _liveTracker;
+  const groups = t._groups || _computeLiveGroups();
   let html = "";
 
-  t.exercises.forEach((ex, ei) => {
-    const sets = t.sets[ei] || [];
-    const allDone = sets.every(s => s.done);
-    html += `
-      <div class="live-exercise${allDone ? " live-exercise--done" : ""}${ei === t.currentExercise ? " live-exercise--active" : ""}" id="live-ex-${ei}">
-        <div class="live-exercise-header" onclick="_toggleLiveExercise(${ei})">
-          <span class="live-exercise-name">${_escLiveHtml(ex.name)}</span>
-          <span class="live-exercise-target">${ex.sets || "3"} x ${ex.reps || ""} ${ex.weight ? "@ " + ex.weight : ""}</span>
-          ${allDone ? '<span class="live-done-check">&#10003;</span>' : ""}
-          ${!allDone ? `<button class="live-swap-btn" onclick="_swapLiveExercise(${ei})" title="Swap exercise">&#8644;</button>` : ""}
-        </div>
-        <div class="live-sets-grid" id="live-sets-${ei}">
-          <div class="live-sets-header">
-            <span>Set</span><span>Reps</span><span>Weight</span><span></span>
-          </div>
-          ${sets.map((s, si) => `
-            <div class="live-set-row${s.done ? " live-set--done" : ""}" id="live-set-${ei}-${si}">
-              <span class="live-set-num">${si + 1}</span>
-              <input class="live-set-input" type="text" inputmode="numeric" value="${s.reps}" id="live-reps-${ei}-${si}" placeholder="reps" ${s.done ? "disabled" : ""} />
-              <input class="live-set-input" type="text" value="${s.weight}" id="live-wt-${ei}-${si}" placeholder="lbs" ${s.done ? "disabled" : ""} />
-              <button class="live-set-btn${s.done ? " live-set-btn--done" : ""}" onclick="_logLiveSet(${ei},${si})">${s.done ? "&#10003;" : "Log"}</button>
-            </div>
-          `).join("")}
-        </div>
-      </div>`;
-  });
+  for (const g of groups) {
+    if (g.kind === "single") {
+      html += _buildLiveSingleExerciseCard(g.index);
+    } else {
+      html += _buildLiveSupersetCard(g);
+    }
+  }
 
   return html;
+}
+
+function _buildLiveSingleExerciseCard(ei) {
+  const t = _liveTracker;
+  const ex = t.exercises[ei];
+  const sets = t.sets[ei] || [];
+  const allDone = sets.every(s => s.done);
+  return `
+    <div class="live-exercise${allDone ? " live-exercise--done" : ""}${ei === t.currentExercise ? " live-exercise--active" : ""}" id="live-ex-${ei}">
+      <div class="live-exercise-header" onclick="_toggleLiveExercise(${ei})">
+        <span class="live-exercise-name">${_escLiveHtml(ex.name)}</span>
+        <span class="live-exercise-target">${ex.sets || "3"} x ${ex.reps || ""} ${ex.weight ? "@ " + ex.weight : ""}</span>
+        ${allDone ? '<span class="live-done-check">&#10003;</span>' : ""}
+        ${!allDone ? `<button class="live-swap-btn" onclick="_swapLiveExercise(${ei})" title="Swap exercise">&#8644;</button>` : ""}
+      </div>
+      <div class="live-sets-grid" id="live-sets-${ei}">
+        <div class="live-sets-header">
+          <span>Set</span><span>Reps</span><span>Weight</span><span></span>
+        </div>
+        ${sets.map((s, si) => `
+          <div class="live-set-row${s.done ? " live-set--done" : ""}" id="live-set-${ei}-${si}">
+            <span class="live-set-num">${si + 1}</span>
+            <input class="live-set-input" type="text" inputmode="numeric" value="${s.reps}" id="live-reps-${ei}-${si}" placeholder="reps" ${s.done ? "disabled" : ""} />
+            <input class="live-set-input" type="text" value="${s.weight}" id="live-wt-${ei}-${si}" placeholder="lbs" ${s.done ? "disabled" : ""} />
+            <button class="live-set-btn${s.done ? " live-set-btn--done" : ""}" onclick="_logLiveSet(${ei},${si})">${s.done ? "&#10003;" : "Log"}</button>
+          </div>
+        `).join("")}
+      </div>
+    </div>`;
+}
+
+function _buildLiveSupersetCard(g) {
+  const t = _liveTracker;
+  const letters = ["A", "B", "C", "D", "E", "F"];
+  const members = g.indices.map(ix => t.exercises[ix]);
+  const allDone = g.indices.every(ix => (t.sets[ix] || []).every(s => s.done));
+  const summary = members.map((ex, k) => `${letters[k] || "?"}: ${_escLiveHtml(ex.name)}`).join(" · ");
+
+  let roundsHtml = "";
+  for (let r = 0; r < g.rounds; r++) {
+    const roundDone = g.indices.every(ix => !!t.sets[ix]?.[r]?.done);
+    let rowsHtml = "";
+    g.indices.forEach((ix, k) => {
+      const s = t.sets[ix]?.[r];
+      if (!s) return;
+      const ex = t.exercises[ix];
+      const target = `${ex.reps || "—"}${ex.weight ? " @ " + _escLiveHtml(ex.weight) : ""}`;
+      rowsHtml += `
+        <div class="live-superset-row${s.done ? " live-set--done" : ""}" id="live-set-${ix}-${r}">
+          <span class="live-superset-letter">${letters[k] || "?"}</span>
+          <div class="live-superset-ex-info">
+            <span class="live-superset-ex-name">${_escLiveHtml(ex.name)}</span>
+            <span class="live-superset-ex-target">Target: ${target}</span>
+          </div>
+          <input class="live-set-input" type="text" inputmode="numeric" value="${s.reps}" id="live-reps-${ix}-${r}" placeholder="reps" ${s.done ? "disabled" : ""} />
+          <input class="live-set-input" type="text" value="${s.weight}" id="live-wt-${ix}-${r}" placeholder="lbs" ${s.done ? "disabled" : ""} />
+          <button class="live-set-btn${s.done ? " live-set-btn--done" : ""}" onclick="_logLiveSet(${ix},${r})">${s.done ? "&#10003;" : "Log"}</button>
+        </div>`;
+    });
+    roundsHtml += `
+      <div class="live-superset-round${roundDone ? " live-superset-round--done" : ""}">
+        <div class="live-superset-round-label">Round ${r + 1} of ${g.rounds}</div>
+        ${rowsHtml}
+      </div>`;
+  }
+
+  return `
+    <div class="live-exercise live-superset-group${allDone ? " live-exercise--done" : ""}" id="live-ss-${g.gid}">
+      <div class="live-exercise-header live-superset-header">
+        <span class="live-superset-badge">SS</span>
+        <span class="live-exercise-name">Superset · ${members.length} exercises</span>
+        <span class="live-exercise-target">${g.rounds} round${g.rounds !== 1 ? "s" : ""}</span>
+        ${allDone ? '<span class="live-done-check">&#10003;</span>' : ""}
+      </div>
+      <div class="live-superset-members">${summary}</div>
+      <div class="live-superset-rounds">
+        ${roundsHtml}
+      </div>
+    </div>`;
 }
 
 function _buildEnduranceView() {
@@ -423,11 +532,23 @@ function _logLiveSet(exIdx, setIdx) {
     set.weight = document.getElementById(`live-wt-${exIdx}-${setIdx}`)?.value || set.weight;
     set.done = true;
 
-    // Start rest timer (90s default for strength) unless disabled
+    // Start rest timer unless disabled. Supersets rest only after the full round
+    // (all exercises in the group at this round index are logged) and use a
+    // shorter default (60s vs 90s for normal exercises).
     if (!_getLivePrefs().hideRestTimer) {
-      _liveTracker.inRest = true;
-      _liveTracker.restCountdown = 90000;
-      _liveTracker.restEndTime = Date.now() + 90000;
+      const group = _findLiveGroupContaining(exIdx);
+      let restMs = 90000;
+      let shouldRest = true;
+      if (group && group.kind === "superset") {
+        const roundComplete = group.indices.every(ix => !!_liveTracker.sets[ix]?.[setIdx]?.done);
+        shouldRest = roundComplete;
+        restMs = 60000;
+      }
+      if (shouldRest) {
+        _liveTracker.inRest = true;
+        _liveTracker.restCountdown = restMs;
+        _liveTracker.restEndTime = Date.now() + restMs;
+      }
     }
   }
 
