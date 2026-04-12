@@ -18,12 +18,23 @@ function _getAnalyticsPlatform() {
   return (window.Capacitor && window.Capacitor.isNativePlatform()) ? "ios" : "web";
 }
 
+// Debug mode: when `localStorage.ironz_debug === "true"`, every tracked event
+// is mirrored to the browser console so devs can verify wiring without having
+// to query the analytics_events table in Supabase.
+function _isAnalyticsDebug() {
+  try { return localStorage.getItem("ironz_debug") === "true"; } catch { return false; }
+}
+
 /* =====================================================================
    CORE: trackEvent
    ===================================================================== */
 
 function trackEvent(name, properties) {
   try {
+    if (_isAnalyticsDebug()) {
+      try { console.log("trackEvent:", name, properties || {}); } catch {}
+    }
+
     const client = window.supabaseClient;
     if (!client) return;
 
@@ -39,6 +50,27 @@ function trackEvent(name, properties) {
         platform: _getAnalyticsPlatform(),
       }).then(() => {}, () => {}); // swallow errors silently
     }).catch(() => {});
+  } catch {
+    // never throw
+  }
+}
+
+// Shim for the modern workout-sharing flow and saved-workouts-library, which
+// call `window.IronZAnalytics.track(event, payload)`. Delegates to trackEvent
+// so both call sites land in analytics_events.
+if (typeof window !== "undefined") {
+  window.IronZAnalytics = window.IronZAnalytics || {
+    track: (event, payload) => trackEvent(event, payload),
+  };
+}
+
+// Fires once per browser session (sessionStorage flag). Call from app init
+// after auth lands. A re-invocation within the same session is a no-op.
+function trackSessionStarted() {
+  try {
+    if (sessionStorage.getItem("analytics_session_started") === "1") return;
+    sessionStorage.setItem("analytics_session_started", "1");
+    trackEvent("session_started", { platform: _getAnalyticsPlatform() });
   } catch {
     // never throw
   }
@@ -156,8 +188,15 @@ function trackWorkoutLogged(properties) {
 }
 
 function trackWorkoutShared(properties) {
-  trackEvent("share_sent", properties);
+  trackEvent("workout_shared", properties);
   _incrementProfileCounter("total_workouts_shared", {
     last_workout_shared: new Date().toISOString(),
   });
+}
+
+// Plan generation — called from Build a Plan (workouts.js), Custom Plan save,
+// and the philosophy plan generator. `plan_type` is one of "gym" | "custom" |
+// "race" | "philosophy"; `duration_weeks` is optional when unknown.
+function trackPlanGenerated(properties) {
+  trackEvent("plan_generated", properties || {});
 }

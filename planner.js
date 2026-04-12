@@ -2373,6 +2373,15 @@ function generateTrainingPlan(race) {
     details: "Give it everything. You've earned this.",
   });
 
+  if (typeof trackPlanGenerated === "function") {
+    trackPlanGenerated({
+      plan_type: "race",
+      race_type: race.type,
+      duration_weeks: config.totalWeeks,
+      level: race.level,
+    });
+  }
+
   return plan;
 }
 

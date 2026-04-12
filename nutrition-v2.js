@@ -305,6 +305,8 @@ function quickAddMealSelect(cal, protein, carbs, fat, name) {
   meals.unshift(meal);
   localStorage.setItem("meals", JSON.stringify(meals)); if (typeof DB !== 'undefined') DB.syncKey('meals');
 
+  if (typeof trackEvent === "function") trackEvent("meal_logged", { source: "quick_add", calories: cal });
+
   closeQuickAddMeal();
   updateNutritionDashboard();
   renderNutritionHistory();
@@ -423,6 +425,8 @@ function savePhotoMeal() {
   const meals = loadMeals();
   meals.unshift(meal);
   localStorage.setItem("meals", JSON.stringify(meals)); if (typeof DB !== 'undefined') DB.syncKey('meals');
+
+  if (typeof trackEvent === "function") trackEvent("meal_logged", { source: "photo", calories });
 
   const msg = document.getElementById("photo-meal-msg");
   msg.style.color = "var(--color-success)";
@@ -575,6 +579,8 @@ function logSuggestedMeal(name, cal, protein, carbs, fat) {
   const meals = loadMeals();
   meals.unshift(meal);
   localStorage.setItem("meals", JSON.stringify(meals)); if (typeof DB !== 'undefined') DB.syncKey('meals');
+
+  if (typeof trackEvent === "function") trackEvent("meal_logged", { source: "suggestion", calories: cal });
 
   updateNutritionDashboard();
   renderNutritionHistory();

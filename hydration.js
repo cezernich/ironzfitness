@@ -211,7 +211,11 @@ function logWater(beverageType) {
 
   log[dateStr] = day;
   localStorage.setItem("hydrationLog", JSON.stringify(log)); if (typeof DB !== 'undefined') DB.syncKey('hydrationLog');
-  if (typeof trackEvent === "function") trackEvent("hydration_logged", { beverage: type, total: day.total });
+  if (typeof trackEvent === "function") {
+    let target = null;
+    try { target = getHydrationBreakdownForDate(dateStr)?.totalOz || null; } catch {}
+    trackEvent("hydration_logged", { beverage: type, bottles_today: day.total, target });
+  }
 
   renderHydration();
 

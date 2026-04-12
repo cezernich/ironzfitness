@@ -402,7 +402,7 @@ function init() {
       }
     } catch (e) { console.warn("[IronZ] visibility refresh failed:", e); }
   });
-  if (typeof trackEvent === "function") trackEvent("app_opened");
+  if (typeof trackSessionStarted === "function") trackSessionStarted();
   if (typeof updateLastActive === "function") updateLastActive();
   cleanupOrphanedCompletions();
   const today = getTodayString();

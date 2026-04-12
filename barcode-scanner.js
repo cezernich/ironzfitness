@@ -170,6 +170,8 @@ function confirmBarcodeLog() {
   meals.push(meal);
   localStorage.setItem("meals", JSON.stringify(meals)); if (typeof DB !== 'undefined') DB.syncKey('meals');
 
+  if (typeof trackEvent === "function") trackEvent("meal_logged", { source: "barcode", calories: calories });
+
   // Save to recent scans
   saveRecentScan({
     name: name,
@@ -247,6 +249,8 @@ function quickLogRecentScan(index) {
   var meals = JSON.parse(localStorage.getItem("meals") || "[]");
   meals.push(meal);
   localStorage.setItem("meals", JSON.stringify(meals)); if (typeof DB !== 'undefined') DB.syncKey('meals');
+
+  if (typeof trackEvent === "function") trackEvent("meal_logged", { source: "quick_add", calories: meal.calories });
 
   closeBarcodeScanner();
 

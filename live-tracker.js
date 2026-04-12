@@ -841,6 +841,16 @@ function _commitLiveWorkout(logAll) {
   });
   localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
 
+  if (typeof trackWorkoutLogged === "function") {
+    trackWorkoutLogged({
+      type: t.type,
+      source: "live_tracker",
+      exercise_count: Array.isArray(exercises) ? exercises.length : 0,
+      duration_min: durationMin,
+      date: t.dateStr,
+    });
+  }
+
   // Mark session as completed
   const meta = typeof loadCompletionMeta === "function" ? loadCompletionMeta() : {};
   meta[t.sessionId] = { workoutId, completedAt: new Date().toISOString() };

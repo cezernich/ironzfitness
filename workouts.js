@@ -1774,6 +1774,15 @@ function saveWorkout() {
   // Save the updated array back to localStorage as a JSON string
   localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
 
+  if (typeof trackWorkoutLogged === "function") {
+    trackWorkoutLogged({
+      type,
+      source: "manual",
+      exercise_count: exercises.length || (segments ? segments.length : 0),
+      date,
+    });
+  }
+
   // Auto-mark as completed since this is a logged (already done) workout
   const cardId = `session-log-${workout.id}`;
   try {
@@ -2512,6 +2521,15 @@ function saveWorkoutSchedule(type, selectedDays, level, startDate, totalWeeks, r
     return true;
   });
   localStorage.setItem("workoutSchedule", JSON.stringify(deduped)); if (typeof DB !== 'undefined') DB.syncSchedule();
+  if (typeof trackPlanGenerated === "function") {
+    trackPlanGenerated({
+      plan_type: "gym",
+      workout_type: type,
+      level,
+      duration_weeks: totalWeeks,
+      session_count: schedule.length,
+    });
+  }
   return schedule.length;
 }
 
@@ -2574,6 +2592,15 @@ function saveEnduranceTrainingSchedule(type, dows, level, startDate, totalWeeks,
     return true;
   });
   localStorage.setItem("workoutSchedule", JSON.stringify(deduped)); if (typeof DB !== 'undefined') DB.syncSchedule();
+  if (typeof trackPlanGenerated === "function") {
+    trackPlanGenerated({
+      plan_type: "gym",
+      workout_type: type,
+      level,
+      duration_weeks: totalWeeks,
+      session_count: schedule.length,
+    });
+  }
   return schedule.length;
 }
 

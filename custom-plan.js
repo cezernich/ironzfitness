@@ -1532,6 +1532,14 @@ function saveCustomPlan() {
 
   localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
 
+  if (typeof trackPlanGenerated === "function") {
+    trackPlanGenerated({
+      plan_type: "custom",
+      duration_weeks: weeks,
+      session_count: newEntries.length,
+    });
+  }
+
   const msg = document.getElementById("custom-plan-msg");
   if (msg) {
     msg.style.color = "var(--color-success)";
