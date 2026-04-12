@@ -129,7 +129,7 @@
     });
   }
 
-  function planEntryFor(workout, dateStr) {
+  function planEntryFor(workout, dateStr, notes) {
     const intervals = _phasesToIntervals(workout.phases);
     return {
       id: "user-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e6).toString(36),
@@ -139,6 +139,7 @@
       duration: workout.estimated_duration_min,
       is_hard: workout.is_hard,
       source: "user_added",
+      notes: notes || "",
       // Store as aiSession so the card renderer shows the intensity strip
       // + step list via buildAiIntervalsList / buildIntensityStrip.
       aiSession: {
@@ -225,9 +226,9 @@
    * the modal layer calls this after the user has cleared the conflict +
    * stress-check modals.
    */
-  function save(generatedWorkout, dateStr, mode) {
+  function save(generatedWorkout, dateStr, mode, notes) {
     const Planner = (typeof window !== "undefined" && window.Planner) || null;
-    const entry = planEntryFor(generatedWorkout, dateStr);
+    const entry = planEntryFor(generatedWorkout, dateStr, notes);
     const monday = _mondayOf(dateStr);
 
     if (mode === "replace") {
@@ -251,15 +252,47 @@
       }
     }
 
-    // Save to workoutSchedule (the user-added store).
+    // Save to workoutSchedule (the user-added store) — drives the calendar
+    // week view and day-detail session cards.
     const schedule = _readSchedule();
     schedule.push(entry);
     _writeSchedule(schedule);
+
+    // ALSO write a mirror record into localStorage.workouts so the session
+    // counts in Workout History, Total Workouts, This Week, and streaks.
+    // Flagged isCompletion:true so:
+    //   - loadCompletedSessions() dedup picks it up via the standaloneCompletions
+    //     path (same logic used for live-tracker and day-detail completions)
+    //   - filterWorkoutHistory() dedup includes it as a standalone entry
+    //   - getDataForDate()'s loggedWorkouts filter (!w.isCompletion) skips it,
+    //     so it doesn't double-render alongside the scheduledWorkouts card
+    try {
+      const workouts = JSON.parse(localStorage.getItem("workouts") || "[]");
+      workouts.unshift({
+        id: entry.id + "-mirror",
+        date: entry.date,
+        type: entry.type,
+        name: entry.sessionName,
+        notes: entry.notes || "",
+        duration: entry.duration,
+        aiSession: entry.aiSession,
+        phases: entry.phases,
+        source: "manual",
+        isCompletion: true,
+        linkedScheduleId: entry.id,
+      });
+      localStorage.setItem("workouts", JSON.stringify(workouts));
+      if (typeof DB !== "undefined" && DB.syncWorkouts) DB.syncWorkouts();
+    } catch (e) {
+      console.warn("[IronZ] Running session mirror-write to workouts failed:", e.message);
+    }
 
     // Refresh the calendar so the new entry shows immediately.
     try {
       if (typeof renderCalendar === "function") renderCalendar();
       if (typeof renderDayDetail === "function") renderDayDetail(dateStr);
+      if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
+      if (typeof renderStats === "function") renderStats();
     } catch {}
     return entry;
   }
@@ -415,6 +448,10 @@
             <input type="range" id="ars-duration" min="20" max="180" step="5">
           </label>
           <div id="ars-preview" class="ars-preview"></div>
+          <label class="post-test-field">
+            <span>Notes (optional)</span>
+            <textarea id="ars-notes" rows="2" placeholder="e.g. Legs felt heavy, hot weather"></textarea>
+          </label>
         </div>
 
         <div class="post-test-modal-actions">
@@ -513,6 +550,7 @@
     overlay.querySelector("#ars-save").onclick = () => {
       const w = overlay._currentWorkout;
       const date = $date.value;
+      const notes = (overlay.querySelector("#ars-notes")?.value || "").trim();
       if (!w || !date) return;
 
       // 1. Hard-block evaluation (only Long Run cap today).
@@ -531,7 +569,7 @@
           const stress = c2.warnings.find(x => x.rule === "weekly_hard_count") || c2.warnings[0];
           _showStressCheckModal(stress, decision => {
             if (decision === "save_anyway") {
-              save(w, date, mode);
+              save(w, date, mode, notes);
               _close(id);
             } else if (decision === "pick_different_day") {
               // leave the main modal open; user will change date
@@ -540,7 +578,7 @@
             }
           });
         } else {
-          save(w, date, mode);
+          save(w, date, mode, notes);
           _close(id);
         }
       };

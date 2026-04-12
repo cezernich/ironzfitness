@@ -3895,6 +3895,7 @@ function qeSelectType(type) {
   }
   if (type === "strength")        qeShowStep(1, "strength");
   else if (type === "yoga")       qeShowStep(1, "strength"); // yoga uses exercise rows like Build a Plan
+  else if (type === "bodyweight") qeShowStep(2, "manual");   // skip muscle picker, go straight to manual entry
   else if (type === "restriction") qeShowStep(1, "restriction");
   else if (type === "equipment")  qeShowStep(1, "equipment");
   else                            qeShowStep(1, type);
@@ -5408,7 +5409,7 @@ function qeSaveGeneratedCardio() {
   const dateStr = document.getElementById("qe-date").value;
   if (!dateStr || !_qeGeneratedCardioData) return;
 
-  const typeMap = { running: "running", cycling: "cycling", swim: "swimming", hiit: "general", brick: "brick" };
+  const typeMap = { running: "running", cycling: "cycling", swim: "swimming", hiit: "hiit", brick: "brick" };
   const type    = typeMap[_qeSelectedType] || _qeSelectedType || "general";
 
   let restrictions = {};
@@ -5707,7 +5708,7 @@ function qeSaveCardioManual() {
     intervals.push(interval);
   });
 
-  const typeMap = { running: "running", cycling: "cycling", swim: "swimming", hiit: "general", brick: "brick" };
+  const typeMap = { running: "running", cycling: "cycling", swim: "swimming", hiit: "hiit", brick: "brick" };
   const type    = typeMap[_qeSelectedType] || _qeSelectedType || "general";
 
   let restrictions = {};
@@ -6087,7 +6088,9 @@ function qeSaveManual() {
   });
 
   if (!exercises.length) { document.getElementById("qe-manual-msg").textContent = "Add at least one exercise."; return; }
-  const defaultName = isHiit ? "HIIT Session" : "Strength Session";
+  const defaultName = isHiit ? "HIIT Session"
+                    : _qeSelectedType === "bodyweight" ? "Bodyweight Session"
+                    : "Strength Session";
   const manualName = (document.getElementById("qe-manual-workout-name")?.value || "").trim() || defaultName;
 
   let hiitMeta = null;
@@ -6114,7 +6117,9 @@ function _qeSaveStrengthWorkout(dateStr, label, notes, exercises, hiitMeta) {
 
   let workouts = [];
   try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
-  const _saveType = (_qeSelectedType === "hiit") ? "hiit" : "weightlifting";
+  const _saveType = _qeSelectedType === "hiit"       ? "hiit"
+                  : _qeSelectedType === "bodyweight" ? "bodyweight"
+                  : "weightlifting";
   const entry = { id: generateId(), date: dateStr, type: _saveType, name: label, notes, exercises };
   if (hiitMeta) entry.hiitMeta = hiitMeta;
   workouts.unshift(entry);
@@ -6134,7 +6139,7 @@ function saveQuickActivity() {
   const dateStr = document.getElementById("qe-date").value;
   if (!dateStr) { document.getElementById("qe-activity-msg").textContent = "Please select a date."; return; }
 
-  const typeMap = { running: "running", cycling: "cycling", swim: "swimming", hiit: "general", brick: "brick" };
+  const typeMap = { running: "running", cycling: "cycling", swim: "swimming", hiit: "hiit", brick: "brick" };
   const type    = typeMap[_qeSelectedType] || _qeSelectedType || "general";
   const notes   = document.getElementById("qe-activity-notes").value.trim();
   const msg     = document.getElementById("qe-activity-msg");
