@@ -174,45 +174,55 @@ function _addEditRow(ex) {
   _editRowCount++;
   const id  = _editRowCount;
   const div = document.createElement("div");
-  div.className = "qe-manual-row edit-exercise-row" + (_editIsHiit ? " hiit-row" : "");
+  div.className = "ex-row qe-manual-row edit-exercise-row" + (_editIsHiit ? " hiit-row" : "");
   div.id = `edit-row-${id}`;
   const weightVal = typeof _normalizeWeightDisplay === 'function' ? _normalizeWeightDisplay(ex?.weight || '') : (ex?.weight || '');
-  const hasSetDetails = ex?.setDetails && ex.setDetails.length > 0;
-  const dragHandleHTML = `<span class="drag-handle" title="Drag to reorder · drop on a row to superset">⠿</span>`;
+  const existingPerSet = (ex?.perSet && ex.perSet.length) ? ex.perSet
+                       : (ex?.setDetails && ex.setDetails.length) ? ex.setDetails
+                       : null;
+  const startExpanded = !!existingPerSet;
+  const escAttr = (v) => String(v == null ? "" : v).replace(/"/g, "&quot;");
   if (_editIsHiit) {
     div.innerHTML = `
-      ${dragHandleHTML}
-      <div><label>Exercise</label>
-        <input type="text" id="edit-ex-${id}" value="${ex?.name || ""}" placeholder="e.g. Burpees, Row 500m" /></div>
-      <div class="edit-summary-fields" id="edit-summary-${id}"><label>Reps / Time</label>
-        <input type="text" id="edit-reps-${id}" value="${ex?.reps || ""}" placeholder="e.g. 10, 45s, 500m" /></div>
-      <div class="edit-summary-fields" id="edit-summary-wt-${id}"><label>Weight</label>
-        <input type="text" id="edit-wt-${id}" value="${weightVal}" placeholder="optional" /></div>
-      <button class="remove-exercise-btn" title="Remove" onclick="removeEditRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
+      <div class="ex-row-header">
+        <input type="text" id="edit-ex-${id}" class="ex-row-name" value="${escAttr(ex?.name)}" placeholder="e.g. Burpees, Row 500m" />
+        <button type="button" class="ex-row-delete" onclick="removeEditRow(${id})" title="Remove">×</button>
+      </div>
+      <div class="ex-row-defaults ex-row-defaults--hiit">
+        <div class="ex-row-field">
+          <label>Reps / Time</label>
+          <input type="text" id="edit-reps-${id}" value="${escAttr(ex?.reps)}" placeholder="e.g. 10, 45s, 500m" />
+        </div>
+        <div class="ex-row-field">
+          <label>Weight</label>
+          <input type="text" id="edit-wt-${id}" value="${escAttr(weightVal)}" placeholder="optional" />
+        </div>
+      </div>`;
   } else {
     div.innerHTML = `
-      ${dragHandleHTML}
-      <div><label>Exercise</label>
-        <input type="text"   id="edit-ex-${id}"    value="${ex?.name   || ""}" placeholder="e.g. Bench Press" /></div>
-      <div><label>Sets</label>
-        <input type="number" id="edit-sets-${id}"  value="${ex?.sets   || ""}" placeholder="3" min="1" max="99" oninput="editSetCountChanged(${id})" /></div>
-      <div><label>Default Reps</label>
-        <input type="text"   id="edit-reps-${id}"  value="${ex?.reps   || ""}" placeholder="10" oninput="editDefaultsChanged(${id})" /></div>
-      <div><label>Default Weight</label>
-        <input type="text"   id="edit-wt-${id}"    value="${weightVal}" placeholder="lbs / BW" oninput="editDefaultsChanged(${id})" /></div>
-      <button class="remove-exercise-btn" title="Remove" onclick="removeEditRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
+      <div class="ex-row-header">
+        <input type="text" id="edit-ex-${id}" class="ex-row-name" value="${escAttr(ex?.name)}" placeholder="e.g. Bench Press" />
+        <button type="button" class="ex-row-delete" onclick="removeEditRow(${id})" title="Remove">×</button>
+      </div>
+      <div class="ex-row-defaults">
+        <div class="ex-row-field">
+          <label>Sets</label>
+          <input type="number" id="edit-sets-${id}" min="1" max="99" value="${escAttr(ex?.sets)}" placeholder="3" oninput="editSetCountChanged(${id})" />
+        </div>
+        <div class="ex-row-field">
+          <label>Reps</label>
+          <input type="text" id="edit-reps-${id}" value="${escAttr(ex?.reps)}" placeholder="10" oninput="editDefaultsChanged(${id})" />
+        </div>
+        <div class="ex-row-field">
+          <label>Weight (lbs)</label>
+          <input type="text" id="edit-wt-${id}" value="${escAttr(weightVal)}" placeholder="lbs" oninput="editDefaultsChanged(${id})" />
+        </div>
+      </div>
+      <button type="button" class="ex-row-customize-toggle" id="edit-pyr-toggle-${id}" onclick="editTogglePerSet(${id})">${startExpanded ? "Collapse ▴" : "Customize per set ▾"}</button>
+      <div class="ex-pyramid-detail edit-set-details" id="edit-sd-${id}" style="display:${startExpanded ? "" : "none"}"></div>`;
   }
-  // Per-set detail section (skip for HIIT — rounds are at workout level)
-  if (!_editIsHiit) {
-    const detailWrap = document.createElement("div");
-    detailWrap.className = "edit-set-detail-wrap";
-    detailWrap.id = `edit-sd-wrap-${id}`;
-    detailWrap.innerHTML = `<div class="edit-set-details" id="edit-sd-${id}"></div>`;
-    div.appendChild(detailWrap);
-  }
-  if (hasSetDetails) {
-    // Store setDetails as data for later rendering (after DOM insertion)
-    div.dataset.pendingSetDetails = JSON.stringify(ex.setDetails);
+  if (startExpanded) {
+    div.dataset.pendingSetDetails = JSON.stringify(existingPerSet);
   }
   div.draggable = true;
   let _editHoverTimer = null;
@@ -269,15 +279,16 @@ function _addEditRow(ex) {
     }
   });
   editContainer.appendChild(div);
-  // Always auto-render per-set rows if we have sets and this isn't HIIT
-  if (!_editIsHiit) {
-    if (hasSetDetails) {
-      _editRenderSetDetails(id, ex.setDetails);
-      delete div.dataset.pendingSetDetails;
-    } else {
-      // Seed per-set rows from the summary sets/reps/weight
-      editSetCountChanged(id);
-    }
+  // If we loaded an exercise that already has per-set data, render those rows
+  // now. Otherwise leave the per-set panel collapsed by default.
+  if (!_editIsHiit && div.dataset.pendingSetDetails) {
+    try {
+      const pending = JSON.parse(div.dataset.pendingSetDetails);
+      if (Array.isArray(pending) && pending.length) {
+        _editRenderSetDetails(id, pending);
+      }
+    } catch {}
+    delete div.dataset.pendingSetDetails;
   }
 }
 
@@ -288,28 +299,44 @@ function removeEditRow(id) {
   if (el) el.remove();
 }
 
-// Back-compat shim — toggle is no longer needed since per-set rows auto-render
-function editTogglePerSet(rowId) { editSetCountChanged(rowId); }
+// Toggle the per-set customization panel for a row. Collapsed by default.
+function editTogglePerSet(rowId) {
+  const detailsEl = document.getElementById(`edit-sd-${rowId}`);
+  const toggle = document.getElementById(`edit-pyr-toggle-${rowId}`);
+  if (!detailsEl || !toggle) return;
+  const isHidden = detailsEl.style.display === "none" || !detailsEl.style.display;
+  if (isHidden) {
+    detailsEl.style.display = "";
+    toggle.textContent = "Collapse ▴";
+    // Build rows from current defaults if the panel is empty
+    if (!detailsEl.querySelector(".edit-set-row")) {
+      editSetCountChanged(rowId);
+    }
+  } else {
+    detailsEl.style.display = "none";
+    toggle.textContent = "Customize per set ▾";
+  }
+}
 
 function _editRenderSetDetails(rowId, details) {
   const el = document.getElementById(`edit-sd-${rowId}`);
   if (!el) return;
-  let html = `<div class="edit-set-header"><span></span><span>Reps</span><span>Weight</span></div>`;
+  let html = `<div class="ex-pyr-header"><span></span><span>Reps</span><span>Weight</span></div>`;
   details.forEach((d, s) => {
-    html += `<div class="edit-set-row" id="edit-sr-${rowId}-${s}">
-      <span class="edit-set-label">Set ${s + 1}</span>
-      <input class="qe-edit-reps" id="edit-sd-reps-${rowId}-${s}" value="${d.reps || ""}" placeholder="reps" />
-      <input class="qe-weight-input" id="edit-sd-wt-${rowId}-${s}" value="${d.weight || ""}" placeholder="lbs" />
+    html += `<div class="edit-set-row ex-pyr-row" id="edit-sr-${rowId}-${s}">
+      <span class="ex-pyr-label edit-set-label">Set ${s + 1}</span>
+      <input class="ex-pyr-reps qe-edit-reps" id="edit-sd-reps-${rowId}-${s}" value="${d.reps || ""}" placeholder="reps" />
+      <input class="ex-pyr-weight qe-weight-input" id="edit-sd-wt-${rowId}-${s}" value="${d.weight || ""}" placeholder="lbs" />
     </div>`;
   });
   el.innerHTML = html;
 }
 
-// Auto-render/refresh per-set rows whenever Sets input changes. Preserves any
-// user edits in existing rows and seeds new rows from the defaults.
+// Rebuild per-set rows to match the current Sets count. Only runs if the
+// per-set panel is currently expanded — the panel is collapsed by default.
 function editSetCountChanged(rowId) {
   const detailsEl = document.getElementById(`edit-sd-${rowId}`);
-  if (!detailsEl) return;
+  if (!detailsEl || detailsEl.style.display === "none") return;
   const numSets = parseInt(document.getElementById(`edit-sets-${rowId}`)?.value) || 0;
   const defaultReps = document.getElementById(`edit-reps-${rowId}`)?.value || "";
   const defaultWeight = document.getElementById(`edit-wt-${rowId}`)?.value || "";
@@ -333,10 +360,11 @@ function editSetCountChanged(rowId) {
   _editRenderSetDetails(rowId, details);
 }
 
-// When default reps/weight inputs change, propagate to any empty per-set cells
+// When default reps/weight inputs change, propagate to any empty per-set cells.
+// No-op if the per-set panel is collapsed.
 function editDefaultsChanged(rowId) {
   const detailsEl = document.getElementById(`edit-sd-${rowId}`);
-  if (!detailsEl) return;
+  if (!detailsEl || detailsEl.style.display === "none") return;
   const defaultReps = document.getElementById(`edit-reps-${rowId}`)?.value || "";
   const defaultWeight = document.getElementById(`edit-wt-${rowId}`)?.value || "";
   for (let s = 0; ; s++) {
@@ -346,23 +374,27 @@ function editDefaultsChanged(rowId) {
     if (!rInp.value) rInp.value = defaultReps;
     if (wInp && !wInp.value) wInp.value = defaultWeight;
   }
-  // If there are no rows yet (user typed defaults before sets), render them now
   if (!detailsEl.querySelector(".edit-set-row")) editSetCountChanged(rowId);
 }
 
+// Read per-set values out of the DOM. Returns null if the panel is collapsed
+// or if all rows match the defaults (so the caller can save a flat entry).
 function _editReadSetDetails(rowId) {
   const detailsEl = document.getElementById(`edit-sd-${rowId}`);
-  if (!detailsEl) return null;
+  if (!detailsEl || detailsEl.style.display === "none") return null;
+  const defaultReps = (document.getElementById(`edit-reps-${rowId}`)?.value || "").trim();
+  const defaultWeight = (document.getElementById(`edit-wt-${rowId}`)?.value || "").trim();
   const details = [];
+  let hasDiff = false;
   for (let s = 0; ; s++) {
     const r = document.getElementById(`edit-sd-reps-${rowId}-${s}`);
     if (!r) break;
-    details.push({
-      reps:   r.value || "",
-      weight: document.getElementById(`edit-sd-wt-${rowId}-${s}`)?.value || "",
-    });
+    const rv = (r.value || "").trim();
+    const wv = (document.getElementById(`edit-sd-wt-${rowId}-${s}`)?.value || "").trim();
+    details.push({ reps: rv || defaultReps, weight: wv || defaultWeight });
+    if ((rv && rv !== defaultReps) || (wv && wv !== defaultWeight)) hasDiff = true;
   }
-  if (!details.length) return null;
+  if (!details.length || !hasDiff) return null;
   return details;
 }
 
@@ -876,8 +908,11 @@ function saveEditedWorkout() {
       const setsInput = document.getElementById(`edit-sets-${id}`);
       if (setsInput) ex.sets = setsInput.value || "";
       if (!_editIsHiit) {
-        const setDetails = _editReadSetDetails(id);
-        if (setDetails) ex.setDetails = setDetails;
+        const perSet = _editReadSetDetails(id);
+        if (perSet) {
+          ex.perSet = perSet;
+          ex.setDetails = perSet; // legacy alias for existing readers
+        }
       }
       if (row?.dataset.ssId) ex.supersetId = row.dataset.ssId;
       exercises.push(ex);

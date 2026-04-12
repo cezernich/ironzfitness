@@ -720,7 +720,7 @@ function cpManualAddExRow(prefill) {
   const isHiit = _cpManualSelectedType === "hiit";
   const isBW = _cpManualSelectedType === "bodyweight";
   const div = document.createElement("div");
-  div.className = "qe-manual-row" + (isHiit ? " hiit-row" : "");
+  div.className = "ex-row qe-manual-row" + (isHiit ? " hiit-row" : "");
   div.id = `cp-mrow-${id}`;
   div.draggable = true;
 
@@ -729,39 +729,58 @@ function cpManualAddExRow(prefill) {
   const pSets = (prefill?.sets != null) ? String(prefill.sets) : "";
   const pWt = _cpNormalizeWt(prefill?.weight, isBW);
   const pGroup = prefill?.supersetGroup || prefill?.supersetId || "";
+  const pPerSet = prefill?.perSet || prefill?.setDetails || null;
   if (pGroup) {
     div.dataset.supersetGroup = pGroup;
     if (prefill?.groupSets) div.dataset.groupSets = String(prefill.groupSets);
   }
 
-  const dragHandleHTML = `<span class="drag-handle" title="Drag to reorder · drop on a row to superset">⠿</span>`;
-
   if (isHiit) {
     div.innerHTML = `
-      ${dragHandleHTML}
-      <div><label>Exercise</label>
-        <input type="text" id="cp-mex-${id}" placeholder="e.g. Burpees, Row 500m" value="${_cpEsc(pName)}" /></div>
-      <div><label>Reps / Time / Distance</label>
-        <input type="text" id="cp-mreps-${id}" placeholder="e.g. 10, 45s, 500m" value="${_cpEsc(pReps)}" /></div>
-      <div><label>Weight</label>
-        <input type="text" id="cp-mwt-${id}" placeholder="optional" value="${_cpEsc(pWt)}" /></div>
-      <button class="remove-exercise-btn" onclick="cpManualRemoveRow(${id})">${_CP_TRASH_SVG}</button>`;
+      <div class="ex-row-header">
+        <input type="text" id="cp-mex-${id}" class="ex-row-name" placeholder="e.g. Burpees, Row 500m" value="${_cpEsc(pName)}" />
+        <button type="button" class="ex-row-delete" onclick="cpManualRemoveRow(${id})" title="Remove">×</button>
+      </div>
+      <div class="ex-row-defaults ex-row-defaults--hiit">
+        <div class="ex-row-field">
+          <label>Reps / Time / Distance</label>
+          <input type="text" id="cp-mreps-${id}" placeholder="e.g. 10, 45s, 500m" value="${_cpEsc(pReps)}" />
+        </div>
+        <div class="ex-row-field">
+          <label>Weight</label>
+          <input type="text" id="cp-mwt-${id}" placeholder="optional" value="${_cpEsc(pWt)}" />
+        </div>
+      </div>`;
   } else {
-    const wtPlaceholder = isBW ? "Bodyweight" : "lbs/kg";
+    const wtPlaceholder = isBW ? "BW" : "lbs";
     const wtValue = pWt || (isBW ? "Bodyweight" : "");
     const exPlaceholder = isBW ? "e.g. Push-ups, Pull-ups" : "e.g. Bench Press";
+    const startExpanded = !!(pPerSet && pPerSet.length);
     div.innerHTML = `
-      ${dragHandleHTML}
-      <div><label>Exercise</label>
-        <input type="text"   id="cp-mex-${id}"   placeholder="${exPlaceholder}" value="${_cpEsc(pName)}" /></div>
-      <div><label>Sets</label>
-        <input type="number" id="cp-msets-${id}" placeholder="3" min="1" max="20" value="${_cpEsc(pSets)}" oninput="cpPyramidSetsChanged(${id})" /></div>
-      <div><label>Default Reps</label>
-        <input type="text"   id="cp-mreps-${id}" placeholder="10" value="${_cpEsc(pReps)}" oninput="cpPyramidDefaultsChanged(${id})" /></div>
-      <div><label>Default Weight</label>
-        <input type="text"   id="cp-mwt-${id}"   placeholder="${wtPlaceholder}" value="${_cpEsc(wtValue)}"${isBW ? ' readonly' : ''} oninput="cpPyramidDefaultsChanged(${id})" /></div>
-      <button class="remove-exercise-btn" onclick="cpManualRemoveRow(${id})">${_CP_TRASH_SVG}</button>
-      <div class="ex-pyramid-detail" id="cp-pyr-${id}"></div>`;
+      <div class="ex-row-header">
+        <input type="text" id="cp-mex-${id}" class="ex-row-name" placeholder="${exPlaceholder}" value="${_cpEsc(pName)}" />
+        <button type="button" class="ex-row-delete" onclick="cpManualRemoveRow(${id})" title="Remove">×</button>
+      </div>
+      <div class="ex-row-defaults">
+        <div class="ex-row-field">
+          <label>Sets</label>
+          <input type="number" id="cp-msets-${id}" min="1" max="20" placeholder="3" value="${_cpEsc(pSets)}" oninput="cpPyramidSetsChanged(${id})" />
+        </div>
+        <div class="ex-row-field">
+          <label>Reps</label>
+          <input type="text" id="cp-mreps-${id}" placeholder="10" value="${_cpEsc(pReps)}" oninput="cpPyramidDefaultsChanged(${id})" />
+        </div>
+        <div class="ex-row-field">
+          <label>Weight (lbs)</label>
+          <input type="text" id="cp-mwt-${id}" placeholder="${wtPlaceholder}" value="${_cpEsc(wtValue)}"${isBW ? ' readonly' : ''} oninput="cpPyramidDefaultsChanged(${id})" />
+        </div>
+      </div>
+      <button type="button" class="ex-row-customize-toggle" id="cp-pyr-toggle-${id}" onclick="cpTogglePerSet(${id})">${startExpanded ? "Collapse ▴" : "Customize per set ▾"}</button>
+      <div class="ex-pyramid-detail" id="cp-pyr-${id}" style="display:${startExpanded ? "" : "none"}"></div>`;
+    if (startExpanded) {
+      // Defer render until the element is actually in the DOM
+      div.dataset.pendingPerSet = JSON.stringify(pPerSet);
+    }
   }
 
   // Wire native HTML5 drag-and-drop
@@ -773,6 +792,26 @@ function cpManualAddExRow(prefill) {
 
   const container = document.getElementById("cp-manual-exercise-rows");
   container.appendChild(div);
+
+  // Render any pending per-set rows now that the element is in the DOM
+  if (div.dataset.pendingPerSet) {
+    try {
+      const pending = JSON.parse(div.dataset.pendingPerSet);
+      const detail = document.getElementById(`cp-pyr-${id}`);
+      if (detail && Array.isArray(pending)) {
+        let html = '<div class="ex-pyr-header"><span></span><span>Reps</span><span>Weight</span></div>';
+        pending.forEach((d, i) => {
+          html += `<div class="ex-pyr-row">
+            <span class="ex-pyr-label">Set ${i + 1}</span>
+            <input type="text" class="ex-pyr-reps" placeholder="10" value="${_cpEsc(d.reps || "")}" />
+            <input type="text" class="ex-pyr-weight" placeholder="lbs" value="${_cpEsc(d.weight || "")}" />
+          </div>`;
+        });
+        detail.innerHTML = html;
+      }
+    } catch {}
+    delete div.dataset.pendingPerSet;
+  }
 
   // Touch drag support for mobile
   if (typeof TouchDrag !== "undefined") {
@@ -970,18 +1009,33 @@ function cpManualRemoveRow(id) {
   if (row) row.remove();
 }
 
-// Auto-render per-set rows whenever the Sets input changes. Top-level Reps/
-// Weight fields act as defaults; per-set rows can be edited individually.
+// Toggle the per-set customization panel for a row. Collapsed by default.
+function cpTogglePerSet(id) {
+  const detail = document.getElementById(`cp-pyr-${id}`);
+  const toggle = document.getElementById(`cp-pyr-toggle-${id}`);
+  if (!detail || !toggle) return;
+  const isHidden = detail.style.display === "none" || !detail.style.display;
+  if (isHidden) {
+    detail.style.display = "";
+    toggle.textContent = "Collapse ▴";
+    cpPyramidSetsChanged(id);
+  } else {
+    detail.style.display = "none";
+    toggle.textContent = "Customize per set ▾";
+  }
+}
+
+// Rebuild per-set rows to match the current Sets count. Only runs if the
+// per-set panel is currently expanded — the panel is collapsed by default.
 function cpPyramidSetsChanged(id) {
   const detail = document.getElementById(`cp-pyr-${id}`);
-  if (!detail) return;
+  if (!detail || detail.style.display === "none") return;
   const setsVal = parseInt(document.getElementById(`cp-msets-${id}`)?.value) || 0;
   const defaultReps = document.getElementById(`cp-mreps-${id}`)?.value || "";
   const defaultWeight = document.getElementById(`cp-mwt-${id}`)?.value || "";
 
   if (setsVal < 1) { detail.innerHTML = ""; return; }
 
-  // Preserve any existing per-set values
   const existing = [];
   detail.querySelectorAll(".ex-pyr-row").forEach(pr => {
     existing.push({
@@ -990,13 +1044,13 @@ function cpPyramidSetsChanged(id) {
     });
   });
 
-  let html = '<div class="ex-pyr-header"><span>Set</span><span>Reps</span><span>Weight</span></div>';
+  let html = '<div class="ex-pyr-header"><span></span><span>Reps</span><span>Weight</span></div>';
   for (let i = 0; i < setsVal; i++) {
     const prev = existing[i] || {};
     const reps = prev.reps || defaultReps;
     const weight = prev.weight || defaultWeight;
     html += `<div class="ex-pyr-row">
-      <span class="ex-pyr-label">${i + 1}</span>
+      <span class="ex-pyr-label">Set ${i + 1}</span>
       <input type="text" class="ex-pyr-reps" placeholder="${defaultReps || '10'}" value="${reps}" />
       <input type="text" class="ex-pyr-weight" placeholder="${defaultWeight || 'lbs'}" value="${weight}" />
     </div>`;
@@ -1006,7 +1060,7 @@ function cpPyramidSetsChanged(id) {
 
 function cpPyramidDefaultsChanged(id) {
   const detail = document.getElementById(`cp-pyr-${id}`);
-  if (!detail) return;
+  if (!detail || detail.style.display === "none") return;
   const defaultReps = document.getElementById(`cp-mreps-${id}`)?.value || "";
   const defaultWeight = document.getElementById(`cp-mwt-${id}`)?.value || "";
   detail.querySelectorAll(".ex-pyr-row").forEach(pr => {
@@ -1021,7 +1075,7 @@ function cpPyramidDefaultsChanged(id) {
 }
 
 // Back-compat shim
-function cpTogglePyramid(id) { cpPyramidSetsChanged(id); }
+function cpTogglePyramid(id) { cpTogglePerSet(id); }
 
 // ── Cardio interval rows for running/cycling/swimming ─────────────────────────
 
@@ -1308,18 +1362,24 @@ function customPlanSaveManual() {
       ex.supersetGroup = row.dataset.supersetGroup || null;
       if (row.dataset.groupSets) ex.groupSets = parseInt(row.dataset.groupSets) || 3;
 
-      // Collect per-set details (panel auto-renders as user enters sets)
+      // Collect per-set details only if the panel is expanded AND values differ
+      // from the defaults — otherwise save as a flat sets/reps/weight entry.
       const pyrDetail = document.getElementById(`cp-pyr-${id}`);
-      if (pyrDetail) {
+      if (pyrDetail && pyrDetail.style.display !== "none") {
         const pyrRows = pyrDetail.querySelectorAll(".ex-pyr-row");
         if (pyrRows.length > 0) {
-          const setDetails = [];
+          const perSet = [];
+          let hasDiff = false;
           pyrRows.forEach(pr => {
             const r = pr.querySelector(".ex-pyr-reps")?.value.trim() || ex.reps;
             const w = pr.querySelector(".ex-pyr-weight")?.value.trim() || ex.weight;
-            setDetails.push({ reps: r, weight: w });
+            perSet.push({ reps: r, weight: w });
+            if (r !== ex.reps || w !== ex.weight) hasDiff = true;
           });
-          ex.setDetails = setDetails;
+          if (hasDiff) {
+            ex.perSet = perSet;
+            ex.setDetails = perSet; // legacy alias for existing readers
+          }
         }
       }
       exercises.push(ex);

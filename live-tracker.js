@@ -39,11 +39,14 @@ function startLiveWorkout(sessionId, dateStr, type, stepsJson, exercisesJson) {
     elapsed: 0,
     pausedAt: null,
     // For strength: track completed sets per exercise
-    // If exercise has setDetails (pyramid), pre-fill each set with its specific reps/weight
+    // Pre-fill per-set reps/weight from perSet (preferred) or legacy setDetails.
     sets: isStrength ? exercises.map(ex => {
       const numSets = parseInt(String(ex.sets).match(/^\d+/)?.[0]) || 3;
+      const details = (ex.perSet && ex.perSet.length) ? ex.perSet
+                    : (ex.setDetails && ex.setDetails.length) ? ex.setDetails
+                    : null;
       return Array.from({ length: numSets }, (_, si) => {
-        const sd = ex.setDetails && ex.setDetails[si];
+        const sd = details && details[si];
         return { done: false, reps: sd ? sd.reps : (ex.reps || ""), weight: sd ? sd.weight : (ex.weight || "") };
       });
     }) : [],

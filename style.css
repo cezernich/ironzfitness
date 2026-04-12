@@ -12600,3 +12600,206 @@ button:active {
 
 /* Hide bottom nav on the auth screen (controlled via JS by toggling display) */
 body.auth-visible #bottom-nav { display: none !important; }
+
+/* =============================================================================
+   EXERCISE ROW CARD — vertical mobile-first layout for all strength entry flows
+   Applies to .ex-row (new class added alongside .qe-manual-row / .exercise-row
+   by qeAddExerciseRow / cpManualAddExRow / _addEditRow / addExerciseRow /
+   addSwExerciseRow / _createExerciseRowWithValues).
+   ============================================================================= */
+.ex-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  padding-right: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface, var(--color-card-bg));
+  margin-bottom: 10px;
+  position: relative;
+}
+/* Reset legacy .qe-manual-row padding that adds right gutter for absolute btn */
+.ex-row.qe-manual-row { padding-right: 14px; background: var(--color-surface-2, var(--color-surface)); }
+/* Override legacy reset-button positioning — the new layout uses inline delete */
+.ex-row .remove-exercise-btn { position: static; }
+/* Drag handle (if any leaked through) is no longer shown */
+.ex-row .drag-handle { display: none !important; }
+
+.ex-row-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ex-row-name {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  font-size: 16px; /* Prevent iOS zoom */
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.ex-row-delete {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+.ex-row-delete:hover {
+  color: var(--color-danger, #ef4444);
+  border-color: var(--color-danger, #ef4444);
+}
+
+.ex-row-defaults {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+.ex-row-defaults--hiit {
+  grid-template-columns: 2fr 1fr;
+}
+.ex-row-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.ex-row-field label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  font-weight: 700;
+}
+.ex-row-field input {
+  width: 100%;
+  padding: 10px 6px;
+  font-size: 16px; /* Prevent iOS zoom */
+  text-align: center;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+  font-family: inherit;
+}
+.ex-row-field input[readonly] {
+  background: var(--color-surface-2, var(--color-surface));
+  color: var(--color-text-muted);
+}
+
+.ex-row-customize-toggle {
+  background: none;
+  border: none;
+  color: var(--color-accent, #6366f1);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 0 2px;
+  cursor: pointer;
+  text-align: left;
+  align-self: flex-start;
+  font-family: inherit;
+}
+.ex-row-customize-toggle:hover { text-decoration: underline; }
+
+/* Per-set panel inside .ex-row — override legacy grid to tighter columns */
+.ex-row .ex-pyramid-detail {
+  grid-column: unset;
+  padding: 6px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ex-row .ex-pyramid-detail:empty { display: none; }
+.ex-row .ex-pyr-header {
+  display: grid;
+  grid-template-columns: 56px 1fr 1fr;
+  gap: 8px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  padding: 0 0 2px;
+}
+.ex-row .ex-pyr-row {
+  display: grid;
+  grid-template-columns: 56px 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+}
+.ex-row .ex-pyr-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-align: left;
+}
+.ex-row .ex-pyr-row input {
+  width: 100%;
+  padding: 9px 6px;
+  font-size: 16px;
+  text-align: center;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+  font-family: inherit;
+}
+
+/* Suppress legacy flex rules that fight the new vertical stack */
+.ex-row.qe-manual-row {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 10px;
+}
+.ex-row.qe-manual-row > div:first-of-type,
+.ex-row.qe-manual-row > div:not(:first-of-type):not(.ex-pyramid-detail) {
+  flex: unset;
+  min-width: 0;
+  padding-left: 0;
+}
+.ex-row.qe-manual-row > div { min-width: 0; }
+.ex-row.qe-manual-row input { padding: 10px 6px; font-size: 16px; width: 100%; }
+.ex-row.qe-manual-row .ex-row-name { padding: 10px 12px; text-align: left; }
+.ex-row.qe-manual-row .ex-row-field input { text-align: center; }
+
+/* Legacy .exercise-row (Log a Workout / Saved Workouts) — force vertical stack */
+.ex-row.exercise-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ex-row.exercise-row > input,
+.ex-row.exercise-row > button {
+  /* Legacy direct children that may remain on compact variants */
+  width: 100%;
+}
+
+/* On very narrow screens keep the 3-column grid but allow wrap if necessary */
+@media (max-width: 360px) {
+  .ex-row-field input { padding: 10px 4px; }
+  .ex-row-field label { font-size: 0.62rem; }
+}

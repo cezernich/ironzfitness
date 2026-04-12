@@ -1295,34 +1295,31 @@ Each exercise object must have: { "name": string, "sets": number, "reps": number
 
 function _createExerciseRowWithValues(name, sets, reps, weight) {
   const row = document.createElement("div");
-  row.className = "exercise-row";
+  row.className = "ex-row exercise-row";
   row.draggable = true;
+  const esc = (v) => String(v == null ? '' : v).replace(/"/g, '&quot;');
   row.innerHTML = `
-    <span class="drag-handle" title="Drag to reorder">⠿</span>
-    <div>
-      <label>Exercise Name</label>
-      <input type="text" class="ex-name" value="${(name || '').replace(/"/g, '&quot;')}" placeholder="e.g. Bench Press" />
+    <div class="ex-row-header">
+      <input type="text" class="ex-name ex-row-name" value="${esc(name)}" placeholder="e.g. Bench Press" />
+      <button type="button" class="ex-row-delete" onclick="removeExerciseRow(this)" title="Remove">×</button>
     </div>
-    <div>
-      <label>Sets</label>
-      <input type="number" class="ex-sets" value="${sets || 1}" placeholder="3" min="1" oninput="exPyramidSetsChanged(this)" />
+    <div class="ex-row-defaults">
+      <div class="ex-row-field">
+        <label>Sets</label>
+        <input type="number" class="ex-sets" min="1" max="20" value="${esc(sets || 1)}" placeholder="3" oninput="exPyramidSetsChanged(this)" />
+      </div>
+      <div class="ex-row-field">
+        <label>Reps</label>
+        <input type="text" class="ex-reps" value="${esc(reps)}" placeholder="10" oninput="exPyramidDefaultsChanged(this)" />
+      </div>
+      <div class="ex-row-field">
+        <label>Weight (lbs)</label>
+        <input type="text" class="ex-weight" value="${esc(weight)}" placeholder="lbs" oninput="exPyramidDefaultsChanged(this)" />
+      </div>
     </div>
-    <div>
-      <label>Default Reps</label>
-      <input type="number" class="ex-reps" value="${reps || 0}" placeholder="10" min="0" oninput="exPyramidDefaultsChanged(this)" />
-    </div>
-    <div>
-      <label>Default Weight</label>
-      <input type="text" class="ex-weight" value="${(weight || '').replace(/"/g, '&quot;')}" placeholder="45lbs" oninput="exPyramidDefaultsChanged(this)" />
-    </div>
-    <button class="remove-exercise-btn" title="Remove" onclick="removeExerciseRow(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
-    <div class="ex-pyramid-detail"></div>
+    <button type="button" class="ex-row-customize-toggle" onclick="exTogglePerSet(this)">Customize per set ▾</button>
+    <div class="ex-pyramid-detail" style="display:none"></div>
   `;
-  // Auto-render per-set rows from the seeded sets value
-  setTimeout(() => {
-    const setsInput = row.querySelector(".ex-sets");
-    if (setsInput && parseInt(setsInput.value) > 0) exPyramidSetsChanged(setsInput);
-  }, 0);
   return row;
 }
 
@@ -1519,43 +1516,61 @@ function addLogSegmentRow(seg) {
 function addExerciseRow() {
   const container = document.getElementById("exercise-entries");
 
-  // Create a new div with the exercise row layout
   const row = document.createElement("div");
-  row.className = "exercise-row";
+  row.className = "ex-row exercise-row";
 
   row.innerHTML = `
-    <span class="drag-handle" title="Drag to reorder">⠿</span>
-    <div>
-      <label>Exercise Name</label>
-      <input type="text" class="ex-name" placeholder="e.g. Bench Press" />
+    <div class="ex-row-header">
+      <input type="text" class="ex-name ex-row-name" placeholder="e.g. Bench Press" />
+      <button type="button" class="ex-row-delete" onclick="removeExerciseRow(this)" title="Remove">×</button>
     </div>
-    <div>
-      <label>Sets</label>
-      <input type="number" class="ex-sets" placeholder="3" min="1" oninput="exPyramidSetsChanged(this)" />
+    <div class="ex-row-defaults">
+      <div class="ex-row-field">
+        <label>Sets</label>
+        <input type="number" class="ex-sets" min="1" max="20" placeholder="3" oninput="exPyramidSetsChanged(this)" />
+      </div>
+      <div class="ex-row-field">
+        <label>Reps</label>
+        <input type="text" class="ex-reps" placeholder="10" oninput="exPyramidDefaultsChanged(this)" />
+      </div>
+      <div class="ex-row-field">
+        <label>Weight (lbs)</label>
+        <input type="text" class="ex-weight" placeholder="lbs" oninput="exPyramidDefaultsChanged(this)" />
+      </div>
     </div>
-    <div>
-      <label>Default Reps</label>
-      <input type="number" class="ex-reps" placeholder="10" min="1" oninput="exPyramidDefaultsChanged(this)" />
-    </div>
-    <div>
-      <label>Default Weight</label>
-      <input type="text" class="ex-weight" placeholder="45lbs" oninput="exPyramidDefaultsChanged(this)" />
-    </div>
-    <button class="remove-exercise-btn" title="Remove" onclick="removeExerciseRow(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
-    <div class="ex-pyramid-detail"></div>
+    <button type="button" class="ex-row-customize-toggle" onclick="exTogglePerSet(this)">Customize per set ▾</button>
+    <div class="ex-pyramid-detail" style="display:none"></div>
   `;
 
   _initRowDrag(row, container);
   container.appendChild(row);
 }
 
-// Auto-render per-set rows whenever Sets input changes. Preserves existing
-// user-entered values; seeds new rows from default reps/weight.
+// Toggle the per-set customization panel for a row. Collapsed by default.
+function exTogglePerSet(btn) {
+  const row = btn.closest(".exercise-row");
+  if (!row) return;
+  const detail = row.querySelector(".ex-pyramid-detail");
+  const toggle = row.querySelector(".ex-row-customize-toggle");
+  if (!detail || !toggle) return;
+  const isHidden = detail.style.display === "none" || !detail.style.display;
+  if (isHidden) {
+    detail.style.display = "";
+    toggle.textContent = "Collapse ▴";
+    exPyramidSetsChanged(row.querySelector(".ex-sets"));
+  } else {
+    detail.style.display = "none";
+    toggle.textContent = "Customize per set ▾";
+  }
+}
+
+// Rebuild per-set rows to match the current Sets count. Only runs if the
+// per-set panel is currently expanded — the panel is collapsed by default.
 function exPyramidSetsChanged(input) {
   const row = input.closest(".exercise-row");
   if (!row) return;
   const detail = row.querySelector(".ex-pyramid-detail");
-  if (!detail) return;
+  if (!detail || detail.style.display === "none") return;
   const setsVal = parseInt(row.querySelector(".ex-sets")?.value) || 0;
   const defaultReps = row.querySelector(".ex-reps")?.value || "";
   const defaultWeight = row.querySelector(".ex-weight")?.value || "";
@@ -1569,13 +1584,13 @@ function exPyramidSetsChanged(input) {
     });
   });
 
-  let html = '<div class="ex-pyr-header"><span>Set</span><span>Reps</span><span>Weight</span></div>';
+  let html = '<div class="ex-pyr-header"><span></span><span>Reps</span><span>Weight</span></div>';
   for (let i = 0; i < setsVal; i++) {
     const prev = existing[i] || {};
     const reps = prev.reps || defaultReps;
     const weight = prev.weight || defaultWeight;
     html += `<div class="ex-pyr-row">
-      <span class="ex-pyr-label">${i + 1}</span>
+      <span class="ex-pyr-label">Set ${i + 1}</span>
       <input type="text" class="ex-pyr-reps" placeholder="${defaultReps || '10'}" value="${reps}" />
       <input type="text" class="ex-pyr-weight" placeholder="${defaultWeight || 'lbs'}" value="${weight}" />
     </div>`;
@@ -1583,11 +1598,12 @@ function exPyramidSetsChanged(input) {
   detail.innerHTML = html;
 }
 
+// Propagate default reps/weight into empty per-set cells; no-op when collapsed.
 function exPyramidDefaultsChanged(input) {
   const row = input.closest(".exercise-row");
   if (!row) return;
   const detail = row.querySelector(".ex-pyramid-detail");
-  if (!detail) return;
+  if (!detail || detail.style.display === "none") return;
   const defaultReps = row.querySelector(".ex-reps")?.value || "";
   const defaultWeight = row.querySelector(".ex-weight")?.value || "";
   detail.querySelectorAll(".ex-pyr-row").forEach(pr => {
@@ -1603,9 +1619,7 @@ function exPyramidDefaultsChanged(input) {
 
 // Back-compat shim for any callers still using the toggle
 function exTogglePyramid(btn) {
-  const row = btn?.closest(".exercise-row");
-  if (!row) return;
-  exPyramidSetsChanged(row.querySelector(".ex-sets"));
+  exTogglePerSet(btn);
 }
 
 /** Syncs pyramid per-set values up to the main reps/weight fields as a range */
@@ -1710,18 +1724,24 @@ function saveWorkout() {
       const ex = { name, sets, reps, weight };
       if (row.dataset.ssId) ex.supersetId = row.dataset.ssId;
 
-      // Collect per-set details (panel auto-renders as user enters sets)
+      // Collect per-set details only if the panel is expanded AND values differ
+      // from the defaults — otherwise save as a flat sets/reps/weight entry.
       const detail = row.querySelector(".ex-pyramid-detail");
-      if (detail) {
+      if (detail && detail.style.display !== "none") {
         const pyrRows = detail.querySelectorAll(".ex-pyr-row");
         if (pyrRows.length > 0) {
-          const setDetails = [];
+          const perSet = [];
+          let hasDiff = false;
           pyrRows.forEach(pr => {
             const r = pr.querySelector(".ex-pyr-reps")?.value.trim() || reps;
             const w = pr.querySelector(".ex-pyr-weight")?.value.trim() || weight;
-            setDetails.push({ reps: r, weight: w });
+            perSet.push({ reps: r, weight: w });
+            if (r !== reps || w !== weight) hasDiff = true;
           });
-          ex.setDetails = setDetails;
+          if (hasDiff) {
+            ex.perSet = perSet;
+            ex.setDetails = perSet; // legacy alias for existing readers
+          }
         }
       }
       exercises.push(ex);
@@ -2677,6 +2697,27 @@ function openSaveWorkoutModal(editId) {
           if (setsInput) setsInput.value = e.sets || "";
           row.querySelector(".ex-reps").value   = e.reps   || "";
           row.querySelector(".ex-weight").value = e.weight || "";
+          // Restore per-set data if present: auto-expand the panel and populate rows
+          const existingPerSet = (e.perSet && e.perSet.length) ? e.perSet
+                               : (e.setDetails && e.setDetails.length) ? e.setDetails
+                               : null;
+          if (existingPerSet) {
+            const detail = row.querySelector(".ex-pyramid-detail");
+            const toggle = row.querySelector(".ex-row-customize-toggle");
+            if (detail && toggle) {
+              detail.style.display = "";
+              toggle.textContent = "Collapse ▴";
+              let html = '<div class="ex-pyr-header"><span></span><span>Reps</span><span>Weight</span></div>';
+              existingPerSet.forEach((d, idx) => {
+                html += `<div class="ex-pyr-row">
+                  <span class="ex-pyr-label">Set ${idx + 1}</span>
+                  <input type="text" class="ex-pyr-reps" placeholder="10" value="${escHtml(d.reps || '')}" />
+                  <input type="text" class="ex-pyr-weight" placeholder="lbs" value="${escHtml(d.weight || '')}" />
+                </div>`;
+              });
+              detail.innerHTML = html;
+            }
+          }
         });
         if (!sw.exercises || !sw.exercises.length) addSwExerciseRow();
         // Populate HIIT metadata
@@ -2788,33 +2829,46 @@ function addSwExerciseRow() {
   const container = document.getElementById("sw-exercise-entries");
   const isHiit = document.getElementById("sw-type")?.value === "hiit";
 
-  // Add a header row if this is the first exercise
-  if (container.children.length === 0) {
-    const header = document.createElement("div");
-    header.className = "exercise-row-header" + (isHiit ? " hiit-row-header" : "");
-    if (isHiit) {
-      header.innerHTML = `<span>Exercise</span><span>Reps / Time</span><span>Weight</span><span></span>`;
-    } else {
-      header.innerHTML = `<span>Exercise</span><span>Sets</span><span>Reps</span><span>Weight</span><span></span>`;
-    }
-    container.appendChild(header);
-  }
-
   const row = document.createElement("div");
-  row.className = "exercise-row exercise-row--compact" + (isHiit ? " hiit-row" : "");
+  row.className = "ex-row exercise-row sw-exercise-row" + (isHiit ? " hiit-row" : "");
   if (isHiit) {
     row.innerHTML = `
-      <input type="text" class="ex-name" placeholder="e.g. Burpees" />
-      <input type="text" class="ex-reps" placeholder="e.g. 10, 45s" />
-      <input type="text" class="ex-weight" placeholder="optional" />
-      <button class="remove-exercise-btn" onclick="this.parentElement.remove()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
+      <div class="ex-row-header">
+        <input type="text" class="ex-name ex-row-name" placeholder="e.g. Burpees" />
+        <button type="button" class="ex-row-delete" onclick="this.closest('.exercise-row').remove()" title="Remove">×</button>
+      </div>
+      <div class="ex-row-defaults ex-row-defaults--hiit">
+        <div class="ex-row-field">
+          <label>Reps / Time</label>
+          <input type="text" class="ex-reps" placeholder="e.g. 10, 45s" />
+        </div>
+        <div class="ex-row-field">
+          <label>Weight</label>
+          <input type="text" class="ex-weight" placeholder="optional" />
+        </div>
+      </div>`;
   } else {
     row.innerHTML = `
-      <input type="text" class="ex-name" placeholder="e.g. Bench Press" />
-      <input type="number" class="ex-sets" placeholder="3" min="1" />
-      <input type="number" class="ex-reps" placeholder="10" min="1" />
-      <input type="text" class="ex-weight" placeholder="45lbs" />
-      <button class="remove-exercise-btn" onclick="this.parentElement.remove()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
+      <div class="ex-row-header">
+        <input type="text" class="ex-name ex-row-name" placeholder="e.g. Bench Press" />
+        <button type="button" class="ex-row-delete" onclick="this.closest('.exercise-row').remove()" title="Remove">×</button>
+      </div>
+      <div class="ex-row-defaults">
+        <div class="ex-row-field">
+          <label>Sets</label>
+          <input type="number" class="ex-sets" min="1" max="20" placeholder="3" oninput="exPyramidSetsChanged(this)" />
+        </div>
+        <div class="ex-row-field">
+          <label>Reps</label>
+          <input type="text" class="ex-reps" placeholder="10" oninput="exPyramidDefaultsChanged(this)" />
+        </div>
+        <div class="ex-row-field">
+          <label>Weight (lbs)</label>
+          <input type="text" class="ex-weight" placeholder="lbs" oninput="exPyramidDefaultsChanged(this)" />
+        </div>
+      </div>
+      <button type="button" class="ex-row-customize-toggle" onclick="exTogglePerSet(this)">Customize per set ▾</button>
+      <div class="ex-pyramid-detail" style="display:none"></div>`;
   }
   _initRowDrag(row, container);
   container.appendChild(row);
@@ -2861,6 +2915,26 @@ function saveSavedWorkout() {
       };
       const setsInput = row.querySelector(".ex-sets");
       if (setsInput) ex.sets = setsInput.value;
+
+      // Collect per-set details only if panel is expanded AND values differ
+      const detail = row.querySelector(".ex-pyramid-detail");
+      if (detail && detail.style.display !== "none") {
+        const pyrRows = detail.querySelectorAll(".ex-pyr-row");
+        if (pyrRows.length > 0) {
+          const perSet = [];
+          let hasDiff = false;
+          pyrRows.forEach(pr => {
+            const r = pr.querySelector(".ex-pyr-reps")?.value.trim() || ex.reps;
+            const w = pr.querySelector(".ex-pyr-weight")?.value.trim() || ex.weight;
+            perSet.push({ reps: r, weight: w });
+            if (r !== ex.reps || w !== ex.weight) hasDiff = true;
+          });
+          if (hasDiff) {
+            ex.perSet = perSet;
+            ex.setDetails = perSet; // legacy alias
+          }
+        }
+      }
       exercises.push(ex);
     });
   }

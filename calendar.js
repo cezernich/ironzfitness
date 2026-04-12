@@ -5763,36 +5763,50 @@ function qeAddExerciseRow() {
   const div = document.createElement("div");
   const isHiit = _qeSelectedType === "hiit";
   const isBW = _qeSelectedType === "bodyweight";
-  div.className = "qe-manual-row" + (isHiit ? " hiit-row" : "");
+  div.className = "ex-row qe-manual-row" + (isHiit ? " hiit-row" : "");
   div.id = `qe-mrow-${id}`;
   div.draggable = true;
-  const dragHandleHTML = `<span class="drag-handle" title="Drag to reorder · drop on a row to superset">⠿</span>`;
   if (isHiit) {
     div.innerHTML = `
-      ${dragHandleHTML}
-      <div><label>Exercise</label>
-        <input type="text" id="qe-mex-${id}" placeholder="e.g. Burpees, Row 500m" /></div>
-      <div><label>Reps / Time / Distance</label>
-        <input type="text" id="qe-mreps-${id}" placeholder="e.g. 10, 45s, 500m" /></div>
-      <div><label>Weight</label>
-        <input type="text" id="qe-mwt-${id}" placeholder="optional" /></div>
-      <button class="remove-exercise-btn" onclick="qeRemoveRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
+      <div class="ex-row-header">
+        <input type="text" id="qe-mex-${id}" class="ex-row-name" placeholder="e.g. Burpees, Row 500m" />
+        <button type="button" class="ex-row-delete" onclick="qeRemoveRow(${id})" title="Remove">×</button>
+      </div>
+      <div class="ex-row-defaults ex-row-defaults--hiit">
+        <div class="ex-row-field">
+          <label>Reps / Time / Distance</label>
+          <input type="text" id="qe-mreps-${id}" placeholder="e.g. 10, 45s, 500m" />
+        </div>
+        <div class="ex-row-field">
+          <label>Weight</label>
+          <input type="text" id="qe-mwt-${id}" placeholder="optional" />
+        </div>
+      </div>`;
   } else {
-    const wtPlaceholder = isBW ? "Bodyweight" : "lbs/kg";
+    const wtPlaceholder = isBW ? "BW" : "lbs";
     const wtValue = isBW ? "Bodyweight" : "";
     const exPlaceholder = isBW ? "e.g. Push-ups, Pull-ups" : "e.g. Bench Press";
     div.innerHTML = `
-      ${dragHandleHTML}
-      <div><label>Exercise</label>
-        <input type="text"   id="qe-mex-${id}"   placeholder="${exPlaceholder}" /></div>
-      <div><label>Sets</label>
-        <input type="number" id="qe-msets-${id}" placeholder="3" min="1" max="20" oninput="qePyramidSetsChanged(${id})" /></div>
-      <div class="qe-default-reps"><label>Default Reps</label>
-        <input type="text"   id="qe-mreps-${id}" placeholder="10" oninput="qePyramidDefaultsChanged(${id})" /></div>
-      <div class="qe-default-wt"><label>Default Weight</label>
-        <input type="text"   id="qe-mwt-${id}"   placeholder="${wtPlaceholder}" value="${wtValue}"${isBW ? " readonly" : ""} oninput="qePyramidDefaultsChanged(${id})" /></div>
-      <button class="remove-exercise-btn" onclick="qeRemoveRow(${id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
-      <div class="ex-pyramid-detail" id="qe-pyr-${id}"></div>`;
+      <div class="ex-row-header">
+        <input type="text" id="qe-mex-${id}" class="ex-row-name" placeholder="${exPlaceholder}" />
+        <button type="button" class="ex-row-delete" onclick="qeRemoveRow(${id})" title="Remove">×</button>
+      </div>
+      <div class="ex-row-defaults">
+        <div class="ex-row-field">
+          <label>Sets</label>
+          <input type="number" id="qe-msets-${id}" min="1" max="20" placeholder="3" oninput="qePyramidSetsChanged(${id})" />
+        </div>
+        <div class="ex-row-field">
+          <label>Reps</label>
+          <input type="text" id="qe-mreps-${id}" placeholder="10" oninput="qePyramidDefaultsChanged(${id})" />
+        </div>
+        <div class="ex-row-field">
+          <label>Weight (lbs)</label>
+          <input type="text" id="qe-mwt-${id}" placeholder="${wtPlaceholder}" value="${wtValue}"${isBW ? " readonly" : ""} oninput="qePyramidDefaultsChanged(${id})" />
+        </div>
+      </div>
+      <button type="button" class="ex-row-customize-toggle" id="qe-pyr-toggle-${id}" onclick="qeTogglePerSet(${id})">Customize per set ▾</button>
+      <div class="ex-pyramid-detail" id="qe-pyr-${id}" style="display:none"></div>`;
   }
   let _qeHoverTimer = null;
   div.addEventListener("dragstart", (e) => { _qeManualDragId = id; div.classList.add("drag-active"); e.dataTransfer.effectAllowed = "move"; });
@@ -5958,12 +5972,27 @@ function qeRemoveRow(id) {
   if (el) el.remove();
 }
 
-// Auto-render per-set rows whenever the Sets input changes. The top-level
-// Reps/Weight fields act as defaults that populate any new per-set rows;
-// per-set rows can then be edited individually.
+// Toggle the per-set customization panel for a row. Collapsed by default.
+function qeTogglePerSet(id) {
+  const detail = document.getElementById(`qe-pyr-${id}`);
+  const toggle = document.getElementById(`qe-pyr-toggle-${id}`);
+  if (!detail || !toggle) return;
+  const isHidden = detail.style.display === "none" || !detail.style.display;
+  if (isHidden) {
+    detail.style.display = "";
+    toggle.textContent = "Collapse ▴";
+    qePyramidSetsChanged(id); // build the per-set rows now that panel is open
+  } else {
+    detail.style.display = "none";
+    toggle.textContent = "Customize per set ▾";
+  }
+}
+
+// Rebuild per-set rows to match the current Sets count. Only runs if the
+// per-set panel is currently expanded — the panel is collapsed by default.
 function qePyramidSetsChanged(id) {
   const detail = document.getElementById(`qe-pyr-${id}`);
-  if (!detail) return;
+  if (!detail || detail.style.display === "none") return;
   const setsVal = parseInt(document.getElementById(`qe-msets-${id}`)?.value) || 0;
   const defaultReps = document.getElementById(`qe-mreps-${id}`)?.value || "";
   const defaultWeight = document.getElementById(`qe-mwt-${id}`)?.value || "";
@@ -5979,13 +6008,13 @@ function qePyramidSetsChanged(id) {
     });
   });
 
-  let html = '<div class="ex-pyr-header"><span>Set</span><span>Reps</span><span>Weight</span></div>';
+  let html = '<div class="ex-pyr-header"><span></span><span>Reps</span><span>Weight</span></div>';
   for (let i = 0; i < setsVal; i++) {
     const prev = existing[i] || {};
     const reps = prev.reps || defaultReps;
     const weight = prev.weight || defaultWeight;
     html += `<div class="ex-pyr-row">
-      <span class="ex-pyr-label">${i + 1}</span>
+      <span class="ex-pyr-label">Set ${i + 1}</span>
       <input type="text" class="ex-pyr-reps" placeholder="${defaultReps || '10'}" value="${reps}" />
       <input type="text" class="ex-pyr-weight" placeholder="${defaultWeight || 'lbs'}" value="${weight}" />
     </div>`;
@@ -5993,11 +6022,11 @@ function qePyramidSetsChanged(id) {
   detail.innerHTML = html;
 }
 
-// When the default Reps or Weight field changes, propagate into any per-set
-// rows that are still at the old default (empty or matching prior default).
+// When the default Reps/Weight changes, propagate into empty per-set cells.
+// No-op if the per-set panel is collapsed.
 function qePyramidDefaultsChanged(id) {
   const detail = document.getElementById(`qe-pyr-${id}`);
-  if (!detail) return;
+  if (!detail || detail.style.display === "none") return;
   const defaultReps = document.getElementById(`qe-mreps-${id}`)?.value || "";
   const defaultWeight = document.getElementById(`qe-mwt-${id}`)?.value || "";
   detail.querySelectorAll(".ex-pyr-row").forEach(pr => {
@@ -6008,12 +6037,11 @@ function qePyramidDefaultsChanged(id) {
     if (rInp) rInp.placeholder = defaultReps || "10";
     if (wInp) wInp.placeholder = defaultWeight || "lbs";
   });
-  // If there are no rows yet but sets is set, render them now
   if (!detail.querySelector(".ex-pyr-row")) qePyramidSetsChanged(id);
 }
 
-// Back-compat shim in case anything still calls qeTogglePyramid
-function qeTogglePyramid(id) { qePyramidSetsChanged(id); }
+// Back-compat shims
+function qeTogglePyramid(id) { qeTogglePerSet(id); }
 
 function qeSaveManual() {
   const dateStr = document.getElementById("qe-date").value;
@@ -6035,18 +6063,24 @@ function qeSaveManual() {
     if (!isHiit) ex.sets = document.getElementById(`qe-msets-${idx}`)?.value || "";
     if (row?.dataset.ssId) ex.supersetId = row.dataset.ssId;
 
-    // Collect per-set details (the pyramid panel auto-renders as user enters sets)
+    // Collect per-set details only if the panel is expanded AND values differ
+    // from the defaults — otherwise save as a flat sets/reps/weight entry.
     const pyrDetail = document.getElementById(`qe-pyr-${idx}`);
-    if (pyrDetail) {
+    if (pyrDetail && pyrDetail.style.display !== "none") {
       const pyrRows = pyrDetail.querySelectorAll(".ex-pyr-row");
       if (pyrRows.length > 0) {
-        const setDetails = [];
+        const perSet = [];
+        let hasDiff = false;
         pyrRows.forEach(pr => {
           const r = pr.querySelector(".ex-pyr-reps")?.value.trim() || ex.reps;
           const w = pr.querySelector(".ex-pyr-weight")?.value.trim() || ex.weight;
-          setDetails.push({ reps: r, weight: w });
+          perSet.push({ reps: r, weight: w });
+          if (r !== ex.reps || w !== ex.weight) hasDiff = true;
         });
-        ex.setDetails = setDetails;
+        if (hasDiff) {
+          ex.perSet = perSet;
+          ex.setDetails = perSet; // legacy alias for existing readers
+        }
       }
     }
     exercises.push(ex);
