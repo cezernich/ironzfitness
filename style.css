@@ -7042,7 +7042,89 @@ button:active {
 }
 
 #barcode-reader video { border-radius: 8px; }
-#barcode-reader { background: #000; border-radius: 8px; min-height: 200px; }
+#barcode-reader,
+.barcode-reader {
+  position: relative;
+  background: #000;
+  border-radius: 8px;
+  min-height: 200px;
+  overflow: hidden;
+}
+
+/* Animated scanning line inside the camera viewport */
+.barcode-scan-line {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 50%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #ef4444 50%, transparent);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
+  pointer-events: none;
+  animation: barcode-scan-sweep 2.2s ease-in-out infinite;
+  z-index: 2;
+}
+@keyframes barcode-scan-sweep {
+  0%, 100% { top: 20%; opacity: 0.35; }
+  50%      { top: 80%; opacity: 1; }
+}
+
+/* Brief "code detected" success pill that flashes over the camera */
+.barcode-detected-flash {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+  padding: 8px 14px;
+  background: rgba(34, 197, 94, 0.95);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 3;
+}
+.barcode-detected-flash.is-visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.barcode-manual-link {
+  background: transparent;
+  border: none;
+  color: var(--color-cyan);
+  text-decoration: underline;
+  font-size: 0.88rem;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.barcode-manual-link:hover { opacity: 0.8; }
+
+/* Per-100g vs per-serving toggle in the product result panel */
+.barcode-mode-toggle {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+.barcode-mode-btn {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.barcode-mode-btn.is-active {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent);
+}
 
 .recent-scan-item {
   padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 8px;
