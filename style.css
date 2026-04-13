@@ -2192,7 +2192,16 @@ button:active {
 .intensity-seg.z4    { background: #f87171; }
 .intensity-seg.z5    { background: #ef4444; }
 .intensity-seg.z6    { background: #b91c1c; }
-.intensity-seg.z-rest{ background: rgba(255, 255, 255, 0.06); }
+/* Rest gaps in the intensity strip — use a theme-aware neutral so the
+   gap is clearly visible between adjacent work segments on both light
+   and dark themes. The previous rgba(255,255,255,0.06) was nearly
+   invisible on light backgrounds. */
+.intensity-seg.z-rest{ background: rgba(148, 163, 184, 0.45); }
+:root[data-theme="blackout"] .intensity-seg.z-rest,
+:root[data-theme="iron"]    .intensity-seg.z-rest,
+:root[data-theme="midnight"] .intensity-seg.z-rest {
+  background: rgba(255, 255, 255, 0.14);
+}
 .session-intensity-strip .intensity-seg.exercise { background: #8b5cf6; }
 .intensity-seg.z-transition { background: #a78bfa; }
 .zone-badge.z-transition { background: rgba(167, 139, 250, 0.18); color: #a78bfa; }

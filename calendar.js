@@ -2601,13 +2601,46 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
           return v;
         };
         const _allSegs = [];
-        _expandRepeatGroups(w.aiSession.intervals).forEach(iv => {
+        // Parse rest text ("90 sec rest", "2 min rest") out of details
+        // strings when the interval doesn't have an explicit
+        // restDuration field. This is the fallback for AI-generated
+        // workouts where Claude put the rest in free text.
+        function _extractRestFromDetails(details) {
+          const s = String(details || "");
+          const patterns = [
+            /(\d+)\s*(?:sec|seconds|s)\b[^,.]*?\brest\b/i,
+            /(\d+)\s*(?:min|minutes|m)\b[^,.]*?\brest\b/i,
+            /\brest\b[^,.]*?(\d+)\s*(?:sec|seconds|s)\b/i,
+            /\brest\b[^,.]*?(\d+)\s*(?:min|minutes|m)\b/i,
+          ];
+          for (const pat of patterns) {
+            const m = s.match(pat);
+            if (m) {
+              const val = parseInt(m[1], 10);
+              if (val > 0) {
+                const isMin = /min|minutes|\bm\b/i.test(m[0]) && !/sec|seconds|\bs\b/i.test(m[0]);
+                return isMin ? `${val} min` : `${val}s`;
+              }
+            }
+          }
+          return null;
+        }
+
+        // Classify so we know whether to insert a trailing rest between
+        // adjacent segments (rests only appear between "work" segments,
+        // not after a warmup block).
+        function _isWarmupOrCooldown(iv) {
+          const n = String(iv.name || "").toLowerCase();
+          return /warm|cool|recovery/.test(n);
+        }
+
+        const _expanded = _expandRepeatGroups(w.aiSession.intervals);
+        _expanded.forEach((iv, ivIdx) => {
           let reps = iv.reps || 1;
           let _ivDur = iv.duration;
           // Fix legacy ladder data: "ladder" is not a per-rep duration
           if (_ivDur === "ladder" || (reps > 1 && !/\d/.test(_ivDur))) {
             reps = 1;
-            // Use total duration_min from the phase if available, otherwise estimate
             _ivDur = iv.duration_min ? `${iv.duration_min} min` : "15 min";
           }
           // Fix legacy data: if reps > 1 and duration is total minutes, extract per-rep distance or divide
@@ -2617,7 +2650,11 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
             else { const t = parseFloat(_ivDur); if (t > 0) _ivDur = `${Math.round(t / reps)} min`; }
           }
           const mainDur = _parseDur(_ivDur, iv.effort);
-          const restDur = iv.restDuration ? _parseDur(iv.restDuration, iv.restEffort) : 0;
+          // Prefer restDuration field; fall back to parsing it from the
+          // details text so AI-generated intervals that described rest
+          // in free text still render gaps in the strip.
+          const restStr = iv.restDuration || _extractRestFromDetails(iv.details);
+          const restDur = restStr ? _parseDur(restStr, iv.restEffort) : 0;
           const mainCls = _effortToZone[iv.effort] || "z2";
           const restCls = iv.restEffort ? (_effortToZone[iv.restEffort] || "z2") : "z-rest";
           for (let i = 0; i < reps; i++) {
@@ -2625,6 +2662,13 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
             if (i < reps - 1 && restDur > 0) {
               _allSegs.push({ dur: restDur, cls: restCls, effort: iv.restEffort || "Z2", name: "Recovery" });
             }
+          }
+          // Between-interval rest: only when there's a rest on this
+          // segment AND the NEXT segment is also a work block (not a
+          // cooldown — no point showing a gap before the cooldown).
+          const next = _expanded[ivIdx + 1];
+          if (restDur > 0 && next && !_isWarmupOrCooldown(next) && !_isWarmupOrCooldown(iv)) {
+            _allSegs.push({ dur: restDur, cls: restCls, effort: iv.restEffort || "Z2", name: "Rest" });
           }
         });
         const _totalDur = _allSegs.reduce((sum, seg) => sum + seg.dur, 0) || 1;
@@ -3944,6 +3988,114 @@ function qeShowAskIronZ() {
   }
 }
 
+// ── Ask IronZ interval normalization ────────────────────────────────────────
+//
+// The AI generator is unreliable about:
+//   (a) assigning distinct zones per phase — it often returns every
+//       interval at the same effort like "Easy" or "Z2", then describes
+//       the actual intensity in the free-text `details` field.
+//   (b) including restDuration — it describes rest in details like
+//       "90 sec rest" or "2 min rest" instead of populating the field.
+//
+// This helper post-processes the AI response to:
+//   1. Infer the correct zone from the phase name + details when the AI
+//      returned a flat/default value
+//   2. Extract restDuration from the details text when missing
+// Both fixes are idempotent — if the AI ALREADY returned a distinct
+// zone or a populated restDuration, we leave it alone.
+
+function _normalizeAiIntervals(intervals) {
+  if (!Array.isArray(intervals)) return [];
+
+  // First pass: detect whether the AI returned a flat zone profile
+  // (every segment the same effort). If so, we'll reassign from context.
+  const effortValues = intervals.map(iv => String(iv.effort || "").toUpperCase());
+  const uniqueEfforts = new Set(effortValues.filter(Boolean));
+  const allSameEffort = uniqueEfforts.size <= 1;
+
+  function _zoneFromContext(iv, idx, total) {
+    const name = String(iv.name || "").toLowerCase();
+    const details = String(iv.details || "").toLowerCase();
+    const combined = name + " " + details;
+
+    // Warmup / cooldown → Z1
+    if (/warm.?up|warmup/i.test(name) || /cool.?down|cooldown/i.test(name)) return "Z1";
+    // First/last segment without a clear name → likely warm/cool
+    if (idx === 0 && /easy|recovery|warm/.test(combined)) return "Z1";
+    if (idx === total - 1 && /easy|recovery|cool|breathing/.test(combined)) return "Z1";
+
+    // Sprint / max effort → Z5
+    if (/sprint|max effort|all.?out|100%/i.test(combined)) return "Z5";
+    // Hard intervals / ~85%+ → Z4
+    if (/\b([89]\d|100)%\b/.test(combined)) return "Z4";
+    if (/hard interval|threshold|race pace|hard effort/i.test(combined)) return "Z4";
+    // Tempo → Z3
+    if (/tempo|sweet spot|comfortably hard|moderate.?hard/i.test(combined)) return "Z3";
+    // Recovery between intervals
+    if (/recover|rest/i.test(name)) return "Z1";
+    // Steady / aerobic → Z2
+    if (/steady|aerobic|endurance|moderate/i.test(combined)) return "Z2";
+
+    // Unknown — preserve what the AI gave us (might be a legitimate Z-label)
+    return null;
+  }
+
+  function _extractRestDuration(details) {
+    const s = String(details || "");
+    // Match "90 sec rest", "90s rest", "2 min rest", "2:00 rest", etc.
+    const patterns = [
+      /(\d+)\s*(?:sec|seconds|s)\b[^,.]*?\brest\b/i,
+      /(\d+)\s*(?:min|minutes|m)\b[^,.]*?\brest\b/i,
+      /\brest\b[^,.]*?(\d+)\s*(?:sec|seconds|s)\b/i,
+      /\brest\b[^,.]*?(\d+)\s*(?:min|minutes|m)\b/i,
+    ];
+    for (const pat of patterns) {
+      const m = s.match(pat);
+      if (m) {
+        const val = parseInt(m[1], 10);
+        if (val > 0) {
+          const isMin = /min|minutes|\bm\b/i.test(m[0]) && !/sec|seconds|\bs\b/i.test(m[0]);
+          return isMin ? `${val} min` : `${val}s`;
+        }
+      }
+    }
+    return null;
+  }
+
+  return intervals.map((iv, idx) => {
+    const out = { ...iv };
+
+    // Zone inference: only override when the AI was flat OR the given
+    // value is a generic non-zone word like "Easy"/"Moderate"/"Hard".
+    // If the AI returned a specific Z-notation that varies across
+    // segments, we trust it.
+    const givenEffort = String(out.effort || "").toUpperCase();
+    const isZNotation = /^Z[1-6]$/.test(givenEffort);
+    const shouldOverride = allSameEffort || !isZNotation;
+    if (shouldOverride) {
+      const inferred = _zoneFromContext(out, idx, intervals.length);
+      if (inferred) out.effort = inferred;
+      else if (!isZNotation) {
+        // Map generic English labels to zones so the pace-range lookup
+        // downstream doesn't default everything to Z2.
+        const labelMap = { EASY: "Z1", RECOVERY: "Z1", AEROBIC: "Z2",
+          MODERATE: "Z2", STEADY: "Z2", TEMPO: "Z3", THRESHOLD: "Z4",
+          HARD: "Z4", "VO2": "Z5", VO2MAX: "Z5", MAX: "Z5", SPRINT: "Z5" };
+        if (labelMap[givenEffort]) out.effort = labelMap[givenEffort];
+      }
+    }
+
+    // restDuration: extract from details text if not already set and
+    // we can find a pattern in the description.
+    if (!out.restDuration && out.details) {
+      const extracted = _extractRestDuration(out.details);
+      if (extracted) out.restDuration = extracted;
+    }
+
+    return out;
+  });
+}
+
 async function qeSubmitAskIronZ() {
   const input = document.getElementById("qe-ask-ironz-input");
   const prompt = (input?.value || "").trim();
@@ -3999,7 +4151,18 @@ For strength/HIIT/general workouts:
 {"type":"strength","title":"Workout Name","exercises":[{"name":"Exercise","sets":3,"reps":10,"rest":"60s","weight":"135 lbs"}]}
 
 For running/cycling/swim/cardio workouts:
-{"type":"cardio","sport":"running","title":"Run Name","intervals":[{"name":"Phase","duration":"10 min","effort":"Easy","details":"Keep HR zone 2"}]}
+{"type":"cardio","sport":"running","title":"Run Name","intervals":[{"name":"Phase","duration":"10 min","effort":"Z2","details":"Aerobic pace","restDuration":"90s"}]}
+
+CARDIO INTERVAL RULES — every phase MUST have an explicit zone in the "effort" field:
+- Z1: Recovery / very easy (warmup, cooldown, easy recovery phases)
+- Z2: Aerobic / steady endurance pace
+- Z3: Tempo / threshold lower end
+- Z4: Hard intervals / threshold / ~85% effort / "hard" phases
+- Z5: VO2max / sprint / max effort
+DO NOT put every phase at the same zone. Warmup+cooldown are Z1, steady blocks are Z2, tempo is Z3, hard intervals are Z4, sprints are Z5.
+
+For swim interval sets, "effort":"Z4" for hard intervals at ~85% effort.
+For hard/tempo/sprint intervals that have rest between reps, include a "restDuration" field in the interval object (e.g. "90s", "2 min", "30s"). Warmup/cooldown/steady phases don't need restDuration.
 
 Use "Bodyweight" for bodyweight exercises. Strength exercises must have specific weights in lbs rounded to the nearest 5 (e.g. 135, 185 — NEVER 137, 267). Use reference lifts if provided. Include 5-8 exercises or 3-5 intervals.`
       }]
@@ -4011,8 +4174,13 @@ Use "Bodyweight" for bodyweight exercises. Strength exercises must have specific
     loadingEl.style.display = "none"; _stopLoadingMessages();
 
     if (workout.type === "cardio") {
-      // Cardio — reuse the cardio-generated display
-      _qeGeneratedCardioData = { title: workout.title, intervals: workout.intervals || [], sport: workout.sport || "running" };
+      // Cardio — reuse the cardio-generated display.
+      // Normalize the intervals first: the AI often returns every
+      // segment at the same effort (all "Z2" or all "Easy") and
+      // describes rest periods in free-text details instead of the
+      // restDuration field. Post-process to fix both.
+      const _normalizedIntervals = _normalizeAiIntervals(workout.intervals || []);
+      _qeGeneratedCardioData = { title: workout.title, intervals: _normalizedIntervals, sport: workout.sport || "running" };
       _qeSelectedType = workout.sport || "running";
       const effortColors = { Easy: "#22c55e", Moderate: "#f59e0b", Hard: "#f97316", Max: "#ef4444" };
       const intervalsHtml = (workout.intervals || []).map(iv => {
