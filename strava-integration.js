@@ -94,7 +94,15 @@ async function connectStrava() {
   if (btn) { btn.disabled = true; btn.textContent = "Connecting…"; }
 
   try {
-    const { data, error } = await sb.functions.invoke("strava-auth");
+    // Explicitly pass the session access_token as a Bearer header.
+    // supabase.functions.invoke() DOES NOT automatically substitute the
+    // session token for the anon key — it sends whatever Authorization
+    // header was set on client creation (the anon key). Without this
+    // explicit header the edge function's getUser() returns null and
+    // the function 401s.
+    const { data, error } = await sb.functions.invoke("strava-auth", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
     if (error) throw error;
     if (!data || !data.authorize_url) throw new Error("No authorize URL returned");
 
@@ -151,7 +159,10 @@ async function syncStravaNow(opts) {
   if (!opts.silent) _showStravaToast("Syncing Strava…");
 
   try {
+    // Same explicit Bearer header fix as strava-auth: .invoke() doesn't
+    // auto-substitute the session token for the anon key.
     const { data, error } = await sb.functions.invoke("strava-sync", {
+      headers: { Authorization: `Bearer ${accessToken}` },
       body: {},
     });
     if (error) throw error;
