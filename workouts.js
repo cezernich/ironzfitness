@@ -3438,13 +3438,43 @@ async function renderCommunityWorkouts(filter) {
 
       let detailHTML = "";
       if (hasExercises) {
-        detailHTML = `<table class="exercise-table comm-ex-table">
-          <thead><tr><th>Exercise</th><th>Sets</th><th>Reps</th><th>Weight</th></tr></thead>
-          <tbody>${w.exercises.map(e => `<tr><td>${escHtml(e.name)}</td><td>${escHtml(String(e.sets))}</td><td>${escHtml(String(e.reps))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight))}</td></tr>`).join("")}</tbody></table>`;
+        // Reuse the shared exercise table renderer so supersets group
+        // correctly and per-set pyramid rows appear exactly the way they
+        // do on calendar cards and workout history.
+        const opts = {};
+        if (w.type === "hiit" || w.category === "HIIT") opts.hiit = true;
+        detailHTML = buildExerciseTableHTML(w.exercises, opts);
+        // HIIT meta pill above the table (format · N rounds · Rx rest)
+        if (w.hiitMeta) {
+          const parts = [];
+          if (w.hiitMeta.format) parts.push(String(w.hiitMeta.format).toUpperCase());
+          if (w.hiitMeta.rounds) parts.push(w.hiitMeta.rounds + " round" + (w.hiitMeta.rounds !== 1 ? "s" : ""));
+          if (w.hiitMeta.restBetweenRounds) parts.push(w.hiitMeta.restBetweenRounds + " rest");
+          if (parts.length) {
+            detailHTML = `<div class="comm-hiit-meta">${escHtml(parts.join(" · "))}</div>` + detailHTML;
+          }
+        }
       } else if (hasSegments) {
+        // Render segments — handles both legacy duration-only rows and the
+        // new metric:"distance" rows with optional reps / rest / pace.
+        const rows = w.segments.map(s => {
+          const metric = s.metric || (s.distance ? "distance" : "duration");
+          let valueCell;
+          if (metric === "distance") {
+            // "15 × 400m" when reps are set, just "400m" otherwise
+            const base = s.distance || s.duration || "";
+            valueCell = s.reps ? `${escHtml(String(s.reps))} × ${escHtml(base)}` : escHtml(base);
+            if (s.rest) valueCell += ` <span class="comm-seg-rest">(${escHtml(s.rest)} rest)</span>`;
+          } else {
+            valueCell = escHtml(s.duration || "");
+          }
+          const zoneCell = escHtml(s.effort || "");
+          const paceCell = s.pace ? ` · ${escHtml(s.pace)}` : "";
+          return `<tr><td>${escHtml(s.name)}</td><td>${valueCell}</td><td>${zoneCell}${paceCell}</td></tr>`;
+        }).join("");
         detailHTML = `<table class="exercise-table comm-ex-table">
-          <thead><tr><th>Phase</th><th>Duration</th><th>Zone</th></tr></thead>
-          <tbody>${w.segments.map(s => `<tr><td>${escHtml(s.name)}</td><td>${escHtml(s.duration)}</td><td>${escHtml(s.effort)}</td></tr>`).join("")}</tbody></table>`;
+          <thead><tr><th>Phase</th><th>Distance / Duration</th><th>Zone</th></tr></thead>
+          <tbody>${rows}</tbody></table>`;
       }
 
       // Admin delete button for DB-sourced workouts
@@ -3818,7 +3848,10 @@ function saveCreateCommunityWorkout() {
 /* ── Admin: add / delete community workouts via Supabase ──────────────── */
 
 let _commAdminRowCount = 0;
+let _commAdminSsCount  = 0;
 const COMM_STRENGTH_TYPES = ["weightlifting", "bodyweight", "hiit", "general"];
+const COMM_ENDURANCE_TYPES = ["running", "cycling", "swimming", "yoga", "stairstepper"];
+const COMM_DISTANCE_SPORTS = ["running", "swimming"];
 
 function openCommAdminForm() {
   const list = document.getElementById("community-workouts-list");
@@ -3828,6 +3861,7 @@ function openCommAdminForm() {
   if (document.getElementById("comm-admin-form")) return;
 
   _commAdminRowCount = 0;
+  _commAdminSsCount  = 0;
 
   const formHTML = `
     <div class="card comm-admin-form" id="comm-admin-form">
@@ -3845,6 +3879,7 @@ function openCommAdminForm() {
             <option value="HIIT">HIIT</option>
             <option value="Running">Running</option>
             <option value="Cycling">Cycling</option>
+            <option value="Swimming">Swimming</option>
             <option value="Yoga">Yoga</option>
             <option value="Fun">Fun</option>
           </select>
@@ -3865,6 +3900,7 @@ function openCommAdminForm() {
             <option value="hiit">HIIT</option>
             <option value="running">Running</option>
             <option value="cycling">Cycling</option>
+            <option value="swimming">Swimming</option>
             <option value="yoga">Yoga</option>
             <option value="stairstepper">Stair Stepper</option>
             <option value="general">General</option>
@@ -3876,10 +3912,34 @@ function openCommAdminForm() {
         <input type="text" id="ca-author" placeholder="e.g. Coach Dave" value="IronZ Team" />
       </div>
 
+      <!-- HIIT metadata: only visible when category/type = HIIT -->
+      <div id="ca-hiit-meta" class="form-row" style="display:none;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div>
+          <label>Format</label>
+          <select id="ca-hiit-format">
+            <option value="circuit">Circuit</option>
+            <option value="tabata">Tabata</option>
+            <option value="emom">EMOM</option>
+            <option value="amrap">AMRAP</option>
+          </select>
+        </div>
+        <div>
+          <label>Rounds</label>
+          <input type="text" id="ca-hiit-rounds" placeholder="e.g. 3" />
+        </div>
+        <div>
+          <label>Rest between rounds</label>
+          <input type="text" id="ca-hiit-rest" placeholder="e.g. 60s" />
+        </div>
+      </div>
+
       <div id="ca-exercises-section">
         <p class="sw-section-label" style="margin:8px 0 4px;font-weight:600;font-size:0.82rem">Exercises</p>
         <div id="ca-exercise-rows"></div>
-        <button class="btn-secondary" onclick="_caAddExRow()" style="margin-bottom:8px">+ Add Exercise</button>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <button class="btn-secondary" onclick="_caAddExRow()">+ Add Exercise</button>
+          <button class="btn-secondary" onclick="_caAddSupersetGroup()">+ Add Superset</button>
+        </div>
       </div>
 
       <div id="ca-segments-section" style="display:none">
@@ -3896,6 +3956,7 @@ function openCommAdminForm() {
     </div>`;
 
   list.insertAdjacentHTML("afterbegin", formHTML);
+  _caTypeChanged(); // kick off the initial section visibility
   _caAddExRow();
   _caAddExRow();
   _caAddSegRow();
@@ -3904,54 +3965,233 @@ function openCommAdminForm() {
 
 function _caTypeChanged() {
   const type = document.getElementById("ca-type")?.value;
-  const isEndurance = ["running", "cycling", "yoga"].includes(type);
+  const isEndurance = COMM_ENDURANCE_TYPES.includes(type);
   const exSec  = document.getElementById("ca-exercises-section");
   const segSec = document.getElementById("ca-segments-section");
+  const hiitSec = document.getElementById("ca-hiit-meta");
   if (exSec)  exSec.style.display  = isEndurance ? "none" : "";
+  if (segSec) segSec.style.display = isEndurance ? "grid" : "none";
   if (segSec) segSec.style.display = isEndurance ? "" : "none";
+  if (hiitSec) hiitSec.style.display = (type === "hiit") ? "grid" : "none";
+
+  // Re-label existing segment rows: show distance toggle only on
+  // distance-friendly sports (running / swimming).
+  const distanceSport = COMM_DISTANCE_SPORTS.includes(type);
+  document.querySelectorAll("#ca-segment-rows .ca-seg-row").forEach(row => {
+    row.dataset.distanceAllowed = distanceSport ? "1" : "0";
+    const toggle = row.querySelector(".ca-seg-metric-toggle");
+    if (toggle) toggle.style.display = distanceSport ? "" : "none";
+  });
 }
 
-function _caAddExRow() {
+/* ─── Strength exercise row (single) ──────────────────────────────────────
+   Can also live inside a superset group. When inside a group, the "Sets"
+   input is hidden because the group owns a single shared sets value. */
+
+function _caAddExRow(opts) {
   _commAdminRowCount++;
   const id = _commAdminRowCount;
-  const container = document.getElementById("ca-exercise-rows");
+  const ssId = (opts && opts.ssId) || null;
+  const container = (opts && opts.container) || document.getElementById("ca-exercise-rows");
   if (!container) return;
   const row = document.createElement("div");
-  row.className = "exercise-row";
+  row.className = "exercise-row ca-ex-row";
+  if (ssId) row.dataset.ssId = ssId;
+  row.dataset.rowId = String(id);
   row.innerHTML = `
-    <div><label>Exercise</label><input type="text" id="ca-ex-${id}" placeholder="e.g. Bench Press" /></div>
-    <div><label>Sets</label><input type="text" id="ca-sets-${id}" placeholder="3" /></div>
-    <div><label>Reps</label><input type="text" id="ca-reps-${id}" placeholder="10" /></div>
-    <div><label>Weight</label><input type="text" id="ca-wt-${id}" placeholder="lbs / BW" /></div>
-    <button class="remove-exercise-btn" onclick="this.parentElement.remove()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
+    <div class="ca-ex-main">
+      <div><label>Exercise</label><input type="text" data-ca-field="name" placeholder="e.g. Bench Press" /></div>
+      <div class="ca-sets-cell" ${ssId ? 'style="display:none"' : ""}><label>Sets</label><input type="text" data-ca-field="sets" placeholder="3" oninput="_caPyrSetsChanged(${id})" /></div>
+      <div><label>Reps</label><input type="text" data-ca-field="reps" placeholder="10" oninput="_caPyrDefaultsChanged(${id})" /></div>
+      <div><label>Weight</label><input type="text" data-ca-field="weight" placeholder="lbs / BW" oninput="_caPyrDefaultsChanged(${id})" /></div>
+      <button class="remove-exercise-btn" onclick="this.closest('.ca-ex-row').remove()" title="Remove"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
+    </div>
+    <button type="button" class="ca-pyr-toggle btn-link" onclick="_caTogglePerSet(${id})">Customize per set ▾</button>
+    <div class="ca-pyr-detail" id="ca-pyr-${id}" style="display:none"></div>
+  `;
   _initRowDrag(row, container);
   container.appendChild(row);
 }
+
+// Toggle per-set customization panel. First open builds N rows based on
+// whatever's currently in the Sets / Reps / Weight fields.
+function _caTogglePerSet(id) {
+  const panel = document.getElementById(`ca-pyr-${id}`);
+  if (!panel) return;
+  const visible = panel.style.display !== "none";
+  panel.style.display = visible ? "none" : "";
+  const toggleBtn = panel.parentElement?.querySelector(".ca-pyr-toggle");
+  if (toggleBtn) toggleBtn.textContent = visible ? "Customize per set ▾" : "Collapse ▴";
+  if (!visible && !panel.dataset.built) {
+    _caBuildPyrRows(id);
+    panel.dataset.built = "1";
+  }
+}
+
+function _caBuildPyrRows(id) {
+  const row = document.querySelector(`.ca-ex-row[data-row-id="${id}"]`);
+  if (!row) return;
+  const panel = document.getElementById(`ca-pyr-${id}`);
+  if (!panel) return;
+  let setsVal = row.querySelector('[data-ca-field="sets"]')?.value || "";
+  // If this row is inside a superset group, read sets from the group header
+  const ssId = row.dataset.ssId;
+  if (ssId) {
+    const group = document.querySelector(`.ca-ss-group[data-ssid="${ssId}"]`);
+    if (group) setsVal = group.querySelector(".ca-ss-sets")?.value || setsVal;
+  }
+  const n = Math.max(1, Math.min(20, parseInt(setsVal, 10) || 3));
+  const defaultReps   = row.querySelector('[data-ca-field="reps"]')?.value || "";
+  const defaultWeight = row.querySelector('[data-ca-field="weight"]')?.value || "";
+  let html = '<div class="ca-pyr-grid">';
+  for (let i = 0; i < n; i++) {
+    html += `<div class="ca-pyr-row"><span class="ca-pyr-label">Set ${i + 1}</span>`
+         +  `<input type="text" data-ca-pyr="reps" placeholder="reps" value="${escHtml(defaultReps)}" />`
+         +  `<input type="text" data-ca-pyr="weight" placeholder="weight" value="${escHtml(defaultWeight)}" />`
+         +  "</div>";
+  }
+  html += "</div>";
+  panel.innerHTML = html;
+}
+
+// Sets field changed — rebuild the per-set panel if it's already open.
+function _caPyrSetsChanged(id) {
+  const panel = document.getElementById(`ca-pyr-${id}`);
+  if (!panel || panel.style.display === "none") return;
+  panel.dataset.built = "";
+  _caBuildPyrRows(id);
+  panel.dataset.built = "1";
+}
+
+// Reps or weight default changed — propagate to per-set rows that haven't
+// been customized yet (i.e. still hold the old default).
+function _caPyrDefaultsChanged(id) {
+  const panel = document.getElementById(`ca-pyr-${id}`);
+  if (!panel || panel.style.display === "none" || panel.dataset.built !== "1") return;
+  _caBuildPyrRows(id); // simplest: just rebuild with current defaults
+}
+
+/* ─── Superset group ──────────────────────────────────────────────────────
+   A lightweight wrapper that holds 2+ exercise rows sharing a single
+   supersetGroup id and one shared "Sets" value. At save time the walker
+   picks up each row with the group's id + sets. */
+
+function _caAddSupersetGroup() {
+  _commAdminSsCount++;
+  const ssId = "ss-" + _commAdminSsCount;
+  const container = document.getElementById("ca-exercise-rows");
+  if (!container) return;
+  const group = document.createElement("div");
+  group.className = "ca-ss-group";
+  group.dataset.ssid = ssId;
+  group.innerHTML = `
+    <div class="ca-ss-header">
+      <span class="ca-ss-label">Superset</span>
+      <span class="ca-ss-sets-wrap"><label>Sets</label><input type="text" class="ca-ss-sets" value="3" oninput="_caSsSetsChanged('${ssId}')" /></span>
+      <button class="btn-link ca-ss-remove" onclick="_caRemoveSuperset('${ssId}')" title="Remove superset">Remove</button>
+    </div>
+    <div class="ca-ss-body" id="ca-ss-body-${ssId}"></div>
+    <button class="btn-link ca-ss-add" onclick="_caAddExToSuperset('${ssId}')">+ Add exercise to superset</button>
+  `;
+  container.appendChild(group);
+  // Seed the group with two exercises, matching how the custom-plan
+  // supersets start out.
+  const body = document.getElementById(`ca-ss-body-${ssId}`);
+  _caAddExRow({ container: body, ssId });
+  _caAddExRow({ container: body, ssId });
+}
+
+function _caAddExToSuperset(ssId) {
+  const body = document.getElementById(`ca-ss-body-${ssId}`);
+  if (!body) return;
+  _caAddExRow({ container: body, ssId });
+}
+
+function _caRemoveSuperset(ssId) {
+  const group = document.querySelector(`.ca-ss-group[data-ssid="${ssId}"]`);
+  if (group) group.remove();
+}
+
+// When the shared Sets input on a superset group changes, rebuild any
+// already-expanded per-set panels inside that group.
+function _caSsSetsChanged(ssId) {
+  const group = document.querySelector(`.ca-ss-group[data-ssid="${ssId}"]`);
+  if (!group) return;
+  group.querySelectorAll(".ca-ex-row").forEach(row => {
+    const id = parseInt(row.dataset.rowId, 10);
+    const panel = document.getElementById(`ca-pyr-${id}`);
+    if (panel && panel.style.display !== "none") _caBuildPyrRows(id);
+  });
+}
+
+/* ─── Endurance / distance segment row ─────────────────────────────────────
+   Supports two metric modes:
+     - Duration  (e.g. "10 min")
+     - Distance  (e.g. "400m", "1 mile")
+   In distance mode an optional Reps input captures interval repeats
+   ("15 × 400m") and an optional Rest input captures the jog/rest between
+   reps. Pace is a free-text label ("I-pace", "T-pace", "Easy"). */
 
 function _caAddSegRow() {
   _commAdminRowCount++;
   const id = _commAdminRowCount;
   const container = document.getElementById("ca-segment-rows");
   if (!container) return;
+
+  const type = document.getElementById("ca-type")?.value;
+  const distanceAllowed = COMM_DISTANCE_SPORTS.includes(type);
+
   const row = document.createElement("div");
-  row.className = "exercise-row sw-segment-row";
+  row.className = "exercise-row sw-segment-row ca-seg-row";
+  row.dataset.segId = String(id);
+  row.dataset.metric = "duration";
+  row.dataset.distanceAllowed = distanceAllowed ? "1" : "0";
   row.innerHTML = `
-    <div><label>Phase</label><input type="text" id="ca-seg-${id}" placeholder="e.g. Warm-up" /></div>
-    <div><label>Duration</label><input type="text" id="ca-dur-${id}" placeholder="e.g. 10 min" /></div>
-    <div><label>Zone</label>
-      <select id="ca-eff-${id}">
-        <option value="RW">Rest / Walk</option>
-        <option value="Z1">Z1 Recovery</option>
-        <option value="Z2" selected>Z2 Aerobic</option>
-        <option value="Z3">Z3 Tempo</option>
-        <option value="Z4">Z4 Threshold</option>
-        <option value="Z5">Z5 VO2 Max</option>
-        <option value="Z6">Z6 Max Sprint</option>
-      </select>
+    <div class="ca-seg-main">
+      <div><label>Phase</label><input type="text" data-ca-field="name" placeholder="e.g. Main Set" /></div>
+      <div class="ca-seg-metric-cell">
+        <label>${distanceAllowed ? "Duration / Distance" : "Duration"}</label>
+        <input type="text" data-ca-field="duration-or-distance" placeholder="${distanceAllowed ? "10 min or 400m" : "e.g. 10 min"}" />
+      </div>
+      <div><label>Zone</label>
+        <select data-ca-field="zone">
+          <option value="RW">Rest / Walk</option>
+          <option value="Z1">Z1 Recovery</option>
+          <option value="Z2" selected>Z2 Aerobic</option>
+          <option value="Z3">Z3 Tempo</option>
+          <option value="Z4">Z4 Threshold</option>
+          <option value="Z5">Z5 VO2 Max</option>
+          <option value="Z6">Z6 Max Sprint</option>
+        </select>
+      </div>
+      <button class="remove-exercise-btn" onclick="this.closest('.ca-seg-row').remove()" title="Remove"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
     </div>
-    <button class="remove-exercise-btn" onclick="this.parentElement.remove()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>`;
+    <div class="ca-seg-metric-toggle" style="${distanceAllowed ? "" : "display:none"}">
+      <label class="ca-seg-metric-choice">
+        <input type="radio" name="ca-seg-metric-${id}" value="duration" checked onchange="_caSegMetricChanged(${id},'duration')" /> Duration
+      </label>
+      <label class="ca-seg-metric-choice">
+        <input type="radio" name="ca-seg-metric-${id}" value="distance" onchange="_caSegMetricChanged(${id},'distance')" /> Distance
+      </label>
+    </div>
+    <div class="ca-seg-interval-row" id="ca-seg-iv-${id}" style="display:none">
+      <div><label>Reps</label><input type="text" data-ca-field="reps" placeholder="e.g. 15" /></div>
+      <div><label>Rest</label><input type="text" data-ca-field="rest" placeholder="e.g. 90s jog" /></div>
+      <div><label>Pace / label</label><input type="text" data-ca-field="pace" placeholder="I-pace, T-pace, 1:45/100" /></div>
+    </div>
+  `;
   _initRowDrag(row, container);
   container.appendChild(row);
+}
+
+function _caSegMetricChanged(id, metric) {
+  const row = document.querySelector(`.ca-seg-row[data-seg-id="${id}"]`);
+  if (!row) return;
+  row.dataset.metric = metric;
+  const iv = document.getElementById(`ca-seg-iv-${id}`);
+  if (iv) iv.style.display = (metric === "distance") ? "" : "none";
+  const input = row.querySelector('[data-ca-field="duration-or-distance"]');
+  if (input) input.placeholder = (metric === "distance") ? "e.g. 400m or 1 mile" : "e.g. 10 min";
 }
 
 async function saveCommAdminWorkout() {
@@ -3964,29 +4204,55 @@ async function saveCommAdminWorkout() {
 
   if (!name) { msg.textContent = "Name is required."; msg.style.color = "#ef4444"; return; }
 
-  const isEndurance = ["running", "cycling", "yoga"].includes(type);
+  const isEndurance = COMM_ENDURANCE_TYPES.includes(type);
   let exercises = null, segments = null;
 
   if (isEndurance) {
     segments = [];
-    document.querySelectorAll("#ca-segment-rows .exercise-row").forEach(row => {
-      const inputs = row.querySelectorAll("input, select");
-      const n = inputs[0]?.value.trim();
-      const d = inputs[1]?.value.trim();
-      const e = inputs[2]?.value;
-      if (n && d) segments.push({ name: n, duration: d, effort: e || "Z2" });
+    document.querySelectorAll("#ca-segment-rows .ca-seg-row").forEach(row => {
+      const phase   = row.querySelector('[data-ca-field="name"]')?.value.trim() || "";
+      const value   = row.querySelector('[data-ca-field="duration-or-distance"]')?.value.trim() || "";
+      const zone    = row.querySelector('[data-ca-field="zone"]')?.value || "Z2";
+      const metric  = row.dataset.metric || "duration";
+      if (!phase && !value) return;
+      const seg = { name: phase || "Segment", effort: zone, metric };
+      if (metric === "distance") {
+        seg.distance = value;
+        const reps = row.querySelector('[data-ca-field="reps"]')?.value.trim() || "";
+        const rest = row.querySelector('[data-ca-field="rest"]')?.value.trim() || "";
+        const pace = row.querySelector('[data-ca-field="pace"]')?.value.trim() || "";
+        if (reps) seg.reps = reps;
+        if (rest) seg.rest = rest;
+        if (pace) seg.pace = pace;
+        // Human-readable `duration` field so legacy readers still render:
+        // "15 × 400m" / "400m" / etc.
+        seg.duration = reps ? `${reps} × ${value}` : value;
+      } else {
+        seg.duration = value;
+      }
+      segments.push(seg);
     });
     if (!segments.length) { msg.textContent = "Add at least one segment."; msg.style.color = "#ef4444"; return; }
   } else {
     exercises = [];
-    document.querySelectorAll("#ca-exercise-rows .exercise-row").forEach(row => {
-      const inputs = row.querySelectorAll("input");
-      const n = inputs[0]?.value.trim();
-      const s = inputs[1]?.value.trim();
-      const r = inputs[2]?.value.trim();
-      const w = inputs[3]?.value.trim();
-      if (n) exercises.push({ name: n, sets: s || "3", reps: r || "10", weight: w || "Bodyweight" });
-    });
+    // Walk the direct children of #ca-exercise-rows — each child is either
+    // a top-level .ca-ex-row or a .ca-ss-group wrapping multiple rows.
+    const container = document.getElementById("ca-exercise-rows");
+    if (container) {
+      for (const child of Array.from(container.children)) {
+        if (child.classList.contains("ca-ex-row")) {
+          const ex = _caCollectExRow(child, null, null);
+          if (ex) exercises.push(ex);
+        } else if (child.classList.contains("ca-ss-group")) {
+          const ssId = child.dataset.ssid;
+          const sharedSets = child.querySelector(".ca-ss-sets")?.value.trim() || "3";
+          child.querySelectorAll(".ca-ex-row").forEach(row => {
+            const ex = _caCollectExRow(row, ssId, sharedSets);
+            if (ex) exercises.push(ex);
+          });
+        }
+      }
+    }
     if (!exercises.length) { msg.textContent = "Add at least one exercise."; msg.style.color = "#ef4444"; return; }
   }
 
@@ -3995,6 +4261,20 @@ async function saveCommAdminWorkout() {
   const record = { id, category, name, author, difficulty, type };
   if (exercises) record.exercises = exercises;
   if (segments)  record.segments  = segments;
+
+  // HIIT metadata — only when type is HIIT and a format was picked.
+  if (type === "hiit") {
+    const format   = document.getElementById("ca-hiit-format")?.value || null;
+    const rounds   = document.getElementById("ca-hiit-rounds")?.value.trim() || null;
+    const restBRnd = document.getElementById("ca-hiit-rest")?.value.trim() || null;
+    if (format || rounds || restBRnd) {
+      record.hiitMeta = {
+        format: format || "circuit",
+        rounds: rounds ? parseInt(rounds, 10) || rounds : null,
+        restBetweenRounds: restBRnd || null,
+      };
+    }
+  }
 
   const client = window.supabaseClient;
   if (!client || SUPABASE_URL === "YOUR_SUPABASE_PROJECT_URL") {
@@ -4014,6 +4294,41 @@ async function saveCommAdminWorkout() {
 
   document.getElementById("comm-admin-form")?.remove();
   renderCommunityWorkouts();
+}
+
+// Collect one strength-exercise row into the shape the rest of the app
+// consumes. Honors the supersetGroup / shared sets if the row is inside
+// a group, and captures per-set details when the customize panel is open
+// and at least one value differs from the default.
+function _caCollectExRow(row, ssId, sharedSets) {
+  const n = row.querySelector('[data-ca-field="name"]')?.value.trim();
+  if (!n) return null;
+  const ownSets = row.querySelector('[data-ca-field="sets"]')?.value.trim() || "";
+  const sets = ssId ? (sharedSets || "3") : (ownSets || "3");
+  const reps = row.querySelector('[data-ca-field="reps"]')?.value.trim() || "10";
+  const weight = row.querySelector('[data-ca-field="weight"]')?.value.trim() || "Bodyweight";
+
+  const ex = { name: n, sets, reps, weight };
+  if (ssId) ex.supersetGroup = ssId;
+
+  // Per-set pyramids
+  const rowId = row.dataset.rowId;
+  const pyrPanel = document.getElementById(`ca-pyr-${rowId}`);
+  if (pyrPanel && pyrPanel.style.display !== "none" && pyrPanel.dataset.built === "1") {
+    const perSet = [];
+    let diff = false;
+    pyrPanel.querySelectorAll(".ca-pyr-row").forEach(pr => {
+      const r = pr.querySelector('[data-ca-pyr="reps"]')?.value.trim() || reps;
+      const w = pr.querySelector('[data-ca-pyr="weight"]')?.value.trim() || weight;
+      perSet.push({ reps: r, weight: w });
+      if (r !== reps || w !== weight) diff = true;
+    });
+    if (diff && perSet.length > 1) {
+      ex.perSet = perSet;
+      ex.setDetails = perSet; // legacy alias (buildExerciseTableHTML reads this)
+    }
+  }
+  return ex;
 }
 
 async function deleteCommWorkout(workoutId) {

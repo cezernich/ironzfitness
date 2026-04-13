@@ -9593,6 +9593,174 @@ button:active {
   width: 100%;
 }
 
+/* Single strength/accessory row in the Community builder. Lays out the
+   inputs in a row on desktop and stacks the per-set detail panel below. */
+.ca-ex-row {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: var(--color-surface);
+}
+.ca-ex-row .ca-ex-main {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) 60px minmax(0, 1fr) minmax(0, 1fr) 32px;
+  gap: 8px;
+  align-items: end;
+}
+.ca-pyr-toggle {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 6px;
+  background: transparent;
+  border: none;
+  color: var(--color-cyan);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.ca-pyr-detail {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--color-border);
+}
+.ca-pyr-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ca-pyr-row {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+}
+.ca-pyr-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+/* Superset group wrapper — indent + left-border accent so supersets read
+   as visually grouped, matching how the calendar renders them. */
+.ca-ss-group {
+  border: 1px solid var(--color-cyan);
+  border-left-width: 3px;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 6px 0 10px;
+  background: rgba(29, 78, 216, 0.04);
+}
+.ca-ss-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--color-border);
+  margin-bottom: 8px;
+}
+.ca-ss-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-cyan);
+}
+.ca-ss-sets-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ca-ss-sets-wrap label { margin-bottom: 0 !important; }
+.ca-ss-sets {
+  width: 50px;
+  padding: 4px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  text-align: center;
+}
+.ca-ss-remove {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--color-danger);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.ca-ss-add {
+  background: transparent;
+  border: none;
+  color: var(--color-cyan);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+.ca-ss-body .ca-ex-row {
+  border-color: var(--color-border);
+  background: var(--color-bg);
+}
+
+/* Distance-mode metric toggle + interval row (reps / rest / pace) on the
+   segment builder. Hidden by default; shown only for distance-friendly
+   sports (running, swimming). */
+.ca-seg-row {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: var(--color-surface);
+}
+.ca-seg-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.6fr) minmax(0, 1fr) 32px;
+  gap: 8px;
+  align-items: end;
+}
+.ca-seg-metric-toggle {
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
+  font-size: 0.78rem;
+}
+.ca-seg-metric-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+.ca-seg-interval-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 2fr);
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--color-border);
+}
+
+/* HIIT metadata strip above the community card's exercise table. */
+.comm-hiit-meta {
+  margin: 0 16px 8px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-cyan);
+  background: rgba(29, 78, 216, 0.08);
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  display: inline-block;
+}
+
+/* "(90s jog rest)" qualifier inside distance segments. */
+.comm-seg-rest {
+  color: var(--color-text-muted);
+  font-size: 0.82em;
+}
+
 /* =====================================================================
    MOBILE POLISH (≤ 430px — phones)
    ===================================================================== */
