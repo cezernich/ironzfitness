@@ -4000,7 +4000,7 @@ function _caAddExRow(opts) {
   row.dataset.rowId = String(id);
   row.innerHTML = `
     <div class="ca-ex-main">
-      <div><label>Exercise</label><input type="text" data-ca-field="name" placeholder="e.g. Bench Press" /></div>
+      <div><label>Exercise</label><input type="text" class="ex-row-name" data-ca-field="name" placeholder="e.g. Bench Press" /></div>
       <div class="ca-sets-cell" ${ssId ? 'style="display:none"' : ""}><label>Sets</label><input type="text" data-ca-field="sets" placeholder="3" oninput="_caPyrSetsChanged(${id})" /></div>
       <div><label>Reps</label><input type="text" data-ca-field="reps" placeholder="10" oninput="_caPyrDefaultsChanged(${id})" /></div>
       <div><label>Weight</label><input type="text" data-ca-field="weight" placeholder="lbs / BW" oninput="_caPyrDefaultsChanged(${id})" /></div>

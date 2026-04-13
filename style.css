@@ -14656,3 +14656,62 @@ body.auth-visible #bottom-nav { display: none !important; }
   font-family: inherit;
 }
 .gear-reset-btn:hover { color: var(--color-text); border-color: var(--color-text-muted); }
+
+/* =====================================================================
+   EXERCISE NAME AUTOCOMPLETE
+   Single floating dropdown attached to document.body, positioned
+   relative to whichever .ex-row-name input is focused. Lives above
+   modals (z-index 10005 — premium upsell is at 10000).
+   ===================================================================== */
+
+.exercise-autocomplete {
+  position: fixed;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 10005;
+  font-size: 0.92rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.exercise-autocomplete-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  min-height: 44px; /* Apple HIG tap target */
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border);
+  transition: background 0.1s ease;
+  color: var(--color-text);
+}
+.exercise-autocomplete-item:last-child { border-bottom: none; }
+.exercise-autocomplete-item:hover,
+.exercise-autocomplete-item.is-active {
+  background: var(--color-accent-glow, rgba(0, 0, 0, 0.06));
+}
+
+.exercise-autocomplete-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.exercise-autocomplete-name strong {
+  color: var(--color-cyan);
+  font-weight: 800;
+}
+
+.exercise-autocomplete-muscle {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
