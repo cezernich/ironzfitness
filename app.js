@@ -718,7 +718,11 @@ function saveProfile() {
   const feet = parseInt(document.getElementById("profile-height-feet")?.value) || 0;
   const inches = parseInt(document.getElementById("profile-height-inches")?.value) || 0;
   const totalInches = feet * 12 + inches;
+  // Preserve any fields saved through non-form paths (CSS, VDOT, etc.)
+  let existing = {};
+  try { existing = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
   const profile = {
+    ...existing,
     name:   document.getElementById("profile-name").value.trim(),
     birthday: document.getElementById("profile-birthday").value,
     age:    document.getElementById("profile-birthday").value ? String(_calcAgeFromBirthday(document.getElementById("profile-birthday").value)) : "",
@@ -726,6 +730,7 @@ function saveProfile() {
     height: String(totalInches || ""),
     gender: document.getElementById("profile-gender").value,
     goal:   document.getElementById("profile-goal").value,
+    pool_size: document.getElementById("profile-pool-size")?.value || "25m",
   };
   localStorage.setItem("profile", JSON.stringify(profile));
   if (typeof DB !== 'undefined') DB.profile.save(profile).catch(() => {});
@@ -763,6 +768,8 @@ async function loadProfileIntoForm() {
     }
     if (profile.gender) document.getElementById("profile-gender").value = profile.gender;
     if (profile.goal)   document.getElementById("profile-goal").value   = profile.goal;
+    const poolSel = document.getElementById("profile-pool-size");
+    if (poolSel) poolSel.value = profile.pool_size || profile.poolSize || "25m";
   } catch { /* ignore */ }
 }
 

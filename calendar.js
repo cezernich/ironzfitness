@@ -797,7 +797,12 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
         ${strip}
         <div class="card-body">
           ${_restrictNote}
-          ${buildAiIntervalsList(s, w.type) || '<p style="color:var(--color-text-muted);font-style:italic;margin:0">No intervals logged</p>'}
+          ${(
+            // Swim with canonical step tree → Garmin-style card.
+            (w.type === "swim" || w.type === "swimming") && Array.isArray(s.steps) && s.steps.length && typeof SwimCardRenderer !== "undefined"
+              ? SwimCardRenderer.render(s)
+              : (buildAiIntervalsList(s, w.type) || '<p style="color:var(--color-text-muted);font-style:italic;margin:0">No intervals logged</p>')
+          )}
           ${movePanel}
           ${_aiCompletion}
         </div>
@@ -2681,7 +2686,16 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
           return `<div class="intensity-seg ${seg.cls}" style="width:${pct}%" title="${tip}"></div>`;
         }).join("");
         if (_stripSegs) _swGenStrip = `<div class="session-intensity-strip" onclick="event.stopPropagation();toggleSection('${cardId}')">${_stripSegs}</div>`;
-        if (!body) body = buildAiIntervalsList(w.aiSession, w.type) || '';
+        if (!body) {
+          // Swim: if the session has the canonical step tree, render the
+          // Garmin-style swim card. Falls through to the flat interval
+          // list when steps are missing (legacy workouts).
+          if ((w.type === "swim" || w.discipline === "swim") && w.aiSession && Array.isArray(w.aiSession.steps) && w.aiSession.steps.length && typeof SwimCardRenderer !== "undefined") {
+            body = SwimCardRenderer.render(w.aiSession);
+          } else {
+            body = buildAiIntervalsList(w.aiSession, w.type) || '';
+          }
+        }
       }
 
       const _swGenCompletion = buildCompletionSection(cardId, w.type, w.exercises || null, dateStr, _swGenDurMin);
@@ -3664,6 +3678,12 @@ function openQuickEntry(dateStr) {
 // AddRunningSessionFlow's "Add Manually" button to hand off to the full
 // interval-row editor without going through the type picker again.
 function openQuickEntryCardioManual(dateStr, type) {
+  // Swim gets a dedicated Garmin-style pool-workout builder, not the flat
+  // interval editor used for run/bike/generic cardio.
+  if (type === "swim" && typeof SwimBuilderModal !== "undefined") {
+    SwimBuilderModal.open(dateStr);
+    return;
+  }
   openQuickEntry(dateStr);
   _qeSelectedType = type || "running";
   qeInitCardioRows();
@@ -4295,16 +4315,51 @@ async function qeSubmitModify() {
       workoutCtx = {
         type: "cardio",
         title: _qeGeneratedCardioData.title,
-        sport: _qeGeneratedCardioData.sport,
-        intervals: _qeGeneratedCardioData.intervals
+        sport: _qeSelectedType === "swim" ? "swim" : _qeGeneratedCardioData.sport,
+        intervals: _qeGeneratedCardioData.intervals,
       };
+      // For swim workouts, include the canonical step tree + pool size so
+      // the model can edit it in place.
+      if (_qeSelectedType === "swim") {
+        workoutCtx.pool_size_m = _qeGeneratedCardioData.pool_size_m;
+        workoutCtx.pool_unit = _qeGeneratedCardioData.pool_unit;
+        workoutCtx.total_distance_m = _qeGeneratedCardioData.total_distance_m;
+        workoutCtx.steps = _qeGeneratedCardioData.steps;
+      }
     }
+
+    // Swim-specific schema guidance for Ask IronZ: tell the model how to
+    // return a replacement step tree. Only attached when we're modifying
+    // a swim workout.
+    const swimSchemaHint = (_qeSelectedType === "swim") ? {
+      swim_workout_schema: {
+        instructions: "This is a pool swim workout. When the user asks to modify it, return a ```action``` block with a `set_swim_workout` action whose `steps` array replaces the current steps. Every interval step MUST include distance_m rounded to whole pool lengths (pool_size_m = " + (_qeGeneratedCardioData?.pool_size_m || 25) + " m). Rest steps use duration_sec. Repeat blocks wrap children with a count. Strokes: freestyle, backstroke, breaststroke, butterfly, im, choice.",
+        example_action: {
+          actions: [{
+            action: "set_swim_workout",
+            workout: {
+              title: "CSS Intervals",
+              steps: [
+                { kind: "interval", name: "Warm Up", distance_m: 400, stroke: "freestyle", pace_target: "easy" },
+                { kind: "rest", duration_sec: 20 },
+                { kind: "repeat", count: 8, children: [
+                  { kind: "interval", name: "Main", distance_m: 100, stroke: "freestyle", pace_target: "CSS" },
+                  { kind: "rest", duration_sec: 15 },
+                ]},
+                { kind: "interval", name: "Cool Down", distance_m: 200, stroke: "choice", pace_target: "easy" },
+              ],
+            },
+          }],
+        },
+      },
+    } : null;
 
     const data = await callAskIronZ({
       question: prompt,
       context: {
-        current_workout: workoutCtx
-      }
+        current_workout: workoutCtx,
+        ...(swimSchemaHint || {}),
+      },
     });
 
     const answer = data.answer || "";
@@ -4404,6 +4459,21 @@ function _qeApplyWorkoutActions(actions) {
         applied = true;
         break;
       }
+      case "set_swim_workout": {
+        // Replace the entire swim workout with a canonical steps tree
+        // returned by the AI. We normalize through SwimWorkout to drop
+        // unknown fields and coerce invalid strokes.
+        if (!_qeGeneratedCardioData || typeof SwimWorkout === "undefined") break;
+        const normalized = SwimWorkout.normalizeWorkout(act.workout || {});
+        if (!normalized.steps.length) break;
+        _qeGeneratedCardioData.title = normalized.title || _qeGeneratedCardioData.title;
+        _qeGeneratedCardioData.steps = normalized.steps;
+        _qeGeneratedCardioData.pool_size_m = normalized.pool_size_m;
+        _qeGeneratedCardioData.pool_unit = normalized.pool_unit;
+        _qeGeneratedCardioData.total_distance_m = normalized.total_distance_m;
+        applied = true;
+        break;
+      }
     }
   }
 
@@ -4435,21 +4505,28 @@ function _qeFindExercise(target) {
 function _qeRerenderCardio() {
   const resultEl = document.getElementById("qe-ai-result");
   if (!resultEl || !_qeGeneratedCardioData) return;
-  const effortColors = { Easy: "#22c55e", Moderate: "#f59e0b", Hard: "#f97316", Max: "#ef4444" };
-  const intervalsHtml = _qeGeneratedCardioData.intervals.map(iv => {
-    const c = effortColors[iv.effort] || "#64748b";
-    return `<div class="qe-cardio-interval">
-      <div class="qe-cardio-interval-header">
-        <span class="qe-cardio-phase">${escHtml(iv.name)}</span>
-        <span class="qe-cardio-meta">${escHtml(iv.duration)} · <span style="color:${c}">${escHtml(iv.effort)}</span></span>
-      </div>
-      ${iv.details ? `<div class="qe-cardio-details">${escHtml(iv.details)}</div>` : ""}
+  // Swim with canonical step tree → Garmin-style card.
+  let innerHtml;
+  if (_qeSelectedType === "swim" && Array.isArray(_qeGeneratedCardioData.steps) && _qeGeneratedCardioData.steps.length && typeof SwimCardRenderer !== "undefined") {
+    innerHtml = `<div class="qe-generated-workout">${SwimCardRenderer.render(_qeGeneratedCardioData)}</div>`;
+  } else {
+    const effortColors = { Easy: "#22c55e", Moderate: "#f59e0b", Hard: "#f97316", Max: "#ef4444" };
+    const intervalsHtml = (_qeGeneratedCardioData.intervals || []).map(iv => {
+      const c = effortColors[iv.effort] || "#64748b";
+      return `<div class="qe-cardio-interval">
+        <div class="qe-cardio-interval-header">
+          <span class="qe-cardio-phase">${escHtml(iv.name)}</span>
+          <span class="qe-cardio-meta">${escHtml(iv.duration)} · <span style="color:${c}">${escHtml(iv.effort)}</span></span>
+        </div>
+        ${iv.details ? `<div class="qe-cardio-details">${escHtml(iv.details)}</div>` : ""}
+      </div>`;
+    }).join("");
+    innerHtml = `<div class="qe-generated-workout">
+      <div class="qe-generated-title">${ICONS.sparkles} ${escHtml(_qeGeneratedCardioData.title)}</div>
+      ${intervalsHtml}
     </div>`;
-  }).join("");
-  resultEl.innerHTML = `<div class="qe-generated-workout">
-    <div class="qe-generated-title">${ICONS.sparkles} ${escHtml(_qeGeneratedCardioData.title)}</div>
-    ${intervalsHtml}
-  </div>`;
+  }
+  resultEl.innerHTML = innerHtml;
   const btnRow = document.createElement("div");
   btnRow.style.cssText = "display:flex;gap:10px;margin-top:12px";
   btnRow.innerHTML = `<button class="btn-primary" style="flex:1" onclick="qeSaveGeneratedCardio()">Save Session</button>`;
@@ -5402,7 +5479,15 @@ async function qeRegenExercise(i) {
 
 // ── AI Cardio Generation ──────────────────────────────────────────────────────
 
-function qeGoCardioManual() { qeShowStep(2, "cardio-manual"); }
+function qeGoCardioManual() {
+  if (_qeSelectedType === "swim" && typeof SwimBuilderModal !== "undefined") {
+    const dateStr = document.getElementById("qe-date")?.value || null;
+    try { closeQuickEntry(); } catch {}
+    SwimBuilderModal.open(dateStr);
+    return;
+  }
+  qeShowStep(2, "cardio-manual");
+}
 
 // ── Structured swim main set generator ──────────────────────────────────────
 //
@@ -5881,23 +5966,64 @@ function qeGenerateCardio() {
     const title = `${sportName[type] || type} — ${intensity} ${durMin} min`;
     const workout = { title, intervals };
 
+    // Swim: emit the canonical step tree (pool_size_m + steps + total_distance_m)
+    // so SwimCardRenderer shows Garmin-style pool workout UI instead of the
+    // flat interval list. The legacy `intervals` is still attached for the
+    // intensity strip and back-compat.
+    if (type === "swim" && typeof SwimWorkoutGenerator !== "undefined" && typeof SwimWorkout !== "undefined") {
+      try {
+        // Pick a session type + variant based on intensity.
+        const lib = window.VARIANT_LIBRARY_SWIM;
+        const typeByIntensity = {
+          light:    "swim_technique",
+          moderate: "swim_endurance",
+          intense:  "swim_css_intervals",
+          max:      "swim_speed",
+        };
+        const sessionTypeId = typeByIntensity[intensity] || "swim_endurance";
+        const variants = (lib && lib.variants && lib.variants[sessionTypeId]) || [];
+        const variant = variants[Math.floor(Math.random() * variants.length)];
+        if (variant) {
+          const css = (zones.swimming && zones.swimming.css) || null;
+          const result = SwimWorkoutGenerator.generateSwimWorkout({
+            sessionTypeId, variantId: variant.id,
+            userZones: { css }, experienceLevel: level,
+          });
+          const w = result.workout;
+          workout.steps = w.steps;
+          workout.pool_size_m = w.pool_size_m;
+          workout.pool_unit = w.pool_unit;
+          workout.total_distance_m = w.total_distance_m;
+          workout.why_text = w.why_text;
+          workout.title = w.title;
+        }
+      } catch (e) {
+        console.warn("[qeGenerateCardio swim] canonical shape failed:", e);
+      }
+    }
+
     _qeGeneratedCardioData = workout;
     loadingEl.style.display = "none"; _stopLoadingMessages();
 
     const effortToZone = { RW:"rw",Z1:"z1",Z2:"z2",Z3:"z3",Z4:"z4",Z5:"z5",Z6:"z6", Easy:"z2",Moderate:"z3",Hard:"z4",Max:"z5", T1:"z-transition" };
-    let html = `<div class="qe-generated-workout"><div class="qe-generated-title">${escHtml(workout.title)}</div>`;
-    (workout.intervals || []).forEach(iv => {
-      const zCls = effortToZone[iv.effort] || "z2";
-      const sportTag = iv.sport ? `<span class="qe-brick-sport qe-brick-${iv.sport}">${iv.sport === "bike" ? "Bike" : "Run"}</span> ` : "";
-      html += `<div class="qe-cardio-interval">
-        <div class="qe-cardio-interval-header">
-          <span class="qe-cardio-phase">${sportTag}${escHtml(iv.name)}</span>
-          <span class="qe-cardio-meta">${escHtml(iv.duration)}&ensp;<span class="zone-badge ${zCls}">${escHtml(iv.effort)}</span></span>
-        </div>
-        <div class="qe-cardio-details">${escHtml(iv.details)}</div>
-      </div>`;
-    });
-    html += `</div>`;
+    let html;
+    if (type === "swim" && Array.isArray(workout.steps) && workout.steps.length && typeof SwimCardRenderer !== "undefined") {
+      html = `<div class="qe-generated-workout">${SwimCardRenderer.render(workout)}</div>`;
+    } else {
+      html = `<div class="qe-generated-workout"><div class="qe-generated-title">${escHtml(workout.title)}</div>`;
+      (workout.intervals || []).forEach(iv => {
+        const zCls = effortToZone[iv.effort] || "z2";
+        const sportTag = iv.sport ? `<span class="qe-brick-sport qe-brick-${iv.sport}">${iv.sport === "bike" ? "Bike" : "Run"}</span> ` : "";
+        html += `<div class="qe-cardio-interval">
+          <div class="qe-cardio-interval-header">
+            <span class="qe-cardio-phase">${sportTag}${escHtml(iv.name)}</span>
+            <span class="qe-cardio-meta">${escHtml(iv.duration)}&ensp;<span class="zone-badge ${zCls}">${escHtml(iv.effort)}</span></span>
+          </div>
+          <div class="qe-cardio-details">${escHtml(iv.details)}</div>
+        </div>`;
+      });
+      html += `</div>`;
+    }
     resultEl.innerHTML = html;
 
     const btnRow = document.createElement("div");

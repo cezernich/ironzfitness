@@ -1,6 +1,13 @@
 // js/swim-workout-generator.js
 // Pure-function swim workout generator. Uses VARIANT_LIBRARY_SWIM and CSS pace.
 // NO API calls.
+//
+// Emits the canonical swim-workout shape (js/swim-workout-model.js):
+//   { steps: [interval|rest|repeat, ...], pool_size_m, pool_unit,
+//     total_distance_m, title, why_text, warnings }
+//
+// Back-compat: also emits the legacy `phases` array + `estimated_distance_m`
+// so importers and any old consumers keep working.
 
 (function () {
   "use strict";
@@ -12,8 +19,6 @@
     return `${m}:${s.toString().padStart(2, "0")}`;
   }
 
-  // Resolve a pace_source token like "css", "css_plus_5", "css_minus_5",
-  // "css_plus_10", "css_plus_12" against the user's CSS (sec/100m).
   function _resolveCssPace(token, css) {
     if (!css) return null;
     if (token === "css") return css;
@@ -23,8 +28,8 @@
     return css + sign * parseInt(m[2], 10);
   }
 
-  function _formatPace(secPer100m) {
-    if (secPer100m == null) return "by feel";
+  function _paceLabel(secPer100m) {
+    if (secPer100m == null) return "easy";
     return `${_fmtMmSs(secPer100m)}/100m`;
   }
 
@@ -34,9 +39,153 @@
     return null;
   }
 
+  // Snap a target distance to a whole number of pool lengths using the
+  // SwimWorkout helper when available. Returns an integer meter value.
+  function _snap(targetM, pool) {
+    const M = (typeof window !== "undefined" && window.SwimWorkout) || null;
+    if (M && M.snapDistanceToPool) return M.snapDistanceToPool(targetM, pool).distance_m;
+    return Math.round(targetM);
+  }
+
+  function _totalDistance(steps) {
+    const M = (typeof window !== "undefined" && window.SwimWorkout) || null;
+    if (M && M.totalDistance) return M.totalDistance(steps);
+    // Minimal fallback so this module still works in Node unit tests
+    let total = 0;
+    for (const s of steps || []) {
+      if (!s) continue;
+      if (s.kind === "interval") total += s.distance_m || 0;
+      else if (s.kind === "repeat") total += _totalDistance(s.children || []) * (s.count || 0);
+    }
+    return total;
+  }
+
+  // ─── Step builders ───────────────────────────────────────────────────────
+
+  function _iv(name, distance_m, stroke, pace_target) {
+    return {
+      kind: "interval",
+      name: name || "",
+      distance_m: Math.round(distance_m),
+      stroke: stroke || "freestyle",
+      pace_target: pace_target || "",
+    };
+  }
+  function _rest(sec) {
+    return { kind: "rest", duration_sec: Math.max(0, Math.round(sec || 0)) };
+  }
+  function _repeat(count, children) {
+    return { kind: "repeat", count: Math.max(1, Math.round(count || 1)), children };
+  }
+
+  // ─── Main-set builders keyed off variant.main_set.type ───────────────────
+
+  // Default: N × dist @ pace w/ rest sec (the bread-and-butter interval set).
+  function _buildStandardReps(ms, css, pool, exp) {
+    const reps = _resolveCount(ms.reps, exp) || 1;
+    const dist = _snap(ms.distance_m || 100, pool);
+    const pace = _resolveCssPace(ms.pace_source, css);
+    const rest = ms.rest_sec || 15;
+    const paceLabel = ms.effort === "maximal" ? "max" : _paceLabel(pace);
+    return [
+      _repeat(reps, [
+        _iv("Main", dist, "freestyle", paceLabel),
+        _rest(rest),
+      ]),
+    ];
+  }
+
+  function _buildContinuous(ms, css, pool, totalDistanceHint) {
+    const pace = _resolveCssPace(ms.pace_source, css);
+    const dist = _snap(ms.distance_m || totalDistanceHint || 1500, pool);
+    return [ _iv("Continuous", dist, "freestyle", _paceLabel(pace)) ];
+  }
+
+  function _buildContinuousWithTool(ms, css, pool) {
+    const pace = _resolveCssPace(ms.pace_source, css);
+    const full = _snap(ms.distance_m || 1500, pool);
+    const half = _snap(full / 2, pool);
+    return [
+      _iv("With pull buoy", half, "freestyle", _paceLabel(pace)),
+      _rest(20),
+      _iv("No tools", half, "freestyle", _paceLabel(pace)),
+    ];
+  }
+
+  function _buildLadder(ms, css, pool) {
+    const rungs = ms.rungs_m || [50, 100, 150, 200, 150, 100, 50];
+    const pace = _resolveCssPace(ms.pace_source, css);
+    const rest = ms.rest_sec || 15;
+    const label = _paceLabel(pace);
+    const steps = [];
+    rungs.forEach((m, idx) => {
+      steps.push(_iv("Ladder", _snap(m, pool), "freestyle", label));
+      if (idx < rungs.length - 1) steps.push(_rest(rest));
+    });
+    return steps;
+  }
+
+  function _buildBroken(ms, css, pool) {
+    const reps = ms.reps || 4;
+    const dist = _snap(ms.distance_m || 400, pool);
+    const breakAt = _snap(ms.break_at_m || 100, pool);
+    const breakRest = ms.break_rest_sec || 10;
+    const pace = _resolveCssPace(ms.pace_source, css);
+    const label = _paceLabel(pace);
+    const chunks = Math.max(1, Math.round(dist / breakAt));
+    // One outer rep = chunks × (breakAt + breakRest) minus trailing rest
+    const inner = [];
+    for (let i = 0; i < chunks; i++) {
+      inner.push(_iv(i === 0 ? "Broken" : "", breakAt, "freestyle", label));
+      if (i < chunks - 1) inner.push(_rest(breakRest));
+    }
+    inner.push(_rest(30)); // rest between outer reps
+    return [_repeat(reps, inner)];
+  }
+
+  function _buildDescending(ms, css, pool) {
+    const sets = Array.isArray(ms.sets) ? ms.sets : null;
+    if (sets) {
+      const out = [];
+      sets.forEach((s, idx) => {
+        const reps = s.reps || 1;
+        const dist = _snap(s.distance_m || 100, pool);
+        const pace = _resolveCssPace(s.pace_source, css);
+        const rest = s.rest_sec || 15;
+        out.push(_repeat(reps, [
+          _iv("Descending", dist, "freestyle", _paceLabel(pace)),
+          _rest(rest),
+        ]));
+        if (idx < sets.length - 1) out.push(_rest(20));
+      });
+      return out;
+    }
+    // Homogeneous descending set: label the pace as "descending"
+    const reps = ms.reps || 8;
+    const dist = _snap(ms.distance_m || 75, pool);
+    const rest = ms.rest_sec || 20;
+    return [ _repeat(reps, [
+      _iv("Descending", dist, "freestyle", "descend 1→last"),
+      _rest(rest),
+    ])];
+  }
+
+  function _buildDrills(ms, pool) {
+    const reps = ms.reps || 6;
+    const dist = _snap(ms.distance_m || 100, pool);
+    const drillText = (ms.drills || []).join(" / ");
+    return [ _repeat(reps, [
+      _iv("Drill", dist, "freestyle", drillText || "drill"),
+      _rest(15),
+    ])];
+  }
+
+  // ─── Public entry point ──────────────────────────────────────────────────
+
   /**
-   * generateSwimWorkout({ sessionTypeId, variantId, userZones, experienceLevel })
-   * userZones may be { css: <sec/100m> } or the structured zone bundle with .swim.css
+   * generateSwimWorkout({ sessionTypeId, variantId, userZones, experienceLevel, poolSize? })
+   * userZones may be { css: <sec/100m> } or { swim: { css } }.
+   * poolSize is optional — falls back to the user's profile setting.
    */
   function generateSwimWorkout(opts) {
     const { sessionTypeId, variantId, userZones, experienceLevel } = opts || {};
@@ -52,84 +201,75 @@
 
     const exp = experienceLevel || "intermediate";
     const css = (userZones && (userZones.css || (userZones.swim && userZones.swim.css))) || null;
+
+    const M = (typeof window !== "undefined" && window.SwimWorkout) || null;
+    const pool = (opts && opts.poolSize) || (M && M.getUserPoolSize ? M.getUserPoolSize() : { length_m: 25, unit: "m" });
+
     const warnings = [];
     if (!css) warnings.push("For accurate swim pace targets, log a CSS test result.");
 
-    const phases = [];
-    phases.push({
-      phase: "warmup",
-      distance_m: 400,
-      target: "easy",
-      instruction: "WU 400m easy + 4x50m build.",
-    });
+    // Warmup — always 400m easy + 4×50 build, snapped to pool.
+    const warmupSteps = [
+      _iv("Warm Up", _snap(400, pool), "freestyle", "easy"),
+      _rest(15),
+      _repeat(4, [
+        _iv("Build", _snap(50, pool), "freestyle", "easy → strong"),
+        _rest(10),
+      ]),
+    ];
+    // Rest before main
+    const beforeMain = _rest(30);
 
+    // Main — pick builder based on variant main_set shape
     const ms = variant.main_set || {};
-    let mainText = "";
-    let mainDistance = 0;
+    let mainSteps;
+    if (ms.type === "continuous") mainSteps = _buildContinuous(ms, css, pool);
+    else if (ms.type === "continuous_with_tool") mainSteps = _buildContinuousWithTool(ms, css, pool);
+    else if (ms.type === "ladder") mainSteps = _buildLadder(ms, css, pool);
+    else if (ms.type === "broken") mainSteps = _buildBroken(ms, css, pool);
+    else if (ms.type === "descending") mainSteps = _buildDescending(ms, css, pool);
+    else if (ms.drills) mainSteps = _buildDrills(ms, pool);
+    else mainSteps = _buildStandardReps(ms, css, pool, exp);
 
-    if (ms.type === "continuous" || ms.type === "continuous_with_tool") {
-      const pace = _resolveCssPace(ms.pace_source, css);
-      const dist = ms.distance_m || 1500;
-      mainText = `${dist}m continuous @ ${_formatPace(pace)}.`;
-      mainDistance = dist;
-    } else if (ms.type === "ladder") {
-      const rungs = ms.rungs_m || [];
-      const pace = _resolveCssPace(ms.pace_source, css);
-      mainText = `Ladder ${rungs.join("/")} @ ${_formatPace(pace)} w/ ${ms.rest_sec || 15}s rest.`;
-      mainDistance = rungs.reduce((a, b) => a + b, 0);
-    } else if (ms.type === "broken") {
-      const reps = ms.reps || 4;
-      const dist = ms.distance_m || 400;
-      const breakAt = ms.break_at_m || 100;
-      const pace = _resolveCssPace(ms.pace_source, css);
-      mainText = `${reps}x${dist}m @ ${_formatPace(pace)}, broken every ${breakAt}m w/ ${ms.break_rest_sec || 10}s rest inside each rep.`;
-      mainDistance = reps * dist;
-    } else if (ms.type === "descending" && Array.isArray(ms.sets)) {
-      const parts = ms.sets.map(s => {
-        const p = _resolveCssPace(s.pace_source, css);
-        return `${s.reps}x${s.distance_m} @ ${_formatPace(p)}`;
-      });
-      mainText = parts.join(" → ") + ".";
-      mainDistance = ms.sets.reduce((a, s) => a + s.reps * s.distance_m, 0);
-    } else if (ms.drills) {
-      const reps = ms.reps || 6;
-      const dist = ms.distance_m || 100;
-      mainText = `${reps}x${dist}m drill set: ${ms.drills.join(" / ")}.`;
-      mainDistance = reps * dist;
-    } else {
-      // Standard reps + distance + pace
-      const reps = _resolveCount(ms.reps, exp);
-      const dist = ms.distance_m || 100;
-      const pace = _resolveCssPace(ms.pace_source, css);
-      const rest = ms.rest_sec || 15;
-      const paceLabel = ms.effort === "maximal" ? "max effort" : _formatPace(pace);
-      mainText = `${reps}x${dist}m @ ${paceLabel} w/ ${rest}s rest.`;
-      mainDistance = reps * dist;
-    }
+    // Cooldown — 200m easy choice.
+    const beforeCd = _rest(30);
+    const cooldownSteps = [ _iv("Cool Down", _snap(200, pool), "choice", "easy") ];
 
-    phases.push({
-      phase: "main_set",
-      distance_m: mainDistance,
-      target: variant.name,
-      instruction: mainText,
-    });
+    const steps = [
+      ...warmupSteps,
+      beforeMain,
+      ...mainSteps,
+      beforeCd,
+      ...cooldownSteps,
+    ];
 
-    phases.push({
-      phase: "cooldown",
-      distance_m: 200,
-      target: "easy",
-      instruction: "CD 200m easy.",
-    });
+    const totalDistance = _totalDistance(steps);
 
-    const totalDistance = 400 + mainDistance + 200;
+    // Legacy phases (kept for back-compat with importers / old consumers).
+    const legacyPhases = [
+      { phase: "warmup",   distance_m: _snap(400, pool) + _snap(50, pool) * 4,
+        target: "easy",    instruction: "WU 400m easy + 4x50m build." },
+      { phase: "main_set", distance_m: _totalDistance(mainSteps),
+        target: variant.name,
+        instruction: M && M.prosify ? M.prosify(mainSteps) : variant.description || "" },
+      { phase: "cooldown", distance_m: _snap(200, pool),
+        target: "easy",    instruction: "CD 200m easy choice." },
+    ];
+
     return {
       workout: {
         title: variant.name,
         type: sessionTypeId,
         variant_id: variantId,
         is_hard: sessionTypeId === "swim_css_intervals" || sessionTypeId === "swim_speed",
+        // Canonical shape (new)
+        pool_size_m: pool.length_m,
+        pool_unit: pool.unit,
+        total_distance_m: totalDistance,
+        steps,
+        // Legacy shape (kept for back-compat)
         estimated_distance_m: totalDistance,
-        phases,
+        phases: legacyPhases,
         why_text: variant.description || "",
         warnings,
       },

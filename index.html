@@ -1333,6 +1333,15 @@
             </select>
           </div>
 
+          <div class="form-row">
+            <label for="profile-pool-size">Pool Size</label>
+            <select id="profile-pool-size">
+              <option value="25m">25 m (short course)</option>
+              <option value="50m">50 m (long course)</option>
+              <option value="25yd">25 yd</option>
+            </select>
+          </div>
+
           <button class="btn-primary" onclick="saveProfile()">Save Profile</button>
           <p id="profile-save-msg" class="save-msg"></p>
         </div>
@@ -2641,7 +2650,10 @@
   <script src="zone-calculator.js"></script>
   <script src="running-workout-generator.js"></script>
   <script src="js/bike-workout-generator.js"></script>
+  <script src="js/swim-workout-model.js"></script>
   <script src="js/swim-workout-generator.js"></script>
+  <script src="js/ui/swim-card-renderer.js"></script>
+  <script src="js/ui/swim-builder-modal.js"></script>
   <script src="js/strength-workout-generator.js"></script>
   <script src="js/ai-variant-selector.js"></script>
   <script src="add-running-session-flow.js"></script>

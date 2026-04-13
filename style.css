@@ -14742,3 +14742,304 @@ body.auth-visible #bottom-nav { display: none !important; }
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Swim workout card (Garmin-style pool workout display + builder)
+   ───────────────────────────────────────────────────────────────────────── */
+.swim-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.swim-card-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--color-text);
+}
+.swim-card-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--color-surface, #1a1a24);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+.swim-total {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.swim-total-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--color-text);
+  line-height: 1;
+}
+.swim-total-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+.swim-pool-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+  background: var(--color-accent, #ff6b35);
+  color: #fff;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.swim-card-why {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+.swim-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.swim-step {
+  display: block;
+}
+
+.swim-interval {
+  padding: 9px 12px;
+  background: var(--color-surface-2, var(--color-surface));
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent, #ff6b35);
+  border-radius: 8px;
+}
+.swim-iv-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+.swim-iv-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: baseline;
+  font-size: 14px;
+  color: var(--color-text);
+}
+.swim-iv-distance { font-weight: 800; }
+.swim-iv-stroke {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+.swim-iv-pace {
+  font-size: 12px;
+  color: var(--color-text);
+  font-weight: 600;
+  opacity: 0.85;
+}
+.swim-iv-notes {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+.swim-rest {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+.swim-rest-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+  opacity: 0.5;
+}
+
+.swim-repeat {
+  border: 1px dashed var(--color-border);
+  border-radius: 10px;
+  padding: 6px 8px 8px;
+  background: rgba(255, 107, 53, 0.04);
+}
+.swim-repeat-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--color-accent, #ff6b35);
+  padding: 2px 6px 6px;
+  letter-spacing: 0.04em;
+}
+.swim-repeat-text {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+}
+.swim-repeat-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.swim-empty {
+  padding: 20px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Swim workout builder modal (manual entry)
+   ───────────────────────────────────────────────────────────────────────── */
+.swim-builder-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 10000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+.swim-builder-overlay.is-open { opacity: 1; }
+.swim-builder {
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100vh - env(safe-area-inset-top, 20px));
+  background: var(--color-card-bg, #121218);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 0.26s ease;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  overflow: hidden;
+}
+.swim-builder-overlay.is-open .swim-builder { transform: translateY(0); }
+@media (min-width: 600px) {
+  .swim-builder-overlay { align-items: center; padding: 24px; }
+  .swim-builder { max-height: 85vh; border-radius: 16px; border-bottom: 1px solid var(--color-border); }
+}
+.swim-builder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.swim-builder-header-left { display: flex; gap: 14px; align-items: center; }
+.swim-builder-cancel, .swim-builder-save {
+  background: none; border: none; font-size: 15px; font-weight: 600;
+  color: var(--color-accent, #ff6b35); cursor: pointer; padding: 6px 0;
+  font-family: inherit;
+}
+.swim-builder-save { font-weight: 700; }
+.swim-builder-title {
+  font-size: 15px; font-weight: 800; color: var(--color-text);
+  flex: 1; text-align: center;
+}
+.swim-builder-totals {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  padding: 14px 18px; gap: 12px; flex-shrink: 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.swim-builder-totals .swim-total-value { font-size: 24px; }
+.swim-builder-meta {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 10px 18px 12px; flex-shrink: 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.swim-builder-meta label {
+  font-size: 11px; font-weight: 700; color: var(--color-text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.swim-builder-meta .swim-builder-meta-row {
+  display: flex; gap: 10px; align-items: center;
+}
+.swim-builder-meta input[type="date"] { flex: 1; }
+.swim-builder-body {
+  flex: 1; overflow-y: auto; padding: 12px 18px 18px;
+  -webkit-overflow-scrolling: touch;
+}
+.swim-builder-empty {
+  padding: 28px 12px; text-align: center; color: var(--color-text-muted);
+  font-size: 13px;
+}
+.swim-builder-footer {
+  display: flex; gap: 10px; padding: 12px 18px 16px;
+  border-top: 1px solid var(--color-border); flex-shrink: 0;
+}
+.swim-add-btn {
+  flex: 1; padding: 12px; border-radius: 10px; font-weight: 800;
+  font-size: 13px; cursor: pointer; font-family: inherit;
+  background: var(--color-accent, #ff6b35); color: #fff; border: none;
+}
+.swim-add-btn.secondary {
+  background: transparent; color: var(--color-accent, #ff6b35);
+  border: 1px solid var(--color-accent, #ff6b35);
+}
+
+.swim-builder-step {
+  position: relative; margin-bottom: 6px;
+}
+.swim-builder-step .swim-step-edit-btn,
+.swim-builder-step .swim-step-delete-btn {
+  position: absolute; top: 6px; background: none; border: none;
+  cursor: pointer; color: var(--color-text-muted); padding: 4px;
+  font-size: 16px; line-height: 1;
+}
+.swim-builder-step .swim-step-edit-btn { right: 32px; }
+.swim-builder-step .swim-step-delete-btn { right: 6px; }
+.swim-builder-step .swim-step-edit-btn:hover,
+.swim-builder-step .swim-step-delete-btn:hover { color: var(--color-text); }
+
+.swim-step-form {
+  padding: 12px;
+  background: var(--color-surface-2, var(--color-surface));
+  border: 1px solid var(--color-accent, #ff6b35);
+  border-radius: 10px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.swim-step-form-row {
+  display: flex; gap: 10px; flex-wrap: wrap;
+}
+.swim-step-form label {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 11px; font-weight: 700; color: var(--color-text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em; flex: 1 1 120px;
+}
+.swim-step-form input, .swim-step-form select {
+  padding: 8px 10px; font-size: 14px; font-family: inherit;
+  background: var(--color-surface, #1a1a24); color: var(--color-text);
+  border: 1px solid var(--color-border); border-radius: 8px;
+}
+.swim-step-form-actions {
+  display: flex; gap: 8px; justify-content: flex-end;
+}
+.swim-step-form-actions button {
+  padding: 8px 14px; border-radius: 8px; font-weight: 700;
+  font-size: 12px; cursor: pointer; font-family: inherit;
+  border: 1px solid var(--color-border); background: transparent;
+  color: var(--color-text);
+}
+.swim-step-form-actions .swim-form-save {
+  background: var(--color-accent, #ff6b35); color: #fff;
+  border-color: var(--color-accent, #ff6b35);
+}
+

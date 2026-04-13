@@ -78,6 +78,11 @@ async function generateWithAI(request, classification, modules, profile) {
       plan.plan_metadata.philosophy_modules_used = modules.map(m => m.id);
       plan.plan_metadata.module_versions = Object.fromEntries(modules.map(m => [m.id, m.version]));
 
+      // Normalize any swim workouts in the AI response to the canonical
+      // shape — coerces invalid strokes, strips unknown fields, recomputes
+      // total_distance_m. No-op if SwimWorkout isn't loaded.
+      _normalizeSwimWorkoutsInPlan(plan);
+
       const validated = validatePlan(plan, profile);
       await storeGeneratedPlan(validated.plan, 'ai_assisted');
       return validated;
@@ -215,6 +220,44 @@ Weight: ${profile.weight || 'Not provided'} lbs
 Height: ${profile.height || 'Not provided'} inches
 `;
 
+  // Layer 2d: Swim workout schema — only attached when the athlete's sport
+  // profile could include swimming. Tells the model to return pool workouts
+  // as a structured step tree (interval | rest | repeat) with real
+  // distances and pool size, NOT prose time blocks.
+  let layer2d = '';
+  const couldSwim = ['endurance', 'hybrid', 'triathlon'].includes(classification.sportProfile)
+    || (profile && (profile.sports || []).some && (profile.sports || []).some(s => /swim|tri/i.test(s)))
+    || /swim|triathlon|ironman|pool/i.test(request.text || '');
+  if (couldSwim) {
+    const poolSize = (profile && (profile.pool_size || profile.poolSize)) || '25m';
+    layer2d = `
+SWIM WORKOUT SCHEMA (required for any pool swim session you generate):
+- Return each swim workout with a structured step tree, not prose time blocks.
+- Shape:
+  {
+    "type": "swim",
+    "title": "CSS Intervals",
+    "pool_size_m": 25,          // user's pool: ${poolSize}
+    "pool_unit": "m",            // "m" or "yd"
+    "steps": [
+      { "kind": "interval", "name": "Warm Up", "distance_m": 400, "stroke": "freestyle", "pace_target": "easy" },
+      { "kind": "rest", "duration_sec": 20 },
+      { "kind": "repeat", "count": 8, "children": [
+          { "kind": "interval", "name": "Main", "distance_m": 100, "stroke": "freestyle", "pace_target": "CSS" },
+          { "kind": "rest", "duration_sec": 15 }
+      ]},
+      { "kind": "interval", "name": "Cool Down", "distance_m": 200, "stroke": "choice", "pace_target": "easy" }
+    ]
+  }
+- Every interval step MUST have an integer distance_m rounded to whole pool lengths.
+- Rest steps have duration_sec (seconds). Do NOT use "rest" as a property on interval steps — use explicit rest steps between intervals.
+- Repeat blocks: use kind="repeat" with count and children. Nested repeats are allowed but keep them shallow.
+- Valid strokes: freestyle | backstroke | breaststroke | butterfly | im | choice.
+- pace_target is free text like "CSS", "CSS+5", "easy", "max", "drill".
+- Include a Warm Up step (300–600 m easy freestyle) and a Cool Down step (150–300 m easy choice) on every session.
+`;
+  }
+
   // Layer 4: Output schema
   const layer4 = `
 OUTPUT FORMAT: Return a valid JSON object matching the IronZ plan output schema.
@@ -227,7 +270,42 @@ USER REQUEST: ${request.text || 'Generate a personalized training and nutrition 
 
 IMPORTANT: Your response MUST be consistent with the philosophy modules above. Do not contradict any principle, plan rule, or hard constraint. If the user's request conflicts with a hard constraint, explain why you adapted the request to stay within safety boundaries.`;
 
-  return layer1 + '\n\n' + layer2 + (layer2b ? '\n\n' + layer2b : '') + '\n\n' + layer3 + '\n\n' + layer4 + '\n\n' + userRequest;
+  return layer1 + '\n\n' + layer2 + (layer2b ? '\n\n' + layer2b : '') + (layer2d ? '\n\n' + layer2d : '') + '\n\n' + layer3 + '\n\n' + layer4 + '\n\n' + userRequest;
+}
+
+// ── Swim workout normalization ──────────────────────────────────────────────
+//
+// Walks an AI-generated plan, finds any object that looks like a swim
+// workout (has type/sport "swim" or similar, or already has a steps array),
+// and normalizes it through SwimWorkout.normalizeWorkout. Safe to call
+// on unknown plan shapes — it only touches things that match.
+
+function _normalizeSwimWorkoutsInPlan(plan) {
+  if (!plan || typeof window === 'undefined' || !window.SwimWorkout) return;
+  const norm = window.SwimWorkout.normalizeWorkout;
+  const seen = new WeakSet();
+  function walk(node) {
+    if (!node || typeof node !== 'object' || seen.has(node)) return;
+    seen.add(node);
+    // Heuristic: anything with a `steps` array + a swim-ish discriminator
+    // gets normalized. We accept type/sport/discipline fields.
+    const tag = String(node.type || node.sport || node.discipline || '').toLowerCase();
+    const isSwim = /^swim/.test(tag) || tag === 'pool';
+    if (isSwim && Array.isArray(node.steps)) {
+      const fixed = norm(node);
+      node.pool_size_m    = fixed.pool_size_m;
+      node.pool_unit      = fixed.pool_unit;
+      node.total_distance_m = fixed.total_distance_m;
+      node.steps          = fixed.steps;
+    }
+    // Recurse into children arrays and keyed objects
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+    } else {
+      for (const k of Object.keys(node)) walk(node[k]);
+    }
+  }
+  walk(plan);
 }
 
 // ── Plan Storage ────────────────────────────────────────────────────────────
