@@ -10,12 +10,15 @@
 --        supabase secrets set STRAVA_CLIENT_SECRET=badd334cf44f359762e66d61cec66f6f3dd05959
 --        supabase secrets set STRAVA_REDIRECT_URI=https://dagdpdcwqdlibxbitdgr.supabase.co/functions/v1/strava-callback
 --        supabase secrets set STRAVA_RETURN_URL=https://ironz.fit/?strava=connected
---   5. Deploy the three edge functions:
---        supabase functions deploy strava-auth
+--   5. Deploy all three edge functions WITH --no-verify-jwt:
+--        supabase functions deploy strava-auth     --no-verify-jwt
 --        supabase functions deploy strava-callback --no-verify-jwt
---        supabase functions deploy strava-sync
---      (The callback must be --no-verify-jwt because Strava itself redirects
---       here with no JWT header — the function verifies the nonce instead.)
+--        supabase functions deploy strava-sync     --no-verify-jwt
+--      All three functions do manual JWT verification in their own code
+--      (or verify the OAuth state nonce, in the callback's case). The
+--      platform-level JWT pre-check is either unnecessary (callback) or
+--      rejects valid session tokens before our code can run (auth, sync).
+--      Manual verification is already wired up inside each function.
 --   6. In the Strava API settings at https://www.strava.com/settings/api
 --      set the Authorization Callback Domain to:
 --        dagdpdcwqdlibxbitdgr.supabase.co

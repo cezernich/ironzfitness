@@ -5,7 +5,13 @@
 // activities into strava_activities. Returns the synced rows so the
 // client can mirror them into local state / calendar rendering.
 //
-// Deploy: supabase functions deploy strava-sync
+// Deploy: supabase functions deploy strava-sync --no-verify-jwt
+//
+// IMPORTANT: --no-verify-jwt is REQUIRED for the same reason as
+// strava-auth — platform JWT verification can reject valid session
+// tokens before the function code runs. Manual verification via a
+// user-scoped Supabase client is wired up inside the function.
+//
 // Requires secrets: STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET
 
 // deno-lint-ignore-file no-explicit-any

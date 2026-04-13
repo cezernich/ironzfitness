@@ -49,7 +49,16 @@ async function _stravaAccessToken() {
   if (!sb) return null;
   try {
     const { data } = await sb.auth.getSession();
-    return data?.session?.access_token || null;
+    let tok = data?.session?.access_token || null;
+    // If getSession() returned nothing (auth state still loading), fall
+    // back to refreshSession which forces a re-read from storage.
+    if (!tok && sb.auth.refreshSession) {
+      try {
+        const { data: r } = await sb.auth.refreshSession();
+        tok = r?.session?.access_token || null;
+      } catch {}
+    }
+    return tok;
   } catch { return null; }
 }
 
@@ -88,6 +97,13 @@ async function connectStrava() {
   const sb = _stravaClient();
   if (!sb) { alert("Not connected to database."); return; }
   const accessToken = await _stravaAccessToken();
+
+  // Debug log — visible in the browser devtools Console tab so we can
+  // verify the token is actually being sent. Logs only the first 20
+  // chars to avoid leaking the full JWT.
+  console.log("[Strava] connect — access token:",
+    accessToken ? accessToken.slice(0, 20) + "… (len=" + accessToken.length + ")" : "NO TOKEN");
+
   if (!accessToken) { alert("Please log in first."); return; }
 
   const btn = document.querySelector(".btn-strava");
@@ -100,9 +116,17 @@ async function connectStrava() {
     // header was set on client creation (the anon key). Without this
     // explicit header the edge function's getUser() returns null and
     // the function 401s.
+    //
+    // Also: strava-auth MUST be deployed with --no-verify-jwt because
+    // Supabase's platform-level JWT verification (enabled by default)
+    // runs BEFORE the function code and rejects valid session tokens
+    // in some edge runtime versions, short-circuiting to 401 before
+    // our manual getUser() check can even run. Manual verification is
+    // already wired up inside the function.
     const { data, error } = await sb.functions.invoke("strava-auth", {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
+    console.log("[Strava] connect — invoke result:", { data, error });
     if (error) throw error;
     if (!data || !data.authorize_url) throw new Error("No authorize URL returned");
 
@@ -154,17 +178,24 @@ async function syncStravaNow(opts) {
   const sb = _stravaClient();
   if (!sb) return 0;
   const accessToken = await _stravaAccessToken();
+
+  console.log("[Strava] sync — access token:",
+    accessToken ? accessToken.slice(0, 20) + "… (len=" + accessToken.length + ")" : "NO TOKEN");
+
   if (!accessToken) return 0;
 
   if (!opts.silent) _showStravaToast("Syncing Strava…");
 
   try {
     // Same explicit Bearer header fix as strava-auth: .invoke() doesn't
-    // auto-substitute the session token for the anon key.
+    // auto-substitute the session token for the anon key. strava-sync
+    // should also be deployed with --no-verify-jwt for the same reason
+    // as strava-auth.
     const { data, error } = await sb.functions.invoke("strava-sync", {
       headers: { Authorization: `Bearer ${accessToken}` },
       body: {},
     });
+    console.log("[Strava] sync — invoke result:", { synced: data?.synced, error });
     if (error) throw error;
     const synced = (data && data.synced) || 0;
     const activities = (data && data.activities) || [];

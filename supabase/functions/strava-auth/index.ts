@@ -5,7 +5,15 @@
 // Generates a random nonce, stores it in strava_oauth_state keyed to the
 // user_id, and returns the Strava authorize URL with the nonce as `state`.
 //
-// Deploy: supabase functions deploy strava-auth
+// Deploy: supabase functions deploy strava-auth --no-verify-jwt
+//
+// IMPORTANT: --no-verify-jwt is REQUIRED. Supabase's platform-level JWT
+// verification (enabled by default) runs BEFORE the function code, and
+// in some edge runtime versions rejects valid session tokens before our
+// manual getUser() check can run — resulting in a 401 with no function
+// logs. We do manual JWT verification via a user-scoped Supabase client
+// inside the function, so the platform pre-check is redundant.
+//
 // Requires secrets: STRAVA_CLIENT_ID, STRAVA_REDIRECT_URI
 
 // deno-lint-ignore-file no-explicit-any
