@@ -335,6 +335,7 @@ const DB = (() => {
     'importedPlans', 'personalRecords', 'nutritionAdjustments',
     'foodPreferences', 'equipmentRestrictions', 'trainingZones',
     'trainingZonesHistory', 'trainingPreferences', 'trainingNotes',
+    'gear_checklists_v1',
     // Nutrition & hydration
     'hydrationLog', 'hydrationSettings', 'hydrationDailyTargetOz',
     'savedMealPlans', 'currentWeekMealPlan', 'fuelingPrefs',

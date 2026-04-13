@@ -6860,6 +6860,172 @@ button:active {
   color: #fc4c02;
 }
 
+/* ===== POST-COMPLETION STRAVA SHARE PROMPT ===== */
+.strava-share-prompt-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 10060;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  opacity: 0;
+  transition: opacity 0.2s ease-out;
+}
+.strava-share-prompt-overlay.is-open { opacity: 1; }
+.strava-share-prompt-modal {
+  width: 100%;
+  max-width: 480px;
+  max-height: 92vh;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+  transform: scale(0.96);
+  transition: transform 0.2s ease-out;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.strava-share-prompt-overlay.is-open .strava-share-prompt-modal { transform: scale(1); }
+
+.strava-share-prompt-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 18px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+.strava-share-prompt-icon {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(252, 76, 2, 0.12);
+  color: #fc4c02;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.strava-share-prompt-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--color-text);
+}
+.strava-share-prompt-sub {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.strava-share-prompt-body {
+  padding: 14px 18px 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Live preview block — monospace, styled like the real Strava
+   description box so the user knows exactly what they're about to post. */
+.strava-preview-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+}
+.strava-preview-box {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow-y: auto;
+  margin-bottom: 14px;
+}
+
+/* Toggle grid — 2 columns on wide screens, 1 column on narrow */
+.strava-toggles-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+}
+.strava-toggles-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+  margin-bottom: 8px;
+}
+@media (max-width: 440px) {
+  .strava-toggles-grid { grid-template-columns: 1fr; }
+}
+.strava-toggle-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--color-text);
+  cursor: pointer;
+  user-select: none;
+}
+.strava-toggle-item:hover {
+  border-color: #fc4c02;
+}
+.strava-toggle-item input[type="checkbox"] {
+  accent-color: #fc4c02;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.strava-toggle-item--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.strava-share-prompt-footer {
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.strava-share-prompt-actions {
+  display: flex;
+  gap: 10px;
+}
+.strava-share-prompt-actions button { flex: 1; }
+.strava-share-prompt-autoshare {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.strava-share-prompt-autoshare input[type="checkbox"] {
+  accent-color: #fc4c02;
+}
+.strava-share-prompt-remember {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-align: center;
+  font-style: italic;
+}
+
 /* ===== SUBSCRIPTION & PAYWALL ===== */
 .pw-header { text-align: center; margin-bottom: 16px; }
 .pw-logo {
@@ -14104,3 +14270,389 @@ body.auth-visible #bottom-nav { display: none !important; }
   line-height: 1.5;
 }
 .pricing-fineprint a { color: var(--color-cyan); }
+
+/* =============================================================================
+   TRIATHLON GEAR CHECKLIST — feature spec v1
+   In-app equipment checklist for triathlon races. Entry button lives on the
+   race card in Active Training Inputs; opens a bottom-sheet modal with
+   categorized items, tier badges, and expandable Why / Pro Tip content.
+   ============================================================================= */
+
+/* ── Entry button on race cards ───────────────────────────────────────── */
+.gear-checklist-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  background: var(--color-surface, #1a1a24);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.gear-checklist-btn:hover {
+  border-color: var(--color-accent, #ff6b35);
+  color: var(--color-accent, #ff6b35);
+}
+.gear-checklist-btn svg { flex-shrink: 0; }
+.gear-checklist-btn-count {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+/* ── Modal overlay + sheet ────────────────────────────────────────────── */
+.gear-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 10000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+  padding: 0;
+}
+.gear-sheet-overlay.is-open { opacity: 1; }
+
+.gear-sheet {
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100vh - env(safe-area-inset-top, 20px));
+  background: var(--color-card-bg, #121218);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 0.26s ease;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  overflow: hidden;
+}
+.gear-sheet-overlay.is-open .gear-sheet { transform: translateY(0); }
+@media (min-width: 600px) {
+  .gear-sheet-overlay {
+    align-items: center;
+    padding: 24px;
+  }
+  .gear-sheet {
+    max-height: 85vh;
+    border-radius: 16px;
+    border-bottom: 1px solid var(--color-border);
+  }
+}
+
+/* ── Header ───────────────────────────────────────────────────────────── */
+.gear-sheet-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 18px 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+.gear-sheet-title-wrap { flex: 1; min-width: 0; }
+.gear-sheet-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+.gear-sheet-subtitle {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--color-text);
+  margin-top: 2px;
+  word-wrap: break-word;
+}
+.gear-sheet-meta {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+.gear-sheet-close {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.gear-sheet-close:hover { color: var(--color-text); }
+
+/* ── Progress bar ─────────────────────────────────────────────────────── */
+.gear-progress-wrap {
+  padding: 12px 18px 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+.gear-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--color-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.gear-progress-fill {
+  height: 100%;
+  background: var(--color-accent, #ff6b35);
+  transition: width 0.25s ease;
+}
+.gear-progress-label {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+/* ── Filter pills ─────────────────────────────────────────────────────── */
+.gear-filter-row {
+  display: flex;
+  gap: 6px;
+  padding: 10px 18px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--color-border);
+  -webkit-overflow-scrolling: touch;
+}
+.gear-pill {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: var(--color-surface, #1a1a24);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.gear-pill:hover { color: var(--color-text); }
+.gear-pill.is-active {
+  background: var(--color-accent, #ff6b35);
+  border-color: var(--color-accent, #ff6b35);
+  color: #fff;
+}
+.gear-pill-count {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+/* ── Body + category sections ─────────────────────────────────────────── */
+.gear-sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 18px 18px;
+  -webkit-overflow-scrolling: touch;
+}
+.gear-cat { margin-top: 16px; }
+.gear-cat:first-child { margin-top: 8px; }
+.gear-cat-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--color-text-muted);
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+.gear-cat-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ── Item card ────────────────────────────────────────────────────────── */
+.gear-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--color-surface-2, var(--color-surface));
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+.gear-item.is-checked { background: var(--color-surface, #1a1a24); opacity: 0.72; }
+.gear-item.is-checked .gear-item-name { text-decoration: line-through; color: var(--color-text-muted); }
+
+.gear-item-checkbox {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-top: 2px;
+  border: 2px solid var(--color-border);
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.gear-item-checkbox:hover { border-color: var(--color-accent, #ff6b35); }
+.gear-item-checkbox svg { width: 14px; height: 14px; }
+.gear-item.is-checked .gear-item-checkbox {
+  background: var(--color-accent, #ff6b35);
+  border-color: var(--color-accent, #ff6b35);
+}
+
+.gear-item-main {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.gear-item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.gear-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.gear-tier-badge {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.gear-tier-need  { background: rgba(255, 107, 53, 0.18); color: var(--color-accent, #ff6b35); }
+.gear-tier-nice  { background: rgba(99, 102, 241, 0.18); color: #818cf8; }
+.gear-tier-extra { background: rgba(148, 163, 184, 0.18); color: #94a3b8; }
+
+.gear-item-detail {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+.gear-item-detail strong { color: var(--color-text); font-weight: 700; }
+
+.gear-item-remove {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 6px;
+  -webkit-tap-highlight-color: transparent;
+}
+.gear-item-remove:hover { color: var(--color-danger, #ef4444); background: rgba(239, 68, 68, 0.1); }
+
+.gear-empty {
+  text-align: center;
+  color: var(--color-text-muted);
+  padding: 32px 12px;
+  font-size: 13px;
+}
+
+/* ── Removed items drawer ─────────────────────────────────────────────── */
+.gear-removed-toggle-row { margin: 20px 0 8px; text-align: center; }
+.gear-show-removed,
+.gear-hide-removed {
+  background: none;
+  border: none;
+  color: var(--color-accent, #ff6b35);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 4px 0;
+}
+.gear-show-removed:hover,
+.gear-hide-removed:hover { text-decoration: underline; }
+
+.gear-removed {
+  margin-top: 20px;
+  padding: 12px;
+  background: var(--color-surface, #1a1a24);
+  border: 1px dashed var(--color-border);
+  border-radius: 10px;
+}
+.gear-removed-label {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+}
+.gear-removed-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.gear-restore-btn {
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.gear-restore-btn:hover { border-color: var(--color-accent, #ff6b35); color: var(--color-accent, #ff6b35); }
+
+/* ── Footer ───────────────────────────────────────────────────────────── */
+.gear-sheet-footer {
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: center;
+}
+.gear-reset-btn {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  background: none;
+  border: 1px solid var(--color-border);
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.gear-reset-btn:hover { color: var(--color-text); border-color: var(--color-text-muted); }

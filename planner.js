@@ -1344,6 +1344,23 @@ function _promoteToARace(raceId) {
   if (typeof renderTrainingBlocksSection === "function") renderTrainingBlocksSection();
 }
 
+// Open the triathlon gear checklist modal for a given race id. Resolves the
+// race object from the events store and hands it to GearChecklistModal.
+function _openGearChecklist(raceId) {
+  try {
+    const races = JSON.parse(localStorage.getItem("events") || "[]");
+    const race = races.find(r => r.id === raceId);
+    if (!race) return;
+    if (typeof GearChecklistModal === "undefined" || !GearChecklistModal.open) {
+      console.warn("[planner] GearChecklistModal not loaded");
+      return;
+    }
+    GearChecklistModal.open(race);
+  } catch (e) {
+    console.warn("[planner] _openGearChecklist failed", e);
+  }
+}
+
 function renderTrainingInputs() {
   const container = document.getElementById("training-inputs-list");
   if (!container) return;
@@ -1382,6 +1399,21 @@ function renderTrainingInputs() {
       race.runGoal ? _goalLabels[race.runGoal] : null,
     ].filter(Boolean).map(t => `<span class="race-tag">${t}</span>`).join("");
 
+    // Triathlon gear checklist button — only shown for triathlon race types
+    let gearBtnHtml = "";
+    try {
+      if (typeof GearChecklist !== "undefined" && GearChecklist.isTriathlon(race)) {
+        const prog = GearChecklist.progressFor(race.id);
+        const progLabel = prog.total > 0 ? `${prog.checked}/${prog.total} items` : "Open checklist";
+        gearBtnHtml = `
+          <button class="gear-checklist-btn" onclick="_openGearChecklist('${race.id}')" title="Race day gear checklist">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>
+            <span>Gear Checklist</span>
+            <span class="gear-checklist-btn-count">${progLabel}</span>
+          </button>`;
+      }
+    } catch (e) { /* module not loaded — skip the button */ }
+
     html += `
       <div class="race-card">
         <div class="race-card-top">
@@ -1398,6 +1430,7 @@ function renderTrainingInputs() {
         ${race.avgTemp ? `<div class="race-card-detail">Avg Temp: ${race.avgTemp}°F</div>` : ""}
         ${race.courseNotes ? `<div class="race-card-detail" style="font-style:italic">${_escapeHtml(race.courseNotes)}</div>` : ""}
         ${tags ? `<div class="race-tags">${tags}</div>` : ""}
+        ${gearBtnHtml}
         <div class="race-card-footer">
           <span class="race-date-badge">${formatDisplayDate(race.date)}</span>
           <span class="race-countdown">${label}</span>
