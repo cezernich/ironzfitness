@@ -281,6 +281,14 @@ function _mergeStravaIntoLocalWorkouts(activities) {
     if (w.stravaUploadId) uploadedStravaIds.add(String(w.stravaUploadId));
   });
 
+  // Strava imports are completed by definition — Strava only logs activities
+  // the athlete actually did. Mirror that into the same completedSessions
+  // localStorage entry that manual completions write to so calendar.js
+  // isSessionComplete() returns true and the green session-card--completed
+  // styling kicks in.
+  let completionMeta = {};
+  try { completionMeta = JSON.parse(localStorage.getItem("completedSessions") || "{}"); } catch {}
+
   let added = 0;
   activities.forEach(a => {
     const key = String(a.id);
@@ -292,6 +300,9 @@ function _mergeStravaIntoLocalWorkouts(activities) {
     const durationMin = Math.round((a.moving_time || 0) / 60);
     const distanceKm = a.distance ? (a.distance / 1000) : null;
     const distanceStr = distanceKm ? `${distanceKm.toFixed(2)} km` : null;
+    // Use the Strava activity's own start time as the completion timestamp
+    // when available, else the date midnight.
+    const completedAt = a.start_date_local || a.start_date || (date + "T00:00:00.000Z");
 
     const workout = {
       id: "strava-" + a.id,
@@ -304,6 +315,10 @@ function _mergeStravaIntoLocalWorkouts(activities) {
       duration: durationMin ? String(durationMin) : null,
       distance: distanceStr,
       avgWatts: null,
+      // Mark complete on the workout object itself for any reader that
+      // walks workouts[] directly instead of going through completedSessions.
+      completed: true,
+      completedAt,
     };
 
     if (a.average_heartrate) workout.avgHr = Math.round(a.average_heartrate);
@@ -317,10 +332,21 @@ function _mergeStravaIntoLocalWorkouts(activities) {
       workouts.unshift(workout);
       added++;
     }
+
+    // Tag the corresponding session card as complete. The card id matches
+    // calendar.js buildLoggedWorkoutCard (`session-log-${w.id}`).
+    const cardId = `session-log-${workout.id}`;
+    completionMeta[cardId] = {
+      completedAt,
+      duration: workout.duration || null,
+      source: "strava",
+    };
   });
 
   localStorage.setItem("workouts", JSON.stringify(workouts));
   if (typeof DB !== "undefined" && DB.syncWorkouts) DB.syncWorkouts();
+  localStorage.setItem("completedSessions", JSON.stringify(completionMeta));
+  if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("completedSessions");
   localStorage.setItem("stravaLastLocalSync", new Date().toISOString());
 }
 
