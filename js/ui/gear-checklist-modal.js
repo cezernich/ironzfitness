@@ -101,6 +101,10 @@
     const overlay = document.getElementById(SHEET_ID);
     if (!overlay) return;
 
+    // Preserve body scroll across re-renders (e.g. when a user checks an item).
+    const prevBody = overlay.querySelector(".gear-sheet-body");
+    const prevScroll = prevBody ? prevBody.scrollTop : 0;
+
     const GC = window.GearChecklist;
     const { race, checklist, tierFilter, showRemoved, expandedItems } = _state;
     const progress = GC.progressFor(race.id);
@@ -122,10 +126,11 @@
     visibleItems.forEach(it => {
       (byCategory[it.category] = byCategory[it.category] || []).push(it);
     });
-    // Sort inside a category: need → nice → extra, then stable order
+    // Sort inside a category: need → nice → extra, then stable order.
+    // Use nullish coalescing — tierOrder.need is 0, which would be falsy with ||.
     const tierOrder = { need: 0, nice: 1, extra: 2 };
     Object.keys(byCategory).forEach(cat => {
-      byCategory[cat].sort((a, b) => (tierOrder[a.tier] || 9) - (tierOrder[b.tier] || 9));
+      byCategory[cat].sort((a, b) => (tierOrder[a.tier] ?? 9) - (tierOrder[b.tier] ?? 9));
     });
 
     // Filter pill row
@@ -205,6 +210,11 @@
         </div>
       </div>
     `;
+
+    // Restore body scroll after innerHTML replace (so checking an item
+    // doesn't bounce the user back to the top of the list).
+    const newBody = overlay.querySelector(".gear-sheet-body");
+    if (newBody && prevScroll) newBody.scrollTop = prevScroll;
 
     _wireEvents(overlay);
   }

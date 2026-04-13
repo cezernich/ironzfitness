@@ -14359,6 +14359,7 @@ body.auth-visible #bottom-nav { display: none !important; }
   gap: 12px;
   padding: 18px 18px 10px;
   border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 .gear-sheet-title-wrap { flex: 1; min-width: 0; }
 .gear-sheet-title {
@@ -14398,6 +14399,7 @@ body.auth-visible #bottom-nav { display: none !important; }
 .gear-progress-wrap {
   padding: 12px 18px 8px;
   border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 .gear-progress-bar {
   width: 100%;
@@ -14424,8 +14426,12 @@ body.auth-visible #bottom-nav { display: none !important; }
   gap: 6px;
   padding: 10px 18px;
   overflow-x: auto;
+  overflow-y: hidden;
   border-bottom: 1px solid var(--color-border);
   -webkit-overflow-scrolling: touch;
+  flex-shrink: 0;
+  min-height: 48px;
+  align-items: center;
 }
 .gear-pill {
   flex-shrink: 0;
@@ -14643,6 +14649,7 @@ body.auth-visible #bottom-nav { display: none !important; }
   border-top: 1px solid var(--color-border);
   display: flex;
   justify-content: center;
+  flex-shrink: 0;
 }
 .gear-reset-btn {
   font-size: 12px;
