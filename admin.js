@@ -6,8 +6,14 @@ let _adminProfiles = [];
 // ── Visibility ────────────────────────────────────────────────────────────────
 
 function initAdminVisibility() {
+  const isAdmin = window._userRole === "admin";
+  // New entry point: dedicated card at the top of the Settings tab
+  const card = document.getElementById("section-admin-entry");
+  if (card) card.style.display = isAdmin ? "" : "none";
+  // Legacy entry point: profile-dropdown button (dropdown removed during
+  // the bottom-nav refactor but the id is still checked by older builds)
   const btn = document.getElementById("admin-dropdown-btn");
-  if (btn) btn.style.display = window._userRole === "admin" ? "" : "none";
+  if (btn) btn.style.display = isAdmin ? "" : "none";
 }
 
 // ── Patch showTab to load admin data ─────────────────────────────────────────

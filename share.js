@@ -170,40 +170,28 @@ async function shareWorkoutLinkDirect(entry, source) {
   _handleShareUrl(workoutName, token, source, sessionTypeId);
 }
 
-// Trigger navigator.share or clipboard + toast. Analytics logged here.
+// "Copy link" handler: writes the preview URL to the clipboard and shows
+// a toast. Previously this fell through to navigator.share(), which on iOS
+// opened the native share sheet on top of our custom ShareActionSheet — two
+// stacked share UIs. The user already picked "Copy link" from our sheet, so
+// the expected behavior is clipboard + toast, period. If a user wants to
+// then share the URL from somewhere else, their OS already gives them that.
 async function _handleShareUrl(workoutName, token, source, sessionTypeId) {
   const url = SHARE_PREVIEW_BASE + "?id=" + encodeURIComponent(token);
-  let method = "link";
-
-  if (navigator.share) {
-    try {
-      await navigator.share({ title: workoutName, url });
-      method = "native";
-    } catch {
-      // User cancelled or the share call threw — fall through to clipboard.
-      method = "cancel";
-    }
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch {
+    // execCommand fallback for older browsers / non-https contexts
+    const ta = document.createElement("textarea");
+    ta.value = url; ta.style.cssText = "position:fixed;opacity:0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch {}
+    document.body.removeChild(ta);
   }
-  if (method !== "native" && method !== "cancel") {
-    // Clipboard fallback
-    try {
-      await navigator.clipboard.writeText(url);
-    } catch {
-      const ta = document.createElement("textarea");
-      ta.value = url; ta.style.cssText = "position:fixed;opacity:0";
-      document.body.appendChild(ta); ta.select();
-      try { document.execCommand("copy"); } catch {}
-      document.body.removeChild(ta);
-    }
-    _showShareToast("Link copied!");
-    method = "clipboard";
-  } else if (method === "cancel") {
-    // User cancelled native share — no toast, no analytics.
-    return;
-  }
+  _showShareToast("Link copied!");
 
   if (typeof trackEvent === "function") {
-    trackEvent("workout_shared", { source: source || "unknown", method });
+    trackEvent("workout_shared", { source: source || "unknown", method: "clipboard" });
   }
 }
 

@@ -1265,6 +1265,13 @@
         <button class="btn-primary" onclick="showTab('saved-library')">Open Saved Library</button>
       </section>
 
+      <!-- Admin Panel entry point (visible only for role=admin, toggled by admin.js) -->
+      <section class="card" id="section-admin-entry" style="display:none">
+        <h2>Admin Panel</h2>
+        <p class="hint">Manage users, philosophy modules, exercises, and analytics.</p>
+        <button class="btn-primary" onclick="showTab('admin')">Open Admin Panel</button>
+      </section>
+
       <!-- Athlete Profile -->
       <section class="card collapsible is-collapsed" id="section-profile">
         <div class="card-toggle" onclick="toggleSection('section-profile')">
