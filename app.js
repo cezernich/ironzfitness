@@ -497,7 +497,8 @@ function init() {
   // Initialize notification timers
   if (typeof initNotificationTimers === "function") initNotificationTimers();
 
-  // Check for Strava OAuth callback
+  // Check for Strava OAuth return (new server-side flow) or legacy callback
+  if (typeof handleStravaReturn === "function") handleStravaReturn();
   if (typeof handleStravaCallback === "function") handleStravaCallback();
 
   // API key UI removed — AI calls route through server-side proxy

@@ -1,255 +1,259 @@
-// strava-integration.js — Strava OAuth Integration
-// Phase 4.2: Connect Strava, import activities, map to IronZ types.
-
-/* =====================================================================
-   CONFIGURATION
-   ===================================================================== */
-
-// User must register a Strava API application at https://www.strava.com/settings/api
-// and fill in these values.
-const STRAVA_CONFIG = {
-  clientId: "",       // Your Strava app client ID
-  clientSecret: "",   // Your Strava app client secret
-  redirectUri: window.location.origin + window.location.pathname,
-  scope: "activity:read_all",
-};
-
-/* =====================================================================
-   AUTH STATE
-   ===================================================================== */
-
-function getStravaAuth() {
-  try { return JSON.parse(localStorage.getItem("stravaAuth") || "null"); } catch { return null; }
-}
-
-function saveStravaAuth(auth) {
-  localStorage.setItem("stravaAuth", JSON.stringify(auth));
-}
-
-function isStravaConnected() {
-  const auth = getStravaAuth();
-  return auth && auth.access_token;
-}
-
-function getStravaAthlete() {
-  const auth = getStravaAuth();
-  return auth?.athlete || null;
-}
-
-/* =====================================================================
-   OAUTH2 FLOW
-   ===================================================================== */
-
-function connectStrava() {
-  if (!STRAVA_CONFIG.clientId) {
-    alert("Strava API credentials not configured. Go to strava-integration.js and add your Client ID and Secret from https://www.strava.com/settings/api");
-    return;
-  }
-
-  // Generate state for CSRF protection
-  const state = generateId("strava");
-  localStorage.setItem("stravaOauthState", state);
-
-  const authUrl = `https://www.strava.com/oauth/authorize?client_id=${STRAVA_CONFIG.clientId}&redirect_uri=${encodeURIComponent(STRAVA_CONFIG.redirectUri)}&response_type=code&scope=${STRAVA_CONFIG.scope}&state=${state}`;
-
-  window.location.href = authUrl;
-}
-
-/**
- * Handle the OAuth callback. Call this on page load to check for auth code in URL.
- */
-async function handleStravaCallback() {
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get("code");
-  const state = params.get("state");
-
-  if (!code || !state) return false;
-
-  // Verify state
-  const savedState = localStorage.getItem("stravaOauthState");
-  if (state !== savedState) {
-    console.error("Strava OAuth state mismatch");
-    return false;
-  }
-  localStorage.removeItem("stravaOauthState");
-
-  // Clean URL
-  window.history.replaceState({}, document.title, window.location.pathname);
-
-  // Exchange code for token
-  try {
-    const response = await fetch("https://www.strava.com/oauth/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        client_id: STRAVA_CONFIG.clientId,
-        client_secret: STRAVA_CONFIG.clientSecret,
-        code: code,
-        grant_type: "authorization_code",
-      }),
-    });
-
-    if (!response.ok) throw new Error("Token exchange failed");
-
-    const data = await response.json();
-    saveStravaAuth({
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
-      expires_at: data.expires_at,
-      athlete: data.athlete,
-    });
-
-    renderStravaStatus();
-    await importStravaActivities();
-    return true;
-  } catch (err) {
-    console.error("Strava auth error:", err);
-    return false;
-  }
-}
-
-/**
- * Refresh the access token if expired.
- */
-async function refreshStravaToken() {
-  const auth = getStravaAuth();
-  if (!auth || !auth.refresh_token) return false;
-
-  const now = Math.floor(Date.now() / 1000);
-  if (auth.expires_at && auth.expires_at > now + 300) return true; // Still valid
-
-  try {
-    const response = await fetch("https://www.strava.com/oauth/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        client_id: STRAVA_CONFIG.clientId,
-        client_secret: STRAVA_CONFIG.clientSecret,
-        refresh_token: auth.refresh_token,
-        grant_type: "refresh_token",
-      }),
-    });
-
-    if (!response.ok) return false;
-
-    const data = await response.json();
-    auth.access_token = data.access_token;
-    auth.refresh_token = data.refresh_token;
-    auth.expires_at = data.expires_at;
-    saveStravaAuth(auth);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function disconnectStrava() {
-  if (!confirm("Disconnect Strava? Imported activities will remain in your history.")) return;
-  localStorage.removeItem("stravaAuth");
-  localStorage.removeItem("stravaOauthState");
-  localStorage.removeItem("stravaLastSync");
-  renderStravaStatus();
-}
-
-/* =====================================================================
-   ACTIVITY IMPORT
-   ===================================================================== */
+// strava-integration.js — Strava OAuth + sync (server-side flow)
+//
+// Replaces the old client-side OAuth implementation that embedded the
+// client secret in the browser. All token exchange + refresh + activity
+// fetching now runs in Supabase Edge Functions (strava-auth,
+// strava-callback, strava-sync). The client only:
+//   - Calls strava-auth to get the authorize URL, then redirects
+//   - Reads strava_tokens / strava_activities for connected state + history
+//   - Mirrors synced activities into localStorage.workouts so calendar +
+//     history render them alongside manually-logged workouts
 
 const STRAVA_TYPE_MAP = {
-  Run: "run",
-  Trail_Run: "run",
-  VirtualRun: "run",
-  Ride: "bike",
-  VirtualRide: "bike",
-  Swim: "swim",
-  Walk: "run",
-  Hike: "run",
-  WeightTraining: "strength",
-  Crossfit: "hiit",
-  Yoga: "yoga",
-  Workout: "general",
+  Run:            "running",
+  TrailRun:       "running",
+  VirtualRun:     "running",
+  Walk:           "running",
+  Hike:           "running",
+  Ride:           "cycling",
+  VirtualRide:    "cycling",
+  EBikeRide:      "cycling",
+  MountainBikeRide: "cycling",
+  GravelRide:     "cycling",
+  Swim:           "swimming",
+  WeightTraining: "weightlifting",
+  Workout:        "weightlifting",
+  Crossfit:       "hiit",
+  HighIntensityIntervalTraining: "hiit",
+  Yoga:           "yoga",
+  Elliptical:     "general",
+  StairStepper:   "stairstepper",
+  Rowing:         "rowing",
 };
 
-/**
- * Import recent Strava activities (last 30 days).
- */
-async function importStravaActivities() {
-  const valid = await refreshStravaToken();
-  if (!valid) return;
+function _stravaClient() {
+  return (typeof window !== "undefined" && window.supabaseClient) || null;
+}
 
-  const auth = getStravaAuth();
-  const thirtyDaysAgo = Math.floor((Date.now() - 30 * 86400000) / 1000);
+async function _stravaUserId() {
+  const sb = _stravaClient();
+  if (!sb) return null;
+  try {
+    const { data } = await sb.auth.getSession();
+    return data?.session?.user?.id || null;
+  } catch { return null; }
+}
+
+async function _stravaAccessToken() {
+  const sb = _stravaClient();
+  if (!sb) return null;
+  try {
+    const { data } = await sb.auth.getSession();
+    return data?.session?.access_token || null;
+  } catch { return null; }
+}
+
+/* =====================================================================
+   CONNECTED STATE — reads strava_tokens
+   ===================================================================== */
+
+async function getStravaTokenRow() {
+  const sb = _stravaClient();
+  if (!sb) return null;
+  const userId = await _stravaUserId();
+  if (!userId) return null;
+  try {
+    const { data } = await sb
+      .from("strava_tokens")
+      .select("athlete_id, athlete_firstname, athlete_lastname, athlete_avatar, connected_at, last_sync_at")
+      .eq("user_id", userId)
+      .maybeSingle();
+    return data || null;
+  } catch (e) {
+    console.warn("[Strava] token lookup failed:", e.message || e);
+    return null;
+  }
+}
+
+async function isStravaConnected() {
+  const row = await getStravaTokenRow();
+  return !!row;
+}
+
+/* =====================================================================
+   OAUTH FLOW — delegates to strava-auth edge function
+   ===================================================================== */
+
+async function connectStrava() {
+  const sb = _stravaClient();
+  if (!sb) { alert("Not connected to database."); return; }
+  const accessToken = await _stravaAccessToken();
+  if (!accessToken) { alert("Please log in first."); return; }
+
+  const btn = document.querySelector(".btn-strava");
+  if (btn) { btn.disabled = true; btn.textContent = "Connecting…"; }
 
   try {
-    const response = await fetch(
-      `https://www.strava.com/api/v3/athlete/activities?after=${thirtyDaysAgo}&per_page=50`,
-      { headers: { Authorization: `Bearer ${auth.access_token}` } }
-    );
+    const { data, error } = await sb.functions.invoke("strava-auth");
+    if (error) throw error;
+    if (!data || !data.authorize_url) throw new Error("No authorize URL returned");
 
-    if (!response.ok) throw new Error("Failed to fetch activities");
+    // Redirect the whole page to Strava's authorize screen. Strava will
+    // redirect back to strava-callback, which (after exchanging the code)
+    // sends us to https://ironz.fit/?strava=connected.
+    window.location.href = data.authorize_url;
+  } catch (e) {
+    console.error("[Strava] connect error:", e);
+    if (btn) { btn.disabled = false; btn.textContent = "Connect with Strava"; }
+    if (typeof reportCaughtError === "function") reportCaughtError(e, { context: "strava", action: "connect" });
+    alert("Couldn't start the Strava connect flow. " + (e.message || e));
+  }
+}
 
-    const activities = await response.json();
-    let imported = 0;
+/**
+ * Called on app load. If the URL contains ?strava=connected, the user has
+ * just come back from the callback flow — fire the connected analytics
+ * event, kick off an initial sync, and clean the URL.
+ */
+async function handleStravaReturn() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has("strava")) return;
 
-    let workouts = [];
-    try { workouts = JSON.parse(localStorage.getItem("workouts") || "[]"); } catch {}
+  const val = params.get("strava");
+  // Clean the URL so refreshing doesn't re-trigger.
+  const cleanUrl = window.location.pathname + window.location.hash;
+  history.replaceState(null, "", cleanUrl);
 
-    // Check for existing Strava imports to prevent duplicates
-    const existingStravaIds = new Set(
-      workouts.filter(w => w.stravaId).map(w => String(w.stravaId))
-    );
+  if (val === "connected") {
+    if (typeof trackEvent === "function") {
+      trackEvent("strava_connected", {});
+    }
+    _showStravaToast("Strava connected! Syncing your activities…");
+    await syncStravaNow({ silent: false });
+    renderStravaStatus();
+  } else if (val === "error") {
+    const reason = params.get("reason") || "unknown";
+    _showStravaToast("Strava connect failed: " + reason);
+  }
+}
 
-    activities.forEach(activity => {
-      if (existingStravaIds.has(String(activity.id))) return;
+/* =====================================================================
+   SYNC — delegates to strava-sync edge function
+   ===================================================================== */
 
-      const type = STRAVA_TYPE_MAP[activity.type] || "general";
-      const date = activity.start_date_local
-        ? activity.start_date_local.slice(0, 10)
-        : new Date(activity.start_date).toISOString().slice(0, 10);
+async function syncStravaNow(opts) {
+  opts = opts || {};
+  const sb = _stravaClient();
+  if (!sb) return 0;
+  const accessToken = await _stravaAccessToken();
+  if (!accessToken) return 0;
 
-      const workout = {
-        id: generateId("strava"),
-        stravaId: activity.id,
-        date: date,
-        name: activity.name,
-        type: type,
-        notes: `Imported from Strava`,
-        source: "strava",
-        duration: Math.round((activity.moving_time || 0) / 60),
-        distance: activity.distance ? (activity.distance / 1000).toFixed(2) : null,
-        segments: [],
-        exercises: [],
-      };
+  if (!opts.silent) _showStravaToast("Syncing Strava…");
 
-      // Add distance as a segment for cardio activities
-      if (activity.distance && ["run", "bike", "swim"].includes(type)) {
-        workout.segments = [{
-          name: activity.name,
-          duration: `${Math.round((activity.moving_time || 0) / 60)} min`,
-          effort: "Z2",
-          distance: (activity.distance / 1000).toFixed(2),
-        }];
-      }
-
-      workouts.unshift(workout);
-      imported++;
+  try {
+    const { data, error } = await sb.functions.invoke("strava-sync", {
+      body: {},
     });
+    if (error) throw error;
+    const synced = (data && data.synced) || 0;
+    const activities = (data && data.activities) || [];
 
-    if (imported > 0) {
-      localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
-      localStorage.setItem("stravaLastSync", new Date().toISOString());
+    // Mirror synced activities into localStorage.workouts so calendar +
+    // history render them alongside manually-logged workouts. Dedup by
+    // stravaId so repeat syncs don't create duplicates.
+    _mergeStravaIntoLocalWorkouts(activities);
 
-      // Refresh UI
-      if (typeof renderCalendar === "function") renderCalendar();
-      if (typeof selectDay === "function") selectDay(getTodayString());
-      if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
+    if (typeof trackEvent === "function") {
+      trackEvent("strava_sync_completed", { synced });
     }
 
+    if (typeof renderCalendar === "function") renderCalendar();
+    if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
+    if (typeof renderStats === "function") renderStats();
     renderStravaStatus();
-    return imported;
-  } catch (err) {
-    console.error("Strava import error:", err);
+
+    if (!opts.silent) {
+      _showStravaToast(synced > 0 ? `Synced ${synced} activit${synced === 1 ? "y" : "ies"}` : "Strava is up to date");
+    }
+    return synced;
+  } catch (e) {
+    console.error("[Strava] sync error:", e);
+    if (typeof reportCaughtError === "function") reportCaughtError(e, { context: "strava", action: "sync" });
+    if (!opts.silent) _showStravaToast("Sync failed. Try again later.");
     return 0;
+  }
+}
+
+function _mergeStravaIntoLocalWorkouts(activities) {
+  if (!activities || !activities.length) return;
+  let workouts = [];
+  try { workouts = JSON.parse(localStorage.getItem("workouts") || "[]"); } catch {}
+  const existingByStravaId = {};
+  workouts.forEach(w => { if (w.stravaId) existingByStravaId[String(w.stravaId)] = w; });
+
+  let added = 0;
+  activities.forEach(a => {
+    const key = String(a.id);
+    const localType = STRAVA_TYPE_MAP[a.type] || "general";
+    const date = (a.start_date_local || a.start_date || "").slice(0, 10);
+    if (!date) return;
+
+    const durationMin = Math.round((a.moving_time || 0) / 60);
+    const distanceKm = a.distance ? (a.distance / 1000) : null;
+    const distanceStr = distanceKm ? `${distanceKm.toFixed(2)} km` : null;
+
+    const workout = {
+      id: "strava-" + a.id,
+      stravaId: a.id,
+      date,
+      name: a.name || "Strava activity",
+      type: localType,
+      notes: "Imported from Strava",
+      source: "strava",
+      duration: durationMin ? String(durationMin) : null,
+      distance: distanceStr,
+      avgWatts: null,
+    };
+
+    if (a.average_heartrate) workout.avgHr = Math.round(a.average_heartrate);
+    if (a.suffer_score)      workout.sufferScore = a.suffer_score;
+    if (a.map_summary_polyline) workout.mapPolyline = a.map_summary_polyline;
+
+    if (existingByStravaId[key]) {
+      // Update in place — keeps ordering stable
+      Object.assign(existingByStravaId[key], workout);
+    } else {
+      workouts.unshift(workout);
+      added++;
+    }
+  });
+
+  localStorage.setItem("workouts", JSON.stringify(workouts));
+  if (typeof DB !== "undefined" && DB.syncWorkouts) DB.syncWorkouts();
+  localStorage.setItem("stravaLastLocalSync", new Date().toISOString());
+}
+
+/* =====================================================================
+   DISCONNECT
+   ===================================================================== */
+
+async function disconnectStrava() {
+  if (!confirm("Disconnect Strava? Already-imported activities stay in your history.")) return;
+  const sb = _stravaClient();
+  if (!sb) return;
+  const userId = await _stravaUserId();
+  if (!userId) return;
+
+  try {
+    const { error } = await sb.from("strava_tokens").delete().eq("user_id", userId);
+    if (error) throw error;
+    if (typeof trackEvent === "function") trackEvent("strava_disconnected", {});
+    _showStravaToast("Strava disconnected");
+    renderStravaStatus();
+  } catch (e) {
+    console.error("[Strava] disconnect error:", e);
+    if (typeof reportCaughtError === "function") reportCaughtError(e, { context: "strava", action: "disconnect" });
+    alert("Disconnect failed: " + (e.message || e));
   }
 }
 
@@ -257,25 +261,45 @@ async function importStravaActivities() {
    UI
    ===================================================================== */
 
-function renderStravaStatus() {
+function _showStravaToast(msg) {
+  if (typeof _showShareToast === "function") { _showShareToast(msg); return; }
+  const t = document.createElement("div");
+  t.className = "ironz-toast visible";
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.classList.remove("visible"); setTimeout(() => t.remove(), 300); }, 3000);
+}
+
+function _formatStravaDate(iso) {
+  if (!iso) return "Never";
+  try {
+    const d = new Date(iso);
+    const diffMs = Date.now() - d.getTime();
+    if (diffMs < 60_000) return "just now";
+    if (diffMs < 3600_000) return `${Math.round(diffMs/60000)}m ago`;
+    if (diffMs < 86400_000) return `${Math.round(diffMs/3600000)}h ago`;
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  } catch { return "Never"; }
+}
+
+async function renderStravaStatus() {
   const container = document.getElementById("strava-status");
   if (!container) return;
 
-  if (isStravaConnected()) {
-    const athlete = getStravaAthlete();
-    const lastSync = localStorage.getItem("stravaLastSync");
-    const syncLabel = lastSync
-      ? `Last sync: ${new Date(lastSync).toLocaleDateString()}`
-      : "Not synced yet";
+  container.innerHTML = `<p class="hint" style="margin:0">Checking Strava connection…</p>`;
+  const row = await getStravaTokenRow();
 
+  if (row) {
+    const name = [row.athlete_firstname, row.athlete_lastname].filter(Boolean).join(" ") || "Connected";
+    const sync = _formatStravaDate(row.last_sync_at);
     container.innerHTML = `
       <div class="strava-connected">
         <div class="strava-user">
-          ${athlete ? `Connected as <strong>${escHtml(athlete.firstname)} ${escHtml(athlete.lastname)}</strong>` : "Connected"}
+          Connected as <strong>${_escStrava(name)}</strong>
         </div>
-        <div class="strava-sync-info">${escHtml(syncLabel)}</div>
+        <div class="strava-sync-info">Last sync: ${_escStrava(sync)}</div>
         <div class="strava-actions">
-          <button class="btn-primary btn-sm" onclick="importStravaActivities()">Sync Now</button>
+          <button class="btn-primary btn-sm" onclick="syncStravaNow()">Sync Now</button>
           <button class="btn-secondary btn-sm" onclick="disconnectStrava()">Disconnect</button>
         </div>
       </div>`;
@@ -286,4 +310,23 @@ function renderStravaStatus() {
         <button class="btn-strava" onclick="connectStrava()">Connect with Strava</button>
       </div>`;
   }
+}
+
+function _escStrava(s) {
+  if (s == null) return "";
+  const d = document.createElement("div");
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+// Run the return handler on page load. auth.js defers app init until
+// after session confirmation so supabaseClient is available by then.
+if (typeof window !== "undefined") {
+  window.handleStravaReturn = handleStravaReturn;
+  window.connectStrava = connectStrava;
+  window.syncStravaNow = syncStravaNow;
+  window.disconnectStrava = disconnectStrava;
+  window.renderStravaStatus = renderStravaStatus;
+  // For back-compat with any old code calling importStravaActivities()
+  window.importStravaActivities = syncStravaNow;
 }
