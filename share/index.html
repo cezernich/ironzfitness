@@ -4,6 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Shared Workout — IronZ</title>
+
+<!-- Open Graph tags for iMessage / Slack / Twitter unfurls.
+     These are generic because GitHub Pages can't server-render a per-
+     workout title — the unfurl happens at fetch time and JS hasn't run
+     yet. The workout details render client-side after the page loads. -->
+<meta property="og:title" content="A workout shared from IronZ">
+<meta property="og:description" content="Run this workout in your own zones with IronZ. Your friend's paces stay private.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://ironz.fit/share">
+<meta property="og:image" content="https://ironz.fit/Logo/iron-logo.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="A workout shared from IronZ">
+<meta name="twitter:description" content="Run this workout in your own zones with IronZ.">
+<meta name="twitter:image" content="https://ironz.fit/Logo/iron-logo.png">
+
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -162,19 +177,20 @@
 
 <script>
 (function() {
-  const SUPABASE_URL = 'https://dagdpdcwqdlibxbitdgr.supabase.co';
-  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRhZ2RwZGN3cWRsaWJ4Yml0ZGdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1Mjk4NjQsImV4cCI6MjA5MTEwNTg2NH0.vc-fvFgZNEvusGgc3yhCzMRmuKrXUHW5uxHHMx1JV44';
+  // The share-preview Edge Function is the data source. It returns JSON
+  // (Supabase forces text/plain on --no-verify-jwt responses, but fetch
+  // .text() + JSON.parse works regardless of Content-Type).
+  const EDGE_URL = "https://dagdpdcwqdlibxbitdgr.supabase.co/functions/v1/share-preview";
 
   const app = document.getElementById('app');
 
-  // Extract token from URL path: /share.html -> /w/TOKEN or ?token=TOKEN
+  // Extract token from ?token= (primary) or /w/TOKEN path fallback.
   let token = null;
-  const pathMatch = window.location.pathname.match(/\/w\/([^\/]+)/);
-  if (pathMatch) {
-    token = pathMatch[1];
-  } else {
-    const params = new URLSearchParams(window.location.search);
-    token = params.get('token');
+  const params = new URLSearchParams(window.location.search);
+  token = params.get('token');
+  if (!token) {
+    const pathMatch = window.location.pathname.match(/\/w\/([^\/]+)/);
+    if (pathMatch) token = pathMatch[1];
   }
 
   if (!token || !/^[\w-]{6,64}$/.test(token)) {
@@ -182,90 +198,51 @@
     return;
   }
 
-  // Fetch workout data from Supabase directly (REST API)
   fetchWorkout(token);
 
   async function fetchWorkout(token) {
     try {
-      const headers = {
-        'apikey': SUPABASE_ANON,
-        'Authorization': `Bearer ${SUPABASE_ANON}`
-      };
+      // format=json tells the Edge Function to return JSON instead of
+      // 302-redirecting back here. Accept header is a second signal for
+      // belt-and-suspenders.
+      const url = `${EDGE_URL}?format=json&token=${encodeURIComponent(token)}`;
+      const res = await fetch(url, {
+        headers: { 'Accept': 'application/json' },
+      });
 
-      // Step 1: Get the shared_workouts row (plain select, no join —
-      // there's no FK from shared_workouts to profiles in the schema).
-      const shareUrl = `${SUPABASE_URL}/rest/v1/shared_workouts?share_token=eq.${encodeURIComponent(token)}&select=*`;
-      const shareRes = await fetch(shareUrl, { headers });
-
-      if (!shareRes.ok) {
+      // Supabase overrides content-type to text/plain — parse the body
+      // text manually so content-type mismatch doesn't break .json().
+      const bodyText = await res.text();
+      let payload;
+      try {
+        payload = JSON.parse(bodyText);
+      } catch (e) {
+        console.error('[share] failed to parse edge response:', bodyText.slice(0, 500));
         showError('Something went wrong', 'Could not load this workout.');
         return;
       }
 
-      const rows = await shareRes.json();
-      if (!rows || rows.length === 0 || rows.code) {
-        showError('Link not found', 'This workout link doesn\u2019t exist or has been removed.');
+      if (!payload || !payload.ok) {
+        const reason = (payload && payload.reason) || 'unknown';
+        if (reason === 'expired') {
+          showExpired({ share_token: payload.share_token || token });
+          return;
+        }
+        if (reason === 'revoked') {
+          showError('Link revoked', 'This share link is no longer available.');
+          return;
+        }
+        if (reason === 'not_found' || reason === 'invalid_token') {
+          showError('Link not found', 'This workout link doesn\u2019t exist or has been removed.');
+          return;
+        }
+        showError('Something went wrong', 'Could not load this workout.');
         return;
       }
 
-      const share = rows[0];
-
-      // Check revoked
-      if (share.revoked_at) {
-        showError('Link revoked', 'This share link is no longer available.');
-        return;
-      }
-
-      // Check expiry
-      if (share.expires_at && new Date(share.expires_at) < new Date()) {
-        showExpired(share);
-        return;
-      }
-
-      // Step 2: Look up sender profile name (separate query since no FK join).
-      if (share.sender_user_id) {
-        try {
-          const profileUrl = `${SUPABASE_URL}/rest/v1/profiles?id=eq.${share.sender_user_id}&select=full_name`;
-          const profileRes = await fetch(profileUrl, { headers });
-          if (profileRes.ok) {
-            const profileRows = await profileRes.json();
-            if (profileRows && profileRows.length > 0 && profileRows[0].full_name) {
-              share._senderName = profileRows[0].full_name;
-            }
-          }
-        } catch (e) { /* non-fatal */ }
-      }
-
-      // Step 3: Get the actual training session using variant_id.
-      // RLS on training_sessions may block anon reads — handle gracefully.
-      let session = {};
-      if (share.variant_id) {
-        try {
-          const sessionUrl = `${SUPABASE_URL}/rest/v1/training_sessions?id=eq.${encodeURIComponent(share.variant_id)}&select=session_name,session_type,description,exercises,data`;
-          const sessionRes = await fetch(sessionUrl, { headers });
-          if (sessionRes.ok) {
-            const sessionRows = await sessionRes.json();
-            console.log('[share.html] training_sessions response:', sessionRows);
-            if (sessionRows && sessionRows.length > 0) session = sessionRows[0];
-          } else {
-            console.warn('[share.html] training_sessions query failed:', sessionRes.status);
-          }
-        } catch (e) { /* non-fatal — we'll fall back to share metadata */ }
-      }
-
-      // Merge share + session data for rendering
-      const merged = { ...share, session };
-
-      // Best-effort view increment
-      fetch(`${SUPABASE_URL}/rest/v1/rpc/increment_share_view`, {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token_arg: token })
-      }).catch(() => {});
-
-      renderWorkout(merged);
+      renderWorkout(payload);
     } catch (e) {
-      console.error('[share.html] Fatal error:', e);
+      console.error('[share] Fatal error:', e);
       showError('Something went wrong', e.message || 'Could not load this workout.');
     }
   }
@@ -284,10 +261,9 @@
   function showExpired(data) {
     app.innerHTML = `
       <div class="expired-banner">This share link has expired.</div>
-      ${renderCard(data)}
       <div class="cta">
         <a href="https://ironz.fit">Open IronZ</a>
-        <div class="sub">Get the full workout in the app</div>
+        <div class="sub">Get more workouts in the app</div>
       </div>`;
   }
 
@@ -318,11 +294,9 @@
   function _friendlyTypeLabel(typeId) {
     if (!typeId) return null;
     if (_TYPE_LABELS[typeId]) return _TYPE_LABELS[typeId];
-    // Capitalize and clean underscores as last resort
     return typeId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
 
-  // Sport display labels
   const _SPORT_LABELS = {
     run: 'Running', bike: 'Cycling', swim: 'Swimming',
     strength: 'Strength', hybrid: 'Hybrid', running: 'Running',
@@ -337,50 +311,38 @@
       || 'Shared Workout';
     const sessionType = session.session_type || data.session_type_id || '';
     const sport = data.sport_id || sessionData.sport || '';
-    const sharer = data._senderName || (data.profiles && data.profiles.full_name) || 'An IronZ user';
+    const sharer = data.sender_name || 'An IronZ user';
 
     const sportLabel = _SPORT_LABELS[sport] || '';
     const typeLabel = _friendlyTypeLabel(sessionType) || '';
 
     let html = `<div class="card">`;
 
-    // Header — deduplicate badges: if sport and type would show the same thing, only show sport
     html += `<div class="card-header">
       <h1>${esc(name)}</h1>
       <div class="card-meta">`;
     if (sportLabel) html += `<span class="badge">${esc(sportLabel)}</span>`;
-    // Only show type badge if it adds information beyond the sport badge
     if (typeLabel && typeLabel !== sportLabel && typeLabel !== name) {
       html += `<span class="badge">${esc(typeLabel)}</span>`;
     }
     if (sessionData.duration_minutes) html += `<span class="badge">${sessionData.duration_minutes} min</span>`;
     html += `</div></div>`;
 
-    // Shared by
     html += `<div class="shared-by">Shared by <strong>${esc(sharer)}</strong></div>`;
 
-    // Share note
     if (data.share_note) {
       html += `<div class="notes">\u201c${esc(data.share_note)}\u201d</div>`;
     }
 
-    // Exercises: try training_sessions.exercises first, then fall back to
-    // a generic structure summary from the session_type_id
     let exercises = session.exercises || [];
     if (typeof exercises === 'string') {
       try { exercises = JSON.parse(exercises); } catch { exercises = []; }
     }
 
-    // Colored segment bar for running/cardio workouts
     if (exercises.length > 0) {
       html += renderSegmentBar(exercises);
-    }
-
-    console.log('[share.html] renderCard exercises:', exercises.length, exercises);
-    if (exercises.length > 0) {
       html += renderExercises(exercises);
     } else {
-      // No training_sessions data — show a generic structure from session_type_id
       const structures = {
         track_workout:    ['Warm-up: 15 min easy + strides', 'Main: Repeats at I-pace', 'Cool-down: 10 min easy'],
         tempo_threshold:  ['Warm-up: 15 min easy', 'Main: Cruise intervals at T-pace', 'Cool-down: 10 min easy'],
@@ -402,7 +364,6 @@
       }
     }
 
-    // Description as notes
     if (session.description) {
       html += `<div class="notes">${esc(session.description)}</div>`;
     }
@@ -424,17 +385,14 @@
     };
 
     function getColor(ex) {
-      // Check name and intensity fields for zone keywords
       const text = ((ex.name || '') + ' ' + (ex.intensity || '') + ' ' + (ex.zone || '')).toLowerCase();
       for (const [key, color] of Object.entries(ZONE_COLORS)) {
         if (text.includes(key)) return color;
       }
-      // Default: moderate effort
       return '#FFB74D';
     }
 
     function getDuration(ex) {
-      // Try numeric duration_minutes or parse duration string
       if (ex.duration_minutes) return Number(ex.duration_minutes);
       if (ex.duration) {
         const str = String(ex.duration).toLowerCase();
@@ -445,11 +403,9 @@
         const bare = parseFloat(str);
         if (!isNaN(bare)) return bare;
       }
-      // Fallback: 1 unit so it still shows
       return 1;
     }
 
-    // Build flat segment list, expanding repeats
     const segments = [];
     for (const ex of exercises) {
       const repeats = ex.repeats || ex.repeat || 1;
@@ -471,7 +427,6 @@
   }
 
   function renderExercises(exercises) {
-    // Group consecutive exercises by any superset/repeat grouping field
     const _gid = (ex) => ex.supersetGroup || ex.superset_group || ex.superset_id || ex.repeatGroup || null;
 
     let html = `<div class="section"><div class="section-title">Workout Structure</div>`;
@@ -513,23 +468,6 @@
       <span class="exercise-name">${esc(name)}</span>
       ${detail ? `<span class="exercise-detail">${esc(detail)}</span>` : ''}
     </div>`;
-  }
-
-  function renderSegments(segments) {
-    let html = `<div class="section"><div class="section-title">Segments</div>`;
-    segments.forEach(seg => {
-      const name = seg.name || seg.type || 'Segment';
-      let detail = '';
-      if (seg.distance) detail = seg.distance;
-      if (seg.duration) detail = detail ? `${detail} / ${seg.duration}` : seg.duration;
-      if (seg.pace) detail += ` @ ${seg.pace}`;
-      html += `<div class="exercise-row">
-        <span class="exercise-name">${esc(name)}</span>
-        <span class="exercise-detail">${esc(detail)}</span>
-      </div>`;
-    });
-    html += `</div>`;
-    return html;
   }
 
   function esc(str) {

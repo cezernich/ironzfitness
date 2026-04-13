@@ -11,7 +11,13 @@
 // Diagnostic — verify the script actually parsed and executed.
 console.log("[IronZ] share.js loaded");
 
-const SHARE_PREVIEW_BASE = "https://dagdpdcwqdlibxbitdgr.supabase.co/functions/v1/share-preview";
+// Public share URL base — the static HTML page at
+// https://ironz.fit/share served by share/index.html on GitHub Pages.
+// Previously pointed at the Supabase Edge Function directly, but
+// Supabase forces Content-Type: text/plain on all --no-verify-jwt
+// responses, so browsers rendered the HTML as source code. The static
+// page fetches the Edge Function as a JSON data source instead.
+const SHARE_PREVIEW_BASE = "https://ironz.fit/share";
 
 // SVG used for every share icon in the app. 20px square, currentColor so
 // themes can tint it. Arrow-out-of-box icon matching platform conventions.
