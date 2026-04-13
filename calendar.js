@@ -4422,7 +4422,20 @@ function _estimateWeight(exercise, repRange, profile) {
   } catch {}
   if (!refs) return "Bodyweight";
 
-  // Map exercise movement patterns to reference lifts
+  // Some "isolation_arms" exercises don't take added load by their nature —
+  // bodyweight dips and chair-style dips should stay BW even when the user
+  // has reference lifts on file. Curls and skull crushers fall through to
+  // the calculator below.
+  const exName = String(exercise.name || "").toLowerCase();
+  if (/^tricep dip|^bench dip|chair dip|diamond push|^dip$/.test(exName)) {
+    return "Bodyweight";
+  }
+
+  // Map exercise movement patterns to reference lifts. Previously
+  // isolation_arms / isolation_legs / core had no entry, so every curl,
+  // extension, calf raise, and core exercise short-circuited to
+  // "Bodyweight" regardless of the user's actual lifts. Curls and
+  // extensions scale off bench 1RM; isolation legs scale off squat.
   const patternToRef = {
     horizontal_push: 'bench',
     squat: 'squat',
@@ -4430,6 +4443,8 @@ function _estimateWeight(exercise, repRange, profile) {
     vertical_push: 'ohp',
     horizontal_pull: 'row',
     vertical_pull: 'row',
+    isolation_arms: 'bench',
+    isolation_legs: 'squat',
   };
 
   const refKey = patternToRef[exercise.movement_pattern];
@@ -4455,6 +4470,19 @@ function _estimateWeight(exercise, repRange, profile) {
   // For secondary/accessory exercises (tier 2/3), scale down further
   if (exercise.tier === 2) pct *= 0.85;
   else if (exercise.tier === 3) pct *= 0.7;
+
+  // Isolation work is a small fraction of the compound it's referenced
+  // against. Curls (biceps) sit ~25–30% of bench at 10 reps, skull
+  // crushers ~30–35%. Calves and glute-isolation work ~30% of squat.
+  // Apply an extra scale on top of the tier multiplier.
+  if (exercise.movement_pattern === 'isolation_arms') {
+    // Extensions (skull crusher, kickback, pushdown) are slightly heavier
+    // than curls relative to bench; bump their factor a touch.
+    const isExt = /skull|tricep|extension|kickback|pushdown/i.test(exName);
+    pct *= isExt ? 0.40 : 0.32;
+  } else if (exercise.movement_pattern === 'isolation_legs') {
+    pct *= 0.30;
+  }
 
   const weight = Math.round((est1RM * pct) / 5) * 5;
   return weight > 0 ? weight + " lbs" : "Bodyweight";
