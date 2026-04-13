@@ -76,12 +76,16 @@ function shareWorkoutLink(cacheKey, source) {
 }
 
 /**
- * Direct-share: create (or reuse) a shared_workouts row, then either open
- * the native share sheet or copy the preview URL to the clipboard.
- * Called by ShareActionSheet when the user picks "Copy link".
+ * Direct-share: create (or reuse) a shared_workouts row, then hand off to
+ * either the native share sheet (delivery="native") or the clipboard toast
+ * path (delivery="clipboard"). Called by:
+ *   - _handleShareClick on touch devices → delivery="native"
+ *   - ShareActionSheet "Copy link" button → delivery="clipboard"
+ *   - Fallback from _handleShareClick when ShareActionSheet isn't loaded
  */
-async function shareWorkoutLinkDirect(entry, source) {
+async function shareWorkoutLinkDirect(entry, source, delivery) {
   if (!entry) { console.warn("[IronZ] share: no entry"); return; }
+  const useNative = delivery === "native";
 
   const sb = window.supabaseClient;
   if (!sb) { _showShareToast("Can't share — not connected."); return; }
@@ -110,7 +114,7 @@ async function shareWorkoutLinkDirect(entry, source) {
   // Reuse an existing share_token if this entry has been shared before —
   // keeps the same URL stable across taps.
   if (entry._lastShareToken) {
-    _handleShareUrl(workoutName, entry._lastShareToken, source, sessionTypeId);
+    _handleShareUrl(workoutName, entry._lastShareToken, source, sessionTypeId, useNative);
     return;
   }
 
@@ -167,17 +171,35 @@ async function shareWorkoutLinkDirect(entry, source) {
   }
 
   entry._lastShareToken = token;
-  _handleShareUrl(workoutName, token, source, sessionTypeId);
+  _handleShareUrl(workoutName, token, source, sessionTypeId, useNative);
 }
 
-// "Copy link" handler: writes the preview URL to the clipboard and shows
-// a toast. Previously this fell through to navigator.share(), which on iOS
-// opened the native share sheet on top of our custom ShareActionSheet — two
-// stacked share UIs. The user already picked "Copy link" from our sheet, so
-// the expected behavior is clipboard + toast, period. If a user wants to
-// then share the URL from somewhere else, their OS already gives them that.
-async function _handleShareUrl(workoutName, token, source, sessionTypeId) {
+// Deliver the preview URL to the user. Two code paths:
+//   - useNative=true (touch devices / iOS + Android with Web Share API)
+//     hands the URL to navigator.share so the OS opens its own share sheet.
+//     This is the right UX on mobile — lets users pick Messages/WhatsApp/etc.
+//     directly. If the user cancels the OS sheet, we bail without copying
+//     (silently copying would be surprising).
+//   - useNative=false (desktop, or caller is the ShareActionSheet "Copy link"
+//     button) writes the URL to the clipboard and shows a toast.
+async function _handleShareUrl(workoutName, token, source, sessionTypeId, useNative) {
   const url = SHARE_PREVIEW_BASE + "?id=" + encodeURIComponent(token);
+
+  if (useNative && navigator.share) {
+    try {
+      await navigator.share({ title: workoutName, url });
+      if (typeof trackEvent === "function") {
+        trackEvent("workout_shared", { source: source || "unknown", method: "native" });
+      }
+      return;
+    } catch {
+      // User cancelled the native sheet — nothing to do, don't fall
+      // through to a surprise clipboard copy.
+      return;
+    }
+  }
+
+  // Desktop / Copy-link path: clipboard + toast
   try {
     await navigator.clipboard.writeText(url);
   } catch {
@@ -366,10 +388,21 @@ function _handleShareClick(e) {
     entry = window.__calShareFallbackCache[key];
   }
   if (!entry) { console.warn("[IronZ] share: entry not in cache for key", key); return; }
+
+  // Touch device with Web Share API → use the native share sheet directly.
+  // That's the right UX on iOS/Android — skip our custom sheet entirely.
+  // Desktop (no navigator.share, or no touch) → show our custom
+  // ShareActionSheet (Copy link + Send to friend).
+  const preferNative = !!(navigator.share && "ontouchstart" in window);
+  if (preferNative) {
+    shareWorkoutLinkDirect(entry, source, "native");
+    return;
+  }
   if (window.ShareActionSheet && window.ShareActionSheet.open) {
     window.ShareActionSheet.open(entry, source);
   } else {
-    shareWorkoutLinkDirect(entry, source);
+    // Last-resort fallback if the action sheet module failed to load
+    shareWorkoutLinkDirect(entry, source, "clipboard");
   }
 }
 
