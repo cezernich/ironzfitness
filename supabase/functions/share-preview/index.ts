@@ -137,19 +137,28 @@ function renderHtml(share: any): string {
 }
 
 // Status 200 workaround: Supabase Edge Runtime overrides Content-Type to text/plain
-// on 4xx/5xx responses for --no-verify-jwt functions, causing browsers to render
-// raw HTML source. Error info is conveyed in the HTML body instead.
-function renderError(message: string, _status: number): Response {
+// on 4xx/5xx responses for --no-verify-jwt functions, causing browsers (and
+// iMessage/Slack/Twitter unfurlers) to render raw HTML source instead of the
+// styled preview. Every response in this file is forced to status 200 with an
+// explicit text/html Content-Type and the error message lives in the HTML body
+// only.
+function renderError(message: string): Response {
   const html = `<!doctype html><html><head><meta charset="UTF-8"><title>${escapeHtml(message)}</title>
 <style>body{font-family:system-ui;background:#0f0f18;color:#fff;padding:40px;text-align:center;}</style>
 </head><body><h1>${escapeHtml(message)}</h1></body></html>`;
   const headers = new Headers(CORS);
   headers.set("Content-Type", "text/html; charset=utf-8");
+  // Status 200 workaround: Supabase Edge Runtime overrides Content-Type on 4xx/5xx
+  // for --no-verify-jwt functions
   return new Response(html, { status: 200, headers });
 }
 
-serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+async function _handle(req: Request): Promise<Response> {
+  if (req.method === "OPTIONS") {
+    // Status 200 workaround: Supabase Edge Runtime overrides Content-Type on 4xx/5xx
+    // for --no-verify-jwt functions
+    return new Response("ok", { status: 200, headers: CORS });
+  }
 
   const url = new URL(req.url);
   // Token can come from path /share-preview/{token}, ?token=, or the legacy
@@ -163,35 +172,47 @@ serve(async (req: Request) => {
   if (!token || !/^[\w-]{6,64}$/.test(token)) {
     // Status 200 workaround: Supabase Edge Runtime overrides Content-Type on 4xx/5xx
     // for --no-verify-jwt functions
-    return renderError("Link not found", 200);
+    return renderError("Link not found");
   }
 
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     // Status 200 workaround: Supabase Edge Runtime overrides Content-Type on 4xx/5xx
     // for --no-verify-jwt functions
-    return renderError("Server misconfigured", 200);
+    return renderError("Server misconfigured");
   }
 
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  const { data, error } = await sb
-    .from("shared_workouts")
-    .select(`
-      share_token, variant_id, sport_id, session_type_id, share_note,
-      created_at, expires_at, revoked_at,
-      sender:profiles!shared_workouts_sender_user_id_fkey ( full_name )
-    `)
-    .eq("share_token", token)
-    .maybeSingle();
+
+  // Wrap the shared_workouts query — a network error or timeout would
+  // otherwise bubble up as an uncaught exception and the Edge Runtime would
+  // serve a text/plain 500 page, defeating the whole status-200 strategy.
+  let data: any = null;
+  let error: any = null;
+  try {
+    const result = await sb
+      .from("shared_workouts")
+      .select(`
+        share_token, variant_id, sport_id, session_type_id, share_note,
+        created_at, expires_at, revoked_at,
+        sender:profiles!shared_workouts_sender_user_id_fkey ( full_name )
+      `)
+      .eq("share_token", token)
+      .maybeSingle();
+    data = result.data;
+    error = result.error;
+  } catch (e) {
+    error = e;
+  }
 
   // Status 200 workaround: Supabase Edge Runtime overrides Content-Type on 4xx/5xx
   // for --no-verify-jwt functions
-  if (error || !data) return renderError("Link not found", 200);
+  if (error || !data) return renderError("Link not found");
   // Status 200 workaround: Supabase Edge Runtime overrides Content-Type on 4xx/5xx
   // for --no-verify-jwt functions
-  if (data.revoked_at) return renderError("Link revoked", 200);
+  if (data.revoked_at) return renderError("Link revoked");
   // Status 200 workaround: Supabase Edge Runtime overrides Content-Type on 4xx/5xx
   // for --no-verify-jwt functions
-  if (data.expires_at && new Date(data.expires_at) < new Date()) return renderError("Link expired", 200);
+  if (data.expires_at && new Date(data.expires_at) < new Date()) return renderError("Link expired");
 
   // Look up actual workout name from training_sessions by variant_id.
   if (data.variant_id) {
@@ -224,5 +245,22 @@ serve(async (req: Request) => {
 
   const headers = new Headers(CORS);
   headers.set("Content-Type", "text/html; charset=utf-8");
+  // Status 200 workaround: Supabase Edge Runtime overrides Content-Type on 4xx/5xx
+  // for --no-verify-jwt functions
   return new Response(renderHtml(data), { status: 200, headers });
+}
+
+serve(async (req: Request) => {
+  // Outer try/catch — any uncaught throw inside _handle (bad JSON parse,
+  // network blip, RPC timeout, etc.) gets converted to a styled 200 HTML
+  // error page instead of bubbling up to the Edge Runtime which would
+  // serve a text/plain 500 and break the iMessage / Safari preview.
+  try {
+    return await _handle(req);
+  } catch (e) {
+    console.error("[share-preview] uncaught:", (e as Error)?.message);
+    // Status 200 workaround: Supabase Edge Runtime overrides Content-Type on 4xx/5xx
+    // for --no-verify-jwt functions
+    return renderError("Link not found");
+  }
 });
