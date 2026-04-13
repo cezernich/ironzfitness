@@ -1725,7 +1725,7 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   // Watts for cycling
   const wattsVal = parseInt(document.getElementById(`cwatts-${sessionId}`)?.value) || null;
 
-  workouts.unshift({
+  const completedWorkout = {
     id:                 workoutId,
     date:               dateStr,
     name:               sessionName,
@@ -1736,10 +1736,18 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
     distance:           distance || null,
     ...(wattsVal && { avgWatts: wattsVal }),
     completedSessionId: sessionId,
+    completedAt:        new Date().toISOString(),
     isCompletion:       true,
-  });
+  };
+  workouts.unshift(completedWorkout);
   localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
   if (typeof trackWorkoutLogged === "function") trackWorkoutLogged({ type, date: dateStr, source: "session_complete" });
+
+  // Push-to-Strava: auto-share silently OR prompt the user, per the
+  // Section 1 spec. Short-circuits if not connected / no write scope.
+  if (typeof promptStravaShareIfEligible === "function") {
+    promptStravaShareIfEligible(completedWorkout);
+  }
 
   // Mark session as completed
   const meta = loadCompletionMeta();

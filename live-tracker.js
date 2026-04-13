@@ -843,10 +843,10 @@ function _commitLiveWorkout(logAll) {
   workouts.unshift(completedWorkout);
   localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
 
-  // Push-to-Strava: fire-and-forget if the user has auto-share enabled.
-  // No-op if Strava isn't connected, no write scope, or auto-share is off.
-  if (typeof tryAutoShareToStrava === "function") {
-    tryAutoShareToStrava(completedWorkout);
+  // Push-to-Strava: auto-share silently OR prompt the user, per the
+  // Section 1 spec. Short-circuits if not connected / no write scope.
+  if (typeof promptStravaShareIfEligible === "function") {
+    promptStravaShareIfEligible(completedWorkout);
   }
 
   if (typeof trackWorkoutLogged === "function") {

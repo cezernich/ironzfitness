@@ -341,83 +341,167 @@ function setStravaAutoShareEnabled(enabled) {
   renderStravaStatus();
 }
 
+/* =====================================================================
+   SHARE CARD CUSTOMIZATION — per-field toggles saved per workout type
+   ===================================================================== */
+
+// Default field inclusion per workout type. Users can override any of
+// these via the share prompt, and their choices are remembered for the
+// next workout of the same type via `stravaCardPrefs` in localStorage.
+const _STRAVA_CARD_DEFAULTS_BY_TYPE = {
+  weightlifting: { typeLabel: true, body: true, stats: true, distance: false, hiitMeta: false, notes: false, footer: true },
+  bodyweight:    { typeLabel: true, body: true, stats: true, distance: false, hiitMeta: false, notes: false, footer: true },
+  hiit:          { typeLabel: true, body: true, stats: true, distance: false, hiitMeta: true,  notes: false, footer: true },
+  running:       { typeLabel: true, body: true, stats: true, distance: true,  hiitMeta: false, notes: false, footer: true },
+  cycling:       { typeLabel: true, body: true, stats: true, distance: true,  hiitMeta: false, notes: false, footer: true },
+  swimming:      { typeLabel: true, body: true, stats: true, distance: true,  hiitMeta: false, notes: false, footer: true },
+  yoga:          { typeLabel: true, body: true, stats: true, distance: false, hiitMeta: false, notes: true,  footer: true },
+  rowing:        { typeLabel: true, body: true, stats: true, distance: true,  hiitMeta: false, notes: false, footer: true },
+  walking:       { typeLabel: true, body: false, stats: true, distance: true, hiitMeta: false, notes: false, footer: true },
+  hiking:        { typeLabel: true, body: false, stats: true, distance: true, hiitMeta: false, notes: false, footer: true },
+  general:       { typeLabel: true, body: true, stats: true, distance: false, hiitMeta: false, notes: false, footer: true },
+};
+const _STRAVA_CARD_DEFAULT = { typeLabel: true, body: true, stats: true, distance: false, hiitMeta: false, notes: false, footer: true };
+
+function _normalizeWorkoutTypeKey(type) {
+  const t = (type || "").toLowerCase();
+  if (t === "run") return "running";
+  if (t === "bike") return "cycling";
+  if (t === "swim") return "swimming";
+  if (t === "walk") return "walking";
+  if (t === "hike") return "hiking";
+  return t || "general";
+}
+
+function getStravaCardPrefs(type) {
+  const key = _normalizeWorkoutTypeKey(type);
+  const fallback = _STRAVA_CARD_DEFAULTS_BY_TYPE[key] || _STRAVA_CARD_DEFAULT;
+  let stored = {};
+  try {
+    const raw = JSON.parse(localStorage.getItem("stravaCardPrefs") || "{}");
+    stored = (raw && typeof raw === "object" && raw[key]) || {};
+  } catch {}
+  return { ...fallback, ...stored };
+}
+
+function setStravaCardPrefs(type, prefs) {
+  const key = _normalizeWorkoutTypeKey(type);
+  let raw = {};
+  try { raw = JSON.parse(localStorage.getItem("stravaCardPrefs") || "{}") || {}; } catch {}
+  raw[key] = { ...(raw[key] || {}), ...prefs };
+  try { localStorage.setItem("stravaCardPrefs", JSON.stringify(raw)); } catch {}
+}
+
 /**
  * Build the multi-line Strava activity description from an IronZ workout.
- * Format follows the spec mockup:
+ * Per-field inclusion is controlled by `prefs` which comes from
+ * getStravaCardPrefs(workout.type) by default, but the share prompt
+ * lets the user override any field at upload time. Keys are:
  *
- *   <Workout Name> — <Type Label>
- *
- *   <Exercise lines>
- *
- *   <duration> · <sets> sets · <exercises> exercises
- *
- *   Built with IronZ — ironz.fit
- *
- * For cardio workouts with intervals/segments, the body becomes the
- * interval list (name · duration · effort) instead of exercises.
+ *   typeLabel  — append "— Strength Training" to title
+ *   body       — exercise list / interval list / segment list
+ *   stats      — "52 min · 24 sets · 6 exercises" line
+ *   distance   — explicit distance line (cardio only, if available)
+ *   hiitMeta   — HIIT format / rounds / rest line
+ *   notes      — user's workout notes field
+ *   footer     — "Built with IronZ — ironz.fit" branding
  */
-function _buildStravaDescription(w) {
+function _buildStravaDescription(w, prefs) {
+  prefs = prefs || getStravaCardPrefs(w.type);
   const lines = [];
-  const typeLabel = _stravaWorkoutTypeLabel(w);
-  const titleLine = (w.name || w.sessionName || "Workout") + (typeLabel ? ` — ${typeLabel}` : "");
-  lines.push(titleLine);
-  lines.push("");
 
-  // Body: exercises (strength/HIIT) OR intervals (cardio) OR segments (legacy)
+  // Title — always included (a Strava activity has to have one)
+  const typeLabel = _stravaWorkoutTypeLabel(w);
+  const titleLine = prefs.typeLabel && typeLabel
+    ? `${w.name || w.sessionName || "Workout"} — ${typeLabel}`
+    : (w.name || w.sessionName || "Workout");
+  lines.push(titleLine);
+
+  // Body: exercises (strength/HIIT) OR intervals (cardio) OR segments
   const exercises = (w.exercises && w.exercises.length) ? w.exercises : null;
   const intervals = (w.aiSession && w.aiSession.intervals && w.aiSession.intervals.length)
     ? w.aiSession.intervals
     : null;
   const segments = (w.segments && w.segments.length) ? w.segments : null;
 
-  if (exercises) {
-    exercises.forEach(ex => {
-      const name = ex.name || "Exercise";
-      const parts = [];
-      if (ex.sets && ex.reps) parts.push(`${ex.sets} × ${ex.reps}`);
-      else if (ex.sets) parts.push(`${ex.sets} sets`);
-      else if (ex.reps) parts.push(`${ex.reps} reps`);
-      if (ex.weight) parts.push(`@ ${ex.weight}`);
-      if (ex.duration) parts.push(ex.duration);
-      lines.push(parts.length ? `${name}: ${parts.join(" ")}` : name);
-    });
-  } else if (intervals) {
-    intervals.forEach(iv => {
-      const parts = [];
-      if (iv.duration) parts.push(iv.duration);
-      if (iv.effort || iv.intensity) parts.push(iv.effort || iv.intensity);
-      lines.push(`${iv.name || "Interval"}${parts.length ? ` — ${parts.join(" · ")}` : ""}`);
-    });
-  } else if (segments) {
-    segments.forEach(s => {
-      const parts = [];
-      if (s.duration) parts.push(s.duration);
-      if (s.effort || s.intensity || s.zone) parts.push(s.effort || s.intensity || s.zone);
-      lines.push(`${s.name || "Segment"}${parts.length ? ` — ${parts.join(" · ")}` : ""}`);
-    });
+  if (prefs.body) {
+    if (exercises) {
+      lines.push("");
+      exercises.forEach(ex => {
+        const name = ex.name || "Exercise";
+        const parts = [];
+        if (ex.sets && ex.reps) parts.push(`${ex.sets} × ${ex.reps}`);
+        else if (ex.sets) parts.push(`${ex.sets} sets`);
+        else if (ex.reps) parts.push(`${ex.reps} reps`);
+        if (ex.weight) parts.push(`@ ${ex.weight}`);
+        if (ex.duration) parts.push(ex.duration);
+        lines.push(parts.length ? `${name}: ${parts.join(" ")}` : name);
+      });
+    } else if (intervals) {
+      lines.push("");
+      intervals.forEach(iv => {
+        const parts = [];
+        if (iv.duration) parts.push(iv.duration);
+        if (iv.effort || iv.intensity) parts.push(iv.effort || iv.intensity);
+        lines.push(`${iv.name || "Interval"}${parts.length ? ` — ${parts.join(" · ")}` : ""}`);
+      });
+    } else if (segments) {
+      lines.push("");
+      segments.forEach(s => {
+        const parts = [];
+        if (s.duration) parts.push(s.duration);
+        if (s.effort || s.intensity || s.zone) parts.push(s.effort || s.intensity || s.zone);
+        lines.push(`${s.name || "Segment"}${parts.length ? ` — ${parts.join(" · ")}` : ""}`);
+      });
+    }
   }
 
-  // Stats line: <duration> · <sets> · <exercises>  (or distance for cardio)
-  const statParts = [];
-  const durMin = parseInt(w.duration, 10);
-  if (durMin > 0) statParts.push(`${durMin} min`);
-  if (w.distance) statParts.push(String(w.distance));
-  if (exercises) {
-    const totalSets = exercises.reduce((s, e) => s + (parseInt(e.sets, 10) || 0), 0);
-    if (totalSets) statParts.push(`${totalSets} set${totalSets === 1 ? "" : "s"}`);
-    statParts.push(`${exercises.length} exercise${exercises.length === 1 ? "" : "s"}`);
-  } else if (intervals) {
-    statParts.push(`${intervals.length} interval${intervals.length === 1 ? "" : "s"}`);
-  }
-  if (statParts.length) {
+  // HIIT metadata line (format · rounds · rest)
+  if (prefs.hiitMeta && w.hiitMeta) {
+    const m = w.hiitMeta;
+    const fmtLabels = { circuit: "Circuit", tabata: "Tabata", emom: "EMOM", amrap: "AMRAP", "for-time": "For Time" };
+    const mParts = [fmtLabels[m.format] || m.format || "HIIT"];
+    if (m.rounds) mParts.push(`${m.rounds} rounds`);
+    if (m.restBetweenRounds) mParts.push(`${m.restBetweenRounds} rest`);
     lines.push("");
-    lines.push(statParts.join(" · "));
+    lines.push(mParts.join(" · "));
   }
 
-  // Footer — branding (this is the entire marketing payload since
-  // Strava's public API doesn't support photo uploads on activities).
-  lines.push("");
-  lines.push("Built with IronZ — ironz.fit");
+  // Notes (user workout notes)
+  if (prefs.notes && w.notes) {
+    lines.push("");
+    lines.push(String(w.notes));
+  }
+
+  // Stats line
+  if (prefs.stats) {
+    const statParts = [];
+    const durMin = parseInt(w.duration, 10);
+    if (durMin > 0) statParts.push(`${durMin} min`);
+    if (exercises) {
+      const totalSets = exercises.reduce((s, e) => s + (parseInt(e.sets, 10) || 0), 0);
+      if (totalSets) statParts.push(`${totalSets} set${totalSets === 1 ? "" : "s"}`);
+      statParts.push(`${exercises.length} exercise${exercises.length === 1 ? "" : "s"}`);
+    } else if (intervals) {
+      statParts.push(`${intervals.length} interval${intervals.length === 1 ? "" : "s"}`);
+    }
+    if (statParts.length) {
+      lines.push("");
+      lines.push(statParts.join(" · "));
+    }
+  }
+
+  // Distance line (cardio only, if available)
+  if (prefs.distance && w.distance) {
+    lines.push("");
+    lines.push(`Distance: ${w.distance}`);
+  }
+
+  // Footer — branding
+  if (prefs.footer) {
+    lines.push("");
+    lines.push("Built with IronZ — ironz.fit");
+  }
 
   return lines.join("\n");
 }
@@ -496,12 +580,17 @@ async function uploadWorkoutToStrava(workout, opts) {
     return { ok: false, reason: "missing_write_scope" };
   }
 
+  // Caller can pass explicit card prefs (e.g. from the share prompt's
+  // toggles); otherwise fall back to the user's saved prefs for this
+  // workout type, which fall back to sensible defaults.
+  const cardPrefs = opts.cardPrefs || getStravaCardPrefs(workout.type);
+
   const payload = {
     name: workout.name || workout.sessionName || "IronZ workout",
     type: _stravaTypeForWorkout(workout),
     start_date_local: _stravaStartDateLocal(workout),
     elapsed_time: _stravaElapsedSeconds(workout),
-    description: _buildStravaDescription(workout),
+    description: _buildStravaDescription(workout, cardPrefs),
     trainer: workout.type === "weightlifting" || workout.type === "bodyweight" || workout.type === "hiit",
   };
 
@@ -566,6 +655,183 @@ async function tryAutoShareToStrava(workout) {
   // Fire and forget — the user just finished a workout, we don't want to
   // block the UI on a network round-trip.
   uploadWorkoutToStrava(workout, { silent: true }).catch(() => {});
+}
+
+/**
+ * Post-completion share path. The spec (Section 1) says:
+ *   - Auto-share ON  → upload silently in the background
+ *   - Auto-share OFF → show a modal asking the user if they want to
+ *     share this specific workout, with "Share" and "Not now" buttons
+ *
+ * Called from every workout-completion code path (live tracker,
+ * day-detail Mark-as-Complete form, quick-log). Short-circuits silently
+ * if Strava isn't connected, the user doesn't have the write scope, or
+ * the workout is already tagged with a stravaUploadId.
+ *
+ * Dedupes its own prompt via a session-storage flag keyed on workout id
+ * so you can't get stacked modals if multiple code paths fire.
+ */
+async function promptStravaShareIfEligible(workout, opts) {
+  opts = opts || {};
+  if (!workout) return;
+  // When force=true (explicit user action from the share action sheet),
+  // we skip the auto-share bypass, the already-uploaded short-circuit,
+  // and the session-storage dedup. The user is asking for the prompt
+  // right now.
+  const force = !!opts.force;
+
+  if (!force && workout.stravaUploadId) return;
+  if (!force && workout.source === "strava") return;
+
+  const hasWrite = await hasStravaWriteScope();
+  if (!hasWrite) {
+    if (force) {
+      _showStravaToast("Reconnect Strava in Settings to enable uploads");
+    }
+    return;
+  }
+
+  // Auto-share branch — silent background upload, only when NOT forced.
+  if (!force && isStravaAutoShareEnabled()) {
+    uploadWorkoutToStrava(workout, { silent: true }).catch(() => {});
+    return;
+  }
+
+  // Manual branch — guard against prompt stacking on the completion
+  // flow. The force path skips this so the share icon always works.
+  if (!force) {
+    try {
+      const key = "stravaPromptShown:" + String(workout.id || "");
+      if (sessionStorage.getItem(key) === "1") return;
+      sessionStorage.setItem(key, "1");
+    } catch {}
+    // Defer the modal a beat so it lands AFTER the rating modal opens
+    // (the rating modal shows at +400ms from saveSessionCompletion).
+    setTimeout(() => _showStravaSharePrompt(workout), 900);
+  } else {
+    // Forced path — show the prompt immediately.
+    _showStravaSharePrompt(workout);
+  }
+}
+
+// Field definitions for the toggle grid. Each entry has a user-facing
+// label, a key into the prefs object, and an "availability" function
+// that returns true only when the field actually has data to show. We
+// hide unavailable toggles (e.g. "HIIT metadata" on a yoga workout) so
+// the UI doesn't offer meaningless choices.
+const _STRAVA_CARD_FIELDS = [
+  { key: "typeLabel", label: "Type label", available: (w) => !!_stravaWorkoutTypeLabel(w) },
+  { key: "body",      label: "Exercises / intervals",
+    available: (w) => (w.exercises && w.exercises.length)
+                    || (w.aiSession && w.aiSession.intervals && w.aiSession.intervals.length)
+                    || (w.segments && w.segments.length) },
+  { key: "stats",     label: "Stats line (time · sets · count)",
+    available: () => true },
+  { key: "distance",  label: "Distance", available: (w) => !!w.distance },
+  { key: "hiitMeta",  label: "HIIT format / rounds / rest",
+    available: (w) => !!w.hiitMeta },
+  { key: "notes",     label: "Workout notes", available: (w) => !!w.notes },
+  { key: "footer",    label: "IronZ branding footer", available: () => true },
+];
+
+function _showStravaSharePrompt(workout) {
+  // Remove any existing prompt first.
+  const existing = document.getElementById("strava-share-prompt");
+  if (existing) existing.remove();
+
+  const name = _escStrava(workout.name || workout.sessionName || "this workout");
+  const typeLabel = _escStrava(_stravaWorkoutTypeLabel(workout));
+  const workoutType = (workout.type || "general");
+
+  // Seed the prompt's prefs from the user's saved prefs for this type.
+  // Live mutable object — we update it as toggles flip and re-render the
+  // preview, then pass it to uploadWorkoutToStrava + setStravaCardPrefs
+  // on share.
+  const livePrefs = { ...getStravaCardPrefs(workoutType) };
+
+  // Build the toggles HTML. Fields without available data are hidden.
+  const togglesHtml = _STRAVA_CARD_FIELDS
+    .filter(f => f.available(workout))
+    .map(f => `
+      <label class="strava-toggle-item" data-field="${f.key}">
+        <input type="checkbox" data-field="${f.key}" ${livePrefs[f.key] ? "checked" : ""}>
+        <span>${_escStrava(f.label)}</span>
+      </label>
+    `).join("");
+
+  const overlay = document.createElement("div");
+  overlay.id = "strava-share-prompt";
+  overlay.className = "strava-share-prompt-overlay";
+  overlay.innerHTML = `
+    <div class="strava-share-prompt-modal">
+      <div class="strava-share-prompt-header">
+        <div class="strava-share-prompt-icon">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>
+        </div>
+        <div>
+          <div class="strava-share-prompt-title">Share to Strava?</div>
+          <div class="strava-share-prompt-sub">Post <strong>${name}</strong> · ${typeLabel}</div>
+        </div>
+      </div>
+      <div class="strava-share-prompt-body">
+        <div class="strava-preview-label">Preview</div>
+        <div class="strava-preview-box" id="strava-preview-box"></div>
+        <div class="strava-toggles-label">Include</div>
+        <div class="strava-toggles-grid" id="strava-toggles-grid">${togglesHtml}</div>
+        <div class="strava-share-prompt-remember">
+          Your choices are saved as the default for future ${_escStrava(typeLabel.toLowerCase() || "workouts")}.
+        </div>
+      </div>
+      <div class="strava-share-prompt-footer">
+        <label class="strava-share-prompt-autoshare">
+          <input type="checkbox" id="strava-share-prompt-remember">
+          <span>Always share future workouts automatically</span>
+        </label>
+        <div class="strava-share-prompt-actions">
+          <button class="btn-ghost"  id="strava-share-prompt-skip">Not now</button>
+          <button class="btn-strava" id="strava-share-prompt-share">Share to Strava</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("is-open"));
+
+  const previewEl = document.getElementById("strava-preview-box");
+  const refreshPreview = () => {
+    previewEl.textContent = _buildStravaDescription(workout, livePrefs);
+  };
+  refreshPreview();
+
+  // Wire toggles — flipping any checkbox updates livePrefs and
+  // re-renders the preview in place.
+  overlay.querySelectorAll('.strava-toggles-grid input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener("change", () => {
+      const field = cb.dataset.field;
+      livePrefs[field] = cb.checked;
+      refreshPreview();
+    });
+  });
+
+  const close = () => {
+    overlay.classList.remove("is-open");
+    setTimeout(() => overlay.remove(), 200);
+  };
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) close();
+  });
+
+  document.getElementById("strava-share-prompt-skip").addEventListener("click", close);
+
+  document.getElementById("strava-share-prompt-share").addEventListener("click", async () => {
+    const remember = document.getElementById("strava-share-prompt-remember")?.checked;
+    if (remember) setStravaAutoShareEnabled(true);
+    // Save the user's toggle choices as the new defaults for this type.
+    setStravaCardPrefs(workoutType, livePrefs);
+    close();
+    await uploadWorkoutToStrava(workout, { silent: false, cardPrefs: livePrefs });
+  });
 }
 
 /* =====================================================================
@@ -688,9 +954,12 @@ if (typeof window !== "undefined") {
   // Push-to-Strava
   window.uploadWorkoutToStrava = uploadWorkoutToStrava;
   window.tryAutoShareToStrava = tryAutoShareToStrava;
+  window.promptStravaShareIfEligible = promptStravaShareIfEligible;
   window.hasStravaWriteScope = hasStravaWriteScope;
   window.isStravaAutoShareEnabled = isStravaAutoShareEnabled;
   window.setStravaAutoShareEnabled = setStravaAutoShareEnabled;
+  window.getStravaCardPrefs = getStravaCardPrefs;
+  window.setStravaCardPrefs = setStravaCardPrefs;
   // For back-compat with any old code calling importStravaActivities()
   window.importStravaActivities = syncStravaNow;
 }

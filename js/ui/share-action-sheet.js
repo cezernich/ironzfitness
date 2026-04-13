@@ -87,16 +87,19 @@
       _removeSheet(SHEET_ID);
       openSendModal(entry, source);
     });
-    overlay.querySelector('[data-action="share-strava"]').addEventListener("click", async () => {
+    overlay.querySelector('[data-action="share-strava"]').addEventListener("click", () => {
       _removeSheet(SHEET_ID);
-      if (typeof window.uploadWorkoutToStrava !== "function") {
-        if (typeof _showShareToast === "function") _showShareToast("Strava integration not loaded");
-        return;
+      // Route through the customization prompt so the user gets the live
+      // preview + toggles instead of a blind confirm() dialog. force:true
+      // bypasses the auto-share + already-uploaded short-circuits, so
+      // tapping this button always opens the prompt.
+      if (typeof window.promptStravaShareIfEligible === "function") {
+        window.promptStravaShareIfEligible(entry, { force: true });
+      } else if (typeof window.uploadWorkoutToStrava === "function") {
+        window.uploadWorkoutToStrava(entry, { silent: false });
+      } else if (typeof _showShareToast === "function") {
+        _showShareToast("Strava integration not loaded");
       }
-      // Confirm before pushing — uploads are visible on the user's Strava feed.
-      const name = entry.sessionName || entry.name || entry.title || "this workout";
-      if (!confirm(`Post "${name}" to your Strava feed?`)) return;
-      await window.uploadWorkoutToStrava(entry, { silent: false });
     });
     overlay.querySelector('[data-action="cancel"]').addEventListener("click", () => {
       _removeSheet(SHEET_ID);
