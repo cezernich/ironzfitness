@@ -4164,6 +4164,14 @@ DO NOT put every phase at the same zone. Warmup+cooldown are Z1, steady blocks a
 For swim interval sets, "effort":"Z4" for hard intervals at ~85% effort.
 For hard/tempo/sprint intervals that have rest between reps, include a "restDuration" field in the interval object (e.g. "90s", "2 min", "30s"). Warmup/cooldown/steady phases don't need restDuration.
 
+SWIM-SPECIFIC: For swim workouts, every main/tempo/interval phase MUST use structured sets in the details field — concrete sets × distance @ pace with rest, not a narrative like "swim tempo for 13 min". Examples of correct details:
+- "8 × 100m @ CSS pace (1:30/100m) w/ 15s rest"
+- "6 × 200m @ CSS w/ 20s rest"
+- "10 × 50m sprint (CSS-5s) w/ 30s rest"
+- "Ladder 50/100/150/200/150/100/50m all @ CSS w/ 15s rest"
+- "4 × 400m @ CSS broken every 100m w/ 10s rest inside each 400"
+Also populate the reps, distance, and restDuration fields on interval objects (e.g. "reps": 6, "duration": "200m", "restDuration": "20s").
+
 Use "Bodyweight" for bodyweight exercises. Strength exercises must have specific weights in lbs rounded to the nearest 5 (e.g. 135, 185 — NEVER 137, 267). Use reference lifts if provided. Include 5-8 exercises or 3-5 intervals.`
       }]
     });
@@ -5396,6 +5404,275 @@ async function qeRegenExercise(i) {
 
 function qeGoCardioManual() { qeShowStep(2, "cardio-manual"); }
 
+// ── Structured swim main set generator ──────────────────────────────────────
+//
+// Builds a swim main set with concrete sets × distance @ pace and rest
+// periods instead of a time-block "swim Z3 for 13 min" instruction. Used
+// by qeGenerateCardio's swim branch.
+//
+// Arguments:
+//   mainMin   — total minutes available for the main set (after warmup/cooldown)
+//   intensity — "light" | "moderate" | "intense" | "max"
+//   cssSec    — user's Critical Swim Speed in seconds per 100m (nullable)
+//   iz        — the intensity zone map ({ warmup, main, hard, cooldown })
+//
+// Returns an array of interval objects ready to push into the cardio
+// intervals list. Each interval carries a human-readable `details`
+// string with the structured set AND the reps/restDuration fields so
+// the intensity strip can render rest gaps between reps.
+
+function _swimFmtPace(secPer100m) {
+  if (secPer100m == null || isNaN(secPer100m)) return null;
+  const t = Math.round(secPer100m);
+  const m = Math.floor(t / 60);
+  const s = t % 60;
+  return `${m}:${s.toString().padStart(2, "0")}/100m`;
+}
+
+function _swimWarmupText(warmupMin, cssSec) {
+  const easyPace = cssSec ? _swimFmtPace(cssSec + 15) : null;
+  const yd400 = "400m (or 400 yd) easy + 4 × 50m build w/ 20s rest";
+  return easyPace ? `${yd400}. Easy pace ~${easyPace}.` : yd400 + ". Conversational pace.";
+}
+
+function _swimCooldownText(cooldownMin, cssSec) {
+  return "200-300m easy, mix freestyle and backstroke, focus on breathing recovery.";
+}
+
+// Estimate per-rep seconds for a given distance at a given pace offset
+// from CSS. Used to pass a sensible `duration` on rep-based intervals.
+function _swimRepSeconds(distMeters, cssSec, paceOffsetSec) {
+  if (!cssSec) return Math.round(distMeters * 1.4); // ~1.4 sec/m default (~2:20/100m)
+  return Math.round((distMeters / 100) * (cssSec + (paceOffsetSec || 0)));
+}
+
+function _swimSetDetails(reps, distM, cssSec, paceOffsetSec, restStr, label) {
+  const paceStr = cssSec
+    ? _swimFmtPace(cssSec + (paceOffsetSec || 0))
+    : (label || "by feel");
+  const paceLabel = cssSec ? `@ ${paceStr}` : `at ${label || "steady effort"}`;
+  return `${reps} × ${distM}m ${paceLabel} w/ ${restStr} rest`;
+}
+
+function _generateStructuredSwimMain(mainMin, intensity, cssSec, iz) {
+  // Randomly pick a variant per intensity. On Regenerate, this runs
+  // again and Math.random yields a different pick → user sees a
+  // different swim workout.
+  const _pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+  if (intensity === "light") {
+    // Aerobic continuous or long reps — warmup/cooldown already handle easy.
+    const variants = [
+      () => ({
+        name: "Main Set",
+        effort: "Z2",
+        details: cssSec
+          ? `Continuous ${Math.round(mainMin * 60 / (cssSec + 10) * 100) * 10 || 1500}m at ${_swimFmtPace(cssSec + 10)}, steady breathing. Stop if form breaks down.`
+          : `Continuous swim at easy aerobic pace for the full time. Focus on form.`,
+        duration: mainMin + " min",
+      }),
+      () => {
+        const reps = 4;
+        const dist = 300;
+        const rest = "20s";
+        return {
+          name: "Main Set",
+          effort: "Z2",
+          details: _swimSetDetails(reps, dist, cssSec, 12, rest, "easy aerobic"),
+          duration: `${Math.round(_swimRepSeconds(dist, cssSec, 12) / 60)} min`,
+          reps,
+          restDuration: rest,
+          restEffort: "Z1",
+        };
+      },
+      () => {
+        const reps = 6;
+        const dist = 200;
+        const rest = "15s";
+        return {
+          name: "Main Set",
+          effort: "Z2",
+          details: _swimSetDetails(reps, dist, cssSec, 10, rest, "easy aerobic"),
+          duration: `${Math.round(_swimRepSeconds(dist, cssSec, 10) / 60)} min`,
+          reps,
+          restDuration: rest,
+          restEffort: "Z1",
+        };
+      },
+    ];
+    return [_pick(variants)()];
+  }
+
+  if (intensity === "moderate") {
+    // Main aerobic set + optional tempo accent. Mix of variants.
+    const variants = [
+      () => [{
+        name: "Main Set",
+        effort: "Z2",
+        details: _swimSetDetails(8, 200, cssSec, 5, "15s", "cruise pace"),
+        duration: `${Math.round(_swimRepSeconds(200, cssSec, 5) / 60)} min`,
+        reps: 8,
+        restDuration: "15s",
+        restEffort: "Z1",
+      }],
+      () => [{
+        name: "Main Set",
+        effort: "Z3",
+        details: _swimSetDetails(4, 300, cssSec, 5, "20s", "cruise / CSS+5s"),
+        duration: `${Math.round(_swimRepSeconds(300, cssSec, 5) / 60)} min`,
+        reps: 4,
+        restDuration: "20s",
+        restEffort: "Z1",
+      }],
+      () => [
+        {
+          name: "Main Set",
+          effort: "Z2",
+          details: _swimSetDetails(3, 200, cssSec, 8, "15s", "aerobic"),
+          duration: `${Math.round(_swimRepSeconds(200, cssSec, 8) / 60)} min`,
+          reps: 3,
+          restDuration: "15s",
+          restEffort: "Z1",
+        },
+        {
+          name: "Tempo Set",
+          effort: "Z3",
+          details: _swimSetDetails(4, 150, cssSec, 3, "20s", "tempo / CSS+3s"),
+          duration: `${Math.round(_swimRepSeconds(150, cssSec, 3) / 60)} min`,
+          reps: 4,
+          restDuration: "20s",
+          restEffort: "Z1",
+        },
+      ],
+      () => [{
+        name: "Descending Set",
+        effort: "Z3",
+        details: cssSec
+          ? `6 × 150m descending: first 2 @ ${_swimFmtPace(cssSec + 8)}, middle 2 @ ${_swimFmtPace(cssSec + 3)}, last 2 @ ${_swimFmtPace(cssSec)}. 20s rest.`
+          : `6 × 150m descending — first 2 easy, middle 2 cruise, last 2 threshold. 20s rest.`,
+        duration: `${Math.round(_swimRepSeconds(150, cssSec, 5) / 60)} min`,
+        reps: 6,
+        restDuration: "20s",
+        restEffort: "Z1",
+      }],
+    ];
+    return _pick(variants)();
+  }
+
+  if (intensity === "intense") {
+    // CSS intervals at threshold pace.
+    const variants = [
+      () => [{
+        name: "CSS Intervals",
+        effort: "Z4",
+        details: _swimSetDetails(8, 100, cssSec, 0, "15s", "CSS pace"),
+        duration: `${Math.round(_swimRepSeconds(100, cssSec, 0) / 60 * 10) / 10} min`,
+        reps: 8,
+        restDuration: "15s",
+        restEffort: "Z1",
+      }],
+      () => [{
+        name: "CSS Intervals",
+        effort: "Z4",
+        details: _swimSetDetails(6, 200, cssSec, 0, "20s", "CSS pace"),
+        duration: `${Math.round(_swimRepSeconds(200, cssSec, 0) / 60 * 10) / 10} min`,
+        reps: 6,
+        restDuration: "20s",
+        restEffort: "Z1",
+      }],
+      () => [{
+        name: "Descending Intervals",
+        effort: "Z4",
+        details: cssSec
+          ? `10 × 100m descending: first 5 @ ${_swimFmtPace(cssSec + 5)} (CSS+5s), last 5 @ ${_swimFmtPace(cssSec)} (CSS). 15s rest.`
+          : `10 × 100m descending — first 5 at cruise, last 5 at threshold. 15s rest.`,
+        duration: `${Math.round(_swimRepSeconds(100, cssSec, 2) / 60 * 10) / 10} min`,
+        reps: 10,
+        restDuration: "15s",
+        restEffort: "Z1",
+      }],
+      () => [{
+        name: "CSS Ladder",
+        effort: "Z4",
+        details: cssSec
+          ? `Ladder 50/100/150/200/150/100/50m all @ ${_swimFmtPace(cssSec)} (CSS) w/ 15s rest.`
+          : `Ladder 50/100/150/200/150/100/50m all at threshold effort w/ 15s rest.`,
+        duration: `${Math.round(_swimRepSeconds(800, cssSec, 0) / 60 * 10) / 10} min`,
+        // Ladder has varying distances per rep — treat as 7 reps of ~114m avg
+        reps: 7,
+        restDuration: "15s",
+        restEffort: "Z1",
+      }],
+      () => [{
+        name: "Broken 400s",
+        effort: "Z4",
+        details: cssSec
+          ? `4 × 400m @ ${_swimFmtPace(cssSec)} (CSS), broken every 100m w/ 10s mini-rest inside each 400. 30s rest between 400s.`
+          : `4 × 400m at threshold effort, broken every 100m w/ 10s rest inside each 400. 30s rest between 400s.`,
+        duration: `${Math.round(_swimRepSeconds(400, cssSec, 2) / 60 * 10) / 10} min`,
+        reps: 4,
+        restDuration: "30s",
+        restEffort: "Z1",
+      }],
+    ];
+    return _pick(variants)();
+  }
+
+  // intensity === "max"
+  const variants = [
+    () => [{
+      name: "Sprint Set",
+      effort: "Z5",
+      details: _swimSetDetails(10, 50, cssSec, -5, "30s", "CSS-5s / sprint"),
+      duration: `${Math.round(_swimRepSeconds(50, cssSec, -5) / 60 * 10) / 10} min`,
+      reps: 10,
+      restDuration: "30s",
+      restEffort: "Z1",
+    }],
+    () => [{
+      name: "All-Out Sprints",
+      effort: "Z5",
+      details: `16 × 25m all-out sprint, max effort. 20s rest.`,
+      duration: `${Math.round(_swimRepSeconds(25, cssSec, -8) / 60 * 10) / 10} min`,
+      reps: 16,
+      restDuration: "20s",
+      restEffort: "Z1",
+    }],
+    () => [{
+      name: "Descending Sprints",
+      effort: "Z5",
+      details: cssSec
+        ? `8 × 75m descending pace: first 2 @ ${_swimFmtPace(cssSec)} (CSS), next 3 @ ${_swimFmtPace(cssSec - 3)}, last 3 @ ${_swimFmtPace(cssSec - 6)} all-out. 20s rest.`
+        : `8 × 75m descending pace — first 2 at threshold, middle 3 hard, last 3 all-out. 20s rest.`,
+      duration: `${Math.round(_swimRepSeconds(75, cssSec, -3) / 60 * 10) / 10} min`,
+      reps: 8,
+      restDuration: "20s",
+      restEffort: "Z1",
+    }],
+    () => [
+      {
+        name: "Threshold Opener",
+        effort: "Z4",
+        details: _swimSetDetails(4, 100, cssSec, 0, "15s", "CSS pace"),
+        duration: `${Math.round(_swimRepSeconds(100, cssSec, 0) / 60 * 10) / 10} min`,
+        reps: 4,
+        restDuration: "15s",
+        restEffort: "Z1",
+      },
+      {
+        name: "Sprint Set",
+        effort: "Z5",
+        details: _swimSetDetails(8, 50, cssSec, -5, "30s", "sprint"),
+        duration: `${Math.round(_swimRepSeconds(50, cssSec, -5) / 60 * 10) / 10} min`,
+        reps: 8,
+        restDuration: "30s",
+        restEffort: "Z1",
+      },
+    ],
+  ];
+  return _pick(variants)();
+}
+
 function qeGenerateCardio() {
   const type      = _qeSelectedType;
   const intensity = document.getElementById("qe-activity-intensity")?.value || "moderate";
@@ -5491,38 +5768,31 @@ function qeGenerateCardio() {
         intervals[1].duration = (bMain - hardDur) + " min";
       }
     } else if (type === "swim") {
+      // Structured swim generator — emits concrete sets × distance @
+      // pace with rest periods, not flat time blocks. A swimmer needs
+      // to know how many yards/meters and what rest. Pace comes from
+      // the user's CSS in trainingZones.swimming.css (sec/100m); if
+      // unset we fall back to "by feel" text.
+      //
+      // Randomizes the variant on every call so Regenerate produces
+      // different output each tap.
       const mainMin = durMin - warmupMin - cooldownMin;
+      const swimCss = (zones.swimming && zones.swimming.css) || null; // sec per 100m
       intervals = [
-        { name: "Warm-Up", duration: warmupMin + " min", effort: iz.warmup, details: swimDetail(iz.warmup) },
-        { name: "Main Set", duration: Math.round(mainMin * 0.6) + " min", effort: iz.main, details: swimDetail(iz.main) },
+        {
+          name: "Warm-Up",
+          duration: warmupMin + " min",
+          effort: iz.warmup,
+          details: _swimWarmupText(warmupMin, swimCss),
+        },
+        ..._generateStructuredSwimMain(mainMin, intensity, swimCss, iz),
+        {
+          name: "Cool-Down",
+          duration: cooldownMin + " min",
+          effort: iz.cooldown,
+          details: _swimCooldownText(cooldownMin, swimCss),
+        },
       ];
-      if (intensity !== "light") {
-        // Name this block by its effort zone, not by "Hard Intervals" —
-        // this code path doesn't actually generate repeat structure
-        // (no reps, no rest, just a continuous time block), so a Z3
-        // segment is a tempo effort and a Z4 segment is a threshold
-        // block. Only a true repeat set (e.g. 6×100m w/ 20s rest)
-        // should be called intervals. See _stravaWorkoutTypeLabel
-        // / wearable spec.
-        const zoneNames = {
-          Z1: "Easy",
-          Z2: "Aerobic",
-          Z3: "Tempo",
-          Z4: "Threshold",
-          Z5: "VO2max",
-          Z6: "Sprint",
-        };
-        const hardName = zoneNames[iz.hard] || "Main";
-        intervals.push({
-          name: hardName,
-          duration: Math.round(mainMin * 0.4) + " min",
-          effort: iz.hard,
-          details: swimDetail(iz.hard),
-        });
-      } else {
-        intervals[1].duration = mainMin + " min";
-      }
-      intervals.push({ name: "Cool-Down", duration: cooldownMin + " min", effort: iz.cooldown, details: swimDetail(iz.cooldown) });
     } else {
       // Running / Cycling / generic — with variation on regenerate
       const mainMin = durMin - warmupMin - cooldownMin;
