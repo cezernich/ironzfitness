@@ -27,8 +27,14 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet" />
   <!-- Apply saved theme immediately to prevent flash -->
   <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'stone');</script>
-  <!-- Global error handling — MUST load first so it catches errors from
-       any module that loads after it. -->
+  <!-- Sentry browser SDK — loaded first so Sentry's global handlers capture
+       errors from every subsequent script. Uses the stable v7 single-file
+       bundle. Replace PLACEHOLDER_SENTRY_DSN in js/sentry-init.js once the
+       Sentry project exists. -->
+  <script src="https://browser.sentry-cdn.com/7.120.0/bundle.min.js" crossorigin="anonymous"></script>
+  <script src="js/sentry-init.js"></script>
+  <!-- In-house error reporting — runs alongside Sentry and writes to
+       analytics_events for our own dashboards. -->
   <script src="js/error-reporting.js"></script>
   <!-- Supabase JS SDK (must load before supabase-init.js) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>

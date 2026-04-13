@@ -355,6 +355,11 @@ async function authBoot() {
   clearTimeout(splashTimeout);
 
   if (session) {
+    // Tag every Sentry event from this session with the user id + email
+    // so crash reports are tied to the account that experienced them.
+    if (typeof window.Sentry !== 'undefined' && window.Sentry.setUser) {
+      try { window.Sentry.setUser({ id: session.user.id, email: session.user.email }); } catch {}
+    }
     try { await ensureProfile(session.user); } catch (e) { console.warn('Auth: ensureProfile error', e); }
     try { await DB.migrateLocalStorage(); } catch (e) { console.warn('Auth: migration error', e); }
     // Pull all data from Supabase before initializing UI
@@ -383,6 +388,9 @@ async function authBoot() {
 
   window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN' && session) {
+      if (typeof window.Sentry !== 'undefined' && window.Sentry.setUser) {
+        try { window.Sentry.setUser({ id: session.user.id, email: session.user.email }); } catch {}
+      }
       try { await ensureProfile(session.user); } catch (e) { console.warn('Auth: ensureProfile error', e); }
       try { await DB.migrateLocalStorage(); } catch (e) { console.warn('Auth: migration error', e); }
       try { await DB.refreshAllKeys(); } catch (e) { console.warn('Auth: refreshAllKeys error', e); }
@@ -407,6 +415,11 @@ async function authBoot() {
     } else if (event === 'PASSWORD_RECOVERY') {
       showNewPasswordPanel();
     } else if (event === 'SIGNED_OUT') {
+      // Drop the user context on Sentry so any errors after sign-out
+      // don't get attributed to the previous account.
+      if (typeof window.Sentry !== 'undefined' && window.Sentry.setUser) {
+        try { window.Sentry.setUser(null); } catch {}
+      }
       window._appInitialized = false;
       showAuthScreen();
     }
