@@ -375,13 +375,23 @@
   }
 
   function _generateSpeedWork(template, experience, durationOverrideMin, zones, warnings, variantOffset) {
-    // Pick sub-template — cycle between matching options for variety
-    const matching = template.sub_templates.filter(s => (s.default_for || []).includes(experience));
+    // Pick sub-template. Each sub_template is usually "default_for" exactly
+    // one experience level (200s=intermediate, 400s=advanced, strides=beginner),
+    // so filtering by experience alone leaves only one match and shuffle is a
+    // no-op. When the user explicitly hits shuffle (variantOffset > 0) we pool
+    // across all sub-templates so they actually get a different workout —
+    // starting one step past the experience-default so the first press always
+    // gives a new flavor.
+    const allSubs = template.sub_templates;
+    const matching = allSubs.filter(s => (s.default_for || []).includes(experience));
     let subTpl;
-    if (matching.length > 1) {
+    if (variantOffset && allSubs.length > 1) {
+      const defaultIdx = Math.max(0, allSubs.indexOf(matching[0] || allSubs[0]));
+      subTpl = allSubs[(defaultIdx + variantOffset) % allSubs.length];
+    } else if (matching.length > 1) {
       subTpl = matching[_variantIndex(variantOffset) % matching.length];
     } else {
-      subTpl = matching[0] || template.sub_templates[0];
+      subTpl = matching[0] || allSubs[0];
     }
     const wuMin = 15;
     const cdMin = subTpl.id === "strides_only" ? 5 : 10;
