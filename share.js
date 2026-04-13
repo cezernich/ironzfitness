@@ -183,7 +183,10 @@ async function shareWorkoutLinkDirect(entry, source, delivery) {
 //   - useNative=false (desktop, or caller is the ShareActionSheet "Copy link"
 //     button) writes the URL to the clipboard and shows a toast.
 async function _handleShareUrl(workoutName, token, source, sessionTypeId, useNative) {
-  const url = SHARE_PREVIEW_BASE + "?id=" + encodeURIComponent(token);
+  // The share-preview Edge Function reads the token from ?token=<…> (or
+  // from the path). Earlier builds of this file used ?id= which the
+  // function silently treated as missing and returned "Link not found".
+  const url = SHARE_PREVIEW_BASE + "?token=" + encodeURIComponent(token);
 
   if (useNative && navigator.share) {
     try {

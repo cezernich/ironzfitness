@@ -152,9 +152,12 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   const url = new URL(req.url);
-  // Token can come from path /share-preview/{token} or ?token=
+  // Token can come from path /share-preview/{token}, ?token=, or the legacy
+  // ?id= query param. Older builds of share.js shipped ?id= and there are
+  // links out in the wild (clipboards, text messages, social posts) we
+  // need to keep resolving — the alias below makes those work.
   const pathToken = (url.pathname.split("/").pop() || "").trim();
-  const queryToken = url.searchParams.get("token") || "";
+  const queryToken = url.searchParams.get("token") || url.searchParams.get("id") || "";
   const token = (pathToken && pathToken !== "share-preview" ? pathToken : queryToken).trim();
 
   if (!token || !/^[\w-]{6,64}$/.test(token)) {
