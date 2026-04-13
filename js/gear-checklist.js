@@ -59,10 +59,14 @@
       applies: ["half","full"],
       why: "When water is too warm for wetsuits, a swim skin reduces drag.",
       tip: "Only worth it if you're competitive. Most age-groupers skip this." },
-    { id: "swim-training-aids", category: "swim", name: "Pull buoy / paddles (training)", tier: "extra",
+    { id: "swim-pull-buoy", category: "swim", name: "Pull buoy (training)", tier: "nice",
       applies: ["sprint","olympic","half","full"],
-      why: "Training aids — not for race day. Build upper-body swim strength.",
-      tip: "A pull buoy teaches proper body position. Don't become dependent on it." },
+      why: "Training aid — not for race day. Teaches proper body position in the water.",
+      tip: "Great for isolating the pull, but don't become dependent on it — you still need to kick on race day." },
+    { id: "swim-paddles", category: "swim", name: "Paddles (training)", tier: "nice",
+      applies: ["sprint","olympic","half","full"],
+      why: "Training aid — not for race day. Build upper-body swim strength and catch feel.",
+      tip: "Start small — oversized paddles are a shoulder-injury factory. Finis Freestyler is a good starter." },
 
     // ── BIKE ────────────────────────────────────────────────────────────
     { id: "bike-bike", category: "bike", name: "Road or tri bike", tier: "need",
