@@ -28,10 +28,10 @@
   <!-- Apply saved theme immediately to prevent flash -->
   <script>document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'stone');</script>
   <!-- Sentry browser SDK — loaded first so Sentry's global handlers capture
-       errors from every subsequent script. Uses the stable v7 single-file
-       bundle. Replace PLACEHOLDER_SENTRY_DSN in js/sentry-init.js once the
-       Sentry project exists. -->
-  <script src="https://browser.sentry-cdn.com/7.120.0/bundle.min.js" crossorigin="anonymous"></script>
+       errors from every subsequent script. Uses the v8 error-only bundle;
+       upgrade to bundle.tracing.replay.min.js if we ever want performance
+       monitoring or session replay. -->
+  <script src="https://browser.sentry-cdn.com/8.0.0/bundle.min.js" crossorigin="anonymous"></script>
   <script src="js/sentry-init.js"></script>
   <!-- In-house error reporting — runs alongside Sentry and writes to
        analytics_events for our own dashboards. -->
