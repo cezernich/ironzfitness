@@ -140,6 +140,25 @@ async function connectStrava() {
     if (error) throw error;
     if (!data || !data.authorize_url) throw new Error("No authorize URL returned");
 
+    // Parse the scope out of the returned authorize URL and log it so we
+    // can tell at a glance whether the deployed edge function is
+    // requesting read_all+write or still the old read_all only.
+    try {
+      const parsedUrl = new URL(data.authorize_url);
+      const urlScope = parsedUrl.searchParams.get("scope");
+      console.log("[Strava] connect — authorize URL scope:", urlScope);
+      if (urlScope && !urlScope.includes("activity:write")) {
+        console.warn(
+          "[Strava] The deployed strava-auth function is requesting scope:",
+          urlScope,
+          "— expected 'activity:read_all,activity:write'. Redeploy the function:\n" +
+          "  supabase functions deploy strava-auth --no-verify-jwt"
+        );
+      }
+    } catch (e) {
+      console.warn("[Strava] couldn't parse authorize URL:", e);
+    }
+
     // Redirect the whole page to Strava's authorize screen. Strava will
     // redirect back to strava-callback, which (after exchanging the code)
     // sends us to https://ironz.fit/?strava=connected.
@@ -171,6 +190,17 @@ async function handleStravaReturn() {
       trackEvent("strava_connected", {});
     }
     _showStravaToast("Strava connected! Syncing your activities…");
+
+    // Dump the freshly-stored scope to the console so we can verify
+    // reconnect flows immediately. If this logs a scope without
+    // "activity:write", the deployed strava-callback is NOT writing
+    // the scope column — redeploy the function.
+    try {
+      const row = await getStravaTokenRow();
+      console.log("[Strava] post-callback stored scope:", row?.scope || "(null)",
+        "— hasWrite:", String(row?.scope || "").includes("activity:write"));
+    } catch {}
+
     await syncStravaNow({ silent: false });
     renderStravaStatus();
   } else if (val === "error") {
@@ -893,15 +923,34 @@ async function renderStravaStatus() {
   if (row) {
     const name = [row.athlete_firstname, row.athlete_lastname].filter(Boolean).join(" ") || "Connected";
     const sync = _formatStravaDate(row.last_sync_at);
-    const hasWrite = String(row.scope || "").includes("activity:write");
+    const scopeStr = String(row.scope || "");
+    const hasWrite = scopeStr.includes("activity:write");
     const autoShare = isStravaAutoShareEnabled();
+
+    // Log the stored scope to the console every time we render so it's
+    // easy to diagnose "reconnect isn't enabling uploads" reports.
+    console.log("[Strava] renderStravaStatus — stored scope:", scopeStr || "(null)", "hasWrite:", hasWrite);
+
+    // Small diagnostic line on the card so the user can see what's
+    // actually stored without opening devtools. Read-only connections
+    // display this in the reconnect block; successful upload-enabled
+    // connections just see "Uploads: enabled".
+    const scopeLine = scopeStr
+      ? `<div class="strava-scope-info">Scope: <code>${_escStrava(scopeStr)}</code></div>`
+      : `<div class="strava-scope-info">Scope: <code>(none stored)</code></div>`;
 
     // Read-only legacy connections need to re-grant the write scope
     // before the auto-share toggle becomes meaningful.
     const reconnectBlock = !hasWrite ? `
       <div class="strava-reconnect-prompt">
         <p class="hint">Reconnect to enable Push-to-Strava — your existing connection only has read access.</p>
+        ${scopeLine}
         <button class="btn-strava btn-sm" onclick="connectStrava()">Reconnect to enable uploads</button>
+        <p class="hint" style="margin-top:8px;font-size:0.72rem;opacity:0.75">
+          If reconnecting doesn't change the scope above, the <code>strava-auth</code>
+          and <code>strava-callback</code> Edge Functions need to be redeployed
+          with <code>--no-verify-jwt</code>.
+        </p>
       </div>` : "";
 
     const autoShareBlock = hasWrite ? `

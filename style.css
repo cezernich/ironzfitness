@@ -6822,6 +6822,17 @@ button:active {
   margin: 8px 0 10px;
 }
 .strava-reconnect-prompt .hint { margin: 0 0 8px; }
+.strava-scope-info {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  margin: 0 0 8px;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+}
+.strava-scope-info code {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
 
 /* Auto-share toggle row */
 .strava-toggle-row {
