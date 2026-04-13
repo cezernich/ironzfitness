@@ -11459,6 +11459,131 @@ button:active {
   .admin-td-email { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
 }
 
+/* ── Event analytics bar chart ── */
+.admin-bar-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 4px 0;
+}
+.admin-bar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+.admin-bar-value {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--color-text);
+  min-height: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.admin-bar-track {
+  width: 100%;
+  max-width: 32px;
+  height: 80px;
+  background: rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--color-border);
+  border-radius: 6px 6px 0 0;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+:root[data-theme="blackout"] .admin-bar-track,
+:root[data-theme="iron"]    .admin-bar-track,
+:root[data-theme="midnight"] .admin-bar-track {
+  background: rgba(255, 255, 255, 0.06);
+}
+.admin-bar-fill {
+  width: 100%;
+  background: color-mix(in srgb, var(--color-accent) 75%, transparent);
+  border-radius: 5px 5px 0 0;
+  transition: height 0.3s ease;
+}
+@supports not (background: color-mix(in srgb, red, blue)) {
+  .admin-bar-fill { background: rgba(129, 140, 248, 0.75); }
+}
+.admin-bar-track--inline {
+  max-width: none;
+  height: 8px;
+  border-radius: 999px;
+  display: block;
+}
+.admin-bar-track--inline .admin-bar-fill {
+  border-radius: 999px;
+}
+.admin-bar-label {
+  font-size: 0.62rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  text-align: center;
+  font-weight: 600;
+}
+
+/* ── Event analytics activity log ── */
+.admin-activity-log {
+  max-height: 400px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 4px;
+}
+.admin-activity-row {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  transition: background 0.12s;
+}
+.admin-activity-row:nth-child(odd) {
+  background: rgba(0, 0, 0, 0.03);
+}
+:root[data-theme="blackout"] .admin-activity-row:nth-child(odd),
+:root[data-theme="iron"]    .admin-activity-row:nth-child(odd),
+:root[data-theme="midnight"] .admin-activity-row:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.03);
+}
+.admin-activity-time {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.admin-activity-event code {
+  font-size: 0.82em;
+  color: var(--color-accent);
+}
+.admin-activity-user {
+  color: var(--color-text-muted);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-mini-chart {
+  min-height: 120px;
+}
+
+@media (max-width: 520px) {
+  .admin-activity-row {
+    grid-template-columns: 90px 1fr;
+    row-gap: 2px;
+  }
+  .admin-activity-user {
+    grid-column: 2;
+    text-align: left;
+  }
+  .admin-bar-chart { gap: 4px; }
+  .admin-bar-track { height: 60px; }
+  .admin-bar-label { font-size: 0.55rem; }
+}
+
 /* ===== PHILOSOPHY ENGINE UI ===== */
 
 .plan-outdated-banner {

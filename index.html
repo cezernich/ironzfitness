@@ -1783,7 +1783,74 @@
 
       <!-- ── SUB-TAB: Analytics ──────────────────────────────────── -->
       <div id="admin-analytics" class="admin-subtab-content" style="display:none">
+        <!-- Headline metrics from analytics_events -->
         <div class="admin-stats-row">
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-ae-total-users">--</div>
+            <div class="admin-stat-label">Registered Users</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-ae-dau">--</div>
+            <div class="admin-stat-label">DAU (today)</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-ae-wau">--</div>
+            <div class="admin-stat-label">WAU (7d)</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-ae-mau">--</div>
+            <div class="admin-stat-label">MAU (30d)</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-ae-sessions-total">--</div>
+            <div class="admin-stat-label">Total Sessions</div>
+          </div>
+        </div>
+
+        <!-- DAU mini chart — last 7 days -->
+        <div class="card">
+          <h3 style="margin:0 0 12px">Daily Active Users (last 7 days)</h3>
+          <div id="admin-ae-dau-chart" class="admin-mini-chart">Loading...</div>
+        </div>
+
+        <!-- Weekly actives — last 4 weeks -->
+        <div class="card">
+          <h3 style="margin:0 0 12px">Weekly Active Users (last 4 weeks)</h3>
+          <div id="admin-ae-wau-chart" class="admin-mini-chart">Loading...</div>
+        </div>
+
+        <!-- New signups — last 14 days -->
+        <div class="card">
+          <h3 style="margin:0 0 12px">New Users per Day (last 14 days)</h3>
+          <div id="admin-ae-new-users-chart" class="admin-mini-chart">Loading...</div>
+        </div>
+
+        <!-- Top event names — last 30 days -->
+        <div class="card" style="overflow-x:auto">
+          <h3 style="margin:0 0 12px">Most Popular Features (top 10, last 30d)</h3>
+          <div id="admin-ae-top-events">Loading...</div>
+        </div>
+
+        <!-- Last login per user -->
+        <div class="card" style="overflow-x:auto">
+          <h3 style="margin:0 0 12px">Last Login per User</h3>
+          <div id="admin-ae-last-login">Loading...</div>
+        </div>
+
+        <!-- Last activity per user (any event) -->
+        <div class="card" style="overflow-x:auto">
+          <h3 style="margin:0 0 12px">Last Activity per User</h3>
+          <div id="admin-ae-last-activity">Loading...</div>
+        </div>
+
+        <!-- User activity feed — last 100 events -->
+        <div class="card">
+          <h3 style="margin:0 0 12px">User Activity Log (last 100 events)</h3>
+          <div id="admin-ae-activity-log" class="admin-activity-log">Loading...</div>
+        </div>
+
+        <!-- Existing plan/outcome analytics below — kept as a lower section -->
+        <div class="admin-stats-row" style="margin-top:24px">
           <div class="admin-stat-card">
             <div class="admin-stat-value" id="admin-plans-total">--</div>
             <div class="admin-stat-label">Plans Generated</div>

@@ -544,6 +544,13 @@ async function adminUpdateGapStatus(gapId, newStatus) {
 async function loadAdminAnalytics() {
   const client = window.supabaseClient;
 
+  // Fire the new analytics_events dashboard independently so it can't
+  // block the older plans/outcomes widgets if it errors out.
+  loadAdminEventAnalytics().catch(e => {
+    console.warn("Admin: event analytics failed", e);
+    if (typeof reportCaughtError === "function") reportCaughtError(e, { context: "admin", action: "load_event_analytics" });
+  });
+
   // Plan count
   try {
     const { count } = await client.from('generated_plans').select('id', { count: 'exact', head: true });
@@ -627,3 +634,348 @@ document.addEventListener("DOMContentLoaded", () => {
   const gapFilter = document.getElementById("admin-gaps-filter");
   if (gapFilter) gapFilter.addEventListener("change", () => renderAdminGaps());
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+// Event analytics dashboard (analytics_events + profiles join)
+// ══════════════════════════════════════════════════════════════════════════
+//
+// Pulls last 30 days of events + last 100 events + all profiles in three
+// Supabase queries, then aggregates client-side. This is fine for an MVP
+// admin dashboard with dozens of users; for 100k+ events it should move
+// to SQL views or RPC functions.
+//
+// The function is idempotent and safe to call repeatedly — each call
+// overwrites the rendered content of every #admin-ae-* target.
+
+async function loadAdminEventAnalytics() {
+  const client = window.supabaseClient;
+  if (!client) return;
+
+  // ── Query 1: last 30 days of events (for DAU/WAU/MAU/top events) ─────
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+  let recentEvents = [];
+  try {
+    const { data, error } = await client
+      .from("analytics_events")
+      .select("id, user_id, event_name, created_at")
+      .gte("created_at", thirtyDaysAgo)
+      .order("created_at", { ascending: false })
+      .limit(20000);
+    if (error) throw error;
+    recentEvents = data || [];
+  } catch (e) {
+    console.warn("[Admin] recent events query failed:", e.message || e);
+    _aeRenderError("Failed to load recent events");
+    return;
+  }
+
+  // ── Query 2: last 100 events (for the activity feed — more detail) ──
+  let latest100 = [];
+  try {
+    const { data } = await client
+      .from("analytics_events")
+      .select("id, user_id, event_name, created_at, properties")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    latest100 = data || [];
+  } catch (e) {
+    console.warn("[Admin] latest 100 events query failed:", e.message || e);
+  }
+
+  // ── Query 3: profiles (for email join) ───────────────────────────────
+  let profiles = [];
+  try {
+    const { data } = await client
+      .from("profiles")
+      .select("id, email, full_name, created_at")
+      .order("created_at", { ascending: false })
+      .limit(10000);
+    profiles = data || [];
+  } catch (e) {
+    console.warn("[Admin] profiles query failed:", e.message || e);
+  }
+  const profilesById = {};
+  profiles.forEach(p => { profilesById[p.id] = p; });
+
+  // ── Total registered users ───────────────────────────────────────────
+  const eventUserIds = new Set(recentEvents.map(e => e.user_id).filter(Boolean));
+  const totalRegistered = Math.max(profiles.length, eventUserIds.size);
+  setText("admin-ae-total-users", totalRegistered);
+
+  // ── DAU/WAU/MAU ──────────────────────────────────────────────────────
+  const now = new Date();
+  const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+  const weekAgo    = new Date(now.getTime() - 7  * 86400000);
+  const monthAgo   = new Date(now.getTime() - 30 * 86400000);
+
+  const distinctIn = (sinceMs) => {
+    const set = new Set();
+    recentEvents.forEach(e => {
+      if (!e.user_id) return;
+      if (new Date(e.created_at).getTime() >= sinceMs) set.add(e.user_id);
+    });
+    return set.size;
+  };
+  setText("admin-ae-dau", distinctIn(todayStart.getTime()));
+  setText("admin-ae-wau", distinctIn(weekAgo.getTime()));
+  setText("admin-ae-mau", distinctIn(monthAgo.getTime()));
+
+  // ── Total sessions (session_started events) ──────────────────────────
+  try {
+    const { count } = await client
+      .from("analytics_events")
+      .select("id", { count: "exact", head: true })
+      .eq("event_name", "session_started");
+    setText("admin-ae-sessions-total", count || 0);
+  } catch {
+    setText("admin-ae-sessions-total", "?");
+  }
+
+  // ── DAU chart — last 7 days ──────────────────────────────────────────
+  const dauBuckets = _aeDailyBuckets(recentEvents, 7, /*distinctUsers*/true);
+  _aeRenderBarChart("admin-ae-dau-chart", dauBuckets, (b) => `${b.value} user${b.value === 1 ? "" : "s"}`);
+
+  // ── WAU chart — last 4 weeks ────────────────────────────────────────
+  const wauBuckets = _aeWeeklyBuckets(recentEvents, 4);
+  _aeRenderBarChart("admin-ae-wau-chart", wauBuckets, (b) => `${b.value} user${b.value === 1 ? "" : "s"}`);
+
+  // ── New users per day — last 14 days ─────────────────────────────────
+  const newUserBuckets = _aeNewUsersBuckets(profiles, 14);
+  _aeRenderBarChart("admin-ae-new-users-chart", newUserBuckets, (b) => `${b.value} new`);
+
+  // ── Top 10 event names (last 30d) ────────────────────────────────────
+  const eventCounts = {};
+  recentEvents.forEach(e => {
+    if (!e.event_name) return;
+    eventCounts[e.event_name] = (eventCounts[e.event_name] || 0) + 1;
+  });
+  const topEvents = Object.entries(eventCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+  _aeRenderTopEventsTable("admin-ae-top-events", topEvents);
+
+  // ── Last login per user (most recent session_started) ────────────────
+  const lastLoginByUser = {};
+  recentEvents.forEach(e => {
+    if (e.event_name !== "session_started" || !e.user_id) return;
+    const t = new Date(e.created_at).getTime();
+    if (!lastLoginByUser[e.user_id] || t > lastLoginByUser[e.user_id]) {
+      lastLoginByUser[e.user_id] = t;
+    }
+  });
+  _aeRenderUserTimeTable("admin-ae-last-login", lastLoginByUser, profilesById, null);
+
+  // ── Last activity per user (most recent event of any type) ───────────
+  const lastActivityByUser = {};
+  recentEvents.forEach(e => {
+    if (!e.user_id) return;
+    const t = new Date(e.created_at).getTime();
+    if (!lastActivityByUser[e.user_id] || t > lastActivityByUser[e.user_id].t) {
+      lastActivityByUser[e.user_id] = { t, eventName: e.event_name };
+    }
+  });
+  _aeRenderUserActivityTable("admin-ae-last-activity", lastActivityByUser, profilesById);
+
+  // ── User activity log — last 100 events ──────────────────────────────
+  _aeRenderActivityLog("admin-ae-activity-log", latest100, profilesById);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+function _aeRenderError(msg) {
+  ["admin-ae-dau-chart","admin-ae-wau-chart","admin-ae-new-users-chart",
+   "admin-ae-top-events","admin-ae-last-login","admin-ae-last-activity",
+   "admin-ae-activity-log"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = `<p style="color:var(--color-text-muted)">${escAdmin(msg)}</p>`;
+  });
+}
+
+// Build N daily buckets ending today. If distinctUsers, count distinct
+// user_ids per day; otherwise count events per day.
+function _aeDailyBuckets(events, days, distinctUsers) {
+  const buckets = [];
+  const now = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i);
+    const dNext = new Date(d); dNext.setDate(dNext.getDate() + 1);
+    const users = new Set();
+    let count = 0;
+    events.forEach(e => {
+      const t = new Date(e.created_at).getTime();
+      if (t >= d.getTime() && t < dNext.getTime()) {
+        count++;
+        if (e.user_id) users.add(e.user_id);
+      }
+    });
+    buckets.push({
+      label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      value: distinctUsers ? users.size : count,
+    });
+  }
+  return buckets;
+}
+
+// Build N weekly buckets ending this week.
+function _aeWeeklyBuckets(events, weeks) {
+  const buckets = [];
+  // Find this week's Monday
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const dow = now.getDay();
+  const thisMonday = new Date(now);
+  thisMonday.setDate(thisMonday.getDate() + (dow === 0 ? -6 : 1 - dow));
+  for (let i = weeks - 1; i >= 0; i--) {
+    const weekStart = new Date(thisMonday); weekStart.setDate(weekStart.getDate() - i * 7);
+    const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 7);
+    const users = new Set();
+    events.forEach(e => {
+      const t = new Date(e.created_at).getTime();
+      if (t >= weekStart.getTime() && t < weekEnd.getTime() && e.user_id) users.add(e.user_id);
+    });
+    buckets.push({
+      label: weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      value: users.size,
+    });
+  }
+  return buckets;
+}
+
+function _aeNewUsersBuckets(profiles, days) {
+  const buckets = [];
+  const now = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i);
+    const dNext = new Date(d); dNext.setDate(dNext.getDate() + 1);
+    let count = 0;
+    profiles.forEach(p => {
+      if (!p.created_at) return;
+      const t = new Date(p.created_at).getTime();
+      if (t >= d.getTime() && t < dNext.getTime()) count++;
+    });
+    buckets.push({
+      label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      value: count,
+    });
+  }
+  return buckets;
+}
+
+// Render a simple pure-CSS bar chart. Each bucket = { label, value }.
+function _aeRenderBarChart(elId, buckets, tooltipFn) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const maxVal = Math.max(...buckets.map(b => b.value), 1);
+  const bars = buckets.map(b => {
+    const pct = b.value === 0 ? 0 : Math.max(8, Math.round((b.value / maxVal) * 100));
+    const tooltip = tooltipFn ? tooltipFn(b) : String(b.value);
+    return `<div class="admin-bar-col" title="${escAdmin(b.label)}: ${escAdmin(tooltip)}">
+      <div class="admin-bar-value">${b.value || ""}</div>
+      <div class="admin-bar-track">
+        <div class="admin-bar-fill" style="height:${pct}%"></div>
+      </div>
+      <div class="admin-bar-label">${escAdmin(b.label)}</div>
+    </div>`;
+  }).join("");
+  el.innerHTML = `<div class="admin-bar-chart">${bars}</div>`;
+}
+
+function _aeRenderTopEventsTable(elId, topEvents) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (!topEvents.length) {
+    el.innerHTML = `<p style="color:var(--color-text-muted)">No events in the last 30 days.</p>`;
+    return;
+  }
+  const total = topEvents.reduce((s, [, n]) => s + n, 0);
+  const rows = topEvents.map(([name, count]) => {
+    const pct = Math.round((count / total) * 100);
+    return `<tr>
+      <td>${escAdmin(name)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${count}</td>
+      <td style="width:40%">
+        <div class="admin-bar-track admin-bar-track--inline">
+          <div class="admin-bar-fill" style="width:${pct}%;height:100%"></div>
+        </div>
+      </td>
+      <td style="text-align:right;width:44px;font-variant-numeric:tabular-nums">${pct}%</td>
+    </tr>`;
+  }).join("");
+  el.innerHTML = `<table class="admin-table">
+    <thead><tr><th>Event</th><th style="text-align:right">Count</th><th></th><th style="text-align:right">%</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function _aeRenderUserTimeTable(elId, timeByUser, profilesById, extraCol) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const entries = Object.entries(timeByUser)
+    .map(([uid, t]) => ({ uid, t, profile: profilesById[uid] }))
+    .sort((a, b) => b.t - a.t);
+  if (!entries.length) {
+    el.innerHTML = `<p style="color:var(--color-text-muted)">No logins in the last 30 days.</p>`;
+    return;
+  }
+  const rows = entries.map(e => `<tr>
+    <td>${escAdmin((e.profile && (e.profile.full_name || e.profile.email)) || e.uid.slice(0, 8))}</td>
+    <td>${escAdmin((e.profile && e.profile.email) || "—")}</td>
+    <td style="font-variant-numeric:tabular-nums">${escAdmin(_aeFormatRelative(e.t))}</td>
+  </tr>`).join("");
+  el.innerHTML = `<table class="admin-table">
+    <thead><tr><th>Name</th><th>Email</th><th>Last Login</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function _aeRenderUserActivityTable(elId, activityByUser, profilesById) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const entries = Object.entries(activityByUser)
+    .map(([uid, v]) => ({ uid, t: v.t, eventName: v.eventName, profile: profilesById[uid] }))
+    .sort((a, b) => b.t - a.t);
+  if (!entries.length) {
+    el.innerHTML = `<p style="color:var(--color-text-muted)">No user activity in the last 30 days.</p>`;
+    return;
+  }
+  const rows = entries.map(e => `<tr>
+    <td>${escAdmin((e.profile && (e.profile.full_name || e.profile.email)) || e.uid.slice(0, 8))}</td>
+    <td>${escAdmin((e.profile && e.profile.email) || "—")}</td>
+    <td><code style="font-size:0.85em">${escAdmin(e.eventName || "")}</code></td>
+    <td style="font-variant-numeric:tabular-nums">${escAdmin(_aeFormatRelative(e.t))}</td>
+  </tr>`).join("");
+  el.innerHTML = `<table class="admin-table">
+    <thead><tr><th>Name</th><th>Email</th><th>Last Event</th><th>When</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function _aeRenderActivityLog(elId, events, profilesById) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (!events.length) {
+    el.innerHTML = `<p style="color:var(--color-text-muted)">No events yet.</p>`;
+    return;
+  }
+  const rows = events.map(e => {
+    const p = profilesById[e.user_id];
+    const label = (p && (p.email || p.full_name)) || (e.user_id ? e.user_id.slice(0, 8) + "…" : "anonymous");
+    const ts = new Date(e.created_at);
+    const when = ts.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    return `<div class="admin-activity-row">
+      <span class="admin-activity-time">${escAdmin(when)}</span>
+      <span class="admin-activity-event"><code>${escAdmin(e.event_name || "unknown")}</code></span>
+      <span class="admin-activity-user">${escAdmin(label)}</span>
+    </div>`;
+  }).join("");
+  el.innerHTML = rows;
+}
+
+function _aeFormatRelative(ms) {
+  const diff = Date.now() - ms;
+  if (diff < 60 * 1000) return "just now";
+  if (diff < 60 * 60 * 1000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 24 * 60 * 60 * 1000) return `${Math.floor(diff / 3600000)}h ago`;
+  if (diff < 30 * 86400000) return `${Math.floor(diff / 86400000)}d ago`;
+  const d = new Date(ms);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}

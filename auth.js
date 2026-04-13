@@ -260,9 +260,11 @@ async function ensureProfile(user) {
   }
 
   if (!existing) {
-    // Determine role — only the hardcoded owner email gets admin
-    const adminEmail = 'chase.zernich@gmail.com';
-    const isAdmin = user.email && user.email.toLowerCase() === adminEmail;
+    // Determine role — hardcoded owner emails get admin. Both the personal
+    // gmail and the northwestern account are admins so the dashboard works
+    // whichever email is logged in.
+    const ADMIN_EMAILS = ['chase.zernich@gmail.com', 'chase.zernich@kellogg.northwestern.edu'];
+    const isAdmin = user.email && ADMIN_EMAILS.includes(user.email.toLowerCase());
 
     const { error: insertError } = await client.from('profiles').insert({
       id:                  user.id,
@@ -282,7 +284,22 @@ async function ensureProfile(user) {
     .eq('id', user.id)
     .single();
 
-  window._userRole = profileRow?.role || 'user';
+  let role = profileRow?.role || 'user';
+
+  // Self-heal: if the logged-in user's email is on the admin list but their
+  // profile row predates that check, upgrade it now. Runs once per sign-in
+  // — no-op if already admin.
+  const ADMIN_EMAILS = ['chase.zernich@gmail.com', 'chase.zernich@kellogg.northwestern.edu'];
+  if (role !== 'admin' && user.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) {
+    try {
+      await client.from('profiles').update({ role: 'admin' }).eq('id', user.id);
+      role = 'admin';
+    } catch (e) {
+      if (typeof reportCaughtError === 'function') reportCaughtError(e, { context: 'auth', action: 'admin_self_heal' });
+    }
+  }
+
+  window._userRole = role;
   if (typeof initAdminVisibility === 'function') initAdminVisibility();
 }
 
