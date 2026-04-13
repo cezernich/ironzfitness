@@ -74,7 +74,7 @@ async function getStravaTokenRow() {
   try {
     const { data } = await sb
       .from("strava_tokens")
-      .select("athlete_id, athlete_firstname, athlete_lastname, athlete_avatar, connected_at, last_sync_at")
+      .select("athlete_id, athlete_firstname, athlete_lastname, athlete_avatar, connected_at, last_sync_at, scope")
       .eq("user_id", userId)
       .maybeSingle();
     return data || null;
@@ -87,6 +87,16 @@ async function getStravaTokenRow() {
 async function isStravaConnected() {
   const row = await getStravaTokenRow();
   return !!row;
+}
+
+// True if the user's Strava connection has the activity:write scope and
+// can therefore push uploads. Read-only legacy connections (scope=NULL or
+// scope=activity:read_all only) return false.
+async function hasStravaWriteScope() {
+  const row = await getStravaTokenRow();
+  if (!row) return false;
+  const scope = String(row.scope || "");
+  return scope.includes("activity:write");
 }
 
 /* =====================================================================
@@ -231,11 +241,20 @@ function _mergeStravaIntoLocalWorkouts(activities) {
   let workouts = [];
   try { workouts = JSON.parse(localStorage.getItem("workouts") || "[]"); } catch {}
   const existingByStravaId = {};
-  workouts.forEach(w => { if (w.stravaId) existingByStravaId[String(w.stravaId)] = w; });
+  // Round-trip prevention: any local workout we previously pushed to
+  // Strava has its returned activity id stored as `stravaUploadId`. The
+  // next sync will see that same activity coming back from Strava — skip
+  // those so we don't duplicate.
+  const uploadedStravaIds = new Set();
+  workouts.forEach(w => {
+    if (w.stravaId) existingByStravaId[String(w.stravaId)] = w;
+    if (w.stravaUploadId) uploadedStravaIds.add(String(w.stravaUploadId));
+  });
 
   let added = 0;
   activities.forEach(a => {
     const key = String(a.id);
+    if (uploadedStravaIds.has(key)) return; // round-trip skip
     const localType = STRAVA_TYPE_MAP[a.type] || "general";
     const date = (a.start_date_local || a.start_date || "").slice(0, 10);
     if (!date) return;
@@ -273,6 +292,280 @@ function _mergeStravaIntoLocalWorkouts(activities) {
   localStorage.setItem("workouts", JSON.stringify(workouts));
   if (typeof DB !== "undefined" && DB.syncWorkouts) DB.syncWorkouts();
   localStorage.setItem("stravaLastLocalSync", new Date().toISOString());
+}
+
+/* =====================================================================
+   PUSH-TO-STRAVA — upload completed IronZ workouts as Strava activities
+   ===================================================================== */
+
+// IronZ workout type → Strava activity type. Strava's canonical names are
+// PascalCase; anything not in this map falls back to "Workout" which Strava
+// accepts as a generic activity.
+const IRONZ_TO_STRAVA_TYPE = {
+  running:        "Run",
+  run:            "Run",
+  cycling:        "Ride",
+  bike:           "Ride",
+  swimming:       "Swim",
+  swim:           "Swim",
+  weightlifting:  "WeightTraining",
+  strength:       "WeightTraining",
+  bodyweight:     "WeightTraining",
+  hiit:           "HighIntensityIntervalTraining",
+  yoga:           "Yoga",
+  rowing:         "Rowing",
+  walking:        "Walk",
+  walk:           "Walk",
+  hike:           "Hike",
+  hiking:         "Hike",
+  stairstepper:   "StairStepper",
+  elliptical:     "Elliptical",
+  brick:          "Workout",
+  triathlon:      "Workout",
+  general:        "Workout",
+};
+
+function _stravaTypeForWorkout(w) {
+  const t = (w.type || "").toLowerCase();
+  return IRONZ_TO_STRAVA_TYPE[t] || "Workout";
+}
+
+// Auto-share toggle — local-only, per device. Defaults to off.
+function isStravaAutoShareEnabled() {
+  try { return localStorage.getItem("stravaAutoShare") === "1"; }
+  catch { return false; }
+}
+function setStravaAutoShareEnabled(enabled) {
+  try { localStorage.setItem("stravaAutoShare", enabled ? "1" : "0"); }
+  catch {}
+  renderStravaStatus();
+}
+
+/**
+ * Build the multi-line Strava activity description from an IronZ workout.
+ * Format follows the spec mockup:
+ *
+ *   <Workout Name> — <Type Label>
+ *
+ *   <Exercise lines>
+ *
+ *   <duration> · <sets> sets · <exercises> exercises
+ *
+ *   Built with IronZ — ironz.fit
+ *
+ * For cardio workouts with intervals/segments, the body becomes the
+ * interval list (name · duration · effort) instead of exercises.
+ */
+function _buildStravaDescription(w) {
+  const lines = [];
+  const typeLabel = _stravaWorkoutTypeLabel(w);
+  const titleLine = (w.name || w.sessionName || "Workout") + (typeLabel ? ` — ${typeLabel}` : "");
+  lines.push(titleLine);
+  lines.push("");
+
+  // Body: exercises (strength/HIIT) OR intervals (cardio) OR segments (legacy)
+  const exercises = (w.exercises && w.exercises.length) ? w.exercises : null;
+  const intervals = (w.aiSession && w.aiSession.intervals && w.aiSession.intervals.length)
+    ? w.aiSession.intervals
+    : null;
+  const segments = (w.segments && w.segments.length) ? w.segments : null;
+
+  if (exercises) {
+    exercises.forEach(ex => {
+      const name = ex.name || "Exercise";
+      const parts = [];
+      if (ex.sets && ex.reps) parts.push(`${ex.sets} × ${ex.reps}`);
+      else if (ex.sets) parts.push(`${ex.sets} sets`);
+      else if (ex.reps) parts.push(`${ex.reps} reps`);
+      if (ex.weight) parts.push(`@ ${ex.weight}`);
+      if (ex.duration) parts.push(ex.duration);
+      lines.push(parts.length ? `${name}: ${parts.join(" ")}` : name);
+    });
+  } else if (intervals) {
+    intervals.forEach(iv => {
+      const parts = [];
+      if (iv.duration) parts.push(iv.duration);
+      if (iv.effort || iv.intensity) parts.push(iv.effort || iv.intensity);
+      lines.push(`${iv.name || "Interval"}${parts.length ? ` — ${parts.join(" · ")}` : ""}`);
+    });
+  } else if (segments) {
+    segments.forEach(s => {
+      const parts = [];
+      if (s.duration) parts.push(s.duration);
+      if (s.effort || s.intensity || s.zone) parts.push(s.effort || s.intensity || s.zone);
+      lines.push(`${s.name || "Segment"}${parts.length ? ` — ${parts.join(" · ")}` : ""}`);
+    });
+  }
+
+  // Stats line: <duration> · <sets> · <exercises>  (or distance for cardio)
+  const statParts = [];
+  const durMin = parseInt(w.duration, 10);
+  if (durMin > 0) statParts.push(`${durMin} min`);
+  if (w.distance) statParts.push(String(w.distance));
+  if (exercises) {
+    const totalSets = exercises.reduce((s, e) => s + (parseInt(e.sets, 10) || 0), 0);
+    if (totalSets) statParts.push(`${totalSets} set${totalSets === 1 ? "" : "s"}`);
+    statParts.push(`${exercises.length} exercise${exercises.length === 1 ? "" : "s"}`);
+  } else if (intervals) {
+    statParts.push(`${intervals.length} interval${intervals.length === 1 ? "" : "s"}`);
+  }
+  if (statParts.length) {
+    lines.push("");
+    lines.push(statParts.join(" · "));
+  }
+
+  // Footer — branding (this is the entire marketing payload since
+  // Strava's public API doesn't support photo uploads on activities).
+  lines.push("");
+  lines.push("Built with IronZ — ironz.fit");
+
+  return lines.join("\n");
+}
+
+function _stravaWorkoutTypeLabel(w) {
+  const t = (w.type || "").toLowerCase();
+  const labels = {
+    running: "Run", run: "Run",
+    cycling: "Ride", bike: "Ride",
+    swimming: "Swim", swim: "Swim",
+    weightlifting: "Strength Training",
+    bodyweight: "Bodyweight",
+    hiit: "HIIT",
+    yoga: "Yoga",
+    rowing: "Rowing",
+    walking: "Walk", walk: "Walk",
+    hike: "Hike", hiking: "Hike",
+    stairstepper: "Stair Stepper",
+    brick: "Brick",
+    triathlon: "Triathlon",
+    general: "Workout",
+  };
+  return labels[t] || "Workout";
+}
+
+// Build the start_date_local in Strava's expected format: ISO 8601 with
+// no trailing Z (Strava interprets it in the user's local time zone).
+function _stravaStartDateLocal(w) {
+  // Prefer an explicit completedAt timestamp, else compose from the date
+  // string + 8am as a sensible default.
+  if (w.completedAt) {
+    try {
+      const d = new Date(w.completedAt);
+      // YYYY-MM-DDTHH:mm:ss with no Z
+      return d.toISOString().replace("Z", "").slice(0, 19);
+    } catch {}
+  }
+  const date = w.date || new Date().toISOString().slice(0, 10);
+  return `${date}T08:00:00`;
+}
+
+function _stravaElapsedSeconds(w) {
+  const min = parseInt(w.duration, 10);
+  if (min > 0) return min * 60;
+  // Fallback: 30 minutes if we don't know
+  return 30 * 60;
+}
+
+/**
+ * Upload an IronZ workout to Strava. Returns { ok, strava_id?, reason? }.
+ *
+ * Caller responsibility:
+ *   - Confirm the user wants to share (don't surprise them)
+ *   - Show the resulting toast / error
+ *
+ * The upload edge function handles auth, scope check, token refresh,
+ * the actual Strava POST, and mirroring the new activity into
+ * strava_activities for round-trip prevention.
+ *
+ * On success, the local workout gets `stravaUploadId` set so the next
+ * Strava sync will skip the round-trip.
+ */
+async function uploadWorkoutToStrava(workout, opts) {
+  opts = opts || {};
+  const sb = _stravaClient();
+  if (!sb) return { ok: false, reason: "no_client" };
+
+  const accessToken = await _stravaAccessToken();
+  if (!accessToken) return { ok: false, reason: "not_logged_in" };
+
+  // Pre-flight scope check so we can surface the reconnect prompt
+  // without burning a round-trip.
+  const hasWrite = await hasStravaWriteScope();
+  if (!hasWrite) {
+    if (!opts.silent) _showStravaToast("Reconnect Strava to enable uploads");
+    return { ok: false, reason: "missing_write_scope" };
+  }
+
+  const payload = {
+    name: workout.name || workout.sessionName || "IronZ workout",
+    type: _stravaTypeForWorkout(workout),
+    start_date_local: _stravaStartDateLocal(workout),
+    elapsed_time: _stravaElapsedSeconds(workout),
+    description: _buildStravaDescription(workout),
+    trainer: workout.type === "weightlifting" || workout.type === "bodyweight" || workout.type === "hiit",
+  };
+
+  if (!opts.silent) _showStravaToast("Posting to Strava…");
+
+  try {
+    const { data, error } = await sb.functions.invoke("strava-upload", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: payload,
+    });
+    console.log("[Strava] upload — invoke result:", { data, error });
+    if (error) throw error;
+    if (!data || !data.ok) {
+      const reason = (data && data.reason) || "unknown";
+      if (!opts.silent) _showStravaToast(`Strava upload failed (${reason})`);
+      return { ok: false, reason };
+    }
+
+    // Stamp the local workout with the returned Strava id so the next
+    // sync skips it (round-trip prevention).
+    try {
+      const list = JSON.parse(localStorage.getItem("workouts") || "[]");
+      const target = list.find(w => String(w.id) === String(workout.id));
+      if (target) {
+        target.stravaUploadId = data.strava_id;
+        target.stravaUploadAt = new Date().toISOString();
+        localStorage.setItem("workouts", JSON.stringify(list));
+        if (typeof DB !== "undefined" && DB.syncWorkouts) DB.syncWorkouts();
+      }
+    } catch {}
+
+    if (typeof trackEvent === "function") {
+      trackEvent("strava_activity_uploaded", {
+        type: payload.type,
+        elapsed_time: payload.elapsed_time,
+      });
+    }
+
+    if (!opts.silent) _showStravaToast("Posted to Strava!");
+    return { ok: true, strava_id: data.strava_id, strava_url: data.strava_url };
+  } catch (e) {
+    console.error("[Strava] upload error:", e);
+    if (typeof reportCaughtError === "function") reportCaughtError(e, { context: "strava", action: "upload" });
+    if (!opts.silent) _showStravaToast("Couldn't post to Strava");
+    return { ok: false, reason: "exception", error: e };
+  }
+}
+
+/**
+ * Auto-share path: called after a workout save in the live tracker or
+ * day-detail completion form. No-op unless the user has enabled
+ * auto-share AND has the write scope. Skips if the workout was already
+ * uploaded (stravaUploadId set).
+ */
+async function tryAutoShareToStrava(workout) {
+  if (!workout) return;
+  if (!isStravaAutoShareEnabled()) return;
+  if (workout.stravaUploadId) return;
+  if (workout.source === "strava") return; // don't push a Strava activity back to Strava
+  const hasWrite = await hasStravaWriteScope();
+  if (!hasWrite) return;
+  // Fire and forget — the user just finished a workout, we don't want to
+  // block the UI on a network round-trip.
+  uploadWorkoutToStrava(workout, { silent: true }).catch(() => {});
 }
 
 /* =====================================================================
@@ -334,12 +627,35 @@ async function renderStravaStatus() {
   if (row) {
     const name = [row.athlete_firstname, row.athlete_lastname].filter(Boolean).join(" ") || "Connected";
     const sync = _formatStravaDate(row.last_sync_at);
+    const hasWrite = String(row.scope || "").includes("activity:write");
+    const autoShare = isStravaAutoShareEnabled();
+
+    // Read-only legacy connections need to re-grant the write scope
+    // before the auto-share toggle becomes meaningful.
+    const reconnectBlock = !hasWrite ? `
+      <div class="strava-reconnect-prompt">
+        <p class="hint">Reconnect to enable Push-to-Strava — your existing connection only has read access.</p>
+        <button class="btn-strava btn-sm" onclick="connectStrava()">Reconnect to enable uploads</button>
+      </div>` : "";
+
+    const autoShareBlock = hasWrite ? `
+      <label class="strava-toggle-row">
+        <span>
+          <span class="strava-toggle-title">Auto-share completed workouts</span>
+          <span class="strava-toggle-sub">Posts every workout you finish to Strava with the IronZ branding line.</span>
+        </span>
+        <input type="checkbox" ${autoShare ? "checked" : ""}
+               onchange="setStravaAutoShareEnabled(this.checked)">
+      </label>` : "";
+
     container.innerHTML = `
       <div class="strava-connected">
         <div class="strava-user">
           Connected as <strong>${_escStrava(name)}</strong>
         </div>
         <div class="strava-sync-info">Last sync: ${_escStrava(sync)}</div>
+        ${reconnectBlock}
+        ${autoShareBlock}
         <div class="strava-actions">
           <button class="btn-primary btn-sm" onclick="syncStravaNow()">Sync Now</button>
           <button class="btn-secondary btn-sm" onclick="disconnectStrava()">Disconnect</button>
@@ -369,6 +685,12 @@ if (typeof window !== "undefined") {
   window.syncStravaNow = syncStravaNow;
   window.disconnectStrava = disconnectStrava;
   window.renderStravaStatus = renderStravaStatus;
+  // Push-to-Strava
+  window.uploadWorkoutToStrava = uploadWorkoutToStrava;
+  window.tryAutoShareToStrava = tryAutoShareToStrava;
+  window.hasStravaWriteScope = hasStravaWriteScope;
+  window.isStravaAutoShareEnabled = isStravaAutoShareEnabled;
+  window.setStravaAutoShareEnabled = setStravaAutoShareEnabled;
   // For back-compat with any old code calling importStravaActivities()
   window.importStravaActivities = syncStravaNow;
 }

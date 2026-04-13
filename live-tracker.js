@@ -823,7 +823,7 @@ function _commitLiveWorkout(logAll) {
     hyroxData = { totalRunMs, totalStationMs, totalMs: t.elapsed };
   }
 
-  workouts.unshift({
+  const completedWorkout = {
     id: workoutId,
     date: t.dateStr,
     name: sessionName,
@@ -835,11 +835,19 @@ function _commitLiveWorkout(logAll) {
     ...(_finishWatts && { avgWatts: _finishWatts }),
     ...(hyroxData && { hyroxData }),
     completedSessionId: t.sessionId,
+    completedAt: new Date().toISOString(),
     isCompletion: true,
     liveTracked: true,
     isHyrox: !!t.isHyrox,
-  });
+  };
+  workouts.unshift(completedWorkout);
   localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
+
+  // Push-to-Strava: fire-and-forget if the user has auto-share enabled.
+  // No-op if Strava isn't connected, no write scope, or auto-share is off.
+  if (typeof tryAutoShareToStrava === "function") {
+    tryAutoShareToStrava(completedWorkout);
+  }
 
   if (typeof trackWorkoutLogged === "function") {
     trackWorkoutLogged({

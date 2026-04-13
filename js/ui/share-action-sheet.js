@@ -61,6 +61,13 @@
             <span class="share-action-sheet-btn-sub">Direct to their IronZ inbox</span>
           </span>
         </button>
+        <button class="share-action-sheet-btn share-action-sheet-btn--strava" data-action="share-strava">
+          <span class="share-action-sheet-btn-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg></span>
+          <span class="share-action-sheet-btn-label">
+            <span class="share-action-sheet-btn-title">Share to Strava</span>
+            <span class="share-action-sheet-btn-sub">Post this workout to your Strava feed</span>
+          </span>
+        </button>
         <button class="share-action-sheet-cancel" data-action="cancel">Cancel</button>
       </div>
     `;
@@ -79,6 +86,17 @@
     overlay.querySelector('[data-action="send-friend"]').addEventListener("click", () => {
       _removeSheet(SHEET_ID);
       openSendModal(entry, source);
+    });
+    overlay.querySelector('[data-action="share-strava"]').addEventListener("click", async () => {
+      _removeSheet(SHEET_ID);
+      if (typeof window.uploadWorkoutToStrava !== "function") {
+        if (typeof _showShareToast === "function") _showShareToast("Strava integration not loaded");
+        return;
+      }
+      // Confirm before pushing — uploads are visible on the user's Strava feed.
+      const name = entry.sessionName || entry.name || entry.title || "this workout";
+      if (!confirm(`Post "${name}" to your Strava feed?`)) return;
+      await window.uploadWorkoutToStrava(entry, { silent: false });
     });
     overlay.querySelector('[data-action="cancel"]').addEventListener("click", () => {
       _removeSheet(SHEET_ID);

@@ -103,6 +103,19 @@ serve(async (req: Request) => {
   const athlete = tokenData.athlete || {};
   const expiresAtIso = new Date((tokenData.expires_at || 0) * 1000).toISOString();
 
+  // Strava also returns `scope` (and an array `scope_split` in some
+  // versions) confirming which scopes the user actually granted. Falling
+  // back to the request scopes if the response doesn't include it.
+  let grantedScope: string | null = tokenData.scope || null;
+  if (!grantedScope && Array.isArray(tokenData.scope_split)) {
+    grantedScope = tokenData.scope_split.join(",");
+  }
+  // Strava's authorize page also passes the granted scope back via the
+  // callback query string when the user accepts a subset of the requested
+  // scopes. Prefer that if present, since it's the most authoritative.
+  const callbackScope = url.searchParams.get("scope");
+  if (callbackScope) grantedScope = callbackScope;
+
   // Upsert into strava_tokens
   const { error: upsertErr } = await admin
     .from("strava_tokens")
@@ -116,6 +129,7 @@ serve(async (req: Request) => {
       athlete_lastname: athlete.lastname || null,
       athlete_avatar: athlete.profile_medium || athlete.profile || null,
       connected_at: new Date().toISOString(),
+      scope: grantedScope,
     });
 
   if (upsertErr) {

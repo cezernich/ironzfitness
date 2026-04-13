@@ -76,13 +76,17 @@ serve(async (req: Request) => {
     return jsonResponse({ error: "state_store_failed", detail: insertErr.message }, 500);
   }
 
-  // Build the authorize URL. approval_prompt=auto so returning users don't
-  // have to re-grant every time.
+  // Build the authorize URL. We request BOTH scopes:
+  //   - activity:read_all  → pulling activities (existing flow)
+  //   - activity:write     → pushing IronZ workouts to Strava (Push-to-Strava)
+  // approval_prompt=auto so returning users don't re-grant every time, but
+  // users with an existing read-only connection will be prompted once to
+  // accept the new write scope.
   const params = new URLSearchParams({
     client_id: STRAVA_CLIENT_ID,
     response_type: "code",
     redirect_uri: STRAVA_REDIRECT_URI,
-    scope: "activity:read_all",
+    scope: "activity:read_all,activity:write",
     approval_prompt: "auto",
     state: nonce,
   });
