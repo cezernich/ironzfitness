@@ -702,6 +702,23 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
   const editBtn = `<button class="edit-workout-btn" title="Edit"
     onclick="event.stopPropagation(); openEditWorkout('${w.id}')">Edit</button>`;
 
+  // ── Circuit workout (CrossFit-style) ──────────────────────────────────────
+  if (w.type === "circuit" && w.circuit && typeof window !== "undefined" && window.CircuitCard) {
+    const circuitForRender = { ...w.circuit, id: w.id, circuit_result: w.circuit_result };
+    const cardHtml = window.CircuitCard.render(circuitForRender, { cardId });
+    const actionBtn = w.circuit_result
+      ? ""
+      : `<button class="circuit-btn circuit-btn-primary" style="margin-top:12px" onclick="event.stopPropagation(); window.CircuitBuilder.openCompletionModal('${w.id}')">Log Time</button>`;
+    return `
+      <div class="session-card${_logCompleteCls}" id="${cardId}-wrap">
+        <div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:8px">
+          ${delBtn}
+        </div>
+        ${cardHtml}
+        ${actionBtn}
+      </div>`;
+  }
+
   if (w.aiSession) {
     const s = w.aiSession;
     // Map effort label → zone CSS class (supports both old Easy/Moderate/Hard and new Z1-Z6)
@@ -1895,6 +1912,39 @@ function _parseDurMin(str) {
   return /sec/.test(s) ? v / 60 : v;
 }
 
+// Estimate minutes for a weightlifting session from its exercises array.
+// Calibrated to match real-world session times: a typical 4-exercise push
+// day with 3–4 working sets runs 40–55 min including warmup sets, walking
+// to stations, and between-set recovery. The old heuristic of 3 min per
+// exercise reported 12 min for the same workout.
+//
+// Per working set we budget 45s under the bar + the prescribed rest.
+// We add 1.5 "warmup" sets per exercise (the ramp to working weight) and
+// a 2-minute setup allowance per exercise for walking between stations,
+// chalking up, loading plates, etc.
+function _estimateStrengthSessionMin(exercises) {
+  if (!Array.isArray(exercises) || !exercises.length) return 0;
+  const WORK_SEC = 45;
+  const SETUP_SEC = 120;
+  const WARMUP_SET_BOOST = 1.5;
+  let totalSec = 0;
+  exercises.forEach(ex => {
+    const workingSets = Math.max(1, parseInt(ex.sets, 10) || 3);
+    // rest is usually a string like "90s" or "2 min" — parse to seconds
+    let restSec = 90;
+    const r = String(ex.rest || "").toLowerCase();
+    const m = r.match(/([\d.]+)/);
+    if (m) {
+      const v = parseFloat(m[1]);
+      restSec = /min/.test(r) ? v * 60 : v;
+    }
+    const effectiveSets = workingSets + WARMUP_SET_BOOST;
+    const perEx = effectiveSets * WORK_SEC + (effectiveSets - 1) * restSec + SETUP_SEC;
+    totalSec += perEx;
+  });
+  return Math.round(totalSec / 60);
+}
+
 function _parseDistKm(str) {
   const s = String(str || "");
   const val = parseFloat(s.match(/[\d.]+/)?.[0] || 0);
@@ -1961,12 +2011,21 @@ function getDayTotals(dateStr) {
   }
 
   data.scheduledWorkouts.forEach(w => {
+    // Actual logged duration (from completion) wins over any estimate.
+    // scheduled workouts use session id `session-sw-${w.id}`.
+    const actual = _parseDurMin(String(_getCompletionDuration(`session-sw-${w.id}`) || ""));
+    if (actual > 0) { totalMin += actual; return; }
+
+    if (w.duration) {
+      const explicit = _parseDurMin(String(w.duration));
+      if (explicit > 0) { totalMin += explicit; return; }
+    }
     if (w.discipline && w.load) {
       const session = (SESSION_DESCRIPTIONS[w.discipline] || {})[w.load];
-      if (session?.duration) totalMin += _parseDurMin(session.duration);
-    } else if (w.exercises && w.exercises.length > 0) {
-      // Estimate strength session: ~3 min per exercise (sets + rest)
-      totalMin += w.exercises.length * 3;
+      if (session?.duration) { totalMin += _parseDurMin(session.duration); return; }
+    }
+    if (w.exercises && w.exercises.length > 0) {
+      totalMin += _estimateStrengthSessionMin(w.exercises);
     }
   });
 
@@ -2008,6 +2067,10 @@ function getDayTotals(dateStr) {
       sessionMin = _parseDurMin(w.generatedSession.duration);
     } else if (w.duration) {
       sessionMin = _parseDurMin(String(w.duration));
+    } else if (Array.isArray(w.exercises) && w.exercises.length > 0) {
+      // Weightlifting / bodyweight logged with no explicit duration —
+      // estimate from the exercise list instead of reporting 0.
+      sessionMin = _estimateStrengthSessionMin(w.exercises);
     }
 
     totalMin += sessionMin;
@@ -3984,6 +4047,14 @@ function qeSelectType(type) {
     const dateStr = document.getElementById("qe-date")?.value || _qeDateStr || new Date().toISOString().slice(0, 10);
     closeQuickEntry();
     window.AddRunningSessionFlow.open(dateStr);
+    return;
+  }
+  // Circuit workouts (CrossFit-style: For Time / AMRAP / Standard). Uses its
+  // own entry → preview → save flow with a bespoke data model.
+  if (type === "circuit" && typeof window !== "undefined" && window.CircuitBuilder) {
+    const dateStr = document.getElementById("qe-date")?.value || _qeDateStr || new Date().toISOString().slice(0, 10);
+    closeQuickEntry();
+    window.CircuitBuilder.openEntryFlow(dateStr);
     return;
   }
   if (type === "strength")        qeShowStep(1, "strength");

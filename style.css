@@ -8912,10 +8912,16 @@ button:active {
 
 @media (max-width: 520px) {
   header {
-    flex-direction: column;
-    align-items: flex-start;
+    padding: 10px 14px;
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+    padding-left: calc(14px + env(safe-area-inset-left, 0px));
+    padding-right: calc(14px + env(safe-area-inset-right, 0px));
     gap: 10px;
   }
+  .header-left { gap: 10px; min-width: 0; flex: 1; }
+  .header-right { flex-shrink: 0; }
+  .sv-open-btn { padding: 8px 12px; font-size: 0.85rem; }
+  .nav-icon-btn { width: 36px; height: 36px; }
 
   nav { flex-wrap: wrap; }
 
@@ -15042,4 +15048,646 @@ body.auth-visible #bottom-nav { display: none !important; }
   background: var(--color-accent, #ff6b35); color: #fff;
   border-color: var(--color-accent, #ff6b35);
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Circuit Workouts (mockup: Plan/circuit-mockup.html)
+   Tokens: bg #1c1c1e, card #2c2c2e, row #3a3a3c, deep #48484a,
+           red #e74c3c, orange #f39c12, cyan #00b4d8, green #4cd964
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ── Circuit card (Screen 1/1b/1c/1d) ───────────────────────────────────── */
+.circuit-card {
+  background: #2c2c2e;
+  border-radius: 16px;
+  padding: 20px;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+}
+.circuit-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 12px;
+}
+.circuit-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.circuit-icon {
+  width: 40px;
+  height: 40px;
+  background: #e74c3c22;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.circuit-title-group { min-width: 0; }
+.circuit-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+}
+.circuit-subtitle {
+  font-size: 13px;
+  color: #8e8e93;
+  margin-top: 2px;
+}
+.circuit-card-header-right {
+  text-align: right;
+  flex-shrink: 0;
+}
+.circuit-time-badge {
+  display: inline-block;
+  background: #e74c3c;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 8px;
+}
+.circuit-time-badge--amrap { background: #f39c12; color: #000; }
+.circuit-pr-line {
+  font-size: 12px;
+  color: #8e8e93;
+  margin-top: 4px;
+}
+.circuit-pr-line .pr-val { color: #4cd964; font-weight: 600; }
+
+.goal-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 6px;
+  margin-top: 4px;
+}
+.goal-badge.goal-for-time { background: #e74c3c33; color: #e74c3c; }
+.goal-badge.goal-amrap    { background: #f39c1233; color: #f39c12; }
+.goal-badge.goal-standard { background: #8e8e9333; color: #8e8e93; }
+
+/* ── Visual strip ───────────────────────────────────────────────────────── */
+.circuit-strip {
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  gap: 1px;
+}
+.circuit-strip .strip-cardio   { background: #00b4d8; }
+.circuit-strip .strip-exercise { background: #e74c3c; }
+.circuit-strip .strip-rest     { background: #48484a; }
+
+/* ── Step rows ──────────────────────────────────────────────────────────── */
+.circuit-body { padding: 0; }
+.circuit-step-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid #3a3a3c;
+  font-size: 15px;
+  color: #fff;
+}
+.circuit-step-row:last-child { border-bottom: none; }
+.circuit-step-row .left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.circuit-step-row .right {
+  color: #8e8e93;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.circuit-step-row .step-icon {
+  font-size: 16px;
+  width: 24px;
+  text-align: center;
+}
+.circuit-step-row--rest .left,
+.circuit-step-row--rest .right { color: #8e8e93; font-style: italic; }
+
+/* ── Repeat block (read-only, inside circuit card) ──────────────────────── */
+.circuit-repeat-block {
+  background: #3a3a3c;
+  border-radius: 12px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+.circuit-repeat-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #f39c12;
+  background: #f39c1215;
+}
+.circuit-repeat-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.repeat-badge {
+  background: #f39c12;
+  color: #000;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.circuit-repeat-children { padding: 4px 14px 8px; }
+.circuit-repeat-children .circuit-step-row {
+  padding: 8px 0;
+  font-size: 14px;
+  border-bottom-color: #48484a;
+}
+
+/* ── Modal shell (entry/preview/builder/library/completion) ─────────────── */
+.circuit-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 10070;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.circuit-modal-overlay.is-open { opacity: 1; }
+.circuit-modal {
+  background: #1c1c1e;
+  color: #fff;
+  width: 100%;
+  max-width: 460px;
+  max-height: 92vh;
+  border-radius: 20px 20px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  transform: translateY(20px);
+  transition: transform 0.2s ease;
+}
+.circuit-modal-overlay.is-open .circuit-modal { transform: translateY(0); }
+
+@media (min-width: 560px) {
+  .circuit-modal-overlay { align-items: center; }
+  .circuit-modal { border-radius: 20px; }
+}
+
+.circuit-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 10px;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.circuit-modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  flex: 1;
+  text-align: center;
+}
+.circuit-modal-back,
+.circuit-modal-close,
+.circuit-modal-back-spacer {
+  background: none;
+  border: none;
+  color: #8e8e93;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 8px;
+  min-width: 52px;
+}
+.circuit-modal-back { text-align: left; }
+.circuit-modal-close { text-align: right; font-size: 18px; }
+.circuit-modal-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 20px 12px;
+  flex-shrink: 0;
+}
+.circuit-modal-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #48484a;
+}
+.circuit-modal-dot.is-active { background: #e74c3c; }
+.circuit-modal-body {
+  padding: 12px 20px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+.circuit-modal-footer {
+  padding: 12px 20px calc(16px + env(safe-area-inset-bottom, 0));
+  border-top: 1px solid #2c2c2e;
+  flex-shrink: 0;
+}
+.circuit-modal-footer--dual {
+  display: flex;
+  gap: 10px;
+}
+
+/* ── Builder fields (entry + manual builder) ────────────────────────────── */
+.builder-field { margin-bottom: 16px; }
+.builder-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #8e8e93;
+  margin-bottom: 6px;
+}
+.builder-input {
+  width: 100%;
+  background: #3a3a3c;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 15px;
+  color: #fff;
+  outline: none;
+  font-family: inherit;
+}
+.builder-input::placeholder { color: #636366; }
+.builder-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%238e8e93' d='M6 8L0 0h12z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+}
+.builder-empty {
+  color: #8e8e93;
+  font-size: 13px;
+  font-style: italic;
+  padding: 12px;
+  text-align: center;
+  border: 1px dashed #3a3a3c;
+  border-radius: 10px;
+}
+
+/* ── Focus chips (entry flow) ───────────────────────────────────────────── */
+.focus-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.focus-chip {
+  flex: 1 1 auto;
+  min-width: calc(50% - 4px);
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #3a3a3c;
+  color: #8e8e93;
+  border: 2px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.focus-chip.is-active {
+  border-color: #e74c3c;
+  color: #fff;
+  background: #e74c3c22;
+}
+
+/* ── Goal selector (manual builder) ─────────────────────────────────────── */
+.goal-selector {
+  display: flex;
+  gap: 8px;
+}
+.goal-option {
+  flex: 1;
+  text-align: center;
+  padding: 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #3a3a3c;
+  color: #8e8e93;
+  border: 2px solid transparent;
+  font-family: inherit;
+}
+.goal-option.is-active {
+  border-color: #e74c3c;
+  color: #fff;
+  background: #e74c3c22;
+}
+
+/* ── Manual builder steps ───────────────────────────────────────────────── */
+.builder-step {
+  background: #3a3a3c;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.builder-step .drag-handle {
+  color: #636366;
+  font-size: 18px;
+  cursor: grab;
+}
+.builder-step .step-content { flex: 1; min-width: 0; cursor: pointer; }
+.builder-step .step-name { font-size: 15px; font-weight: 600; color: #fff; }
+.builder-step .step-detail { font-size: 13px; color: #8e8e93; margin-top: 2px; }
+.builder-step .delete-btn {
+  color: #e74c3c;
+  font-size: 18px;
+  cursor: pointer;
+  opacity: 0.7;
+  background: none;
+  border: none;
+  padding: 4px 8px;
+}
+.builder-step--child { margin-bottom: 6px; }
+
+.builder-repeat {
+  border: 2px solid #f39c12;
+  border-radius: 14px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.builder-repeat-header {
+  background: #f39c1220;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #f39c12;
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.builder-repeat-header .left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.builder-repeat-label { color: #f39c12; }
+.repeat-count-btn {
+  background: none;
+  border: 1px solid #f39c1266;
+  color: #f39c12;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 600;
+  margin-left: 6px;
+}
+.builder-repeat-header .delete-btn {
+  color: #e74c3c;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+}
+.builder-repeat-body { padding: 8px; }
+.builder-repeat-body .builder-step { background: #48484a; }
+.add-inside-btn {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  font-size: 13px;
+  color: #f39c12;
+  background: none;
+  border: 1px dashed #f39c1266;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 4px;
+  text-align: center;
+  font-family: inherit;
+  font-weight: 600;
+}
+
+/* ── Action buttons (+ Exercise / Cardio / Round) ───────────────────────── */
+.action-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.action-btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  border: 1px dashed #636366;
+  background: none;
+  color: #fff;
+  font-family: inherit;
+}
+.action-btn:hover { background: #3a3a3c; }
+.action-btn .icon { font-size: 16px; display: block; margin-bottom: 4px; }
+
+/* ── Primary/secondary modal buttons ────────────────────────────────────── */
+.circuit-btn {
+  display: block;
+  width: 100%;
+  padding: 16px;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+}
+.circuit-btn-primary   { background: #e74c3c; color: #fff; }
+.circuit-btn-secondary { background: #3a3a3c; color: #fff; }
+.circuit-btn-amrap     { background: #f39c12; color: #000; }
+.circuit-modal-footer--dual .circuit-btn { flex: 1; }
+
+/* ── Library (Screen 2) ─────────────────────────────────────────────────── */
+.circuit-tab-row {
+  display: flex;
+  background: #3a3a3c;
+  border-radius: 10px;
+  padding: 3px;
+  margin-bottom: 16px;
+}
+.circuit-tab {
+  flex: 1;
+  text-align: center;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #8e8e93;
+  cursor: pointer;
+  background: none;
+  border: none;
+  font-family: inherit;
+}
+.circuit-tab.is-active {
+  background: #2c2c2e;
+  color: #fff;
+}
+.library-section-header {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #636366;
+  margin: 16px 0 8px;
+}
+.library-card {
+  background: #2c2c2e;
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+.library-card:hover { background: #3a3a3c; }
+.library-card-left { flex: 1; min-width: 0; }
+.library-card .wod-name { font-size: 16px; font-weight: 700; color: #fff; }
+.library-card .wod-desc { font-size: 13px; color: #8e8e93; margin-top: 3px; }
+.library-card .wod-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #636366;
+  align-items: center;
+}
+.library-card .wod-meta > span:not(.goal-badge) {
+  background: #3a3a3c;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.library-card-chevron { color: #636366; font-size: 20px; padding-left: 10px; }
+.library-empty {
+  color: #8e8e93;
+  font-size: 13px;
+  text-align: center;
+  padding: 24px 16px;
+  font-style: italic;
+}
+.wod-long-desc {
+  color: #8e8e93;
+  font-size: 13px;
+  margin-top: 12px;
+  line-height: 1.5;
+}
+
+/* ── Completion modal (Screen 4 / 4b) ───────────────────────────────────── */
+.completion-modal-inner {
+  text-align: center;
+  padding: 12px 0 4px;
+}
+.completion-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 4px;
+}
+.completion-sub {
+  font-size: 14px;
+  color: #8e8e93;
+  margin-bottom: 20px;
+}
+.completion-time-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.completion-time-input {
+  background: #3a3a3c;
+  border: 2px solid #e74c3c;
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 32px;
+  font-weight: 700;
+  color: #fff;
+  width: 80px;
+  text-align: center;
+  outline: none;
+  font-family: inherit;
+  -moz-appearance: textfield;
+}
+.completion-time-input::-webkit-outer-spin-button,
+.completion-time-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.completion-time-sep {
+  font-size: 32px;
+  font-weight: 700;
+  color: #636366;
+}
+.completion-amrap-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.completion-amrap-field { text-align: center; }
+.completion-amrap-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #8e8e93;
+  margin-bottom: 6px;
+}
+.completion-amrap-plus {
+  font-size: 28px;
+  font-weight: 700;
+  color: #636366;
+  padding-bottom: 14px;
+}
+.completion-pr-card {
+  background: #3a3a3c;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 4px;
+}
+.completion-pr-card--new { background: #4cd96422; }
+.completion-pr-card .pr-text {
+  font-size: 14px;
+  color: #4cd964;
+  font-weight: 600;
+}
+.completion-pr-card .pr-sub {
+  font-size: 12px;
+  color: #8e8e93;
+  margin-top: 2px;
+}
+
+.circuit-preview-wrap .circuit-card { background: #2c2c2e; padding: 20px; }
 
