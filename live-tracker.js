@@ -794,13 +794,37 @@ function _commitLiveWorkout(logAll) {
     });
   }
 
-  // Look up session name
+  // Look up session name from whichever source the card id points at.
+  // t.sessionId is a card id like "session-sw-<id>" / "session-plan-<date>-<raceId>"
+  // — strip the prefix so the match actually hits. The old code compared
+  // the raw card id against s.id which never matched, so the Strava
+  // upload was stuck on the "IronZ workout" fallback.
   let sessionName = "";
   try {
-    const _sched = JSON.parse(localStorage.getItem("workoutSchedule")) || [];
-    const _sw = _sched.find(s => s.id === t.sessionId);
-    if (_sw) sessionName = _sw.sessionName || "";
+    const sid = String(t.sessionId || "");
+    if (sid.startsWith("session-sw-")) {
+      const rawId = sid.slice("session-sw-".length);
+      const _sched = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
+      const _sw = _sched.find(s => String(s.id) === rawId);
+      if (_sw) sessionName = _sw.sessionName || "";
+    } else if (sid.startsWith("session-plan-")) {
+      const rest = sid.slice("session-plan-".length);
+      const dashIdx = rest.indexOf("-", 11);
+      const planDate = dashIdx > 0 ? rest.slice(0, dashIdx) : rest;
+      const raceId   = dashIdx > 0 ? rest.slice(dashIdx + 1) : "";
+      const _plan = typeof loadTrainingPlan === "function" ? loadTrainingPlan() : [];
+      const _pe = _plan.find(p => p.date === planDate && String(p.raceId) === raceId);
+      if (_pe) sessionName = _pe.sessionName || "";
+    } else if (sid.startsWith("session-log-")) {
+      const rawId = sid.slice("session-log-".length);
+      const _logged = JSON.parse(localStorage.getItem("workouts") || "[]");
+      const _lw = _logged.find(w => String(w.id) === rawId);
+      if (_lw) sessionName = _lw.name || _lw.sessionName || "";
+    }
   } catch {}
+  if (!sessionName) {
+    sessionName = (typeof _wTypeLabel === "function" ? _wTypeLabel(t.type) : t.type) + " Session";
+  }
 
   // Save as completion
   let workouts = [];

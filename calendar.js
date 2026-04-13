@@ -1634,7 +1634,8 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   if (isSessionComplete(sessionId)) return;
   const notes    = (document.getElementById(`cnotes-${sessionId}`)?.value || "").trim();
   const rawDuration = document.getElementById(`cdur-${sessionId}`)?.value || "";
-  const duration = rawDuration ? String(_parseDurationInput(rawDuration)) : "";
+  const _parsedDur = rawDuration ? _parseDurationInput(rawDuration) : NaN;
+  let duration = (!isNaN(_parsedDur) && _parsedDur > 0) ? String(_parsedDur) : "";
   const distance = document.getElementById(`cdist-${sessionId}`)?.value || "";
 
   // Pace sanity check for endurance types (sport-specific thresholds)
@@ -1700,22 +1701,76 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
     });
   }
 
-  // Look up session name from the schedule or training plan
+  // Look up session name AND fallback duration from the correct source.
+  // sessionId is a card id in one of three formats:
+  //   session-sw-<id>      → look up in workoutSchedule by stripped id
+  //   session-plan-<date>-<raceId>  → look up in trainingPlan by composite key
+  //   session-log-<id>     → look up in workouts by stripped id
+  // The previous implementation compared `s.id === sessionId` which never
+  // matched because s.id is the raw id and sessionId is the card id, so
+  // the name lookup always returned "" and the Strava upload used the
+  // "IronZ workout" fallback. It also never filled in the duration, so
+  // an empty form submission sent 30 min to Strava (the _stravaElapsedSeconds
+  // default).
   let sessionName = "";
+  let fallbackDuration = null;
   try {
-    const _sched = JSON.parse(localStorage.getItem("workoutSchedule")) || [];
-    const _sw = _sched.find(s => s.id === sessionId || `${s.date}-${s.type}-${s.sessionName}`.replace(/\s/g,"") === sessionId);
-    if (_sw) sessionName = _sw.sessionName || "";
-  } catch {}
-  if (!sessionName) {
-    try {
+    if (sessionId.startsWith("session-sw-")) {
+      const rawId = sessionId.slice("session-sw-".length);
+      const _sched = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
+      const _sw = _sched.find(s => String(s.id) === rawId);
+      if (_sw) {
+        sessionName = _sw.sessionName || "";
+        fallbackDuration = _sw.duration || null;
+      }
+    } else if (sessionId.startsWith("session-plan-")) {
+      // Format: session-plan-<YYYY-MM-DD>-<raceId>
+      const rest = sessionId.slice("session-plan-".length);
+      const dashIdx = rest.indexOf("-", 11); // skip past date (YYYY-MM-DD has 10 chars)
+      const planDate = dashIdx > 0 ? rest.slice(0, dashIdx) : rest;
+      const raceId   = dashIdx > 0 ? rest.slice(dashIdx + 1) : "";
       const _plan = typeof loadTrainingPlan === "function" ? loadTrainingPlan() : [];
-      const _pe = _plan.find(p => {
-        const cid = `plan-${p.date}-${p.raceId}-${p.discipline}`;
-        return cid === sessionId;
-      });
-      if (_pe) sessionName = _pe.sessionName || "";
-    } catch {}
+      const _pe = _plan.find(p => p.date === planDate && String(p.raceId) === raceId);
+      if (_pe) {
+        sessionName = _pe.sessionName || "";
+        // Prefer the explicit duration on the plan entry, else look up the
+        // session library's canonical duration for this discipline+load.
+        if (_pe.duration) {
+          fallbackDuration = _pe.duration;
+        } else if (typeof SESSION_DESCRIPTIONS !== "undefined" && SESSION_DESCRIPTIONS[_pe.discipline]) {
+          const _ld = SESSION_DESCRIPTIONS[_pe.discipline][_pe.load];
+          if (_ld && _ld.duration) fallbackDuration = _ld.duration;
+        }
+      }
+    } else if (sessionId.startsWith("session-log-")) {
+      const rawId = sessionId.slice("session-log-".length);
+      const _logged = JSON.parse(localStorage.getItem("workouts") || "[]");
+      const _lw = _logged.find(w => String(w.id) === rawId);
+      if (_lw) {
+        sessionName = _lw.name || _lw.sessionName || "";
+        fallbackDuration = _lw.duration || null;
+      }
+    }
+  } catch (e) {
+    console.warn("[IronZ] session name/duration lookup failed:", e);
+  }
+
+  // Final fallback for the name so the Strava upload never posts as
+  // the generic "IronZ workout" fallback.
+  if (!sessionName) {
+    sessionName = (typeof _wTypeLabel === "function" ? _wTypeLabel(type) : type) + " Session";
+  }
+
+  // If the user left the duration field empty, use the looked-up value
+  // so Strava gets the planned duration (or at worst the scheduled
+  // workout's saved duration) rather than the 30-min hard default.
+  if (!duration && fallbackDuration) {
+    // fallbackDuration might be a number like 60 or a string like
+    // "60 min" — coerce to a plain minutes number.
+    const fallbackNum = parseFloat(String(fallbackDuration));
+    if (!isNaN(fallbackNum) && fallbackNum > 0) {
+      duration = String(fallbackNum);
+    }
   }
 
   // Save to workout history
