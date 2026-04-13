@@ -1153,11 +1153,30 @@ function buildAiIntervalsList(session, type) {
     if (reps > 1 && iv.restDuration) durText += ` (${iv.restDuration} rest)`;
     const nameLow   = (iv.name || "").toLowerCase();
     const sportTag  = iv.sport ? `<span class="qe-brick-sport qe-brick-${iv.sport}">${iv.sport === "bike" ? "Bike" : "Run"}</span> ` : "";
+
+    // Effective name: if the segment is labeled as "interval(s)" but has
+    // no actual repeat structure (reps <= 1 and no restDuration), the
+    // label is stale — a continuous Z3 block is tempo, not intervals.
+    // Rename it from the effort zone instead. Preserves existing logged
+    // workouts that were generated before the swim generator fix.
+    let effectiveName = iv.name || "";
+    const hasRepeatStructure = (iv.reps && iv.reps > 1)
+                            || !!iv.restDuration
+                            || !!iv.repeatGroup;
+    if (/interval/i.test(effectiveName) && !hasRepeatStructure) {
+      const zoneNames = {
+        Z1: "Easy", Z2: "Aerobic", Z3: "Tempo", Z4: "Threshold",
+        Z5: "VO2max", Z6: "Sprint",
+      };
+      effectiveName = zoneNames[iv.effort] || effectiveName;
+    }
+    const effectiveNameLow = effectiveName.toLowerCase();
+
     const typeLabel = isTransition ? "TRANSITION"
                     : /warm/i.test(nameLow) ? "WARMUP"
                     : /cool/i.test(nameLow) ? "COOLDOWN"
-                    : /recov/i.test(nameLow) ? "RECOVERY"
-                    : iv.name ? iv.name.toUpperCase() : "INTERVAL";
+                    : /recov/i.test(effectiveNameLow) ? "RECOVERY"
+                    : effectiveName ? effectiveName.toUpperCase() : "INTERVAL";
     const stepCls   = isTransition ? "session-step--transition" : isRestWalk ? "session-step--rw" : `session-step--z${zone}`;
     const zoneBadge = isTransition ? "T1" : isRestWalk ? "RW" : `Z${zone}${zoneLabel ? `<span class="session-step-pace">${zoneLabel}</span>` : ""}`;
     return `
@@ -5310,7 +5329,28 @@ function qeGenerateCardio() {
         { name: "Main Set", duration: Math.round(mainMin * 0.6) + " min", effort: iz.main, details: swimDetail(iz.main) },
       ];
       if (intensity !== "light") {
-        intervals.push({ name: "Hard Intervals", duration: Math.round(mainMin * 0.4) + " min", effort: iz.hard, details: swimDetail(iz.hard) });
+        // Name this block by its effort zone, not by "Hard Intervals" —
+        // this code path doesn't actually generate repeat structure
+        // (no reps, no rest, just a continuous time block), so a Z3
+        // segment is a tempo effort and a Z4 segment is a threshold
+        // block. Only a true repeat set (e.g. 6×100m w/ 20s rest)
+        // should be called intervals. See _stravaWorkoutTypeLabel
+        // / wearable spec.
+        const zoneNames = {
+          Z1: "Easy",
+          Z2: "Aerobic",
+          Z3: "Tempo",
+          Z4: "Threshold",
+          Z5: "VO2max",
+          Z6: "Sprint",
+        };
+        const hardName = zoneNames[iz.hard] || "Main";
+        intervals.push({
+          name: hardName,
+          duration: Math.round(mainMin * 0.4) + " min",
+          effort: iz.hard,
+          details: swimDetail(iz.hard),
+        });
       } else {
         intervals[1].duration = mainMin + " min";
       }
