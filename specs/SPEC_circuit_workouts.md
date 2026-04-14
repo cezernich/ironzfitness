@@ -8,7 +8,7 @@ This is distinct from the existing HIIT type (which is time-based work/rest inte
 
 ## ⚠️ APPROVED MOCKUP — MATCH THIS EXACTLY
 
-**circuit-mockup.html** in the Ironz folder is the approved visual reference for all circuit UI. Open it in a browser and match:
+**mockups/circuit-mockup.html** is the approved visual reference for all circuit UI. Open it in a browser and match:
 - Card layout, colors, spacing, typography, and border-radii
 - Repeat block rendering (orange badge, indented children, background color)
 - Visual strip proportions and colors (red = exercise, cyan = cardio, gray = rest)

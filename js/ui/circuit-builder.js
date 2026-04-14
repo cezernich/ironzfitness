@@ -1,6 +1,6 @@
 // js/ui/circuit-builder.js
 //
-// Every screen in circuit-mockup.html that isn't the already-saved card:
+// Every screen in mockups/circuit-mockup.html that isn't the already-saved card:
 //   - Screen 1e: Add Circuit Session entry point (intensity / duration /
 //     focus / notes → Generate or Log Manually)
 //   - Screen 1f: Generated circuit preview with Save / Regenerate

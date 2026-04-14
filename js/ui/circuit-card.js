@@ -1,7 +1,7 @@
 // js/ui/circuit-card.js
 //
 // Renders circuit-type workouts on the calendar day detail. Matches
-// circuit-mockup.html screens 1, 1b, 1c, 1d exactly:
+// mockups/circuit-mockup.html screens 1, 1b, 1c, 1d exactly:
 //   - Card header with circuit-icon, title, subtitle, goal badge
 //   - Time badge (top-right) with PR line underneath
 //   - Visual strip (cardio cyan, exercise red, rest gray)
