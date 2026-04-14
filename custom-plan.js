@@ -224,14 +224,19 @@ const CP_MUSCLES = ["Chest", "Back", "Shoulders", "Biceps", "Triceps", "Quads", 
 
 function customPlanAddAI(dow) {
   const dayLabel = CP_DAYS.find(d => d.dow === dow)?.label || "this day";
+  // Route each type through its own options step so the user specifies
+  // session type + duration + intensity BEFORE we call any generator.
+  // Previously the cardio types jumped straight into a generic AI call
+  // with no inputs — the AI made up whatever it wanted, which never
+  // matched the deterministic per-discipline formats we use elsewhere.
   const types = [
-    { value: "strength", label: "Strength" },
-    { value: "running", label: "Running" },
-    { value: "cycling", label: "Cycling" },
-    { value: "swimming", label: "Swimming" },
-    { value: "hiit", label: "HIIT" },
-    { value: "yoga", label: "Yoga / Mobility" },
-    { value: "bodyweight", label: "Bodyweight" },
+    { value: "strength",   label: "Strength",   fn: "cpShowStrengthOptions" },
+    { value: "running",    label: "Running",    fn: "cpShowRunningOptions" },
+    { value: "cycling",    label: "Cycling",    fn: "cpShowCyclingOptions" },
+    { value: "swimming",   label: "Swimming",   fn: "cpShowSwimmingOptions" },
+    { value: "hiit",       label: "HIIT",       fn: "cpShowGenericCardioOptions" },
+    { value: "yoga",       label: "Yoga / Mobility", fn: "cpShowGenericCardioOptions" },
+    { value: "bodyweight", label: "Bodyweight", fn: "cpShowGenericCardioOptions" },
   ];
 
   const modal = document.getElementById("cp-ai-modal");
@@ -241,9 +246,9 @@ function customPlanAddAI(dow) {
 
   const list = document.getElementById("cp-ai-type-list");
   if (list) {
-    list.innerHTML = types.map(t => `
-      <button class="cp-type-btn" onclick="${t.value === 'strength' ? `cpShowStrengthOptions(${dow})` : `customPlanGenerateAI(${dow}, '${t.value}')`}">${t.label}</button>
-    `).join("");
+    list.innerHTML = types.map(t =>
+      `<button class="cp-type-btn" onclick="${t.fn}(${dow}, '${t.value}')">${t.label}</button>`
+    ).join("");
   }
 
   // Reset to type picker view
@@ -312,6 +317,287 @@ function cpGenerateStrength(dow) {
   const muscleStr = muscles.join(", ");
   closeCustomPlanAIModal();
   customPlanGenerateAI(dow, "strength", `Target muscles: ${muscleStr}. Level: ${level}. Session length: ${duration} min.`);
+}
+
+// ── Cardio options pickers ───────────────────────────────────────────────
+//
+// Every cardio type gets its own "what kind of session + how long" step
+// before generation. For running and swimming we route through the
+// deterministic generators (RunningWorkoutGenerator, SwimWorkoutGenerator)
+// that produce canonical phase trees matching SwimCardRenderer and the
+// running intensity strip. For cycling and generic cardio (hiit/yoga/bw)
+// we still call the AI but pass the user's session type + duration so
+// the output is shaped the way the user asked for.
+
+function _cpShowCardioDetail(title, bodyHtml) {
+  const list = document.getElementById("cp-ai-type-list");
+  const detailEl = document.getElementById("cp-ai-detail");
+  if (list) list.style.display = "none";
+  if (!detailEl) return;
+  detailEl.style.display = "";
+  const titleEl = document.getElementById("cp-ai-modal-title");
+  if (titleEl) titleEl.textContent = title;
+  detailEl.innerHTML = `<div style="padding:0 16px 16px">${bodyHtml}</div>`;
+}
+
+function _cpDurationSelect(id, defaultMin) {
+  const options = [20, 30, 45, 60, 75, 90, 120];
+  return `
+    <div class="form-row">
+      <label for="${id}">Session Length</label>
+      <select id="${id}">
+        ${options.map(m => `<option value="${m}"${m === defaultMin ? " selected" : ""}>${m} min</option>`).join("")}
+      </select>
+    </div>`;
+}
+
+function _cpIntensitySelect(id) {
+  return `
+    <div class="form-row">
+      <label for="${id}">Intensity</label>
+      <select id="${id}">
+        <option value="light">Light / Recovery</option>
+        <option value="moderate" selected>Moderate</option>
+        <option value="intense">Intense</option>
+      </select>
+    </div>`;
+}
+
+// ── Running ──
+function cpShowRunningOptions(dow) {
+  const sessionTypes = [
+    { id: "easy_recovery",   label: "Easy / Recovery",    desc: "Z1-Z2 conversational" },
+    { id: "endurance",       label: "Endurance",          desc: "Z2 steady aerobic" },
+    { id: "long_run",        label: "Long Run",           desc: "Longest run of the week" },
+    { id: "tempo_threshold", label: "Tempo / Threshold",  desc: "Z3-Z4 comfortably hard" },
+    { id: "track_workout",   label: "Track Intervals",    desc: "V-pace repeats" },
+    { id: "speed_work",      label: "Speed Work",         desc: "R-pace strides / 400s" },
+    { id: "hills",           label: "Hill Workout",       desc: "Hill repeats" },
+  ];
+  _cpShowCardioDetail("Running Session", `
+    <div class="form-row">
+      <label for="cp-run-type">Session Type</label>
+      <select id="cp-run-type">
+        ${sessionTypes.map(t => `<option value="${t.id}">${t.label} — ${t.desc}</option>`).join("")}
+      </select>
+    </div>
+    ${_cpDurationSelect("cp-run-duration", 45)}
+    <button class="btn-primary" style="width:100%;margin-top:8px" onclick="cpGenerateRunning(${dow})">Generate</button>
+  `);
+}
+
+function cpGenerateRunning(dow) {
+  const sessionTypeId = document.getElementById("cp-run-type")?.value || "endurance";
+  const durationMin = parseInt(document.getElementById("cp-run-duration")?.value, 10) || 45;
+  closeCustomPlanAIModal();
+
+  const Gen = (typeof window !== "undefined" && window.RunningWorkoutGenerator) || null;
+  if (!Gen || !Gen.generateRunWorkout) {
+    // Fall back to the AI path with context if the deterministic generator
+    // isn't loaded (shouldn't happen in production).
+    customPlanGenerateAI(dow, "running", `Session type: ${sessionTypeId}. Session length: ${durationMin} min.`);
+    return;
+  }
+
+  let zones = {};
+  try { zones = JSON.parse(localStorage.getItem("trainingZones") || "{}"); } catch {}
+  let experienceLevel = "intermediate";
+  try {
+    const ob = JSON.parse(localStorage.getItem("onboardingData") || "{}");
+    if (ob.level) experienceLevel = ob.level;
+  } catch {}
+
+  try {
+    const { workout } = Gen.generateRunWorkout({
+      sessionTypeId,
+      userZones: zones,
+      experienceLevel,
+      durationOverrideMin: durationMin,
+    });
+    _cpAddSession(dow, {
+      id: _cpGenId(),
+      mode: "ai",
+      data: _cpBuildRunEntry(workout, durationMin),
+    });
+    _cpRerenderDay(dow);
+  } catch (err) {
+    console.warn("[custom-plan] run generator failed:", err);
+    customPlanGenerateAI(dow, "running", `Session type: ${sessionTypeId}. Session length: ${durationMin} min.`);
+  }
+}
+
+function _cpBuildRunEntry(workout, durationMin) {
+  // Prefer AddRunningSessionFlow.planEntryFor when available — it builds
+  // the same { aiSession, phases, why_text, ... } shape the calendar +
+  // Strava description consumers expect.
+  const ARSF = (typeof window !== "undefined" && window.AddRunningSessionFlow) || null;
+  if (ARSF && ARSF.planEntryFor) {
+    const entry = ARSF.planEntryFor(workout, "", "");
+    return {
+      type: entry.type,
+      title: entry.sessionName || workout.title,
+      sessionName: entry.sessionName || workout.title,
+      duration: entry.duration || durationMin,
+      aiSession: entry.aiSession,
+      phases: entry.phases,
+      why_text: entry.why_text,
+      is_hard: entry.is_hard,
+    };
+  }
+  // Fallback: minimal shape if AddRunningSessionFlow isn't loaded.
+  return {
+    type: workout.type || "running",
+    title: workout.title,
+    sessionName: workout.title,
+    duration: workout.estimated_duration_min || durationMin,
+    phases: workout.phases,
+  };
+}
+
+// ── Cycling ──
+function cpShowCyclingOptions(dow) {
+  const sessionTypes = [
+    { id: "bike_endurance", label: "Zone 2 Endurance",  desc: "Long aerobic base ride" },
+    { id: "bike_tempo",     label: "Tempo",             desc: "Z3 sustained pace" },
+    { id: "bike_threshold", label: "Threshold",         desc: "FTP intervals" },
+    { id: "bike_intervals", label: "VO2 Intervals",     desc: "Short hard repeats" },
+    { id: "bike_sweetspot", label: "Sweet Spot",        desc: "88-94% FTP blocks" },
+    { id: "bike_recovery",  label: "Recovery Spin",     desc: "Easy flush ride" },
+    { id: "bike_long",      label: "Long Ride",         desc: "Longest ride of the week" },
+  ];
+  _cpShowCardioDetail("Cycling Session", `
+    <div class="form-row">
+      <label for="cp-bike-type">Session Type</label>
+      <select id="cp-bike-type">
+        ${sessionTypes.map(t => `<option value="${t.id}">${t.label} — ${t.desc}</option>`).join("")}
+      </select>
+    </div>
+    ${_cpDurationSelect("cp-bike-duration", 60)}
+    <button class="btn-primary" style="width:100%;margin-top:8px" onclick="cpGenerateCycling(${dow})">Generate</button>
+  `);
+}
+
+function cpGenerateCycling(dow) {
+  const sessionTypeId = document.getElementById("cp-bike-type")?.value || "bike_endurance";
+  const durationMin = parseInt(document.getElementById("cp-bike-duration")?.value, 10) || 60;
+  const labelMap = {
+    bike_endurance: "Zone 2 endurance ride",
+    bike_tempo:     "tempo ride at Z3",
+    bike_threshold: "threshold (FTP) intervals",
+    bike_intervals: "VO2max short hard intervals",
+    bike_sweetspot: "sweet spot 88-94% FTP blocks",
+    bike_recovery:  "easy recovery spin",
+    bike_long:      "long aerobic ride",
+  };
+  const ctx = `Session: ${labelMap[sessionTypeId] || sessionTypeId}. Target duration: ${durationMin} min. Structure as warmup + main set + cooldown with explicit zones (Z1-Z5). For interval sessions, use repeat blocks with work/rest pairs. Every phase must have an effort zone.`;
+  closeCustomPlanAIModal();
+  customPlanGenerateAI(dow, "cycling", ctx);
+}
+
+// ── Swimming ──
+function cpShowSwimmingOptions(dow) {
+  const sessionTypes = [
+    { id: "swim_technique",     label: "Technique",       desc: "Drill-focused, easy pace" },
+    { id: "swim_endurance",     label: "Endurance",       desc: "Continuous aerobic" },
+    { id: "swim_css_intervals", label: "CSS Intervals",   desc: "Threshold pace repeats" },
+    { id: "swim_speed",         label: "Speed / Sprint",  desc: "Short fast repeats" },
+  ];
+  _cpShowCardioDetail("Swimming Session", `
+    <div class="form-row">
+      <label for="cp-swim-type">Session Type</label>
+      <select id="cp-swim-type">
+        ${sessionTypes.map(t => `<option value="${t.id}">${t.label} — ${t.desc}</option>`).join("")}
+      </select>
+    </div>
+    ${_cpDurationSelect("cp-swim-duration", 45)}
+    <button class="btn-primary" style="width:100%;margin-top:8px" onclick="cpGenerateSwimming(${dow})">Generate</button>
+  `);
+}
+
+function cpGenerateSwimming(dow) {
+  const sessionTypeId = document.getElementById("cp-swim-type")?.value || "swim_endurance";
+  const durationMin = parseInt(document.getElementById("cp-swim-duration")?.value, 10) || 45;
+  closeCustomPlanAIModal();
+
+  const Gen = (typeof window !== "undefined" && window.SwimWorkoutGenerator) || null;
+  const lib = (typeof window !== "undefined" && window.VARIANT_LIBRARY_SWIM) || null;
+  if (!Gen || !Gen.generateSwimWorkout || !lib) {
+    // No deterministic generator available — fall back to the AI path with
+    // the session type + duration passed as context.
+    customPlanGenerateAI(dow, "swimming", `Session type: ${sessionTypeId}. Session length: ${durationMin} min.`);
+    return;
+  }
+
+  let css = null;
+  try {
+    const zones = JSON.parse(localStorage.getItem("trainingZones") || "{}");
+    css = zones.swimming?.css || null;
+  } catch {}
+  let experienceLevel = "intermediate";
+  try {
+    const ob = JSON.parse(localStorage.getItem("onboardingData") || "{}");
+    if (ob.level) experienceLevel = ob.level;
+  } catch {}
+
+  try {
+    const variants = (lib.variants && lib.variants[sessionTypeId]) || [];
+    const variant = variants[Math.floor(Math.random() * variants.length)];
+    if (!variant) throw new Error("No variant for sessionType " + sessionTypeId);
+    const result = Gen.generateSwimWorkout({
+      sessionTypeId,
+      variantId: variant.id,
+      userZones: { css },
+      experienceLevel,
+    });
+    const w = result.workout;
+    _cpAddSession(dow, {
+      id: _cpGenId(),
+      mode: "ai",
+      data: {
+        type: sessionTypeId,
+        title: w.title,
+        sessionName: w.title,
+        duration: durationMin,
+        aiSession: {
+          title: w.title,
+          pool_size_m: w.pool_size_m,
+          pool_unit: w.pool_unit,
+          total_distance_m: w.total_distance_m,
+          steps: w.steps,
+          why_text: w.why_text,
+        },
+        steps: w.steps,
+        pool_size_m: w.pool_size_m,
+        pool_unit: w.pool_unit,
+        total_distance_m: w.total_distance_m,
+      }
+    });
+    _cpRerenderDay(dow);
+  } catch (err) {
+    console.warn("[custom-plan] swim generator failed:", err);
+    customPlanGenerateAI(dow, "swimming", `Session type: ${sessionTypeId}. Session length: ${durationMin} min.`);
+  }
+}
+
+// ── HIIT / Yoga / Bodyweight — just duration + intensity ──
+function cpShowGenericCardioOptions(dow, type) {
+  const titleMap = { hiit: "HIIT Session", yoga: "Yoga / Mobility Session", bodyweight: "Bodyweight Session" };
+  const defaultDur = type === "yoga" ? 30 : 30;
+  _cpShowCardioDetail(titleMap[type] || "Session", `
+    ${_cpDurationSelect(`cp-${type}-duration`, defaultDur)}
+    ${type === "yoga" ? "" : _cpIntensitySelect(`cp-${type}-intensity`)}
+    <button class="btn-primary" style="width:100%;margin-top:8px" onclick="cpGenerateGeneric(${dow}, '${type}')">Generate</button>
+  `);
+}
+
+function cpGenerateGeneric(dow, type) {
+  const durationMin = parseInt(document.getElementById(`cp-${type}-duration`)?.value, 10) || 30;
+  const intensity = document.getElementById(`cp-${type}-intensity`)?.value || "moderate";
+  closeCustomPlanAIModal();
+  const ctx = type === "yoga"
+    ? `Session length: ${durationMin} min.`
+    : `Intensity: ${intensity}. Session length: ${durationMin} min.`;
+  customPlanGenerateAI(dow, type, ctx);
 }
 
 function closeCustomPlanAIModal() {
@@ -471,14 +757,30 @@ async function customPlanGenerateAI(dow, workoutType, extraContext) {
   const bwConstraint = isBodyweight
     ? "IMPORTANT: This is a BODYWEIGHT-ONLY session. Every exercise must use ONLY bodyweight — absolutely NO dumbbells, barbells, kettlebells, cables, machines, or any external weight. All weight fields must be \"Bodyweight\". "
     : "";
-  const prompt = `Generate a single ${workoutType} session. ${bwConstraint}${extraCtx}${profileCtx}${levelCtx}${avoidCtx}
 
+  const cardioRules = `
+CARDIO RULES — every interval MUST have an explicit "effort" zone (Z1-Z5):
+- Z1: Recovery / warmup / cooldown / very easy
+- Z2: Aerobic / steady endurance
+- Z3: Tempo / threshold lower
+- Z4: Threshold / hard intervals (~85% effort)
+- Z5: VO2max / sprint / max effort
+DO NOT put every phase at the same zone. Warmup and cooldown are ALWAYS Z1.
+
+STRUCTURE: If the session has repeated work/rest pairs (e.g. "4 rounds of 5 min tempo with 2 min recovery"), use a single interval with reps + restDuration fields:
+  {"name":"Tempo Block","duration":"5 min","effort":"Z3","reps":4,"restDuration":"2 min","details":"..."}
+NOT four separate phases. Use reps when a phase repeats.
+
+Every phase needs a duration (e.g. "10 min") and a details string describing what to do.`;
+
+  const prompt = `Generate a single ${workoutType} session. ${bwConstraint}${extraCtx}${profileCtx}${levelCtx}${avoidCtx}
+${isCardio ? cardioRules : ""}
 Return ONLY valid JSON, no markdown:
 ${isCardio
-  ? `{"type":"${workoutType}","title":"Session Name","intervals":[{"name":"Phase","duration":"10 min","effort":"Easy","details":"Description"}]}`
+  ? `{"type":"${workoutType}","title":"Session Name","intervals":[{"name":"Phase","duration":"10 min","effort":"Z2","details":"Description","reps":1,"restDuration":""}]}`
   : `{"type":"${workoutType}","title":"Session Name","exercises":[{"name":"Exercise","sets":3,"reps":10,"rest":"60s","weight":"Bodyweight"}]}`
 }
-Include 5-8 exercises or 3-5 intervals.`;
+Include 5-8 exercises or 3-6 intervals. Match the user-requested duration — sum of all intervals should land within 5 min of the target.`;
 
   try {
     const data = await callAI({
