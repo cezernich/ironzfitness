@@ -3427,7 +3427,7 @@ async function renderCommunityWorkouts(filter) {
 
   // Admin: add workout button
   if (_commIsAdmin) {
-    html += `<button class="btn-primary" style="margin-bottom:12px" onclick="openCommAdminForm()">+ Add Community Workout</button>`;
+    html += `<button class="btn-primary" style="margin-bottom:12px" onclick="openCommAdminForm()">+ Add Community Workout (Admin)</button>`;
   }
 
 
