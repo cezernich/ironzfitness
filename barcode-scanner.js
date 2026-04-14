@@ -68,11 +68,19 @@ async function _startNativeScan() {
   const reader = document.getElementById("barcode-reader");
   if (!reader) return;
 
+  // Create the video element with every attribute iOS Safari requires to
+  // play a MediaStream inline: muted + playsInline + autoplay, set as both
+  // properties AND attributes because iOS is picky. Ensure the container
+  // has enough height so the video actually renders.
   const video = document.createElement("video");
-  video.setAttribute("playsinline", "true");
-  video.setAttribute("autoplay", "true");
   video.muted = true;
-  video.style.cssText = "width:100%;height:auto;display:block";
+  video.playsInline = true;
+  video.autoplay = true;
+  video.setAttribute("playsinline", "");
+  video.setAttribute("autoplay", "");
+  video.setAttribute("muted", "");
+  video.controls = false;
+  video.style.cssText = "width:100%;height:100%;min-height:240px;display:block;object-fit:cover;background:#000";
   // Insert the video behind the scan-line overlay
   reader.insertBefore(video, reader.firstChild);
 
@@ -83,6 +91,7 @@ async function _startNativeScan() {
       audio: false,
     });
   } catch (err) {
+    console.warn("[barcode] getUserMedia failed:", err);
     if (err && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError" || err.name === "SecurityError")) {
       _showPermissionDenied();
     } else {
@@ -92,7 +101,24 @@ async function _startNativeScan() {
   }
 
   video.srcObject = stream;
-  try { await video.play(); } catch { /* autoplay may throw on some browsers */ }
+  // Retry play() once if the first attempt fails — iOS Safari sometimes
+  // rejects the first call and accepts the second. If it still fails,
+  // the video stays blank and the user sees nothing, so surface an error
+  // rather than leaving them staring at a black screen.
+  try {
+    await video.play();
+  } catch (err1) {
+    console.warn("[barcode] video.play() attempt 1 failed:", err1);
+    try {
+      await new Promise(r => setTimeout(r, 50));
+      await video.play();
+    } catch (err2) {
+      console.warn("[barcode] video.play() attempt 2 failed:", err2);
+      _stopCameraStream();
+      _showCameraError("Couldn't start the camera preview. Try closing other camera apps and reopening.");
+      return;
+    }
+  }
 
   const detector = new window.BarcodeDetector({
     formats: ["ean_13", "ean_8", "upc_a", "upc_e"],

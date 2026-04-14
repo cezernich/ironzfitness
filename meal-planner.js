@@ -305,11 +305,17 @@ function generateWeekMealPlan(options) {
     days.push({ dayIndex: d, label: MP_DAY_LABELS[d], meals: dayMeals, load, dayTargets, date: dateStr });
   }
 
+  // baseTargets used to be a closure variable that was removed during the
+  // nutrition refactor — leaving `targets: baseTargets` as an undefined
+  // reference here threw on the first click of "Generate 7-Day Meal Plan"
+  // and silently swallowed the whole function. Per-day targets are already
+  // stored on each day (dayTargets), so we just snapshot the first day's
+  // targets as the plan-level baseline.
   const plan = {
     id: (typeof generateId === "function") ? generateId("mp") : "mp_" + Date.now(),
     createdAt: new Date().toISOString(),
     householdSize: hs,
-    targets: baseTargets,
+    targets: (days[0] && days[0].dayTargets) || fallbackTargets,
     days: days,
   };
 

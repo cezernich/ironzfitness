@@ -1330,7 +1330,11 @@ function hasAnyCompletedSession(dateStr) {
   if (dateStr > getTodayString()) return false;
   try {
     const workouts = JSON.parse(localStorage.getItem("workouts")) || [];
-    return workouts.some(w => w.date === dateStr && w.isCompletion);
+    // Strava-imported activities carry source:"strava" (and completed:true)
+    // but NOT isCompletion — they come in as fully-formed logged workouts,
+    // not completion receipts. Treat any of these as "this day has work"
+    // so the calendar cell gets the green styling.
+    return workouts.some(w => w.date === dateStr && (w.isCompletion || w.source === "strava" || w.completed === true));
   } catch { return false; }
 }
 
@@ -6191,9 +6195,14 @@ function qeGenerateCardio() {
         const variant = variants[Math.floor(Math.random() * variants.length)];
         if (variant) {
           const css = (zones.swimming && zones.swimming.css) || null;
+          // Random variantOffset so each Quick Entry shuffle picks a
+          // different warmup + cooldown shape — before this, every swim
+          // session started with "400m easy + 4×50 build" regardless of
+          // how many times the user hit Regenerate.
           const result = SwimWorkoutGenerator.generateSwimWorkout({
             sessionTypeId, variantId: variant.id,
             userZones: { css }, experienceLevel: level,
+            variantOffset: Math.floor(Math.random() * 12),
           });
           const w = result.workout;
           workout.steps = w.steps;

@@ -180,6 +180,68 @@
     ])];
   }
 
+  // ─── Warmup / cooldown variants (for variety across sessions) ───────────
+
+  function _buildWarmup(idx, pool) {
+    switch (idx) {
+      case 1:
+        // Mixed strokes warmup: 200 choice + 4×50 kick-drill-swim
+        return [
+          _iv("Warm Up", _snap(200, pool), "choice", "easy"),
+          _rest(15),
+          _repeat(4, [
+            _iv("K/D/S", _snap(50, pool), "freestyle", "kick / drill / swim by 25"),
+            _rest(15),
+          ]),
+        ];
+      case 2:
+        // Classic 300 / 4×25 build
+        return [
+          _iv("Warm Up", _snap(300, pool), "freestyle", "easy"),
+          _rest(15),
+          _repeat(4, [
+            _iv("Build", _snap(25, pool), "freestyle", "build to fast"),
+            _rest(10),
+          ]),
+        ];
+      case 3:
+        // Longer aerobic warmup (for longer main sets)
+        return [
+          _iv("Warm Up", _snap(500, pool), "freestyle", "easy aerobic"),
+          _rest(20),
+          _repeat(6, [
+            _iv("Stroke Count", _snap(50, pool), "freestyle", "count strokes, hold form"),
+            _rest(10),
+          ]),
+        ];
+      default:
+        // Variant 0 — the classic 400 + 4×50 build
+        return [
+          _iv("Warm Up", _snap(400, pool), "freestyle", "easy"),
+          _rest(15),
+          _repeat(4, [
+            _iv("Build", _snap(50, pool), "freestyle", "easy → strong"),
+            _rest(10),
+          ]),
+        ];
+    }
+  }
+
+  function _buildCooldown(idx, pool) {
+    switch (idx) {
+      case 1:
+        return [
+          _iv("Cool Down", _snap(150, pool), "backstroke", "easy"),
+          _rest(10),
+          _iv("Easy", _snap(100, pool), "choice", "very easy"),
+        ];
+      case 2:
+        return [ _iv("Cool Down", _snap(300, pool), "choice", "easy, long and loose") ];
+      default:
+        return [ _iv("Cool Down", _snap(200, pool), "choice", "easy") ];
+    }
+  }
+
   // ─── Public entry point ──────────────────────────────────────────────────
 
   /**
@@ -208,18 +270,15 @@
     const warnings = [];
     if (!css) warnings.push("For accurate swim pace targets, log a CSS test result.");
 
-    // Warmup — always 400m easy + 4×50 build, snapped to pool.
-    const warmupSteps = [
-      _iv("Warm Up", _snap(400, pool), "freestyle", "easy"),
-      _rest(15),
-      _repeat(4, [
-        _iv("Build", _snap(50, pool), "freestyle", "easy → strong"),
-        _rest(10),
-      ]),
-    ];
-    // Rest before main
-    const beforeMain = _rest(30);
+    // Variety: rotate warmup + cooldown shapes per variantOffset so two
+    // sessions of the same type don't feel identical. Previously every
+    // workout started with "400m easy + 4×50 build", every time.
+    const variantOffset = (opts && typeof opts.variantOffset === "number") ? opts.variantOffset : 0;
+    const warmupIdx = Math.abs(variantOffset) % 4;
+    const cooldownIdx = Math.abs(variantOffset) % 3;
 
+    const warmupSteps = _buildWarmup(warmupIdx, pool);
+    const beforeMain = _rest(30);
     // Main — pick builder based on variant main_set shape
     const ms = variant.main_set || {};
     let mainSteps;
@@ -231,9 +290,8 @@
     else if (ms.drills) mainSteps = _buildDrills(ms, pool);
     else mainSteps = _buildStandardReps(ms, css, pool, exp);
 
-    // Cooldown — 200m easy choice.
     const beforeCd = _rest(30);
-    const cooldownSteps = [ _iv("Cool Down", _snap(200, pool), "choice", "easy") ];
+    const cooldownSteps = _buildCooldown(cooldownIdx, pool);
 
     const steps = [
       ...warmupSteps,
