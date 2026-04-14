@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>IronZ</title>
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/images/favicon-16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/images/apple-touch-icon.png" />
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#818cf8" />
   <meta name="description" content="Your AI-powered fitness companion. Personalized training plans, nutrition tracking, and smart workout programming." />
@@ -38,9 +38,9 @@
   <script src="js/error-reporting.js"></script>
   <!-- Supabase JS SDK (must load before supabase-init.js) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="supabase-init.js"></script>
-  <script src="db.js"></script>
-  <script src="seed-reference-data.js"></script>
+  <script src="js/supabase-init.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/seed-reference-data.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
@@ -2697,16 +2697,16 @@
   </div>
 
   <!-- Scripts — order matters -->
-  <script src="config.js"></script>
-  <script src="icons.js"></script>
-  <script src="themes.js"></script>
-  <script src="stats.js"></script>
-  <script src="touch-drag.js"></script>
-  <script src="workouts.js"></script>
-  <script src="nutrition.js"></script>
-  <script src="meals-data.js"></script>
-  <script src="threshold-week-scheduler.js"></script>
-  <script src="session-type-library.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/icons.js"></script>
+  <script src="js/themes.js"></script>
+  <script src="js/stats.js"></script>
+  <script src="js/touch-drag.js"></script>
+  <script src="js/workouts.js"></script>
+  <script src="js/nutrition.js"></script>
+  <script src="js/meals-data.js"></script>
+  <script src="js/threshold-week-scheduler.js"></script>
+  <script src="js/session-type-library.js"></script>
   <!-- Variant libraries (pure data) — must load before any code that consumes them -->
   <script src="js/variant-libraries/run.js"></script>
   <script src="js/variant-libraries/bike.js"></script>
@@ -2717,17 +2717,17 @@
   <script src="js/deterministic-variant-rotation.js"></script>
   <!-- Shared per-session validator — used by Add Session flow + Workout Sharing import validator -->
   <script src="js/workout-validator.js"></script>
-  <script src="planner.js"></script>
+  <script src="js/planner.js"></script>
   <!-- Triathlon gear checklist (SPEC_triathlon_gear_checklist.md) — data + modal -->
   <script src="js/gear-checklist.js"></script>
   <script src="js/ui/gear-checklist-modal.js"></script>
-  <script src="philosophy-engine.js"></script>
-  <script src="exercise-selector.js"></script>
-  <script src="nutrition-calculator.js"></script>
-  <script src="zone-calculator.js"></script>
+  <script src="js/philosophy-engine.js"></script>
+  <script src="js/exercise-selector.js"></script>
+  <script src="js/nutrition-calculator.js"></script>
+  <script src="js/zone-calculator.js"></script>
   <script src="js/sport-levels.js"></script>
   <script src="js/threshold-reminders.js"></script>
-  <script src="running-workout-generator.js"></script>
+  <script src="js/running-workout-generator.js"></script>
   <script src="js/bike-workout-generator.js"></script>
   <script src="js/swim-workout-model.js"></script>
   <script src="js/swim-workout-generator.js"></script>
@@ -2740,11 +2740,11 @@
   <script src="js/ui/circuit-builder.js"></script>
   <script src="js/strength-workout-generator.js"></script>
   <script src="js/ai-variant-selector.js"></script>
-  <script src="add-running-session-flow.js"></script>
-  <script src="test-result-handler.js"></script>
-  <script src="post-test-modal.js"></script>
+  <script src="js/add-running-session-flow.js"></script>
+  <script src="js/test-result-handler.js"></script>
+  <script src="js/post-test-modal.js"></script>
   <!-- Workout Sharing & Personal Library (FEATURE_SPEC_2026-04-09_workout_sharing.md) -->
-  <script src="subscription.js"></script>
+  <script src="js/subscription.js"></script>
   <script src="js/workout-sharing-privacy.js"></script>
   <script src="js/workout-link-service.js"></script>
   <script src="js/workout-sharing-flow.js"></script>
@@ -2762,52 +2762,52 @@
   <script src="js/ui/conflict-resolution-modal.js"></script>
   <script src="js/ui/inbox-tab-view.js"></script>
   <script src="js/ui/saved-library-tab-view.js"></script>
-  <script src="rules-engine.js"></script>
-  <script src="validator.js"></script>
-  <script src="gap-tracker.js"></script>
-  <script src="feedback-loop.js"></script>
-  <script src="feedback-tracker.js"></script>
-  <script src="philosophy-planner.js"></script>
-  <script src="survey.js"></script>
-  <script src="exercise-library.js"></script>
-  <script src="fueling.js"></script>
-  <script src="calendar.js"></script>
-  <script src="live-tracker.js"></script>
-  <script src="nl-input.js"></script>
+  <script src="js/rules-engine.js"></script>
+  <script src="js/validator.js"></script>
+  <script src="js/gap-tracker.js"></script>
+  <script src="js/feedback-loop.js"></script>
+  <script src="js/feedback-tracker.js"></script>
+  <script src="js/philosophy-planner.js"></script>
+  <script src="js/survey.js"></script>
+  <script src="js/exercise-library.js"></script>
+  <script src="js/fueling.js"></script>
+  <script src="js/calendar.js"></script>
+  <script src="js/live-tracker.js"></script>
+  <script src="js/nl-input.js"></script>
 
-  <script src="share.js"></script>
+  <script src="js/share.js"></script>
   <script src="js/ui/share-action-sheet.js"></script>
-  <script src="calendar-sync.js"></script>
-  <script src="app.js"></script>
-  <script src="workout-editor.js"></script>
+  <script src="js/calendar-sync.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/workout-editor.js"></script>
   <!-- Exercise name typeahead — loads the shared exercise database and
        wires up document-level delegation for any .ex-row-name input. -->
   <script src="js/data/exercises.js"></script>
   <script src="js/ui/exercise-autocomplete.js"></script>
-  <script src="nutrition-v2.js"></script>
-  <script src="meal-planner.js"></script>
-  <script src="custom-plan.js"></script>
-  <script src="leveling.js"></script>
-  <script src="challenges.js"></script>
-  <script src="ux-level.js"></script>
-  <script src="hydration.js"></script>
-  <script src="goals.js"></script>
-  <script src="life-training.js"></script>
-  <script src="strava-integration.js"></script>
-  <script src="adaptive-coach.js"></script>
-  <script src="trust-center.js"></script>
-  <script src="adherence.js"></script>
-  <script src="notifications.js"></script>
-  <script src="claims-filter.js"></script>
-  <script src="safety-guardrails.js"></script>
-  <script src="weekly-checkin.js"></script>
-  <script src="barcode-scanner.js"></script>
-  <script src="onboarding.js"></script>
-  <script src="admin.js"></script>
-  <script src="analytics.js"></script>
-  <script src="push.js"></script>
+  <script src="js/nutrition-v2.js"></script>
+  <script src="js/meal-planner.js"></script>
+  <script src="js/custom-plan.js"></script>
+  <script src="js/leveling.js"></script>
+  <script src="js/challenges.js"></script>
+  <script src="js/ux-level.js"></script>
+  <script src="js/hydration.js"></script>
+  <script src="js/goals.js"></script>
+  <script src="js/life-training.js"></script>
+  <script src="js/strava-integration.js"></script>
+  <script src="js/adaptive-coach.js"></script>
+  <script src="js/trust-center.js"></script>
+  <script src="js/adherence.js"></script>
+  <script src="js/notifications.js"></script>
+  <script src="js/claims-filter.js"></script>
+  <script src="js/safety-guardrails.js"></script>
+  <script src="js/weekly-checkin.js"></script>
+  <script src="js/barcode-scanner.js"></script>
+  <script src="js/onboarding.js"></script>
+  <script src="js/admin.js"></script>
+  <script src="js/analytics.js"></script>
+  <script src="js/push.js"></script>
   <!-- auth.js last — overrides window.onload to gate app behind login -->
-  <script src="auth.js"></script>
+  <script src="js/auth.js"></script>
 
   <!-- ===== BOTTOM NAV BAR ===== -->
   <nav id="bottom-nav" style="display:none">

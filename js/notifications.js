@@ -87,7 +87,7 @@ function sendNotification(title, body, tag) {
   try {
     const notif = new Notification(title, {
       body: body,
-      icon: "/file.svg",
+      icon: "/assets/images/file.svg",
       tag: tag || generateId("notif"),
       requireInteraction: false,
     });
