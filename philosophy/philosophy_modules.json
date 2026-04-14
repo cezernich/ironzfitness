@@ -837,28 +837,6 @@
     "is_active": true
   },
   {
-    "id": "SPORT_PILATES",
-    "category": "sport_other",
-    "title": "Pilates Training",
-    "version": "1.0",
-    "applies_when": { "workout_type": "pilates" },
-    "principles": [],
-    "plan_rules": [
-      "Treat as mobility + core strength",
-      "2-3x/week",
-      "Complement strength training",
-      "Focus on movement quality not intensity"
-    ],
-    "hard_constraints": [],
-    "nutrition_rules": [],
-    "training_adjustments": [],
-    "coaching_tone": "",
-    "evidence_sources": [],
-    "rationale": "Pilates as a complementary modality focusing on core strength and movement quality.",
-    "priority": "low",
-    "is_active": true
-  },
-  {
     "id": "SPORT_WALKING",
     "category": "sport_other",
     "title": "Walking",
@@ -1127,7 +1105,7 @@
     "category": "nutrition_yoga_low",
     "title": "Yoga, Mobility, and Walking Nutrition",
     "version": "1.0",
-    "applies_when": { "workout_type": ["yoga", "pilates", "walking"] },
+    "applies_when": { "workout_type": ["yoga", "walking"] },
     "principles": [],
     "plan_rules": [],
     "hard_constraints": [],

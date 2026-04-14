@@ -1241,8 +1241,8 @@ const RACE_TYPE_ICON = {
   hyroxDoubles: ICONS.activity,
 };
 
-const SCHEDULE_TYPE_ICON  = { running: ICONS.run, weightlifting: ICONS.weights, cycling: ICONS.bike, swimming: ICONS.swim, triathlon: ICONS.swim, general: ICONS.activity, hiit: ICONS.flame, bodyweight: ICONS.activity, yoga: ICONS.yoga, mobility: ICONS.activity, walking: ICONS.run, rowing: ICONS.swim, pilates: ICONS.activity, sport: ICONS.activity };
-const SCHEDULE_TYPE_LABEL = { running: "Running", weightlifting: "Strength", cycling: "Cycling", swimming: "Swimming", triathlon: "Triathlon", general: "General Fitness", hiit: "HIIT", bodyweight: "Bodyweight", yoga: "Yoga / Mobility", mobility: "Mobility", walking: "Walking", rowing: "Rowing", pilates: "Pilates", sport: "Sport-Specific" };
+const SCHEDULE_TYPE_ICON  = { running: ICONS.run, weightlifting: ICONS.weights, cycling: ICONS.bike, swimming: ICONS.swim, triathlon: ICONS.swim, general: ICONS.activity, hiit: ICONS.flame, bodyweight: ICONS.activity, yoga: ICONS.yoga, mobility: ICONS.activity, walking: ICONS.run, rowing: ICONS.swim, sport: ICONS.activity };
+const SCHEDULE_TYPE_LABEL = { running: "Running", weightlifting: "Strength", cycling: "Cycling", swimming: "Swimming", triathlon: "Triathlon", general: "General Fitness", hiit: "HIIT", bodyweight: "Bodyweight", yoga: "Yoga / Mobility", mobility: "Mobility", walking: "Walking", rowing: "Rowing", sport: "Sport-Specific" };
 
 function _getScheduleInputs() {
   const schedule = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
@@ -3325,7 +3325,6 @@ const DISCIPLINE_ICONS = {
   hyroxStrength:ICONS.weights,
   yoga:         ICONS.yoga,
   rowing:       ICONS.rowing,
-  pilates:      ICONS.pilates,
   sauna:        ICONS.sauna,
   stairstepper: ICONS.steps,
   wellness:     ICONS.droplet,

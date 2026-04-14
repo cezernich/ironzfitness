@@ -3965,7 +3965,7 @@ function qeShowStep(step, subType) {
     hiit: "HIIT Session",         brick: "Brick Session",
     yoga: "Yoga Session",         mobility: "Mobility Session",
     walking: "Walking Session",   rowing: "Rowing Session",
-    pilates: "Pilates Session",   sport: "Sport Session",
+    sport: "Sport Session",
     hyrox: "Hyrox Session",
     sauna: "Sauna / Steam",
     restriction: "Rest / Restriction",

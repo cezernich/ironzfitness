@@ -231,7 +231,6 @@ const _TOTALS_TYPE_META = {
   brick:        { label: "Brick",         icon: () => ICONS.bike    },
   hyrox:        { label: "Hyrox",         icon: () => ICONS.flame   },
   stairstepper: { label: "Stair Stepper", icon: () => ICONS.run     },
-  pilates:      { label: "Pilates",       icon: () => ICONS.activity},
   mobility:     { label: "Mobility",      icon: () => ICONS.activity},
   wellness:     { label: "Wellness",      icon: () => ICONS.activity},
   sauna:        { label: "Sauna",         icon: () => ICONS.activity},

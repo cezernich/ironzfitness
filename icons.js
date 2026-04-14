@@ -21,7 +21,6 @@ const ICONS = {
   brick:       _i(`<path d="M8 3l4 4-4 4"/><path d="M4 7h12"/><path d="M16 21l-4-4 4-4"/><path d="M20 17H8"/>`),
   circuit:     _i(`<path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v9h-9"/>`),
   rowing:      _i(`<circle cx="8" cy="8" r="1.5"/><path d="M3 19h18"/><path d="M6 19v-4l4-3 4 1"/><path d="M10 12l3-4"/><path d="M14 13h4"/>`),
-  pilates:     _i(`<circle cx="16" cy="5" r="1.5"/><path d="M4 17h16"/><path d="M8 17l2-5h4l2-4"/><path d="M14 12l3-1"/>`),
   sauna:       _i(`<path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0z"/><path d="M18 4c0 1-1 2 0 3s1 2 0 3"/><path d="M21 4c0 1-1 2 0 3s1 2 0 3"/>`),
   medal:       _i(`<circle cx="12" cy="14" r="5"/><path d="M12 9V2"/><path d="M8 2h8"/><path d="M12 14l2-2"/>`),
 
