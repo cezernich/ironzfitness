@@ -5968,6 +5968,246 @@ function _generateStructuredSwimMain(mainMin, intensity, cssSec, iz) {
   return _pick(variants)();
 }
 
+// ── Shared cardio workout builder ───────────────────────────────────────
+//
+// Pure compute — reads profile/zones from localStorage, builds the
+// intervals array (plus canonical swim step tree for swim), returns the
+// workout object. Called from BOTH Add Session (qeGenerateCardio) and
+// Build a Plan → Create Your Own (custom-plan.js) so both flows ask the
+// same questions and produce the same output.
+//
+// opts: { type, intensity, duration, bikeDur, runDur }
+//   type:      "running" | "cycling" | "swim" | "walking" | "rowing" | "brick"
+//   intensity: "easy" | "moderate" | "hard" | "long" (Add Session UI labels)
+//              OR "light" | "moderate" | "intense" | "max" (legacy keys)
+//   duration:  total minutes as number or numeric string
+//   bikeDur:   brick bike duration in minutes (brick only)
+//   runDur:    brick run duration in minutes (brick only)
+function _qeBuildCardioWorkout(opts) {
+  const type      = opts.type;
+  // Map Add Session's intensity labels to the internal intensity keys
+  // used by the variant selectors. Legacy keys pass through unchanged.
+  const _intensityAlias = { easy: "light", hard: "intense", long: "moderate" };
+  const intensity = _intensityAlias[opts.intensity] || opts.intensity || "moderate";
+  const isBrick   = type === "brick";
+  const bikeDur   = isBrick ? (opts.bikeDur || 45) : null;
+  const runDur    = isBrick ? (opts.runDur  || 20) : null;
+  const duration  = isBrick ? (parseInt(bikeDur) + parseInt(runDur)) : (parseInt(opts.duration) || 45);
+
+  let profile = {};
+  try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
+  const level = profile.fitnessLevel || "intermediate";
+
+  let zones = {};
+  try { zones = JSON.parse(localStorage.getItem("trainingZones")) || {}; } catch {}
+
+  const durMin = parseInt(duration) || 45;
+  const sportName = { running: "Run", cycling: "Ride", swim: "Swim", hiit: "HIIT", brick: "Brick" };
+
+  // Build zone-based details from user's training zones
+  function runDetail(zone) {
+    const r = zones.running || {};
+    if (zone === "Z2" && r.easy) return `Easy pace: ${r.easy}`;
+    if (zone === "Z2" && r.easyPaceMin) return `Easy pace: ${r.easyPaceMin}:${(r.easyPaceSec||"00").toString().padStart(2,"0")}/mile`;
+    if (zone === "Z3" && r.tempo) return `Tempo pace: ${r.tempo}`;
+    if (zone === "Z3" && r.thresholdPaceMin) return `Threshold: ${r.thresholdPaceMin}:${(r.thresholdPaceSec||"00").toString().padStart(2,"0")}/mile`;
+    if (zone === "Z4" && r.thresholdPaceMin) return `Threshold pace: ${r.thresholdPaceMin}:${(r.thresholdPaceSec||"00").toString().padStart(2,"0")}/mile`;
+    if (zone === "Z5" && r.vo2max) return `VO2max effort: ${r.vo2max}`;
+    const descs = { Z1: "Very easy effort, conversational", Z2: "Aerobic base, comfortable pace",
+      Z3: "Tempo effort, comfortably hard", Z4: "Threshold effort, sustainable hard",
+      Z5: "VO2max, hard effort", Z6: "Max sprint" };
+    return descs[zone] || "Steady effort";
+  }
+  function bikeDetail(zone) {
+    const c = zones.cycling || {};
+    const ftp = c.ftp ? parseInt(c.ftp) : null;
+    const pctMap = { Z1: 0.5, Z2: 0.7, Z3: 0.85, Z4: 0.95, Z5: 1.1, Z6: 1.3 };
+    if (ftp && pctMap[zone]) return `~${Math.round(ftp * pctMap[zone])}W (${Math.round(pctMap[zone]*100)}% FTP)`;
+    const descs = { Z1: "Easy spin, recovery", Z2: "Endurance pace",
+      Z3: "Sweet spot / tempo", Z4: "Threshold effort", Z5: "VO2max intervals", Z6: "Sprint" };
+    return descs[zone] || "Steady effort";
+  }
+  function swimDetail(zone) {
+    const s = zones.swimming || {};
+    if (s.css) {
+      const descs = { Z1: `Easy, CSS + 15-20s`, Z2: `Aerobic, CSS + 8-12s`,
+        Z3: `Tempo, CSS + 3-5s`, Z4: `Threshold, near CSS (${s.css}/100m)`, Z5: `VO2max, CSS - 3-5s` };
+      return descs[zone] || `Steady effort`;
+    }
+    const descs = { Z1: "Very easy, long rest", Z2: "Steady swimming, moderate effort",
+      Z3: "Tempo effort", Z4: "Threshold pace", Z5: "Hard interval effort" };
+    return descs[zone] || "Steady effort";
+  }
+
+  // Intensity maps to zone distribution
+  const intZones = {
+    light:    { warmup: "Z1", main: "Z2", hard: "Z3", cooldown: "Z1" },
+    moderate: { warmup: "Z1", main: "Z2", hard: "Z3", cooldown: "Z1" },
+    intense:  { warmup: "Z2", main: "Z3", hard: "Z4", cooldown: "Z1" },
+    max:      { warmup: "Z2", main: "Z3", hard: "Z5", cooldown: "Z1" },
+  };
+  const iz = intZones[intensity] || intZones.moderate;
+
+  let intervals = [];
+  const detailFn = type === "cycling" ? bikeDetail : type === "swim" ? swimDetail : runDetail;
+  const warmupMin = level === "beginner" ? Math.max(5, Math.round(durMin * 0.2)) : Math.round(durMin * 0.15);
+  const cooldownMin = Math.max(3, Math.round(durMin * 0.1));
+
+  if (type === "brick") {
+    const bMin = parseInt(bikeDur) || 45;
+    const rMin = parseInt(runDur) || 20;
+    const bWarmup = Math.round(bMin * 0.2);
+    const bMain = bMin - bWarmup;
+    const rMain = rMin - 2;
+    intervals = [
+      { name: "Bike Warm-Up", duration: bWarmup + " min", effort: "Z1", details: bikeDetail("Z1"), sport: "bike" },
+      { name: "Bike Main Set", duration: bMain + " min", effort: iz.main, details: bikeDetail(iz.main), sport: "bike" },
+      { name: "Transition", duration: "2 min", effort: "T1", details: "Quick change, settle into run form", sport: "run" },
+      { name: "Run Main Set", duration: rMain + " min", effort: iz.main, details: runDetail(iz.main), sport: "run" },
+    ];
+    if (intensity === "intense" || intensity === "max") {
+      const hardDur = Math.round(bMain * 0.3);
+      intervals.splice(2, 0, { name: "Bike Hard Effort", duration: hardDur + " min", effort: iz.hard, details: bikeDetail(iz.hard), sport: "bike" });
+      intervals[1].duration = (bMain - hardDur) + " min";
+    }
+  } else if (type === "swim") {
+    const mainMin = durMin - warmupMin - cooldownMin;
+    const swimCss = (zones.swimming && zones.swimming.css) || null;
+    intervals = [
+      { name: "Warm-Up", duration: warmupMin + " min", effort: iz.warmup, details: _swimWarmupText(warmupMin, swimCss) },
+      ..._generateStructuredSwimMain(mainMin, intensity, swimCss, iz),
+      { name: "Cool-Down", duration: cooldownMin + " min", effort: iz.cooldown, details: _swimCooldownText(cooldownMin, swimCss) },
+    ];
+  } else if (type === "walking") {
+    intervals = [{ name: "Walk", duration: durMin + " min" }];
+  } else {
+    const mainMin = durMin - warmupMin - cooldownMin;
+    intervals = [
+      { name: "Warm-Up", duration: warmupMin + " min", effort: iz.warmup, details: detailFn(iz.warmup) },
+    ];
+    if (intensity === "light") {
+      const lightVariants = [
+        () => [{ name: "Steady State", duration: mainMin + " min", effort: iz.main, details: detailFn(iz.main) }],
+        () => {
+          const half = Math.round(mainMin / 2);
+          return [
+            { name: "Easy Cruise", duration: half + " min", effort: "Z2", details: detailFn("Z2") },
+            { name: "Relaxed Finish", duration: (mainMin - half) + " min", effort: "Z1", details: detailFn("Z1") },
+          ];
+        },
+        () => [
+          { name: "Gradual Build", duration: Math.round(mainMin * 0.6) + " min", effort: "Z1", details: detailFn("Z1") },
+          { name: "Comfortable Effort", duration: Math.round(mainMin * 0.4) + " min", effort: "Z2", details: detailFn("Z2") },
+        ],
+      ];
+      intervals.push(...lightVariants[Math.floor(Math.random() * lightVariants.length)]());
+    } else if (intensity === "moderate") {
+      const modVariants = [
+        () => [
+          { name: "Base Effort", duration: Math.round(mainMin * 0.7) + " min", effort: iz.main, details: detailFn(iz.main) },
+          { name: "Tempo Push", duration: Math.round(mainMin * 0.3) + " min", effort: iz.hard, details: detailFn(iz.hard) },
+        ],
+        () => [
+          { name: "Easy Base", duration: Math.round(mainMin * 0.4) + " min", effort: iz.main, details: detailFn(iz.main) },
+          { name: "Tempo Block", duration: Math.round(mainMin * 0.35) + " min", effort: iz.hard, details: detailFn(iz.hard) },
+          { name: "Easy Finish", duration: Math.round(mainMin * 0.25) + " min", effort: iz.main, details: detailFn(iz.main) },
+        ],
+        () => {
+          const reps = 3;
+          const workMin = Math.max(2, Math.round((mainMin * 0.4) / reps));
+          const easyMin = Math.max(2, Math.round((mainMin * 0.6) / (reps + 1)));
+          return [
+            { name: "Steady Build", duration: easyMin + " min", effort: iz.main, details: detailFn(iz.main) },
+            { name: `Tempo Surges (${reps}x)`, duration: workMin + " min", effort: iz.hard, details: detailFn(iz.hard), reps: reps, restDuration: easyMin + " min", restEffort: iz.main },
+          ];
+        },
+        () => [
+          { name: "Progression Start", duration: Math.round(mainMin * 0.5) + " min", effort: iz.main, details: detailFn(iz.main) },
+          { name: "Tempo Finish", duration: Math.round(mainMin * 0.5) + " min", effort: iz.hard, details: detailFn(iz.hard) },
+        ],
+      ];
+      intervals.push(...modVariants[Math.floor(Math.random() * modVariants.length)]());
+    } else {
+      const intVariants = [
+        () => {
+          const reps = intensity === "max" ? 5 : 4;
+          const workMin = Math.max(2, Math.floor((mainMin * 0.5) / reps));
+          const restMin = Math.max(1, Math.floor((mainMin * 0.5) / reps));
+          return [
+            { name: "Easy Base", duration: Math.round(mainMin * 0.2) + " min", effort: iz.main, details: detailFn(iz.main) },
+            { name: `Intervals (${reps}x)`, duration: workMin + " min", effort: iz.hard, details: detailFn(iz.hard), reps: reps, restDuration: restMin + " min", restEffort: iz.warmup },
+          ];
+        },
+        () => {
+          const reps = intensity === "max" ? 6 : 5;
+          const workMin = Math.max(1, Math.floor((mainMin * 0.45) / reps));
+          const restMin = Math.max(1, Math.floor((mainMin * 0.3) / reps));
+          return [
+            { name: "Build-Up", duration: Math.round(mainMin * 0.15) + " min", effort: iz.main, details: detailFn(iz.main) },
+            { name: `Short Repeats (${reps}x)`, duration: workMin + " min", effort: iz.hard, details: detailFn(iz.hard), reps: reps, restDuration: restMin + " min", restEffort: iz.warmup },
+            { name: "Easy Flush", duration: Math.round(mainMin * 0.1) + " min", effort: iz.main, details: detailFn(iz.main) },
+          ];
+        },
+        () => {
+          const reps = intensity === "max" ? 4 : 3;
+          const workMin = Math.max(3, Math.floor((mainMin * 0.55) / reps));
+          const restMin = Math.max(2, Math.floor((mainMin * 0.25) / reps));
+          return [
+            { name: `Long Efforts (${reps}x)`, duration: workMin + " min", effort: iz.hard, details: detailFn(iz.hard), reps: reps, restDuration: restMin + " min", restEffort: iz.warmup },
+            { name: "Easy Wind-Down", duration: Math.round(mainMin * 0.1) + " min", effort: iz.main, details: detailFn(iz.main) },
+          ];
+        },
+      ];
+      intervals.push(...intVariants[Math.floor(Math.random() * intVariants.length)]());
+    }
+    intervals.push({ name: "Cool-Down", duration: cooldownMin + " min", effort: iz.cooldown, details: detailFn(iz.cooldown) });
+  }
+
+  const title = type === "walking"
+    ? `Walk — ${durMin} min`
+    : `${sportName[type] || type} — ${intensity} ${durMin} min`;
+  const workout = { title, intervals };
+
+  // Swim: attach canonical step tree so SwimCardRenderer renders Garmin-style.
+  if (type === "swim" && typeof SwimWorkoutGenerator !== "undefined" && typeof SwimWorkout !== "undefined") {
+    try {
+      const lib = window.VARIANT_LIBRARY_SWIM;
+      const typeByIntensity = {
+        light:    "swim_technique",
+        moderate: "swim_endurance",
+        intense:  "swim_css_intervals",
+        max:      "swim_speed",
+      };
+      const sessionTypeId = typeByIntensity[intensity] || "swim_endurance";
+      const variants = (lib && lib.variants && lib.variants[sessionTypeId]) || [];
+      const variant = variants[Math.floor(Math.random() * variants.length)];
+      if (variant) {
+        const css = (zones.swimming && zones.swimming.css) || null;
+        const result = SwimWorkoutGenerator.generateSwimWorkout({
+          sessionTypeId, variantId: variant.id,
+          userZones: { css }, experienceLevel: level,
+          variantOffset: Math.floor(Math.random() * 12),
+        });
+        const w = result.workout;
+        workout.steps = w.steps;
+        workout.pool_size_m = w.pool_size_m;
+        workout.pool_unit = w.pool_unit;
+        workout.total_distance_m = w.total_distance_m;
+        workout.why_text = w.why_text;
+        workout.title = w.title;
+      }
+    } catch (e) {
+      console.warn("[_qeBuildCardioWorkout swim] canonical shape failed:", e);
+    }
+  }
+
+  return workout;
+}
+
+// Expose the cardio builder so other flows (custom-plan.js) can produce
+// identical output without duplicating 200+ lines of variant logic.
+if (typeof window !== "undefined") window.QEBuildCardioWorkout = _qeBuildCardioWorkout;
+
 function qeGenerateCardio() {
   const type      = _qeSelectedType;
   const intensity = document.getElementById("qe-activity-intensity")?.value || "moderate";
@@ -5984,245 +6224,7 @@ function qeGenerateCardio() {
   resultEl.innerHTML = "";
 
   try {
-    let profile = {};
-    try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
-    const level = profile.fitnessLevel || "intermediate";
-
-    // Load training zones for pace/power targets
-    let zones = {};
-    try { zones = JSON.parse(localStorage.getItem("trainingZones")) || {}; } catch {}
-
-    const durMin = parseInt(duration) || 45;
-    const sportName = { running: "Run", cycling: "Ride", swim: "Swim", hiit: "HIIT", brick: "Brick" };
-
-    // Build zone-based details from user's training zones
-    function runDetail(zone) {
-      const r = zones.running || {};
-      if (zone === "Z2" && r.easy) return `Easy pace: ${r.easy}`;
-      if (zone === "Z2" && r.easyPaceMin) return `Easy pace: ${r.easyPaceMin}:${(r.easyPaceSec||"00").toString().padStart(2,"0")}/mile`;
-      if (zone === "Z3" && r.tempo) return `Tempo pace: ${r.tempo}`;
-      if (zone === "Z3" && r.thresholdPaceMin) return `Threshold: ${r.thresholdPaceMin}:${(r.thresholdPaceSec||"00").toString().padStart(2,"0")}/mile`;
-      if (zone === "Z4" && r.thresholdPaceMin) return `Threshold pace: ${r.thresholdPaceMin}:${(r.thresholdPaceSec||"00").toString().padStart(2,"0")}/mile`;
-      if (zone === "Z5" && r.vo2max) return `VO2max effort: ${r.vo2max}`;
-      const descs = { Z1: "Very easy effort, conversational", Z2: "Aerobic base, comfortable pace",
-        Z3: "Tempo effort, comfortably hard", Z4: "Threshold effort, sustainable hard",
-        Z5: "VO2max, hard effort", Z6: "Max sprint" };
-      return descs[zone] || "Steady effort";
-    }
-    function bikeDetail(zone) {
-      const c = zones.cycling || {};
-      const ftp = c.ftp ? parseInt(c.ftp) : null;
-      const pctMap = { Z1: 0.5, Z2: 0.7, Z3: 0.85, Z4: 0.95, Z5: 1.1, Z6: 1.3 };
-      if (ftp && pctMap[zone]) return `~${Math.round(ftp * pctMap[zone])}W (${Math.round(pctMap[zone]*100)}% FTP)`;
-      const descs = { Z1: "Easy spin, recovery", Z2: "Endurance pace",
-        Z3: "Sweet spot / tempo", Z4: "Threshold effort", Z5: "VO2max intervals", Z6: "Sprint" };
-      return descs[zone] || "Steady effort";
-    }
-    function swimDetail(zone) {
-      const s = zones.swimming || {};
-      if (s.css) {
-        const descs = { Z1: `Easy, CSS + 15-20s`, Z2: `Aerobic, CSS + 8-12s`,
-          Z3: `Tempo, CSS + 3-5s`, Z4: `Threshold, near CSS (${s.css}/100m)`, Z5: `VO2max, CSS - 3-5s` };
-        return descs[zone] || `Steady effort`;
-      }
-      const descs = { Z1: "Very easy, long rest", Z2: "Steady swimming, moderate effort",
-        Z3: "Tempo effort", Z4: "Threshold pace", Z5: "Hard interval effort" };
-      return descs[zone] || "Steady effort";
-    }
-
-    // Intensity maps to zone distribution
-    const intZones = {
-      light:    { warmup: "Z1", main: "Z2", hard: "Z3", cooldown: "Z1" },
-      moderate: { warmup: "Z1", main: "Z2", hard: "Z3", cooldown: "Z1" },
-      intense:  { warmup: "Z2", main: "Z3", hard: "Z4", cooldown: "Z1" },
-      max:      { warmup: "Z2", main: "Z3", hard: "Z5", cooldown: "Z1" },
-    };
-    const iz = intZones[intensity] || intZones.moderate;
-
-    let intervals = [];
-    const detailFn = type === "cycling" ? bikeDetail : type === "swim" ? swimDetail : runDetail;
-    const warmupMin = level === "beginner" ? Math.max(5, Math.round(durMin * 0.2)) : Math.round(durMin * 0.15);
-    const cooldownMin = Math.max(3, Math.round(durMin * 0.1));
-
-    if (type === "brick") {
-      const bMin = parseInt(bikeDur) || 45;
-      const rMin = parseInt(runDur) || 20;
-      const bWarmup = Math.round(bMin * 0.2);
-      const bMain = bMin - bWarmup;
-      const rMain = rMin - 2; // 2 min transition
-      intervals = [
-        { name: "Bike Warm-Up", duration: bWarmup + " min", effort: "Z1", details: bikeDetail("Z1"), sport: "bike" },
-        { name: "Bike Main Set", duration: bMain + " min", effort: iz.main, details: bikeDetail(iz.main), sport: "bike" },
-        { name: "Transition", duration: "2 min", effort: "T1", details: "Quick change, settle into run form", sport: "run" },
-        { name: "Run Main Set", duration: rMain + " min", effort: iz.main, details: runDetail(iz.main), sport: "run" },
-      ];
-      // Add intervals for intense/max
-      if (intensity === "intense" || intensity === "max") {
-        const hardDur = Math.round(bMain * 0.3);
-        intervals.splice(2, 0, { name: "Bike Hard Effort", duration: hardDur + " min", effort: iz.hard, details: bikeDetail(iz.hard), sport: "bike" });
-        intervals[1].duration = (bMain - hardDur) + " min";
-      }
-    } else if (type === "swim") {
-      // Structured swim generator — emits concrete sets × distance @
-      // pace with rest periods, not flat time blocks. A swimmer needs
-      // to know how many yards/meters and what rest. Pace comes from
-      // the user's CSS in trainingZones.swimming.css (sec/100m); if
-      // unset we fall back to "by feel" text.
-      //
-      // Randomizes the variant on every call so Regenerate produces
-      // different output each tap.
-      const mainMin = durMin - warmupMin - cooldownMin;
-      const swimCss = (zones.swimming && zones.swimming.css) || null; // sec per 100m
-      intervals = [
-        {
-          name: "Warm-Up",
-          duration: warmupMin + " min",
-          effort: iz.warmup,
-          details: _swimWarmupText(warmupMin, swimCss),
-        },
-        ..._generateStructuredSwimMain(mainMin, intensity, swimCss, iz),
-        {
-          name: "Cool-Down",
-          duration: cooldownMin + " min",
-          effort: iz.cooldown,
-          details: _swimCooldownText(cooldownMin, swimCss),
-        },
-      ];
-    } else if (type === "walking") {
-      // A walk is a walk — no zones, no warm-up/cool-down, no tempo pushes.
-      // One flat interval covering the entire duration.
-      intervals = [{ name: "Walk", duration: durMin + " min" }];
-    } else {
-      // Running / Cycling / generic — with variation on regenerate
-      const mainMin = durMin - warmupMin - cooldownMin;
-      intervals = [
-        { name: "Warm-Up", duration: warmupMin + " min", effort: iz.warmup, details: detailFn(iz.warmup) },
-      ];
-      if (intensity === "light") {
-        const lightVariants = [
-          () => [{ name: "Steady State", duration: mainMin + " min", effort: iz.main, details: detailFn(iz.main) }],
-          () => {
-            const half = Math.round(mainMin / 2);
-            return [
-              { name: "Easy Cruise", duration: half + " min", effort: "Z2", details: detailFn("Z2") },
-              { name: "Relaxed Finish", duration: (mainMin - half) + " min", effort: "Z1", details: detailFn("Z1") },
-            ];
-          },
-          () => [
-            { name: "Gradual Build", duration: Math.round(mainMin * 0.6) + " min", effort: "Z1", details: detailFn("Z1") },
-            { name: "Comfortable Effort", duration: Math.round(mainMin * 0.4) + " min", effort: "Z2", details: detailFn("Z2") },
-          ],
-        ];
-        intervals.push(...lightVariants[Math.floor(Math.random() * lightVariants.length)]());
-      } else if (intensity === "moderate") {
-        const modVariants = [
-          () => [
-            { name: "Base Effort", duration: Math.round(mainMin * 0.7) + " min", effort: iz.main, details: detailFn(iz.main) },
-            { name: "Tempo Push", duration: Math.round(mainMin * 0.3) + " min", effort: iz.hard, details: detailFn(iz.hard) },
-          ],
-          () => [
-            { name: "Easy Base", duration: Math.round(mainMin * 0.4) + " min", effort: iz.main, details: detailFn(iz.main) },
-            { name: "Tempo Block", duration: Math.round(mainMin * 0.35) + " min", effort: iz.hard, details: detailFn(iz.hard) },
-            { name: "Easy Finish", duration: Math.round(mainMin * 0.25) + " min", effort: iz.main, details: detailFn(iz.main) },
-          ],
-          () => {
-            const reps = 3;
-            const workMin = Math.max(2, Math.round((mainMin * 0.4) / reps));
-            const easyMin = Math.max(2, Math.round((mainMin * 0.6) / (reps + 1)));
-            return [
-              { name: "Steady Build", duration: easyMin + " min", effort: iz.main, details: detailFn(iz.main) },
-              { name: `Tempo Surges (${reps}x)`, duration: workMin + " min", effort: iz.hard, details: detailFn(iz.hard), reps: reps, restDuration: easyMin + " min", restEffort: iz.main },
-            ];
-          },
-          () => [
-            { name: "Progression Start", duration: Math.round(mainMin * 0.5) + " min", effort: iz.main, details: detailFn(iz.main) },
-            { name: "Tempo Finish", duration: Math.round(mainMin * 0.5) + " min", effort: iz.hard, details: detailFn(iz.hard) },
-          ],
-        ];
-        intervals.push(...modVariants[Math.floor(Math.random() * modVariants.length)]());
-      } else {
-        // intense / max — structured intervals with variation
-        const intVariants = [
-          () => {
-            const reps = intensity === "max" ? 5 : 4;
-            const workMin = Math.max(2, Math.floor((mainMin * 0.5) / reps));
-            const restMin = Math.max(1, Math.floor((mainMin * 0.5) / reps));
-            return [
-              { name: "Easy Base", duration: Math.round(mainMin * 0.2) + " min", effort: iz.main, details: detailFn(iz.main) },
-              { name: `Intervals (${reps}x)`, duration: workMin + " min", effort: iz.hard, details: detailFn(iz.hard), reps: reps, restDuration: restMin + " min", restEffort: iz.warmup },
-            ];
-          },
-          () => {
-            const reps = intensity === "max" ? 6 : 5;
-            const workMin = Math.max(1, Math.floor((mainMin * 0.45) / reps));
-            const restMin = Math.max(1, Math.floor((mainMin * 0.3) / reps));
-            return [
-              { name: "Build-Up", duration: Math.round(mainMin * 0.15) + " min", effort: iz.main, details: detailFn(iz.main) },
-              { name: `Short Repeats (${reps}x)`, duration: workMin + " min", effort: iz.hard, details: detailFn(iz.hard), reps: reps, restDuration: restMin + " min", restEffort: iz.warmup },
-              { name: "Easy Flush", duration: Math.round(mainMin * 0.1) + " min", effort: iz.main, details: detailFn(iz.main) },
-            ];
-          },
-          () => {
-            const reps = intensity === "max" ? 4 : 3;
-            const workMin = Math.max(3, Math.floor((mainMin * 0.55) / reps));
-            const restMin = Math.max(2, Math.floor((mainMin * 0.25) / reps));
-            return [
-              { name: `Long Efforts (${reps}x)`, duration: workMin + " min", effort: iz.hard, details: detailFn(iz.hard), reps: reps, restDuration: restMin + " min", restEffort: iz.warmup },
-              { name: "Easy Wind-Down", duration: Math.round(mainMin * 0.1) + " min", effort: iz.main, details: detailFn(iz.main) },
-            ];
-          },
-        ];
-        intervals.push(...intVariants[Math.floor(Math.random() * intVariants.length)]());
-      }
-      intervals.push({ name: "Cool-Down", duration: cooldownMin + " min", effort: iz.cooldown, details: detailFn(iz.cooldown) });
-    }
-
-    const title = type === "walking"
-      ? `Walk — ${durMin} min`
-      : `${sportName[type] || type} — ${intensity} ${durMin} min`;
-    const workout = { title, intervals };
-
-    // Swim: emit the canonical step tree (pool_size_m + steps + total_distance_m)
-    // so SwimCardRenderer shows Garmin-style pool workout UI instead of the
-    // flat interval list. The legacy `intervals` is still attached for the
-    // intensity strip and back-compat.
-    if (type === "swim" && typeof SwimWorkoutGenerator !== "undefined" && typeof SwimWorkout !== "undefined") {
-      try {
-        // Pick a session type + variant based on intensity.
-        const lib = window.VARIANT_LIBRARY_SWIM;
-        const typeByIntensity = {
-          light:    "swim_technique",
-          moderate: "swim_endurance",
-          intense:  "swim_css_intervals",
-          max:      "swim_speed",
-        };
-        const sessionTypeId = typeByIntensity[intensity] || "swim_endurance";
-        const variants = (lib && lib.variants && lib.variants[sessionTypeId]) || [];
-        const variant = variants[Math.floor(Math.random() * variants.length)];
-        if (variant) {
-          const css = (zones.swimming && zones.swimming.css) || null;
-          // Random variantOffset so each Quick Entry shuffle picks a
-          // different warmup + cooldown shape — before this, every swim
-          // session started with "400m easy + 4×50 build" regardless of
-          // how many times the user hit Regenerate.
-          const result = SwimWorkoutGenerator.generateSwimWorkout({
-            sessionTypeId, variantId: variant.id,
-            userZones: { css }, experienceLevel: level,
-            variantOffset: Math.floor(Math.random() * 12),
-          });
-          const w = result.workout;
-          workout.steps = w.steps;
-          workout.pool_size_m = w.pool_size_m;
-          workout.pool_unit = w.pool_unit;
-          workout.total_distance_m = w.total_distance_m;
-          workout.why_text = w.why_text;
-          workout.title = w.title;
-        }
-      } catch (e) {
-        console.warn("[qeGenerateCardio swim] canonical shape failed:", e);
-      }
-    }
-
+    const workout = _qeBuildCardioWorkout({ type, intensity, duration, bikeDur, runDur });
     _qeGeneratedCardioData = workout;
     loadingEl.style.display = "none"; _stopLoadingMessages();
 
