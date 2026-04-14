@@ -381,9 +381,36 @@ const IRONZ_TO_STRAVA_TYPE = {
   general:        "Workout",
 };
 
+// Running-workout-generator emits `type` as the template id (e.g.
+// "tempo_threshold", "long_run") — not "running". We still want these
+// treated as runs for Strava uploads, descriptions, and the share prompt's
+// defaults, so map every known sub-type back to its parent discipline.
+const RUN_SUBTYPES = new Set([
+  "easy_recovery", "endurance", "long_run", "tempo_threshold",
+  "track_workout", "speed_work", "hills", "fun_social",
+  "recovery_run", "base_run", "progression_run",
+]);
+const BIKE_SUBTYPES = new Set([
+  "bike_endurance", "bike_tempo", "bike_threshold", "bike_intervals",
+  "bike_vo2", "bike_recovery", "bike_long", "bike_sweetspot",
+]);
+const SWIM_SUBTYPES = new Set([
+  "swim_endurance", "swim_technique", "swim_css_intervals", "swim_speed",
+  "swim_threshold", "swim_recovery", "swim_long",
+]);
+
+function _parentDiscipline(type) {
+  const t = (type || "").toLowerCase();
+  if (!t) return "";
+  if (RUN_SUBTYPES.has(t))  return "running";
+  if (BIKE_SUBTYPES.has(t)) return "cycling";
+  if (SWIM_SUBTYPES.has(t)) return "swimming";
+  return t;
+}
+
 function _stravaTypeForWorkout(w) {
-  const t = (w.type || "").toLowerCase();
-  return IRONZ_TO_STRAVA_TYPE[t] || "Workout";
+  const parent = _parentDiscipline(w.type);
+  return IRONZ_TO_STRAVA_TYPE[parent] || "Workout";
 }
 
 // Auto-share toggle — local-only, per device. Defaults to off.
@@ -404,29 +431,33 @@ function setStravaAutoShareEnabled(enabled) {
 // Default field inclusion per workout type. Users can override any of
 // these via the share prompt, and their choices are remembered for the
 // next workout of the same type via `stravaCardPrefs` in localStorage.
+// body/stats/notes/hiitMeta/footer — one toggle each in the share prompt.
+// `typeLabel` and `distance` were removed as toggles: the workout type is
+// baked into the activity title now (_buildStravaTitle), and distance is
+// part of the title (cardio) or stats line (swim), not a standalone line.
 const _STRAVA_CARD_DEFAULTS_BY_TYPE = {
-  weightlifting: { typeLabel: true, body: true, stats: true, distance: false, hiitMeta: false, notes: false, footer: true },
-  bodyweight:    { typeLabel: true, body: true, stats: true, distance: false, hiitMeta: false, notes: false, footer: true },
-  hiit:          { typeLabel: true, body: true, stats: true, distance: false, hiitMeta: true,  notes: false, footer: true },
-  running:       { typeLabel: true, body: true, stats: true, distance: true,  hiitMeta: false, notes: false, footer: true },
-  cycling:       { typeLabel: true, body: true, stats: true, distance: true,  hiitMeta: false, notes: false, footer: true },
-  swimming:      { typeLabel: true, body: true, stats: true, distance: true,  hiitMeta: false, notes: false, footer: true },
-  yoga:          { typeLabel: true, body: true, stats: true, distance: false, hiitMeta: false, notes: true,  footer: true },
-  rowing:        { typeLabel: true, body: true, stats: true, distance: true,  hiitMeta: false, notes: false, footer: true },
-  walking:       { typeLabel: true, body: false, stats: true, distance: true, hiitMeta: false, notes: false, footer: true },
-  hiking:        { typeLabel: true, body: false, stats: true, distance: true, hiitMeta: false, notes: false, footer: true },
-  general:       { typeLabel: true, body: true, stats: true, distance: false, hiitMeta: false, notes: false, footer: true },
+  weightlifting: { body: true,  stats: true, hiitMeta: false, notes: false, footer: true },
+  bodyweight:    { body: true,  stats: true, hiitMeta: false, notes: false, footer: true },
+  hiit:          { body: true,  stats: true, hiitMeta: true,  notes: false, footer: true },
+  running:       { body: true,  stats: true, hiitMeta: false, notes: false, footer: true },
+  cycling:       { body: true,  stats: true, hiitMeta: false, notes: false, footer: true },
+  swimming:      { body: true,  stats: true, hiitMeta: false, notes: false, footer: true },
+  yoga:          { body: true,  stats: true, hiitMeta: false, notes: true,  footer: true },
+  rowing:        { body: true,  stats: true, hiitMeta: false, notes: false, footer: true },
+  walking:       { body: false, stats: true, hiitMeta: false, notes: false, footer: true },
+  hiking:        { body: false, stats: true, hiitMeta: false, notes: false, footer: true },
+  general:       { body: true,  stats: true, hiitMeta: false, notes: false, footer: true },
 };
-const _STRAVA_CARD_DEFAULT = { typeLabel: true, body: true, stats: true, distance: false, hiitMeta: false, notes: false, footer: true };
+const _STRAVA_CARD_DEFAULT = { body: true, stats: true, hiitMeta: false, notes: false, footer: true };
 
 function _normalizeWorkoutTypeKey(type) {
-  const t = (type || "").toLowerCase();
-  if (t === "run") return "running";
-  if (t === "bike") return "cycling";
-  if (t === "swim") return "swimming";
-  if (t === "walk") return "walking";
-  if (t === "hike") return "hiking";
-  return t || "general";
+  const parent = _parentDiscipline(type);
+  if (parent === "run") return "running";
+  if (parent === "bike") return "cycling";
+  if (parent === "swim") return "swimming";
+  if (parent === "walk") return "walking";
+  if (parent === "hike") return "hiking";
+  return parent || "general";
 }
 
 function getStravaCardPrefs(type) {
@@ -448,42 +479,669 @@ function setStravaCardPrefs(type, prefs) {
   try { localStorage.setItem("stravaCardPrefs", JSON.stringify(raw)); } catch {}
 }
 
+// ── Name cleanup helpers ─────────────────────────────────────────────────
+//
+// IronZ workouts sometimes land with low-quality names like
+//   "chest, back — min" (duration placeholder left blank)
+//   "legs — 45 min"     (duration redundantly baked into the name)
+//   "upper body push"   (lowercase)
+// These helpers normalize them before they hit Strava so posts look sharp.
+
+function _stripDurationSuffix(name) {
+  if (!name) return name;
+  // Strip " — X min", " — min", " - X min", " – X min", with or without the number
+  return String(name)
+    .replace(/\s*[—–-]\s*\d*\s*min\s*$/i, "")
+    .trim();
+}
+
+function _titleCaseWorkoutName(name) {
+  if (!name) return name;
+  const s = String(name).trim();
+  // Preserve names that already have any uppercase letter (user intent)
+  // except the fully-lowercase case which is the common auto-generated form.
+  if (/[A-Z]/.test(s)) return s;
+  return s.replace(/\b([a-z])([a-z]*)/g, (_, first, rest) => first.toUpperCase() + rest);
+}
+
+function _cleanWorkoutName(name, fallback) {
+  let out = _stripDurationSuffix(name || "");
+  out = _titleCaseWorkoutName(out);
+  return out || fallback || "Workout";
+}
+
+// ── Workout title builder (per discipline) ──────────────────────────────
+//
+// Produces the Strava activity name — the one that shows up as the headline
+// on the post. Each discipline gets its own format per
+// SPEC_strava_share_titles.md (and the follow-up):
+//
+//   Strength:  "Upper Body Push + Core"        (just the name, no suffix)
+//   Running:   "45 min Tempo Run"              (duration + label)
+//   Cycling:   "60 min Zone 2 Ride"            (duration + label)
+//   Swimming:  "2,300m Swim — Endurance"       (distance + label)
+//   Circuit:   "Murph" or "Circuit — For Time" (benchmark name or fallback)
+//
+// When a duration isn't available (old imports) we drop the prefix and
+// just emit the label. Same for distance on swim — falls back to
+// "Swim — Endurance".
+
+// Map IronZ sub-types to the short label we want in the title. Kept
+// separate from _stravaWorkoutTypeLabel (which produces "Run"/"Ride"/
+// "Swim") so we can carry sub-type flavor into the title.
+const _RUN_TITLE_LABEL = {
+  easy_recovery:   "Easy Run",
+  endurance:       "Endurance Run",
+  long_run:        "Long Run",
+  tempo_threshold: "Tempo Run",
+  track_workout:   "Track Workout",
+  speed_work:      "Speed Work",
+  hills:           "Hill Workout",
+  fun_social:      "Easy Run",
+  recovery_run:    "Recovery Run",
+  base_run:        "Base Run",
+  progression_run: "Progression Run",
+};
+const _BIKE_TITLE_LABEL = {
+  bike_endurance:  "Zone 2 Ride",
+  bike_tempo:      "Tempo Ride",
+  bike_threshold:  "Threshold Ride",
+  bike_intervals:  "Interval Ride",
+  bike_vo2:        "VO2 Ride",
+  bike_recovery:   "Recovery Ride",
+  bike_long:       "Long Ride",
+  bike_sweetspot:  "Sweet Spot Ride",
+};
+const _SWIM_TITLE_LABEL = {
+  swim_endurance:      "Endurance",
+  swim_technique:      "Technique",
+  swim_css_intervals:  "CSS Intervals",
+  swim_speed:          "Speed",
+  swim_threshold:      "Threshold",
+  swim_recovery:       "Recovery",
+  swim_long:           "Long",
+};
+
+function _isGenericSessionName(name) {
+  if (!name) return true;
+  return /^(running|cycling|swimming|bike|run|swim|yoga|strength|bodyweight|workout|hiit)\s+session$/i.test(name.trim());
+}
+
+// Strip IronZ-internal junk from a session name that leaks into Strava:
+// "— Workout" / "— Continuous —" / "(Tempo)" / trailing "Session" / etc.
+// The session library sometimes stores names like "Tempo — Continuous —
+// Workout" which makes a terrible Strava headline. This function cleans
+// those up aggressively so we can still accept a user-custom name without
+// leaking the template vocabulary.
+function _stripInternalLabels(name) {
+  if (!name) return "";
+  let s = String(name);
+  // Drop known internal suffix/segment words between em-dashes or spaces.
+  const JUNK = [
+    "continuous", "workout", "session", "run", "ride", "swim",
+    "standard", "default", "main set", "main", "warmup", "warm-up",
+    "cooldown", "cool-down",
+  ];
+  // Split on em-dash / en-dash / hyphen-dash to get parts.
+  const parts = s.split(/\s*[\u2014\u2013\u2012\u2010-]\s+/);
+  const filtered = parts.filter(p => {
+    const low = p.trim().toLowerCase();
+    return low && !JUNK.includes(low);
+  });
+  s = filtered.join(" — ");
+  // Collapse doubled whitespace.
+  return s.replace(/\s+/g, " ").trim();
+}
+
+function _buildStravaTitle(w) {
+  if (!w) return "IronZ Workout";
+  const rawName = w.name || w.sessionName || "";
+  const cleanName = _stripInternalLabels(_cleanWorkoutName(rawName, ""));
+  const discipline = _parentDiscipline(w.type);
+  const durationMin = _plannedDurationMin(w);
+  const typeKey = String(w.type || "").toLowerCase();
+
+  // Strength family: muscle-group name only. Prefer w.muscleGroups if set,
+  // else the cleaned session name, else a generic fallback.
+  const STRENGTH = new Set(["weightlifting", "bodyweight", "hiit", "yoga", "strength"]);
+  if (STRENGTH.has(discipline)) {
+    if (w.muscleGroups) {
+      const mg = Array.isArray(w.muscleGroups) ? w.muscleGroups.join(", ") : String(w.muscleGroups);
+      if (mg.trim()) return mg.trim();
+    }
+    return cleanName || "Strength Session";
+  }
+
+  // Circuit: benchmark name if it looks like one, else "Circuit — <goal>".
+  if (w.type === "circuit" || w.circuit) {
+    const goalMap = { for_time: "For Time", amrap: "AMRAP", standard: "Standard" };
+    const goal = goalMap[w.goal || w.circuit?.goal || "standard"];
+    if (cleanName && !_isGenericSessionName(cleanName) && !/^circuit$/i.test(cleanName)) {
+      return cleanName;
+    }
+    return goal ? `Circuit — ${goal}` : "Circuit";
+  }
+
+  // Running: prefer the canonical type label; only use cleanName when the
+  // session type doesn't map to one (e.g. user-renamed workouts). Inverted
+  // from the old order so "Tempo — Continuous — Workout" can't leak through.
+  if (discipline === "running") {
+    const label = _RUN_TITLE_LABEL[typeKey]
+      || (!_isGenericSessionName(cleanName) && cleanName)
+      || "Run";
+    return durationMin ? `${durationMin} min ${label}` : label;
+  }
+
+  // Cycling: same pattern as running — type label wins.
+  if (discipline === "cycling") {
+    const label = _BIKE_TITLE_LABEL[typeKey]
+      || (!_isGenericSessionName(cleanName) && cleanName)
+      || "Ride";
+    return durationMin ? `${durationMin} min ${label}` : label;
+  }
+
+  // Swimming: "{distance} Swim — <type>" — distance with comma formatting.
+  if (discipline === "swimming") {
+    const distM = _swimTotalDistanceM(w);
+    const distStr = distM > 0 ? _formatSwimDistance(distM, _swimPoolUnit(w)) : "";
+    const typeLabel = _SWIM_TITLE_LABEL[typeKey]
+      || (!_isGenericSessionName(cleanName) && cleanName)
+      || "";
+    if (distStr && typeLabel) return `${distStr} Swim — ${typeLabel}`;
+    if (distStr)              return `${distStr} Swim`;
+    if (typeLabel)            return `Swim — ${typeLabel}`;
+    return "Swim";
+  }
+
+  // Walk / Hike / Row / generic cardio — fall back to "{duration} min <label>".
+  const typeLabel = _stravaWorkoutTypeLabel(w);
+  if (durationMin && typeLabel) return `${durationMin} min ${typeLabel}`;
+  return cleanName || typeLabel || "Workout";
+}
+
+// ── Swim helpers ─────────────────────────────────────────────────────────
+//
+// Swim workouts store a canonical step tree on w.aiSession.steps (or
+// w.steps) with total_distance_m precomputed. We use those directly; the
+// legacy intervals array is a fallback.
+function _swimStepsForWorkout(w) {
+  if (!w) return null;
+  const ai = w.aiSession || {};
+  if (Array.isArray(ai.steps) && ai.steps.length) return ai.steps;
+  if (Array.isArray(w.steps) && w.steps.length) return w.steps;
+  return null;
+}
+
+function _swimTotalDistanceM(w) {
+  if (!w) return 0;
+  const explicit = w.total_distance_m ?? w.aiSession?.total_distance_m;
+  if (explicit && explicit > 0) return explicit;
+  const steps = _swimStepsForWorkout(w);
+  if (steps && typeof window !== "undefined" && window.SwimWorkoutModel?.totalDistance) {
+    const n = window.SwimWorkoutModel.totalDistance(steps);
+    if (n > 0) return n;
+  }
+  // Last resort: a bare "2300" or "2300m" stored on w.distance — parse it as meters.
+  if (w.distance != null) {
+    const s = String(w.distance).trim();
+    const num = parseFloat(s.replace(/,/g, ""));
+    if (num > 0) return Math.round(num);
+  }
+  return 0;
+}
+
+function _formatSwimDistance(m, poolUnit) {
+  if (!m || m <= 0) return "";
+  const unit = poolUnit === "yd" ? "yd" : "m";
+  const val = unit === "yd" ? Math.round(m * 1.09361) : Math.round(m);
+  return `${val.toLocaleString()}${unit}`;
+}
+
+function _swimPoolUnit(w) {
+  return (w?.aiSession?.pool_unit || w?.pool_unit || "m") === "yd" ? "yd" : "m";
+}
+
+// Format an arbitrary distance value for the "Distance:" description line.
+// Accepts bare numbers (respecting w.distance_unit when provided — "mi" /
+// "km" / "m" / "yd"), or pre-formatted strings like "5 mi" (returned as-is).
+function _formatCardioDistanceLine(dist, unit) {
+  if (dist == null) return "";
+  const s = String(dist).trim();
+  if (!s) return "";
+  // Already has a unit suffix? Add thousands separators if the number is big.
+  const withUnit = s.match(/^(\d[\d,\.]*)\s*([a-zA-Z]+)$/);
+  if (withUnit) {
+    const num = parseFloat(withUnit[1].replace(/,/g, ""));
+    const u = withUnit[2].toLowerCase();
+    if (num > 0) {
+      const out = num >= 100 ? Math.round(num).toLocaleString() : num.toString();
+      return `${out} ${u}`;
+    }
+    return s;
+  }
+  // Pre-formatted free text (e.g. "5 mi, 10 km") — leave alone
+  if (/[a-zA-Z]/.test(s)) return s;
+  // Bare number — use the declared unit if we have one; else assume meters.
+  const n = parseFloat(s);
+  if (!(n > 0)) return s;
+  const u = (unit || "m").toLowerCase();
+  if (u === "mi" || u === "km") {
+    // Distances in mi/km are small floats — preserve decimals, no commas
+    return `${n} ${u}`;
+  }
+  // Meters / yards — integer, thousands separator
+  return `${Math.round(n).toLocaleString()} ${u}`;
+}
+
+// ── Duration pre-fill ────────────────────────────────────────────────────
+//
+// Users sometimes log a completed workout without filling in duration.
+// Before falling back to 30 min (Strava requires elapsed_time), try to
+// pull from the originally planned session so the post is accurate.
+function _plannedDurationMin(w) {
+  if (!w) return null;
+  const candidates = [
+    w.duration,
+    w.plannedDuration,
+    w.generatedSession?.duration,
+    w.aiSession?.duration,
+    w.aiSession?.totalMinutes,
+  ];
+  for (const c of candidates) {
+    const n = parseInt(c, 10);
+    if (n > 0) return n;
+  }
+  // Sum aiSession.intervals durations as a last resort
+  const intervals = w.aiSession?.intervals;
+  if (Array.isArray(intervals) && intervals.length) {
+    let total = 0;
+    intervals.forEach(iv => {
+      const reps = parseInt(iv.reps, 10) || 1;
+      const parseMin = (s) => {
+        const str = String(s || "").toLowerCase();
+        if (/sec|\bs\b/.test(str) && !/min/.test(str)) {
+          const v = parseFloat(str); return v > 0 ? v / 60 : 0;
+        }
+        const v = parseFloat(str); return v > 0 ? v : 0;
+      };
+      const main = parseMin(iv.duration);
+      const rest = parseMin(iv.restDuration);
+      total += reps * main + Math.max(0, reps - 1) * rest;
+    });
+    if (total > 0) return Math.round(total);
+  }
+  return null;
+}
+
+// ── Workout enrichment (pull structured body from source entry) ─────────
+//
+// The share prompt can be triggered on a thin "completion record" that
+// only has name / duration / distance — e.g. older completions logged
+// before saveSessionCompletion started carrying forward aiSession/phases.
+// In that case, if the record has a completedSessionId pointing at the
+// original planned session, we look up that source and merge its body
+// structure onto the workout in memory before rendering the preview.
+// This is a non-destructive merge — the live workout in localStorage is
+// untouched.
+function _enrichWorkoutWithSource(workout) {
+  if (!workout) return workout;
+  // If the workout already has a body source we can render, skip the lookup.
+  if (_bodySourceForWorkout(workout)) return workout;
+  const sid = workout.completedSessionId || "";
+  if (!sid) return workout;
+  let source = null;
+  try {
+    if (sid.startsWith("session-sw-")) {
+      const rawId = sid.slice("session-sw-".length);
+      const sched = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
+      source = sched.find(s => String(s.id) === rawId) || null;
+    } else if (sid.startsWith("session-plan-")) {
+      const rest = sid.slice("session-plan-".length);
+      const dashIdx = rest.indexOf("-", 11);
+      const planDate = dashIdx > 0 ? rest.slice(0, dashIdx) : rest;
+      const raceId   = dashIdx > 0 ? rest.slice(dashIdx + 1) : "";
+      const plan = JSON.parse(localStorage.getItem("trainingPlan") || "[]");
+      source = plan.find(p => p.date === planDate && String(p.raceId) === raceId) || null;
+    } else if (sid.startsWith("session-log-")) {
+      const rawId = sid.slice("session-log-".length);
+      const logged = JSON.parse(localStorage.getItem("workouts") || "[]");
+      source = logged.find(w => String(w.id) === rawId) || null;
+    }
+  } catch {}
+  if (!source) return workout;
+  // Non-destructive merge — only fill in fields the workout doesn't
+  // already have, so user-entered completion data wins.
+  const enriched = { ...workout };
+  if (!enriched.aiSession       && source.aiSession)       enriched.aiSession       = source.aiSession;
+  if (!enriched.generatedSession && source.generatedSession) enriched.generatedSession = source.generatedSession;
+  if (!enriched.phases          && source.phases)          enriched.phases          = source.phases;
+  if (!enriched.hiitMeta        && source.hiitMeta)        enriched.hiitMeta        = source.hiitMeta;
+  if (!enriched.steps           && source.steps)           enriched.steps           = source.steps;
+  if (!enriched.total_distance_m && source.total_distance_m) enriched.total_distance_m = source.total_distance_m;
+  if (!enriched.pool_size_m     && source.pool_size_m)     enriched.pool_size_m     = source.pool_size_m;
+  if (!enriched.pool_unit       && source.pool_unit)       enriched.pool_unit       = source.pool_unit;
+  return enriched;
+}
+
+// ── Body-source detection ───────────────────────────────────────────────
+//
+// A workout can carry its structured body in one of several shapes:
+//   w.exercises                       (strength/HIIT)
+//   w.aiSession.intervals             (cardio — legacy + AddRunningSessionFlow)
+//   w.aiSession.steps                 (swim canonical tree)
+//   w.steps                           (swim canonical tree, top-level)
+//   w.phases                          (running-workout-generator raw phases)
+//   w.generatedSession.intervals      (Ask IronZ cardio quick entry)
+//   w.generatedSession.exercises      (Ask IronZ strength quick entry)
+//   w.segments                        (legacy cardio segments)
+// Returns { kind, data } for the first one found, or null. Used by the
+// share prompt's availability check + the description body renderer.
+function _bodySourceForWorkout(w) {
+  if (!w) return null;
+  // Circuit workouts first — they may have a top-level `exercises` array
+  // (legacy) but the canonical shape lives on w.circuit.steps as a step
+  // tree with repeat blocks, cardio, exercise, rest nodes.
+  if ((w.type === "circuit" || w.circuit) && w.circuit && Array.isArray(w.circuit.steps) && w.circuit.steps.length) {
+    return { kind: "circuit_steps", data: w.circuit.steps, circuit: w.circuit };
+  }
+  if (w.exercises && w.exercises.length) return { kind: "exercises", data: w.exercises };
+  const ai = w.aiSession || {};
+  if (Array.isArray(ai.steps) && ai.steps.length) return { kind: "swim_steps", data: ai.steps };
+  if (Array.isArray(ai.intervals) && ai.intervals.length) return { kind: "intervals", data: ai.intervals };
+  if (Array.isArray(w.steps) && w.steps.length && _parentDiscipline(w.type) === "swimming") {
+    return { kind: "swim_steps", data: w.steps };
+  }
+  if (Array.isArray(w.phases) && w.phases.length) return { kind: "phases", data: w.phases };
+  const gs = w.generatedSession || {};
+  if (Array.isArray(gs.intervals) && gs.intervals.length) return { kind: "intervals", data: gs.intervals };
+  if (Array.isArray(gs.exercises) && gs.exercises.length) return { kind: "exercises", data: gs.exercises };
+  if (Array.isArray(w.segments) && w.segments.length) return { kind: "segments", data: w.segments };
+  return null;
+}
+
+// Render a circuit step tree into description lines. Matches the style
+// of the calendar circuit card: repeat blocks headed by "Nx", rest rows
+// as "Rest Ns", exercise/cardio rows as "name: detail".
+function _formatCircuitSteps(steps, indent) {
+  indent = indent || "";
+  const lines = [];
+  (steps || []).forEach(step => {
+    if (!step) return;
+    if (step.kind === "rest") {
+      const dur = step.duration_sec ? `${Math.round(step.duration_sec)}s` : "—";
+      lines.push(`${indent}Rest ${dur}`);
+      return;
+    }
+    if (step.kind === "repeat") {
+      const count = step.count;
+      const header = count == null ? "AMRAP:" : `${count}×`;
+      lines.push(`${indent}${header}`);
+      _formatCircuitSteps(step.children || [], indent + "  ").forEach(l => lines.push(l));
+      return;
+    }
+    const name = step.name || "Step";
+    const parts = [];
+    if (step.reps != null) parts.push(step.per_side ? `${step.reps}/side` : `${step.reps} reps`);
+    if (step.distance_display) parts.push(step.distance_display);
+    else if (step.distance_m) parts.push(`${step.distance_m}m`);
+    if (step.duration_sec && !step.distance_m && step.reps == null) {
+      parts.push(`${Math.round(step.duration_sec / 60)} min`);
+    }
+    if (step.weight != null) parts.push(`${step.weight} ${step.weight_unit || "lbs"}`);
+    lines.push(parts.length ? `${indent}${name}: ${parts.join(" · ")}` : `${indent}${name}`);
+  });
+  return lines;
+}
+
+// Convert a running-workout-generator `phases` array into the same
+// interval shape `_formatInterval` expects. Mirrors
+// add-running-session-flow.js:_phasesToIntervals — kept inline so the
+// Strava module doesn't depend on AddRunningSessionFlow being loaded.
+function _phasesToIntervalsForStrava(phases) {
+  if (!Array.isArray(phases)) return [];
+  const nameMap = {
+    warmup: "Warm Up", cooldown: "Cool Down", main: "Main Set",
+    main_set: "Main Set", main_cruise_intervals: "Cruise Intervals",
+    optional_finish: "M-Pace Finish", optional_mp_finish: "M-Pace Finish",
+  };
+  const intensityMap = {
+    z1: "Z1", z2: "Z2", z3: "Z3", z4: "Z4", z5: "Z5", z6: "Z6",
+    z4_effort: "Z4", easy: "Z1", moderate: "Z2", tempo: "Z3",
+    threshold: "Z4", hard: "Z4", vo2: "Z5", sprint: "Z5",
+    rest: "RW", rw: "RW", walk: "RW",
+  };
+  return phases.map(p => {
+    let dur;
+    if (p.rep_count && p.rep_count > 1 && p.rep_distance) dur = p.rep_distance;
+    else if (p.rep_duration_min) dur = `${p.rep_duration_min} min`;
+    else dur = p.duration_min ? `${p.duration_min} min` : (p.distance_m ? `${p.distance_m}m` : "");
+    const repCount = p.rep_count || p.reps || 0;
+    return {
+      name: nameMap[p.phase] || String(p.phase || "Interval").replace(/_/g, " "),
+      duration: dur,
+      effort: intensityMap[String(p.intensity || "").toLowerCase()] || p.intensity || "",
+      details: p.instruction || p.target || "",
+      ...(repCount > 1 ? { reps: repCount } : {}),
+      ...(p.rest_sec ? { restDuration: `${p.rest_sec}s` } : {}),
+    };
+  });
+}
+
+// ── Interval / phase formatting (cardio description body) ───────────────
+//
+// Format: "Phase Name: <duration> @ Zx"
+//   plain:             "Warm-up: 10 min @ Z1"
+//   reps:              "Intervals: 8 × 400m @ Z4"
+//   reps + rest:       "Intervals: 8 × 400m @ Z4 w/ 90s rest"
+//
+// We do NOT include the generator's free-text `details` field — it's
+// noisy, already zone-tagged (causing double prints), and a Strava post
+// reads cleanest with just "duration @ zone". If you want more detail,
+// look at the activity on Strava which shows HR/pace/map anyway.
+function _normalizePhaseName(name) {
+  if (!name) return "Interval";
+  const map = {
+    "warmup": "Warm-up", "warm up": "Warm-up", "warm-up": "Warm-up", "wu": "Warm-up",
+    "cooldown": "Cool-down", "cool down": "Cool-down", "cool-down": "Cool-down", "cd": "Cool-down",
+    "main set": "Main Set", "mainset": "Main Set", "main": "Main Set",
+    "tempo": "Tempo", "threshold": "Threshold",
+    "intervals": "Intervals", "interval": "Interval",
+    "recovery": "Recovery", "rest": "Rest",
+  };
+  const key = String(name).trim().toLowerCase();
+  return map[key] || name;
+}
+
+function _formatInterval(iv) {
+  const name = _normalizePhaseName(iv.name);
+  const zone = iv.effort || iv.intensity || iv.zone || "";
+  const reps = parseInt(iv.reps, 10) || 1;
+
+  // Build the "body" — the duration/distance chunk to the right of the colon.
+  const parts = [];
+  const dist = iv.distance || iv.distance_display || "";
+  const dur  = iv.duration || "";
+  // Only prefix "N ×" when we have more than 1 rep AND a per-rep magnitude.
+  if (reps > 1 && (dist || dur)) {
+    parts.push(`${reps} × ${dist || dur}`);
+  } else if (dur) {
+    parts.push(dur);
+  } else if (dist) {
+    parts.push(dist);
+  }
+
+  // Normalize zone: if the generator gave us "Easy"/"Hard"/etc, coerce to
+  // a Z-label so the format stays consistent.
+  const zoneStr = _normalizeZoneLabel(zone);
+  if (zoneStr) parts.push(`@ ${zoneStr}`);
+  if (iv.restDuration) parts.push(`w/ ${_formatRestDuration(iv.restDuration)} rest`);
+
+  if (!parts.length) return name;
+  return `${name}: ${parts.join(" ")}`;
+}
+
+function _normalizeZoneLabel(zone) {
+  if (!zone) return "";
+  const s = String(zone).trim();
+  if (/^Z[1-6]$/i.test(s)) return s.toUpperCase();
+  const map = {
+    easy: "Z1", recovery: "Z1", rw: "Z1",
+    aerobic: "Z2", steady: "Z2", moderate: "Z2",
+    tempo: "Z3", "sweet spot": "Z3", sweetspot: "Z3",
+    threshold: "Z4", hard: "Z4",
+    vo2: "Z5", sprint: "Z5", max: "Z5", maximal: "Z5",
+  };
+  return map[s.toLowerCase()] || s;
+}
+
+function _formatRestDuration(rd) {
+  if (rd == null) return "";
+  const s = String(rd).trim();
+  if (!s) return "";
+  // "90s" → "90s"; "2 min" → "2 min"; "90" (bare seconds) → "90s"
+  if (/^\d+\s*$/.test(s)) return `${s}s`;
+  return s;
+}
+
+// Render a swim step tree as description lines. Handles nested repeats,
+// and for repeat blocks where every inner interval shares the same shape
+// (e.g. "Main 100m @ 1:30/100m" repeated 8 times with 15s rest) we emit
+// a compact single line like "8× 100m @ 1:30/100m w/ 15s rest" instead
+// of unrolling the block.
+// Swim stroke → capitalized display label.
+const _SWIM_STROKE_LABEL = {
+  freestyle:    "Freestyle",
+  free:         "Freestyle",
+  backstroke:   "Backstroke",
+  back:         "Backstroke",
+  breaststroke: "Breaststroke",
+  breast:       "Breaststroke",
+  butterfly:    "Butterfly",
+  fly:          "Butterfly",
+  im:           "IM",
+  choice:       "Choice",
+};
+
+// Swim pace_target → effort zone. The canonical swim workouts use relative
+// pace tokens (easy / CSS / CSS-5s / max) rather than Z-labels, so we map
+// them onto the same Z1-Z5 scale the run/bike cards use.
+function _swimPaceToZone(pace) {
+  if (!pace) return "Z2";
+  const s = String(pace).trim().toLowerCase();
+  if (/easy|recovery|warm|cool/.test(s))           return "Z1";
+  if (/aerobic|build|steady/.test(s))              return "Z2";
+  if (/css\s*\+\s*\d/.test(s))                     return "Z2";
+  if (/^css$|css\s*pace|threshold|tempo/.test(s))  return "Z3";
+  if (/css\s*-\s*\d/.test(s))                      return "Z4";
+  if (/hard|fast|race/.test(s))                    return "Z4";
+  if (/max|sprint|all\s*out/.test(s))              return "Z5";
+  // Numeric pace like "1:30/100m" — no zone inference, leave blank.
+  return "";
+}
+
+function _formatSwimInterval(step) {
+  const parts = [];
+  if (step.distance_m) parts.push(`${step.distance_m}m`);
+  const stroke = _SWIM_STROKE_LABEL[String(step.stroke || "").toLowerCase()];
+  if (stroke) parts.push(stroke);
+  const zone = _swimPaceToZone(step.pace_target || step.pace);
+  if (zone) parts.push(`@ ${zone}`);
+  return parts.join(" ");
+}
+
+// Try to compress a repeat block into "<name>: N × <dist> <stroke> @ Zx w/ <rest>".
+// Returns a string on success, null if the block is heterogeneous and
+// must be unrolled by the caller.
+function _compressSwimRepeat(step) {
+  const count = Number(step.count) || 1;
+  const kids = step.children || [];
+  const intervals = kids.filter(k => k && k.kind === "interval");
+  const rests     = kids.filter(k => k && k.kind === "rest");
+  const nested    = kids.filter(k => k && k.kind === "repeat");
+  if (nested.length) return null;
+  if (intervals.length !== 1) return null;
+  if (rests.length > 1) return null;
+  const iv = intervals[0];
+  if (!iv.distance_m) return null;
+
+  const stroke = _SWIM_STROKE_LABEL[String(iv.stroke || "").toLowerCase()] || "Freestyle";
+  const zone = _swimPaceToZone(iv.pace_target || iv.pace);
+  const restSec = rests[0] ? Number(rests[0].duration_sec) || 0 : 0;
+
+  // Phase label — prefer the repeat block's own name, else the inner
+  // interval's name, else "Main Set".
+  const label = _normalizePhaseName(step.name || iv.name || "Main Set");
+
+  let body = `${count} × ${iv.distance_m}m ${stroke}`;
+  if (zone) body += ` @ ${zone}`;
+  if (restSec > 0) body += ` w/ ${restSec}s rest`;
+  return `${label}: ${body}`;
+}
+
+function _formatSwimSteps(steps, prefix) {
+  prefix = prefix || "";
+  const out = [];
+  (steps || []).forEach(step => {
+    if (!step) return;
+    if (step.kind === "interval") {
+      const body = _formatSwimInterval(step);
+      const label = _normalizePhaseName(step.name || "Swim");
+      if (body) out.push(`${prefix}${label}: ${body}`);
+      else out.push(`${prefix}${label}`);
+    } else if (step.kind === "rest") {
+      const sec = Number(step.duration_sec) || 0;
+      // Skip short intra-set rests — they're already implied by the set
+      // notation ("8 × 100m w/ 15s rest"). Only surface meaningful breaks
+      // (30s+) that aren't covered by a parent repeat.
+      if (sec >= 30) out.push(`${prefix}Rest ${sec}s`);
+    } else if (step.kind === "repeat") {
+      const compact = _compressSwimRepeat(step);
+      if (compact) {
+        out.push(`${prefix}${compact}`);
+      } else {
+        const count = Number(step.count) || 1;
+        out.push(`${prefix}${count}× Round${count === 1 ? "" : "s"}:`);
+        const inner = _formatSwimSteps(step.children || [], prefix + "  ");
+        out.push(...inner);
+      }
+    }
+  });
+  return out;
+}
+
 /**
  * Build the multi-line Strava activity description from an IronZ workout.
  * Per-field inclusion is controlled by `prefs` which comes from
  * getStravaCardPrefs(workout.type) by default, but the share prompt
  * lets the user override any field at upload time. Keys are:
  *
- *   typeLabel  — append "— Strength Training" to title
+ *   typeLabel  — (legacy, ignored) title is now the Strava activity name
  *   body       — exercise list / interval list / segment list
  *   stats      — "52 min · 24 sets · 6 exercises" line
  *   distance   — explicit distance line (cardio only, if available)
  *   hiitMeta   — HIIT format / rounds / rest line
  *   notes      — user's workout notes field
  *   footer     — "Built with IronZ — ironz.fit" branding
+ *
+ * Note: we no longer prepend the workout name — Strava already shows it
+ * as the activity title, so a duplicate line wastes vertical space.
  */
 function _buildStravaDescription(w, prefs) {
   prefs = prefs || getStravaCardPrefs(w.type);
   const lines = [];
 
-  // Title — always included (a Strava activity has to have one)
-  const typeLabel = _stravaWorkoutTypeLabel(w);
-  const titleLine = prefs.typeLabel && typeLabel
-    ? `${w.name || w.sessionName || "Workout"} — ${typeLabel}`
-    : (w.name || w.sessionName || "Workout");
-  lines.push(titleLine);
+  const isSwim = _parentDiscipline(w.type) === "swimming";
+  const bodySource = _bodySourceForWorkout(w);
+  // `exercises` / `intervals` are kept as local refs for the stats line
+  // below (needs exercise count + set count + interval count).
+  const exercises = bodySource?.kind === "exercises" ? bodySource.data : null;
+  const intervals = bodySource?.kind === "intervals" ? bodySource.data
+                  : bodySource?.kind === "phases"    ? _phasesToIntervalsForStrava(bodySource.data)
+                  : null;
 
-  // Body: exercises (strength/HIIT) OR intervals (cardio) OR segments
-  const exercises = (w.exercises && w.exercises.length) ? w.exercises : null;
-  const intervals = (w.aiSession && w.aiSession.intervals && w.aiSession.intervals.length)
-    ? w.aiSession.intervals
-    : null;
-  const segments = (w.segments && w.segments.length) ? w.segments : null;
-
-  if (prefs.body) {
-    if (exercises) {
-      lines.push("");
-      exercises.forEach(ex => {
+  if (prefs.body && bodySource) {
+    if (bodySource.kind === "exercises") {
+      bodySource.data.forEach(ex => {
         const name = ex.name || "Exercise";
         const parts = [];
         if (ex.sets && ex.reps) parts.push(`${ex.sets} × ${ex.reps}`);
@@ -493,22 +1151,36 @@ function _buildStravaDescription(w, prefs) {
         if (ex.duration) parts.push(ex.duration);
         lines.push(parts.length ? `${name}: ${parts.join(" ")}` : name);
       });
-    } else if (intervals) {
-      lines.push("");
-      intervals.forEach(iv => {
-        const parts = [];
-        if (iv.duration) parts.push(iv.duration);
-        if (iv.effort || iv.intensity) parts.push(iv.effort || iv.intensity);
-        lines.push(`${iv.name || "Interval"}${parts.length ? ` — ${parts.join(" · ")}` : ""}`);
-      });
-    } else if (segments) {
-      lines.push("");
-      segments.forEach(s => {
+    } else if (bodySource.kind === "swim_steps") {
+      // Swim canonical step tree — render each phase with full set notation.
+      _formatSwimSteps(bodySource.data).forEach(l => lines.push(l));
+    } else if (bodySource.kind === "intervals" || bodySource.kind === "phases") {
+      // Cardio: running/cycling/rowing. Running sessions generated by the
+      // new flow carry their original `phases` array — convert to the
+      // interval shape first so `_formatInterval` produces the "Phase Name:
+      // details @ zone" format we want in Strava posts.
+      intervals.forEach(iv => lines.push(_formatInterval(iv)));
+    } else if (bodySource.kind === "segments") {
+      bodySource.data.forEach(s => {
         const parts = [];
         if (s.duration) parts.push(s.duration);
         if (s.effort || s.intensity || s.zone) parts.push(s.effort || s.intensity || s.zone);
         lines.push(`${s.name || "Segment"}${parts.length ? ` — ${parts.join(" · ")}` : ""}`);
       });
+    } else if (bodySource.kind === "circuit_steps") {
+      // Circuit workouts — render the step tree with indented repeat blocks.
+      // Prepend the goal line above the body ("Goal: For Time" /
+      // "Goal: AMRAP · 20 min") so the reader knows how to interpret the
+      // step list.
+      const c = bodySource.circuit || {};
+      const goalMap = { for_time: "For Time", amrap: "AMRAP", standard: "Standard" };
+      const goalLabel = goalMap[c.goal || "standard"];
+      if (goalLabel) {
+        const v = c.goal === "amrap" && c.goal_value ? ` · ${c.goal_value} min` : "";
+        lines.push(`Goal: ${goalLabel}${v}`);
+        lines.push("");
+      }
+      _formatCircuitSteps(bodySource.data).forEach(l => lines.push(l));
     }
   }
 
@@ -529,28 +1201,29 @@ function _buildStravaDescription(w, prefs) {
     lines.push(String(w.notes));
   }
 
-  // Stats line
+  // Stats line — format differs per discipline:
+  //   Strength: "52 min · 24 sets · 6 exercises"
+  //   Running/Cycling: "45 min" (distance is in the title)
+  //   Swimming: "2,300m · 45 min" (distance first, time second)
   if (prefs.stats) {
     const statParts = [];
-    const durMin = parseInt(w.duration, 10);
-    if (durMin > 0) statParts.push(`${durMin} min`);
-    if (exercises) {
-      const totalSets = exercises.reduce((s, e) => s + (parseInt(e.sets, 10) || 0), 0);
-      if (totalSets) statParts.push(`${totalSets} set${totalSets === 1 ? "" : "s"}`);
-      statParts.push(`${exercises.length} exercise${exercises.length === 1 ? "" : "s"}`);
-    } else if (intervals) {
-      statParts.push(`${intervals.length} interval${intervals.length === 1 ? "" : "s"}`);
+    const durMin = _plannedDurationMin(w);
+    if (isSwim) {
+      const distM = _swimTotalDistanceM(w);
+      if (distM > 0) statParts.push(_formatSwimDistance(distM, _swimPoolUnit(w)));
+      if (durMin > 0) statParts.push(`${durMin} min`);
+    } else {
+      if (durMin > 0) statParts.push(`${durMin} min`);
+      if (exercises) {
+        const totalSets = exercises.reduce((s, e) => s + (parseInt(e.sets, 10) || 0), 0);
+        if (totalSets) statParts.push(`${totalSets} set${totalSets === 1 ? "" : "s"}`);
+        statParts.push(`${exercises.length} exercise${exercises.length === 1 ? "" : "s"}`);
+      }
     }
     if (statParts.length) {
-      lines.push("");
+      if (lines.length) lines.push("");
       lines.push(statParts.join(" · "));
     }
-  }
-
-  // Distance line (cardio only, if available)
-  if (prefs.distance && w.distance) {
-    lines.push("");
-    lines.push(`Distance: ${w.distance}`);
   }
 
   // Footer — branding
@@ -563,7 +1236,10 @@ function _buildStravaDescription(w, prefs) {
 }
 
 function _stravaWorkoutTypeLabel(w) {
-  const t = (w.type || "").toLowerCase();
+  // Always resolve sub-types (tempo_threshold, swim_endurance, ...) to
+  // their parent discipline so labels stay consistent across all code
+  // paths that touch the Strava share prompt.
+  const t = _parentDiscipline(w.type);
   const labels = {
     running: "Run", run: "Run",
     cycling: "Ride", bike: "Ride",
@@ -600,7 +1276,7 @@ function _stravaStartDateLocal(w) {
 }
 
 function _stravaElapsedSeconds(w) {
-  const min = parseInt(w.duration, 10);
+  const min = _plannedDurationMin(w);
   if (min > 0) return min * 60;
   // Fallback: 30 minutes if we don't know
   return 30 * 60;
@@ -625,6 +1301,10 @@ async function uploadWorkoutToStrava(workout, opts) {
   const sb = _stravaClient();
   if (!sb) return { ok: false, reason: "no_client" };
 
+  // Same enrichment as the share prompt — makes the silent auto-share path
+  // produce the same rich description as the manual share path.
+  workout = _enrichWorkoutWithSource(workout);
+
   const accessToken = await _stravaAccessToken();
   if (!accessToken) return { ok: false, reason: "not_logged_in" };
 
@@ -641,14 +1321,26 @@ async function uploadWorkoutToStrava(workout, opts) {
   // workout type, which fall back to sensible defaults.
   const cardPrefs = opts.cardPrefs || getStravaCardPrefs(workout.type);
 
+  // Description: prefer the user's hand-edited text from the share prompt
+  // if they provided one, otherwise build it from the workout structure.
+  const description = (typeof opts.descriptionOverride === "string" && opts.descriptionOverride.length > 0)
+    ? opts.descriptionOverride
+    : _buildStravaDescription(workout, cardPrefs);
+
   const payload = {
-    name: workout.name || workout.sessionName || "IronZ workout",
+    name: _buildStravaTitle(workout),
     type: _stravaTypeForWorkout(workout),
     start_date_local: _stravaStartDateLocal(workout),
     elapsed_time: _stravaElapsedSeconds(workout),
-    description: _buildStravaDescription(workout, cardPrefs),
+    description,
     trainer: workout.type === "weightlifting" || workout.type === "bodyweight" || workout.type === "hiit",
   };
+
+  // For swim, also send the total distance so Strava shows it on the card.
+  if ((workout.type === "swim" || workout.type === "swimming")) {
+    const distM = _swimTotalDistanceM(workout);
+    if (distM > 0) payload.distance = distM;
+  }
 
   if (!opts.silent) _showStravaToast("Posting to Strava…");
 
@@ -730,6 +1422,12 @@ async function tryAutoShareToStrava(workout) {
 async function promptStravaShareIfEligible(workout, opts) {
   opts = opts || {};
   if (!workout) return;
+  // Hydrate the workout with structured body from its source schedule/plan
+  // entry if the completion record is thin (older completions won't have
+  // aiSession/phases carried forward). Done once upfront so every downstream
+  // consumer — the toggle availability check, the preview renderer, the
+  // upload payload builder — sees the same enriched object.
+  workout = _enrichWorkoutWithSource(workout);
   // When force=true (explicit user action from the share action sheet),
   // we skip the auto-share bypass, the already-uploaded short-circuit,
   // and the session-storage dedup. The user is asking for the prompt
@@ -775,18 +1473,24 @@ async function promptStravaShareIfEligible(workout, opts) {
 // that returns true only when the field actually has data to show. We
 // hide unavailable toggles (e.g. "HIIT metadata" on a yoga workout) so
 // the UI doesn't offer meaningless choices.
+//
+// The "body" toggle's label is dynamic per workout type — strength users
+// see "Exercises", runners/cyclists see "Phases", swimmers see "Sets",
+// circuit users see "Steps". Matches the cluster-1 spec.
+function _bodyToggleLabel(w) {
+  const parent = _parentDiscipline(w?.type);
+  if (w?.type === "circuit" || w?.circuit) return "Steps";
+  if (parent === "swimming") return "Sets";
+  if (parent === "running" || parent === "cycling" || parent === "rowing") return "Phases";
+  return "Exercises";
+}
+
 const _STRAVA_CARD_FIELDS = [
-  { key: "typeLabel", label: "Type label", available: (w) => !!_stravaWorkoutTypeLabel(w) },
-  { key: "body",      label: "Exercises / intervals",
-    available: (w) => (w.exercises && w.exercises.length)
-                    || (w.aiSession && w.aiSession.intervals && w.aiSession.intervals.length)
-                    || (w.segments && w.segments.length) },
-  { key: "stats",     label: "Stats line (time · sets · count)",
-    available: () => true },
-  { key: "distance",  label: "Distance", available: (w) => !!w.distance },
-  { key: "hiitMeta",  label: "HIIT format / rounds / rest",
-    available: (w) => !!w.hiitMeta },
-  { key: "notes",     label: "Workout notes", available: (w) => !!w.notes },
+  { key: "body",      label: _bodyToggleLabel,
+    available: (w) => !!_bodySourceForWorkout(w) },
+  { key: "stats",     label: "Stats line",           available: () => true },
+  { key: "hiitMeta",  label: "HIIT format / rounds", available: (w) => !!w.hiitMeta },
+  { key: "notes",     label: "Workout notes",        available: (w) => !!w.notes },
   { key: "footer",    label: "IronZ branding footer", available: () => true },
 ];
 
@@ -795,7 +1499,7 @@ function _showStravaSharePrompt(workout) {
   const existing = document.getElementById("strava-share-prompt");
   if (existing) existing.remove();
 
-  const name = _escStrava(workout.name || workout.sessionName || "this workout");
+  const name = _escStrava(_buildStravaTitle(workout));
   const typeLabel = _escStrava(_stravaWorkoutTypeLabel(workout));
   const workoutType = (workout.type || "general");
 
@@ -806,14 +1510,20 @@ function _showStravaSharePrompt(workout) {
   const livePrefs = { ...getStravaCardPrefs(workoutType) };
 
   // Build the toggles HTML. Fields without available data are hidden.
+  // A field's label may be a string or a function(workout) — the "body"
+  // toggle uses the latter so its label is Exercises/Phases/Sets/Steps
+  // depending on the workout discipline.
   const togglesHtml = _STRAVA_CARD_FIELDS
     .filter(f => f.available(workout))
-    .map(f => `
-      <label class="strava-toggle-item" data-field="${f.key}">
-        <input type="checkbox" data-field="${f.key}" ${livePrefs[f.key] ? "checked" : ""}>
-        <span>${_escStrava(f.label)}</span>
-      </label>
-    `).join("");
+    .map(f => {
+      const rawLabel = typeof f.label === "function" ? f.label(workout) : f.label;
+      return `
+        <label class="strava-toggle-item" data-field="${f.key}">
+          <input type="checkbox" data-field="${f.key}" ${livePrefs[f.key] ? "checked" : ""}>
+          <span>${_escStrava(rawLabel)}</span>
+        </label>
+      `;
+    }).join("");
 
   const overlay = document.createElement("div");
   overlay.id = "strava-share-prompt";
@@ -830,8 +1540,8 @@ function _showStravaSharePrompt(workout) {
         </div>
       </div>
       <div class="strava-share-prompt-body">
-        <div class="strava-preview-label">Preview</div>
-        <div class="strava-preview-box" id="strava-preview-box"></div>
+        <div class="strava-preview-label">Preview <span class="strava-preview-hint">(editable)</span></div>
+        <textarea class="strava-preview-box" id="strava-preview-box" spellcheck="false" rows="10"></textarea>
         <div class="strava-toggles-label">Include</div>
         <div class="strava-toggles-grid" id="strava-toggles-grid">${togglesHtml}</div>
         <div class="strava-share-prompt-remember">
@@ -854,13 +1564,24 @@ function _showStravaSharePrompt(workout) {
   requestAnimationFrame(() => overlay.classList.add("is-open"));
 
   const previewEl = document.getElementById("strava-preview-box");
+  // Track whether the user has manually edited the description. Once they
+  // have, toggling a checkbox should NOT stomp their edit. We only reset
+  // the "edited" flag when the user presses a toggle AFTER clearing the
+  // field, or when they close and reopen the prompt.
+  let userEdited = false;
   const refreshPreview = () => {
-    previewEl.textContent = _buildStravaDescription(workout, livePrefs);
+    if (userEdited) return;
+    previewEl.value = _buildStravaDescription(workout, livePrefs);
   };
   refreshPreview();
 
-  // Wire toggles — flipping any checkbox updates livePrefs and
-  // re-renders the preview in place.
+  previewEl.addEventListener("input", () => {
+    userEdited = true;
+  });
+
+  // Wire toggles — flipping any checkbox updates livePrefs and re-renders
+  // the preview. If the user has hand-edited the text, toggles become
+  // cosmetic-only (they still save as the default for next time).
   overlay.querySelectorAll('.strava-toggles-grid input[type="checkbox"]').forEach(cb => {
     cb.addEventListener("change", () => {
       const field = cb.dataset.field;
@@ -885,8 +1606,16 @@ function _showStravaSharePrompt(workout) {
     if (remember) setStravaAutoShareEnabled(true);
     // Save the user's toggle choices as the new defaults for this type.
     setStravaCardPrefs(workoutType, livePrefs);
+    // Capture whatever is currently in the textarea — either the
+    // auto-generated body or the user's manual edits — and pass it
+    // straight through to the uploader so it goes to Strava verbatim.
+    const finalDescription = previewEl.value;
     close();
-    await uploadWorkoutToStrava(workout, { silent: false, cardPrefs: livePrefs });
+    await uploadWorkoutToStrava(workout, {
+      silent: false,
+      cardPrefs: livePrefs,
+      descriptionOverride: finalDescription,
+    });
   });
 }
 

@@ -1833,6 +1833,11 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   // default).
   let sessionName = "";
   let fallbackDuration = null;
+  // The source schedule/plan/logged entry — we pull forward its structured
+  // body (aiSession, phases, hiitMeta, generatedSession) onto the completion
+  // record so downstream consumers (Strava share prompt, workout history card)
+  // can render the original phase breakdown instead of a bare name + duration.
+  let _sourceEntry = null;
   try {
     if (sessionId.startsWith("session-sw-")) {
       const rawId = sessionId.slice("session-sw-".length);
@@ -1841,6 +1846,7 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
       if (_sw) {
         sessionName = _sw.sessionName || "";
         fallbackDuration = _sw.duration || null;
+        _sourceEntry = _sw;
       }
     } else if (sessionId.startsWith("session-plan-")) {
       // Format: session-plan-<YYYY-MM-DD>-<raceId>
@@ -1860,6 +1866,7 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
           const _ld = SESSION_DESCRIPTIONS[_pe.discipline][_pe.load];
           if (_ld && _ld.duration) fallbackDuration = _ld.duration;
         }
+        _sourceEntry = _pe;
       }
     } else if (sessionId.startsWith("session-log-")) {
       const rawId = sessionId.slice("session-log-".length);
@@ -1868,6 +1875,7 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
       if (_lw) {
         sessionName = _lw.name || _lw.sessionName || "";
         fallbackDuration = _lw.duration || null;
+        _sourceEntry = _lw;
       }
     }
   } catch (e) {
@@ -1899,6 +1907,28 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   // Watts for cycling
   const wattsVal = parseInt(document.getElementById(`cwatts-${sessionId}`)?.value) || null;
 
+  // Cardio distance unit: swim uses m/yd (from swimDistUnit), everything
+  // else follows the user's distance preference (mi/km). Tagging the unit
+  // lets the Strava description builder render "4.3 mi" instead of a bare
+  // number mis-read as meters.
+  const _cardioDistUnit = swimDistUnit
+    || ((type === "running" || type === "cycling" || type === "walking" || type === "hiking" || type === "rowing")
+        ? (typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi")
+        : null);
+
+  // Pull forward the structured body from the source schedule/plan/log entry
+  // so the Strava share prompt has phase breakdowns to render.
+  const _carryForward = _sourceEntry ? {
+    ...(_sourceEntry.aiSession      && { aiSession:       _sourceEntry.aiSession }),
+    ...(_sourceEntry.generatedSession && { generatedSession: _sourceEntry.generatedSession }),
+    ...(_sourceEntry.phases         && { phases:          _sourceEntry.phases }),
+    ...(_sourceEntry.hiitMeta       && { hiitMeta:        _sourceEntry.hiitMeta }),
+    ...(_sourceEntry.steps          && { steps:           _sourceEntry.steps }),
+    ...(_sourceEntry.total_distance_m && { total_distance_m: _sourceEntry.total_distance_m }),
+    ...(_sourceEntry.pool_size_m    && { pool_size_m:     _sourceEntry.pool_size_m }),
+    ...(_sourceEntry.pool_unit      && { pool_unit:       _sourceEntry.pool_unit }),
+  } : {};
+
   const completedWorkout = {
     id:                 workoutId,
     date:               dateStr,
@@ -1908,10 +1938,9 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
     exercises:          exercises.length ? exercises : undefined,
     duration:           duration || null,
     distance:           distance || null,
-    // Swim distances are in meters or yards — mark the unit so downstream
-    // display/stats code doesn't treat the number as miles/km.
-    ...(swimDistUnit && distance ? { distance_unit: swimDistUnit } : {}),
+    ...(_cardioDistUnit && distance ? { distance_unit: _cardioDistUnit } : {}),
     ...(wattsVal && { avgWatts: wattsVal }),
+    ..._carryForward,
     completedSessionId: sessionId,
     completedAt:        new Date().toISOString(),
     isCompletion:       true,

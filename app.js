@@ -25,10 +25,28 @@ function getProfileAge() {
   } catch { return 0; }
 }
 
-// ── PWA: Register service worker ────────────────────────────────────────────
+// ── PWA: Unregister stale service worker ────────────────────────────────────
+//
+// The old PWA cache was trapping users on stale JS across deploys — every
+// fix required a manual DevTools → Unregister to take effect. Until we have
+// a proper cache-busting build pipeline, the service worker is more harmful
+// than useful. On every page load we:
+//   1. Find any registered SW and unregister it
+//   2. Delete every Cache Storage entry it left behind
+// This runs once and then silently no-ops on future loads.
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("service-worker.js").catch(() => {});
+  window.addEventListener("load", async () => {
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+      if (window.caches && caches.keys) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      if (regs.length && typeof console !== "undefined") {
+        console.info("[IronZ] Unregistered stale service worker + cleared caches.");
+      }
+    } catch {}
   });
 }
 

@@ -6955,7 +6955,17 @@ button:active {
   color: var(--color-text-muted);
   margin-bottom: 6px;
 }
+.strava-preview-hint {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--color-text-muted);
+  opacity: 0.7;
+  margin-left: 4px;
+}
 .strava-preview-box {
+  display: block;
+  width: 100%;
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
   border-radius: 10px;
@@ -6966,9 +6976,17 @@ button:active {
   color: var(--color-text);
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 180px;
+  max-height: 220px;
+  min-height: 120px;
   overflow-y: auto;
   margin-bottom: 14px;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+}
+.strava-preview-box:focus {
+  border-color: var(--color-accent, #fc4c02);
+  box-shadow: 0 0 0 2px rgba(252, 76, 2, 0.15);
 }
 
 /* Toggle grid — 2 columns on wide screens, 1 column on narrow */
