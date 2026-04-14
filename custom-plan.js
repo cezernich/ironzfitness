@@ -985,12 +985,22 @@ function customPlanDeleteFromModal() {
 const CP_TYPE_LABELS = {
   strength: "Strength", running: "Running", cycling: "Cycling",
   swimming: "Swimming", hiit: "HIIT", yoga: "Yoga / Mobility",
-  bodyweight: "Bodyweight", general: "General"
+  bodyweight: "Bodyweight", general: "General",
+  brick: "Brick", mobility: "Mobility", walking: "Walking",
+  rowing: "Rowing", hyrox: "Hyrox", circuit: "Circuit",
+  sauna: "Sauna / Steam", sport: "Sport",
 };
 
 function cpManualSelectType(type) {
   _cpManualSelectedType = type;
-  const isCardio = ["running", "cycling", "swimming"].includes(type);
+  // Cardio-style types get the interval-rows editor; everything else
+  // uses exercise rows. Expanded to match the home-screen Add Session
+  // modal so plan-builder users can add any session type.
+  const CARDIO_TYPES = new Set([
+    "running", "cycling", "swimming", "brick", "walking", "rowing",
+    "mobility", "sauna", "sport",
+  ]);
+  const isCardio = CARDIO_TYPES.has(type);
   const nameInput = document.getElementById("cp-manual-name");
   nameInput.placeholder = isCardio ? "e.g. Easy 5K, Recovery Ride" : "e.g. " + (CP_TYPE_LABELS[type] || "Custom") + " Day A";
   const notesInput = document.getElementById("cp-manual-notes");

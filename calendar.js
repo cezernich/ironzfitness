@@ -4169,8 +4169,8 @@ function saveSaunaSession() {
   setTimeout(() => closeQuickEntry(), 700);
 }
 
-function toggleMoreTypes(btn) {
-  const panel = document.getElementById("qe-more-types");
+function toggleMoreTypes(btn, panelId) {
+  const panel = document.getElementById(panelId || "qe-more-types");
   if (!panel) return;
   const showing = panel.style.display !== "none";
   panel.style.display = showing ? "none" : "";
