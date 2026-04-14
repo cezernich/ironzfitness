@@ -1,24 +1,29 @@
 // js/sport-levels.js
 //
 // Per-sport experience level derivation from threshold data.
-// Spec: SPEC_cardio_add_session_v1.md §3.1-3.3.
+// Specs:
+//   - SPEC_cardio_add_session_v1.md §3.1-3.3 (swim/cycling/running)
+//   - SPEC_strength_level_v1          §3     (strength)
 //
 // Replaces the single self-reported `profile.fitnessLevel` field with
 // per-sport levels derived from the user's thresholds:
 //   - Swimming: from CSS pace (seconds per 100m)
 //   - Cycling:  from FTP (watts) + body weight (w/kg)
 //   - Running:  from threshold pace (min/mile)
+//   - Strength: from 1RM lifts (squat/bench/deadlift) relative to bodyweight,
+//               gender-adjusted, conservative aggregation (lowest tier wins)
 //
 // When no threshold data exists for a sport, the derive function returns
 // "intermediate" so workout generation never blocks. The existing "log a
 // test result" nudge UI continues to prompt users who haven't set thresholds.
 //
 // Public API (window.SportLevels):
-//   deriveSwimLevel(cssSecPer100m)       → "novice"|"intermediate"|"competitive"
-//   deriveCyclingLevel(ftpWatts, weight) → "beginner"|"intermediate"|"advanced"
-//   deriveRunLevel(thresholdMinPerMile)  → "beginner"|"intermediate"|"advanced"
-//   getSportLevel(sport)                 → reads profile + returns derived level
-//   getLevelsForUser()                   → { swim, cycling, running } all at once
+//   deriveSwimLevel(cssSecPer100m)         → "novice"|"intermediate"|"competitive"
+//   deriveCyclingLevel(ftpWatts, weight)   → "beginner"|"intermediate"|"advanced"
+//   deriveRunLevel(thresholdMinPerMile)    → "beginner"|"intermediate"|"advanced"
+//   deriveStrengthLevel(profile)           → "beginner"|"intermediate"|"advanced"
+//   getSportLevel(sport)                   → reads profile + returns derived level
+//   getLevelsForUser()                     → { swim, cycling, running, strength }
 
 (function () {
   "use strict";
@@ -54,6 +59,50 @@
     if (thresholdMinPerMile > 10) return "beginner";
     if (thresholdMinPerMile >= 7.5) return "intermediate";
     return "advanced";
+  }
+
+  // SPEC_strength_level_v1 §3.2-3.3.
+  //
+  // Classify by lift-to-bodyweight ratio for squat/bench/deadlift using
+  // gender-adjusted thresholds (Rippetoe / Kilgore / ExRx style standards).
+  // Any subset of the three lifts can be entered; the function uses the
+  // LOWEST classification across the entered lifts (conservative — avoids
+  // overrating a user who has one strong lift but lags elsewhere).
+  //
+  // profile shape accepted:
+  //   { squat1RM, bench1RM, deadlift1RM, weight, weightKg, gender }
+  // weight is expected in pounds (profile.weight); weightKg wins when set.
+  // 1RM values are accepted in lbs (no unit conversion — the ratios are
+  // unit-free as long as both numerator and denominator use the same unit).
+  function deriveStrengthLevel(profile) {
+    if (!profile || typeof profile !== "object") return "intermediate";
+    const bwLb = (() => {
+      if (profile.weightKg) return Number(profile.weightKg) * 2.20462;
+      const w = parseFloat(profile.weight);
+      return w > 0 ? w : null;
+    })();
+    if (!bwLb || bwLb <= 0) return "intermediate";
+    const gender = String(profile.gender || "male").toLowerCase();
+    const isFemale = gender === "female" || gender === "f";
+    const thresholds = isFemale
+      ? { squat: [0.75, 1.25], bench: [0.5, 0.85], deadlift: [1.0, 1.5] }
+      : { squat: [1.0,  1.75], bench: [0.75, 1.25], deadlift: [1.25, 2.0] };
+    const lifts = ["squat", "bench", "deadlift"].filter(l => {
+      const v = parseFloat(profile[l + "1RM"]);
+      return v > 0;
+    });
+    if (!lifts.length) return "intermediate";
+    const order = { beginner: 0, intermediate: 1, advanced: 2 };
+    const levels = lifts.map(l => {
+      const ratio = parseFloat(profile[l + "1RM"]) / bwLb;
+      const [lo, hi] = thresholds[l];
+      if (ratio < lo) return "beginner";
+      if (ratio > hi) return "advanced";
+      return "intermediate";
+    });
+    // Lowest level across entered lifts (conservative aggregation).
+    levels.sort((a, b) => order[a] - order[b]);
+    return levels[0];
   }
 
   // ── Profile readers ─────────────────────────────────────────────────────
@@ -146,20 +195,25 @@
       case "run":
       case "running":
         return deriveRunLevel(_readRunThresholdMinPerMile(profile, zones));
+      case "strength":
+      case "weightlifting":
+      case "lifting":
+        return deriveStrengthLevel(profile);
       default:
         return "intermediate";
     }
   }
 
-  // Return all three sport levels at once. Handy for screens that need to
+  // Return all four sport levels at once. Handy for screens that need to
   // adapt multiple sports in one render.
   function getLevelsForUser() {
     const profile = _loadProfile();
     const zones = _loadTrainingZones();
     return {
-      swim:    deriveSwimLevel(_readSwimCSS(profile, zones)),
-      cycling: deriveCyclingLevel(_readCyclingFTP(profile, zones), profile.weight),
-      running: deriveRunLevel(_readRunThresholdMinPerMile(profile, zones)),
+      swim:     deriveSwimLevel(_readSwimCSS(profile, zones)),
+      cycling:  deriveCyclingLevel(_readCyclingFTP(profile, zones), profile.weight),
+      running:  deriveRunLevel(_readRunThresholdMinPerMile(profile, zones)),
+      strength: deriveStrengthLevel(profile),
     };
   }
 
@@ -207,7 +261,7 @@
   }
 
   const api = {
-    deriveSwimLevel, deriveCyclingLevel, deriveRunLevel,
+    deriveSwimLevel, deriveCyclingLevel, deriveRunLevel, deriveStrengthLevel,
     getSportLevel, getLevelsForUser,
     getAge, getAgeModifiers, getLevelModifiers,
   };

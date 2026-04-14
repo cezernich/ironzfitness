@@ -77,6 +77,10 @@
       if (profile.last_test && profile.last_test.sport === "running" && profile.last_test.recorded_at) {
         candidates.push(profile.last_test.recorded_at);
       }
+    } else if (sport === "strength") {
+      // SPEC_strength_level_v1 §4 — strengthThresholdUpdatedAt stamped by
+      // saveProfile when any 1RM field actually changes.
+      if (profile.strengthThresholdUpdatedAt) candidates.push(profile.strengthThresholdUpdatedAt);
     }
     if (!candidates.length) return null;
     // Return the most recent
@@ -96,6 +100,10 @@
     if (sport === "running") {
       return !!(profile.vdot || profile.run_vdot
         || (zones.running && (zones.running.vdot || zones.running.thresholdPaceMin || zones.running.tempo || zones.running.easyPaceMin)));
+    }
+    if (sport === "strength") {
+      // Any of the three 1RM lifts counts as "threshold set".
+      return !!(profile.squat1RM || profile.bench1RM || profile.deadlift1RM);
     }
     return false;
   }
@@ -127,9 +135,10 @@
   }
 
   const SPORT_LABELS = {
-    swim:    { label: "swim threshold",    metric: "CSS pace" },
-    cycling: { label: "cycling FTP",       metric: "FTP" },
-    running: { label: "running threshold", metric: "threshold pace" },
+    swim:     { label: "swim threshold",    metric: "CSS pace" },
+    cycling:  { label: "cycling FTP",       metric: "FTP" },
+    running:  { label: "running threshold", metric: "threshold pace" },
+    strength: { label: "strength numbers",  metric: "1RM" },
   };
 
   function _humanAge(days) {

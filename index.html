@@ -1336,6 +1336,29 @@
             </select>
           </div>
 
+          <!-- Strength 1RM thresholds (SPEC_strength_level_v1 §3.1) —
+               optional, used to derive your strength level the same way
+               CSS / FTP / threshold pace drive cardio levels. All three
+               fields are optional; enter whichever lifts you have data
+               for and the system uses the lowest-ranked lift (conservative). -->
+          <div class="form-row" style="margin-top:8px">
+            <label style="font-size:0.85rem;color:var(--color-text-muted)">Strength 1RM <span style="font-weight:normal">— optional, for personalized lift targets</span></label>
+          </div>
+          <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;gap:10px">
+            <div class="form-row">
+              <label for="profile-squat-1rm" style="font-size:0.8rem">Back Squat</label>
+              <input type="number" id="profile-squat-1rm" placeholder="e.g. 225" min="0" />
+            </div>
+            <div class="form-row">
+              <label for="profile-bench-1rm" style="font-size:0.8rem">Bench Press</label>
+              <input type="number" id="profile-bench-1rm" placeholder="e.g. 185" min="0" />
+            </div>
+            <div class="form-row">
+              <label for="profile-deadlift-1rm" style="font-size:0.8rem">Deadlift</label>
+              <input type="number" id="profile-deadlift-1rm" placeholder="e.g. 315" min="0" />
+            </div>
+          </div>
+
           <button class="btn-primary" onclick="saveProfile()">Save Profile</button>
           <p id="profile-save-msg" class="save-msg"></p>
         </div>
@@ -2015,6 +2038,9 @@
 
       <!-- STEP 1a: Strength -->
       <div class="qe-step" id="qe-step-1-strength" style="display:none">
+        <!-- Strength threshold reminder slot (SPEC_strength_level_v1 §4).
+             Populated by qeShowStep when 1RM data is >90 days old. -->
+        <div id="qe-strength-reminder-slot"></div>
         <p class="qe-section-label">Which muscles are you targeting?</p>
         <div class="qe-muscle-grid">
           <button class="qe-muscle-btn" data-muscle="chest"       onclick="qeToggleMuscle(this)">Chest</button>
@@ -2029,14 +2055,10 @@
           <button class="qe-muscle-btn" data-muscle="calves"      onclick="qeToggleMuscle(this)">Calves</button>
           <button class="qe-muscle-btn" data-muscle="full body"   onclick="qeToggleMuscle(this)">Full Body</button>
         </div>
-        <div class="form-row" style="margin-top:14px">
-          <label for="qe-strength-level">Your Level</label>
-          <select id="qe-strength-level">
-            <option value="beginner">Beginner</option>
-            <option value="intermediate" selected>Intermediate</option>
-            <option value="advanced">Advanced</option>
-          </select>
-        </div>
+        <!-- "Your Level" dropdown removed per SPEC_strength_level_v1 §2.
+             Strength level is derived from 1RM data (squat/bench/deadlift
+             relative to bodyweight) via SportLevels.deriveStrengthLevel.
+             Falls back to "intermediate" when no 1RM data is set. -->
         <div class="form-row" style="margin-top:12px">
           <label for="qe-strength-duration">Session Length</label>
           <select id="qe-strength-duration">

@@ -3976,7 +3976,14 @@ function qeShowStep(step, subType) {
   if (step === 0) {
     document.getElementById("qe-step-0").style.display = "";
   } else if (step === 1) {
-    if (subType === "strength")          document.getElementById("qe-step-1-strength").style.display    = "";
+    if (subType === "strength")          {
+      document.getElementById("qe-step-1-strength").style.display = "";
+      // Strength threshold refresh banner (SPEC_strength_level_v1 §4).
+      const sSlot = document.getElementById("qe-strength-reminder-slot");
+      if (sSlot && typeof ThresholdReminders !== "undefined") {
+        sSlot.innerHTML = ThresholdReminders.buildBannerHtml("strength");
+      }
+    }
     else if (subType === "hiit")         document.getElementById("qe-step-1-hiit").style.display        = "";
     else if (subType === "hyrox")        { document.getElementById("qe-step-1-hyrox").style.display     = ""; _initHyroxBuilder(); }
     else if (subType === "sauna")        document.getElementById("qe-step-1-sauna").style.display       = "";
@@ -5370,7 +5377,13 @@ async function qeGenerateStrength() {
     return;
   }
 
-  const level    = document.getElementById("qe-strength-level").value;
+  // Strength level dropdown was removed per SPEC_strength_level_v1 §2.
+  // Derive from 1RM data (squat/bench/deadlift relative to bodyweight)
+  // via SportLevels.getSportLevel("strength"); falls back to "intermediate"
+  // when no 1RM data has been entered.
+  const level = (typeof SportLevels !== "undefined" && SportLevels.getSportLevel)
+    ? SportLevels.getSportLevel("strength")
+    : "intermediate";
   const duration = document.getElementById("qe-strength-duration").value;
   const muscles  = [..._qeSelectedMuscles].join(", ");
 
