@@ -6260,11 +6260,12 @@ function _qeBuildCardioWorkout(opts) {
     }
   }
 
-  // Cycling: route through BikeWorkoutGenerator when opts.bikeSessionType
-  // is set (SPEC §1.2 session type selector). Attaches the generator's
-  // phase list onto the workout so downstream renderers show real FTP-
-  // based targets instead of the generic zone intervals built above.
-  if (type === "cycling" && opts.bikeSessionType && typeof window !== "undefined" && window.BikeWorkoutGenerator) {
+  // Cycling: when the user picks a session type (SPEC §1.2), replace the
+  // generic intervals with a structure built from VARIANT_LIBRARY_BIKE so
+  // the card title, phases, and interval list all agree. Variants whose
+  // prescribed rep block can't fit inside the user's chosen duration are
+  // filtered out before selection.
+  if (type === "cycling" && opts.bikeSessionType) {
     try {
       const bikeTypeMap = {
         z2_endurance:  { sessionTypeId: "bike_endurance",            preferredVariant: "bike_endurance_steady" },
@@ -6276,29 +6277,169 @@ function _qeBuildCardioWorkout(opts) {
         vo2_intervals: { sessionTypeId: "bike_intervals_vo2",        preferredVariant: null },
       };
       const m = bikeTypeMap[opts.bikeSessionType];
-      if (m) {
-        const lib = window.VARIANT_LIBRARY_BIKE;
-        const variants = (lib && lib.variants && lib.variants[m.sessionTypeId]) || [];
-        const variant = (m.preferredVariant && variants.find(v => v.id === m.preferredVariant))
-          || variants[Math.floor(Math.random() * variants.length)];
+      const lib = (typeof window !== "undefined" && window.VARIANT_LIBRARY_BIKE) || null;
+      if (m && lib && lib.variants && lib.variants[m.sessionTypeId]) {
+        const variants = lib.variants[m.sessionTypeId];
+        const wuMin = m.sessionTypeId === "bike_endurance" ? 5 : Math.min(15, Math.max(5, Math.round(durMin * 0.15)));
+        const cdMin = m.sessionTypeId === "bike_endurance" ? 5 : Math.min(10, Math.max(3, Math.round(durMin * 0.1)));
+
+        const _pickReps = (repSpec) => {
+          if (typeof repSpec === "number") return repSpec;
+          if (repSpec && typeof repSpec === "object") {
+            return repSpec[level] || repSpec.intermediate || repSpec.beginner || 0;
+          }
+          return 0;
+        };
+
+        // Prescribed total for standard interval variants (null means
+        // duration-driven — those always fit).
+        const _variantTotalMin = (v) => {
+          const ms = v.main_set || {};
+          if (ms.type === "continuous" || ms.type === "base_plus_surges") return null;
+          const reps = _pickReps(ms.reps);
+          const repSec = ms.duration_sec || 0;
+          const restSec = ms.rest_sec || 0;
+          const mainSec = reps * repSec + Math.max(0, reps - 1) * restSec;
+          return wuMin + Math.round(mainSec / 60) + cdMin;
+        };
+
+        // Keep variants that fit; fall back to shortest if nothing fits.
+        const fitting = variants.filter(v => {
+          const t = _variantTotalMin(v);
+          return t === null || t <= durMin;
+        });
+        let pool = fitting;
+        if (!pool.length) {
+          const sorted = variants.slice().sort((a, b) => (_variantTotalMin(a) || 0) - (_variantTotalMin(b) || 0));
+          pool = sorted.slice(0, 1);
+        }
+        const variant = (m.preferredVariant && pool.find(v => v.id === m.preferredVariant))
+          || pool[Math.floor(Math.random() * pool.length)];
+
         if (variant) {
-          const ftp = (zones.biking && zones.biking.ftp) || null;
-          const result = window.BikeWorkoutGenerator.generateBikeWorkout({
-            sessionTypeId: m.sessionTypeId,
-            variantId: variant.id,
-            userZones: { ftp },
-            experienceLevel: level,
-            durationOverrideMin: durMin,
-          });
-          const w = result.workout;
-          if (w && w.phases) workout.phases = w.phases;
-          if (w && w.title) workout.title = w.title;
-          if (w && w.why_text) workout.why_text = w.why_text;
+          // Map a %FTP target (number or [lo, hi]) to the Z-effort label the
+          // card renderer uses to look up wattage from trainingZones.
+          const _effortForPct = (pct) => {
+            if (pct == null) return "Z2";
+            const p = Array.isArray(pct) ? (pct[0] + pct[1]) / 2 : pct;
+            if (p < 0.55) return "Z1";
+            if (p < 0.75) return "Z2";
+            if (p < 0.90) return "Z3";
+            if (p < 1.05) return "Z4";
+            if (p < 1.20) return "Z5";
+            return "Z6";
+          };
+
+          const ms = variant.main_set || {};
+          const bikeIntervals = [
+            { name: "Warm-Up", duration: wuMin + " min", effort: "Z1", details: bikeDetail("Z1") },
+          ];
+
+          if (ms.type === "continuous") {
+            const mainMin = Math.max(1, durMin - wuMin - cdMin);
+            const eff = _effortForPct(ms.power_target_pct_ftp || [0.65, 0.75]);
+            bikeIntervals.push({ name: "Steady Endurance", duration: mainMin + " min", effort: eff, details: bikeDetail(eff) });
+          } else if (ms.type === "base_plus_surges") {
+            const mainMin = Math.max(1, durMin - wuMin - cdMin);
+            const surges = ms.surges || {};
+            const surgeCount = surges.count || 6;
+            const surgeMin = Math.max(1, Math.round((surges.duration_sec || 60) / 60));
+            const baseEff = _effortForPct(ms.base_pct_ftp || [0.65, 0.75]);
+            const surgeEff = _effortForPct(surges.power_target_pct_ftp || 1.05);
+            // Display the base block first, then the surges as a separate
+            // repeating segment so the card shows the interval structure.
+            const surgeTotal = surgeCount * surgeMin;
+            const baseMin = Math.max(1, mainMin - surgeTotal);
+            const restMin = Math.max(1, Math.round(baseMin / surgeCount));
+            bikeIntervals.push({ name: "Endurance Base", duration: baseMin + " min", effort: baseEff, details: bikeDetail(baseEff) });
+            bikeIntervals.push({
+              name: `Surges (${surgeCount}×)`,
+              duration: surgeMin + " min",
+              effort: surgeEff,
+              details: bikeDetail(surgeEff),
+              reps: surgeCount,
+              restDuration: restMin + " min",
+              restEffort: baseEff,
+            });
+          } else if (ms.type === "alternation_block") {
+            // FTP over-unders — render as one labeled block; the details
+            // text carries the alternation pattern.
+            const reps = _pickReps(ms.reps);
+            const repMin = Math.max(1, Math.round((ms.duration_sec || 0) / 60));
+            const restMin = Math.max(1, Math.round((ms.rest_sec || 180) / 60));
+            const blocks = ms.blocks || [];
+            const details = blocks.length === 2
+              ? `Alternate ${Math.round((blocks[0].duration_sec || 60))}s @ ${Math.round((blocks[0].power_target_pct_ftp || 1.05) * 100)}% FTP / ${Math.round((blocks[1].duration_sec || 60))}s @ ${Math.round((blocks[1].power_target_pct_ftp || 0.95) * 100)}% FTP`
+              : "Over-unders";
+            bikeIntervals.push({
+              name: variant.name,
+              duration: repMin + " min",
+              effort: "Z4",
+              details,
+              reps,
+              restDuration: restMin + " min",
+              restEffort: "Z1",
+            });
+          } else if (ms.type === "progression") {
+            const reps = _pickReps(ms.reps);
+            const repMin = Math.max(1, Math.round((ms.duration_sec || 0) / 60));
+            const restMin = Math.max(1, Math.round((ms.rest_sec || 180) / 60));
+            const eff = _effortForPct(ms.end_pct_ftp || 1.15);
+            bikeIntervals.push({
+              name: variant.name,
+              duration: repMin + " min",
+              effort: eff,
+              details: `Progress from ${Math.round((ms.start_pct_ftp || 1.0) * 100)}% → ${Math.round((ms.end_pct_ftp || 1.15) * 100)}% FTP across each rep`,
+              reps,
+              restDuration: restMin + " min",
+              restEffort: "Z1",
+            });
+          } else {
+            // Standard interval block: reps × duration_sec at power_target_pct_ftp.
+            const reps = _pickReps(ms.reps);
+            const repMin = Math.max(1, Math.round((ms.duration_sec || 0) / 60));
+            const restMin = Math.max(1, Math.round((ms.rest_sec || 180) / 60));
+            const eff = _effortForPct(ms.power_target_pct_ftp);
+            bikeIntervals.push({
+              name: variant.name,
+              duration: repMin + " min",
+              effort: eff,
+              details: bikeDetail(eff),
+              reps,
+              restDuration: restMin + " min",
+              restEffort: "Z1",
+            });
+          }
+
+          bikeIntervals.push({ name: "Cool-Down", duration: cdMin + " min", effort: "Z1", details: bikeDetail("Z1") });
+
+          workout.intervals = bikeIntervals;
+          workout.title = variant.name;
+          workout.why_text = variant.description || "";
           workout.bike_session_type = opts.bikeSessionType;
+          workout.variant_id = variant.id;
+
+          // Still populate .phases for the few callers that want the
+          // generator's structured phase list (live tracker, share sheet).
+          if (typeof window !== "undefined" && window.BikeWorkoutGenerator) {
+            try {
+              const ftp = (zones.biking && zones.biking.ftp) || null;
+              const result = window.BikeWorkoutGenerator.generateBikeWorkout({
+                sessionTypeId: m.sessionTypeId,
+                variantId: variant.id,
+                userZones: { ftp },
+                experienceLevel: level,
+                durationOverrideMin: durMin,
+              });
+              if (result && result.workout && result.workout.phases) {
+                workout.phases = result.workout.phases;
+              }
+            } catch {}
+          }
         }
       }
     } catch (e) {
-      console.warn("[_qeBuildCardioWorkout cycling] generator failed:", e);
+      console.warn("[_qeBuildCardioWorkout cycling] variant build failed:", e);
     }
   }
 
