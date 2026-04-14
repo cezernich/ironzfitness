@@ -152,6 +152,28 @@
     return "";
   }
 
+  // ── Body only (for the standard session-card shell in calendar.js) ─────
+  //
+  // Returns just the visual strip + step tree HTML without any outer
+  // wrapper, header, title, or result badge. Used when the card is
+  // embedded inside the app's standard `.session-card` container so the
+  // card shell, action buttons, and completion flow all match the rest
+  // of the calendar. The standalone dark `.circuit-card` layout is kept
+  // in render() for the builder preview.
+  function renderBody(workout) {
+    if (!workout) return "";
+    const goal = workout.goal || "standard";
+    const goalValue = workout.goal_value;
+    const bodyHtml = (workout.steps || []).map(step => {
+      if (step.kind === "repeat") return _renderRepeat(step, goal, goalValue);
+      return _renderStepRow(step);
+    }).join("");
+    return `
+      ${_renderStrip(workout)}
+      <div class="circuit-body">${bodyHtml}</div>
+    `;
+  }
+
   // ── Full card ───────────────────────────────────────────────────────────
   function render(workout, opts) {
     opts = opts || {};
@@ -198,6 +220,6 @@
   }
 
   if (typeof window !== "undefined") {
-    window.CircuitCard = { render };
+    window.CircuitCard = { render, renderBody };
   }
 })();

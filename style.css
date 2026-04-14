@@ -15139,23 +15139,24 @@ body.auth-visible #bottom-nav { display: none !important; }
   height: 6px;
   border-radius: 3px;
   overflow: hidden;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   gap: 1px;
 }
 .circuit-strip .strip-cardio   { background: #00b4d8; }
-.circuit-strip .strip-exercise { background: #e74c3c; }
-.circuit-strip .strip-rest     { background: #48484a; }
+.circuit-strip .strip-exercise { background: var(--color-accent, #e74c3c); }
+.circuit-strip .strip-rest     { background: var(--color-border); }
 
-/* ── Step rows ──────────────────────────────────────────────────────────── */
+/* ── Step rows (theme-aware so they fit inside the standard session-card
+   shell in the calendar as well as the dark builder preview) ───────────── */
 .circuit-body { padding: 0; }
 .circuit-step-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px 0;
-  border-bottom: 1px solid #3a3a3c;
-  font-size: 15px;
-  color: #fff;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 14px;
+  color: var(--color-text);
 }
 .circuit-step-row:last-child { border-bottom: none; }
 .circuit-step-row .left {
@@ -15165,7 +15166,7 @@ body.auth-visible #bottom-nav { display: none !important; }
   min-width: 0;
 }
 .circuit-step-row .right {
-  color: #8e8e93;
+  color: var(--color-text-muted);
   font-size: 13px;
   flex-shrink: 0;
 }
@@ -15175,13 +15176,14 @@ body.auth-visible #bottom-nav { display: none !important; }
   text-align: center;
 }
 .circuit-step-row--rest .left,
-.circuit-step-row--rest .right { color: #8e8e93; font-style: italic; }
+.circuit-step-row--rest .right { color: var(--color-text-muted); font-style: italic; }
 
-/* ── Repeat block (read-only, inside circuit card) ──────────────────────── */
+/* ── Repeat block (theme-aware) ─────────────────────────────────────────── */
 .circuit-repeat-block {
-  background: #3a3a3c;
-  border-radius: 12px;
-  margin: 8px 0;
+  background: var(--color-surface, rgba(0, 0, 0, 0.03));
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  margin: 10px 0;
   overflow: hidden;
 }
 .circuit-repeat-header {
@@ -15189,12 +15191,13 @@ body.auth-visible #bottom-nav { display: none !important; }
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
-  color: #f39c12;
-  background: #f39c1215;
+  color: var(--color-accent, #f39c12);
+  background: rgba(243, 156, 18, 0.08);
+  border-bottom: 1px solid var(--color-border);
 }
 .circuit-repeat-header-left {
   display: flex;
@@ -15202,19 +15205,59 @@ body.auth-visible #bottom-nav { display: none !important; }
   gap: 8px;
 }
 .repeat-badge {
-  background: #f39c12;
-  color: #000;
+  background: var(--color-accent, #f39c12);
+  color: #fff;
   font-size: 11px;
   font-weight: 800;
   padding: 2px 8px;
   border-radius: 4px;
 }
-.circuit-repeat-children { padding: 4px 14px 8px; }
+.circuit-repeat-children { padding: 2px 14px 6px; }
 .circuit-repeat-children .circuit-step-row {
   padding: 8px 0;
   font-size: 14px;
+  border-bottom-color: var(--color-border);
+}
+
+/* Goal badge inherits text color from theme unless inside the dark preview. */
+.goal-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 6px;
+  margin-top: 4px;
+}
+.goal-badge.goal-for-time { background: rgba(231, 76, 60, 0.15); color: var(--color-accent, #e74c3c); }
+.goal-badge.goal-amrap    { background: rgba(243, 156, 18, 0.15); color: #f39c12; }
+.goal-badge.goal-standard { background: rgba(142, 142, 147, 0.15); color: var(--color-text-muted); }
+
+/* ── Dark preview overrides (used by the builder modal's preview pane) ──
+   Keep the existing dark look exactly where it already exists — the
+   theme-aware defaults above would otherwise bleed through. ───────────── */
+.circuit-preview-wrap .circuit-step-row {
+  color: #fff;
+  border-bottom-color: #3a3a3c;
+}
+.circuit-preview-wrap .circuit-step-row .right {
+  color: #8e8e93;
+}
+.circuit-preview-wrap .circuit-repeat-block {
+  background: #3a3a3c;
+  border: none;
+}
+.circuit-preview-wrap .circuit-repeat-header {
+  background: #f39c1215;
+  border-bottom: none;
+}
+.circuit-preview-wrap .circuit-repeat-children .circuit-step-row {
   border-bottom-color: #48484a;
 }
+.circuit-preview-wrap .goal-badge.goal-for-time { background: #e74c3c33; color: #e74c3c; }
+.circuit-preview-wrap .goal-badge.goal-amrap    { background: #f39c1233; color: #f39c12; }
+.circuit-preview-wrap .goal-badge.goal-standard { background: #8e8e9333; color: #8e8e93; }
 
 /* ── Modal shell (entry/preview/builder/library/completion) ─────────────── */
 .circuit-modal-overlay {

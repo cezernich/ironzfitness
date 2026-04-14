@@ -703,19 +703,59 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
     onclick="event.stopPropagation(); openEditWorkout('${w.id}')">Edit</button>`;
 
   // ── Circuit workout (CrossFit-style) ──────────────────────────────────────
-  if (w.type === "circuit" && w.circuit && typeof window !== "undefined" && window.CircuitCard) {
+  // Uses the standard session-card shell so it matches weightlifting /
+  // running / swim cards — header row with name + subtitle + action
+  // buttons, light theme, and the same Mark as Complete flow. The
+  // circuit-specific strip + step tree renders inside the card body via
+  // CircuitCard.renderBody().
+  if (w.type === "circuit" && w.circuit && typeof window !== "undefined" && window.CircuitCard && window.CircuitCard.renderBody) {
     const circuitForRender = { ...w.circuit, id: w.id, circuit_result: w.circuit_result };
-    const cardHtml = window.CircuitCard.render(circuitForRender, { cardId });
-    const actionBtn = w.circuit_result
-      ? ""
-      : `<button class="circuit-btn circuit-btn-primary" style="margin-top:12px" onclick="event.stopPropagation(); window.CircuitBuilder.openCompletionModal('${w.id}')">Log Time</button>`;
+    const bodyHtml = window.CircuitCard.renderBody(circuitForRender);
+
+    // Subtitle: "Circuit · For Time" / "Circuit · AMRAP · 20 min" / "Circuit"
+    const _cGoal = w.circuit.goal || "standard";
+    const _cGoalValue = w.circuit.goal_value;
+    const _cGoalLabel = _cGoal === "for_time" ? "For Time"
+                      : _cGoal === "amrap"    ? (_cGoalValue ? `AMRAP · ${_cGoalValue} min` : "AMRAP")
+                      : "";
+    const _cSubtitle = _cGoalLabel ? `Circuit · ${_cGoalLabel}` : "Circuit";
+
+    // Duration badge: prefer explicit completion time, then rounds+reps,
+    // then the session duration target.
+    let _cBadge = "";
+    if (w.circuit_result && w.circuit_result.time_sec != null && window.CircuitWorkout && window.CircuitWorkout.formatTime) {
+      _cBadge = `<span class="session-duration-badge">${window.CircuitWorkout.formatTime(w.circuit_result.time_sec)}</span>`;
+    } else if (w.circuit_result && w.circuit_result.rounds != null) {
+      const _extra = w.circuit_result.reps ? ` + ${w.circuit_result.reps}` : "";
+      _cBadge = `<span class="session-duration-badge">${w.circuit_result.rounds} Rds${_extra}</span>`;
+    } else if (w.duration) {
+      _cBadge = `<span class="session-duration-badge">${w.duration} min</span>`;
+    }
+
+    const _cCompletion = buildCompletionSection(cardId, w.type, null, dateStr, w.duration || null);
+    const _cMovePanel  = buildSessionMovePanel(cardId, "logged", w.id, dateStr);
+    const _cMoveBtn    = `<button class="btn-move-session" title="Move / Duplicate" onclick="event.stopPropagation();toggleMovePanel('${cardId}')">⇄</button>`;
+    const _cShareBtn   = _buildShareBtnFromEntry(w);
+    const _cUndoBtn    = _buildUndoHeaderBtn(cardId, dateStr);
+    const _cSessionName = w.circuit.name || "Circuit";
+
     return `
-      <div class="session-card${_logCompleteCls}" id="${cardId}-wrap">
-        <div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:8px">
-          ${delBtn}
+      <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
+        <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
+          <span class="session-icon" style="color:${color}">${icon}</span>
+          <div class="session-meta">
+            <div class="session-name">${escHtml(_cSessionName)}</div>
+            <div class="session-phase">${escHtml(_cSubtitle)}</div>
+          </div>
+          <div class="session-header-right">
+            ${_cBadge}${_cUndoBtn}${_cMoveBtn}${_cShareBtn}${editBtn}${delBtn}<span class="card-chevron">▾</span>
+          </div>
         </div>
-        ${cardHtml}
-        ${actionBtn}
+        <div class="card-body">
+          ${bodyHtml}
+          ${_cMovePanel}
+          ${_cCompletion}
+        </div>
       </div>`;
   }
 
