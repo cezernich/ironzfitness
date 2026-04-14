@@ -802,8 +802,15 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
         reps = 1;
         _dur = iv.duration_min ? `${iv.duration_min} min` : "15 min";
       }
-      // Fix legacy data: if reps > 1 and duration is total minutes, extract per-rep distance or divide
-      if (reps > 1 && /\d+\s*min/.test(_dur)) {
+      // Legacy running data: old exports sometimes stored a segment's
+      // duration as the TOTAL across reps, so we'd extract a per-rep
+      // distance from the details text or divide by reps. New-style
+      // structured intervals (cycling variants, swim steps, etc.) have
+      // a proper per-rep duration and a separate restDuration — never
+      // touch those. Gate by workout type AND the absence of restDuration
+      // so we don't corrupt the new format.
+      const _isLegacyRun = (w.type === "running" || w.type === "run") && !iv.restDuration;
+      if (_isLegacyRun && reps > 1 && /\d+\s*min/.test(_dur)) {
         const dm = (iv.details || "").match(/(\d+)\s*[x×]\s*(\d+)\s*m\b/i);
         if (dm) { _dur = `${dm[2]}m`; }
         else { const t = parseFloat(_dur); if (t > 0) _dur = `${Math.round(t / reps)} min`; }
@@ -6291,30 +6298,24 @@ function _qeBuildCardioWorkout(opts) {
           return 0;
         };
 
-        // Prescribed total for standard interval variants (null means
-        // duration-driven — those always fit).
-        const _variantTotalMin = (v) => {
-          const ms = v.main_set || {};
-          if (ms.type === "continuous" || ms.type === "base_plus_surges") return null;
-          const reps = _pickReps(ms.reps);
-          const repSec = ms.duration_sec || 0;
-          const restSec = ms.rest_sec || 0;
-          const mainSec = reps * repSec + Math.max(0, reps - 1) * restSec;
-          return wuMin + Math.round(mainSec / 60) + cdMin;
-        };
+        // Main-set window = what's left after warmup + cooldown. We no
+        // longer filter variants by whether their prescribed rep count
+        // fits — instead we rescale the rep count to fill this window,
+        // so the generated workout hits the user-selected duration.
+        const targetMainMin = Math.max(1, durMin - wuMin - cdMin);
 
-        // Keep variants that fit; fall back to shortest if nothing fits.
-        const fitting = variants.filter(v => {
-          const t = _variantTotalMin(v);
-          return t === null || t <= durMin;
-        });
-        let pool = fitting;
-        if (!pool.length) {
-          const sorted = variants.slice().sort((a, b) => (_variantTotalMin(a) || 0) - (_variantTotalMin(b) || 0));
-          pool = sorted.slice(0, 1);
-        }
-        const variant = (m.preferredVariant && pool.find(v => v.id === m.preferredVariant))
-          || pool[Math.floor(Math.random() * pool.length)];
+        // Pick any variant — preferred if set, else random. All get
+        // rescaled below.
+        const variant = (m.preferredVariant && variants.find(v => v.id === m.preferredVariant))
+          || variants[Math.floor(Math.random() * variants.length)];
+
+        // Given a rep block (repMin work + restMin rest between reps),
+        // return the rep count that best fills targetMainMin without
+        // overshooting: N*repMin + (N-1)*restMin ≤ targetMainMin.
+        const _fitReps = (repMin, restMin) => {
+          const block = Math.max(1, repMin + restMin);
+          return Math.max(1, Math.floor((targetMainMin + restMin) / block));
+        };
 
         if (variant) {
           // Map a %FTP target (number or [lo, hi]) to the Z-effort label the
@@ -6364,9 +6365,9 @@ function _qeBuildCardioWorkout(opts) {
           } else if (ms.type === "alternation_block") {
             // FTP over-unders — render as one labeled block; the details
             // text carries the alternation pattern.
-            const reps = _pickReps(ms.reps);
             const repMin = Math.max(1, Math.round((ms.duration_sec || 0) / 60));
             const restMin = Math.max(1, Math.round((ms.rest_sec || 180) / 60));
+            const reps = _fitReps(repMin, restMin);
             const blocks = ms.blocks || [];
             const details = blocks.length === 2
               ? `Alternate ${Math.round((blocks[0].duration_sec || 60))}s @ ${Math.round((blocks[0].power_target_pct_ftp || 1.05) * 100)}% FTP / ${Math.round((blocks[1].duration_sec || 60))}s @ ${Math.round((blocks[1].power_target_pct_ftp || 0.95) * 100)}% FTP`
@@ -6381,9 +6382,9 @@ function _qeBuildCardioWorkout(opts) {
               restEffort: "Z1",
             });
           } else if (ms.type === "progression") {
-            const reps = _pickReps(ms.reps);
             const repMin = Math.max(1, Math.round((ms.duration_sec || 0) / 60));
             const restMin = Math.max(1, Math.round((ms.rest_sec || 180) / 60));
+            const reps = _fitReps(repMin, restMin);
             const eff = _effortForPct(ms.end_pct_ftp || 1.15);
             bikeIntervals.push({
               name: variant.name,
@@ -6396,9 +6397,13 @@ function _qeBuildCardioWorkout(opts) {
             });
           } else {
             // Standard interval block: reps × duration_sec at power_target_pct_ftp.
-            const reps = _pickReps(ms.reps);
+            // Rep count scales with the user's selected duration (_fitReps)
+            // rather than the variant's prescribed count, so a 60-min sweet
+            // spot session actually fills 60 minutes instead of falling back
+            // to the variant's fixed 3–4 reps.
             const repMin = Math.max(1, Math.round((ms.duration_sec || 0) / 60));
             const restMin = Math.max(1, Math.round((ms.rest_sec || 180) / 60));
+            const reps = _fitReps(repMin, restMin);
             const eff = _effortForPct(ms.power_target_pct_ftp);
             bikeIntervals.push({
               name: variant.name,

@@ -1135,11 +1135,35 @@ function loadTrainingZones(sport) {
 function saveTrainingZonesData(sport, data) {
   let all = {};
   try { all = JSON.parse(localStorage.getItem("trainingZones")) || {}; } catch {}
-  all[sport] = data;
-  localStorage.setItem("trainingZones", JSON.stringify(all)); if (typeof DB !== 'undefined') DB.syncKey('trainingZones');
+  // Stamp lastUpdated so the 90-day staleness banner in threshold-reminders.js
+  // knows this sport was just refreshed. Previously only `calculatedAt` was
+  // set here, which the staleness check doesn't read — so even a 5-minute-
+  // old FTP was reported as "last updated a while ago".
+  const nowIso = new Date().toISOString();
+  const stamped = { ...data, lastUpdated: nowIso };
+  all[sport] = stamped;
+  localStorage.setItem("trainingZones", JSON.stringify(all));
+  if (typeof DB !== 'undefined') DB.syncKey('trainingZones');
+
+  // Mirror the stamp onto the profile's per-sport field so the reminder's
+  // primary candidate (profile.*Updated) is populated too.
+  try {
+    const profile = JSON.parse(localStorage.getItem("profile") || "{}");
+    const profileField = {
+      biking: "ftpUpdated",
+      running: "thresholdPaceUpdated",
+      swimming: "cssTimeUpdated",
+      strength: "strengthThresholdUpdatedAt",
+    }[sport];
+    if (profileField) {
+      profile[profileField] = nowIso;
+      localStorage.setItem("profile", JSON.stringify(profile));
+      if (typeof DB !== 'undefined') DB.syncKey('profile');
+    }
+  } catch {}
 
   // Append to zone history
-  _appendZoneHistory(sport, data);
+  _appendZoneHistory(sport, stamped);
 }
 
 function _appendZoneHistory(sport, data) {

@@ -55,25 +55,31 @@
   // For a given sport, return the most recent "last updated" timestamp we
   // can find. We check, in order:
   //   1. profile.*Updated (the dedicated fields from the spec)
-  //   2. trainingZones.<sport>.lastUpdated (the existing settings save timestamp)
-  //   3. profile.last_test.recorded_at if profile.last_test.sport matches
+  //   2. trainingZones.<sport>.lastUpdated (the save-form timestamp)
+  //   3. trainingZones.<sport>.calculatedAt (fallback — set by older save
+  //      paths that didn't stamp lastUpdated; keeps the banner quiet for
+  //      users whose zones were saved before the lastUpdated fix landed)
+  //   4. profile.last_test.recorded_at if profile.last_test.sport matches
   function _lastUpdatedFor(sport, profile, zones) {
     const candidates = [];
     if (sport === "swim") {
       if (profile.cssTimeUpdated) candidates.push(profile.cssTimeUpdated);
       if (zones.swimming && zones.swimming.lastUpdated) candidates.push(zones.swimming.lastUpdated);
+      if (zones.swimming && zones.swimming.calculatedAt) candidates.push(zones.swimming.calculatedAt);
       if (profile.last_test && profile.last_test.sport === "swim" && profile.last_test.recorded_at) {
         candidates.push(profile.last_test.recorded_at);
       }
     } else if (sport === "cycling") {
       if (profile.ftpUpdated) candidates.push(profile.ftpUpdated);
       if (zones.biking && zones.biking.lastUpdated) candidates.push(zones.biking.lastUpdated);
+      if (zones.biking && zones.biking.calculatedAt) candidates.push(zones.biking.calculatedAt);
       if (profile.last_test && profile.last_test.sport === "cycling" && profile.last_test.recorded_at) {
         candidates.push(profile.last_test.recorded_at);
       }
     } else if (sport === "running") {
       if (profile.thresholdPaceUpdated) candidates.push(profile.thresholdPaceUpdated);
       if (zones.running && zones.running.lastUpdated) candidates.push(zones.running.lastUpdated);
+      if (zones.running && zones.running.calculatedAt) candidates.push(zones.running.calculatedAt);
       if (profile.last_test && profile.last_test.sport === "running" && profile.last_test.recorded_at) {
         candidates.push(profile.last_test.recorded_at);
       }
