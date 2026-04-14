@@ -231,8 +231,11 @@
         const key = btn.dataset.inboxPreviewToggle;
         const body = document.getElementById("inbox-preview-" + key);
         if (!body) return;
-        const isHidden = body.style.display === "none" || !body.style.display;
-        body.style.display = isHidden ? "" : "none";
+        // Only treat "none" as hidden — the empty-string fallback made
+        // every click after the first re-open the panel instead of
+        // alternating show/hide. Set explicit "block" on expand.
+        const isHidden = body.style.display === "none";
+        body.style.display = isHidden ? "block" : "none";
         btn.textContent = isHidden ? "Hide details \u25b4" : "Show details \u25be";
       });
     });

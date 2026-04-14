@@ -1014,9 +1014,11 @@ function cpTogglePerSet(id) {
   const detail = document.getElementById(`cp-pyr-${id}`);
   const toggle = document.getElementById(`cp-pyr-toggle-${id}`);
   if (!detail || !toggle) return;
-  const isHidden = detail.style.display === "none" || !detail.style.display;
+  // Only treat "none" as hidden; set explicit "block" on expand so the
+  // next toggle reliably falls into the collapse branch.
+  const isHidden = detail.style.display === "none";
   if (isHidden) {
-    detail.style.display = "";
+    detail.style.display = "block";
     toggle.textContent = "Collapse ▴";
     cpPyramidSetsChanged(id);
   } else {

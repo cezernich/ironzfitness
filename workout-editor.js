@@ -304,11 +304,12 @@ function editTogglePerSet(rowId) {
   const detailsEl = document.getElementById(`edit-sd-${rowId}`);
   const toggle = document.getElementById(`edit-pyr-toggle-${rowId}`);
   if (!detailsEl || !toggle) return;
-  const isHidden = detailsEl.style.display === "none" || !detailsEl.style.display;
+  // Only treat "none" as hidden; set explicit "block" on expand so the
+  // next toggle reliably falls into the collapse branch.
+  const isHidden = detailsEl.style.display === "none";
   if (isHidden) {
-    detailsEl.style.display = "";
+    detailsEl.style.display = "block";
     toggle.textContent = "Collapse ▴";
-    // Build rows from current defaults if the panel is empty
     if (!detailsEl.querySelector(".edit-set-row")) {
       editSetCountChanged(rowId);
     }

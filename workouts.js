@@ -1557,9 +1557,14 @@ function exTogglePerSet(btn) {
   const detail = row.querySelector(".ex-pyramid-detail");
   const toggle = row.querySelector(".ex-row-customize-toggle");
   if (!detail || !toggle) return;
-  const isHidden = detail.style.display === "none" || !detail.style.display;
+  // Only treat an explicit "none" as hidden. Expanding used to clear
+  // display to "" which the old falsy check misread as hidden — every
+  // click after the first re-ran the expand branch and Collapse was
+  // a no-op. Set an explicit "block" on expand so the state is always
+  // unambiguous.
+  const isHidden = detail.style.display === "none";
   if (isHidden) {
-    detail.style.display = "";
+    detail.style.display = "block";
     toggle.textContent = "Collapse ▴";
     exPyramidSetsChanged(row.querySelector(".ex-sets"));
   } else {
