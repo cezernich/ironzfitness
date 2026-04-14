@@ -15,14 +15,16 @@ const ICONS = {
   activity:    _i(`<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>`),
   flame:       _i(`<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/>`),
   zap:         _i(`<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>`),
-  // Per-discipline icons (replacements for the 7 that were duplicated or
-  // unclear — see ICON_REPLACEMENTS.md):
-  bodyweight:  _i(`<circle cx="7" cy="7" r="1.5"/><path d="M5 12h10l2 5"/><path d="M5 12l-2 5"/><path d="M5 12V9.5l5-1.5"/><path d="M15 12V9l-5-1"/>`),
-  brick:       _i(`<path d="M8 3l4 4-4 4"/><path d="M4 7h12"/><path d="M16 21l-4-4 4-4"/><path d="M20 17H8"/>`),
-  circuit:     _i(`<path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v9h-9"/>`),
-  rowing:      _i(`<circle cx="8" cy="8" r="1.5"/><path d="M3 19h18"/><path d="M6 19v-4l4-3 4 1"/><path d="M10 12l3-4"/><path d="M14 13h4"/>`),
-  sauna:       _i(`<path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0z"/><path d="M18 4c0 1-1 2 0 3s1 2 0 3"/><path d="M21 4c0 1-1 2 0 3s1 2 0 3"/>`),
-  medal:       _i(`<circle cx="12" cy="14" r="5"/><path d="M12 9V2"/><path d="M8 2h8"/><path d="M12 14l2-2"/>`),
+  // Per-discipline icons — official Lucide paths (lucide.dev):
+  //   bodyweight → person-standing
+  //   brick      → arrow-right-left
+  //   circuit    → repeat
+  //   rowing     → ship
+  //   hyrox uses ICONS.trophy, sauna uses ICONS.thermometer — no aliases here.
+  bodyweight:  _i(`<circle cx="12" cy="5" r="1"/><path d="m9 20 3-6 3 6"/><path d="m6 8 6 2 6-2"/><path d="M12 10v4"/>`),
+  brick:       _i(`<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>`),
+  circuit:     _i(`<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>`),
+  rowing:      _i(`<path d="M12 10.189V14"/><path d="M12 2v3"/><path d="M19 13V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6"/><path d="M19.38 20A11.6 11.6 0 0 0 21 14l-8.188-3.639a2 2 0 0 0-1.624 0L3 14a11.6 11.6 0 0 0 2.81 7.76"/><path d="M2 21c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1s1.2 1 2.5 1c2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/>`),
 
   // Race / goals
   flag:        _i(`<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>`),
@@ -39,7 +41,7 @@ const ICONS = {
   moon:        _i(`<path d="M12 3a6.364 6.364 0 0 0 9 9 9 9 0 1 1-9-9z"/>`),
   lightbulb:   _i(`<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>`),
   alertCircle: _i(`<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>`),
-  thermometer: _i(`<path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>`),
+  thermometer: _i(`<path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/>`),
   plane:       _i(`<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>`),
   clock:       _i(`<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`),
 

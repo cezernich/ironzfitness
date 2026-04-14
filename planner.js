@@ -3321,11 +3321,11 @@ const DISCIPLINE_ICONS = {
   triathlon:    ICONS.swim,
   general:      ICONS.activity,
   hiit:         ICONS.flame || ICONS.zap,
-  hyrox:        ICONS.medal,
+  hyrox:        ICONS.trophy,
   hyroxStrength:ICONS.weights,
   yoga:         ICONS.yoga,
   rowing:       ICONS.rowing,
-  sauna:        ICONS.sauna,
+  sauna:        ICONS.thermometer,
   stairstepper: ICONS.steps,
   wellness:     ICONS.droplet,
 };
