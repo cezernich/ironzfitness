@@ -418,7 +418,11 @@ function renderHydrationContext(breakdown) {
   if (!el) return;
   if (breakdown.bonusOz > 0) {
     el.style.display = "";
-    el.innerHTML = `<span class="hydration-transparency-note">${typeof ICONS !== "undefined" ? ICONS.lightbulb : ""} Target is ${breakdown.totalOz}oz today (+${breakdown.bonusOz}oz for your ${escHtml(breakdown.reason ? breakdown.reason.split("for your ").pop() : "workout")}).</span>`;
+    // Unambiguous phrasing: show base → total so the user can see the
+    // bonus has already been added. The old "Target is 133oz today (+16oz
+    // for your Long Run)" read as "target WAS 133, adding 16 now".
+    const who = escHtml(breakdown.reason ? breakdown.reason.split("for your ").pop() : "workout");
+    el.innerHTML = `<span class="hydration-transparency-note">${typeof ICONS !== "undefined" ? ICONS.lightbulb : ""} Today's target: ${breakdown.totalOz}oz &mdash; ${breakdown.baseOz}oz base + ${breakdown.bonusOz}oz for your ${who}.</span>`;
   } else {
     // Suppress the base-target note on rest days — it takes up a line of
     // vertical space with information the user has already seen.
