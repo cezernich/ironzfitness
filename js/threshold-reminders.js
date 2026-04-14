@@ -185,23 +185,39 @@
     document.querySelectorAll(`[data-threshold-reminder="${sport}"]`).forEach(el => el.remove());
   }
 
-  function openSettings() {
-    // Nudge the user to Settings → Training Zones. Different parts of the
-    // app expose this differently, so we try a few common hooks.
+  // Sport key in this module ("swim"/"cycling"/"running"/"strength") maps to
+  // the zones module's sport key ("swimming"/"biking"/"running"/"strength").
+  const ZONES_SPORT_MAP = {
+    swim: "swimming",
+    cycling: "biking",
+    running: "running",
+    strength: "strength",
+  };
+
+  function openSettings(sport) {
+    // Close the quick-entry wizard if it's open — the banner lives inside
+    // that modal, and leaving it mounted blocks the Training tab underneath.
+    try { if (typeof closeQuickEntry === "function") closeQuickEntry(); } catch {}
+
     try {
-      if (typeof showTab === "function") showTab("settings");
+      if (typeof showTab === "function") showTab("training");
     } catch {}
+
     setTimeout(() => {
-      const section = document.getElementById("section-training-zones")
-        || document.getElementById("training-zones-section")
-        || document.querySelector("[data-section='training-zones']");
+      const section = document.getElementById("section-running-zones");
+      if (section) {
+        section.classList.remove("is-collapsed");
+      }
+      // Switch the zones tab to the requested sport and open the update form.
+      const zonesSport = ZONES_SPORT_MAP[sport];
+      if (zonesSport && typeof selectZonesSport === "function") {
+        try { selectZonesSport(zonesSport); } catch {}
+      }
+      if (typeof openUpdateZonesForm === "function") {
+        try { openUpdateZonesForm(); } catch {}
+      }
       if (section) {
         section.scrollIntoView({ behavior: "smooth", block: "start" });
-        section.classList.add("is-highlighted");
-        setTimeout(() => section.classList.remove("is-highlighted"), 2000);
-      } else {
-        // Fallback — just open the profile tab.
-        try { if (typeof showTab === "function") showTab("profile"); } catch {}
       }
     }, 80);
   }
@@ -219,7 +235,7 @@
       const updateBtn = e.target.closest && e.target.closest("[data-threshold-update]");
       if (updateBtn) {
         e.stopPropagation();
-        openSettings();
+        openSettings(updateBtn.dataset.thresholdUpdate);
         return;
       }
     });
