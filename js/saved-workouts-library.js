@@ -702,11 +702,14 @@
       list.push(row);
       count++;
     }
-    if (count > 0) {
-      _writeLocal(list);
-      localStorage.removeItem(OLD_KEY);
-      if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey(OLD_KEY);
-    }
+    if (count > 0) _writeLocal(list);
+    // Always drop the legacy key once the loop has inspected every row —
+    // entries were either migrated this run or in a previous run, and any
+    // future writes from legacy paths will reintroduce + re-migrate it.
+    // Leaving it in place lets stale rows resurface in pickers that still
+    // read the old key.
+    localStorage.removeItem(OLD_KEY);
+    if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey(OLD_KEY);
     return count;
   }
 

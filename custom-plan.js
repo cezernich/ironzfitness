@@ -822,28 +822,43 @@ Include 5-8 exercises or 3-6 intervals. Match the user-requested duration — su
 }
 
 // ── From Saved Workouts ───────────────────────────────────────────────────────
+// Reads from SavedWorkoutsLibrary — the same source as the Saved tab — so the
+// picker can't disagree with what the user sees in the library. The old path
+// read legacy `savedWorkouts` localStorage directly, which kept surfacing
+// already-migrated rows.
 
-function customPlanAddSaved(dow) {
-  const saved = typeof loadSavedWorkouts === "function" ? loadSavedWorkouts() : [];
+async function customPlanAddSaved(dow) {
+  const Saved = (typeof window !== "undefined") ? window.SavedWorkoutsLibrary : null;
+  const saved = (Saved && typeof Saved.listSaved === "function")
+    ? await Saved.listSaved()
+    : [];
+  const modal = document.getElementById("cp-saved-modal");
+  if (!modal) return;
+
   if (saved.length === 0) {
     const contentEl = document.getElementById(`custom-day-${dow}-content`);
-    if (contentEl) contentEl.innerHTML = '<p class="empty-msg">No saved workouts yet. Save workouts from your history first.</p>';
+    if (contentEl) contentEl.innerHTML = '<p class="empty-msg">No saved workouts yet. Save workouts from the library or your history first.</p>';
     return;
   }
 
-  const modal = document.getElementById("cp-saved-modal");
-  if (!modal) return;
   modal.classList.add("is-open");
   modal.dataset.dow = dow;
+  // Cache on the modal so the select handler can read synchronously without
+  // another async round-trip (and without index drift if listSaved changes).
+  modal._savedCache = saved;
 
   const list = document.getElementById("cp-saved-list");
   if (list) {
-    list.innerHTML = saved.map((sw, i) => `
-      <button class="cp-saved-item" onclick="customPlanSelectSaved(${dow}, ${i})">
-        <span class="cp-saved-name">${_cpEsc(sw.name || "Untitled")}</span>
-        <span class="cp-saved-type">${sw.type || "general"}</span>
-      </button>
-    `).join("");
+    list.innerHTML = saved.map((sw, i) => {
+      const name = sw.custom_name || "Untitled";
+      const kind = sw.workout_kind || sw.sport_id || "general";
+      return `
+        <button class="cp-saved-item" onclick="customPlanSelectSaved(${dow}, ${i})">
+          <span class="cp-saved-name">${_cpEsc(name)}</span>
+          <span class="cp-saved-type">${_cpEsc(kind)}</span>
+        </button>
+      `;
+    }).join("");
   }
 }
 
@@ -853,18 +868,30 @@ function closeCustomPlanSavedModal() {
 }
 
 function customPlanSelectSaved(dow, index) {
-  closeCustomPlanSavedModal();
-  const saved = typeof loadSavedWorkouts === "function" ? loadSavedWorkouts() : [];
+  const modal = document.getElementById("cp-saved-modal");
+  const saved = (modal && modal._savedCache) || [];
   const sw = saved[index];
+  closeCustomPlanSavedModal();
   if (!sw) return;
 
+  // Translate the unified-library row shape into the legacy session data
+  // shape that _cpAddSession and _cpRenderDayEntry still consume.
+  const payload = sw.payload || {};
   _cpAddSession(dow, {
     id: _cpGenId(),
     mode: "saved",
     data: {
-      ...sw,
-      sessionName: sw.name || "Saved Workout",
-    }
+      id: sw.id,
+      name: sw.custom_name || "Saved Workout",
+      sessionName: sw.custom_name || "Saved Workout",
+      type: sw.workout_kind || sw.sport_id || "general",
+      exercises: payload.exercises || null,
+      intervals: payload.intervals || null,
+      segments: payload.segments || null,
+      hiitMeta: payload.hiitMeta || null,
+      notes: payload.notes || null,
+      duration: payload.duration || null,
+    },
   });
   _cpRerenderDay(dow);
 }
