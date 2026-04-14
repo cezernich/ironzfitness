@@ -201,6 +201,34 @@
       tip: "Velcro-mount on top tube. Faster than reaching into jersey pockets while riding." },
   ];
 
+  // Bike selection advice varies sharply by race distance — a TT bike is
+  // overkill for sprint but the single biggest equipment decision for full
+  // Ironman. Source: philosophy/IRONZ_KNOWLEDGE_BASE.md §2 "Bike Selection
+  // by Race Distance". Applied in defaultItemsForDistance() to override the
+  // generic bike-bike catalog entry with per-distance guidance.
+  const BIKE_ADVICE_BY_DISTANCE = {
+    sprint: {
+      name: "Road bike",
+      why: "30–45 min on the bike. Comfort, handling, and fast transitions matter more than aerodynamics. A TT bike is overkill for sprint racing.",
+      tip: "Any road bike works. Borrow or buy used for your first tri. A proper bike fit ($150–250) matters more than the frame.",
+    },
+    olympic: {
+      name: "Road or TT bike",
+      why: "60–90 min on the bike. Either works — road bike gives training versatility, TT bike gives a small race-day edge. Use what you have.",
+      tip: "Clip-on aero bars on a road bike get you 80% of the TT benefit at a fraction of the cost.",
+    },
+    half: {
+      name: "TT bike (recommended)",
+      why: "2.5–3.5 hours on the bike. Aero position typically saves 10–20 min vs. a road bike at the same effort. This is where a TT bike starts paying for itself.",
+      tip: "If you can't swing a TT bike, clip-on aero bars + a proper fit is a solid intermediate step.",
+    },
+    full: {
+      name: "TT bike (strongly recommended)",
+      why: "5–7 hours on the bike. Aero savings compound — often 30–60+ min vs. a road bike at the same effort. Single biggest equipment decision for Ironman.",
+      tip: "Invest in a proper bike fit first, then the bike. A well-fitted mid-range TT beats a poorly-fitted superbike.",
+    },
+  };
+
   const CATEGORY_ORDER = ["swim", "bike", "run", "transition", "nutrition"];
   const CATEGORY_LABELS = {
     swim: "Swim", bike: "Bike", run: "Run",
@@ -254,7 +282,7 @@
   function defaultItemsForDistance(distance) {
     const d = String(distance || "full").toLowerCase();
     // Deep-copy items so per-race state mutations don't leak into the catalog
-    return CATALOG
+    const items = CATALOG
       .filter(it => it.applies.indexOf(d) !== -1)
       .map(it => ({
         id: it.id,
@@ -266,6 +294,19 @@
         checked: false,
         removed: false,
       }));
+
+    // Override the generic bike entry with distance-specific guidance.
+    const bikeAdvice = BIKE_ADVICE_BY_DISTANCE[d];
+    if (bikeAdvice) {
+      const bike = items.find(i => i.id === "bike-bike");
+      if (bike) {
+        bike.name = bikeAdvice.name;
+        bike.why = bikeAdvice.why;
+        bike.tip = bikeAdvice.tip;
+      }
+    }
+
+    return items;
   }
 
   // ── Storage ────────────────────────────────────────────────────────────
