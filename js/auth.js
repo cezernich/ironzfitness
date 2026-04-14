@@ -360,6 +360,10 @@ async function authBoot() {
     if (typeof window.Sentry !== 'undefined' && window.Sentry.setUser) {
       try { window.Sentry.setUser({ id: session.user.id, email: session.user.email }); } catch {}
     }
+    // Wipe any stale cache from a previous user on this device BEFORE
+    // any migration or refresh runs — otherwise stale data gets pushed
+    // under the new user id.
+    try { DB.handleUserContext(session.user.id); } catch (e) { console.warn('Auth: handleUserContext error', e); }
     try { await ensureProfile(session.user); } catch (e) { console.warn('Auth: ensureProfile error', e); }
     try { await DB.migrateLocalStorage(); } catch (e) { console.warn('Auth: migration error', e); }
     // Pull all data from Supabase before initializing UI
@@ -391,6 +395,9 @@ async function authBoot() {
       if (typeof window.Sentry !== 'undefined' && window.Sentry.setUser) {
         try { window.Sentry.setUser({ id: session.user.id, email: session.user.email }); } catch {}
       }
+      // Wipe any stale cache from a previous user on this device before
+      // anything reads or writes per-user localStorage.
+      try { DB.handleUserContext(session.user.id); } catch (e) { console.warn('Auth: handleUserContext error', e); }
       try { await ensureProfile(session.user); } catch (e) { console.warn('Auth: ensureProfile error', e); }
       try { await DB.migrateLocalStorage(); } catch (e) { console.warn('Auth: migration error', e); }
       try { await DB.refreshAllKeys(); } catch (e) { console.warn('Auth: refreshAllKeys error', e); }
@@ -420,6 +427,12 @@ async function authBoot() {
       if (typeof window.Sentry !== 'undefined' && window.Sentry.setUser) {
         try { window.Sentry.setUser(null); } catch {}
       }
+      // Nuke every per-user key from localStorage so the next user to
+      // sign in on this device starts clean. Without this the next user
+      // sees the previous user's workouts, profile, meals, etc. — and
+      // worse, their first interaction upserts that stale data under
+      // their own user id.
+      try { DB.clearLocalUserData(); } catch (e) { console.warn('Auth: clearLocalUserData error', e); }
       window._appInitialized = false;
       showAuthScreen();
     }

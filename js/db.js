@@ -385,6 +385,60 @@ const DB = (() => {
     _keyTimers[lsKey] = setTimeout(() => _doSyncKey(lsKey), delay);
   }
 
+  // ── User isolation — wipe local cache on sign-out / user switch ──────────
+  //
+  // localStorage is a DEVICE cache. When a different user signs in on the
+  // same device — or the current user signs out — every per-user key must
+  // be cleared, otherwise the next signed-in user sees stale data and
+  // (much worse) the app's sync paths will upsert that stale data under
+  // the NEW user's id, permanently corrupting their account.
+  //
+  // Instead of enumerating every per-user key (guaranteed to drift as
+  // features are added), we wipe everything EXCEPT an explicit allowlist
+  // of global keys + Supabase's own auth-token keys (prefixed "sb-").
+
+  const PRESERVE_ON_USER_SWITCH = new Set([
+    // Reference-data caches — same for every user, safe to keep
+    'philosophy_modules_cache',
+    'philosophy_modules_cache_at',
+    'exerciseLibrary_cache',
+    // Global analytics / diagnostics — not user-scoped
+    'philosophy_gaps',
+    'ironz_debug',
+  ]);
+
+  function clearLocalUserData() {
+    const toRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      if (PRESERVE_ON_USER_SWITCH.has(k)) continue;
+      // Leave Supabase's own auth storage alone — wiping it kills the session
+      if (k.startsWith('sb-') || k.startsWith('supabase.')) continue;
+      toRemove.push(k);
+    }
+    for (const k of toRemove) {
+      try { localStorage.removeItem(k); } catch {}
+    }
+    console.log(`DB: cleared ${toRemove.length} local keys on user switch`);
+  }
+
+  // Detect a user switch (or first-ever sign-in) by comparing the current
+  // session's user id against the one stamped into localStorage by the
+  // previous signed-in session. If they differ, wipe first — otherwise the
+  // new user inherits the previous user's cached data.
+  //
+  // Called from auth.js before migrateLocalStorage / refreshAllKeys.
+  function handleUserContext(currentUid) {
+    if (!currentUid) return;
+    const prev = localStorage.getItem('ironz_last_user_id');
+    if (prev && prev !== currentUid) {
+      console.warn(`DB: user switch detected (${prev} → ${currentUid}) — clearing local cache`);
+      clearLocalUserData();
+    }
+    try { localStorage.setItem('ironz_last_user_id', currentUid); } catch {}
+  }
+
   // Pull all user_data rows from Supabase and populate localStorage cache
   async function refreshAllKeys() {
     const uid = await _userId();
@@ -790,6 +844,8 @@ const DB = (() => {
     refreshAllTables,
     SYNCED_KEYS,
     migrateLocalStorage,
+    clearLocalUserData,
+    handleUserContext,
     _isOnline,
     _userId,
   };
