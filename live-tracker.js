@@ -15,12 +15,247 @@ function _setLivePref(key, val) {
   localStorage.setItem("liveTrackerPrefs", JSON.stringify(p));
 }
 
+// ── Step building from workout data ──────────────────────────────────────
+//
+// For cardio / swim / circuit workouts, translate whatever the workout
+// stored in localStorage into the flat step list the endurance view
+// consumes: { type, zone, duration, label, reps?, rest? }
+//
+// type is one of "warmup" | "main" | "cooldown" | ""
+// zone is an int 1-6 for styling (defaults to 2)
+// duration is a number in minutes
+// label is the user-facing phase name
+// reps / rest are optional extras used for "8 × 400m" type lines
+
+function _findWorkoutBySessionId(sessionId) {
+  try {
+    if (!sessionId) return null;
+    if (sessionId.startsWith("session-sw-")) {
+      const rawId = sessionId.slice("session-sw-".length);
+      const list = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
+      return list.find(w => String(w.id) === rawId) || null;
+    }
+    if (sessionId.startsWith("session-log-")) {
+      const rawId = sessionId.slice("session-log-".length);
+      const list = JSON.parse(localStorage.getItem("workouts") || "[]");
+      return list.find(w => String(w.id) === rawId) || null;
+    }
+    if (sessionId.startsWith("session-plan-")) {
+      const rest = sessionId.slice("session-plan-".length);
+      const dashIdx = rest.indexOf("-", 11);
+      const planDate = dashIdx > 0 ? rest.slice(0, dashIdx) : rest;
+      const raceId = dashIdx > 0 ? rest.slice(dashIdx + 1) : "";
+      const plan = (typeof loadTrainingPlan === "function" ? loadTrainingPlan() : []);
+      return plan.find(p => p.date === planDate && String(p.raceId) === raceId) || null;
+    }
+  } catch (e) {
+    console.warn("[live-tracker] workout lookup failed:", e);
+  }
+  return null;
+}
+
+function _zoneNumFromString(z) {
+  const s = String(z || "").toLowerCase().trim();
+  const m = s.match(/^z(\d)/);
+  if (m) return parseInt(m[1], 10);
+  if (/easy|recovery|warm|cool/.test(s)) return 1;
+  if (/aerobic|steady|moderate/.test(s)) return 2;
+  if (/tempo|sweet/.test(s)) return 3;
+  if (/threshold|hard/.test(s)) return 4;
+  if (/vo2|sprint|max/.test(s)) return 5;
+  return 2;
+}
+
+function _phaseType(name) {
+  const n = String(name || "").toLowerCase();
+  if (/warm|wu\b/.test(n)) return "warmup";
+  if (/cool|cd\b/.test(n)) return "cooldown";
+  return "main";
+}
+
+function _parseMinutes(str) {
+  const s = String(str || "");
+  const m = s.match(/([\d.]+)/);
+  if (!m) return 0;
+  const v = parseFloat(m[1]);
+  return /sec/i.test(s) ? v / 60 : v;
+}
+
+// Running / cycling — convert aiSession.intervals or top-level phases
+// into the flat step list.
+function _buildCardioSteps(workout) {
+  if (!workout) return [];
+  const out = [];
+
+  // Prefer aiSession.intervals (what the calendar renders from).
+  const ai = workout.aiSession || {};
+  const intervals = Array.isArray(ai.intervals) && ai.intervals.length ? ai.intervals
+                  : Array.isArray(workout.intervals) && workout.intervals.length ? workout.intervals
+                  : null;
+
+  if (intervals) {
+    intervals.forEach(iv => {
+      const name = iv.name || "Interval";
+      const dur = _parseMinutes(iv.duration || iv.duration_min);
+      const reps = parseInt(iv.reps, 10) || 0;
+      const rest = iv.restDuration ? _parseMinutes(iv.restDuration) : 0;
+      out.push({
+        type: _phaseType(name),
+        zone: _zoneNumFromString(iv.effort || iv.intensity || iv.zone),
+        duration: dur || 1,
+        label: name,
+        ...(reps > 1 ? { reps } : {}),
+        ...(rest > 0 ? { rest } : {}),
+      });
+    });
+    return out;
+  }
+
+  // Fallback: top-level phases array from the running generator
+  const phases = Array.isArray(workout.phases) ? workout.phases : [];
+  phases.forEach(p => {
+    const name = p.phase ? p.phase.replace(/_/g, " ") : "Interval";
+    const dur = p.duration_min || _parseMinutes(p.duration);
+    out.push({
+      type: _phaseType(p.phase),
+      zone: _zoneNumFromString(p.intensity),
+      duration: dur || 1,
+      label: p.instruction || p.target || name,
+    });
+  });
+  return out;
+}
+
+// Swimming — walk the canonical step tree and emit one step per interval.
+// Rest steps are attached as the .rest field on the preceding interval so
+// the endurance view's "(Ns rest)" suffix works. Repeat blocks expand
+// with a "rep N of M" label so the user can tick each round.
+function _buildSwimSteps(workout) {
+  if (!workout) return [];
+  const ai = workout.aiSession || {};
+  const tree = Array.isArray(ai.steps) ? ai.steps
+             : Array.isArray(workout.steps) ? workout.steps
+             : null;
+  if (!tree || !tree.length) return [];
+  const out = [];
+  function walk(nodes, repeatPrefix) {
+    for (let i = 0; i < nodes.length; i++) {
+      const s = nodes[i];
+      if (!s) continue;
+      if (s.kind === "interval") {
+        const dist = s.distance_m ? `${s.distance_m}m` : "";
+        const stroke = s.stroke && s.stroke !== "freestyle" ? ` ${s.stroke}` : "";
+        const pace = s.pace_target ? ` @ ${s.pace_target}` : "";
+        const nameBase = s.name || "Swim";
+        const fullLabel = `${repeatPrefix || ""}${nameBase}${dist ? ` — ${dist}${stroke}` : ""}${pace}`;
+        // Look ahead: if the next sibling is a rest node, attach its seconds.
+        const next = nodes[i + 1];
+        const restMin = (next && next.kind === "rest" && next.duration_sec)
+          ? next.duration_sec / 60
+          : 0;
+        // Rough duration estimate: 2:00/100m pace by default so the timer
+        // has something sensible to compare against.
+        const estMin = s.distance_m ? Math.max(0.5, s.distance_m / 100 * 2) : 1;
+        out.push({
+          type: _phaseType(nameBase),
+          zone: 2,
+          duration: Math.round(estMin * 10) / 10,
+          label: fullLabel,
+          ...(restMin > 0 ? { rest: Math.round(restMin * 10) / 10 } : {}),
+        });
+      } else if (s.kind === "repeat") {
+        const count = Math.max(1, parseInt(s.count, 10) || 1);
+        for (let r = 0; r < count; r++) {
+          walk(s.children || [], `${repeatPrefix || ""}(Rep ${r + 1}/${count}) `);
+        }
+      }
+      // rest nodes are consumed by the look-ahead above — no direct push.
+    }
+  }
+  walk(tree, "");
+  return out;
+}
+
+// Circuit — flatten the step tree into ordered steps. Repeat blocks are
+// unrolled so each round is its own trackable step. Rest nodes become
+// their own step (unlike swim where they attach to the preceding interval).
+function _buildCircuitSteps(workout) {
+  if (!workout) return [];
+  const circuit = workout.circuit || workout;
+  const tree = Array.isArray(circuit.steps) ? circuit.steps : null;
+  if (!tree || !tree.length) return [];
+  const out = [];
+  function walk(nodes, roundPrefix) {
+    nodes.forEach(s => {
+      if (!s) return;
+      if (s.kind === "rest") {
+        const sec = s.duration_sec || 0;
+        out.push({
+          type: "main",
+          zone: 1,
+          duration: sec / 60,
+          label: `${roundPrefix || ""}Rest ${sec}s`,
+        });
+        return;
+      }
+      if (s.kind === "repeat") {
+        const count = Math.max(1, parseInt(s.count, 10) || 1);
+        for (let r = 0; r < count; r++) {
+          walk(s.children || [], `${roundPrefix || ""}Round ${r + 1}/${count} — `);
+        }
+        return;
+      }
+      // exercise / cardio
+      const name = s.name || "Step";
+      const parts = [];
+      if (s.reps != null) parts.push(s.per_side ? `${s.reps}/side` : `${s.reps} reps`);
+      if (s.distance_display) parts.push(s.distance_display);
+      else if (s.distance_m) parts.push(`${s.distance_m}m`);
+      if (s.weight != null) parts.push(`${s.weight} ${s.weight_unit || "lbs"}`);
+      const detail = parts.length ? ` — ${parts.join(" · ")}` : "";
+      // Rough minute estimate — 20s per rep default, or distance/pace for cardio
+      const estMin = s.duration_sec ? s.duration_sec / 60
+                   : s.reps ? Math.max(0.5, (s.reps * 2) / 60)
+                   : 1;
+      out.push({
+        type: "main",
+        zone: 3,
+        duration: Math.round(estMin * 10) / 10,
+        label: `${roundPrefix || ""}${name}${detail}`,
+      });
+    });
+  }
+  walk(tree, "");
+  return out;
+}
+
+function _buildStepsFromSession(sessionId, type) {
+  const w = _findWorkoutBySessionId(sessionId);
+  if (!w) return [];
+  if (type === "swim" || type === "swimming") return _buildSwimSteps(w);
+  if (type === "circuit" || w.type === "circuit" || w.circuit) return _buildCircuitSteps(w);
+  // Default: running / cycling / rowing / generic cardio
+  return _buildCardioSteps(w);
+}
+
 // ── Launch ───────────────────────────────────────────────────────────────────
 
 function startLiveWorkout(sessionId, dateStr, type, stepsJson, exercisesJson) {
   if (typeof trackEvent === "function") trackEvent("workout_started", { type, date: dateStr });
-  const steps = stepsJson ? JSON.parse(stepsJson) : null;
+  let steps = stepsJson ? JSON.parse(stepsJson) : null;
   const exercises = exercisesJson ? JSON.parse(exercisesJson) : null;
+
+  // Build steps on the fly for cardio/swim/circuit when the caller didn't
+  // supply any. Before this, endurance workouts landed here with steps=null
+  // and immediately rendered "All steps complete!" because t.steps[0] was
+  // undefined. We look up the workout by sessionId and translate its data
+  // model into the flat { type, zone, duration, label, reps, rest } step
+  // shape the endurance view expects.
+  if ((!steps || !steps.length) && !(exercises && exercises.length)) {
+    const built = _buildStepsFromSession(sessionId, type);
+    if (built && built.length) steps = built;
+  }
+
   const isHyrox = type === "hyrox" && exercises && exercises.length > 0;
   const isStrength = !isHyrox && !!(exercises && exercises.length > 0 && !steps);
 

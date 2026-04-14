@@ -465,20 +465,61 @@
     return { duration: totalDuration, phases, subTemplate: subTpl.id };
   }
 
-  function _generateHills(template, experience, durationOverrideMin, zones, warnings) {
-    let repCount = _resolveRepCount(template.main_set.rep_count, experience);
-    const repDurRange = template.main_set.rep_duration_sec;
-    const repSecLabel = `${repDurRange[0]}–${repDurRange[1]}s`;
+  function _generateHills(template, experience, durationOverrideMin, zones, warnings, variantOffset) {
+    // 4 variants cycled via shuffle: short sharp, medium, long grinders,
+    // and a ladder (1-2-3-2-1 min). Shuffle bumps variantOffset so the
+    // user gets something different each tap.
+    const variant = _variantIndex(variantOffset) % 4;
     const wuMin = 15;
     const cdMin = 10;
-    const perRepMin = (repDurRange[1] / 60) * 2; // up + jog down
-    if (durationOverrideMin != null) {
-      const targetMainMin = durationOverrideMin - wuMin - cdMin;
-      repCount = Math.max(4, Math.min(20, Math.round(targetMainMin / perRepMin)));
-    }
-    const repMin = repCount * perRepMin;
-    const totalDuration = Math.round(wuMin + repMin + cdMin);
     const eLabel = zones ? _ePaceLabel(zones) : "Z1";
+    let mainText, mainMin, repCount, subTemplate;
+
+    if (variant === 1) {
+      // Medium hills (60–90s each, 8–10 reps)
+      subTemplate = "hills_medium";
+      const perRepMin = (75 / 60) * 2;
+      repCount = _resolveRepCount({ beginner: 6, intermediate: 8, advanced: 10 }, experience);
+      if (durationOverrideMin != null) {
+        const targetMainMin = durationOverrideMin - wuMin - cdMin;
+        repCount = Math.max(4, Math.min(14, Math.round(targetMainMin / perRepMin)));
+      }
+      mainMin = repCount * perRepMin;
+      mainText = `${repCount}×60–90s medium hill repeats hard up / easy jog down.`;
+    } else if (variant === 2) {
+      // Long grinders (2–3 min each, 4–6 reps, 4-6% grade)
+      subTemplate = "hills_long";
+      const perRepMin = 2.5 * 2;
+      repCount = _resolveRepCount({ beginner: 4, intermediate: 5, advanced: 6 }, experience);
+      if (durationOverrideMin != null) {
+        const targetMainMin = durationOverrideMin - wuMin - cdMin;
+        repCount = Math.max(3, Math.min(8, Math.round(targetMainMin / perRepMin)));
+      }
+      mainMin = repCount * perRepMin;
+      mainText = `${repCount}×2–3 min long hill grinders, sustained threshold effort up / easy jog down.`;
+    } else if (variant === 3) {
+      // Hill ladder (1–2–3–2–1 min)
+      subTemplate = "hills_ladder";
+      const rungs = [1, 2, 3, 2, 1];
+      const totalUp = rungs.reduce((a, b) => a + b, 0);
+      mainMin = totalUp * 2; // up + jog down equal to up
+      repCount = rungs.length;
+      mainText = `Hill ladder: 1 → 2 → 3 → 2 → 1 min hard up, equal-time jog down between.`;
+    } else {
+      // Variant 0 (default) — short sharp (30–60s, 10–12 reps)
+      subTemplate = "hills_short";
+      const repDurRange = template.main_set.rep_duration_sec || [30, 60];
+      const perRepMin = (repDurRange[1] / 60) * 2;
+      repCount = _resolveRepCount(template.main_set.rep_count, experience);
+      if (durationOverrideMin != null) {
+        const targetMainMin = durationOverrideMin - wuMin - cdMin;
+        repCount = Math.max(4, Math.min(20, Math.round(targetMainMin / perRepMin)));
+      }
+      mainMin = repCount * perRepMin;
+      mainText = `${repCount}×${repDurRange[0]}–${repDurRange[1]}s short sharp hill repeats, max effort up / easy jog down.`;
+    }
+
+    const totalDuration = Math.round(wuMin + mainMin + cdMin);
     const phases = [
       {
         phase: "warmup",
@@ -490,10 +531,10 @@
       {
         phase: "main_set",
         intensity: "z4_effort",
-        duration_min: Math.round(repMin),
+        duration_min: Math.round(mainMin),
         target: "hard up, easy down",
         rep_count: repCount,
-        instruction: `${repCount}×${repSecLabel} hill repeats hard up / easy jog down.`
+        instruction: mainText,
       },
       {
         phase: "cooldown",
@@ -503,7 +544,7 @@
         instruction: `CD ${cdMin} min easy @ ${eLabel}${zones ? "/mi" : ""}.`
       }
     ];
-    return { duration: totalDuration, phases };
+    return { duration: totalDuration, phases, subTemplate };
   }
 
   function _generateFunSocial(template, experience, durationOverrideMin, zones, warnings) {
@@ -604,7 +645,7 @@
         result = _generateSpeedWork(template, experience, opts.durationOverrideMin, zones, warnings, vOff);
         break;
       case "hills":
-        result = _generateHills(template, experience, opts.durationOverrideMin, zones, warnings);
+        result = _generateHills(template, experience, opts.durationOverrideMin, zones, warnings, vOff);
         break;
       case "fun_social":
         result = _generateFunSocial(template, experience, opts.durationOverrideMin, zones, warnings);
@@ -634,6 +675,14 @@
     } else if (template.id === "long_run" && result.subTemplate) {
       if (result.subTemplate === "negative_split") title = "Long Run — Negative Split";
       else if (result.subTemplate === "with_surges") title = "Long Run — With Surges";
+    } else if (template.id === "hills" && result.subTemplate) {
+      const hillTitles = {
+        hills_short:  "Hills — Short Sharp",
+        hills_medium: "Hills — Medium Repeats",
+        hills_long:   "Hills — Long Grinders",
+        hills_ladder: "Hills — Ladder",
+      };
+      title = hillTitles[result.subTemplate] || title;
     }
 
     return {

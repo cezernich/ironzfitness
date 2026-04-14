@@ -1424,6 +1424,28 @@ function _getCompletionDuration(sessionId) {
 
 const _ENDURANCE_TYPES = new Set(["running", "cycling", "swimming", "triathlon", "stairstepper"]);
 
+// Running / cycling / swimming workouts come in with sub-type keys like
+// "tempo_threshold" or "speed_work" or "swim_css_intervals". Resolve those
+// to the parent discipline so the completion form's Distance field (and
+// the pace-sanity-check) actually fire.
+function _resolveEnduranceType(type) {
+  const t = String(type || "").toLowerCase();
+  if (_ENDURANCE_TYPES.has(t)) return t;
+  const RUN_SUBS = new Set([
+    "easy_recovery", "endurance", "long_run", "tempo_threshold",
+    "track_workout", "speed_work", "hills", "fun_social",
+    "recovery_run", "base_run", "progression_run", "run",
+  ]);
+  if (RUN_SUBS.has(t)) return "running";
+  const BIKE_SUBS = new Set([
+    "bike_endurance", "bike_tempo", "bike_threshold", "bike_intervals",
+    "bike_vo2", "bike_recovery", "bike_long", "bike_sweetspot", "bike",
+  ]);
+  if (BIKE_SUBS.has(t)) return "cycling";
+  if (t.startsWith("swim")) return "swimming";
+  return t;
+}
+
 // Build the Distance input for the completion form. Swim uses meters or
 // yards (not miles/km), with a unit toggle defaulting to the user's pool
 // size setting. All other endurance types use the global mi/km setting.
@@ -1562,7 +1584,8 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
     }).join("");
     const exDurVal = suggestedDuration ? ` value="${suggestedDuration}"` : "";
     const _unit = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
-    const _distBlock = _ENDURANCE_TYPES.has(type) ? _buildDistanceField(sessionId, type, _unit) : "";
+    const _resolvedType = _resolveEnduranceType(type);
+    const _distBlock = _ENDURANCE_TYPES.has(_resolvedType) ? _buildDistanceField(sessionId, _resolvedType, _unit) : "";
     formBody = `
       <div class="completion-ex-header">
         <span></span><span>Sets</span><span></span><span>Reps</span><span>Weight</span>
@@ -1584,7 +1607,8 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
   } else {
     const durVal = suggestedDuration ? ` value="${suggestedDuration}"` : "";
     const _cUnit = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
-    const _cDistBlock = _ENDURANCE_TYPES.has(type) ? _buildDistanceField(sessionId, type, _cUnit) : "";
+    const _cResolvedType = _resolveEnduranceType(type);
+    const _cDistBlock = _ENDURANCE_TYPES.has(_cResolvedType) ? _buildDistanceField(sessionId, _cResolvedType, _cUnit) : "";
     formBody = `
       <div class="completion-cardio-fields">
         <div class="completion-dur-row">
@@ -1757,7 +1781,8 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
     : null;
 
   // Pace sanity check for endurance types (sport-specific thresholds)
-  if (duration && distance && _ENDURANCE_TYPES.has(type)) {
+  const _paceType = _resolveEnduranceType(type);
+  if (duration && distance && _ENDURANCE_TYPES.has(_paceType)) {
     const durMin = parseFloat(duration);
     const distVal = parseFloat(distance);
     if (durMin > 0 && distVal > 0) {
@@ -1765,11 +1790,11 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
       const distMi = unit === "km" ? distVal / 1.60934 : distVal;
       let paceWarning = null;
 
-      if (type === "cycling") {
+      if (_paceType === "cycling") {
         const mph = (distMi / durMin) * 60;
         if (mph > 45) paceWarning = `That's ${mph.toFixed(1)} mph — extremely fast for cycling. Did you enter correctly?`;
         else if (mph < 3) paceWarning = `That's ${mph.toFixed(1)} mph — very slow for cycling. Did you enter correctly?`;
-      } else if (type === "swimming") {
+      } else if (_paceType === "swimming") {
         // Swim always enters in m or yd — convert to meters for the per-100m check.
         const distM = swimDistUnit === "yd" ? distVal * 0.9144 : distVal;
         const per100m = durMin / (distM / 100);
