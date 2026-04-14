@@ -7,6 +7,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import faqData from "./faq.json" with { type: "json" };
+import { KNOWLEDGE_BASE } from "./knowledge_base.ts";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MAX_REQUESTS_PER_DAY = 30;
@@ -268,13 +269,17 @@ Available action types:
 If no current_workout is provided, just give a text response. Never fabricate a workout context.
 
 ## Rules
-1. ALWAYS follow the philosophy modules below. They are your source of truth.
-2. If a hard constraint exists, NEVER suggest anything that violates it.
-3. Give specific, practical advice. Include sets, reps, durations, paces, or percentages where relevant.
-4. If the question falls outside your philosophy coverage, say so honestly rather than guessing.
-5. Reference the athlete's profile when personalizing advice.
-6. Never recommend medical treatments or diagnose injuries — tell them to see a professional.
-7. Keep responses under 300 words. Shorter is better.
+1. The Knowledge Base below is your factual source of truth. If a question is covered there (race distances, leg times, gear guidance, nutrition targets, training hours, sport-specific facts), use that content — do NOT generate numbers, distances, or gear recommendations from scratch.
+2. The Philosophy Modules below are your training-rules source of truth. ALWAYS follow them.
+3. If a hard constraint exists, NEVER suggest anything that violates it.
+4. NEVER contradict the Knowledge Base. If you don't see the answer there, say so rather than guessing.
+5. Give specific, practical advice. Include sets, reps, durations, paces, or percentages where relevant.
+6. Reference the athlete's profile when personalizing advice.
+7. Never recommend medical treatments or diagnose injuries — tell them to see a professional.
+8. Keep responses under 300 words. Shorter is better.
+
+## Knowledge Base (facts — use verbatim when the question is covered)
+${KNOWLEDGE_BASE}
 
 ## Athlete Profile
 - Level: ${userProfile.fitness_level || "unknown"}
