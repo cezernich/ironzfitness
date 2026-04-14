@@ -98,11 +98,12 @@
   }
 
   function writeNewValue(profile, sport, value) {
-    if (sport === "run")  { profile.vdot = value; profile.run_vdot = value; }
-    if (sport === "bike") { profile.ftp_watts = value; profile.ftp = value; }
-    if (sport === "swim") { profile.css_sec_per_100m = value; profile.css = value; }
+    const nowIso = new Date().toISOString();
+    if (sport === "run")  { profile.vdot = value; profile.run_vdot = value; profile.thresholdPaceUpdated = nowIso; }
+    if (sport === "bike") { profile.ftp_watts = value; profile.ftp = value; profile.ftpUpdated = nowIso; }
+    if (sport === "swim") { profile.css_sec_per_100m = value; profile.css = value; profile.cssTimeUpdated = nowIso; }
     profile.last_test = {
-      sport, value, recorded_at: new Date().toISOString()
+      sport, value, recorded_at: nowIso
     };
     return profile;
   }

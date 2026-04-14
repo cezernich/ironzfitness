@@ -2165,6 +2165,9 @@
            their own session type dropdown. Running routes to AddRunningSessionFlow
            outside this form; swim and cycling use the dropdowns below. -->
       <div class="qe-step" id="qe-step-1-cardio" style="display:none">
+        <!-- Threshold refresh banner (SPEC §3.4): rendered into this slot
+             when the user's threshold for the active sport is >90 days old. -->
+        <div id="qe-threshold-reminder-slot"></div>
         <!-- Swim-specific session type dropdown -->
         <div class="form-row" id="qe-swim-session-type-row" style="display:none">
           <label for="qe-swim-session-type">Session Type</label>
@@ -2723,6 +2726,7 @@
   <script src="nutrition-calculator.js"></script>
   <script src="zone-calculator.js"></script>
   <script src="js/sport-levels.js"></script>
+  <script src="js/threshold-reminders.js"></script>
   <script src="running-workout-generator.js"></script>
   <script src="js/bike-workout-generator.js"></script>
   <script src="js/swim-workout-model.js"></script>

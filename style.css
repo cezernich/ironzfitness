@@ -15773,3 +15773,94 @@ body.auth-visible #bottom-nav { display: none !important; }
 
 .circuit-preview-wrap .circuit-card { background: #2c2c2e; padding: 20px; }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Threshold refresh reminder banner (SPEC_cardio_add_session_v1.md §3.4)
+   Subtle nudge that appears on Quick Entry when the active sport's
+   threshold is >90 days old. Dismissable for 14 days.
+   ───────────────────────────────────────────────────────────────────────── */
+.threshold-reminder {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: rgba(255, 107, 53, 0.08);
+  border: 1px solid rgba(255, 107, 53, 0.3);
+  border-left: 3px solid var(--color-accent, #ff6b35);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--color-text);
+}
+.threshold-reminder-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--color-accent, #ff6b35);
+  background: rgba(255, 107, 53, 0.15);
+  border-radius: 50%;
+}
+.threshold-reminder-body {
+  flex: 1;
+  min-width: 0;
+}
+.threshold-reminder-title {
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.3;
+}
+.threshold-reminder-sub {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+  line-height: 1.3;
+}
+.threshold-reminder-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.threshold-reminder-update {
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--color-accent, #ff6b35);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.threshold-reminder-update:hover { opacity: 0.9; }
+.threshold-reminder-dismiss {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 4px;
+  font-family: inherit;
+}
+.threshold-reminder-dismiss:hover {
+  color: var(--color-text);
+  background: rgba(0, 0, 0, 0.05);
+}
+/* Settings section highlight flash when Update nav lands */
+.is-highlighted {
+  animation: threshold-flash 1.5s ease-out;
+}
+@keyframes threshold-flash {
+  0%   { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0.4); }
+  30%  { box-shadow: 0 0 0 8px rgba(255, 107, 53, 0.12); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0); }
+}
+

@@ -800,6 +800,14 @@ function saveTrainingZonesSettings() {
   let zones = {};
   try { zones = JSON.parse(localStorage.getItem("trainingZones")) || {}; } catch {}
 
+  // Threshold refresh tracking (SPEC §3.4): stamp the profile with per-
+  // threshold *Updated timestamps so the staleness banner can show
+  // ages-ago numbers without duplicating zone storage.
+  const nowIso = new Date().toISOString();
+  let profile = {};
+  try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
+  let profileTouched = false;
+
   const easy = document.getElementById("zone-run-easy")?.value.trim();
   const tempo = document.getElementById("zone-run-tempo")?.value.trim();
   const vo2 = document.getElementById("zone-run-vo2")?.value.trim();
@@ -810,6 +818,8 @@ function saveTrainingZonesSettings() {
     zones.running.vo2max = vo2 || "";
     zones.running.source = "settings";
     zones.running.lastUpdated = new Date().toISOString().slice(0, 10);
+    profile.thresholdPaceUpdated = nowIso;
+    profileTouched = true;
   }
 
   const ftp = document.getElementById("zone-ftp")?.value;
@@ -818,6 +828,8 @@ function saveTrainingZonesSettings() {
     zones.biking.ftp = parseInt(ftp) || null;
     zones.biking.source = "settings";
     zones.biking.lastUpdated = new Date().toISOString().slice(0, 10);
+    profile.ftpUpdated = nowIso;
+    profileTouched = true;
   }
 
   const maxHr = document.getElementById("zone-hr-max")?.value;
@@ -843,6 +855,10 @@ function saveTrainingZonesSettings() {
   }
 
   localStorage.setItem("trainingZones", JSON.stringify(zones)); if (typeof DB !== 'undefined') DB.syncKey('trainingZones');
+  if (profileTouched) {
+    try { localStorage.setItem("profile", JSON.stringify(profile)); } catch {}
+    if (typeof DB !== "undefined" && DB.profile && DB.profile.save) DB.profile.save(profile).catch(() => {});
+  }
   const msg = document.getElementById("zones-save-msg");
   if (msg) { msg.style.color = "var(--color-success)"; msg.textContent = "Zones saved!"; setTimeout(() => { msg.textContent = ""; }, 3000); }
 }

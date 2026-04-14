@@ -4007,6 +4007,13 @@ function qeShowStep(step, subType) {
         const poolSel = document.getElementById("qe-swim-pool");
         if (poolSel) poolSel.value = SwimWorkout.getUserPoolSize().value || "25m";
       }
+      // Threshold refresh banner (SPEC §3.4). Renders for the active sport
+      // when the user's threshold is >90 days old. Dismissable for 14 days.
+      const reminderSlot = document.getElementById("qe-threshold-reminder-slot");
+      if (reminderSlot && typeof ThresholdReminders !== "undefined") {
+        const sportKey = isSwim ? "swim" : isBike ? "cycling" : null;
+        reminderSlot.innerHTML = sportKey ? ThresholdReminders.buildBannerHtml(sportKey) : "";
+      }
     }
   } else if (step === 2) {
     if (subType === "generated" || subType === "cardio-generated") {
