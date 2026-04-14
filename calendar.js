@@ -6088,6 +6088,10 @@ function qeGenerateCardio() {
           details: _swimCooldownText(cooldownMin, swimCss),
         },
       ];
+    } else if (type === "walking") {
+      // A walk is a walk — no zones, no warm-up/cool-down, no tempo pushes.
+      // One flat interval covering the entire duration.
+      intervals = [{ name: "Walk", duration: durMin + " min" }];
     } else {
       // Running / Cycling / generic — with variation on regenerate
       const mainMin = durMin - warmupMin - cooldownMin;
@@ -6173,7 +6177,9 @@ function qeGenerateCardio() {
       intervals.push({ name: "Cool-Down", duration: cooldownMin + " min", effort: iz.cooldown, details: detailFn(iz.cooldown) });
     }
 
-    const title = `${sportName[type] || type} — ${intensity} ${durMin} min`;
+    const title = type === "walking"
+      ? `Walk — ${durMin} min`
+      : `${sportName[type] || type} — ${intensity} ${durMin} min`;
     const workout = { title, intervals };
 
     // Swim: emit the canonical step tree (pool_size_m + steps + total_distance_m)
@@ -6229,12 +6235,14 @@ function qeGenerateCardio() {
       (workout.intervals || []).forEach(iv => {
         const zCls = effortToZone[iv.effort] || "z2";
         const sportTag = iv.sport ? `<span class="qe-brick-sport qe-brick-${iv.sport}">${iv.sport === "bike" ? "Bike" : "Run"}</span> ` : "";
+        const badgeHtml = iv.effort ? `&ensp;<span class="zone-badge ${zCls}">${escHtml(iv.effort)}</span>` : "";
+        const detailsHtml = iv.details ? `<div class="qe-cardio-details">${escHtml(iv.details)}</div>` : "";
         html += `<div class="qe-cardio-interval">
           <div class="qe-cardio-interval-header">
             <span class="qe-cardio-phase">${sportTag}${escHtml(iv.name)}</span>
-            <span class="qe-cardio-meta">${escHtml(iv.duration)}&ensp;<span class="zone-badge ${zCls}">${escHtml(iv.effort)}</span></span>
+            <span class="qe-cardio-meta">${escHtml(iv.duration)}${badgeHtml}</span>
           </div>
-          <div class="qe-cardio-details">${escHtml(iv.details)}</div>
+          ${detailsHtml}
         </div>`;
       });
       html += `</div>`;
