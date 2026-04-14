@@ -667,12 +667,24 @@ const DB = (() => {
       const uid = await _userId();
       if (!uid) return;
       const raw = _lsGet(lsKey);
-      if (!raw) return;
+      // Key never existed — nothing to sync. Distinct from "empty array"
+      // which is a meaningful state (user deleted everything).
+      if (raw == null) return;
       const arr = Array.isArray(raw) ? raw : [raw];
-      if (arr.length === 0) return;
       const rows = arr.map(item => shapeFn(item, uid)).filter(Boolean);
-      if (rows.length === 0) return;
+
       try {
+        // Empty-array case: user cleared all items locally. Delete every
+        // row the user owns in this table so the structured table matches
+        // localStorage. Without this, deleted races/workouts resurrect on
+        // the next refreshAllTables() pull.
+        if (rows.length === 0) {
+          const { error } = await _client()
+            .from(table).delete().eq('user_id', uid);
+          if (error) console.warn(`DB: sync ${lsKey} delete-all error`, error.message);
+          return;
+        }
+
         for (let i = 0; i < rows.length; i += 100) {
           const chunk = rows.slice(i, i + 100);
           const { error } = await _client()
@@ -730,10 +742,14 @@ const DB = (() => {
     ];
     const results = await Promise.allSettled(
       fallbackTables.map(t => {
-        // Only pull from structured table if user_data didn't already populate this key
+        // Only pull from structured table if user_data doesn't already own
+        // this key. A value of `[]` is a meaningful "user deleted everything"
+        // state — we must respect it, not treat it as "empty, go refetch".
+        // Previously we checked `length > 0` here, which resurrected deleted
+        // races/goals on every reload.
         var existing = _lsGet(t.lsKey);
-        if (existing && Array.isArray(existing) && existing.length > 0) {
-          console.log('DB: ' + t.name + ' — already populated from user_data (' + existing.length + ' items), skipping table pull');
+        if (Array.isArray(existing)) {
+          console.log('DB: ' + t.name + ' — user_data owns this key (' + existing.length + ' items), skipping table pull');
           return Promise.resolve();
         }
         return t.accessor.list().then(function(data) {

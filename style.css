@@ -13537,6 +13537,13 @@ body.auth-visible #bottom-nav { display: none !important; }
 .ex-row-defaults--hiit {
   grid-template-columns: 2fr 1fr;
 }
+.ex-row-defaults--bw {
+  grid-template-columns: 1fr 1fr;
+}
+.ex-pyramid-detail--bw .ex-pyr-header,
+.ex-pyramid-detail--bw .ex-pyr-row {
+  grid-template-columns: 56px 1fr;
+}
 .ex-row-field {
   display: flex;
   flex-direction: column;
@@ -15554,8 +15561,9 @@ body.auth-visible #bottom-nav { display: none !important; }
   margin-top: 12px;
 }
 .action-btn {
-  flex: 1;
-  padding: 12px;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 12px 8px;
   border-radius: 10px;
   font-size: 13px;
   font-weight: 600;
@@ -15565,9 +15573,22 @@ body.auth-visible #bottom-nav { display: none !important; }
   background: none;
   color: #fff;
   font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1.1;
 }
 .action-btn:hover { background: #3a3a3c; }
-.action-btn .icon { font-size: 16px; display: block; margin-bottom: 4px; }
+.action-btn > .icon {
+  font-size: 20px;
+  width: auto;
+  height: auto;
+  display: block;
+  line-height: 1;
+  margin: 0;
+}
 
 /* ── Primary/secondary modal buttons ────────────────────────────────────── */
 .circuit-btn {

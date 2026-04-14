@@ -6641,30 +6641,31 @@ function qeAddExerciseRow() {
         </div>
       </div>`;
   } else {
-    const wtPlaceholder = isBW ? "BW" : "lbs";
-    const wtValue = isBW ? "Bodyweight" : "";
-    const exPlaceholder = isBW ? "e.g. Push-ups, Pull-ups" : "e.g. Bench Press";
+    const exPlaceholder = isBW ? "e.g. Push-ups, Plank" : "e.g. Bench Press";
+    const repsLabel = isBW ? "Reps / Time" : "Reps";
+    const repsPlaceholder = isBW ? "10 or 60s" : "10";
+    const weightField = isBW ? "" : `
+        <div class="ex-row-field">
+          <label>Weight (lbs)</label>
+          <input type="text" id="qe-mwt-${id}" placeholder="lbs" data-pyr-field="qe:default:${id}" />
+        </div>`;
     div.innerHTML = `
       <div class="ex-row-header">
         <input type="text" id="qe-mex-${id}" class="ex-row-name" placeholder="${exPlaceholder}" />
         <button type="button" class="ex-row-delete" onclick="qeRemoveRow(${id})" title="Remove">×</button>
       </div>
-      <div class="ex-row-defaults">
+      <div class="ex-row-defaults${isBW ? " ex-row-defaults--bw" : ""}">
         <div class="ex-row-field">
           <label>Sets</label>
           <input type="number" id="qe-msets-${id}" min="1" max="20" placeholder="3" data-pyr-field="qe:sets:${id}" />
         </div>
         <div class="ex-row-field">
-          <label>Reps</label>
-          <input type="text" id="qe-mreps-${id}" placeholder="10" data-pyr-field="qe:default:${id}" />
-        </div>
-        <div class="ex-row-field">
-          <label>Weight (lbs)</label>
-          <input type="text" id="qe-mwt-${id}" placeholder="${wtPlaceholder}" value="${wtValue}"${isBW ? " readonly" : ""} data-pyr-field="qe:default:${id}" />
-        </div>
+          <label>${repsLabel}</label>
+          <input type="text" id="qe-mreps-${id}" placeholder="${repsPlaceholder}" data-pyr-field="qe:default:${id}" />
+        </div>${weightField}
       </div>
       <button type="button" class="ex-row-customize-toggle" id="qe-pyr-toggle-${id}" data-pyr-toggle="qe:${id}">Customize per set ▾</button>
-      <div class="ex-pyramid-detail" id="qe-pyr-${id}" style="display:none"></div>`;
+      <div class="ex-pyramid-detail${isBW ? " ex-pyramid-detail--bw" : ""}" id="qe-pyr-${id}" style="display:none"></div>`;
   }
   let _qeHoverTimer = null;
   div.addEventListener("dragstart", (e) => { _qeManualDragId = id; div.classList.add("drag-active"); e.dataTransfer.effectAllowed = "move"; });
@@ -6835,9 +6836,9 @@ function qeTogglePerSet(id) {
   const detail = document.getElementById(`qe-pyr-${id}`);
   const toggle = document.getElementById(`qe-pyr-toggle-${id}`);
   if (!detail || !toggle) return;
-  const isHidden = detail.style.display === "none" || !detail.style.display;
+  const isHidden = detail.style.display !== "block";
   if (isHidden) {
-    detail.style.display = "";
+    detail.style.display = "block";
     toggle.textContent = "Collapse ▴";
     qePyramidSetsChanged(id); // build the per-set rows now that panel is open
   } else {
@@ -6863,6 +6864,8 @@ function qePyramidSetsChanged(id) {
   const defaultReps = document.getElementById(`qe-mreps-${id}`)?.value || "";
   const defaultWeight = document.getElementById(`qe-mwt-${id}`)?.value || "";
 
+  const isBW = _qeSelectedType === "bodyweight";
+
   // Preserve any existing per-set values so typing into Sets doesn't wipe edits
   const existing = [];
   detail.querySelectorAll(".ex-pyr-row").forEach(pr => {
@@ -6872,16 +6875,25 @@ function qePyramidSetsChanged(id) {
     });
   });
 
-  let html = '<div class="ex-pyr-header"><span></span><span>Reps</span><span>Weight</span></div>';
+  const repsHeader = isBW ? "Reps / Time" : "Reps";
+  const repsPh = isBW ? (defaultReps || "10 or 60s") : (defaultReps || "10");
+  let html = isBW
+    ? `<div class="ex-pyr-header"><span></span><span>${repsHeader}</span></div>`
+    : `<div class="ex-pyr-header"><span></span><span>${repsHeader}</span><span>Weight</span></div>`;
   for (let i = 0; i < setsVal; i++) {
     const prev = existing[i] || {};
     const reps = prev.reps || defaultReps;
     const weight = prev.weight || defaultWeight;
-    html += `<div class="ex-pyr-row">
-      <span class="ex-pyr-label">Set ${i + 1}</span>
-      <input type="text" class="ex-pyr-reps" placeholder="${defaultReps || '10'}" value="${reps}" />
-      <input type="text" class="ex-pyr-weight" placeholder="${defaultWeight || 'lbs'}" value="${weight}" />
-    </div>`;
+    html += isBW
+      ? `<div class="ex-pyr-row">
+          <span class="ex-pyr-label">Set ${i + 1}</span>
+          <input type="text" class="ex-pyr-reps" placeholder="${repsPh}" value="${reps}" />
+        </div>`
+      : `<div class="ex-pyr-row">
+          <span class="ex-pyr-label">Set ${i + 1}</span>
+          <input type="text" class="ex-pyr-reps" placeholder="${repsPh}" value="${reps}" />
+          <input type="text" class="ex-pyr-weight" placeholder="${defaultWeight || 'lbs'}" value="${weight}" />
+        </div>`;
   }
   detail.innerHTML = html;
 }
@@ -6912,6 +6924,7 @@ function qeSaveManual() {
   if (!dateStr) { document.getElementById("qe-manual-msg").textContent = "Please select a date."; return; }
 
   const isHiit = _qeSelectedType === "hiit";
+  const isBW   = _qeSelectedType === "bodyweight";
   const notes     = (document.getElementById("qe-manual-notes").value || "").trim();
   const exercises = [];
   document.querySelectorAll("[id^='qe-mex-']").forEach(inp => {
@@ -6919,10 +6932,11 @@ function qeSaveManual() {
     const name = inp.value.trim();
     if (!name) return;
     const row = document.getElementById(`qe-mrow-${idx}`);
+    const rawWeight = document.getElementById(`qe-mwt-${idx}`)?.value || "";
     const ex = {
       name,
       reps:   document.getElementById(`qe-mreps-${idx}`)?.value || "",
-      weight: document.getElementById(`qe-mwt-${idx}`)?.value   || "",
+      weight: isBW ? (rawWeight || "Bodyweight") : rawWeight,
     };
     if (!isHiit) ex.sets = document.getElementById(`qe-msets-${idx}`)?.value || "";
     if (row?.dataset.ssId) ex.supersetId = row.dataset.ssId;
