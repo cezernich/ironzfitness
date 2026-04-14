@@ -397,7 +397,7 @@ function buildOBWorkoutInterests() {
     { value: "swimming",   icon: ICONS.swim,     label: "Swimming" },
     { value: "hiit",       icon: ICONS.flame,    label: "HIIT" },
     { value: "yoga",       icon: ICONS.yoga,     label: "Yoga / Mobility" },
-    { value: "bodyweight", icon: ICONS.activity, label: "Bodyweight" },
+    { value: "bodyweight", icon: ICONS.bodyweight, label: "Bodyweight" },
   ];
   return `
     <h2 class="ob-step-title">What Types of Workouts Interest You?</h2>
@@ -747,7 +747,7 @@ function getSessionIcon(type) {
     swim: typeof ICONS !== "undefined" ? ICONS.swim : "&#127946;",
     hiit: typeof ICONS !== "undefined" ? ICONS.flame : "&#128293;",
     yoga: typeof ICONS !== "undefined" ? ICONS.yoga : "&#129496;",
-    bodyweight: typeof ICONS !== "undefined" ? ICONS.activity : "&#128170;",
+    bodyweight: typeof ICONS !== "undefined" ? ICONS.bodyweight : "&#128170;",
   };
   return icons[type] || icons.strength;
 }

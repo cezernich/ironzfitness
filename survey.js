@@ -5,7 +5,7 @@ const SURVEY_SPORT_OPTIONS = [
   { value: "running",       icon: ICONS.run,     label: "Running",       desc: "Road races from 5K to marathon" },
   { value: "triathlon",     icon: ICONS.swim,    label: "Triathlon",     desc: "Swim · Bike · Run events" },
   { value: "cycling",       icon: ICONS.bike,    label: "Cycling",       desc: "Gran fondos, century rides & more" },
-  { value: "hyrox",         icon: ICONS.activity, label: "Hyrox",        desc: "Run + functional fitness race" },
+  { value: "hyrox",         icon: ICONS.trophy,  label: "Hyrox",         desc: "Run + functional fitness race" },
   { value: "just-training", icon: ICONS.activity, label: "Other / Mixed Training", desc: "No race goal — mix of activities" },
 ];
 
@@ -23,8 +23,8 @@ const SURVEY_RACE_OPTIONS = [
   { value: "granFondo",     sport: "cycling",       icon: ICONS.trophy,  label: "Gran Fondo",         desc: "Timed mass-start road ride" },
   { value: "life-cycling",  sport: "cycling",       icon: ICONS.activity, label: "Training for Life", desc: "No race — just stay fit and ride" },
   { value: "life-swimming", sport: "swimming",      icon: ICONS.activity, label: "Training for Life", desc: "No race — just stay fit and swim" },
-  { value: "hyrox",         sport: "hyrox",         icon: ICONS.activity, label: "Hyrox",              desc: "8x 1km run + 8 functional stations" },
-  { value: "hyroxDoubles",  sport: "hyrox",         icon: ICONS.activity, label: "Hyrox Doubles",      desc: "Partner Hyrox event" },
+  { value: "hyrox",         sport: "hyrox",         icon: ICONS.trophy,  label: "Hyrox",              desc: "8x 1km run + 8 functional stations" },
+  { value: "hyroxDoubles",  sport: "hyrox",         icon: ICONS.trophy,  label: "Hyrox Doubles",      desc: "Partner Hyrox event" },
   { value: "just-training", sport: "just-training", icon: ICONS.activity, label: "Other / Mixed Training", desc: "No race goal — build strength and fitness year-round" },
 ];
 
@@ -56,7 +56,7 @@ const SURVEY_ACTIVITY_OPTIONS = [
   { value: "swimming",   icon: ICONS.swim,     label: "Swimming",        type: "swimming" },
   { value: "hiit",       icon: ICONS.flame,    label: "HIIT",            type: "hiit" },
   { value: "yoga",       icon: ICONS.yoga,     label: "Yoga / Mobility", type: "yoga" },
-  { value: "bodyweight", icon: ICONS.activity, label: "Bodyweight",      type: "weightlifting" },
+  { value: "bodyweight", icon: ICONS.bodyweight, label: "Bodyweight",    type: "weightlifting" },
   { value: "general",    icon: ICONS.star,     label: "General Fitness", type: "general" },
 ];
 

@@ -1237,11 +1237,11 @@ const RACE_TYPE_ICON = {
   fiveK:        ICONS.run,
   centuryRide:  ICONS.bike,
   granFondo:    ICONS.bike,
-  hyrox:        ICONS.activity,
-  hyroxDoubles: ICONS.activity,
+  hyrox:        ICONS.trophy,
+  hyroxDoubles: ICONS.trophy,
 };
 
-const SCHEDULE_TYPE_ICON  = { running: ICONS.run, weightlifting: ICONS.weights, cycling: ICONS.bike, swimming: ICONS.swim, triathlon: ICONS.swim, general: ICONS.activity, hiit: ICONS.flame, bodyweight: ICONS.activity, yoga: ICONS.yoga, mobility: ICONS.activity, walking: ICONS.run, rowing: ICONS.swim, sport: ICONS.activity };
+const SCHEDULE_TYPE_ICON  = { running: ICONS.run, weightlifting: ICONS.weights, cycling: ICONS.bike, swimming: ICONS.swim, triathlon: ICONS.swim, general: ICONS.activity, hiit: ICONS.flame, bodyweight: ICONS.bodyweight, yoga: ICONS.yoga, mobility: ICONS.activity, walking: ICONS.walking, rowing: ICONS.rowing, sport: ICONS.activity, hyrox: ICONS.trophy, brick: ICONS.brick, circuit: ICONS.circuit, sauna: ICONS.thermometer };
 const SCHEDULE_TYPE_LABEL = { running: "Running", weightlifting: "Strength", cycling: "Cycling", swimming: "Swimming", triathlon: "Triathlon", general: "General Fitness", hiit: "HIIT", bodyweight: "Bodyweight", yoga: "Yoga / Mobility", mobility: "Mobility", walking: "Walking", rowing: "Rowing", sport: "Sport-Specific" };
 
 function _getScheduleInputs() {
@@ -2492,7 +2492,7 @@ const RACE_SPORT_OPTS = [
   { value: "running",   icon: ICONS.run,  label: "Running",    desc: "Races or training for life" },
   { value: "cycling",   icon: ICONS.bike, label: "Cycling",    desc: "Races or training for life" },
   { value: "swimming",  icon: ICONS.swim, label: "Swimming",   desc: "Training for life" },
-  { value: "hyrox",     icon: ICONS.activity || "&#9883;", label: "Hyrox", desc: "Run + functional fitness race" },
+  { value: "hyrox",     icon: ICONS.trophy, label: "Hyrox", desc: "Run + functional fitness race" },
 ];
 
 let raceFormState = {
@@ -3325,6 +3325,10 @@ const DISCIPLINE_ICONS = {
   hyroxStrength:ICONS.weights,
   yoga:         ICONS.yoga,
   rowing:       ICONS.rowing,
+  walking:      ICONS.walking,
+  walk:         ICONS.walking,
+  hiking:       ICONS.walking,
+  hike:         ICONS.walking,
   sauna:        ICONS.thermometer,
   stairstepper: ICONS.steps,
   wellness:     ICONS.droplet,
