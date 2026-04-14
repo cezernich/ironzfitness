@@ -28,6 +28,10 @@ const SURVEY_RACE_OPTIONS = [
   { value: "just-training", sport: "just-training", icon: ICONS.activity, label: "Other / Mixed Training", desc: "No race goal — build strength and fitness year-round" },
 ];
 
+// "fitness-level" step removed per SPEC_cardio_add_session_v1.md §3.3 —
+// per-sport levels are derived from threshold data via SportLevels helpers
+// instead of self-reported ratings. Falls back to "intermediate" when the
+// user hasn't set their thresholds yet.
 const SURVEY_STEPS = [
   "welcome",
   "sport",
@@ -39,7 +43,6 @@ const SURVEY_STEPS = [
   "strength-goal",    // only shown for strength sport
   "race-date",        // only shown for race types
   "long-day",         // only shown for race types
-  "fitness-level",
   "days-per-week",
   "strength-split",   // only shown for strength sport
   "plan-length",      // only shown for strength / effectively-strength
@@ -140,10 +143,10 @@ function _getSurveyZoneSports() {
 }
 
 function _getMixedFlowSteps() {
+  // "fitness-level" step removed — see SPEC_cardio_add_session_v1.md §3.3.
   const steps = ["activities", "days-per-week", "activity-days"];
   if (surveyData.activities.includes("yoga")) steps.push("yoga-types");
   if (isEffectivelyStrength()) steps.push("strength-goal");
-  steps.push("fitness-level");
   if (isEffectivelyStrength()) steps.push("strength-split");
   steps.push("plan-length");
   if (_getSurveyZoneSports().length > 0) steps.push("zones");
@@ -879,7 +882,7 @@ function surveyValidate() {
   }
   if (step === "activities"   && surveyData.activities.length === 0) return fail("Please select at least one activity.");
   if (step === "strength-goal" && !surveyData.strengthGoal) return fail("Please select a goal.");
-  if (step === "fitness-level" && !surveyData.level)       return fail("Please select your fitness level.");
+  // "fitness-level" validation removed — step dropped per SPEC §3.3.
   if (step === "days-per-week") {
     if (!surveyData.daysPerWeek) return fail("Please select your training days.");
     const picked = (surveyData.preferredDays || []).length;
@@ -922,7 +925,6 @@ function renderSurveyStep() {
     "strength-goal":  buildSurveyStrengthGoal,
     "race-date":      buildSurveyRaceDate,
     "long-day":       buildSurveyLongDay,
-    "fitness-level":  buildSurveyFitnessLevel,
     "days-per-week":  buildSurveyDaysPerWeek,
     "strength-split": buildSurveyStrengthSplit,
     "plan-length":    buildSurveyPlanLength,

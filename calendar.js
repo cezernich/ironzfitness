@@ -3987,6 +3987,26 @@ function qeShowStep(step, subType) {
       const isBrick = _qeSelectedType === "brick";
       document.getElementById("qe-duration-single").style.display = isBrick ? "none" : "";
       document.getElementById("qe-duration-brick").style.display  = isBrick ? ""     : "none";
+      // Sport-specific session-type rows — show only for swim and cycling
+      // per SPEC_cardio_add_session_v1.md §1.1-1.2. Running has its own
+      // flow via AddRunningSessionFlow and never lands here.
+      const isSwim = _qeSelectedType === "swim";
+      const isBike = _qeSelectedType === "cycling";
+      const swimRow = document.getElementById("qe-swim-session-type-row");
+      const bikeRow = document.getElementById("qe-bike-session-type-row");
+      const poolRow = document.getElementById("qe-swim-pool-row");
+      if (swimRow) swimRow.style.display = isSwim ? "" : "none";
+      if (bikeRow) bikeRow.style.display = isBike ? "" : "none";
+      if (poolRow) poolRow.style.display = isSwim ? "" : "none";
+      // Hide intensity dropdown for cycling — the session type already
+      // encodes intensity (Recovery Spin ≠ VO2 Intervals). Swim keeps it.
+      const intensityRow = document.getElementById("qe-activity-intensity")?.closest(".form-row");
+      if (intensityRow) intensityRow.style.display = isBike ? "none" : "";
+      // Load the user's saved pool size into the selector.
+      if (isSwim && typeof SwimWorkout !== "undefined" && SwimWorkout.getUserPoolSize) {
+        const poolSel = document.getElementById("qe-swim-pool");
+        if (poolSel) poolSel.value = SwimWorkout.getUserPoolSize().value || "25m";
+      }
     }
   } else if (step === 2) {
     if (subType === "generated" || subType === "cardio-generated") {
@@ -5996,13 +6016,20 @@ function _qeBuildCardioWorkout(opts) {
 
   let profile = {};
   try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
-  const level = profile.fitnessLevel || "intermediate";
 
   let zones = {};
   try { zones = JSON.parse(localStorage.getItem("trainingZones")) || {}; } catch {}
 
   const durMin = parseInt(duration) || 45;
   const sportName = { running: "Run", cycling: "Ride", swim: "Swim", hiit: "HIIT", brick: "Brick" };
+
+  // Derive the level for THIS sport from threshold data instead of the
+  // old self-reported profile.fitnessLevel (removed per SPEC §3.3). Falls
+  // back to "intermediate" when thresholds aren't set.
+  const sportKey = type === "swim" ? "swimming" : type === "cycling" ? "cycling" : "running";
+  const level = (typeof SportLevels !== "undefined" && SportLevels.getSportLevel)
+    ? SportLevels.getSportLevel(sportKey)
+    : (profile.fitnessLevel || "intermediate");
 
   // Build zone-based details from user's training zones
   function runDetail(zone) {
@@ -6172,20 +6199,32 @@ function _qeBuildCardioWorkout(opts) {
   if (type === "swim" && typeof SwimWorkoutGenerator !== "undefined" && typeof SwimWorkout !== "undefined") {
     try {
       const lib = window.VARIANT_LIBRARY_SWIM;
-      const typeByIntensity = {
-        light:    "swim_technique",
-        moderate: "swim_endurance",
-        intense:  "swim_css_intervals",
-        max:      "swim_speed",
+      // Per SPEC §1.1 — the user picks a swim session type explicitly.
+      // Fall back to intensity-derived mapping when opts.swimSessionType
+      // is missing (e.g. when called from the plan generator).
+      const swimTypeMap = {
+        technique:     "swim_technique",
+        endurance:     "swim_endurance",
+        css_intervals: "swim_css_intervals",
+        speed_sprint:  "swim_speed",
       };
-      const sessionTypeId = typeByIntensity[intensity] || "swim_endurance";
+      const sessionTypeId = swimTypeMap[opts.swimSessionType]
+        || { light: "swim_technique", moderate: "swim_endurance", intense: "swim_css_intervals", max: "swim_speed" }[intensity]
+        || "swim_endurance";
       const variants = (lib && lib.variants && lib.variants[sessionTypeId]) || [];
       const variant = variants[Math.floor(Math.random() * variants.length)];
       if (variant) {
         const css = (zones.swimming && zones.swimming.css) || null;
+        // Pool size: explicit override from the form, else the profile
+        // setting via SwimWorkout.getUserPoolSize().
+        let poolSize = null;
+        if (opts.poolSize && SwimWorkout.POOL_SIZES) {
+          poolSize = SwimWorkout.POOL_SIZES.find(p => p.value === opts.poolSize) || null;
+        }
         const result = SwimWorkoutGenerator.generateSwimWorkout({
           sessionTypeId, variantId: variant.id,
           userZones: { css }, experienceLevel: level,
+          poolSize,
           variantOffset: Math.floor(Math.random() * 12),
         });
         const w = result.workout;
@@ -6198,6 +6237,48 @@ function _qeBuildCardioWorkout(opts) {
       }
     } catch (e) {
       console.warn("[_qeBuildCardioWorkout swim] canonical shape failed:", e);
+    }
+  }
+
+  // Cycling: route through BikeWorkoutGenerator when opts.bikeSessionType
+  // is set (SPEC §1.2 session type selector). Attaches the generator's
+  // phase list onto the workout so downstream renderers show real FTP-
+  // based targets instead of the generic zone intervals built above.
+  if (type === "cycling" && opts.bikeSessionType && typeof window !== "undefined" && window.BikeWorkoutGenerator) {
+    try {
+      const bikeTypeMap = {
+        z2_endurance:  { sessionTypeId: "bike_endurance",            preferredVariant: "bike_endurance_steady" },
+        long_ride:     { sessionTypeId: "bike_endurance",            preferredVariant: "bike_endurance_steady" },
+        recovery_spin: { sessionTypeId: "bike_endurance",            preferredVariant: "bike_endurance_steady" },
+        tempo:         { sessionTypeId: "bike_intervals_sweet_spot", preferredVariant: null },
+        sweet_spot:    { sessionTypeId: "bike_intervals_sweet_spot", preferredVariant: null },
+        threshold:     { sessionTypeId: "bike_intervals_ftp",        preferredVariant: null },
+        vo2_intervals: { sessionTypeId: "bike_intervals_vo2",        preferredVariant: null },
+      };
+      const m = bikeTypeMap[opts.bikeSessionType];
+      if (m) {
+        const lib = window.VARIANT_LIBRARY_BIKE;
+        const variants = (lib && lib.variants && lib.variants[m.sessionTypeId]) || [];
+        const variant = (m.preferredVariant && variants.find(v => v.id === m.preferredVariant))
+          || variants[Math.floor(Math.random() * variants.length)];
+        if (variant) {
+          const ftp = (zones.biking && zones.biking.ftp) || null;
+          const result = window.BikeWorkoutGenerator.generateBikeWorkout({
+            sessionTypeId: m.sessionTypeId,
+            variantId: variant.id,
+            userZones: { ftp },
+            experienceLevel: level,
+            durationOverrideMin: durMin,
+          });
+          const w = result.workout;
+          if (w && w.phases) workout.phases = w.phases;
+          if (w && w.title) workout.title = w.title;
+          if (w && w.why_text) workout.why_text = w.why_text;
+          workout.bike_session_type = opts.bikeSessionType;
+        }
+      }
+    } catch (e) {
+      console.warn("[_qeBuildCardioWorkout cycling] generator failed:", e);
     }
   }
 
@@ -6215,6 +6296,23 @@ function qeGenerateCardio() {
   const bikeDur   = isBrick ? (document.getElementById("qe-brick-bike-duration")?.value || "45") : null;
   const runDur    = isBrick ? (document.getElementById("qe-brick-run-duration")?.value || "20")  : null;
   const duration  = isBrick ? String(parseInt(bikeDur) + parseInt(runDur)) : (document.getElementById("qe-cardio-duration")?.value || "45");
+  // Sport-specific session type selections — see SPEC §1.1-1.2.
+  const swimSessionType = type === "swim" ? (document.getElementById("qe-swim-session-type")?.value || "endurance") : null;
+  const bikeSessionType = type === "cycling" ? (document.getElementById("qe-bike-session-type")?.value || "z2_endurance") : null;
+  const poolSize = type === "swim" ? (document.getElementById("qe-swim-pool")?.value || null) : null;
+
+  // Persist the pool size to profile when the user picks one in the form
+  // — same key the Profile settings screen writes to, so the two stay
+  // in sync regardless of which place the user sets it first.
+  if (type === "swim" && poolSize) {
+    try {
+      const p = JSON.parse(localStorage.getItem("profile") || "{}");
+      if (p.pool_size !== poolSize) {
+        p.pool_size = poolSize;
+        localStorage.setItem("profile", JSON.stringify(p));
+      }
+    } catch {}
+  }
 
   qeShowStep(2, "cardio-generated");
 
@@ -6224,7 +6322,10 @@ function qeGenerateCardio() {
   resultEl.innerHTML = "";
 
   try {
-    const workout = _qeBuildCardioWorkout({ type, intensity, duration, bikeDur, runDur });
+    const workout = _qeBuildCardioWorkout({
+      type, intensity, duration, bikeDur, runDur,
+      swimSessionType, bikeSessionType, poolSize,
+    });
     _qeGeneratedCardioData = workout;
     loadingEl.style.display = "none"; _stopLoadingMessages();
 

@@ -1,11 +1,13 @@
 // onboarding.js — First-time user onboarding wizard
 // Separate from the "Build Plan" survey (survey.js) which remains available anytime.
 
+// "experience" step removed per SPEC_cardio_add_session_v1.md §3.3 —
+// per-sport levels are derived from threshold data via SportLevels
+// helpers once the user sets their thresholds. Default is "intermediate".
 const ONBOARDING_STEPS = [
   "welcome",
   "profile",
   "goals",
-  "experience",
   "workout-interests",
   "features",
   "dietary",       // conditional — only if nutrition selected
@@ -162,10 +164,7 @@ function validateOnboardingStep() {
     return true;
   }
 
-  if (step === "experience") {
-    if (!obData.level) { if (msg) msg.textContent = "Please select your experience level."; return false; }
-    return true;
-  }
+  // "experience" step removed per SPEC §3.3.
 
   if (step === "workout-interests") {
     const checked = document.querySelectorAll("#ob-interests input:checked");
@@ -234,7 +233,7 @@ function renderOnboardingStep() {
     case "welcome":       content.innerHTML = buildOBWelcome(); break;
     case "profile":       content.innerHTML = buildOBProfile(); break;
     case "goals":         content.innerHTML = buildOBGoals(); break;
-    case "experience":    content.innerHTML = buildOBExperience(); break;
+    // "experience" case removed per SPEC §3.3.
     case "workout-interests": content.innerHTML = buildOBWorkoutInterests(); break;
     case "features":      content.innerHTML = buildOBFeatures(); break;
     case "dietary":       content.innerHTML = buildOBDietary(); break;

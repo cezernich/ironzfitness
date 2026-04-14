@@ -295,14 +295,9 @@
               </div>
 
               <!-- Common options -->
-              <div class="form-row">
-                <label for="fitness-level">Fitness Level</label>
-                <select id="fitness-level">
-                  <option value="beginner">Beginner</option>
-                  <option value="intermediate">Intermediate</option>
-                  <option value="advanced">Advanced</option>
-                </select>
-              </div>
+              <!-- Fitness Level dropdown removed per SPEC_cardio_add_session_v1.md §3.3.
+                   Per-sport levels are now derived from threshold data via
+                   SportLevels.getSportLevel() instead of self-reported ratings. -->
 
               <div class="form-grid">
                 <div class="form-row">
@@ -2165,8 +2160,45 @@
         <p id="hyrox-save-msg" class="save-msg" style="margin-top:8px"></p>
       </div>
 
-      <!-- STEP 1c: Cardio / General -->
+      <!-- STEP 1c: Cardio / General — sport-specific session type + intensity.
+           Per SPEC_cardio_add_session_v1.md §1, swim/cycling/running each get
+           their own session type dropdown. Running routes to AddRunningSessionFlow
+           outside this form; swim and cycling use the dropdowns below. -->
       <div class="qe-step" id="qe-step-1-cardio" style="display:none">
+        <!-- Swim-specific session type dropdown -->
+        <div class="form-row" id="qe-swim-session-type-row" style="display:none">
+          <label for="qe-swim-session-type">Session Type</label>
+          <select id="qe-swim-session-type">
+            <option value="endurance" selected>Endurance — continuous aerobic swim</option>
+            <option value="technique">Technique — drills, easy pace</option>
+            <option value="css_intervals">CSS Intervals — threshold repeats</option>
+            <option value="speed_sprint">Speed / Sprint — short fast repeats</option>
+          </select>
+        </div>
+        <!-- Cycling-specific session type dropdown -->
+        <div class="form-row" id="qe-bike-session-type-row" style="display:none">
+          <label for="qe-bike-session-type">Session Type</label>
+          <select id="qe-bike-session-type">
+            <option value="z2_endurance" selected>Zone 2 Endurance — aerobic base ride</option>
+            <option value="tempo">Tempo — Z3 sustained pace</option>
+            <option value="threshold">Threshold — FTP intervals</option>
+            <option value="vo2_intervals">VO2 Intervals — short hard repeats</option>
+            <option value="sweet_spot">Sweet Spot — 88–94% FTP blocks</option>
+            <option value="recovery_spin">Recovery Spin — easy flush ride</option>
+            <option value="long_ride">Long Ride — longest ride of the week</option>
+          </select>
+        </div>
+        <!-- Swim-specific pool size selector (uses SwimWorkout model helpers).
+             Saved to profile.pool_size once the user saves a workout — same
+             key the Profile → Pool Size setting writes to. -->
+        <div class="form-row" id="qe-swim-pool-row" style="display:none">
+          <label for="qe-swim-pool">Pool Size</label>
+          <select id="qe-swim-pool">
+            <option value="25m">25 m (short course)</option>
+            <option value="50m">50 m (long course)</option>
+            <option value="25yd">25 yd</option>
+          </select>
+        </div>
         <div class="form-row">
           <label for="qe-activity-intensity">Intensity</label>
           <select id="qe-activity-intensity">
@@ -2690,6 +2722,7 @@
   <script src="exercise-selector.js"></script>
   <script src="nutrition-calculator.js"></script>
   <script src="zone-calculator.js"></script>
+  <script src="js/sport-levels.js"></script>
   <script src="running-workout-generator.js"></script>
   <script src="js/bike-workout-generator.js"></script>
   <script src="js/swim-workout-model.js"></script>

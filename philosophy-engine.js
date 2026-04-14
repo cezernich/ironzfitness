@@ -77,10 +77,25 @@ function classifyUser(profile) {
 }
 
 function classifyLevelFromProfile(profile) {
-  // Infer from survey data if fitnessLevel not set directly
-  const survey = getSurveyData();
+  // Fitness-level dropdown removed per SPEC_cardio_add_session_v1.md §3.3.
+  // Derive from per-sport thresholds when possible — prefer the highest
+  // level across the user's sports (so a competitive swimmer who also
+  // runs casually gets advanced programming, not beginner). Falls back
+  // to any legacy survey value, then to intermediate.
+  if (typeof window !== 'undefined' && window.SportLevels && window.SportLevels.getLevelsForUser) {
+    try {
+      const lv = window.SportLevels.getLevelsForUser();
+      // Map per-sport level names onto the shared beginner/intermediate/advanced scale
+      const rank = { beginner: 0, novice: 0, intermediate: 1, advanced: 2, competitive: 2 };
+      const highest = Math.max(rank[lv.swim] || 0, rank[lv.cycling] || 0, rank[lv.running] || 0);
+      if (highest === 2) return 'advanced';
+      if (highest === 1) return 'intermediate';
+    } catch (_) {}
+  }
+  // Legacy fallbacks: survey-saved level, then intermediate default.
+  const survey = typeof getSurveyData === 'function' ? getSurveyData() : null;
   if (survey && survey.fitnessLevel) return survey.fitnessLevel;
-  return 'beginner';
+  return 'intermediate';
 }
 
 function classifyAgeGroup(age) {
