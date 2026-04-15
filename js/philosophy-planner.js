@@ -311,36 +311,59 @@ function _normalizeSwimWorkoutsInPlan(plan) {
 // ── Plan Storage ────────────────────────────────────────────────────────────
 
 async function storeGeneratedPlan(plan, source) {
-  // Store locally
+  // Local mirror — keeps reads fast and gives the app an offline-safe
+  // copy. DB.syncKey('activePlan') pushes this into the generic
+  // user_data table as a backup so the blob survives even if the
+  // generated_plans insert fails.
   localStorage.setItem('activePlan', JSON.stringify(plan));
-  localStorage.setItem('activePlanSource', source);
+  localStorage.setItem('activePlanSource', source || 'unknown');
   localStorage.setItem('activePlanAt', new Date().toISOString());
+  if (typeof DB !== 'undefined' && DB.syncKey) DB.syncKey('activePlan');
 
-  // Store in Supabase if available
+  // Persist the plan metadata into the canonical generated_plans table.
+  // Order matters: deactivate previous rows BEFORE inserting the new
+  // one, otherwise the deactivate update nukes the row we just wrote.
+  // (The old code used a .neq() on a nested plan_data->plan_metadata
+  // path to try to exclude the new row, which was brittle and wouldn't
+  // always catch duplicates.)
   try {
-    if (typeof supabaseClient !== 'undefined') {
-      const { data: session } = await supabaseClient.auth.getSession();
-      if (session?.session?.user?.id) {
-        await supabaseClient.from('generated_plans').insert({
-          user_id: session.session.user.id,
-          plan_data: plan,
-          philosophy_module_ids: plan.plan_metadata?.philosophy_modules_used || [],
-          module_versions: plan.plan_metadata?.module_versions || {},
-          generation_source: source,
-          plan_version: plan.plan_metadata?.plan_version || '1.0',
-          assumptions: plan.assumptions || [],
-          validation_flags: plan.plan_metadata?.validation_flags || [],
-          is_active: true
-        });
+    if (typeof supabaseClient === 'undefined') return;
+    const { data: session } = await supabaseClient.auth.getSession();
+    const userId = session?.session?.user?.id;
+    if (!userId) return;
 
-        // Deactivate previous plans
-        await supabaseClient
-          .from('generated_plans')
-          .update({ is_active: false })
-          .eq('user_id', session.session.user.id)
-          .eq('is_active', true)
-          .neq('plan_data->plan_metadata->generated_at', plan.plan_metadata?.generated_at);
-      }
+    const { error: deactErr } = await supabaseClient
+      .from('generated_plans')
+      .update({ is_active: false })
+      .eq('user_id', userId)
+      .eq('is_active', true);
+    if (deactErr) {
+      console.warn('[IronZ] Failed to deactivate previous plans:', deactErr.message);
+    }
+
+    const { data: inserted, error: insertErr } = await supabaseClient
+      .from('generated_plans')
+      .insert({
+        user_id: userId,
+        plan_data: plan,
+        philosophy_module_ids: plan.plan_metadata?.philosophy_modules_used || [],
+        module_versions: plan.plan_metadata?.module_versions || {},
+        generation_source: source || 'unknown',
+        plan_version: plan.plan_metadata?.plan_version || '1.0',
+        assumptions: plan.assumptions || [],
+        validation_flags: plan.plan_metadata?.validation_flags || [],
+        is_active: true
+      })
+      .select('id')
+      .single();
+    if (insertErr) {
+      console.warn('[IronZ] Failed to insert active plan:', insertErr.message);
+      return;
+    }
+    // Stamp the plan id so any downstream writer that wants to link
+    // sessions to this plan (future work) has it ready.
+    if (inserted && inserted.id) {
+      try { localStorage.setItem('activePlanId', inserted.id); } catch {}
     }
   } catch (e) {
     console.warn('[IronZ] Failed to store plan in Supabase:', e.message);

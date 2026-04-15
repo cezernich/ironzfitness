@@ -456,11 +456,17 @@ const DB = (() => {
   }
 
   // ── Instantiate table accessors ───────────────────────────────────────────
+  //
+  // Active training plans live in `generated_plans`, NOT `training_plans`.
+  // The `training_plans` table exists in supabase-schema.sql but was never
+  // wired to the app — the real plan store is `generated_plans` (defined
+  // in supabase-migration-002-fix.sql) which is read/written by
+  // philosophy-planner.js storeGeneratedPlan / getActivePlan.
+  // See docs/TRAINING_PLAN_STORAGE.md for the full story.
 
   const workouts         = _userTable('workouts', 'workouts');
   const workoutExercises = _userTable('workout_exercises', 'workoutExercises');
   const workoutSegments  = _userTable('workout_segments', 'workoutSegments');
-  const trainingPlans    = _userTable('training_plans', '_trainingPlans_meta');
   const trainingSessions = _userTable('training_sessions', 'workoutSchedule');
   const planAdherence    = _userTable('plan_adherence', 'planAdherence');
   const weeklyCheckins   = _userTable('weekly_checkins', 'weeklyCheckins');
@@ -489,7 +495,10 @@ const DB = (() => {
       { lsKey: 'profile', handler: _migrateProfile },
       { lsKey: 'workouts', table: 'workouts', shape: _shapeWorkout },
       { lsKey: 'workoutSchedule', table: 'training_sessions', shape: _shapeTrainingSession },
-      // trainingPlan synced via user_data (syncKey), not training_plans table
+      // trainingPlan (the daily-sessions array) is synced through the
+      // generic user_data key-value table, not training_plans. The
+      // philosophy-generated plan metadata lives in generated_plans
+      // and is written by philosophy-planner.js storeGeneratedPlan.
       { lsKey: 'events', table: 'race_events', shape: _shapeRaceEvent },
       { lsKey: 'goals', table: 'goals', shape: _shapeGoal },
       { lsKey: 'weeklyCheckins', table: 'weekly_checkins', shape: _shapeWeeklyCheckin },
@@ -641,25 +650,12 @@ const DB = (() => {
     return row;
   }
 
-  function _shapeTrainingPlan(p, uid) {
-    return {
-      id: (_isUUID(p.id) ? p.id : null) || crypto.randomUUID(),
-      user_id: uid,
-      name: p.name || p.raceName || null,
-      type: p.type || p.raceType || 'general',
-      goal: p.goal || null,
-      fitness_level: p.level || p.fitnessLevel || p.fitness_level || null,
-      start_date: p.startDate || p.start_date || null,
-      end_date: p.endDate || p.end_date || null,
-      weeks: p.weeks || p.totalWeeks || null,
-      days_per_week: p.daysPerWeek || p.days_per_week || null,
-      split_type: p.splitType || p.split_type || null,
-      is_active: p.isActive !== false,
-      source: p.source || 'generated',
-      raw_plan: p,
-      created_at: p.createdAt || p.created_at || new Date().toISOString()
-    };
-  }
+  // _shapeTrainingPlan was removed (commit: training plan storage
+  // cleanup, 2026-04-15). It used to shape a local plan object into
+  // the `training_plans` table's column layout, but nothing ever
+  // called it — the real active-plan store is `generated_plans` with
+  // a completely different schema (plan_data jsonb + philosophy
+  // module ids + generation_source). See docs/TRAINING_PLAN_STORAGE.md.
 
   // Meals are synced via user_data table (syncKey('meals')), not a dedicated table.
 
@@ -785,7 +781,11 @@ const DB = (() => {
   }
 
   function syncTrainingPlan() {
-    // trainingPlan is an array of daily sessions — sync via user_data, not training_plans table
+    // `trainingPlan` is the daily-sessions array consumed by the calendar.
+    // It is intentionally synced through the generic user_data key-value
+    // table, not through the (unused) training_plans table and not
+    // through generated_plans — those store plan METADATA, this is just
+    // the per-day session list.
     syncKey('trainingPlan');
   }
 
@@ -846,7 +846,6 @@ const DB = (() => {
     workouts,
     workoutExercises,
     workoutSegments,
-    trainingPlans,
     trainingSessions,
     planAdherence,
     weeklyCheckins,
@@ -855,6 +854,7 @@ const DB = (() => {
     philosophyModules,
     exerciseLibrary,
     philosophyGaps,
+    // The real active-plan store. See docs/TRAINING_PLAN_STORAGE.md.
     generatedPlans,
     userOutcomes,
     syncWorkouts,
