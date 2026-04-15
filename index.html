@@ -650,15 +650,13 @@
             </div>
           </div>
 
-          <!-- Custom goal fields — preserved for free-form goals like "Lose 15 lbs" -->
+          <!-- Custom goal fields — preserved for free-form goals. The
+               name/unit placeholders update contextually based on the
+               selected category via _updateGoalFormPlaceholders(). -->
           <div id="goal-form-custom" style="display:none">
             <div class="form-row">
-              <label for="goal-form-name">Goal name</label>
-              <input type="text" id="goal-form-name" placeholder="e.g. Lose 15 lbs" />
-            </div>
-            <div class="form-row">
               <label for="goal-form-type">Category</label>
-              <select id="goal-form-type">
+              <select id="goal-form-type" onchange="_updateGoalFormPlaceholders()">
                 <option value="performance">Performance</option>
                 <option value="habit">Habit</option>
                 <option value="body">Body Composition</option>
@@ -666,8 +664,12 @@
               </select>
             </div>
             <div class="form-row">
+              <label for="goal-form-name">Goal name</label>
+              <input type="text" id="goal-form-name" placeholder="e.g. Sub-20 5K" />
+            </div>
+            <div class="form-row">
               <label for="goal-form-unit">Unit</label>
-              <input type="text" id="goal-form-unit" placeholder="e.g. lbs, minutes, days" />
+              <input type="text" id="goal-form-unit" placeholder="e.g. seconds, lbs, days" />
             </div>
             <div class="form-row">
               <label for="goal-form-deadline">Target date (optional)</label>

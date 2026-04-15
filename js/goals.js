@@ -382,7 +382,27 @@ function openGoalForm() {
   const titleEl = document.getElementById("goal-form-title");
   if (titleEl) titleEl.textContent = "New Goal";
   _applyGoalFormKind("recurring");
+  _updateGoalFormPlaceholders();
 }
+
+// Update the custom-goal name/unit placeholders to match the selected
+// category so a "Performance" category doesn't show "e.g. Lose 15 lbs".
+function _updateGoalFormPlaceholders() {
+  const typeEl = document.getElementById("goal-form-type");
+  const nameEl = document.getElementById("goal-form-name");
+  const unitEl = document.getElementById("goal-form-unit");
+  if (!typeEl) return;
+  const examples = {
+    performance: { name: "e.g. Sub-20 5K",           unit: "e.g. seconds, mph, watts" },
+    habit:       { name: "e.g. Stretch 10 min daily", unit: "e.g. days, sessions" },
+    body:        { name: "e.g. Lose 15 lbs",          unit: "e.g. lbs, % body fat" },
+    nutrition:   { name: "e.g. 150g protein / day",   unit: "e.g. grams, calories" },
+  };
+  const ex = examples[typeEl.value] || examples.performance;
+  if (nameEl) nameEl.placeholder = ex.name;
+  if (unitEl) unitEl.placeholder = ex.unit;
+}
+if (typeof window !== "undefined") window._updateGoalFormPlaceholders = _updateGoalFormPlaceholders;
 
 function closeGoalForm() {
   const modal = document.getElementById("goal-form-modal");
@@ -425,6 +445,7 @@ function openGoalEdit(id) {
   document.getElementById("goal-form-id").value = id;
   document.getElementById("goal-form-title").textContent = "Edit Goal";
   _applyGoalFormKind(kind);
+  _updateGoalFormPlaceholders();
 }
 
 // ── Form field helpers ──────────────────────────────────────────────────
