@@ -233,18 +233,15 @@
     _state.mode = "buildplan";
     _resetBuildPlanState();
     _state.thresholds = _loadExistingThresholds();
-    // Multi-race awareness: if the user already has an A race on the
-    // calendar, pre-select its disciplines in bp-v2-1 so a triathlete
-    // doesn't have to re-pick swim/bike/run every time they open Build
-    // Plan. The sport grid still lets them deselect or add more.
-    _preselectSportsFromARace();
+    // Every click on Build Plan opens a fresh builder — no sport
+    // pre-selection carried over from the user's last run or from any
+    // existing A race. The user explicitly asked for this: a build
+    // plan flow that's pre-populated with "Running / Swimming / Cycling"
+    // from an earlier session felt like the plan had already been
+    // decided for them. Pre-selection logic is intentionally removed.
     _clearBuildPlanScreens();
     _openBuildPlanOverlay();
     goTo("bp-v2-1");
-    // Render the sport grid selections AFTER the clear + goTo so we
-    // don't wipe our own preselection. Uses the same is-selected
-    // mechanism as the user manually tapping cards.
-    _applyPreselectedSports();
   }
 
   // Inspect localStorage.events for an upcoming A-priority race and,
@@ -1099,8 +1096,60 @@
     _state.currentRace = race;
     _state.raceEvents = [race];
     _lsSet("raceEvents", _state.raceEvents);
+
+    // B race short-circuit: a B race rides on top of the existing A
+    // race's plan — there's no new threshold test, no new schedule,
+    // no new strength split. Save the race as a calendar event,
+    // apply its taper window to the A-race plan via insertBRaceWindow,
+    // and jump straight to the done screen.
+    if (priority === "B") {
+      try {
+        _persistBRaceAndReshape(race);
+      } catch (e) {
+        console.warn("[OnboardingV2] B race short-circuit save failed", e);
+      }
+      goTo("bp-v2-done");
+      return;
+    }
+
     goTo("bp-v2-4");
     _renderThresholdSections();
+  }
+
+  // Save a B race as a calendar event and let the existing multi-race
+  // helpers (prepareRaceCalendar + insertBRaceWindow) reshape the A
+  // race's workoutSchedule taper window around it. No new training
+  // plan is generated — that's the whole point of B priority.
+  function _persistBRaceAndReshape(race) {
+    if (!race || !race.date) return;
+    // Append to legacy events store in the same shape the A-race flow uses.
+    const legacy = _mapRacesToLegacyEvents([race]);
+    if (legacy.length) {
+      const existing = _lsGet("events", []) || [];
+      _lsSet("events", existing.concat(legacy));
+    }
+    // Reshape any existing workoutSchedule entries for the taper
+    // window around this B race, if the A-race plan is present.
+    try {
+      let schedule = [];
+      try { schedule = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
+      if (schedule.length && typeof prepareRaceCalendar === "function" && typeof insertBRaceWindow === "function") {
+        const raceCalendar = prepareRaceCalendar(_lsGet("events", []) || []);
+        if (raceCalendar && raceCalendar.bRaces.length) {
+          raceCalendar.bRaces.forEach(bRace => insertBRaceWindow(schedule, bRace, raceCalendar.aRace));
+          localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+          if (typeof DB !== "undefined" && DB.syncSchedule) DB.syncSchedule();
+        }
+      }
+    } catch (e) {
+      console.warn("[OnboardingV2] B race taper reshape failed", e);
+    }
+    // Refresh any visible surfaces so the new B race shows up.
+    try {
+      if (typeof renderRaceEvents === "function") renderRaceEvents();
+      if (typeof renderTrainingInputs === "function") renderTrainingInputs();
+      if (typeof renderCalendar === "function") renderCalendar();
+    } catch {}
   }
 
   function _selectPlanOption(btn, field) {
@@ -2658,6 +2707,20 @@
     } catch {}
     if (typeof showTab === "function") showTab("training");
   }
+  // End-of-survey preferred destination — home tab shows the calendar
+  // and day detail, which is what users actually want to see after
+  // finishing Build Plan. _goToTrainingTab is still exported for any
+  // legacy callers that explicitly want the Training tab.
+  function _goToHomeTab() {
+    _closeBuildPlanOverlay();
+    _closeOverlay();
+    try {
+      if (typeof renderRaceEvents === "function") renderRaceEvents();
+      if (typeof renderTrainingInputs === "function") renderTrainingInputs();
+      if (typeof renderCalendar === "function") renderCalendar();
+    } catch {}
+    if (typeof showTab === "function") showTab("home");
+  }
 
   if (typeof window !== "undefined" && window.OnboardingV2) {
     Object.assign(window.OnboardingV2, {
@@ -2676,7 +2739,7 @@
       _openSlotSubtypePicker, _pickSlotSubtype,
       _slotDragStart, _slotDragEnd, _slotDragOver, _slotDragLeave, _slotDrop,
       _saveScheduleAndContinue,
-      _renderPlanPreview, _confirmAndSavePlan, _mapRacesToLegacyEvents, _goToTrainingTab,
+      _renderPlanPreview, _confirmAndSavePlan, _mapRacesToLegacyEvents, _goToTrainingTab, _goToHomeTab,
     });
   }
 
