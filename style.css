@@ -18290,13 +18290,13 @@ body.ob-v2-lock { overflow: hidden; }
   flex-shrink: 0;
   position: relative;
 }
+/* Size the SVG without forcing fill/stroke — the canonical ICONS
+   sprite mixes stroke-based outline icons (bike/swim/weights) with
+   filled silhouettes (run uses fill="currentColor" stroke="none"),
+   so any fill:none override would silently hide the run icon. */
 .wc svg {
-  width: 15px;
-  height: 15px;
-  fill: none;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  width: 16px;
+  height: 16px;
 }
 .wc.run  { background: rgba(78, 205, 196, 0.22); color: #4ecdc4; }
 .wc.str  { background: rgba(230, 57, 70, 0.22);  color: #e63946; }
@@ -18304,7 +18304,9 @@ body.ob-v2-lock { overflow: hidden; }
 .wc.bike { background: rgba(244, 162, 97, 0.22); color: #f4a261; }
 .wc.race { background: rgba(230, 57, 70, 0.22);  color: #e63946; }
 .wc.rest { background: rgba(255, 255, 255, 0.1); color: rgba(255,255,255,0.4); }
-.wc svg { stroke: currentColor; }
+/* ICONS.run is a filled silhouette — leave its own fill alone so the
+   runner shape actually renders instead of disappearing. */
+.wc.run svg { width: 18px; height: 18px; }
 /* Intensity ring */
 .wc::after {
   content: '';
