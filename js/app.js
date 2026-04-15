@@ -163,6 +163,7 @@ function showTab(name) {
     applyNutritionToggle();
     if (typeof applyFuelingToggle === "function") applyFuelingToggle();
     applyMeasurementToggle();
+    applyPoolSizeToggle();
     if (typeof renderNotifSettings === "function") renderNotifSettings();
     if (typeof renderTrustCenter === "function") renderTrustCenter();
     if (typeof renderSubscriptionStatus === "function") renderSubscriptionStatus();
@@ -306,6 +307,30 @@ function setMeasurementSystem(system) {
 function applyMeasurementToggle() {
   const sel = document.getElementById("pref-measurement-select");
   if (sel) sel.value = getMeasurementSystem();
+}
+
+// Pool size — stored on profile.pool_size (same key the swim generators
+// already read). Moved from the Athlete Profile form into Preferences
+// next to Measurement System since it's a device-level default, not
+// biographical data.
+function getPoolSize() {
+  try {
+    const p = JSON.parse(localStorage.getItem("profile") || "{}");
+    return p.pool_size || p.poolSize || "25m";
+  } catch { return "25m"; }
+}
+function setPoolSize(value) {
+  if (!value) return;
+  let profile = {};
+  try { profile = JSON.parse(localStorage.getItem("profile") || "{}"); } catch {}
+  profile.pool_size = value;
+  localStorage.setItem("profile", JSON.stringify(profile));
+  if (typeof DB !== 'undefined' && DB.profile && DB.profile.save) DB.profile.save(profile).catch(() => {});
+  applyPoolSizeToggle();
+}
+function applyPoolSizeToggle() {
+  const sel = document.getElementById("pref-pool-size-select");
+  if (sel) sel.value = getPoolSize();
 }
 
 /* =====================================================================
@@ -753,7 +778,6 @@ function saveProfile() {
     height: String(totalInches || ""),
     gender: document.getElementById("profile-gender").value,
     goal:   document.getElementById("profile-goal").value,
-    pool_size: document.getElementById("profile-pool-size")?.value || "25m",
   };
 
   localStorage.setItem("profile", JSON.stringify(profile));
@@ -792,8 +816,6 @@ async function loadProfileIntoForm() {
     }
     if (profile.gender) document.getElementById("profile-gender").value = profile.gender;
     if (profile.goal)   document.getElementById("profile-goal").value   = profile.goal;
-    const poolSel = document.getElementById("profile-pool-size");
-    if (poolSel) poolSel.value = profile.pool_size || profile.poolSize || "25m";
   } catch { /* ignore */ }
 }
 

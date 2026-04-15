@@ -1327,15 +1327,6 @@
             </select>
           </div>
 
-          <div class="form-row">
-            <label for="profile-pool-size">Pool Size</label>
-            <select id="profile-pool-size">
-              <option value="25m">25 m (short course)</option>
-              <option value="50m">50 m (long course)</option>
-              <option value="25yd">25 yd</option>
-            </select>
-          </div>
-
           <button class="btn-primary" onclick="saveProfile()">Save Profile</button>
           <p id="profile-save-msg" class="save-msg"></p>
         </div>
@@ -1423,6 +1414,17 @@
             <select id="pref-measurement-select" onchange="setMeasurementSystem(this.value)" style="width:auto;padding:6px 32px 6px 10px">
               <option value="imperial">Imperial (mi)</option>
               <option value="metric">Metric (km)</option>
+            </select>
+          </div>
+          <div class="pref-row">
+            <div>
+              <div class="pref-label">Pool Size</div>
+              <div class="pref-desc">Used to build swim workouts in the correct lengths</div>
+            </div>
+            <select id="pref-pool-size-select" onchange="setPoolSize(this.value)" style="width:auto;padding:6px 32px 6px 10px">
+              <option value="25m">25 m (short course)</option>
+              <option value="50m">50 m (long course)</option>
+              <option value="25yd">25 yd</option>
             </select>
           </div>
           <div class="pref-row">
