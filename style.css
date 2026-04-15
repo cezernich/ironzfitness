@@ -17932,15 +17932,28 @@ body.ob-v2-lock { overflow: hidden; }
   height: 10px;
   stroke: #fff;
 }
+.qa-btn-label {
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
 
 /* ── WEEK VIEW: Carousel ── */
 .car-w {
   position: relative;
   overflow: hidden;
+  cursor: grab;
+  user-select: none;
+}
+.car-w.is-dragging {
+  cursor: grabbing;
+}
+.car-w.is-dragging * {
+  pointer-events: none;
 }
 .car {
   display: flex;
   align-items: stretch;
+  justify-content: center;
   gap: 10px;
   padding: 0 16px;
   overflow-x: auto;
@@ -17951,6 +17964,13 @@ body.ob-v2-lock { overflow: hidden; }
 }
 .car::-webkit-scrollbar {
   display: none;
+}
+/* On mobile, let it scroll-snap naturally; on wider viewports the 7
+   cards fit without scroll, so center the row instead. */
+@media (max-width: 640px) {
+  .car {
+    justify-content: flex-start;
+  }
 }
 
 /* Day card base */
@@ -18035,12 +18055,16 @@ body.ob-v2-lock { overflow: hidden; }
 
 /* Center card (selected day) */
 .dc.c {
-  width: 140px;
+  width: 150px;
   background: var(--cal-dark);
   border: 1.5px solid var(--cal-dark);
-  padding: 12px 10px;
+  padding: 14px 12px;
   color: #fff;
   opacity: 1;
+}
+@media (min-width: 640px) {
+  .dc.c { width: 180px; padding: 16px 14px; }
+  .dc.s { width: 68px; padding: 12px 6px; }
 }
 .dc.c::after {
   content: '';

@@ -346,9 +346,15 @@ function renderWeekOverview() {
 // .wc workout-circle and .md-dot / .s-dot styles (run / swim / bike /
 // str). Everything that isn't a pure endurance sport falls to str so
 // strength, HIIT, circuit, hyrox, bodyweight all share a red palette.
+// Covers the specific run-session-library types produced by the Add
+// Running Session flow (long_run, tempo_threshold, track_workout,
+// speed_work, hills, easy_recovery, endurance, fun_social) so the
+// center card actually renders a run icon for those — they come
+// through workoutSchedule as `type: "long_run"` with no discipline.
 function _calV2DiscClass(discOrType) {
   const s = String(discOrType || "").toLowerCase();
   if (s === "run" || s === "running") return "run";
+  if (/^(long_run|tempo_threshold|track_workout|speed_work|hills|easy_recovery|endurance|fun_social)$/.test(s)) return "run";
   if (s === "swim" || s === "swimming") return "swim";
   if (s === "bike" || s === "cycling") return "bike";
   if (s === "brick") return "bike";
@@ -458,6 +464,54 @@ function renderWeekView() {
   }).join("");
 
   grid.innerHTML = `<div class="car-w"><div class="car">${cards}</div></div>`;
+
+  // Wire click-and-drag swipe on desktop so users can grab-drag left/right
+  // to step through weeks — without this, mouse users have to click the
+  // arrow buttons since overflow-x scroll isn't mouse-draggable by
+  // default. Mobile touch gestures still use the native scroll-snap.
+  _calV2WireCarouselSwipe();
+}
+
+function _calV2WireCarouselSwipe() {
+  const wrap = document.querySelector("#calendar-grid .car-w");
+  if (!wrap) return;
+  const THRESHOLD = 60; // px; past this, we navigate a week
+
+  let startX = 0;
+  let dx = 0;
+  let active = false;
+
+  wrap.addEventListener("pointerdown", (ev) => {
+    // Ignore clicks on actual cards — let selectDay run. Only start
+    // a drag from blank space between cards or from the wrapper itself.
+    // We still commit navigation in pointerup if the pointer moved far
+    // enough, which beats the single-tap.
+    if (ev.button !== 0) return;
+    active = true;
+    startX = ev.clientX;
+    dx = 0;
+    wrap.setPointerCapture(ev.pointerId);
+  });
+  wrap.addEventListener("pointermove", (ev) => {
+    if (!active) return;
+    dx = ev.clientX - startX;
+    if (Math.abs(dx) > 5) wrap.classList.add("is-dragging");
+  });
+  const end = () => {
+    if (!active) return;
+    active = false;
+    const moved = dx;
+    dx = 0;
+    wrap.classList.remove("is-dragging");
+    if (Math.abs(moved) >= THRESHOLD) {
+      // Natural direction: drag right → previous week, drag left → next
+      if (moved > 0) calPrev();
+      else calNext();
+    }
+  };
+  wrap.addEventListener("pointerup", end);
+  wrap.addEventListener("pointercancel", end);
+  wrap.addEventListener("pointerleave", end);
 }
 
 // Kept for back-compat with any in-file references — the v2 design
