@@ -165,15 +165,18 @@ function getWorkoutInfoForDate(dateStr) {
     if (dayWorkouts.length === 0) return null;
     let bestBonus = 0;
     let bestName = "";
+    let bestDurationMin = 0;
     for (const w of dayWorkouts) {
       const t = (w.type || "").toLowerCase();
       const bonus = WORKOUT_HYDRATION_BONUS[t] || 16;
       if (bonus > bestBonus) {
         bestBonus = bonus;
         bestName = w.sessionName || w.type || "workout";
+        const d = parseFloat(w.duration);
+        bestDurationMin = isFinite(d) && d > 0 ? d : 0;
       }
     }
-    return { bonusOz: bestBonus, sessionName: bestName };
+    return { bonusOz: bestBonus, sessionName: bestName, durationMin: bestDurationMin };
   } catch { return null; }
 }
 
@@ -467,12 +470,25 @@ function renderHydrationTimingTip() {
   const now = new Date();
   const hour = now.getHours();
 
-  // Smart timing based on time of day and workout
+  // Smart timing based on time of day and workout. If we know the planned
+  // duration, tailor the electrolyte guidance instead of hedging with "if
+  // it's over 60 min" — the app already knows how long the session is.
+  const dur = workoutInfo.durationMin || 0;
   let tip;
   if (hour < 10) {
     tip = `Training day: front-load hydration before your ${workoutInfo.sessionName}. Aim for ${Math.round(workoutInfo.bonusOz * 0.6)}oz before you start.`;
   } else if (hour < 16) {
-    tip = `Training day: keep sipping. Consider electrolytes during your ${workoutInfo.sessionName} if it's over 60 min.`;
+    let electrolyteClause;
+    if (dur >= 90) {
+      electrolyteClause = `Add electrolytes during your ${dur}-min ${workoutInfo.sessionName}.`;
+    } else if (dur > 60) {
+      electrolyteClause = `Add electrolytes during your ${dur}-min ${workoutInfo.sessionName}.`;
+    } else if (dur > 0) {
+      electrolyteClause = `Water is fine for your ${dur}-min ${workoutInfo.sessionName} — no electrolytes needed.`;
+    } else {
+      electrolyteClause = `Consider electrolytes during your ${workoutInfo.sessionName} if it's over 60 min.`;
+    }
+    tip = `Training day: keep sipping. ${electrolyteClause}`;
   } else {
     tip = `Post-training: prioritize ${Math.round(workoutInfo.bonusOz * 0.5)}oz of your remaining target to help recover from your ${workoutInfo.sessionName}.`;
   }
