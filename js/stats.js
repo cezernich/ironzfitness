@@ -442,49 +442,211 @@ function buildStatsBreakdown(byType, total) {
     </section>`;
 }
 
-function buildStatsHeatmap(workouts, streaks) {
-  const countByDate = {};
-  workouts.forEach(w => { countByDate[w.date] = (countByDate[w.date]||0)+1; });
+// Sport → color/label map for the heatmap cells and the sport legend.
+// Keys are normalized workout types (_normalizeType output).
+const _HEATMAP_SPORT_COLOR = {
+  running:      { color: "var(--color-amber)",   label: "Run"        },
+  cycling:      { color: "var(--color-teal)",    label: "Bike"       },
+  swimming:     { color: "var(--color-cyan)",    label: "Swim"       },
+  weightlifting:{ color: "var(--color-violet)",  label: "Strength"   },
+  hiit:         { color: "var(--color-danger)",  label: "HIIT"       },
+  triathlon:    { color: "var(--color-cyan)",    label: "Triathlon"  },
+  brick:        { color: "var(--color-teal)",    label: "Brick"      },
+  hyrox:        { color: "var(--color-danger)",  label: "Hyrox"      },
+  yoga:         { color: "var(--color-teal)",    label: "Yoga"       },
+  walking:      { color: "var(--color-success)", label: "Walk"       },
+  rowing:       { color: "var(--color-teal)",    label: "Row"        },
+  hiking:       { color: "var(--color-success)", label: "Hike"       },
+  stairstepper: { color: "var(--color-amber)",   label: "Stairs"     },
+};
+const _HEATMAP_MIXED_COLOR = "var(--color-accent)"; // multi-sport days
 
-  const today = new Date(); today.setHours(0,0,0,0);
+// Pick the dominant sport for a day — if multiple workouts share the
+// same normalized type, that's the color. If the day had a mix of
+// sports, we use the accent color so the user knows at a glance.
+function _heatmapDominantSport(dayWorkouts) {
+  if (!dayWorkouts || !dayWorkouts.length) return null;
+  const types = dayWorkouts.map(w => _normalizeType(w.type));
+  const unique = [...new Set(types)];
+  if (unique.length === 1) return unique[0];
+  return "_mixed";
+}
+
+function buildStatsHeatmap(workouts, streaks) {
+  // ── Index workouts by date for O(1) cell lookup ───────────────────
+  const byDate = {};
+  workouts.forEach(w => {
+    if (!w.date) return;
+    (byDate[w.date] ||= []).push(w);
+  });
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
   const todayStr = localDateStr(today);
   const year = today.getFullYear();
 
-  // Start on the Sunday on or before Jan 1
-  const jan1 = new Date(year, 0, 1); jan1.setHours(0,0,0,0);
-  const startDate = new Date(jan1);
-  startDate.setDate(startDate.getDate() - startDate.getDay()); // back to Sunday
+  // ── Year-to-date summary: totals, active days, sport chips ────────
+  const ytdStart = `${year}-01-01`;
+  const ytdWorkouts = workouts.filter(w => w.date && w.date >= ytdStart && w.date <= todayStr);
+  const ytdCount = ytdWorkouts.length;
+  const ytdMinutes = ytdWorkouts.reduce((sum, w) => sum + (_extractWorkoutMinutes(w) || 0), 0);
+  const ytdActiveDays = new Set(ytdWorkouts.map(w => w.date)).size;
 
-  // Number of full weeks from startDate through the week containing today
+  const sportCounts = {};
+  ytdWorkouts.forEach(w => {
+    const t = _normalizeType(w.type);
+    sportCounts[t] = (sportCounts[t] || 0) + 1;
+  });
+  const sportChipOrder = Object.entries(sportCounts).sort((a, b) => b[1] - a[1]);
+
+  // ── Last 4 weeks (formerly the Weekly Activity card) ──────────────
+  // Monday-based weeks to match the week strip convention.
+  function _weekStartMon(d) {
+    const x = new Date(d);
+    x.setHours(0, 0, 0, 0);
+    const day = x.getDay();
+    const shift = day === 0 ? -6 : 1 - day;
+    x.setDate(x.getDate() + shift);
+    return x;
+  }
+  const thisWeekStart = _weekStartMon(today);
+  const lastWeekStart = new Date(thisWeekStart); lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+  const lastWeekEnd   = new Date(thisWeekStart); lastWeekEnd.setDate(lastWeekEnd.getDate() - 1);
+  const thisWeekStr = localDateStr(thisWeekStart);
+  const lastWeekStartStr = localDateStr(lastWeekStart);
+  const lastWeekEndStr   = localDateStr(lastWeekEnd);
+  const thisWeekCount = workouts.filter(w => w.date >= thisWeekStr && w.date <= todayStr).length;
+  const lastWeekCount = workouts.filter(w => w.date >= lastWeekStartStr && w.date <= lastWeekEndStr).length;
+
+  // ── Build the grid ────────────────────────────────────────────────
+  // Start on the Sunday on or before Jan 1 so the grid is aligned.
+  const jan1 = new Date(year, 0, 1); jan1.setHours(0, 0, 0, 0);
+  const startDate = new Date(jan1);
+  startDate.setDate(startDate.getDate() - startDate.getDay());
+
   const endDate = new Date(today);
-  endDate.setDate(endDate.getDate() + (6 - endDate.getDay())); // forward to Saturday
+  endDate.setDate(endDate.getDate() + (6 - endDate.getDay()));
   const totalWeeks = Math.ceil((endDate - startDate + 1) / (7 * 86400000));
+  const recentStartCol = Math.max(0, totalWeeks - 4); // for "last 4 weeks" highlight
 
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  let cells = "", lastMonth = -1;
   const monthLabels = [];
+  let cells = "";
+  let lastMonth = -1;
   const d = new Date(startDate);
 
   for (let w = 0; w < totalWeeks; w++) {
     const m = d.getMonth();
     monthLabels.push(m !== lastMonth ? MONTHS[m] : "");
     lastMonth = m;
+    const isRecent = w >= recentStartCol;
     for (let day = 0; day < 7; day++) {
-      const ds    = localDateStr(d);
-      const count = countByDate[ds] || 0;
-      const beforeJan1 = ds < `${year}-01-01`;
-      const future  = ds > todayStr;
+      const ds = localDateStr(d);
+      const dayWorkouts = byDate[ds] || [];
+      const count = dayWorkouts.length;
+      const beforeJan1 = ds < ytdStart;
+      const future = ds > todayStr;
       const isToday = ds === todayStr;
-      const empty   = beforeJan1 || future;
-      const lvl   = empty ? 0 : count===0 ? 0 : count===1 ? 1 : count===2 ? 2 : 3;
-      const tip   = empty ? "" : count ? `${ds}: ${count} workout${count>1?"s":""}` : ds;
-      cells += `<div class="heatmap-cell heat-${lvl}${isToday?" heat-today":""}${empty?" heat-empty":""}" title="${tip}"></div>`;
-      d.setDate(d.getDate()+1);
+      const empty = beforeJan1 || future;
+
+      // Intensity shade driven by workout count (1 / 2 / 3+).
+      const shade = empty ? 0 : count === 0 ? 0 : count === 1 ? 1 : count === 2 ? 2 : 3;
+      const dom = empty ? null : _heatmapDominantSport(dayWorkouts);
+      const color = dom === "_mixed"
+        ? _HEATMAP_MIXED_COLOR
+        : (dom && _HEATMAP_SPORT_COLOR[dom] ? _HEATMAP_SPORT_COLOR[dom].color : null);
+
+      // Opacity ramps with shade so multiple workouts visually stand
+      // out even within the same sport color.
+      const alpha = shade === 0 ? 0 : shade === 1 ? 0.45 : shade === 2 ? 0.75 : 1;
+      const bg = color && alpha > 0
+        ? `background: color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent);`
+        : "";
+
+      // Tooltip lists the actual workout names so hovering gives
+      // context without needing to click.
+      const names = dayWorkouts
+        .slice(0, 3)
+        .map(w => w.sessionName || w.name || w.notes || _normalizeType(w.type))
+        .filter(Boolean)
+        .join(", ");
+      const tip = empty
+        ? ""
+        : count === 0
+          ? ds
+          : `${ds} · ${count} workout${count > 1 ? "s" : ""}${names ? " · " + names : ""}${dayWorkouts.length > 3 ? "…" : ""}`;
+
+      // Clickable — jump to this day on the Home calendar.
+      const onclick = empty
+        ? ""
+        : ` onclick="showTab('home');selectDay('${ds}')"`;
+
+      const classes = [
+        "heatmap-cell",
+        `heat-${shade}`,
+        isToday ? "heat-today" : "",
+        empty ? "heat-empty" : "",
+        isRecent ? "heat-recent" : "",
+      ].filter(Boolean).join(" ");
+
+      cells += `<div class="${classes}" style="${bg}" title="${tip}"${onclick}></div>`;
+      d.setDate(d.getDate() + 1);
     }
   }
 
   const monthRow = monthLabels.map(m => `<span class="heatmap-mlabel">${m}</span>`).join("");
   const dayRow   = ["S","M","T","W","T","F","S"].map(l => `<span class="heatmap-dlabel">${l}</span>`).join("");
+
+  // ── Summary stat pills across the top ─────────────────────────────
+  const flame = streaks.currentDay > 0 ? ' <span class="heat-summary-flame">🔥</span>' : "";
+  const summaryRow = `
+    <div class="heat-summary">
+      <div class="heat-summary-stat">
+        <div class="heat-summary-value">${ytdCount}</div>
+        <div class="heat-summary-label">Workouts</div>
+      </div>
+      <div class="heat-summary-stat">
+        <div class="heat-summary-value">${_fmtHours(ytdMinutes)}</div>
+        <div class="heat-summary-label">Time</div>
+      </div>
+      <div class="heat-summary-stat">
+        <div class="heat-summary-value">${ytdActiveDays}</div>
+        <div class="heat-summary-label">Active days</div>
+      </div>
+      <div class="heat-summary-stat">
+        <div class="heat-summary-value">${streaks.currentDay}${flame}</div>
+        <div class="heat-summary-label">Day streak</div>
+      </div>
+    </div>`;
+
+  // ── Sport legend (replaces the generic Less/More) ─────────────────
+  const sportLegend = sportChipOrder.length
+    ? `<div class="heat-sport-legend">
+         ${sportChipOrder.map(([t, n]) => {
+           const meta = _HEATMAP_SPORT_COLOR[t] || { color: _HEATMAP_MIXED_COLOR, label: _totalsLabelFor(t) };
+           return `<span class="heat-sport-chip">
+                     <span class="heat-sport-dot" style="background:${meta.color}"></span>
+                     ${meta.label} <span class="heat-sport-count">${n}</span>
+                   </span>`;
+         }).join("")}
+       </div>`
+    : "";
+
+  // ── Recent-weeks footer (replaces the separate Weekly Activity card) ──
+  const recentFooter = `
+    <div class="heat-recent-row">
+      <div class="heat-recent-stat">
+        <div class="heat-recent-value">${thisWeekCount}</div>
+        <div class="heat-recent-label">This week</div>
+      </div>
+      <div class="heat-recent-stat">
+        <div class="heat-recent-value">${lastWeekCount}</div>
+        <div class="heat-recent-label">Last week</div>
+      </div>
+      <div class="heat-recent-stat">
+        <div class="heat-recent-value">${streaks.bestDay}</div>
+        <div class="heat-recent-label">Longest streak</div>
+      </div>
+    </div>`;
 
   return `
     <section class="card collapsible" id="section-stats-heatmap">
@@ -492,6 +654,7 @@ function buildStatsHeatmap(workouts, streaks) {
         <h2>Activity</h2><span class="card-chevron">▾</span>
       </div>
       <div class="card-body">
+        ${summaryRow}
         <div class="heatmap-scroll">
           <div class="heatmap-wrap">
             <div class="heatmap-dlabels">${dayRow}</div>
@@ -501,65 +664,17 @@ function buildStatsHeatmap(workouts, streaks) {
             </div>
           </div>
         </div>
-        <div class="heatmap-legend">
-          <span class="heatmap-legend-text">Less</span>
-          <div class="heatmap-cell heat-0"></div>
-          <div class="heatmap-cell heat-1"></div>
-          <div class="heatmap-cell heat-2"></div>
-          <div class="heatmap-cell heat-3"></div>
-          <span class="heatmap-legend-text">More</span>
-        </div>
-        <div class="heatmap-streaks">
-          <span class="heatmap-streak-pill">${streaks.currentDay} day streak</span>
-          <span class="heatmap-streak-pill">${streaks.currentWeek} week streak</span>
-          <span class="heatmap-streak-pill heatmap-streak-best">Best: ${streaks.bestDay} days</span>
-        </div>
+        ${sportLegend}
+        ${recentFooter}
       </div>
     </section>`;
 }
 
-function buildStatsWeekly(workouts) {
-  const WEEKS = 4;
-  const thisMonday = getWeekStart(new Date());
-  const weekData = [];
-  for (let i = WEEKS-1; i >= 0; i--) {
-    const ms = new Date(thisMonday); ms.setDate(ms.getDate() - i*7);
-    const me = new Date(ms); me.setDate(me.getDate()+6);
-    const msS = localDateStr(ms), meS = localDateStr(me);
-    const inWeek = workouts.filter(w => w.date >= msS && w.date <= meS);
-    weekData.push({
-      label: ms.toLocaleDateString("en-US", { month:"short", day:"numeric" }),
-      count: inWeek.length,
-      isCurrent: i === 0,
-    });
-  }
-  // Scale bar heights relative to the max workout count across the 4 weeks.
-  const maxCount = Math.max(...weekData.map(w => w.count), 1);
-  const bars = weekData.map(w => {
-    // Floor at 12% so non-zero weeks are always clearly visible; zero weeks
-    // show just the track background.
-    const pct = w.count === 0 ? 0 : Math.max(12, Math.round((w.count / maxCount) * 100));
-    const countLabel = w.count === 0 ? "" : (w.count === 1 ? "1 workout" : `${w.count} workouts`);
-    return `
-      <div class="weekly-col">
-        <div class="weekly-count">${countLabel}</div>
-        <div class="weekly-track">
-          <div class="weekly-fill${w.isCurrent?" weekly-fill--now":""}" style="height:${pct}%"></div>
-        </div>
-        <div class="weekly-label">${w.label}</div>
-      </div>`;
-  }).join("");
-
-  return `
-    <section class="card collapsible" id="section-stats-weekly">
-      <div class="card-toggle" onclick="toggleSection('section-stats-weekly')">
-        <h2>Weekly Activity</h2><span class="card-chevron">▾</span>
-      </div>
-      <div class="card-body">
-        <div class="weekly-chart">${bars}</div>
-      </div>
-    </section>`;
-}
+// buildStatsWeekly was removed — the 4-week bar chart it rendered
+// duplicated information already present in the Activity heatmap
+// (the rightmost 4 columns) and the summary stats at the top. Its
+// "this week / last week" insight now lives in the heatmap card's
+// recent-row footer.
 
 function buildStatsStreaks(streaks, workouts) {
   const DAY_NAMES  = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -1217,7 +1332,6 @@ function renderStats() {
     buildStatsTotals() +
     buildStatsBreakdown(byType, workouts.length) +
     buildStatsHeatmap(workouts, streaks) +
-    buildStatsWeekly(workouts) +
     buildStatsPRs() +
     buildStatsNextRace(events) +
     buildStatsNutrition(meals) +
