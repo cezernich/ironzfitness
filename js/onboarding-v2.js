@@ -347,8 +347,15 @@
   // so users who've already set their numbers just keep them.
   function _loadExistingThresholds() {
     let zones = {};
+    let prior = {};
     try { zones = JSON.parse(localStorage.getItem("trainingZones") || "{}") || {}; }
     catch { zones = {}; }
+    // Also read the user's last saved Build Plan thresholds — the
+    // previous run may have captured inputs (e.g. a CSS Test's 400m/
+    // 200m times) that don't have a simple trainingZones equivalent.
+    // Those should come back pre-filled the next time Build Plan opens.
+    try { prior = JSON.parse(localStorage.getItem("thresholds") || "{}") || {}; }
+    catch { prior = {}; }
     const result = {};
     if (zones.running) {
       const tp = zones.running.thresholdPace || zones.running.threshold_pace;
@@ -369,6 +376,17 @@
       if (s.deadlift && s.deadlift.weight) out.dead = String(s.deadlift.weight);
       if (out.squat || out.bench || out.dead) result.strength = out;
     }
+    // Layer the prior Build Plan thresholds over the trainingZones-derived
+    // defaults. The prior run wins because it captures method-specific
+    // inputs (CSS Test times, 20-min bike test watts, race results) that
+    // trainingZones only records in collapsed form.
+    Object.keys(prior || {}).forEach(key => {
+      const p = prior[key];
+      if (!p || typeof p !== "object") return;
+      // If the prior entry has any actual values beyond mode, prefer it.
+      const hasValues = Object.keys(p).some(k => k !== "mode" && p[k] != null && p[k] !== "");
+      if (hasValues) result[key] = { ...(result[key] || {}), ...p };
+    });
     return result;
   }
 
@@ -1387,11 +1405,21 @@
       } catch (e) { console.warn("[OnboardingV2] sync running zones failed", e); }
     }
 
-    // Biking — FTP round-trip; compute zones if the helper is available.
+    // Biking — resolve FTP from whatever method the user picked:
+    //   ftp       → raw FTP number
+    //   20min-test → avg watts over 20 min × 0.95 (standard estimate)
+    //   race      → fall back to raw watts if provided
     const b = thresholds.bike;
-    if (b && b.mode === "known" && b.ftp) {
-      const ftp = parseInt(b.ftp, 10);
-      if (ftp > 0) {
+    if (b && b.mode === "known") {
+      let ftp = null;
+      if (b.ftp) ftp = parseInt(b.ftp, 10);
+      else if (b.method === "20min-test" && b.twentyMinWatts) {
+        const avg = parseInt(b.twentyMinWatts, 10);
+        if (avg > 0) ftp = Math.round(avg * 0.95);
+      } else if (b.method === "race" && b.raceWatts) {
+        ftp = parseInt(b.raceWatts, 10);
+      }
+      if (ftp && ftp > 0) {
         let zones = null;
         try {
           if (typeof computeBikingZones === "function") zones = computeBikingZones(ftp).zones;
@@ -1407,11 +1435,28 @@
       }
     }
 
-    // Swimming — CSS pace (seconds per 100m).
+    // Swimming — resolve CSS from whatever method the user picked:
+    //   pace     → raw seconds/100m
+    //   css-test → derived from 400m + 200m times using the standard
+    //              CSS formula: (t400 - t200) / 2 seconds per 100m
+    //   race     → skipped for now (needs a lookup table)
     const s = thresholds.swim;
-    if (s && s.mode === "known" && s.cssPace) {
-      const css = parseInt(s.cssPace, 10);
-      if (css > 0) {
+    if (s && s.mode === "known") {
+      let css = null;
+      if (s.cssPace) css = parseInt(s.cssPace, 10);
+      else if (s.method === "css-test") {
+        const m400 = parseInt(s.css400min, 10) || 0;
+        const s400 = parseInt(s.css400sec, 10) || 0;
+        const m200 = parseInt(s.css200min, 10) || 0;
+        const s200 = parseInt(s.css200sec, 10) || 0;
+        const t400 = m400 * 60 + s400;
+        const t200 = m200 * 60 + s200;
+        if (t400 > 0 && t200 > 0 && t400 > t200) {
+          // (400m time - 200m time) / 2 = sec per 100m at CSS
+          css = Math.round((t400 - t200) / 2);
+        }
+      }
+      if (css && css > 0) {
         try {
           saveTrainingZonesData("swimming", {
             css,
