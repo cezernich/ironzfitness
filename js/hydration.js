@@ -447,9 +447,9 @@ function renderHydration() {
   // back to the legacy single button + bottleSize label.
   _renderBottleButtons();
 
-  // Undo button
+  // Undo button — visible whenever the current day has something to undo.
   const undoBtn = document.getElementById("hydration-undo-btn");
-  if (undoBtn) undoBtn.style.display = bottles > 0 ? "" : "none";
+  if (undoBtn) undoBtn.style.display = effectiveOz > 0 ? "" : "none";
 
   // Fill animation — use effective oz ratio
   const pctForVisual = Math.min(effectiveOz / targetOz, 1);
