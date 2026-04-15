@@ -13231,8 +13231,7 @@ button:active {
   flex-direction: column;
   gap: 12px;
   width: 100%;
-  max-width: 500px;
-  margin: 0 auto 24px;
+  margin: 0 0 24px;
 }
 .saved-card {
   background: var(--color-surface);
@@ -13264,10 +13263,17 @@ button:active {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 1.3rem;
 }
 .saved-card-v2 .saved-card-icon-glyph {
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.saved-card-v2 .saved-card-icon-glyph svg {
+  width: 22px;
+  height: 22px;
+  display: block;
 }
 .saved-card-v2 .saved-card-text {
   flex: 1;
@@ -13880,6 +13886,47 @@ body.auth-visible #bottom-nav { display: none !important; }
   /* Legacy direct children that may remain on compact variants */
   width: 100%;
 }
+
+/* Saved Workout modal — exercise row overrides so the legacy
+   .exercise-row grid rules don't leak through and the name input
+   actually fills its row. The row is a simple column: header
+   (name + delete) / defaults (sets/reps/weight) / customize button. */
+#sw-exercise-entries .ex-row.exercise-row,
+#sw-exercise-entries .ex-row.sw-exercise-row {
+  display: flex !important;
+  flex-direction: column;
+  grid-template-columns: none !important;
+  gap: 10px;
+  padding: 14px;
+}
+#sw-exercise-entries .ex-row.exercise-row > *,
+#sw-exercise-entries .ex-row.sw-exercise-row > * {
+  width: 100%;
+  grid-column: auto !important;
+}
+#sw-exercise-entries .ex-row-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+#sw-exercise-entries .ex-row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+#sw-exercise-entries .ex-row-delete {
+  flex-shrink: 0;
+}
+#sw-exercise-entries .ex-row-defaults {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+#sw-exercise-entries .ex-row-defaults--hiit { grid-template-columns: 2fr 1fr; }
+#sw-exercise-entries .ex-row-defaults--bw   { grid-template-columns: 1fr 1fr; }
+#sw-exercise-entries .ex-row-field { min-width: 0; }
 
 /* On very narrow screens keep the 3-column grid but allow wrap if necessary */
 @media (max-width: 360px) {

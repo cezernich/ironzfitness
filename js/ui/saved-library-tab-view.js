@@ -104,22 +104,26 @@
     });
   }
 
-  // Map sport keys to an icon + color. Falls back to a dumbbell if we
-  // don't recognize the sport — which happens for older saved rows that
-  // were stored without a sport_id.
-  const _SPORT_ICONS = {
-    run:      { icon: "&#x1F3C3;", color: "#f59e0b", label: "Run" },
-    running:  { icon: "&#x1F3C3;", color: "#f59e0b", label: "Run" },
-    bike:     { icon: "&#x1F6B4;", color: "#22d3ee", label: "Bike" },
-    cycling:  { icon: "&#x1F6B4;", color: "#22d3ee", label: "Bike" },
-    swim:     { icon: "&#x1F3CA;", color: "#3b82f6", label: "Swim" },
-    swimming: { icon: "&#x1F3CA;", color: "#3b82f6", label: "Swim" },
-    strength: { icon: "&#x1F3CB;", color: "#a855f7", label: "Strength" },
-    hybrid:   { icon: "&#x26A1;",  color: "#ef4444", label: "Hybrid" },
-  };
+  // Map sport keys to an ICONS.* glyph + color. Resolved at render time
+  // so we pick up the real SVG strings the rest of the app uses
+  // (calendar cards, Community tab, etc.) instead of emoji. Falls back
+  // to the strength icon if we don't know the sport.
   function _sportInfo(sportId) {
+    const I = (typeof ICONS !== "undefined") ? ICONS : {};
     const key = String(sportId || "").toLowerCase();
-    return _SPORT_ICONS[key] || { icon: "&#x1F4AA;", color: "#a855f7", label: key ? key[0].toUpperCase() + key.slice(1) : "Workout" };
+    const COLORS = {
+      run: "#f59e0b", bike: "#22d3ee", swim: "#3b82f6",
+      strength: "#a855f7", hybrid: "#ef4444",
+    };
+    const LABELS = { run: "Run", bike: "Bike", swim: "Swim", strength: "Strength", hybrid: "Hybrid" };
+    if (key === "run" || key === "running")      return { icon: I.run     || "", color: COLORS.run,      label: LABELS.run };
+    if (key === "bike" || key === "cycling")     return { icon: I.bike    || "", color: COLORS.bike,     label: LABELS.bike };
+    if (key === "swim" || key === "swimming")    return { icon: I.swim    || "", color: COLORS.swim,     label: LABELS.swim };
+    if (key === "strength" || key === "weightlifting" || key === "bodyweight") {
+      return { icon: I.weights || "", color: COLORS.strength, label: LABELS.strength };
+    }
+    if (key === "hybrid" || key === "triathlon") return { icon: I.flame || I.zap || I.weights || "", color: COLORS.hybrid, label: LABELS.hybrid };
+    return { icon: I.weights || "", color: COLORS.strength, label: key ? key[0].toUpperCase() + key.slice(1) : "Workout" };
   }
 
   // Share menu item — stashes the saved entry in the global fallback
