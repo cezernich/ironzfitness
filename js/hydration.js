@@ -57,14 +57,14 @@ function getHydrationTarget() {
 }
 
 function getBottleSize() {
+  // Legacy helper — the hydration progress bar is now oz-based, so
+  // callers shouldn't generally need this anymore. Kept for the legacy
+  // day-upgrade path (synthesizing entries from old bottle counts) and
+  // any legacy consumers (calendar/stats) that still think in bottles.
+  // Returns the first named bottle's size when the user has set any
+  // up, otherwise the saved default, otherwise 12oz.
   const settings = getHydrationSettings();
-  // Prefer the bottle the user has starred as default — that becomes
-  // the "default bottle" the progress display (N / target bottles)
-  // normalizes against. Fall back to the first named bottle, then the
-  // legacy bottleSize setting, then 12oz.
   const bottles = Array.isArray(settings.bottles) ? settings.bottles : [];
-  const starred = bottles.find(b => b.isDefault);
-  if (starred && starred.size) return parseFloat(starred.size) || 12;
   if (bottles.length && bottles[0].size) return parseFloat(bottles[0].size) || 12;
   return settings.bottleSize || 12;
 }
@@ -424,23 +424,22 @@ function renderHydration() {
   const today = getTodayString();
   const isToday = dateStr === today;
 
-  const bottleSize = getBottleSize();
   const breakdown = getHydrationBreakdown();
   const targetOz = breakdown.totalOz;
-  const bottles = getTodayHydration();
   const effectiveOz = getTodayEffectiveOz();
-  const bottlesNeeded = Math.ceil(targetOz / bottleSize);
 
   // Date navigator
   _renderHydrationDateNav(dateStr, isToday);
 
-  // Current / target display
+  // Progress bar label — now always oz-based (not bottle counts), so
+  // mixing bottles of different sizes produces a coherent total. The
+  // legacy secondary oz line under the bar is redundant and hidden.
   const currentEl = document.getElementById("hydration-current");
   const targetEl = document.getElementById("hydration-target-display");
   const ozEl = document.getElementById("hydration-oz-display");
-  if (currentEl) currentEl.textContent = bottles;
-  if (targetEl) targetEl.textContent = bottlesNeeded;
-  if (ozEl) ozEl.textContent = `${effectiveOz} / ${targetOz} oz`;
+  if (currentEl) currentEl.textContent = effectiveOz;
+  if (targetEl) targetEl.textContent = `${targetOz} oz`;
+  if (ozEl) ozEl.style.display = "none";
 
   // My Bottle button(s). If the user has named bottles set up, replace
   // the single "+ My Bottle" button with a row of named-bottle buttons
@@ -554,6 +553,12 @@ function _renderBottleButtons() {
     legacyBtn.insertAdjacentElement("afterend", container);
   }
 
+  // Compute remaining oz to goal — "X more bottles to hit your goal"
+  // is computed once and specialized per bottle size below.
+  const targetOz = getHydrationBreakdownForDate(getHydrationDate()).totalOz;
+  const currentOz = getTodayEffectiveOz();
+  const remainingOz = Math.max(0, targetOz - currentOz);
+
   if (!bottles.length) {
     // Legacy mode — keep the single "+ My Bottle" button and hide the
     // multi-bottle container.
@@ -565,13 +570,28 @@ function _renderBottleButtons() {
   }
 
   // Multi-bottle mode — hide the legacy button, render a grid of named
-  // bottles. Each button logs its bottle's oz via logNamedBottle.
+  // bottles. Each button shows how many more of that specific bottle
+  // the user needs to drink to hit today's target (or a "goal met"
+  // chip when they're already there).
   legacyBtn.style.display = "none";
   container.style.display = "";
   container.innerHTML = bottles.map(b => {
     const name = escHtml(b.name || "Bottle");
     const size = parseFloat(b.size) || 0;
-    return `<button class="btn-primary hydration-bottle-btn" onclick="logNamedBottle('${escHtml(b.id)}')">+ ${name} (${size}oz)</button>`;
+    let remainingLabel;
+    if (remainingOz <= 0) {
+      remainingLabel = "Goal met";
+    } else if (size > 0) {
+      const need = Math.ceil(remainingOz / size);
+      remainingLabel = `${need} more to hit goal`;
+    } else {
+      remainingLabel = "";
+    }
+    return `
+      <div class="hydration-bottle-cell">
+        <button class="btn-primary hydration-bottle-btn" onclick="logNamedBottle('${escHtml(b.id)}')">+ ${name} (${size}oz)</button>
+        ${remainingLabel ? `<div class="hydration-bottle-remaining">${remainingLabel}</div>` : ""}
+      </div>`;
   }).join("");
 }
 
@@ -711,18 +731,10 @@ function _renderBottleEditor(bottles) {
     list.innerHTML = `<p class="hint" style="margin:0 0 8px">No custom bottles yet. Add one below — each bottle becomes a one-tap log button on the hydration card.</p>`;
     return;
   }
-  // If no bottle is explicitly starred default, mark the first one —
-  // that way the progress bar always has a size to normalize against.
-  if (bottles.length && !bottles.some(b => b.isDefault)) {
-    bottles[0].isDefault = true;
-  }
   list.innerHTML = bottles.map(b => {
     const id = escHtml(b.id);
-    const starClass = b.isDefault ? " hydration-bottle-star--active" : "";
-    const starTitle = b.isDefault ? "Default bottle" : "Set as default";
     return `
-      <div class="hydration-bottle-row" data-bottle-id="${id}" data-bottle-default="${b.isDefault ? "1" : "0"}">
-        <button class="hydration-bottle-star${starClass}" title="${starTitle}" onclick="_setDefaultBottle('${id}')" aria-label="${starTitle}">&#9733;</button>
+      <div class="hydration-bottle-row" data-bottle-id="${id}">
         <input type="text" class="hydration-bottle-name" value="${escHtml(b.name || "")}" placeholder="Name (e.g. Hydroflask)" />
         <input type="number" class="hydration-bottle-size" value="${parseFloat(b.size) || ""}" min="1" max="128" placeholder="oz" />
         <button class="hydration-bottle-delete" title="Remove" onclick="_removeBottle('${id}')">&times;</button>
@@ -739,18 +751,7 @@ function _harvestBottleEditorRows() {
     id: row.getAttribute("data-bottle-id"),
     name: row.querySelector(".hydration-bottle-name")?.value || "",
     size: parseFloat(row.querySelector(".hydration-bottle-size")?.value) || 0,
-    isDefault: row.getAttribute("data-bottle-default") === "1",
   }));
-}
-
-// Star a bottle as the default. Only one bottle can be default at a
-// time — toggling star on a new row clears the flag on all others.
-// Operates on in-memory editor state so unsaved name/size edits in
-// other rows aren't lost.
-function _setDefaultBottle(id) {
-  const current = _harvestBottleEditorRows();
-  for (const b of current) b.isDefault = (b.id === id);
-  _renderBottleEditor(current);
 }
 
 function _addBottle() {
@@ -779,25 +780,16 @@ function saveHydrationSettings() {
   const bottleSize = parseInt(document.getElementById("hydration-bottle-size")?.value || "12");
   const dailyTargetOz = parseInt(document.getElementById("hydration-daily-target-oz")?.value || "96");
 
-  // Harvest the bottle editor rows — each row carries its id, the
-  // latest name/size the user typed, and whether it's the starred
-  // default. Empty or zero-sized entries are dropped so the user can
-  // delete a bottle by clearing its fields.
+  // Harvest the bottle editor rows — each row carries its id and the
+  // latest name/size the user typed. Empty or zero-sized entries are
+  // dropped so the user can delete a bottle by clearing its fields.
   const rows = Array.from(document.querySelectorAll(".hydration-bottle-row"));
   const bottles = rows.map(row => {
     const id = row.getAttribute("data-bottle-id");
     const name = row.querySelector(".hydration-bottle-name")?.value.trim() || "";
     const size = parseFloat(row.querySelector(".hydration-bottle-size")?.value) || 0;
-    const isDefault = row.getAttribute("data-bottle-default") === "1";
-    return { id, name, size, isDefault };
+    return { id, name, size };
   }).filter(b => b.size > 0 && b.name);
-
-  // Guarantee exactly one starred default when any bottles exist —
-  // otherwise getBottleSize would just fall back to the first element
-  // and the user's star selection wouldn't stick.
-  if (bottles.length && !bottles.some(b => b.isDefault)) {
-    bottles[0].isDefault = true;
-  }
 
   // Merge with existing settings so we don't blow away other keys.
   const prev = getHydrationSettings();
