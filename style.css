@@ -17544,13 +17544,13 @@ body.ob-v2-lock { overflow: hidden; }
   color: #fff;
   box-shadow: 0 6px 24px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.04);
 }
-.bp-card--primary:hover { box-shadow: 0 10px 32px rgba(232,83,14,0.25), 0 0 0 1px rgba(232,83,14,0.35); }
+.bp-card--primary:hover { box-shadow: 0 10px 32px rgba(229,62,62,0.25), 0 0 0 1px rgba(229,62,62,0.4); }
 .bp-card--secondary {
   background: #fff;
   color: #1A1A1A;
   border: 2px dashed #D6D0C4;
 }
-.bp-card--secondary:hover { border-color: #E8530E; background: #FFF9F5; }
+.bp-card--secondary:hover { border-color: #e53e3e; background: #FFF5F5; }
 .bp-card-icon {
   flex-shrink: 0;
   width: 52px;
@@ -17562,9 +17562,11 @@ body.ob-v2-lock { overflow: hidden; }
 }
 .bp-card-icon svg { width: 26px; height: 26px; }
 .bp-card-icon--bolt {
-  background: linear-gradient(135deg, #F26423, #E8530E);
+  /* IronZ brand red — matches the header "Build Plan" CTA and the
+     site's primary accent. Previously hardcoded orange. */
+  background: linear-gradient(135deg, #e53e3e, #c53030);
   color: #fff;
-  box-shadow: 0 4px 14px rgba(232,83,14,0.35);
+  box-shadow: 0 4px 14px rgba(229,62,62,0.4);
 }
 .bp-card-icon--plus {
   background: #F4EFE6;
@@ -17580,8 +17582,8 @@ body.ob-v2-lock { overflow: hidden; }
 .bp-card-badge {
   display: inline-block;
   align-self: flex-start;
-  background: rgba(232,83,14,0.15);
-  color: #FF8C5A;
+  background: rgba(229,62,62,0.18);
+  color: #ff7b7b;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -17606,7 +17608,7 @@ body.ob-v2-lock { overflow: hidden; }
   flex-shrink: 0;
   font-size: 28px;
   font-weight: 300;
-  color: #E8530E;
+  color: #e53e3e;
   padding-left: 6px;
   line-height: 1;
 }
