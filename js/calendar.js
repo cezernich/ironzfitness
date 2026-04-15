@@ -3180,7 +3180,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
             <div class="session-header-right">${(_getCompletionDuration(cardId) || _swGenDurMin) ? `<span class="session-duration-badge">${_getCompletionDuration(cardId) || _swGenDurMin} min</span>` : ""}${_swGenUndoBtn}${_swGenOverflow}<span class="card-chevron">▾</span></div>
           </div>
           ${_swGenStrip}
-          <div class="card-body">${body}${buildWorkoutExplanation(null, dateStr, w.discipline || w.type, w.load || "moderate", w.sessionName, w)}${_swGenEditPanel}${_swGenMovePanel}${_swGenCompletion}</div>
+          <div class="card-body">${body}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(w.duration || _swGenDurMin, w.sessionName) : ""}${buildWorkoutExplanation(null, dateStr, w.discipline || w.type, w.load || "moderate", w.sessionName, w)}${_swGenEditPanel}${_swGenMovePanel}${_swGenCompletion}</div>
         </div>`;
     });
 
