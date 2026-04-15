@@ -752,12 +752,12 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
 
     const _cCompletion = buildCompletionSection(cardId, w.type, null, dateStr, w.duration || null);
     const _cMovePanel  = buildSessionMovePanel(cardId, "logged", w.id, dateStr);
-    const _cShareBtn   = _buildShareBtnFromEntry(w);
     const _cUndoBtn    = _buildUndoHeaderBtn(cardId, dateStr);
     const _cSessionName = w.circuit.name || "Circuit";
     const _cOverflow   = _buildOverflowMenu(cardId,
       _ovflEditItem(w.id) +
       _ovflMoveItem(cardId) +
+      _ovflShareItem(w) +
       _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
 
     return `
@@ -769,7 +769,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
             <div class="session-phase">${escHtml(_cSubtitle)}</div>
           </div>
           <div class="session-header-right">
-            ${_cBadge}${_cUndoBtn}${_cShareBtn}${_cOverflow}<span class="card-chevron">▾</span>
+            ${_cBadge}${_cUndoBtn}${_cOverflow}<span class="card-chevron">▾</span>
           </div>
         </div>
         <div class="card-body">
@@ -867,6 +867,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
     const _aiOverflow = _buildOverflowMenu(cardId,
       _ovflEditItem(w.id) +
       _ovflMoveItem(cardId) +
+      _ovflShareItem(w) +
       _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
     return `
       <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
@@ -878,7 +879,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
           </div>
           <div class="session-header-right">
             ${displayDur ? `<span class="session-duration-badge">${isReduced ? "⬇ " : ""}${displayDur} min</span>` : ""}
-            ${_buildUndoHeaderBtn(cardId, dateStr)}${_buildShareBtnFromEntry(w)}${_aiOverflow}
+            ${_buildUndoHeaderBtn(cardId, dateStr)}${_aiOverflow}
             <span class="card-chevron">▾</span>
           </div>
         </div>
@@ -902,6 +903,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
     const _genCompletion = buildCompletionSection(cardId, w.type, null, dateStr, s.duration || null, s.steps);
     const _genOverflow = _buildOverflowMenu(cardId,
       _ovflEditItem(w.id) +
+      _ovflShareItem(w) +
       _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
     return `
       <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
@@ -913,7 +915,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
           </div>
           <div class="session-header-right">
             <span class="session-duration-badge">${_getCompletionDuration(cardId) || s.duration} min</span>
-            ${_buildUndoHeaderBtn(cardId, dateStr)}${_buildShareBtnFromEntry(w)}${_genOverflow}
+            ${_buildUndoHeaderBtn(cardId, dateStr)}${_genOverflow}
             <span class="card-chevron">▾</span>
           </div>
         </div>
@@ -943,6 +945,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
     const _exOverflow = _buildOverflowMenu(cardId,
       _ovflEditItem(w.id) +
       _ovflMoveItem(cardId) +
+      _ovflShareItem(w) +
       _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
     return `
       <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
@@ -953,7 +956,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
             <div class="session-phase">${w.fromSaved ? "Logged · " + _wTypeLabel(w.type) : "Planned"}${(!w.fromSaved && w.notes) ? " · " + w.notes : ""}</div>
           </div>
           <div class="session-header-right">
-            ${_buildUndoHeaderBtn(cardId, dateStr)}${_buildShareBtnFromEntry(w)}${_exOverflow}
+            ${_buildUndoHeaderBtn(cardId, dateStr)}${_exOverflow}
             <span class="card-chevron">▾</span>
           </div>
         </div>
@@ -970,6 +973,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
   const _minCompletion = buildCompletionSection(cardId, w.type, null, dateStr, w.duration || null);
   const _minOverflow = _buildOverflowMenu(cardId,
     _ovflEditItem(w.id) +
+    _ovflShareItem(w) +
     _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
   return `
     <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
@@ -979,7 +983,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
           <div class="session-name">${w.fromSaved || _wTypeLabel(w.type)}</div>
           ${w.fromSaved ? `<div class="session-phase">Logged · ${_wTypeLabel(w.type)}</div>` : (w.notes ? `<div class="session-phase">${escHtml(w.notes)}</div>` : "")}
         </div>
-        <div class="session-header-right">${_buildUndoHeaderBtn(cardId, dateStr)}${_buildShareBtnFromEntry(w)}${_minOverflow}<span class="card-chevron">▾</span></div>
+        <div class="session-header-right">${_buildUndoHeaderBtn(cardId, dateStr)}${_minOverflow}<span class="card-chevron">▾</span></div>
       </div>
       <div class="card-body">${_minCompletion}</div>
     </div>`;
@@ -1499,6 +1503,47 @@ function _ovflMoveItem(cardId) {
 // also need to re-render the day detail inline.
 function _ovflDeleteItem(onclickExpr) {
   return `<button class="ovflow-item ovflow-item--danger" onclick="event.stopPropagation();closeOverflowMenu();${onclickExpr}">Delete</button>`;
+}
+// Share item — stashes the workout entry in _calShareFallbackCache and
+// returns a menu item that, on click, closes the overflow menu and then
+// invokes the share action sheet directly via _invokeShareFromOverflow.
+// We cannot route this through share.js's document-level delegator —
+// that handler runs in the capture phase and calls stopPropagation,
+// which would prevent our onclick from firing and leave the overflow
+// menu stuck open behind the share sheet.
+function _ovflShareItem(entry) {
+  if (!entry) return "";
+  try {
+    const cacheKey = "cal" + (++_calShareSeq);
+    _calShareFallbackCache[cacheKey] = entry;
+    if (typeof window !== "undefined") window.__calShareFallbackCache = _calShareFallbackCache;
+    return `<button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();_invokeShareFromOverflow('${cacheKey}')">Share</button>`;
+  } catch (e) {
+    console.warn("[IronZ] share overflow item render skipped:", e.message);
+    return "";
+  }
+}
+
+// Direct share invocation — reads the entry from the calendar's local
+// fallback cache and calls window.ShareActionSheet.open (or native share
+// on touch devices), replicating what share.js's delegator does without
+// going through the delegator itself.
+if (typeof window !== "undefined") {
+  window._invokeShareFromOverflow = function (cacheKey) {
+    const entry = (window.__calShareFallbackCache || {})[cacheKey];
+    if (!entry) { console.warn("[IronZ] overflow share: entry not found for", cacheKey); return; }
+    const source = "calendar";
+    const preferNative = !!(navigator.share && "ontouchstart" in window);
+    if (preferNative && typeof window.shareWorkoutLinkDirect === "function") {
+      window.shareWorkoutLinkDirect(entry, source, "native");
+      return;
+    }
+    if (window.ShareActionSheet && window.ShareActionSheet.open) {
+      window.ShareActionSheet.open(entry, source);
+    } else if (typeof window.shareWorkoutLinkDirect === "function") {
+      window.shareWorkoutLinkDirect(entry, source, "clipboard");
+    }
+  };
 }
 
 // Returns header-level undo button shown in collapsed view when session is complete
@@ -2804,6 +2849,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       const _planEditItem = `<button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();openEditPlanSession('${dateStr}','${p.raceId}','${p.discipline}','${p.load}')">Edit</button>`;
       const _planOverflow = _buildOverflowMenu(cardId,
         _planEditItem +
+        _ovflShareItem(p) +
         _ovflDeleteItem(`deletePlanEntry('${p.raceId}','${p.discipline}','${dateStr}')`));
       if (session) {
         html += `
@@ -2817,7 +2863,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
               <div class="session-header-right">
                 <span class="session-duration-badge">${_getCompletionDuration(cardId) || session.duration} min</span>
                 <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
-                ${_planUndoBtn}${_buildShareBtnFromEntry(p)}${_planOverflow}
+                ${_planUndoBtn}${_planOverflow}
                 <span class="card-chevron">▾</span>
               </div>
             </div>
@@ -2835,7 +2881,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
               </div>
               <div class="session-header-right">
                 <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
-                ${_planUndoBtn}${_buildShareBtnFromEntry(p)}${_planOverflow}
+                ${_planUndoBtn}${_planOverflow}
                 <span class="card-chevron">▾</span>
               </div>
             </div>
@@ -2864,11 +2910,11 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
           const _swDoneIndicator = _swIsComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
           const _swUndoBtn       = _buildUndoHeaderBtn(cardId, dateStr);
           const _swUserAddedCls = w.source === "user_added" ? " session-card--user-added" : "";
-          const _swShareBtn = _buildShareBtnFromEntry(w);
           const _swEditItem = `<button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();openEditScheduledWorkout('${w.id}')">Edit</button>`;
           const _swOverflow = _buildOverflowMenu(cardId,
             _swEditItem +
             _ovflMoveItem(cardId) +
+            _ovflShareItem(w) +
             _ovflDeleteItem(`deleteScheduledWorkout('${w.id}','${dateStr}')`));
           html += `
             <div class="session-card collapsible${_swIsComplete ? " session-card--completed is-collapsed" : ""}${_swUserAddedCls}" id="${cardId}">
@@ -2881,7 +2927,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
                 <div class="session-header-right">
                   <span class="session-duration-badge">${_getCompletionDuration(cardId) || targetDuration} min</span>
                   <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
-                  ${_swUndoBtn}${_swShareBtn}${_swOverflow}
+                  ${_swUndoBtn}${_swOverflow}
                   <span class="card-chevron">▾</span>
                 </div>
               </div>
@@ -3052,11 +3098,11 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       const _swGenDoneInd    = _swGenCompleted ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
       const _swGenUndoBtn    = _buildUndoHeaderBtn(cardId, dateStr);
       const _swGenUserAddedCls = w.source === "user_added" ? " session-card--user-added" : "";
-      const _swGenShareBtn = _buildShareBtnFromEntry(w);
       const _swGenEditItem = `<button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();openEditScheduledWorkout('${w.id}')">Edit</button>`;
       const _swGenOverflow = _buildOverflowMenu(cardId,
         _swGenEditItem +
         _ovflMoveItem(cardId) +
+        _ovflShareItem(w) +
         _ovflDeleteItem(`deleteScheduledWorkout('${w.id}','${dateStr}')`));
       html += `
         <div class="session-card collapsible${_swGenCompleted ? " session-card--completed is-collapsed" : ""}${_swGenUserAddedCls}" id="${cardId}">
@@ -3066,7 +3112,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
               <div class="session-name">${w.sessionName}${_swGenDoneInd}</div>
               <div class="session-phase">${_wTypeLabel(w.type)}</div>
             </div>
-            <div class="session-header-right">${(_getCompletionDuration(cardId) || _swGenDurMin) ? `<span class="session-duration-badge">${_getCompletionDuration(cardId) || _swGenDurMin} min</span>` : ""}${_swGenUndoBtn}${_swGenShareBtn}${_swGenOverflow}<span class="card-chevron">▾</span></div>
+            <div class="session-header-right">${(_getCompletionDuration(cardId) || _swGenDurMin) ? `<span class="session-duration-badge">${_getCompletionDuration(cardId) || _swGenDurMin} min</span>` : ""}${_swGenUndoBtn}${_swGenOverflow}<span class="card-chevron">▾</span></div>
           </div>
           ${_swGenStrip}
           <div class="card-body">${body}${buildWorkoutExplanation(null, dateStr, w.discipline || w.type, w.load || "moderate", w.sessionName, w)}${_swGenEditPanel}${_swGenMovePanel}${_swGenCompletion}</div>
