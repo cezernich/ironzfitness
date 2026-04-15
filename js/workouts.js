@@ -2346,7 +2346,24 @@ function buildExerciseTableHTML(exercises, opts) {
         if (hyroxHasTimes) rows += `<td style="font-variant-numeric:tabular-nums;text-align:right">${e.splitTime ? _fmtSplitMs(e.splitTime) : "—"}</td>`;
         rows += `</tr>`;
       } else if (isHiit) {
-        rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(String(e.reps||"—"))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight)||"—")}</td></tr>`;
+        // HIIT rows can be rep-based (40 burpees) OR time-based (60s plank
+        // hold). Detect time-based exercises by name and suffix the unit so
+        // a user seeing "40" knows whether it's reps or seconds. If the
+        // entry already carries an explicit unit ("time"/"reps"), honor it.
+        const repsVal = String(e.reps || "—");
+        const unit = e.unit || e.repsUnit;
+        const nameL = String(e.name || "").toLowerCase();
+        const isTimed = unit === "time" || unit === "sec" || unit === "s" ||
+          /(hold|plank|carry|iso|wall.?sit|side.?plank|bear.?crawl|jump.?rope|battle.?rope|row)\b/.test(nameL);
+        let repsDisplay;
+        if (repsVal === "—" || /[a-z]/i.test(repsVal)) {
+          repsDisplay = repsVal;
+        } else if (isTimed) {
+          repsDisplay = repsVal + "s";
+        } else {
+          repsDisplay = repsVal + " reps";
+        }
+        rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(repsDisplay)}</td><td>${escHtml(_normalizeWeightDisplay(e.weight)||"—")}</td></tr>`;
       } else {
         rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(String(e.sets||"—"))}</td><td>${escHtml(String(e.reps||"—"))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight)||"—")}</td></tr>`;
       }
