@@ -746,11 +746,8 @@
     { id: "race",      icon: "flag",     text: "Train for a Race",      buckets: ["endurance"] },
     { id: "speed",     icon: "zap",      text: "Get Faster",             buckets: ["endurance"] },
     { id: "endurance", icon: "activity", text: "Build Endurance",        buckets: ["endurance"] },
-    { id: "stronger",  icon: "weights",  text: "Get Stronger",           buckets: ["strength"] },
-    { id: "muscle",    icon: "weights",  text: "Build Muscle / Bulk",    buckets: ["strength"] },
-    { id: "prs",       icon: "trophy",   text: "Set New PRs",            buckets: ["strength"] },
-    { id: "cut",       icon: "flame",    text: "Cut / Lean Out",         buckets: ["strength"] },
-    { id: "maintain",  icon: "check",    text: "Maintain",               buckets: ["strength"] },
+    { id: "stronger",  icon: "trophy",   text: "Get Stronger",           buckets: ["strength"] },
+    { id: "muscle",    icon: "weights",  text: "Build Muscle",           buckets: ["strength"] },
     { id: "weight",    icon: "flame",    text: "Lose Weight",            buckets: ["*"] },
     { id: "general",   icon: "target",   text: "General Fitness",        buckets: ["*"] },
   ];
