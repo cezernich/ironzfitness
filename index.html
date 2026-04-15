@@ -1607,6 +1607,31 @@
         </div>
       </section>
 
+      <!-- Account — change password + log out -->
+      <section class="card collapsible is-collapsed" id="section-change-password">
+        <div class="card-toggle" onclick="toggleSection('section-change-password')">
+          <h2>Change Password</h2>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body">
+          <p class="hint">Requires your current password. Minimum 6 characters.</p>
+          <div class="form-row">
+            <label for="change-pw-current">Current password</label>
+            <input type="password" id="change-pw-current" autocomplete="current-password" />
+          </div>
+          <div class="form-row">
+            <label for="change-pw-new">New password</label>
+            <input type="password" id="change-pw-new" autocomplete="new-password" />
+          </div>
+          <div class="form-row">
+            <label for="change-pw-confirm">Confirm new password</label>
+            <input type="password" id="change-pw-confirm" autocomplete="new-password" />
+          </div>
+          <button class="btn-primary" onclick="handleChangePassword()">Change Password</button>
+          <p id="change-pw-msg" class="save-msg"></p>
+        </div>
+      </section>
+
       <div style="margin-top:1rem;text-align:center">
         <button class="btn-danger" onclick="handleLogout()">Log Out</button>
       </div>

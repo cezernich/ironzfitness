@@ -268,6 +268,69 @@ async function handleLogout() {
   // onAuthStateChange fires SIGNED_OUT and calls showAuthScreen()
 }
 
+// ── Change password (signed-in user) ──────────────────────────────────────────
+//
+// Used by the in-app "Change Password" card in Settings. Re-verifies the
+// current password via signInWithPassword before calling updateUser so a
+// stolen-laptop scenario can't change the password without knowing the
+// existing one. The signInWithPassword re-auth fires a SIGNED_IN event
+// which our onAuthStateChange handler treats as a normal login for the
+// same user — harmless overhead.
+
+async function handleChangePassword() {
+  const currentEl = document.getElementById('change-pw-current');
+  const newEl     = document.getElementById('change-pw-new');
+  const confirmEl = document.getElementById('change-pw-confirm');
+  const msgId = 'change-pw-msg';
+
+  const current = currentEl?.value || '';
+  const next    = newEl?.value || '';
+  const confirm = confirmEl?.value || '';
+
+  if (!current) { setAuthMsg(msgId, 'Enter your current password.', true); return; }
+  if (!next || next.length < 6) { setAuthMsg(msgId, 'New password must be at least 6 characters.', true); return; }
+  if (next !== confirm) { setAuthMsg(msgId, 'New passwords do not match.', true); return; }
+  if (next === current) { setAuthMsg(msgId, 'New password must be different from the current one.', true); return; }
+
+  const btn = document.querySelector('#section-change-password .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Updating…'; }
+
+  try {
+    // Who are we? We need the email to re-verify current password.
+    const { data: userData, error: userErr } = await window.supabaseClient.auth.getUser();
+    if (userErr || !userData?.user?.email) {
+      setAuthMsg(msgId, 'Could not read your session. Try signing out and back in.', true);
+      return;
+    }
+    const email = userData.user.email;
+
+    // Re-verify the current password. If it's wrong, signInWithPassword
+    // returns an error and we stop here — no updateUser call.
+    const { error: verifyErr } = await window.supabaseClient.auth.signInWithPassword({ email, password: current });
+    if (verifyErr) {
+      setAuthMsg(msgId, 'Current password is incorrect.', true);
+      return;
+    }
+
+    const { error: updateErr } = await window.supabaseClient.auth.updateUser({ password: next });
+    if (updateErr) {
+      setAuthMsg(msgId, updateErr.message || 'Could not update password.', true);
+      return;
+    }
+
+    setAuthMsg(msgId, 'Password updated.', false);
+    if (currentEl) currentEl.value = '';
+    if (newEl) newEl.value = '';
+    if (confirmEl) confirmEl.value = '';
+    setTimeout(() => { const m = document.getElementById(msgId); if (m) m.textContent = ''; }, 4000);
+  } catch (e) {
+    setAuthMsg(msgId, 'Something went wrong. Try again.', true);
+    if (typeof reportCaughtError === 'function') reportCaughtError(e, { context: 'auth', action: 'change_password' });
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Change Password'; }
+  }
+}
+
 // ── Profile upsert (create if not exists) ─────────────────────────────────────
 
 async function ensureProfile(user) {
