@@ -1425,14 +1425,22 @@
     grid.innerHTML = _BP_DAYS.map(day => {
       const slots = _state.schedule[day] || [];
       const chipsHtml = slots.map((s, i) => {
-        const cls = s.replace(/[^a-z0-9]/gi, "");
+        // For display, show the enriched label if the stored slot is
+        // already an enriched code (e.g. "run-interval"), else compute
+        // the position-based enrichment via _enrichSlotPreview so the
+        // chip reflects what the user will actually get.
+        const displayCode = s.indexOf("-") > 0 ? s : s;
+        const label = _enrichedLabel(displayCode);
+        const bucket = _sportBucketFromEnriched(s);
+        const cls = bucket.replace(/[^a-z0-9]/gi, "");
         return '<span class="ob-v2-slot-chip ob-v2-slot-' + cls + '" ' +
           'draggable="true" ' +
           'data-slot-day="' + day + '" data-slot-idx="' + i + '" data-slot-sport="' + s + '" ' +
           'ondragstart="OnboardingV2._slotDragStart(event)" ' +
-          'ondragend="OnboardingV2._slotDragEnd(event)">' +
-          _escape(_prettySport(s)) +
-          '<button type="button" class="ob-v2-slot-remove" onclick="OnboardingV2._removeSlotAt(\'' + day + '\',' + i + ')" aria-label="Remove">&times;</button>' +
+          'ondragend="OnboardingV2._slotDragEnd(event)" ' +
+          'onclick="OnboardingV2._openSlotSubtypePicker(\'' + day + '\',' + i + ',this)">' +
+          _escape(label) +
+          '<button type="button" class="ob-v2-slot-remove" onclick="event.stopPropagation();OnboardingV2._removeSlotAt(\'' + day + '\',' + i + ')" aria-label="Remove">&times;</button>' +
           '</span>';
       }).join("");
       return '<div class="ob-v2-schedule-day" ' +
@@ -1612,6 +1620,50 @@
     const arr = _state.schedule[day] || [];
     const idx = arr.indexOf(sport);
     if (idx >= 0) { arr.splice(idx, 1); _renderSchedule(); }
+  }
+
+  // Subtype picker catalog — when the user taps an existing chip
+  // on the schedule grid, offer the variants for that sport so they
+  // can lock in an "Interval Run" vs "Easy Run" etc. Stored slots
+  // are replaced with the enriched code, which flows through to the
+  // preview (via _enrichWeekTemplate's pass-through branch) and the
+  // materialized calendar sessions (via _buildSessionForSport).
+  const _SUBTYPE_OPTIONS = {
+    run:  [["run-easy","Easy Run"], ["run-interval","Interval Run"], ["run-long","Long Run"], ["run-recovery","Recovery Run"]],
+    bike: [["bike-easy","Easy Ride"], ["bike-interval","Interval Ride"], ["bike-long","Long Ride"]],
+    swim: [["swim-endurance","Endurance Swim"], ["swim-css","CSS Swim"]],
+    strength: [["strength-push","Push Day"], ["strength-pull","Pull Day"], ["strength-legs","Leg Day"], ["strength-upper","Upper Body"], ["strength-lower","Lower Body"], ["strength-full","Full Body"]],
+  };
+
+  function _openSlotSubtypePicker(day, slotIdx, triggerChip) {
+    _closeAddSlotPicker();
+    if (!Array.isArray(_state.schedule[day])) return;
+    const current = _state.schedule[day][slotIdx];
+    if (!current) return;
+    const bucket = _sportBucketFromEnriched(current);
+    const options = _SUBTYPE_OPTIONS[bucket];
+    if (!options) return; // e.g. brick / rest / yoga have no variants — no-op
+    const chips = options.map(o =>
+      '<button type="button" class="ob-v2-picker-chip' + (o[0] === current ? " is-selected" : "") + '" ' +
+        'onclick="OnboardingV2._pickSlotSubtype(\'' + day + '\',' + slotIdx + ',\'' + o[0] + '\')">' +
+        _escape(o[1]) +
+      '</button>'
+    ).join("");
+    const tray = document.createElement("div");
+    tray.className = "ob-v2-picker-tray";
+    tray.innerHTML =
+      '<div class="ob-v2-picker-head">Set focus for this ' + _escape(_prettySport(bucket)) + '</div>' +
+      '<div class="ob-v2-picker-chips">' + chips + '</div>' +
+      '<button type="button" class="ob-v2-picker-cancel" onclick="OnboardingV2._closeAddSlotPicker()">Cancel</button>';
+    const dayRow = triggerChip ? triggerChip.closest(".ob-v2-schedule-day") : null;
+    if (dayRow) dayRow.appendChild(tray);
+    _activePicker = tray;
+  }
+  function _pickSlotSubtype(day, slotIdx, enrichedCode) {
+    if (!Array.isArray(_state.schedule[day])) return;
+    _state.schedule[day][slotIdx] = enrichedCode;
+    _closeAddSlotPicker();
+    _renderSchedule();
   }
 
   // Inline tap picker for adding a session to a day. Replaces the
@@ -2198,6 +2250,7 @@
       _shouldShowLongDays, _renderLongDayBlocks, _selectLongDay, _saveLongDaysAndContinue,
       _renderSchedule, _removeSlot, _removeSlotAt,
       _openAddSlotPicker, _pickAddSlot, _closeAddSlotPicker,
+      _openSlotSubtypePicker, _pickSlotSubtype,
       _slotDragStart, _slotDragEnd, _slotDragOver, _slotDragLeave, _slotDrop,
       _saveScheduleAndContinue,
       _renderPlanPreview, _confirmAndSavePlan, _mapRacesToLegacyEvents, _goToTrainingTab,
