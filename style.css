@@ -13240,6 +13240,89 @@ button:active {
   border-radius: 14px;
   padding: 14px;
 }
+
+/* ── Saved card v2 — cleaner flex layout ──────────────────────────────── */
+.saved-card-v2 {
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  transition: border-color 0.15s;
+}
+.saved-card-v2:hover {
+  border-color: var(--color-accent);
+}
+.saved-card-v2 .saved-card-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+.saved-card-v2 .saved-card-icon-wrap {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 1.3rem;
+}
+.saved-card-v2 .saved-card-icon-glyph {
+  line-height: 1;
+}
+.saved-card-v2 .saved-card-text {
+  flex: 1;
+  min-width: 0;
+}
+.saved-card-v2 .saved-card-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 2px;
+}
+.saved-card-v2 .saved-card-meta-line {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.saved-card-v2 .saved-card-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.saved-card-v2 .saved-card-schedule {
+  padding: 8px 16px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  background: var(--color-accent);
+  color: #fff;
+}
+.saved-card-v2 .saved-card-schedule:hover {
+  filter: brightness(1.08);
+}
+.saved-card-v2 .card-body {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.82rem;
+}
+.saved-card-v2.is-collapsed .card-body {
+  display: none;
+}
+@media (max-width: 520px) {
+  .saved-card-v2 .saved-card-schedule {
+    padding: 7px 12px;
+    font-size: 0.75rem;
+  }
+}
 .saved-card-header {
   display: flex;
   justify-content: space-between;

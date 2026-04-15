@@ -11,6 +11,12 @@
   const MAX_SAVED = 50;
   const TABLE = "saved_workouts";
 
+  // Tombstone list for deletes. Deleted saved-workout rows get added here
+  // so _refreshFromSupabase won't resurrect them, even if the remote
+  // delete silently failed (offline, RLS rejection, race, etc). IDs are
+  // cleared from the tombstone once the remote delete actually succeeds.
+  const PENDING_DELETE_KEY = "ironz_saved_workouts_pending_delete_v1";
+
   function _readLocal() {
     if (typeof localStorage === "undefined") return [];
     try { return JSON.parse(localStorage.getItem(LOCAL_KEY) || "[]"); } catch { return []; }
@@ -24,6 +30,30 @@
       // per-row Supabase writes — harmless duplication.
       if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey(LOCAL_KEY);
     } catch {}
+  }
+
+  function _readPendingDeletes() {
+    if (typeof localStorage === "undefined") return [];
+    try { return JSON.parse(localStorage.getItem(PENDING_DELETE_KEY) || "[]"); } catch { return []; }
+  }
+  function _writePendingDeletes(ids) {
+    if (typeof localStorage === "undefined") return;
+    try {
+      localStorage.setItem(PENDING_DELETE_KEY, JSON.stringify(ids));
+      if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey(PENDING_DELETE_KEY);
+    } catch {}
+  }
+  function _addPendingDelete(id) {
+    if (!id) return;
+    const ids = _readPendingDeletes();
+    if (!ids.includes(id)) {
+      ids.push(id);
+      _writePendingDeletes(ids);
+    }
+  }
+  function _clearPendingDelete(id) {
+    const ids = _readPendingDeletes().filter(x => x !== id);
+    _writePendingDeletes(ids);
   }
 
   // All rows (new and migrated) use a UUID for their id so they can be used
@@ -482,8 +512,30 @@
     const list = _readLocal();
     const before = list.length;
     const next = list.filter(s => s.id !== savedId);
+    if (next.length === before) return; // nothing to delete
     _writeLocal(next);
-    if (next.length !== before) _remoteDelete(savedId);
+    // Tombstone this id BEFORE the remote call — _refreshFromSupabase
+    // reads the tombstone and refuses to resurrect tombstoned rows
+    // even if the remote delete hasn't landed yet.
+    _addPendingDelete(savedId);
+    // Attempt the remote delete. On success we clear the tombstone.
+    // On failure we leave it in place so _retryPendingDeletes can
+    // pick it up at next boot.
+    try {
+      const client = _client();
+      const uid = await _getUserId();
+      if (client && uid) {
+        const { error } = await client.from(TABLE).delete().eq("id", savedId).eq("user_id", uid);
+        if (!error) {
+          _clearPendingDelete(savedId);
+        } else {
+          console.warn("[SavedWorkouts] delete remote failed (tombstoned):", error.message);
+          if (typeof reportCaughtError === "function") reportCaughtError(error, { context: "saved_workouts_library", action: "remote_delete_tombstoned" });
+        }
+      }
+    } catch (e) {
+      console.warn("[SavedWorkouts] delete offline (tombstoned):", e);
+    }
   }
 
   async function renameSaved(savedId, customName) {
@@ -849,6 +901,11 @@
     const remoteById = new Map(remoteRows.map(r => [r.id, r]));
     const local = _readLocal();
 
+    // Tombstoned ids must not resurrect — even if the remote delete
+    // hasn't landed yet, these rows have been explicitly removed on
+    // this device and should stay gone until the tombstone is cleared.
+    const tombstones = new Set(_readPendingDeletes());
+
     // Keep local rows that either exist remotely (refreshed) or are pending
     // a remote write (protected from stale-deletion).
     const kept = local.filter(l => remoteById.has(l.id) || l.pendingSync === true);
@@ -866,8 +923,10 @@
       }
     }
 
-    // Add rows that exist remotely but not locally (saved on another device).
+    // Add rows that exist remotely but not locally (saved on another device),
+    // EXCEPT tombstoned ones — those stay deleted.
     for (const r of remoteRows) {
+      if (tombstones.has(r.id)) continue;
       if (!keptById.has(r.id)) {
         keptById.set(r.id, _fromRemoteRow(r));
       }
@@ -877,6 +936,24 @@
       .sort((a, b) => (b.saved_at || "").localeCompare(a.saved_at || ""));
 
     _writeLocal(merged);
+  }
+
+  // Retry any pending remote deletes that failed on the original remove
+  // call. Runs at the start of bootSyncSupabase so that _refreshFromSupabase
+  // sees the pruned remote state. IDs that delete successfully clear from
+  // the tombstone; IDs that still fail stay tombstoned until next boot.
+  async function _retryPendingDeletes() {
+    const ids = _readPendingDeletes();
+    if (!ids.length) return;
+    const client = _client();
+    const uid = await _getUserId();
+    if (!client || !uid) return;
+    for (const id of ids) {
+      try {
+        const { error } = await client.from(TABLE).delete().eq("id", id).eq("user_id", uid);
+        if (!error) _clearPendingDelete(id);
+      } catch {}
+    }
   }
 
   // Retry any local rows whose previous per-row write failed. Runs at the
@@ -893,6 +970,15 @@
 
   // Entry point called once by auth.js after the session is confirmed.
   async function bootSyncSupabase() {
+    // Retry failed deletes FIRST so _refreshFromSupabase sees the
+    // pruned remote state and doesn't accidentally merge back in a
+    // row we're trying to delete.
+    try {
+      await _retryPendingDeletes();
+    } catch (e) {
+      console.warn("[SavedWorkouts] retry-deletes error:", e);
+      if (typeof reportCaughtError === "function") reportCaughtError(e, { context: "saved_workouts_library", action: "boot_sync_retry_deletes" });
+    }
     try {
       await _migrateLocalToSupabase();
     } catch (e) {

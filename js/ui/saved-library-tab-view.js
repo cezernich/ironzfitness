@@ -104,85 +104,131 @@
     });
   }
 
-  // ─── Custom workout cards ───────────────────────────────────────────────────
+  // Map sport keys to an icon + color. Falls back to a dumbbell if we
+  // don't recognize the sport — which happens for older saved rows that
+  // were stored without a sport_id.
+  const _SPORT_ICONS = {
+    run:      { icon: "&#x1F3C3;", color: "#f59e0b", label: "Run" },
+    running:  { icon: "&#x1F3C3;", color: "#f59e0b", label: "Run" },
+    bike:     { icon: "&#x1F6B4;", color: "#22d3ee", label: "Bike" },
+    cycling:  { icon: "&#x1F6B4;", color: "#22d3ee", label: "Bike" },
+    swim:     { icon: "&#x1F3CA;", color: "#3b82f6", label: "Swim" },
+    swimming: { icon: "&#x1F3CA;", color: "#3b82f6", label: "Swim" },
+    strength: { icon: "&#x1F3CB;", color: "#a855f7", label: "Strength" },
+    hybrid:   { icon: "&#x26A1;",  color: "#ef4444", label: "Hybrid" },
+  };
+  function _sportInfo(sportId) {
+    const key = String(sportId || "").toLowerCase();
+    return _SPORT_ICONS[key] || { icon: "&#x1F4AA;", color: "#a855f7", label: key ? key[0].toUpperCase() + key.slice(1) : "Workout" };
+  }
 
-  function _renderCustomCard(s) {
+  // Share menu item — stashes the saved entry in the global fallback
+  // cache that share.js and calendar.js's _invokeShareFromOverflow both
+  // consult, then returns a menu item that fires the share sheet via
+  // that helper instead of going through share.js's stopPropagation
+  // delegator (which would leave the overflow menu stuck open).
+  let _slShareSeq = 0;
+  function _ovflShareSavedItem(entry) {
+    if (!entry) return "";
+    try {
+      const cacheKey = "saved" + (++_slShareSeq);
+      if (typeof window !== "undefined") {
+        window.__calShareFallbackCache = window.__calShareFallbackCache || {};
+        window.__calShareFallbackCache[cacheKey] = entry;
+      }
+      // Also hand it to share.js's own cache so either code path works.
+      if (typeof window !== "undefined" && typeof window.stashShareEntry === "function") {
+        try { window.stashShareEntry(entry); } catch {}
+      }
+      return `<button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();_invokeShareFromOverflow('${cacheKey}')">Share</button>`;
+    } catch { return ""; }
+  }
+
+  // Unified overflow menu for a saved card. Schedule stays as the
+  // primary visible button; Edit (custom only) / Share / Remove go
+  // into a ••• menu that reuses calendar.js's _buildOverflowMenu helper.
+  function _buildSavedOverflow(s, cardId) {
+    if (typeof window._buildOverflowMenu !== "function") return "";
+    const editItem = s.source === "custom"
+      ? `<button class="ovflow-item" data-saved-action="edit-custom" data-id="${_esc(s.id)}" onclick="event.stopPropagation();closeOverflowMenu();">Edit</button>`
+      : "";
+    const shareItem = _ovflShareSavedItem(s);
+    const removeItem = `<button class="ovflow-item ovflow-item--danger" data-saved-action="remove" data-id="${_esc(s.id)}" onclick="event.stopPropagation();closeOverflowMenu();">Remove</button>`;
+    return window._buildOverflowMenu(cardId, editItem + shareItem + removeItem);
+  }
+
+  // Single unified renderer for all saved cards — library, shared, and
+  // custom. Clean flex row: sport icon on the left, title + meta line
+  // in the middle, Schedule + ••• on the right. No dead chevron.
+  function _renderSavedCardUnified(s) {
+    const isCustom = s.source === "custom";
+    const sourceLabel = isCustom ? "Custom" : (s.source === "shared" ? "Shared" : "Library");
     const p = s.payload || {};
-    const name = s.custom_name || "Untitled";
-    const kind = s.workout_kind || "general";
-    const sportLabel = s.sport_id ? _esc(s.sport_id) : "";
+    const name = s.custom_name || p.name || s.variant_id || "Untitled workout";
+    const cardId = (isCustom ? "sl-custom-" : "sl-card-") + _esc(s.id);
+    const variantAttr = isCustom ? "" : ` data-variant="${_esc(s.variant_id || "")}"`;
 
+    const sport = _sportInfo(s.sport_id);
+    const kindLabel = isCustom
+      ? (s.workout_kind || "").replace(/_/g, " ")
+      : (s.session_type_id || "").replace(/_/g, " ");
+    const metaParts = [];
+    metaParts.push(sourceLabel);
+    if (sport.label) metaParts.push(sport.label);
+    if (kindLabel) metaParts.push(kindLabel.replace(/\b\w/g, c => c.toUpperCase()));
+    const metaLine = metaParts.filter(Boolean).join(" · ");
+
+    const overflow = _buildSavedOverflow(s, cardId);
+
+    // Details body: custom workouts have their data in payload already;
+    // library/shared cards lazy-load via _slLoadDetail on expand.
     let detailHtml = "";
-    if (p.segments && p.segments.length) {
-      detailHtml = typeof buildSegmentTableHTML === "function"
-        ? buildSegmentTableHTML(p.segments)
-        : `<p class="hint">${p.segments.length} segment(s)</p>`;
-    } else if (p.exercises && p.exercises.length) {
-      detailHtml = typeof buildExerciseTableHTML === "function"
-        ? buildExerciseTableHTML(p.exercises, { hiit: kind === "hiit" || !!p.hiitMeta })
-        : `<p class="hint">${p.exercises.length} exercise(s)</p>`;
+    if (isCustom) {
+      if (p.segments && p.segments.length) {
+        detailHtml = typeof buildSegmentTableHTML === "function"
+          ? buildSegmentTableHTML(p.segments)
+          : `<p class="hint">${p.segments.length} segment(s)</p>`;
+      } else if (p.exercises && p.exercises.length) {
+        detailHtml = typeof buildExerciseTableHTML === "function"
+          ? buildExerciseTableHTML(p.exercises, { hiit: (s.workout_kind === "hiit") || !!p.hiitMeta })
+          : `<p class="hint">${p.exercises.length} exercise(s)</p>`;
+      }
+      if (p.notes) detailHtml = `<p class="saved-card-notes">${_esc(p.notes)}</p>${detailHtml}`;
+    } else {
+      detailHtml = `<p class="hint">Tap to see workout details</p>`;
     }
-    const notesHtml = p.notes ? `<p class="saved-card-notes">${_esc(p.notes)}</p>` : "";
 
-    const cardId = "sl-custom-" + _esc(s.id);
+    // Click on the row (but not on buttons) toggles the detail body.
+    const toggleCall = isCustom
+      ? `toggleSection('${cardId}')`
+      : `toggleSection('${cardId}'); _slLoadDetail('${cardId}','${_esc(s.variant_id || "")}')`;
+
     return `
-      <div class="saved-card saved-card--custom collapsible is-collapsed" id="${cardId}" data-id="${_esc(s.id)}">
-        <div class="saved-card-header card-toggle" onclick="toggleSection('${cardId}')">
-          <div class="saved-card-header-left">
-            <span class="saved-source-tag saved-source-custom">Custom</span>
-            ${sportLabel ? `<span class="saved-sport-tag">${sportLabel}</span>` : ""}
-            <span class="workout-tag tag-${_esc(kind)}" style="margin-left:4px">${_esc(kind)}</span>
+      <div class="saved-card saved-card-v2 collapsible is-collapsed${isCustom ? " saved-card--custom" : ""}" id="${cardId}" data-id="${_esc(s.id)}"${variantAttr}>
+        <div class="saved-card-row" onclick="${toggleCall}">
+          <div class="saved-card-icon-wrap" style="background:${sport.color}22;color:${sport.color}">
+            <span class="saved-card-icon-glyph">${sport.icon}</span>
           </div>
-          <span class="card-chevron">▾</span>
+          <div class="saved-card-text">
+            <div class="saved-card-name">${_esc(name)}</div>
+            <div class="saved-card-meta-line">${_esc(metaLine)}</div>
+          </div>
+          <div class="saved-card-right">
+            <button class="btn-primary saved-card-schedule" data-saved-action="schedule" data-id="${_esc(s.id)}" onclick="event.stopPropagation()">Schedule</button>
+            ${overflow}
+          </div>
         </div>
-        <div class="saved-card-title">${_esc(name)}</div>
-        <div class="card-body" style="display:none;padding:4px 0 0">
-          ${notesHtml}
+        <div class="card-body${isCustom ? "" : ""}" ${isCustom ? "" : `id="${cardId}-detail"`}>
           ${detailHtml}
         </div>
-        <div class="saved-card-actions">
-          <button class="btn-primary"  data-saved-action="schedule"    data-id="${_esc(s.id)}">Schedule</button>
-          ${typeof window.buildShareIconButton === "function" ? window.buildShareIconButton(s, "saved") : ""}
-          <button class="btn-ghost"    data-saved-action="edit-custom" data-id="${_esc(s.id)}">Edit</button>
-          <button class="btn-ghost"    data-saved-action="remove"      data-id="${_esc(s.id)}">${typeof ICONS !== "undefined" && ICONS.trash ? ICONS.trash : "Delete"}</button>
-        </div>
       </div>
     `;
   }
 
-  // ─── Library / shared cards (unchanged) ─────────────────────────────────────
-
-  function _renderCard(s) {
-    const sourceLabel = s.source === "shared" ? "Shared" : "Library";
-    const sourceClass = s.source === "shared" ? "saved-source-shared" : "saved-source-library";
-    const name = s.custom_name || s.variant_id;
-    const cardId = "sl-card-" + _esc(s.id);
-    const typeLabel = (s.session_type_id || "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-    const shareBtn = typeof window.buildShareIconButton === "function"
-      ? window.buildShareIconButton(s, "saved")
-      : "";
-    return `
-      <div class="saved-card collapsible is-collapsed" id="${cardId}" data-id="${_esc(s.id)}" data-variant="${_esc(s.variant_id || "")}">
-        <div class="saved-card-header card-toggle" onclick="toggleSection('${cardId}'); _slLoadDetail('${cardId}','${_esc(s.variant_id || "")}')">
-          <div class="saved-card-header-left">
-            <span class="saved-source-tag ${sourceClass}">${sourceLabel}</span>
-            <span class="saved-sport-tag">${_esc(s.sport_id || "")}</span>
-          </div>
-          <span class="card-chevron">\u25be</span>
-        </div>
-        <div class="saved-card-title">${_esc(name)}</div>
-        <div class="saved-card-meta">${_esc(typeLabel)}</div>
-        <div class="card-body" id="${cardId}-detail">
-          <p class="hint">Tap to see workout details</p>
-        </div>
-        <div class="saved-card-actions">
-          <button class="btn-primary"   data-saved-action="schedule" data-id="${_esc(s.id)}">Schedule</button>
-          ${shareBtn}
-          <button class="btn-ghost"     data-saved-action="remove"   data-id="${_esc(s.id)}">Remove</button>
-        </div>
-      </div>
-    `;
-  }
+  // Aliases so the rest of the file keeps compiling — both old render
+  // entry points now route through the unified renderer.
+  function _renderCustomCard(s) { return _renderSavedCardUnified(s); }
+  function _renderCard(s)       { return _renderSavedCardUnified(s); }
 
   // Lazy-load workout details from training_sessions when a card is expanded
   const _detailLoaded = new Set();
