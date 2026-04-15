@@ -17386,6 +17386,7 @@ body.ob-v2-lock { overflow: hidden; }
 .ob-v2-slot-chip.ob-v2-slot-run       { background: #E8F5E9; color: #2E7D32; }
 .ob-v2-slot-chip.ob-v2-slot-runlong   { background: #E8F5E9; color: #2E7D32; }
 .ob-v2-slot-chip.ob-v2-slot-bikelong  { background: #F3E5F5; color: #7B1FA2; }
+.ob-v2-slot-chip.ob-v2-slot-brick     { background: #FFF8E1; color: #E65100; font-weight: 800; }
 .ob-v2-slot-chip.ob-v2-slot-strength  { background: #FFF3E0; color: #E65100; }
 .ob-v2-slot-chip.ob-v2-slot-hyrox     { background: #FCE4EC; color: #C62828; }
 .ob-v2-slot-chip.ob-v2-slot-hiit      { background: #FFF3E0; color: #FF6F00; }

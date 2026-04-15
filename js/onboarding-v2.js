@@ -1498,6 +1498,31 @@
         if (target) _state.schedule[target].push("swim");
       }
     }
+    // Brick seed: triathletes / duathletes (bike + run both selected)
+    // should get at least one brick session per week. Preference order:
+    // the day with a standalone bike that isn't the long ride, so we
+    // convert it to a brick. If none, stack a brick onto the lightest
+    // non-long, non-rest day.
+    if (sports.includes("bike") && sports.includes("run")) {
+      const hasBrick = _BP_DAYS.some(d => _state.schedule[d].includes("brick"));
+      if (!hasBrick) {
+        const isLongDay = d => _state.schedule[d].includes("run-long") || _state.schedule[d].includes("bike-long");
+        // Prefer a day that currently has a plain bike — upgrade it to a brick.
+        let target = _BP_DAYS.find(d =>
+          !isLongDay(d) && _state.schedule[d].length === 1 && _state.schedule[d][0] === "bike"
+        );
+        if (target) {
+          _state.schedule[target] = ["brick"];
+        } else {
+          // Otherwise pick the lightest non-long, non-rest day and add brick there.
+          const candidates = _BP_DAYS
+            .filter(d => !isLongDay(d) && !_state.schedule[d].includes("rest"))
+            .sort((a, b) => _state.schedule[a].length - _state.schedule[b].length);
+          if (candidates[0]) _state.schedule[candidates[0]].push("brick");
+        }
+      }
+    }
+
     // Sprinkle strength sessions on alternating days, capped at requested count
     if (strength > 0) {
       let placed = 0;
@@ -1509,15 +1534,50 @@
         }
       }
     }
-    // If the user ended up with zero rest days, carve one from the lightest day.
-    if (!Object.values(_state.schedule).some(arr => !arr.length || arr.includes("rest"))) {
-      const lightest = _BP_DAYS.slice().sort((a, b) => _state.schedule[a].length - _state.schedule[b].length)[0];
-      if (lightest) _state.schedule[lightest] = ["rest"];
+    // Enforce rest days to match the user's `daysPerWeek` preference.
+    // If they asked for 5 days, we carve 2 rest days from the lightest.
+    // If they asked for 7, we force-clear any rest day we might have
+    // accidentally seeded. Default to 5 training days if unset.
+    const wantedTraining = Math.max(1, Math.min(7,
+      parseInt(_state.planDetails.daysPerWeek, 10) || 5
+    ));
+    const restNeeded = 7 - wantedTraining;
+    // Count current rest days (including implicitly empty days).
+    const isRestDay = d => !_state.schedule[d].length || _state.schedule[d].includes("rest");
+    const currentRest = _BP_DAYS.filter(isRestDay).length;
+
+    if (currentRest < restNeeded) {
+      // Carve rest days from the lightest non-long days.
+      const isLongDay = d => _state.schedule[d].includes("run-long") || _state.schedule[d].includes("bike-long");
+      const carveCandidates = _BP_DAYS
+        .filter(d => !isRestDay(d) && !isLongDay(d))
+        .sort((a, b) => _state.schedule[a].length - _state.schedule[b].length);
+      const toCarve = Math.min(restNeeded - currentRest, carveCandidates.length);
+      for (let i = 0; i < toCarve; i++) {
+        _state.schedule[carveCandidates[i]] = ["rest"];
+      }
+    } else if (currentRest > restNeeded && wantedTraining === 7) {
+      // User wants to train every day — drop any implicit rest markers.
+      _BP_DAYS.forEach(d => {
+        if (_state.schedule[d].includes("rest")) _state.schedule[d] = [];
+      });
+      // Backfill empty days with round-robin endurance so they actually
+      // get a session, otherwise days would render blank with just a +.
+      if (endurance.length) {
+        let idx = 0;
+        _BP_DAYS.forEach(d => {
+          if (_state.schedule[d].length === 0) {
+            _state.schedule[d].push(endurance[idx % endurance.length]);
+            idx++;
+          }
+        });
+      }
     }
   }
   function _prettySport(s) {
     const map = {
       swim: "Swim", bike: "Bike", run: "Run", "run-long": "Long Run", "bike-long": "Long Ride",
+      brick: "Brick",
       strength: "Strength", hiit: "HIIT", yoga: "Yoga", rowing: "Row", walking: "Walk",
       hyrox: "Hyrox", circuit: "Circuit", mobility: "Mobility", rest: "Rest",
     };
@@ -1560,7 +1620,13 @@
   let _activePicker = null;
   function _openAddSlotPicker(day, triggerBtn) {
     _closeAddSlotPicker();
-    const sports = (_state.selectedSports || []).concat(["strength", "rest"]);
+    const selected = _state.selectedSports || [];
+    const sports = selected.concat(["strength"]);
+    // Offer Brick whenever the user has both bike and run (i.e. triathletes
+    // and duathletes). A brick is a single session that stacks a ride and
+    // a run back-to-back — core triathlon-specific work.
+    if (selected.includes("bike") && selected.includes("run")) sports.push("brick");
+    sports.push("rest");
     const unique = Array.from(new Set(sports));
     const chips = unique.map(s =>
       '<button type="button" class="ob-v2-picker-chip ob-v2-slot-' + s.replace(/[^a-z0-9]/gi, "") + '" ' +
@@ -1801,6 +1867,7 @@
       "run-long": { type: "running",      discipline: "run",   sessionName: "Long Run",  load: "long",    duration: Math.round(sessionLen * 1.5) },
       "bike":     { type: "cycling",      discipline: "bike",  sessionName: "Ride",      load: "easy" },
       "bike-long":{ type: "cycling",      discipline: "bike",  sessionName: "Long Ride", load: "long",    duration: Math.round(sessionLen * 1.8) },
+      "brick":    { type: "triathlon",    discipline: "brick", sessionName: "Brick (Bike → Run)", load: "moderate", duration: Math.round(sessionLen * 1.3) },
       "swim":     { type: "swimming",     discipline: "swim",  sessionName: "Swim",      load: "easy" },
       "strength": { type: "weightlifting",discipline: "strength", sessionName: "Strength", load: "moderate" },
       "hiit":     { type: "hiit",         discipline: "hiit",  sessionName: "HIIT",      load: "hard",    duration: Math.max(20, Math.round(sessionLen * 0.5)) },
