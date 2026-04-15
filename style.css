@@ -17693,3 +17693,77 @@ body.ob-v2-lock { overflow: hidden; }
     border-radius: 0;
   }
 }
+
+/* ===== Schedule grid: inline picker + drag/drop feedback ===== */
+.ob-v2-slot-chip { cursor: grab; user-select: none; }
+.ob-v2-slot-chip:active { cursor: grabbing; }
+.ob-v2-slot-dragging { opacity: 0.4; }
+.ob-v2-schedule-day.ob-v2-drop-target {
+  background: rgba(232,83,14,0.08);
+  border-radius: 8px;
+  outline: 2px dashed rgba(232,83,14,0.55);
+  outline-offset: -2px;
+}
+.ob-v2-picker-tray {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+  padding: 12px;
+  background: #FFF9F2;
+  border: 1px solid rgba(232,83,14,0.35);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ob-v2-picker-head {
+  font-size: 11px;
+  font-weight: 700;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.ob-v2-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ob-v2-picker-chip {
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #fff;
+  color: #1A1A1A;
+  border: 1.5px solid #E0D8CC;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, transform 0.1s;
+}
+.ob-v2-picker-chip:hover { background: #FFF5F0; border-color: #E8530E; color: #E8530E; }
+.ob-v2-picker-chip:active { transform: scale(0.96); }
+.ob-v2-picker-cancel {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 0;
+  text-decoration: underline;
+}
+
+/* ===== Strength Setup: custom per-day split rows ===== */
+.ob-v2-custom-day {
+  padding: 12px;
+  background: #FFF;
+  border: 1px solid #EEE;
+  border-radius: 12px;
+  margin-bottom: 10px;
+}
+.ob-v2-custom-day-head {
+  font-size: 12px;
+  font-weight: 800;
+  color: #E8530E;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}

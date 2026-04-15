@@ -792,8 +792,20 @@
       .map(el => el.getAttribute("data-goal"));
     _state.trainingGoals = goals;
     _lsSet("trainingGoals", goals);
-    // Skip the race path entirely if the user didn't pick "race".
-    goTo(goals.includes("race") ? "bp-v2-3-race" : "bp-v2-3-norace");
+    if (goals.includes("race")) { goTo("bp-v2-3-race"); return; }
+    // Strength-only users skip the generic Plan Details screen — the
+    // same fields (block length, session length, days per week) live
+    // on bp-v2-6 Strength Setup to avoid asking twice.
+    const sports = _state.selectedSports || [];
+    const strengthOnly = sports.length > 0 && sports.every(s => s === "strength");
+    if (strengthOnly) {
+      _state.raceEvents = [];
+      _lsSet("raceEvents", []);
+      goTo("bp-v2-4");
+      _renderThresholdSections();
+      return;
+    }
+    goTo("bp-v2-3-norace");
   }
 
   function _updateRaceTypes() {
@@ -1206,11 +1218,12 @@
 
   function _adjustStrengthCount(delta) {
     const cur = _state.strengthSetup.sessionsPerWeek;
-    const next = Math.max(0, Math.min(6, cur + delta));
+    const next = Math.max(0, Math.min(7, cur + delta));
     _state.strengthSetup.sessionsPerWeek = next;
     const el = document.getElementById("bp-v2-strength-count");
     if (el) el.textContent = String(next);
     _applyStrengthCountSideEffects();
+    if (_state.strengthSetup.split === "custom") _renderCustomDayList();
   }
   function _applyStrengthCountSideEffects() {
     const count = _state.strengthSetup.sessionsPerWeek;
@@ -1230,8 +1243,59 @@
     _state.strengthSetup.split = btn.getAttribute("data-split");
     const customBlock = document.getElementById("bp-v2-custom-muscles");
     if (customBlock) customBlock.style.display = _state.strengthSetup.split === "custom" ? "" : "none";
+    if (_state.strengthSetup.split === "custom") _renderCustomDayList();
   }
+  // Legacy flat-muscle toggle (kept for back-compat if any caller remains).
   function _toggleMuscle(btn) { if (btn) btn.classList.toggle("is-selected"); }
+
+  // Custom split: one row per day, each with muscle-group chips.
+  // State lives in _state.strengthSetup.customMuscles as
+  // { "1": ["chest","triceps"], "2": ["back","biceps"], ... }
+  const _BP_MUSCLES = [
+    ["chest","Chest"], ["back","Back"], ["shoulders","Shoulders"],
+    ["biceps","Biceps"], ["triceps","Triceps"], ["quads","Quads"],
+    ["hamstrings","Hamstrings"], ["glutes","Glutes"], ["calves","Calves"],
+    ["core","Core"], ["fullbody","Full Body"],
+  ];
+  function _renderCustomDayList() {
+    const host = document.getElementById("bp-v2-custom-day-list");
+    if (!host) return;
+    const days = _state.strengthSetup.sessionsPerWeek || 0;
+    if (days <= 0) { host.innerHTML = ""; return; }
+    // Normalize state into object shape keyed by day index.
+    const cur = _state.strengthSetup.customMuscles;
+    if (!cur || Array.isArray(cur)) _state.strengthSetup.customMuscles = {};
+    const store = _state.strengthSetup.customMuscles;
+    const rows = [];
+    for (let i = 1; i <= days; i++) {
+      const key = String(i);
+      if (!Array.isArray(store[key])) store[key] = [];
+      const selected = store[key];
+      const chips = _BP_MUSCLES.map(m =>
+        '<button type="button" class="ob-v2-chip' + (selected.includes(m[0]) ? " is-selected" : "") + '" ' +
+          'data-muscle="' + m[0] + '" data-day="' + i + '" ' +
+          'onclick="OnboardingV2._toggleMuscleForDay(' + i + ',\'' + m[0] + '\',this)">' +
+          _escape(m[1]) +
+        '</button>'
+      ).join("");
+      rows.push(
+        '<div class="ob-v2-custom-day">' +
+          '<div class="ob-v2-custom-day-head">Day ' + i + '</div>' +
+          '<div class="ob-v2-chips">' + chips + '</div>' +
+        '</div>'
+      );
+    }
+    host.innerHTML = rows.join("");
+  }
+  function _toggleMuscleForDay(dayIdx, muscle, btn) {
+    const store = _state.strengthSetup.customMuscles || (_state.strengthSetup.customMuscles = {});
+    const key = String(dayIdx);
+    if (!Array.isArray(store[key])) store[key] = [];
+    const list = store[key];
+    const at = list.indexOf(muscle);
+    if (at >= 0) list.splice(at, 1); else list.push(muscle);
+    if (btn) btn.classList.toggle("is-selected", at < 0);
+  }
   function _selectStrLength(btn) {
     if (!btn) return;
     const group = btn.parentElement;
@@ -1241,9 +1305,9 @@
     _state.strengthSetup.sessionLength = parseInt(btn.getAttribute("data-str-length"), 10) || 45;
   }
   function _saveStrengthAndContinue() {
-    const customMuscles = Array.from(document.querySelectorAll("#bp-v2-custom-muscles .ob-v2-chip.is-selected"))
-      .map(el => el.getAttribute("data-muscle"));
-    _state.strengthSetup.customMuscles = customMuscles;
+    // customMuscles is now a per-day object (see _renderCustomDayList).
+    // _toggleMuscleForDay maintains it in _state directly, so we just
+    // persist whatever's there. Non-custom splits leave it empty.
     _lsSet("strengthSetup", _state.strengthSetup);
     if (_shouldShowLongDays()) { goTo("bp-v2-4b"); _renderLongDayBlocks(); }
     else { goTo("bp-v2-5"); _renderSchedule(); }
@@ -1332,17 +1396,25 @@
     if (allEmpty) _seedSchedule();
     grid.innerHTML = _BP_DAYS.map(day => {
       const slots = _state.schedule[day] || [];
-      const chipsHtml = slots.map(s => {
+      const chipsHtml = slots.map((s, i) => {
         const cls = s.replace(/[^a-z0-9]/gi, "");
-        return '<span class="ob-v2-slot-chip ob-v2-slot-' + cls + '">' +
+        return '<span class="ob-v2-slot-chip ob-v2-slot-' + cls + '" ' +
+          'draggable="true" ' +
+          'data-slot-day="' + day + '" data-slot-idx="' + i + '" data-slot-sport="' + s + '" ' +
+          'ondragstart="OnboardingV2._slotDragStart(event)" ' +
+          'ondragend="OnboardingV2._slotDragEnd(event)">' +
           _escape(_prettySport(s)) +
-          '<button type="button" class="ob-v2-slot-remove" onclick="OnboardingV2._removeSlot(\'' + day + '\',\'' + s + '\')">&times;</button>' +
+          '<button type="button" class="ob-v2-slot-remove" onclick="OnboardingV2._removeSlotAt(\'' + day + '\',' + i + ')" aria-label="Remove">&times;</button>' +
           '</span>';
       }).join("");
-      return '<div class="ob-v2-schedule-day">' +
+      return '<div class="ob-v2-schedule-day" ' +
+        'data-day="' + day + '" ' +
+        'ondragover="OnboardingV2._slotDragOver(event)" ' +
+        'ondragleave="OnboardingV2._slotDragLeave(event)" ' +
+        'ondrop="OnboardingV2._slotDrop(event,\'' + day + '\')">' +
         '<div class="ob-v2-day-name">' + _BP_DAY_LABELS[day] + '</div>' +
         '<div class="ob-v2-day-slots">' + chipsHtml +
-          '<button type="button" class="ob-v2-add-slot" onclick="OnboardingV2._promptAddSlot(\'' + day + '\')">+</button>' +
+          '<button type="button" class="ob-v2-add-slot" onclick="OnboardingV2._openAddSlotPicker(\'' + day + '\',this)" aria-label="Add session">+</button>' +
         '</div>' +
       '</div>';
     }).join("");
@@ -1440,23 +1512,99 @@
     const warn = document.getElementById("bp-v2-rest-warning");
     if (warn) warn.style.display = restDays === 0 ? "" : "none";
   }
-  function _removeSlot(day, sport) {
-    _state.schedule[day] = (_state.schedule[day] || []).filter(s => s !== sport);
+  // Remove a specific slot by its index in the day's array (so we can
+  // distinguish duplicates of the same sport on the same day).
+  function _removeSlotAt(day, idx) {
+    if (!Array.isArray(_state.schedule[day])) return;
+    _state.schedule[day].splice(idx, 1);
     _renderSchedule();
   }
-  function _promptAddSlot(day) {
-    const sports = _state.selectedSports.concat(["strength", "rest"]);
+  // Back-compat wrapper: delete first occurrence by sport name.
+  function _removeSlot(day, sport) {
+    const arr = _state.schedule[day] || [];
+    const idx = arr.indexOf(sport);
+    if (idx >= 0) { arr.splice(idx, 1); _renderSchedule(); }
+  }
+
+  // Inline tap picker for adding a session to a day. Replaces the
+  // ugly window.prompt() that used to pop up. Renders a row of
+  // tappable sport chips right below the day, no modal.
+  let _activePicker = null;
+  function _openAddSlotPicker(day, triggerBtn) {
+    _closeAddSlotPicker();
+    const sports = (_state.selectedSports || []).concat(["strength", "rest"]);
     const unique = Array.from(new Set(sports));
-    const lines = unique.map((s, i) => (i + 1) + ". " + _prettySport(s)).join("\n");
-    const choice = window.prompt("Add to " + _BP_DAY_LABELS[day] + ":\n" + lines + "\n\nEnter number or sport name:");
-    if (!choice) return;
-    const idx = parseInt(choice, 10);
-    let picked = null;
-    if (!isNaN(idx) && unique[idx - 1]) picked = unique[idx - 1];
-    else picked = unique.find(s => s.toLowerCase() === choice.toLowerCase() || _prettySport(s).toLowerCase() === choice.toLowerCase());
-    if (!picked) return;
-    _state.schedule[day] = _state.schedule[day] || [];
-    _state.schedule[day].push(picked);
+    const chips = unique.map(s =>
+      '<button type="button" class="ob-v2-picker-chip ob-v2-slot-' + s.replace(/[^a-z0-9]/gi, "") + '" ' +
+        'onclick="OnboardingV2._pickAddSlot(\'' + day + '\',\'' + s + '\')">' +
+        _escape(_prettySport(s)) +
+      '</button>'
+    ).join("");
+    const tray = document.createElement("div");
+    tray.className = "ob-v2-picker-tray";
+    tray.innerHTML =
+      '<div class="ob-v2-picker-head">Add to ' + _BP_DAY_LABELS[day] + '</div>' +
+      '<div class="ob-v2-picker-chips">' + chips + '</div>' +
+      '<button type="button" class="ob-v2-picker-cancel" onclick="OnboardingV2._closeAddSlotPicker()">Cancel</button>';
+    // Append tray to the day row so it shows contextually
+    const dayRow = triggerBtn ? triggerBtn.closest(".ob-v2-schedule-day") : null;
+    if (dayRow) dayRow.appendChild(tray);
+    _activePicker = tray;
+  }
+  function _pickAddSlot(day, sport) {
+    if (!Array.isArray(_state.schedule[day])) _state.schedule[day] = [];
+    _state.schedule[day].push(sport);
+    _closeAddSlotPicker();
+    _renderSchedule();
+  }
+  function _closeAddSlotPicker() {
+    if (_activePicker && _activePicker.parentElement) _activePicker.parentElement.removeChild(_activePicker);
+    _activePicker = null;
+  }
+
+  // Drag-and-drop: allow the user to move a slot from one day to
+  // another by dragging it. Works on desktop with mouse; touch
+  // drag-drop is not universally supported so tap-add remains the
+  // fallback on mobile.
+  function _slotDragStart(ev) {
+    const el = ev.currentTarget;
+    if (!el) return;
+    const day = el.getAttribute("data-slot-day");
+    const idx = el.getAttribute("data-slot-idx");
+    const sport = el.getAttribute("data-slot-sport");
+    try {
+      ev.dataTransfer.effectAllowed = "move";
+      ev.dataTransfer.setData("text/plain", JSON.stringify({ day, idx: Number(idx), sport }));
+    } catch {}
+    el.classList.add("ob-v2-slot-dragging");
+  }
+  function _slotDragEnd(ev) {
+    const el = ev.currentTarget;
+    if (el) el.classList.remove("ob-v2-slot-dragging");
+    document.querySelectorAll(".ob-v2-schedule-day.ob-v2-drop-target")
+      .forEach(d => d.classList.remove("ob-v2-drop-target"));
+  }
+  function _slotDragOver(ev) {
+    ev.preventDefault();
+    try { ev.dataTransfer.dropEffect = "move"; } catch {}
+    ev.currentTarget.classList.add("ob-v2-drop-target");
+  }
+  function _slotDragLeave(ev) {
+    ev.currentTarget.classList.remove("ob-v2-drop-target");
+  }
+  function _slotDrop(ev, targetDay) {
+    ev.preventDefault();
+    ev.currentTarget.classList.remove("ob-v2-drop-target");
+    let payload = null;
+    try { payload = JSON.parse(ev.dataTransfer.getData("text/plain") || "null"); } catch {}
+    if (!payload || !payload.day) return;
+    if (payload.day === targetDay) return;
+    if (!Array.isArray(_state.schedule[payload.day])) return;
+    const from = _state.schedule[payload.day];
+    if (from[payload.idx] !== payload.sport) return;
+    from.splice(payload.idx, 1);
+    if (!Array.isArray(_state.schedule[targetDay])) _state.schedule[targetDay] = [];
+    _state.schedule[targetDay].push(payload.sport);
     _renderSchedule();
   }
   function _saveScheduleAndContinue() {
@@ -1470,6 +1618,10 @@
     if (!body) return;
     const race = _state.currentRace;
     const hasRace = _state.trainingGoals.includes("race") && race && race.date;
+    // Strength-only users don't follow a race-phased arc, so the
+    // base/build/peak/taper timeline is irrelevant — skip it.
+    const sports = _state.selectedSports || [];
+    const strengthOnly = sports.length > 0 && sports.every(s => s === "strength");
 
     // "You are here" marker — computes the user's current position along
     // the plan so they can see which phase they're in at a glance. At
@@ -1512,7 +1664,7 @@
       return '<div class="ob-v2-week-day-row"><div class="ob-v2-week-day-label">' + _BP_DAY_LABELS[d] + '</div><div class="ob-v2-week-day-workouts">' + mini + '</div></div>';
     }).join("");
     body.innerHTML =
-      '<div class="ob-v2-preview-timeline">' + timelineHtml + '</div>' +
+      (strengthOnly ? "" : '<div class="ob-v2-preview-timeline">' + timelineHtml + '</div>') +
       '<div class="ob-v2-section-label">Plan Week 1</div>' +
       '<div class="ob-v2-week-preview">' + weekHtml + '</div>';
     const anyTest = Object.values(_state.thresholds || {}).some(t => t && t.mode === "test");
@@ -1664,9 +1816,14 @@
       _updateRaceTypes, _updateWeeksCallout, _selectRaceGoal, _selectLeadInPhase, _adjustLeadIn, _saveRaceAndContinue,
       _selectPlanOption, _saveNoraceAndContinue,
       _renderThresholdSections, _toggleTestMe, _changeThresholdMethod, _saveThresholdsAndContinue, _testMeForEverythingAndContinue,
-      _adjustStrengthCount, _applyStrengthCountSideEffects, _selectSplit, _toggleMuscle, _selectStrLength, _saveStrengthAndContinue,
+      _adjustStrengthCount, _applyStrengthCountSideEffects, _selectSplit, _toggleMuscle,
+      _renderCustomDayList, _toggleMuscleForDay,
+      _selectStrLength, _saveStrengthAndContinue,
       _shouldShowLongDays, _renderLongDayBlocks, _selectLongDay, _saveLongDaysAndContinue,
-      _renderSchedule, _removeSlot, _promptAddSlot, _saveScheduleAndContinue,
+      _renderSchedule, _removeSlot, _removeSlotAt,
+      _openAddSlotPicker, _pickAddSlot, _closeAddSlotPicker,
+      _slotDragStart, _slotDragEnd, _slotDragOver, _slotDragLeave, _slotDrop,
+      _saveScheduleAndContinue,
       _renderPlanPreview, _confirmAndSavePlan, _mapRacesToLegacyEvents, _goToTrainingTab,
     });
   }
