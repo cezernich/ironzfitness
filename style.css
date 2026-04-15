@@ -2256,6 +2256,11 @@ button:active {
   margin-left: auto;
 }
 
+.session-step-zone-row {
+  margin-top: 3px;
+  margin-bottom: 3px;
+}
+
 .session-step-label {
   font-size: 0.82rem;
   color: var(--color-text);
@@ -9653,9 +9658,21 @@ button:active {
 .qe-brick-run  { background: var(--color-accent); color: #fff; }
 
 .qe-cardio-meta {
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  color: var(--color-text);
+  font-weight: 600;
   white-space: nowrap;
+}
+
+.qe-cardio-rest {
+  font-weight: 400;
+  color: var(--color-text-muted);
+  margin-left: 2px;
+}
+
+.qe-cardio-badge-row {
+  margin-top: 4px;
+  margin-bottom: 4px;
 }
 
 .qe-cardio-details {

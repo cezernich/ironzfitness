@@ -34,6 +34,31 @@ const DISCIPLINE_COLORS = {
   wellness:     "var(--color-success)",
 };
 
+// Resolve the card icon/color for a workout record when the type field
+// might be a subtemplate alias (e.g. "tempo", "progression") that
+// DISCIPLINE_ICONS doesn't know about. Falls back to matching keywords
+// in the workout title/notes before giving up with the strength icon —
+// so a "Tempo — Progression Run" session still renders with the run
+// icon instead of the barbell.
+function _resolveDiscipline(w) {
+  if (!w) return { icon: ICONS.weights, color: "var(--color-accent)" };
+  const key = w.discipline || w.type || "";
+  if (DISCIPLINE_ICONS[key]) {
+    return { icon: DISCIPLINE_ICONS[key], color: DISCIPLINE_COLORS[key] || "var(--color-accent)" };
+  }
+  const text = `${w.sessionName || ""} ${w.name || ""} ${w.notes || ""} ${w.generatedSession?.name || ""}`.toLowerCase();
+  if (/\b(run|tempo|progression|threshold|speed|vo2|easy.?run|long.?run|brick.?run|hill)\b/.test(text)) {
+    return { icon: ICONS.run, color: DISCIPLINE_COLORS.run };
+  }
+  if (/\b(bike|cycling|ftp|sweet.?spot|trainer|spin)\b/.test(text)) {
+    return { icon: ICONS.bike, color: DISCIPLINE_COLORS.bike };
+  }
+  if (/\b(swim|css|freestyle|pool|stroke|drill)\b/.test(text)) {
+    return { icon: ICONS.swim, color: DISCIPLINE_COLORS.swim };
+  }
+  return { icon: ICONS.weights, color: "var(--color-accent)" };
+}
+
 const RESTRICTION_LABELS = {
   injury:  "Injury / Pain",
   sick:    "Sick / Low Energy",
@@ -329,8 +354,7 @@ function buildWeekCell(dateStr, dateObj, todayStr) {
     });
   }
   if (!sessionRemoved) sw.forEach(w => {
-    const icon  = DISCIPLINE_ICONS[w.type] || ICONS.weights;
-    const color = DISCIPLINE_COLORS[w.type] || "var(--color-accent)";
+    const { icon, color } = _resolveDiscipline(w);
     sessions.push({
       icon, label: w.sessionName, color, badge: null,
       drag: `draggable="true" data-drag-type="scheduled" data-drag-source="${dateStr}" data-drag-id="${w.id}" ondragstart="onSessionDragStart(event)" ondragend="onSessionDragEnd(event)"`,
@@ -339,8 +363,7 @@ function buildWeekCell(dateStr, dateObj, todayStr) {
 
   // Manually-added sessions get bubbles too
   data.loggedWorkouts.forEach(w => {
-    const icon  = DISCIPLINE_ICONS[w.type] || ICONS.weights;
-    const color = DISCIPLINE_COLORS[w.type] || "var(--color-accent)";
+    const { icon, color } = _resolveDiscipline(w);
     const label = w.generatedSession ? w.generatedSession.name : _wTypeLabel(w.type);
     sessions.push({
       icon, label, color,
@@ -453,10 +476,10 @@ function buildDayCell(dateStr, dayNum, todayStr) {
       icons.push({ icon: DISCIPLINE_ICONS[disc] || ICONS.weights, color: DISCIPLINE_COLORS[disc] || "var(--color-accent)" });
     }
     data.scheduledWorkouts.forEach(w => {
-      icons.push({ icon: DISCIPLINE_ICONS[w.type] || ICONS.weights, color: DISCIPLINE_COLORS[w.type] || "var(--color-accent)" });
+      icons.push(_resolveDiscipline(w));
     });
     data.loggedWorkouts.forEach(w => {
-      icons.push({ icon: DISCIPLINE_ICONS[w.type] || ICONS.weights, color: DISCIPLINE_COLORS[w.type] || "var(--color-accent)" });
+      icons.push(_resolveDiscipline(w));
     });
   }
 
@@ -692,8 +715,7 @@ function doDuplicateSession(cardId, sourceType, sourceId, _origDate) {
 // ─── Logged workout session card ─────────────────────────────────────────────
 
 function buildLoggedWorkoutCard(w, dateStr, restriction) {
-  const icon    = DISCIPLINE_ICONS[w.type] || ICONS.weights;
-  const color   = DISCIPLINE_COLORS[w.type] || "var(--color-accent)";
+  const { icon, color } = _resolveDiscipline(w);
   const cardId  = `session-log-${w.id}`;
   const _logComplete = isSessionComplete(cardId);
   const _logCompleteCls = _logComplete ? " session-card--completed" : "";
@@ -1204,9 +1226,14 @@ function buildAiIntervalsList(session, type) {
       // Try to extract total duration from details (e.g., "Ladder 1600m / 1200m / ...")
       perRepDur = "";
     }
-    // Fix legacy data: if reps > 1 and duration is total minutes (not per-rep),
-    // try to extract per-rep distance from the details text.
-    if (reps > 1 && /\d+\s*min/.test(perRepDur)) {
+    // Legacy running data: older exports stored segment duration as TOTAL
+    // across reps; we'd extract a per-rep distance or divide by reps. New
+    // structured intervals (cycling variants, swim steps, etc.) have a
+    // proper per-rep duration AND a separate restDuration — never rewrite
+    // those. Gate by workout type and the absence of restDuration so the
+    // fix only fires where the legacy assumption actually holds.
+    const _isLegacyRun = (type === "running" || type === "run") && !iv.restDuration;
+    if (_isLegacyRun && reps > 1 && /\d+\s*min/.test(perRepDur)) {
       const distMatch = (iv.details || "").match(/(\d+)\s*[x×]\s*(\d+)\s*m\b/i);
       if (distMatch) {
         perRepDur = `${distMatch[2]}m`;
@@ -1248,13 +1275,15 @@ function buildAiIntervalsList(session, type) {
                     : effectiveName ? effectiveName.toUpperCase() : "INTERVAL";
     const stepCls   = isTransition ? "session-step--transition" : isRestWalk ? "session-step--rw" : `session-step--z${zone}`;
     const zoneBadge = isTransition ? "T1" : isRestWalk ? "RW" : `Z${zone}${zoneLabel ? `<span class="session-step-pace">${zoneLabel}</span>` : ""}`;
+    // Top row: name on left, duration on right. Zone badge moves to its
+    // own row underneath so it isn't squeezed between name and duration.
     return `
       <div class="session-step ${stepCls}">
         <div class="session-step-meta">
           <span class="session-step-type">${sportTag}${typeLabel}</span>
-          <span class="session-step-zone">${zoneBadge}</span>
           <span class="session-step-duration">${durText}</span>
         </div>
+        <div class="session-step-zone-row"><span class="session-step-zone">${zoneBadge}</span></div>
         ${iv.details ? `<div class="session-step-label">${escHtml(iv.details)}</div>` : ""}
       </div>`;
   }
@@ -2714,8 +2743,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
 
     // Generated plan sessions
     data.scheduledWorkouts.forEach(w => {
-      const icon   = DISCIPLINE_ICONS[w.discipline || w.type] || ICONS.weights;
-      const color  = DISCIPLINE_COLORS[w.discipline || w.type] || "var(--color-accent)";
+      const { icon, color } = _resolveDiscipline(w);
       const cardId = `session-sw-${w.id}`;
 
       // Rich rendering for sessions with discipline + load (running philosophy)
@@ -6504,13 +6532,19 @@ function qeGenerateCardio() {
       (workout.intervals || []).forEach(iv => {
         const zCls = effortToZone[iv.effort] || "z2";
         const sportTag = iv.sport ? `<span class="qe-brick-sport qe-brick-${iv.sport}">${iv.sport === "bike" ? "Bike" : "Run"}</span> ` : "";
-        const badgeHtml = iv.effort ? `&ensp;<span class="zone-badge ${zCls}">${escHtml(iv.effort)}</span>` : "";
+        const badgeHtml = iv.effort ? `<span class="zone-badge ${zCls}">${escHtml(iv.effort)}</span>` : "";
+        // Duration text: show reps × per-rep dur for structured blocks
+        // so the card reflects the actual work time (e.g. "4 × 10 min").
+        const reps = iv.reps || 1;
+        const durText = reps > 1 ? `${reps} × ${escHtml(iv.duration)}` : escHtml(iv.duration);
+        const restText = (reps > 1 && iv.restDuration) ? ` <span class="qe-cardio-rest">(${escHtml(iv.restDuration)} rest)</span>` : "";
         const detailsHtml = iv.details ? `<div class="qe-cardio-details">${escHtml(iv.details)}</div>` : "";
         html += `<div class="qe-cardio-interval">
           <div class="qe-cardio-interval-header">
             <span class="qe-cardio-phase">${sportTag}${escHtml(iv.name)}</span>
-            <span class="qe-cardio-meta">${escHtml(iv.duration)}${badgeHtml}</span>
+            <span class="qe-cardio-meta">${durText}${restText}</span>
           </div>
+          ${badgeHtml ? `<div class="qe-cardio-badge-row">${badgeHtml}</div>` : ""}
           ${detailsHtml}
         </div>`;
       });

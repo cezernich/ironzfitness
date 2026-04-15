@@ -745,6 +745,29 @@ const DB = (() => {
             .from(table).upsert(chunk, { onConflict: 'id' });
           if (error) console.warn(`DB: sync ${lsKey} error`, error.message);
         }
+
+        // Purge stale rows: anything that exists in Supabase for this
+        // user but NOT in the current local survivor set. Without this,
+        // a single-item delete only upserts the remaining items and the
+        // removed row lingers in the table — then refreshAllTables()
+        // pulls it back on next reload and the deleted item reappears.
+        try {
+          const { data: remote, error: fetchErr } = await _client()
+            .from(table).select('id').eq('user_id', uid);
+          if (fetchErr) {
+            console.warn(`DB: sync ${lsKey} purge-fetch error`, fetchErr.message);
+          } else if (remote && remote.length) {
+            const localIds = new Set(rows.map(r => r.id).filter(Boolean));
+            const stale = remote.map(r => r.id).filter(id => id && !localIds.has(id));
+            if (stale.length) {
+              const { error: delErr } = await _client()
+                .from(table).delete().eq('user_id', uid).in('id', stale);
+              if (delErr) console.warn(`DB: sync ${lsKey} purge-delete error`, delErr.message);
+            }
+          }
+        } catch (e) {
+          console.warn(`DB: sync ${lsKey} purge exception`, e);
+        }
       } catch (e) { console.warn(`DB: sync ${lsKey} offline`, e); }
     }, delay);
   }
