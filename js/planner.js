@@ -2535,8 +2535,11 @@ function _rfValidateStep3AndNext() {
     const allRaces = (() => { try { return JSON.parse(localStorage.getItem("events")) || []; } catch { return []; } })();
     const existingA = allRaces.find(r => (r.priority || "A").toUpperCase() === "A" && r.id !== _editingRaceId && r.date >= todayStr);
     if (existingA) {
-      _rfShowError(`You already have an upcoming A Race (${existingA.name || existingA.type}). Only one A Race is allowed at a time — set this to B, or edit your existing A Race first.`);
-      return;
+      const existingName = existingA.name || existingA.type;
+      const newName = raceFormState.savedName || raceFormState.type || "this race";
+      const msg = `You already have an upcoming A race: ${existingName}.\n\nAdd "${newName}" as a B race instead? Your training plan will stay built around ${existingName} and will factor in ${newName} that week.\n\n(Cancel to go back and edit your existing A race first.)`;
+      if (!confirm(msg)) return;
+      raceFormState.savedPriority = "B";
     }
   }
   raceFormState.step = 4;
@@ -2853,8 +2856,11 @@ function _rfValidateStep3AndNextTri() {
     const allRaces = (() => { try { return JSON.parse(localStorage.getItem("events")) || []; } catch { return []; } })();
     const existingA = allRaces.find(r => (r.priority || "A").toUpperCase() === "A" && r.id !== _editingRaceId && r.date >= todayStr);
     if (existingA) {
-      _rfShowError(`You already have an upcoming A Race (${existingA.name || existingA.type}). Only one A Race is allowed at a time — set this to B, or edit your existing A Race first.`);
-      return;
+      const existingName = existingA.name || existingA.type;
+      const newName = raceFormState.savedName || raceFormState.type || "this race";
+      const msg = `You already have an upcoming A race: ${existingName}.\n\nAdd "${newName}" as a B race instead? Your training plan will stay built around ${existingName} and will factor in ${newName} that week.\n\n(Cancel to go back and edit your existing A race first.)`;
+      if (!confirm(msg)) return;
+      raceFormState.savedPriority = "B";
     }
   }
   raceFormState.step = 4;
@@ -2896,8 +2902,11 @@ function _rfValidateStep3AndNextGeneral() {
     const allRaces = (() => { try { return JSON.parse(localStorage.getItem("events")) || []; } catch { return []; } })();
     const existingA = allRaces.find(r => (r.priority || "A").toUpperCase() === "A" && r.id !== _editingRaceId && r.date >= todayStr);
     if (existingA) {
-      _rfShowError(`You already have an upcoming A Race (${existingA.name || existingA.type}). Only one A Race is allowed at a time — set this to B, or edit your existing A Race first.`);
-      return;
+      const existingName = existingA.name || existingA.type;
+      const newName = raceFormState.savedName || raceFormState.type || "this race";
+      const msg = `You already have an upcoming A race: ${existingName}.\n\nAdd "${newName}" as a B race instead? Your training plan will stay built around ${existingName} and will factor in ${newName} that week.\n\n(Cancel to go back and edit your existing A race first.)`;
+      if (!confirm(msg)) return;
+      raceFormState.savedPriority = "B";
     }
   }
   raceFormState.step = 4;
@@ -3062,14 +3071,29 @@ function saveRace() {
     return;
   }
 
-  // A-race uniqueness: only one upcoming A race allowed at a time
+  // A-race uniqueness: only one upcoming A race allowed at a time. If the
+  // user tries to add a second A race, offer to save the new one as a B
+  // race instead of rejecting outright — that way the existing A race
+  // keeps its training plan as the primary build, and the new event is
+  // added as a secondary goal the plan can factor into its taper /
+  // recovery logic on that week. The user can still cancel and edit the
+  // other race first if they really meant to swap A races.
+  let effectivePriority = priority;
   if (priority === "A") {
     const todayStr = new Date().toISOString().slice(0, 10);
     const allRaces = (() => { try { return JSON.parse(localStorage.getItem("events")) || []; } catch { return []; } })();
     const existingA = allRaces.find(r => (r.priority || "A").toUpperCase() === "A" && r.id !== _editingRaceId && r.date >= todayStr);
     if (existingA) {
-      showErr(`You already have an upcoming A Race (${existingA.name || existingA.type}). You can only have one A Race at a time — set this race to B, or edit your existing A Race first.`);
-      return;
+      const existingName = existingA.name || existingA.type;
+      const newName = name || type;
+      const msg = `You already have an upcoming A race: ${existingName}.\n\nAdd "${newName}" as a B race instead? Your training plan will stay built around ${existingName} and will factor in ${newName} that week.\n\n(Cancel to go back and edit your existing A race first.)`;
+      if (!confirm(msg)) return;
+      effectivePriority = "B";
+      // Reflect the demotion in the form state so the saved race record
+      // and any subsequent renders see the B priority.
+      raceFormState.savedPriority = "B";
+      const prioritySelect = document.getElementById("race-priority");
+      if (prioritySelect) prioritySelect.value = "B";
     }
   }
 
@@ -3103,7 +3127,7 @@ function saveRace() {
     name,
     type,
     level,
-    priority,
+    priority: effectivePriority,
     date,
     longDay,
     ...(raceLocation && { location: raceLocation }),
