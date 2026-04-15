@@ -820,7 +820,8 @@
     { id: "speed",     icon: "zap",      text: "Get Faster",             buckets: ["endurance"] },
     { id: "endurance", icon: "activity", text: "Build Endurance",        buckets: ["endurance"] },
     { id: "stronger",  icon: "trophy",   text: "Get Stronger",           buckets: ["strength"] },
-    { id: "muscle",    icon: "weights",  text: "Build Muscle",           buckets: ["strength"] },
+    { id: "bulk",      icon: "weights",  text: "Bulk",                   buckets: ["strength"] },
+    { id: "cut",       icon: "flame",    text: "Cut",                    buckets: ["strength"] },
     { id: "weight",    icon: "flame",    text: "Lose Weight",            buckets: ["*"] },
     { id: "general",   icon: "target",   text: "General Fitness",        buckets: ["*"] },
   ];
@@ -1336,6 +1337,48 @@
       else if (count === 3) rec.textContent = "Push / Pull / Legs is the sweet spot for 3 days.";
       else rec.textContent = "PPL recommended. Upper / Lower also works for 4+ days.";
     }
+    // Block-length + start-date section only appears when the user is
+    // strength-only. Endurance / mixed users answer those questions on
+    // bp-v2-3-norace instead, so showing them twice would be redundant.
+    const blockSection = document.getElementById("bp-v2-strength-block-section");
+    if (blockSection) {
+      const sports = _state.selectedSports || [];
+      const strengthOnly = sports.length > 0 && sports.every(s => s === "strength");
+      blockSection.style.display = strengthOnly ? "" : "none";
+      // Seed the start-date input with the default (next Monday) so
+      // it's never blank when the strength-only user lands here.
+      const dateInput = document.getElementById("bp-v2-str-start-date");
+      if (dateInput) {
+        if (!_state.planDetails.startDate) _state.planDetails.startDate = _nextMondayISO();
+        dateInput.value = _state.planDetails.startDate;
+        const today = new Date(); today.setHours(0,0,0,0);
+        dateInput.min = today.toISOString().slice(0, 10);
+      }
+      // Sync the duration chip with _state so the right one is selected
+      // when the user lands on the screen.
+      document.querySelectorAll("#bp-v2-strength-block-section [data-str-duration]").forEach(el => {
+        el.classList.toggle("is-selected", el.getAttribute("data-str-duration") === String(_state.planDetails.duration));
+      });
+    }
+  }
+  function _selectStrDuration(btn) {
+    if (!btn) return;
+    const group = btn.parentElement;
+    if (!group) return;
+    group.querySelectorAll(".ob-v2-chip").forEach(el => el.classList.remove("is-selected"));
+    btn.classList.add("is-selected");
+    const val = btn.getAttribute("data-str-duration");
+    _state.planDetails.duration = val;
+    const customBlock = document.getElementById("bp-v2-str-duration-custom");
+    if (customBlock) customBlock.style.display = val === "custom" ? "" : "none";
+    if (val === "custom") {
+      const inp = document.getElementById("bp-v2-str-duration-weeks");
+      if (inp) {
+        const stored = _state.planDetails.customWeeks;
+        inp.value = stored ? String(stored) : "";
+        setTimeout(() => inp.focus(), 0);
+      }
+    }
   }
   function _selectSplit(btn) {
     if (!btn) return;
@@ -1613,7 +1656,10 @@
       }
     }
 
-    // Sprinkle strength sessions on alternating days, capped at requested count
+    // Place strength sessions up to the requested count.
+    // First pass: alternate days (Mon/Wed/Fri/Sun) to spread load.
+    // Second pass: fill remaining days if the user asked for >4 days,
+    // so a 5/6/7-day request actually lands the full count.
     if (strength > 0) {
       let placed = 0;
       for (let i = 0; i < _BP_DAYS.length && placed < strength; i += 2) {
@@ -1621,6 +1667,25 @@
         if (_state.schedule[d].length < 2) {
           _state.schedule[d].push("strength");
           placed++;
+        }
+      }
+      if (placed < strength) {
+        for (let i = 1; i < _BP_DAYS.length && placed < strength; i += 2) {
+          const d = _BP_DAYS[i];
+          if (!_state.schedule[d].includes("strength") && _state.schedule[d].length < 2) {
+            _state.schedule[d].push("strength");
+            placed++;
+          }
+        }
+      }
+      // Last resort: stack onto any day that doesn't already have strength.
+      if (placed < strength) {
+        for (let i = 0; i < _BP_DAYS.length && placed < strength; i++) {
+          const d = _BP_DAYS[i];
+          if (!_state.schedule[d].includes("strength")) {
+            _state.schedule[d].push("strength");
+            placed++;
+          }
         }
       }
     }
@@ -1923,7 +1988,12 @@
         } else if (s === "strength") {
           let focus;
           if (split === "custom") {
-            focus = _customDayLabel(strIdx + 1);
+            // Preserve the day index so the renderer and the session
+            // builder can look up the actual muscle selections for
+            // this specific day. Produces codes like "strength-day1",
+            // "strength-day2", ... — _enrichedLabel reads customMuscles
+            // from state to format a label.
+            focus = "day" + (strIdx + 1);
           } else {
             focus = (STRENGTH_ROTATION[split] || STRENGTH_ROTATION.ppl)[strIdx] || "full";
           }
@@ -1961,7 +2031,34 @@
       "strength-custom":"Strength",
       "brick":        "Brick",
     };
-    return map[code] || _prettySport(code);
+    if (map[code]) return map[code];
+    // strength-dayN → look up the user's per-day muscle picks and
+    // produce a "Chest + Shoulders" style label. Falls back to "Day N"
+    // when the user didn't pick anything for that day.
+    const dayMatch = /^strength-day(\d+)$/.exec(code);
+    if (dayMatch) {
+      const n = dayMatch[1];
+      const muscles = (_state.strengthSetup && _state.strengthSetup.customMuscles && _state.strengthSetup.customMuscles[n]) || [];
+      if (!muscles.length) return "Day " + n;
+      const nameMap = {
+        chest: "Chest", back: "Back", shoulders: "Shoulders",
+        biceps: "Biceps", triceps: "Triceps", quads: "Quads",
+        hamstrings: "Hamstrings", glutes: "Glutes", calves: "Calves",
+        core: "Core", fullbody: "Full Body",
+      };
+      const labels = muscles.map(m => nameMap[m] || m);
+      // Collapse common upper/lower groupings into a single name so
+      // the label doesn't become an essay when the user picks every
+      // push muscle, etc.
+      const set = new Set(muscles);
+      const all = (...xs) => xs.every(x => set.has(x));
+      if (all("chest","shoulders","triceps") && set.size === 3) return "Push Day";
+      if (all("back","biceps") && set.size === 2)               return "Pull Day";
+      if (all("quads","hamstrings","glutes","calves") && set.size === 4) return "Leg Day";
+      if (labels.length <= 3) return labels.join(" + ");
+      return labels.slice(0, 2).join(" + ") + " +" + (labels.length - 2);
+    }
+    return _prettySport(code);
   }
 
   function _renderPlanPreview() {
@@ -2286,18 +2383,64 @@
       "hyrox":         { type: "hiit",         discipline: "hyrox", sessionName: "Hyrox",     load: "hard" },
       "circuit":       { type: "hiit",         discipline: "circuit", sessionName: "Circuit", load: "hard" },
     };
-    const spec = map[code];
+    let spec = map[code];
+    // strength-dayN (custom split) — synthesize a spec from the user's
+    // per-day muscle selections. Name reflects the actual muscles,
+    // exercises come from the per-muscle template lookup below.
+    let customDayIdx = null;
+    const dayMatch = /^strength-day(\d+)$/.exec(code);
+    if (!spec && dayMatch) {
+      customDayIdx = dayMatch[1];
+      spec = {
+        type: "weightlifting",
+        discipline: "strength",
+        sessionName: _enrichedLabel(code),
+        load: "moderate",
+        _strengthFocus: "custom",
+      };
+    }
     if (!spec) return null;
-    // Pull the internal _strengthFocus marker out of the spec before
-    // merging so it doesn't leak into the stored session.
     const { _strengthFocus, ...cleanSpec } = spec;
     const session = Object.assign({}, base, cleanSpec);
-    // Inject strength exercise content so the calendar card isn't
-    // empty. Users can edit from the day-detail editor.
-    if (_strengthFocus && _STRENGTH_TEMPLATES[_strengthFocus]) {
+    if (customDayIdx && _state.strengthSetup && _state.strengthSetup.customMuscles) {
+      const muscles = _state.strengthSetup.customMuscles[customDayIdx] || [];
+      session.exercises = _strengthExercisesForMuscles(muscles);
+    } else if (_strengthFocus && _STRENGTH_TEMPLATES[_strengthFocus]) {
       session.exercises = _STRENGTH_TEMPLATES[_strengthFocus].map(ex => ({ ...ex }));
     }
     return session;
+  }
+
+  // Produce a 4-6 exercise list targeting the given muscle groups.
+  // Used by _buildSessionForSport for strength-dayN (custom split)
+  // sessions. Caps at 6 exercises so the session stays ~45-60 min.
+  function _strengthExercisesForMuscles(muscles) {
+    if (!Array.isArray(muscles) || muscles.length === 0) {
+      return _STRENGTH_TEMPLATES.full.map(ex => ({ ...ex }));
+    }
+    const _EX_BY_MUSCLE = {
+      chest:      [{ name: "Barbell Bench Press",      sets: 4, reps: "6-8",  weight: "" }, { name: "Incline Dumbbell Press", sets: 3, reps: "10", weight: "" }],
+      back:       [{ name: "Barbell Row",              sets: 4, reps: "8",    weight: "" }, { name: "Lat Pulldown",           sets: 3, reps: "10-12", weight: "" }],
+      shoulders:  [{ name: "Overhead Press",           sets: 4, reps: "6-8",  weight: "" }, { name: "Lateral Raise",          sets: 3, reps: "12-15", weight: "" }],
+      biceps:     [{ name: "Barbell Curl",             sets: 3, reps: "10",   weight: "" }, { name: "Hammer Curl",            sets: 3, reps: "12", weight: "" }],
+      triceps:    [{ name: "Close Grip Bench Press",   sets: 3, reps: "8-10", weight: "" }, { name: "Tricep Pushdown",        sets: 3, reps: "12", weight: "" }],
+      quads:      [{ name: "Back Squat",               sets: 4, reps: "5-8",  weight: "" }, { name: "Leg Press",              sets: 3, reps: "10", weight: "" }],
+      hamstrings: [{ name: "Romanian Deadlift",        sets: 4, reps: "8",    weight: "" }, { name: "Lying Leg Curl",         sets: 3, reps: "12", weight: "" }],
+      glutes:     [{ name: "Hip Thrust",               sets: 4, reps: "10",   weight: "" }, { name: "Bulgarian Split Squat",  sets: 3, reps: "10/leg", weight: "" }],
+      calves:     [{ name: "Standing Calf Raise",      sets: 4, reps: "15",   weight: "" }],
+      core:       [{ name: "Plank",                    sets: 3, reps: "45s",  weight: "Bodyweight" }, { name: "Hanging Leg Raise", sets: 3, reps: "12", weight: "Bodyweight" }],
+      fullbody:   [{ name: "Deadlift",                 sets: 4, reps: "5",    weight: "" }, { name: "Farmer's Carry",         sets: 3, reps: "40m", weight: "" }],
+    };
+    const out = [];
+    const seen = new Set();
+    muscles.forEach(m => {
+      (_EX_BY_MUSCLE[m] || []).forEach(e => {
+        if (seen.has(e.name) || out.length >= 6) return;
+        seen.add(e.name);
+        out.push({ ...e });
+      });
+    });
+    return out.length ? out : _STRENGTH_TEMPLATES.full.map(ex => ({ ...ex }));
   }
   function _mapRacesToLegacyEvents(races) {
     const typeMap = {
@@ -2337,7 +2480,7 @@
       _renderThresholdSections, _toggleTestMe, _changeThresholdMethod, _saveThresholdsAndContinue, _testMeForEverythingAndContinue,
       _adjustStrengthCount, _applyStrengthCountSideEffects, _selectSplit, _toggleMuscle,
       _renderCustomDayList, _toggleMuscleForDay,
-      _selectStrLength, _saveStrengthAndContinue,
+      _selectStrLength, _selectStrDuration, _saveStrengthAndContinue,
       _shouldShowLongDays, _renderLongDayBlocks, _selectLongDay, _saveLongDaysAndContinue,
       _renderSchedule, _removeSlot, _removeSlotAt,
       _openAddSlotPicker, _pickAddSlot, _closeAddSlotPicker,

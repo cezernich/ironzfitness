@@ -378,7 +378,16 @@ function logWaterCustom() {
 
 function toggleQuickAddWater() {
   const panel = document.getElementById("hydration-quickadd");
-  if (panel) panel.style.display = panel.style.display === "none" ? "" : "none";
+  if (!panel) return;
+  // Compare against computed style so a previous toggle that left
+  // display as "" (default block) still flips correctly. The old
+  // version compared only against the inline "none" string, so if
+  // anything re-set the inline style to "" mid-session the second
+  // click saw a non-"none" value and flipped it to "none"... which
+  // was what we wanted — unless a subsequent render re-ran and
+  // cleared it again. Use offsetParent as a cheap visibility probe.
+  const isHidden = panel.offsetParent === null || panel.style.display === "none";
+  panel.style.display = isHidden ? "" : "none";
 }
 
 function undoWater() {
