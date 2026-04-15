@@ -3361,12 +3361,17 @@
           <button type="button" class="ob-v2-back" onclick="OnboardingV2.goTo('bp-v2-2')">&larr; Back</button>
           <h2 class="ob-v2-h2">Plan Details</h2>
           <p class="ob-v2-subtitle">We'll build your plan around the goals you selected.</p>
-          <div class="ob-v2-section-label">How long do you want to train?</div>
+          <div class="ob-v2-section-label">Block length</div>
           <div class="ob-v2-chips">
             <button type="button" class="ob-v2-chip" data-duration="4" onclick="OnboardingV2._selectPlanOption(this,'duration')">4 weeks</button>
             <button type="button" class="ob-v2-chip" data-duration="8" onclick="OnboardingV2._selectPlanOption(this,'duration')">8 weeks</button>
             <button type="button" class="ob-v2-chip is-selected" data-duration="12" onclick="OnboardingV2._selectPlanOption(this,'duration')">12 weeks</button>
             <button type="button" class="ob-v2-chip" data-duration="indefinite" onclick="OnboardingV2._selectPlanOption(this,'duration')">Indefinite</button>
+            <button type="button" class="ob-v2-chip" data-duration="custom" onclick="OnboardingV2._selectPlanOption(this,'duration')">Custom</button>
+          </div>
+          <div class="ob-v2-form-group" id="bp-v2-duration-custom" style="display:none;margin-top:8px">
+            <label for="bp-v2-duration-weeks">How many weeks?</label>
+            <input type="number" id="bp-v2-duration-weeks" min="1" max="52" placeholder="11" inputmode="numeric" oninput="OnboardingV2._setCustomDuration(this.value)" />
           </div>
           <div class="ob-v2-section-label">Max time per session</div>
           <div class="ob-v2-chips">
@@ -3377,13 +3382,12 @@
             <button type="button" class="ob-v2-chip" data-session-length="nolimit" onclick="OnboardingV2._selectPlanOption(this,'sessionLength')">No limit</button>
           </div>
           <div class="ob-v2-section-label">Days per week</div>
-          <div class="ob-v2-chips">
-            <button type="button" class="ob-v2-chip" data-days="3" onclick="OnboardingV2._selectPlanOption(this,'daysPerWeek')">3</button>
-            <button type="button" class="ob-v2-chip" data-days="4" onclick="OnboardingV2._selectPlanOption(this,'daysPerWeek')">4</button>
-            <button type="button" class="ob-v2-chip is-selected" data-days="5" onclick="OnboardingV2._selectPlanOption(this,'daysPerWeek')">5</button>
-            <button type="button" class="ob-v2-chip" data-days="6" onclick="OnboardingV2._selectPlanOption(this,'daysPerWeek')">6</button>
-            <button type="button" class="ob-v2-chip" data-days="7" onclick="OnboardingV2._selectPlanOption(this,'daysPerWeek')">7</button>
+          <div class="ob-v2-counter-row">
+            <button type="button" class="ob-v2-counter-btn" onclick="OnboardingV2._adjustDaysPerWeek(-1)">&minus;</button>
+            <span class="ob-v2-counter-value" id="bp-v2-days-count">5</span>
+            <button type="button" class="ob-v2-counter-btn" onclick="OnboardingV2._adjustDaysPerWeek(1)">+</button>
           </div>
+          <p class="ob-v2-notif-hint ob-v2-center">days per week</p>
           <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._saveNoraceAndContinue()">Continue</button>
         </div>
 

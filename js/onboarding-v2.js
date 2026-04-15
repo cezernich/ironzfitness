@@ -893,6 +893,34 @@
     btn.classList.add("is-selected");
     const val = btn.getAttribute("data-duration") || btn.getAttribute("data-session-length") || btn.getAttribute("data-days");
     _state.planDetails[field] = val;
+    // Show/hide the custom weeks input when the user toggles into/out of Custom.
+    if (field === "duration") {
+      const customBlock = document.getElementById("bp-v2-duration-custom");
+      if (customBlock) customBlock.style.display = val === "custom" ? "" : "none";
+      if (val === "custom") {
+        const input = document.getElementById("bp-v2-duration-weeks");
+        if (input) {
+          // Reset to whatever was previously typed, or blank so they can type fresh
+          const stored = _state.planDetails.customWeeks;
+          input.value = stored ? String(stored) : "";
+          setTimeout(() => input.focus(), 0);
+        }
+      }
+    }
+  }
+  function _setCustomDuration(val) {
+    const n = parseInt(val, 10);
+    if (!isNaN(n) && n > 0) {
+      _state.planDetails.customWeeks = n;
+      _state.planDetails.duration = String(n);
+    }
+  }
+  function _adjustDaysPerWeek(delta) {
+    const cur = parseInt(_state.planDetails.daysPerWeek, 10) || 5;
+    const next = Math.max(1, Math.min(7, cur + delta));
+    _state.planDetails.daysPerWeek = String(next);
+    const el = document.getElementById("bp-v2-days-count");
+    if (el) el.textContent = String(next);
   }
   function _saveNoraceAndContinue() {
     _state.raceEvents = [];
@@ -1712,7 +1740,14 @@
   // Appends to the existing `workoutSchedule` array without touching
   // past entries.
   function _writeScheduleSessions() {
-    const weeks = Math.max(1, parseInt(_state.planDetails.duration, 10) || 12);
+    // "indefinite" → materialize 12 weeks as a rolling window; numeric
+    // strings like "11" or "12" parse cleanly; "custom" falls back to
+    // customWeeks (set by the custom-weeks input).
+    let weeks = 12;
+    const dur = _state.planDetails.duration;
+    if (dur === "indefinite") weeks = 12;
+    else if (dur === "custom") weeks = Math.max(1, Math.min(52, parseInt(_state.planDetails.customWeeks, 10) || 12));
+    else weeks = Math.max(1, parseInt(dur, 10) || 12);
     const sessionLen = Math.max(15, parseInt(_state.planDetails.sessionLength, 10) || 60);
     const planId = "ob-v2-" + Date.now();
 
@@ -1814,7 +1849,7 @@
       _toggleSport, _applySportSideEffects, _selectGym, _saveSportsAndContinue,
       _toggleGoal, _saveGoalsAndContinue, _renderGoalCards,
       _updateRaceTypes, _updateWeeksCallout, _selectRaceGoal, _selectLeadInPhase, _adjustLeadIn, _saveRaceAndContinue,
-      _selectPlanOption, _saveNoraceAndContinue,
+      _selectPlanOption, _setCustomDuration, _adjustDaysPerWeek, _saveNoraceAndContinue,
       _renderThresholdSections, _toggleTestMe, _changeThresholdMethod, _saveThresholdsAndContinue, _testMeForEverythingAndContinue,
       _adjustStrengthCount, _applyStrengthCountSideEffects, _selectSplit, _toggleMuscle,
       _renderCustomDayList, _toggleMuscleForDay,
