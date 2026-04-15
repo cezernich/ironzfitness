@@ -2877,6 +2877,10 @@
   <script src="js/weekly-checkin.js"></script>
   <script src="js/barcode-scanner.js"></script>
   <script src="js/onboarding.js"></script>
+  <!-- Onboarding v2 — replaces js/onboarding.js in Phase 2. Must come
+       after planner.js / philosophy-planner.js (loaded above) and
+       before app.js so init() can call OnboardingV2.maybeStart(). -->
+  <script src="js/onboarding-v2.js"></script>
   <script src="js/admin.js"></script>
   <script src="js/analytics.js"></script>
   <script src="js/push.js"></script>

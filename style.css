@@ -16478,3 +16478,12 @@ body.auth-visible #bottom-nav { display: none !important; }
   100% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0); }
 }
 
+
+/* ============================================================================
+   ONBOARDING v2 — Onboarding Survey + Build Plan wizard
+   ============================================================================
+   Namespaced .ob-v2-* to avoid colliding with legacy .ob-* classes from the
+   original onboarding. Full styles land in Phase 2 when the screens get
+   built — this block is a placeholder so Phase 1 commits cleanly. */
+.ob-v2-root { display: none; }
+.ob-v2-root.is-active { display: block; }

@@ -347,10 +347,17 @@ const DB = (() => {
     'workoutEffortFeedback', 'calibrationSignals',
     'hasOnboarded', 'surveyComplete', 'onboardingData',
     // Plan management
-    'activePlan', 'activePlanAt', 'activePlanSource',
+    'activePlan', 'activePlanAt', 'activePlanSource', 'activePlanId',
     'currentRecoveryState', 'latestCheckIn',
     // Preferences
     'notifSettings', 'theme', 'userLevel', 'coachingDismissed',
+    // Onboarding v2 / Build Plan inputs (spec §5.1)
+    // These capture the user's answers from the onboarding survey and
+    // the standalone Build Plan flow. They feed generateTrainingPlan()
+    // and are preserved across sessions so the Build Plan screens can
+    // pre-fill on subsequent use.
+    'selectedSports', 'trainingGoals', 'raceEvents', 'thresholds',
+    'strengthSetup', 'injuries', 'connectedApps',
   ];
 
   const _keyTimers = {};
