@@ -3377,9 +3377,14 @@ function renderRaceEvents() {
   const container = document.getElementById("race-events-list");
   if (!container) return;
 
-  const events = loadEvents();
+  // The Build a Plan list is for races that still need a training plan —
+  // i.e. upcoming events. Past races (date < today, OR explicitly flagged
+  // isPastRace via the Add Past Race trophy-case flow) belong in the
+  // Stats trophy case, not here, so filter them out.
+  const todayStr = (typeof getTodayString === "function") ? getTodayString() : new Date().toISOString().slice(0, 10);
+  const events = loadEvents().filter(e => !e.isPastRace && e.date && e.date >= todayStr);
   if (events.length === 0) {
-    container.innerHTML = `<p class="empty-msg">No races added yet. Add your first event above!</p>`;
+    container.innerHTML = `<p class="empty-msg">No upcoming races. Add your next event above to build a plan!</p>`;
     return;
   }
 
