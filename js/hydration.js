@@ -58,12 +58,14 @@ function getHydrationTarget() {
 
 function getBottleSize() {
   const settings = getHydrationSettings();
-  // Prefer the first named bottle when the user has set some up — that
-  // becomes the "default bottle" the progress display (N / target
-  // bottles) normalizes against. Fall back to the legacy bottleSize
-  // setting, then to 12oz.
+  // Prefer the bottle the user has starred as default — that becomes
+  // the "default bottle" the progress display (N / target bottles)
+  // normalizes against. Fall back to the first named bottle, then the
+  // legacy bottleSize setting, then 12oz.
   const bottles = Array.isArray(settings.bottles) ? settings.bottles : [];
-  if (bottles.length && bottles[0].size) return bottles[0].size;
+  const starred = bottles.find(b => b.isDefault);
+  if (starred && starred.size) return parseFloat(starred.size) || 12;
+  if (bottles.length && bottles[0].size) return parseFloat(bottles[0].size) || 12;
   return settings.bottleSize || 12;
 }
 
@@ -121,9 +123,45 @@ function getHydrationLog() {
 
 /** Normalize a day's log entry to the new format. Handles legacy number format. */
 function normalizeDayLog(entry) {
-  if (entry == null) return { total: 0, beverages: [] };
-  if (typeof entry === "number") return { total: entry, beverages: [{ type: "water", count: entry }] };
+  if (entry == null) return { total: 0, beverages: [], entries: [] };
+  if (typeof entry === "number") return { total: entry, beverages: [{ type: "water", count: entry }], entries: [] };
+  if (!Array.isArray(entry.entries)) entry.entries = [];
   return entry;
+}
+
+// Upgrade a legacy day (totals/beverages only, no per-log entries) into
+// the new entry-backed format by synthesizing one entry per bottle of
+// its default size. Runs before the first write to a legacy day so the
+// authoritative source becomes the entries array — matching new writes.
+function _upgradeLegacyDay(day) {
+  if (day.entries.length) return;
+  if (!Array.isArray(day.beverages) || day.beverages.length === 0) return;
+  const bottleSize = getBottleSize();
+  for (const b of day.beverages) {
+    const n = Math.round(parseFloat(b.count) || 0);
+    for (let i = 0; i < n; i++) {
+      day.entries.push({ type: b.type || "water", oz: bottleSize });
+    }
+  }
+}
+
+// Rebuild the aggregated `total` (bottle-count equivalent) and
+// `beverages` from the authoritative per-log entries array. Called
+// after every push/pop so downstream consumers that still read the
+// legacy shape get coherent values.
+function _rebuildDayAggregates(day) {
+  const bottleSize = getBottleSize() || 1;
+  const beverages = {};
+  let totalBottles = 0;
+  for (const e of day.entries) {
+    const b = (parseFloat(e.oz) || 0) / bottleSize;
+    totalBottles += b;
+    const key = e.type || "water";
+    if (!beverages[key]) beverages[key] = { type: key, count: 0 };
+    beverages[key].count += b;
+  }
+  day.total = Math.max(0, totalBottles);
+  day.beverages = Object.values(beverages);
 }
 
 /** Get bottle count from a log entry (handles both old number and new object format) */
@@ -134,7 +172,13 @@ function getLogBottles(entry) {
 }
 
 function getTodayHydration() {
-  return getHydrationForDate(getHydrationDate()).total;
+  const day = getHydrationForDate(getHydrationDate());
+  // Prefer entries-based count when the entries array exists — each
+  // entry represents one log action regardless of size. Clamp at zero
+  // so stale corrupted `total` values (previously possible via undo
+  // mismatches) never display as negative.
+  if (Array.isArray(day.entries) && day.entries.length) return day.entries.length;
+  return Math.max(0, parseFloat(day.total) || 0);
 }
 
 /** Get effective oz for today accounting for beverage coefficients */
@@ -177,13 +221,27 @@ function getHydrationForDate(dateStr) {
 /** Get effective oz for a specific date accounting for beverage coefficients */
 function getEffectiveOzForDate(dateStr) {
   const day = getHydrationForDate(dateStr);
+  // Prefer the authoritative per-log entries array when present —
+  // each entry has the exact oz that was logged, so mixed bottle
+  // sizes and fractional counts can't corrupt the total.
+  if (Array.isArray(day.entries) && day.entries.length) {
+    let oz = 0;
+    for (const e of day.entries) {
+      const coeff = (BEVERAGE_TYPES[e.type] || BEVERAGE_TYPES.water).coeff;
+      oz += (parseFloat(e.oz) || 0) * coeff;
+    }
+    return Math.max(0, Math.round(oz));
+  }
+  // Legacy fallback for days logged before the entries array existed.
+  // Clamp at zero so a previously-corrupted count can't display as a
+  // negative oz value.
   const bottleSize = getBottleSize();
   let effectiveOz = 0;
-  for (const b of day.beverages) {
+  for (const b of day.beverages || []) {
     const coeff = (BEVERAGE_TYPES[b.type] || BEVERAGE_TYPES.water).coeff;
-    effectiveOz += b.count * bottleSize * coeff;
+    effectiveOz += Math.max(0, parseFloat(b.count) || 0) * bottleSize * coeff;
   }
-  return Math.round(effectiveOz);
+  return Math.max(0, Math.round(effectiveOz));
 }
 
 /** Get workout bonus for a specific date */
@@ -231,23 +289,39 @@ function getHydrationBreakdownForDate(dateStr) {
   return { baseOz, bonusOz: totalBonus, totalOz: baseOz + totalBonus, reason };
 }
 
-function logWater(beverageType) {
-  const type = beverageType || _selectedBeverage || "water";
+// Core push — records a single hydration event on the current day.
+// All log paths (named bottles, quick-add, legacy logWater, etc.) funnel
+// through here so the entries array stays authoritative and undo can
+// pop by exact oz rather than decrementing a shared counter by 1.
+function _pushHydrationEntry(type, oz) {
+  if (!type) type = "water";
+  oz = parseFloat(oz) || 0;
+  if (oz <= 0) return 0;
+
   const log = getHydrationLog();
   const dateStr = getHydrationDate();
   const day = normalizeDayLog(log[dateStr]);
+  _upgradeLegacyDay(day);
 
-  day.total++;
-  const existing = day.beverages.find(b => b.type === type);
-  if (existing) existing.count++;
-  else day.beverages.push({ type, count: 1 });
+  day.entries.push({ type, oz });
+  _rebuildDayAggregates(day);
 
   log[dateStr] = day;
-  localStorage.setItem("hydrationLog", JSON.stringify(log)); if (typeof DB !== 'undefined') DB.syncKey('hydrationLog');
+  localStorage.setItem("hydrationLog", JSON.stringify(log));
+  if (typeof DB !== "undefined") DB.syncKey("hydrationLog");
+  return oz;
+}
+
+function logWater(beverageType) {
+  const type = beverageType || _selectedBeverage || "water";
+  const dateStr = getHydrationDate();
+  const bottleSize = getBottleSize();
+  _pushHydrationEntry(type, bottleSize);
+
   if (typeof trackEvent === "function") {
     let target = null;
     try { target = getHydrationBreakdownForDate(dateStr)?.totalOz || null; } catch {}
-    trackEvent("hydration_logged", { beverage: type, bottles_today: day.total, target });
+    trackEvent("hydration_logged", { beverage: type, target });
   }
 
   renderHydration();
@@ -261,7 +335,6 @@ function logWater(beverageType) {
   if (dateStr === getTodayString()) {
     const effectiveOz = getEffectiveOzForDate(dateStr);
     const targetOz = getHydrationBreakdownForDate(dateStr).totalOz;
-    const bottleSize = getBottleSize();
     const prevOz = effectiveOz - bottleSize * (BEVERAGE_TYPES[type] || BEVERAGE_TYPES.water).coeff;
     if (effectiveOz >= targetOz && prevOz < targetOz) {
       playHydrationGoalAnimation();
@@ -270,20 +343,10 @@ function logWater(beverageType) {
 }
 
 function logWaterOz(oz) {
-  const bottleSize = getBottleSize();
-  const bottles = oz / bottleSize;
   const type = _selectedBeverage || "water";
-  const log = getHydrationLog();
   const dateStr = getHydrationDate();
-  const day = normalizeDayLog(log[dateStr]);
+  _pushHydrationEntry(type, oz);
 
-  day.total += bottles;
-  const existing = day.beverages.find(b => b.type === type);
-  if (existing) existing.count += bottles;
-  else day.beverages.push({ type, count: bottles });
-
-  log[dateStr] = day;
-  localStorage.setItem("hydrationLog", JSON.stringify(log)); if (typeof DB !== 'undefined') DB.syncKey('hydrationLog');
   renderHydration();
 
   if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
@@ -322,19 +385,27 @@ function undoWater() {
   const log = getHydrationLog();
   const dateStr = getHydrationDate();
   const day = normalizeDayLog(log[dateStr]);
-  if (day.total <= 0) return;
+  _upgradeLegacyDay(day);
 
-  day.total--;
-  for (let i = day.beverages.length - 1; i >= 0; i--) {
-    if (day.beverages[i].count > 0) {
-      day.beverages[i].count--;
-      if (day.beverages[i].count === 0) day.beverages.splice(i, 1);
-      break;
-    }
+  if (!day.entries.length) {
+    // Nothing to undo — clamp any stale legacy totals at zero so a
+    // previously-corrupted day (fractional counts that decremented past
+    // zero) doesn't continue to render as negative.
+    day.total = 0;
+    day.beverages = [];
+    log[dateStr] = day;
+    localStorage.setItem("hydrationLog", JSON.stringify(log));
+    if (typeof DB !== "undefined") DB.syncKey("hydrationLog");
+    renderHydration();
+    return;
   }
 
+  day.entries.pop();
+  _rebuildDayAggregates(day);
+
   log[dateStr] = day;
-  localStorage.setItem("hydrationLog", JSON.stringify(log)); if (typeof DB !== 'undefined') DB.syncKey('hydrationLog');
+  localStorage.setItem("hydrationLog", JSON.stringify(log));
+  if (typeof DB !== "undefined") DB.syncKey("hydrationLog");
   renderHydration();
 
   if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
@@ -623,19 +694,35 @@ function openHydrationSettings() {
 // Lets the user set up multiple named bottles (e.g. "Hydroflask 32oz",
 // "Gym bottle 20oz") so the hydration card shows a button per bottle
 // instead of one generic "+ My Bottle" shortcut.
+//
+// Editor state lives in the DOM until the user hits Save. Add / Remove
+// never touch localStorage — they harvest whatever the user has typed
+// from the current rows, mutate the list in memory, and re-render.
+// This way mid-edit values survive Add/Remove clicks and nothing is
+// persisted until the user explicitly saves the settings form.
 
-function _renderBottleEditor() {
+function _renderBottleEditor(bottles) {
   const list = document.getElementById("hydration-bottles-list");
   if (!list) return;
-  const bottles = getNamedBottles();
+  // When called without an explicit list (first open of the modal),
+  // start from whatever is in storage.
+  if (!bottles) bottles = getNamedBottles();
   if (!bottles.length) {
     list.innerHTML = `<p class="hint" style="margin:0 0 8px">No custom bottles yet. Add one below — each bottle becomes a one-tap log button on the hydration card.</p>`;
     return;
   }
+  // If no bottle is explicitly starred default, mark the first one —
+  // that way the progress bar always has a size to normalize against.
+  if (bottles.length && !bottles.some(b => b.isDefault)) {
+    bottles[0].isDefault = true;
+  }
   list.innerHTML = bottles.map(b => {
     const id = escHtml(b.id);
+    const starClass = b.isDefault ? " hydration-bottle-star--active" : "";
+    const starTitle = b.isDefault ? "Default bottle" : "Set as default";
     return `
-      <div class="hydration-bottle-row" data-bottle-id="${id}">
+      <div class="hydration-bottle-row" data-bottle-id="${id}" data-bottle-default="${b.isDefault ? "1" : "0"}">
+        <button class="hydration-bottle-star${starClass}" title="${starTitle}" onclick="_setDefaultBottle('${id}')" aria-label="${starTitle}">&#9733;</button>
         <input type="text" class="hydration-bottle-name" value="${escHtml(b.name || "")}" placeholder="Name (e.g. Hydroflask)" />
         <input type="number" class="hydration-bottle-size" value="${parseFloat(b.size) || ""}" min="1" max="128" placeholder="oz" />
         <button class="hydration-bottle-delete" title="Remove" onclick="_removeBottle('${id}')">&times;</button>
@@ -643,21 +730,42 @@ function _renderBottleEditor() {
   }).join("");
 }
 
+// Read current editor rows into bottle objects — preserving whatever
+// partial text/numbers the user has typed so Add/Remove don't wipe
+// unsaved edits. Empty-name rows are preserved here because the user
+// may still be typing; the save path is the only place that drops them.
+function _harvestBottleEditorRows() {
+  return Array.from(document.querySelectorAll(".hydration-bottle-row")).map(row => ({
+    id: row.getAttribute("data-bottle-id"),
+    name: row.querySelector(".hydration-bottle-name")?.value || "",
+    size: parseFloat(row.querySelector(".hydration-bottle-size")?.value) || 0,
+    isDefault: row.getAttribute("data-bottle-default") === "1",
+  }));
+}
+
+// Star a bottle as the default. Only one bottle can be default at a
+// time — toggling star on a new row clears the flag on all others.
+// Operates on in-memory editor state so unsaved name/size edits in
+// other rows aren't lost.
+function _setDefaultBottle(id) {
+  const current = _harvestBottleEditorRows();
+  for (const b of current) b.isDefault = (b.id === id);
+  _renderBottleEditor(current);
+}
+
 function _addBottle() {
-  const bottles = getNamedBottles().slice();
-  bottles.push({
-    id: "b-" + Date.now().toString(36),
+  const current = _harvestBottleEditorRows();
+  current.push({
+    id: "b-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e4).toString(36),
     name: "",
     size: 20,
   });
-  saveNamedBottles(bottles);
-  _renderBottleEditor();
+  _renderBottleEditor(current);
 }
 
 function _removeBottle(id) {
-  const bottles = getNamedBottles().filter(b => b.id !== id);
-  saveNamedBottles(bottles);
-  _renderBottleEditor();
+  const current = _harvestBottleEditorRows().filter(b => b.id !== id);
+  _renderBottleEditor(current);
 }
 
 function closeHydrationSettings() {
@@ -671,16 +779,25 @@ function saveHydrationSettings() {
   const bottleSize = parseInt(document.getElementById("hydration-bottle-size")?.value || "12");
   const dailyTargetOz = parseInt(document.getElementById("hydration-daily-target-oz")?.value || "96");
 
-  // Harvest the bottle editor rows — each row carries its id and the
-  // latest name/size the user typed. Empty or zero-sized entries are
-  // dropped so the user can delete a bottle by clearing its fields.
+  // Harvest the bottle editor rows — each row carries its id, the
+  // latest name/size the user typed, and whether it's the starred
+  // default. Empty or zero-sized entries are dropped so the user can
+  // delete a bottle by clearing its fields.
   const rows = Array.from(document.querySelectorAll(".hydration-bottle-row"));
   const bottles = rows.map(row => {
     const id = row.getAttribute("data-bottle-id");
     const name = row.querySelector(".hydration-bottle-name")?.value.trim() || "";
     const size = parseFloat(row.querySelector(".hydration-bottle-size")?.value) || 0;
-    return { id, name, size };
+    const isDefault = row.getAttribute("data-bottle-default") === "1";
+    return { id, name, size, isDefault };
   }).filter(b => b.size > 0 && b.name);
+
+  // Guarantee exactly one starred default when any bottles exist —
+  // otherwise getBottleSize would just fall back to the first element
+  // and the user's star selection wouldn't stick.
+  if (bottles.length && !bottles.some(b => b.isDefault)) {
+    bottles[0].isDefault = true;
+  }
 
   // Merge with existing settings so we don't blow away other keys.
   const prev = getHydrationSettings();
