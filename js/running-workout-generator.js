@@ -121,7 +121,11 @@
   function _generateLongRun(template, experience, durationOverrideMin, zones, warnings, variantOffset) {
     const range = template.experience_scaling[experience] || template.default_duration_min;
     const defaultMin = (range[0] + range[1]) / 2;
-    const duration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings, template.max_duration_min);
+    // Long runs always snap to multiples of 5 minutes — users plan long
+    // runs in round numbers (100, 105, 110, …), and showing "113 min"
+    // in the preview when the slider step is 5 read like a bug.
+    const rawDuration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings, template.max_duration_min);
+    const duration = Math.max(5, Math.round(rawDuration / 5) * 5);
     const allowsFinish = experience === "intermediate" || experience === "advanced";
     const eLabel = zones ? _ePaceLabel(zones) : "Z1 (conversational)";
     const mLabel = zones ? _mPaceLabel(zones) : "Z2 marathon";

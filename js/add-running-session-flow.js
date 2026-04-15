@@ -466,7 +466,12 @@
       // slider can land in territory that gets silently clamped and the
       // displayed minutes won't match the slider position. Honor a per-template
       // `max_duration_min` (e.g. endurance up to 150) when present.
-      const mid = isArrayRange ? Math.round((lo + hi) / 2) : 45;
+      // Snap the default slider position to a multiple of 5 so long_run
+      // (and every other type that uses this flow) matches the generator's
+      // rounded output — otherwise the slider can land at e.g. 112.5 → 113
+      // while the generated workout shows 115 min.
+      const rawMid = isArrayRange ? (lo + hi) / 2 : 45;
+      const mid = Math.max(5, Math.round(rawMid / 5) * 5);
       const sliderMax = Math.max(Math.round(mid * 1.5), tmpl.max_duration_min || 0);
       $dur.min = String(Math.max(15, Math.round(mid * 0.5)));
       $dur.max = String(sliderMax);
