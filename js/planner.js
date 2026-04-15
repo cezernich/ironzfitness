@@ -1940,6 +1940,58 @@ function saveTrainingPlanData(plan) {
   localStorage.setItem("trainingPlan", JSON.stringify(plan)); if (typeof DB !== 'undefined') DB.syncTrainingPlan();
 }
 
+/**
+ * regenerateTrainingPlanFromEvents()
+ * Self-healing rebuild of localStorage.trainingPlan from the user's
+ * current race list. Used when the user has upcoming races on their
+ * calendar but the plan has been cleared (corrupted, manually deleted,
+ * or broken by a prior migration). Reads events, prepares a race
+ * calendar, calls generateTrainingPlan, and writes the result.
+ * Returns the number of plan entries written, or -1 if there was
+ * nothing to regenerate.
+ */
+function regenerateTrainingPlanFromEvents() {
+  const events = loadEvents();
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const upcoming = events.filter(e => e && e.date && e.date >= todayStr);
+  if (!upcoming.length) return -1;
+  try {
+    const calendar = prepareRaceCalendar(upcoming);
+    const newPlan = generateTrainingPlan(calendar);
+    if (!Array.isArray(newPlan) || newPlan.length === 0) return 0;
+    // Replace only the entries for races that are in the current calendar;
+    // keep history from other races untouched so regeneration is additive.
+    const keep = loadTrainingPlan().filter(e => {
+      const raceIds = calendar.all.map(r => r.id);
+      return !raceIds.includes(e.raceId);
+    });
+    saveTrainingPlanData([...keep, ...newPlan]);
+    console.info("[planner] Regenerated " + newPlan.length + " plan entries from " + calendar.all.length + " race(s)");
+    return newPlan.length;
+  } catch (e) {
+    console.warn("[planner] regenerateTrainingPlanFromEvents failed", e);
+    return -1;
+  }
+}
+
+// Self-heal on script load: if there are upcoming races in events but
+// trainingPlan has zero future entries, regenerate automatically. This
+// recovers from a corrupted plan write without requiring manual action.
+(function _autoHealTrainingPlan() {
+  try {
+    if (typeof localStorage === "undefined") return;
+    const events = loadEvents();
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const hasUpcomingRace = events.some(e => e && e.date && e.date >= todayStr);
+    if (!hasUpcomingRace) return;
+    const plan = loadTrainingPlan();
+    const hasFuturePlan = plan.some(e => e && e.date && e.date >= todayStr);
+    if (hasFuturePlan) return;
+    // Silently regen — no user prompt. Defensive.
+    regenerateTrainingPlanFromEvents();
+  } catch {}
+})();
+
 // ═════════════════════════════════════════════════════════════════════════════
 // Add Running Session helpers — added 2026-04-09 by
 // PHILOSOPHY_UPDATE_2026-04-09_run_session_types.md
