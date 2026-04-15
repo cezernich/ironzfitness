@@ -270,12 +270,63 @@ async function handleLogout() {
 
 // ── Change password (signed-in user) ──────────────────────────────────────────
 //
-// Used by the in-app "Change Password" card in Settings. Re-verifies the
-// current password via signInWithPassword before calling updateUser so a
-// stolen-laptop scenario can't change the password without knowing the
-// existing one. The signInWithPassword re-auth fires a SIGNED_IN event
-// which our onAuthStateChange handler treats as a normal login for the
-// same user — harmless overhead.
+// Used by the in-app "Change Password" button in Settings → Account.
+// Opens a centered modal (matching the move-session-modal convention)
+// with current / new / confirm fields. handleChangePassword
+// re-verifies the current password via signInWithPassword before
+// calling updateUser, so a stolen-laptop scenario can't change the
+// password without knowing the existing one. The re-auth fires a
+// SIGNED_IN event for the same user — harmless overhead handled as a
+// no-op by the normal onAuthStateChange path.
+
+function openChangePasswordDialog() {
+  let overlay = document.getElementById('change-password-modal-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'change-password-modal-overlay';
+    overlay.className = 'move-session-modal-overlay';
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeChangePasswordDialog();
+    });
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div class="move-session-modal" role="dialog" aria-modal="true" aria-label="Change password">
+      <div class="move-session-modal-title">Change password</div>
+      <p class="hint" style="margin:0 0 12px">Requires your current password. Minimum 6 characters.</p>
+      <div class="form-row">
+        <label for="change-pw-current">Current password</label>
+        <input type="password" id="change-pw-current" autocomplete="current-password" />
+      </div>
+      <div class="form-row">
+        <label for="change-pw-new">New password</label>
+        <input type="password" id="change-pw-new" autocomplete="new-password" />
+      </div>
+      <div class="form-row">
+        <label for="change-pw-confirm">Confirm new password</label>
+        <input type="password" id="change-pw-confirm" autocomplete="new-password" />
+      </div>
+      <p id="change-pw-msg" class="save-msg" style="margin:8px 0 0;min-height:1.2em"></p>
+      <div class="move-session-modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeChangePasswordDialog()">Cancel</button>
+        <button type="button" class="btn-primary"   onclick="handleChangePassword()">Save</button>
+      </div>
+    </div>
+  `;
+  void overlay.offsetWidth;
+  overlay.classList.add('visible');
+  setTimeout(() => { document.getElementById('change-pw-current')?.focus(); }, 0);
+}
+
+function closeChangePasswordDialog() {
+  const overlay = document.getElementById('change-password-modal-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('visible');
+  setTimeout(() => {
+    const el = document.getElementById('change-password-modal-overlay');
+    if (el) el.remove();
+  }, 220);
+}
 
 async function handleChangePassword() {
   const currentEl = document.getElementById('change-pw-current');
@@ -292,11 +343,10 @@ async function handleChangePassword() {
   if (next !== confirm) { setAuthMsg(msgId, 'New passwords do not match.', true); return; }
   if (next === current) { setAuthMsg(msgId, 'New password must be different from the current one.', true); return; }
 
-  const btn = document.querySelector('#section-change-password .btn-primary');
-  if (btn) { btn.disabled = true; btn.textContent = 'Updating…'; }
+  const btn = document.querySelector('#change-password-modal-overlay .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
 
   try {
-    // Who are we? We need the email to re-verify current password.
     const { data: userData, error: userErr } = await window.supabaseClient.auth.getUser();
     if (userErr || !userData?.user?.email) {
       setAuthMsg(msgId, 'Could not read your session. Try signing out and back in.', true);
@@ -304,8 +354,8 @@ async function handleChangePassword() {
     }
     const email = userData.user.email;
 
-    // Re-verify the current password. If it's wrong, signInWithPassword
-    // returns an error and we stop here — no updateUser call.
+    // Re-verify the current password. If wrong, stop without calling
+    // updateUser so nothing changes.
     const { error: verifyErr } = await window.supabaseClient.auth.signInWithPassword({ email, password: current });
     if (verifyErr) {
       setAuthMsg(msgId, 'Current password is incorrect.', true);
@@ -319,15 +369,12 @@ async function handleChangePassword() {
     }
 
     setAuthMsg(msgId, 'Password updated.', false);
-    if (currentEl) currentEl.value = '';
-    if (newEl) newEl.value = '';
-    if (confirmEl) confirmEl.value = '';
-    setTimeout(() => { const m = document.getElementById(msgId); if (m) m.textContent = ''; }, 4000);
+    setTimeout(() => closeChangePasswordDialog(), 900);
   } catch (e) {
     setAuthMsg(msgId, 'Something went wrong. Try again.', true);
     if (typeof reportCaughtError === 'function') reportCaughtError(e, { context: 'auth', action: 'change_password' });
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Change Password'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
   }
 }
 
