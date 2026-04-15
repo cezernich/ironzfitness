@@ -72,7 +72,11 @@
   function _generateSimpleSinglePhase(template, experience, durationOverrideMin, zones, warnings) {
     const range = template.experience_scaling[experience] || template.default_duration_min;
     const defaultMin = (range[0] + range[1]) / 2;
-    const duration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings, template.max_duration_min);
+    const rawDuration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings, template.max_duration_min);
+    // Easy / Recovery is one continuous conversational block — there's no
+    // interval math, so snap to the nearest 5 minutes for a cleaner read.
+    // 44 → 45, 47 → 45, 48 → 50, etc.
+    const duration = Math.max(5, Math.round(rawDuration / 5) * 5);
     const paceLabel = zones ? _ePaceLabel(zones) : "conversational, by feel";
     const phases = [
       {
