@@ -1657,10 +1657,13 @@
     }
 
     // Place strength sessions up to the requested count.
+    // Gated on strength actually being a selected sport — otherwise
+    // the stale default sessionsPerWeek=3 from initial state leaks
+    // through and seeds strength days for users who never picked it.
     // First pass: alternate days (Mon/Wed/Fri/Sun) to spread load.
     // Second pass: fill remaining days if the user asked for >4 days,
     // so a 5/6/7-day request actually lands the full count.
-    if (strength > 0) {
+    if (strength > 0 && sports.includes("strength")) {
       let placed = 0;
       for (let i = 0; i < _BP_DAYS.length && placed < strength; i += 2) {
         const d = _BP_DAYS[i];
