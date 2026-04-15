@@ -403,6 +403,21 @@ const _CAL_V2_CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke-linecap="
 // Collect an array of normalized session descriptors for a date, each
 // with the visual tokens the new skin needs. This is the ONLY new data
 // wrangling — everything below it feeds off the existing getDataForDate.
+// Rest-flag detector: threshold-week plans (and some other flows)
+// emit plan entries with load:"rest" / discipline:"rest" / type:"rest"
+// as placeholders for a rest day. These aren't real sessions, so
+// they shouldn't render as workout circles or intensity dots — a
+// day with only a rest entry should just show "REST" like an empty
+// day, not a strength icon.
+function _calV2IsRestEntry(e) {
+  if (!e) return false;
+  const load = String(e.load || "").toLowerCase();
+  const disc = String(e.discipline || "").toLowerCase();
+  const type = String(e.type || "").toLowerCase();
+  const name = String(e.sessionName || e.name || "").toLowerCase();
+  return load === "rest" || disc === "rest" || type === "rest" || /^\s*rest\s*$/.test(name);
+}
+
 function _calV2CollectSessions(dateStr, data) {
   const sessionRemoved = data.restriction && data.restriction.action === "remove";
   const p = data.planEntry;
@@ -412,7 +427,7 @@ function _calV2CollectSessions(dateStr, data) {
   if (data.event && !p) {
     out.push({ discCls: "race", loadLabel: "race", name: data.event.name || "Race day" });
   }
-  if (p && !sessionRemoved) {
+  if (p && !sessionRemoved && !_calV2IsRestEntry(p)) {
     const effectLoad = getEffectiveLoad(p.load, data.restriction);
     out.push({
       discCls: _calV2DiscClass(p.discipline),
@@ -422,6 +437,7 @@ function _calV2CollectSessions(dateStr, data) {
   }
   if (!sessionRemoved) {
     sw.forEach(w => {
+      if (_calV2IsRestEntry(w)) return;
       out.push({
         discCls: _calV2DiscClass(w.discipline || w.type),
         loadLabel: w.load || w.intensity || "moderate",
@@ -430,6 +446,7 @@ function _calV2CollectSessions(dateStr, data) {
     });
   }
   (data.loggedWorkouts || []).forEach(w => {
+    if (_calV2IsRestEntry(w)) return;
     out.push({
       discCls: _calV2DiscClass(w.type),
       loadLabel: w.load || "moderate",
@@ -3075,7 +3092,15 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
 
   // ── All sessions (race plan + generated plan + manually added) ───────────
   const sessionRemoved = data.restriction && data.restriction.action === "remove";
-  const allSessionsCount = (data.planEntry ? 1 : 0) + data.scheduledWorkouts.length + data.loggedWorkouts.length;
+  // Threshold weeks (and a few other flows) emit rest-day plan
+  // entries with load:"rest". Those are placeholders for "no training
+  // today" — don't render a session card for them and don't count
+  // them toward allSessionsCount, otherwise the day detail shows a
+  // strength-icon card labeled "Rest" on every threshold rest day.
+  const planEntryIsRest = data.planEntry && _calV2IsRestEntry(data.planEntry);
+  const effectivePlanEntry = planEntryIsRest ? null : data.planEntry;
+  const nonRestScheduled = data.scheduledWorkouts.filter(w => !_calV2IsRestEntry(w));
+  const allSessionsCount = (effectivePlanEntry ? 1 : 0) + nonRestScheduled.length + data.loggedWorkouts.length;
 
   if (sessionRemoved && allSessionsCount > 0) {
     const rLabel = RESTRICTION_LABELS[data.restriction.type] || data.restriction.type;
@@ -3093,8 +3118,8 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       </div>`;
   } else {
     // Race-plan session
-    if (data.planEntry) {
-      const p           = data.planEntry;
+    if (effectivePlanEntry) {
+      const p           = effectivePlanEntry;
       const icon        = DISCIPLINE_ICONS[p.discipline] || ICONS.weights;
       const color       = DISCIPLINE_COLORS[p.discipline] || "var(--color-accent)";
       const cardId      = `session-plan-${dateStr}-${p.raceId}`;
@@ -3179,8 +3204,10 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       }
     }
 
-    // Generated plan sessions
-    data.scheduledWorkouts.forEach(w => {
+    // Generated plan sessions — skip rest-day placeholders so they
+    // don't render as "Rest" strength-icon cards. nonRestScheduled is
+    // already filtered via _calV2IsRestEntry above.
+    nonRestScheduled.forEach(w => {
       const { icon, color } = _resolveDiscipline(w);
       const cardId = `session-sw-${w.id}`;
 
