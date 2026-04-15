@@ -546,39 +546,102 @@
 
     <!-- Goal Form Modal -->
     <div id="goal-form-modal" class="quick-entry-overlay" style="display:none" onclick="if(event.target===this) closeGoalForm()">
-      <div class="quick-entry-modal" style="max-width:400px">
+      <div class="quick-entry-modal" style="max-width:440px">
         <div class="quick-entry-header">
           <span class="qe-date-label" id="goal-form-title">New Goal</span>
           <button class="qe-close-btn" onclick="closeGoalForm()">&#10005;</button>
         </div>
-        <div style="padding:12px 16px 16px">
+        <div class="goal-form-body">
           <input type="hidden" id="goal-form-id" />
-          <div class="form-row">
-            <label for="goal-form-name">Goal Name</label>
-            <input type="text" id="goal-form-name" placeholder="e.g. Run a 5K" />
+          <input type="hidden" id="goal-form-kind" value="recurring" />
+
+          <!-- Kind picker: recurring (the default) vs custom free-form -->
+          <div class="goal-form-section">
+            <div class="goal-form-section-label">Goal type</div>
+            <div class="goal-chip-row" id="goal-form-kind-chips">
+              <button type="button" class="goal-chip is-active" data-kind="recurring" onclick="_applyGoalFormKind('recurring')">Training</button>
+              <button type="button" class="goal-chip" data-kind="custom" onclick="_applyGoalFormKind('custom')">Custom</button>
+            </div>
           </div>
-          <div class="form-row">
-            <label for="goal-form-type">Type</label>
-            <select id="goal-form-type">
-              <option value="performance">Performance</option>
-              <option value="habit">Habit</option>
-              <option value="body">Body Composition</option>
-              <option value="nutrition">Nutrition</option>
-            </select>
+
+          <!-- Recurring goal fields: sport + timeframe + metric + target -->
+          <div id="goal-form-recurring">
+            <div class="goal-form-section">
+              <div class="goal-form-section-label">Sport</div>
+              <input type="hidden" id="goal-form-sport" value="all" />
+              <div class="goal-chip-row goal-chip-row--wrap" id="goal-form-sport-chips">
+                <button type="button" class="goal-chip is-active" data-sport="all"      onclick="_setGoalFormSport('all')">All</button>
+                <button type="button" class="goal-chip"           data-sport="run"      onclick="_setGoalFormSport('run')">Run</button>
+                <button type="button" class="goal-chip"           data-sport="bike"     onclick="_setGoalFormSport('bike')">Bike</button>
+                <button type="button" class="goal-chip"           data-sport="swim"     onclick="_setGoalFormSport('swim')">Swim</button>
+                <button type="button" class="goal-chip"           data-sport="strength" onclick="_setGoalFormSport('strength')">Strength</button>
+              </div>
+            </div>
+
+            <div class="goal-form-section">
+              <div class="goal-form-section-label">Timeframe</div>
+              <input type="hidden" id="goal-form-timeframe" value="weekly" />
+              <div class="goal-chip-row" id="goal-form-timeframe-chips">
+                <button type="button" class="goal-chip is-active" data-timeframe="weekly"  onclick="_setGoalFormTimeframe('weekly')">Weekly</button>
+                <button type="button" class="goal-chip"           data-timeframe="monthly" onclick="_setGoalFormTimeframe('monthly')">Monthly</button>
+                <button type="button" class="goal-chip"           data-timeframe="annual"  onclick="_setGoalFormTimeframe('annual')">Annual</button>
+              </div>
+            </div>
+
+            <div class="goal-form-section">
+              <div class="goal-form-section-label">Metric</div>
+              <input type="hidden" id="goal-form-metric" value="activities" />
+              <div class="goal-tile-grid" id="goal-form-metric-tiles">
+                <button type="button" class="goal-tile is-active" data-metric="activities" onclick="_setGoalFormMetric('activities')">
+                  <div class="goal-tile-label">Activities</div>
+                  <div class="goal-tile-hint">Number of sessions</div>
+                </button>
+                <button type="button" class="goal-tile" data-metric="time" onclick="_setGoalFormMetric('time')">
+                  <div class="goal-tile-label">Time</div>
+                  <div class="goal-tile-hint">Total minutes</div>
+                </button>
+                <button type="button" class="goal-tile" data-metric="distance" onclick="_setGoalFormMetric('distance')">
+                  <div class="goal-tile-label">Distance</div>
+                  <div class="goal-tile-hint">Total miles</div>
+                </button>
+              </div>
+            </div>
+
+            <div class="goal-form-section">
+              <div class="goal-form-section-label" id="goal-form-target-label">Target activities per week</div>
+              <div class="goal-target-row">
+                <input type="number" id="goal-form-target" placeholder="e.g. 4" min="0" step="any" />
+                <span class="goal-target-unit" id="goal-form-target-unit">sessions</span>
+              </div>
+            </div>
           </div>
-          <div class="form-row">
-            <label for="goal-form-target">Target Value</label>
-            <input type="number" id="goal-form-target" placeholder="e.g. 25" />
+
+          <!-- Custom goal fields — preserved for free-form goals like "Lose 15 lbs" -->
+          <div id="goal-form-custom" style="display:none">
+            <div class="form-row">
+              <label for="goal-form-name">Goal name</label>
+              <input type="text" id="goal-form-name" placeholder="e.g. Lose 15 lbs" />
+            </div>
+            <div class="form-row">
+              <label for="goal-form-type">Category</label>
+              <select id="goal-form-type">
+                <option value="performance">Performance</option>
+                <option value="habit">Habit</option>
+                <option value="body">Body Composition</option>
+                <option value="nutrition">Nutrition</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="goal-form-unit">Unit</label>
+              <input type="text" id="goal-form-unit" placeholder="e.g. lbs, minutes, days" />
+            </div>
+            <div class="form-row">
+              <label for="goal-form-deadline">Target date (optional)</label>
+              <input type="date" id="goal-form-deadline" />
+            </div>
           </div>
-          <div class="form-row">
-            <label for="goal-form-unit">Unit</label>
-            <input type="text" id="goal-form-unit" placeholder="e.g. minutes, lbs, days" />
-          </div>
-          <div class="form-row">
-            <label for="goal-form-deadline">Target Date (optional)</label>
-            <input type="date" id="goal-form-deadline" />
-          </div>
-          <button class="btn-primary" style="width:100%;margin-top:12px" onclick="saveGoalForm()">Save Goal</button>
+
+          <button class="btn-primary" style="width:100%;margin-top:16px" onclick="saveGoalForm()">Save Goal</button>
         </div>
       </div>
     </div>
