@@ -429,12 +429,33 @@ function openGoalEdit(id) {
 
 // ── Form field helpers ──────────────────────────────────────────────────
 
+// Which metrics make sense for each sport. Distance is disabled for
+// strength (no meaningful distance) and for "all sports" (can't
+// aggregate miles across swim + bike + run — 1 mi ≠ 1 mi).
+function _goalMetricsAllowedFor(sportId) {
+  if (sportId === "strength") return ["activities", "time"];
+  if (sportId === "all")      return ["activities", "time"];
+  return ["activities", "time", "distance"];
+}
+
 function _setGoalFormSport(sportId) {
   document.querySelectorAll("#goal-form-sport-chips [data-sport]").forEach(el => {
     el.classList.toggle("is-active", el.dataset.sport === sportId);
   });
   const hidden = document.getElementById("goal-form-sport");
   if (hidden) hidden.value = sportId;
+
+  // Hide metric tiles that don't apply to this sport. If the current
+  // metric just got disabled, fall back to Activities so the user
+  // isn't left with a stale selection.
+  const allowed = _goalMetricsAllowedFor(sportId);
+  document.querySelectorAll("#goal-form-metric-tiles [data-metric]").forEach(el => {
+    el.style.display = allowed.includes(el.dataset.metric) ? "" : "none";
+  });
+  const currentMetric = document.getElementById("goal-form-metric")?.value || "activities";
+  if (!allowed.includes(currentMetric)) {
+    _setGoalFormMetric("activities");
+  }
 }
 function _setGoalFormTimeframe(tfId) {
   document.querySelectorAll("#goal-form-timeframe-chips [data-timeframe]").forEach(el => {
@@ -445,11 +466,17 @@ function _setGoalFormTimeframe(tfId) {
   _updateGoalFormTargetHint();
 }
 function _setGoalFormMetric(metricId) {
+  // Guard against picking a metric that's been disabled for the
+  // current sport (e.g. someone programmatically calls us with
+  // "distance" while strength is selected).
+  const currentSport = document.getElementById("goal-form-sport")?.value || "all";
+  const allowed = _goalMetricsAllowedFor(currentSport);
+  const safeMetric = allowed.includes(metricId) ? metricId : "activities";
   document.querySelectorAll("#goal-form-metric-tiles [data-metric]").forEach(el => {
-    el.classList.toggle("is-active", el.dataset.metric === metricId);
+    el.classList.toggle("is-active", el.dataset.metric === safeMetric);
   });
   const hidden = document.getElementById("goal-form-metric");
-  if (hidden) hidden.value = metricId;
+  if (hidden) hidden.value = safeMetric;
   _updateGoalFormTargetHint();
 }
 function _updateGoalFormTargetHint() {
