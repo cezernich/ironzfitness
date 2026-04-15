@@ -68,7 +68,12 @@
     planDetails: { duration: "12", sessionLength: "60", daysPerWeek: "5" },
     thresholds: {},
     strengthSetup: { sessionsPerWeek: 3, split: "ppl", customMuscles: [], sessionLength: 45 },
-    longDays: { longRun: "sun", longRide: "sat" },
+    // longRun / longRide start unset so _renderLongDayBlocks can pick
+    // the right default based on the user's sport mix (triathletes get
+    // Wed long run + Sat long ride; run-only athletes get Sat long run).
+    // Hard-coding them at init would preempt that logic and everyone
+    // would end up with a Sunday long run.
+    longDays: { longRun: null, longRide: null },
     schedule: { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] },
   };
 
@@ -277,7 +282,7 @@
     _state.planDetails = { duration: "12", sessionLength: "60", daysPerWeek: "5" };
     _state.thresholds = {};
     _state.strengthSetup = { sessionsPerWeek: 3, split: "ppl", customMuscles: [], sessionLength: 45 };
-    _state.longDays = { longRun: "sun", longRide: "sat" };
+    _state.longDays = { longRun: null, longRide: null };
     _state.schedule = { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] };
   }
 
