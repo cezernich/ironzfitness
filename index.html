@@ -182,12 +182,29 @@
            with the nearest race + countdown. -->
       <div id="training-next-race-banner"></div>
 
-      <!-- Build My Plan (v2 entry point) -->
-      <div class="build-plan-cta">
-        <button class="btn btn-primary build-plan-cta-btn" onclick="window.OnboardingV2 && window.OnboardingV2.openBuildPlan()">
-          Build My Plan
+      <!-- Build My Plan (v2) + Create Your Own Plan entry cards -->
+      <div class="bp-cta-stack">
+        <button type="button" class="bp-card bp-card--primary" onclick="window.OnboardingV2 && window.OnboardingV2.openBuildPlan()">
+          <span class="bp-card-icon bp-card-icon--bolt">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          </span>
+          <span class="bp-card-body">
+            <span class="bp-card-badge">AI-POWERED</span>
+            <span class="bp-card-title">Build My Plan</span>
+            <span class="bp-card-subtitle">Sports, goals, schedule — one guided flow</span>
+          </span>
+          <span class="bp-card-chevron">&rsaquo;</span>
         </button>
-        <p class="build-plan-cta-hint">Guided setup: sports, goals, races, thresholds, schedule.</p>
+        <button type="button" class="bp-card bp-card--secondary" onclick="openCustomPlanBuilder()">
+          <span class="bp-card-icon bp-card-icon--plus">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </span>
+          <span class="bp-card-body">
+            <span class="bp-card-title">Create Your Own Plan</span>
+            <span class="bp-card-subtitle">Build a custom plan manually</span>
+          </span>
+          <span class="bp-card-chevron">&rsaquo;</span>
+        </button>
       </div>
 
       <!-- Goals Section -->
