@@ -2359,10 +2359,22 @@ function generateTrainingPlan(race) {
     }
   }
 
+  // Week numbers are computed from days-since-startDate, NOT from
+  // Monday boundary crossings. Previously the week rolled over on
+  // Mondays, so a plan that started mid-week (e.g. a Saturday) had
+  // a 2-day "Week 1" (Sat+Sun) followed immediately by "Week 2" —
+  // users saw Pre-Plan Week 0 jump straight to Base Week 2 with
+  // no visible Week 1.
   let weekNumber = 1;
   let phaseWeekCount = 0;
   let phaseIndex = 0;
   let currentPhase = config.phases[0];
+  const _planStartMs = new Date(startDate).setHours(0, 0, 0, 0);
+  const _weekNumberFor = (d) => {
+    const ms = new Date(d).setHours(0, 0, 0, 0);
+    const days = Math.floor((ms - _planStartMs) / 86400000);
+    return Math.max(1, Math.floor(days / 7) + 1);
+  };
 
   // ── THRESHOLD WEEK SCHEDULING ──────────────────────────────────────────────
   // Added 2026-04-09 (PHILOSOPHY_UPDATE_2026-04-09_threshold_weeks.md).
@@ -2455,15 +2467,19 @@ function generateTrainingPlan(race) {
     } else if (session && dateStr >= todayStr) {
       const LOAD_NAMES = { easy: "Easy", strides: "Strides", moderate: "Tempo", hard: "Threshold", long: "Long" };
       const loadName  = LOAD_NAMES[session.load] || capitalize(session.load);
-      // Compute progressive duration for running sessions
+      // Week number is derived from days-since-plan-start, so all
+      // sessions on a given day share a consistent label regardless
+      // of which weekday the plan started on.
+      const wNum = _weekNumberFor(cursor);
+      weekNumber = wNum;
       const duration = (session.discipline === "run" && runPatternKey)
-        ? getRunSessionDuration(race.type, session.load, phaseName, weekNumber, config.totalWeeks, runPatternKey)
+        ? getRunSessionDuration(race.type, session.load, phaseName, wNum, config.totalWeeks, runPatternKey)
         : undefined;
       plan.push({
         date: dateStr,
         raceId: race.id,
         phase: phaseName,
-        weekNumber,
+        weekNumber: wNum,
         discipline: session.discipline,
         load: session.load,
         sessionName: `${loadName} ${capitalize(session.discipline)}`,
@@ -2471,10 +2487,10 @@ function generateTrainingPlan(race) {
       });
     }
 
-    // Advance day; track week boundaries (Mon = start of training week)
+    // Advance day; phase tracking still pivots on Mondays so each
+    // phase occupies complete calendar weeks.
     cursor.setDate(cursor.getDate() + 1);
-    if (cursor.getDay() === 1) { // Monday
-      weekNumber++;
+    if (cursor.getDay() === 1) {
       phaseWeekCount++;
     }
   }
