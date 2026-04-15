@@ -2017,16 +2017,22 @@
     // Keep only array entries (defensive: previous bug wrote an object)
     const existingArr = Array.isArray(existing) ? existing : [];
 
+    // Compute enriched codes per slot so materialized sessions get
+    // richer names ("Interval Run", "Pull Day", "Long Ride") matching
+    // what the preview showed. _enrichWeekTemplate rotates strength
+    // days by split and labels runs/bikes by position.
+    const enrichedTemplate = _enrichWeekTemplate();
+
     const sessions = [];
     let counter = 0;
     for (let w = 0; w < weeks; w++) {
       _BP_DAYS.forEach((day, idx) => {
-        const slots = (_state.schedule[day] || []).filter(s => s && s !== "rest");
-        slots.forEach(sport => {
+        const slots = (enrichedTemplate[day] || []).filter(s => s && s !== "rest");
+        slots.forEach(enrichedCode => {
           const d = new Date(start);
           d.setDate(start.getDate() + w * 7 + idx);
           const dateStr = d.toISOString().slice(0, 10);
-          const session = _buildSessionForSport(sport, dateStr, sessionLen, w + 1, planId, counter++);
+          const session = _buildSessionForSport(enrichedCode, dateStr, sessionLen, w + 1, planId, counter++);
           if (session) sessions.push(session);
         });
       });
@@ -2037,9 +2043,62 @@
     if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("workoutSchedule");
   }
 
-  // Build a single calendar session object in the shape other
-  // parts of the app (calendar, day detail, planner) already expect.
-  function _buildSessionForSport(sport, dateStr, sessionLen, weekNumber, planId, idx) {
+  // Canonical strength exercise templates keyed by focus. These are
+  // hand-picked baseline splits — not prescriptive per-set loads, just
+  // movement patterns so the materialized session has SOMETHING to do.
+  // Users can edit from the calendar card like any other scheduled
+  // workout. Rep targets are intentionally conservative defaults.
+  const _STRENGTH_TEMPLATES = {
+    push: [
+      { name: "Barbell Bench Press",   sets: 4, reps: "6-8",  weight: "" },
+      { name: "Overhead Press",        sets: 3, reps: "8-10", weight: "" },
+      { name: "Incline Dumbbell Press",sets: 3, reps: "10",   weight: "" },
+      { name: "Lateral Raise",         sets: 3, reps: "12",   weight: "" },
+      { name: "Tricep Pushdown",       sets: 3, reps: "12",   weight: "" },
+    ],
+    pull: [
+      { name: "Deadlift",              sets: 4, reps: "5",    weight: "" },
+      { name: "Barbell Row",           sets: 4, reps: "8",    weight: "" },
+      { name: "Pull-ups",              sets: 4, reps: "AMRAP",weight: "Bodyweight" },
+      { name: "Face Pull",             sets: 3, reps: "15",   weight: "" },
+      { name: "Barbell Curl",          sets: 3, reps: "10",   weight: "" },
+    ],
+    legs: [
+      { name: "Back Squat",            sets: 4, reps: "5-8",  weight: "" },
+      { name: "Romanian Deadlift",     sets: 3, reps: "8",    weight: "" },
+      { name: "Leg Press",             sets: 3, reps: "10",   weight: "" },
+      { name: "Walking Lunges",        sets: 3, reps: "12/leg", weight: "" },
+      { name: "Standing Calf Raise",   sets: 4, reps: "15",   weight: "" },
+    ],
+    upper: [
+      { name: "Bench Press",           sets: 4, reps: "6-8",  weight: "" },
+      { name: "Barbell Row",           sets: 4, reps: "8",    weight: "" },
+      { name: "Overhead Press",        sets: 3, reps: "8-10", weight: "" },
+      { name: "Pull-ups",              sets: 3, reps: "AMRAP",weight: "Bodyweight" },
+      { name: "Lateral Raise",         sets: 3, reps: "12",   weight: "" },
+    ],
+    lower: [
+      { name: "Back Squat",            sets: 4, reps: "5-8",  weight: "" },
+      { name: "Romanian Deadlift",     sets: 3, reps: "8",    weight: "" },
+      { name: "Bulgarian Split Squat", sets: 3, reps: "10/leg", weight: "" },
+      { name: "Leg Curl",              sets: 3, reps: "12",   weight: "" },
+      { name: "Standing Calf Raise",   sets: 4, reps: "15",   weight: "" },
+    ],
+    full: [
+      { name: "Back Squat",            sets: 3, reps: "6-8",  weight: "" },
+      { name: "Bench Press",           sets: 3, reps: "6-8",  weight: "" },
+      { name: "Barbell Row",           sets: 3, reps: "8",    weight: "" },
+      { name: "Overhead Press",        sets: 3, reps: "8",    weight: "" },
+      { name: "Plank",                 sets: 3, reps: "45s",  weight: "Bodyweight" },
+    ],
+  };
+
+  // Build a single calendar session object in the shape other parts
+  // of the app (calendar, day detail, planner) already expect. Takes
+  // an enriched slot code (e.g. "run-interval", "strength-push") and
+  // produces the matching rich session, including exercise templates
+  // for strength variants so the card isn't empty on the calendar.
+  function _buildSessionForSport(code, dateStr, sessionLen, weekNumber, planId, idx) {
     const base = {
       id: planId + "-" + idx,
       date: dateStr,
@@ -2049,24 +2108,53 @@
       source: "onboarding_v2",
     };
     const map = {
-      "run":      { type: "running",      discipline: "run",   sessionName: "Run",       load: "easy" },
-      "run-long": { type: "running",      discipline: "run",   sessionName: "Long Run",  load: "long",    duration: Math.round(sessionLen * 1.5) },
-      "bike":     { type: "cycling",      discipline: "bike",  sessionName: "Ride",      load: "easy" },
-      "bike-long":{ type: "cycling",      discipline: "bike",  sessionName: "Long Ride", load: "long",    duration: Math.round(sessionLen * 1.8) },
-      "brick":    { type: "triathlon",    discipline: "brick", sessionName: "Brick (Bike → Run)", load: "moderate", duration: Math.round(sessionLen * 1.3) },
-      "swim":     { type: "swimming",     discipline: "swim",  sessionName: "Swim",      load: "easy" },
-      "strength": { type: "weightlifting",discipline: "strength", sessionName: "Strength", load: "moderate" },
-      "hiit":     { type: "hiit",         discipline: "hiit",  sessionName: "HIIT",      load: "hard",    duration: Math.max(20, Math.round(sessionLen * 0.5)) },
-      "yoga":     { type: "yoga",         discipline: "yoga",  sessionName: "Yoga",      load: "easy" },
-      "mobility": { type: "mobility",     discipline: "mobility", sessionName: "Mobility", load: "easy",  duration: 20 },
-      "walking":  { type: "walking",      discipline: "walk",  sessionName: "Walk",      load: "easy" },
-      "rowing":   { type: "rowing",       discipline: "row",   sessionName: "Row",       load: "moderate" },
-      "hyrox":    { type: "hiit",         discipline: "hyrox", sessionName: "Hyrox",     load: "hard" },
-      "circuit":  { type: "hiit",         discipline: "circuit", sessionName: "Circuit", load: "hard" },
+      // Legacy bare sport buckets (kept for back-compat / defensive)
+      "run":           { type: "running",      discipline: "run",  sessionName: "Easy Run",       load: "easy" },
+      "bike":          { type: "cycling",      discipline: "bike", sessionName: "Easy Ride",      load: "easy" },
+      "swim":          { type: "swimming",     discipline: "swim", sessionName: "Easy Swim",      load: "easy" },
+      "strength":      { type: "weightlifting",discipline: "strength", sessionName: "Strength",   load: "moderate", _strengthFocus: "full" },
+      // Enriched run variants
+      "run-long":      { type: "running",      discipline: "run",  sessionName: "Long Run",       load: "long",    duration: Math.round(sessionLen * 1.5) },
+      "run-interval":  { type: "running",      discipline: "run",  sessionName: "Interval Run",   load: "hard" },
+      "run-recovery":  { type: "running",      discipline: "run",  sessionName: "Recovery Run",   load: "easy",    duration: Math.max(20, Math.round(sessionLen * 0.7)) },
+      "run-easy":      { type: "running",      discipline: "run",  sessionName: "Easy Run",       load: "easy" },
+      // Enriched bike variants
+      "bike-long":     { type: "cycling",      discipline: "bike", sessionName: "Long Ride",      load: "long",    duration: Math.round(sessionLen * 1.8) },
+      "bike-interval": { type: "cycling",      discipline: "bike", sessionName: "Interval Ride",  load: "hard" },
+      "bike-easy":     { type: "cycling",      discipline: "bike", sessionName: "Easy Ride",      load: "easy" },
+      // Enriched swim variants
+      "swim-css":      { type: "swimming",     discipline: "swim", sessionName: "CSS Swim",       load: "hard" },
+      "swim-endurance":{ type: "swimming",     discipline: "swim", sessionName: "Endurance Swim", load: "moderate" },
+      // Enriched strength variants
+      "strength-push": { type: "weightlifting",discipline: "strength", sessionName: "Push Day",    load: "moderate", _strengthFocus: "push" },
+      "strength-pull": { type: "weightlifting",discipline: "strength", sessionName: "Pull Day",    load: "moderate", _strengthFocus: "pull" },
+      "strength-legs": { type: "weightlifting",discipline: "strength", sessionName: "Leg Day",     load: "moderate", _strengthFocus: "legs" },
+      "strength-upper":{ type: "weightlifting",discipline: "strength", sessionName: "Upper Body",  load: "moderate", _strengthFocus: "upper" },
+      "strength-lower":{ type: "weightlifting",discipline: "strength", sessionName: "Lower Body",  load: "moderate", _strengthFocus: "lower" },
+      "strength-full": { type: "weightlifting",discipline: "strength", sessionName: "Full Body",   load: "moderate", _strengthFocus: "full" },
+      "strength-custom":{type: "weightlifting",discipline: "strength", sessionName: "Strength",    load: "moderate", _strengthFocus: "full" },
+      // Other disciplines
+      "brick":         { type: "triathlon",    discipline: "brick", sessionName: "Brick (Bike → Run)", load: "moderate", duration: Math.round(sessionLen * 1.3) },
+      "hiit":          { type: "hiit",         discipline: "hiit",  sessionName: "HIIT",      load: "hard", duration: Math.max(20, Math.round(sessionLen * 0.5)) },
+      "yoga":          { type: "yoga",         discipline: "yoga",  sessionName: "Yoga",      load: "easy" },
+      "mobility":      { type: "mobility",     discipline: "mobility", sessionName: "Mobility", load: "easy", duration: 20 },
+      "walking":       { type: "walking",      discipline: "walk",  sessionName: "Walk",      load: "easy" },
+      "rowing":        { type: "rowing",       discipline: "row",   sessionName: "Row",       load: "moderate" },
+      "hyrox":         { type: "hiit",         discipline: "hyrox", sessionName: "Hyrox",     load: "hard" },
+      "circuit":       { type: "hiit",         discipline: "circuit", sessionName: "Circuit", load: "hard" },
     };
-    const spec = map[sport];
+    const spec = map[code];
     if (!spec) return null;
-    return Object.assign({}, base, spec);
+    // Pull the internal _strengthFocus marker out of the spec before
+    // merging so it doesn't leak into the stored session.
+    const { _strengthFocus, ...cleanSpec } = spec;
+    const session = Object.assign({}, base, cleanSpec);
+    // Inject strength exercise content so the calendar card isn't
+    // empty. Users can edit from the day-detail editor.
+    if (_strengthFocus && _STRENGTH_TEMPLATES[_strengthFocus]) {
+      session.exercises = _STRENGTH_TEMPLATES[_strengthFocus].map(ex => ({ ...ex }));
+    }
+    return session;
   }
   function _mapRacesToLegacyEvents(races) {
     const typeMap = {
