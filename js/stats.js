@@ -887,14 +887,16 @@ function buildStatsCompletedRaces(events) {
 
   const cards = filtered.map(race => {
     const showTime = race.showFinishTime && race.finishTime;
-    const paceLine = showTime ? _formatRunPace(race) : "";
+    const pace = showTime ? _formatRunPace(race) : "";
+    const timeHtml = showTime
+      ? `<div class="trophy-card-v2-time">${_escapeStatsHtml(race.finishTime)}${pace ? ` <span class="trophy-card-v2-pace">(${_escapeStatsHtml(pace)})</span>` : ""}</div>`
+      : "";
     return `
       <div class="trophy-card-v2" title="Click to edit or delete" onclick="openPastRaceModal('${race.id}')">
         <div class="trophy-card-v2-date">${_escapeStatsHtml(_shortTrophyDate(race.date))}</div>
         <div class="trophy-badge">${_getTrophySportBadge(race.type)}</div>
         <div class="trophy-card-v2-name">${_escapeStatsHtml(race.name || "Unnamed race")}</div>
-        ${showTime ? `<div class="trophy-card-v2-time">${_escapeStatsHtml(race.finishTime)}</div>` : ""}
-        ${paceLine ? `<div class="trophy-card-v2-pace">${paceLine}</div>` : ""}
+        ${timeHtml}
       </div>`;
   }).join("");
 
