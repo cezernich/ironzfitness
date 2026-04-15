@@ -3509,6 +3509,24 @@
     </div><!-- /bp frame -->
   </div><!-- /bp-v2-overlay -->
 
+  <!-- ===== CUSTOM PLAN OVERLAY =====
+       Dedicated modal surface for the legacy custom-plan builder
+       (js/custom-plan.js). Triggered from the "Create Your Own Plan"
+       card on the Training tab. On open, #section-custom-plan is
+       moved into #custom-plan-host; on close it's moved back so
+       its listeners and state stay intact. -->
+  <div id="custom-plan-overlay" class="ob-v2-root bp-v2-overlay" aria-hidden="true">
+    <div class="ob-v2-frame">
+      <button type="button" class="bp-v2-close" onclick="closeCustomPlanBuilder()" aria-label="Close">&times;</button>
+      <div class="ob-v2-progress-wrap">
+        <div class="ob-v2-progress-label">Create Your Own Plan</div>
+      </div>
+      <div class="ob-v2-screen-container">
+        <div id="custom-plan-host" class="ob-v2-screen is-active"></div>
+      </div>
+    </div>
+  </div><!-- /custom-plan-overlay -->
+
 
 </body>
 </html>
