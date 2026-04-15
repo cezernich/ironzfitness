@@ -98,33 +98,40 @@ function openBuildPlanTab(tabName) {
   if (wrapper) wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// Opens the legacy custom-plan builder (the "Create Your Own" tab
-// inside #section-build-plan) as a focused surface. The legacy
-// section is hidden by default in favor of the v2 Build Plan overlay,
-// but we want this one tab reachable from the new "Create Your Own
-// Plan" card on the Training tab.
+// Opens the legacy custom-plan builder inside a dedicated modal
+// overlay (#custom-plan-overlay). #section-custom-plan is moved into
+// the modal's host on open and moved back to #bp-panel-custom on
+// close — this preserves all the ids, event listeners, and state
+// that js/custom-plan.js registers directly against those elements.
 function openCustomPlanBuilder() {
-  const wrapper = document.getElementById('section-build-plan');
-  if (!wrapper) return;
-  // Un-hide the whole section and expand it
-  wrapper.style.display = '';
-  wrapper.classList.remove('is-collapsed');
-  // Hide the tab selector + race/gym panels so only custom shows
-  const tabs = wrapper.querySelector('.build-plan-tabs');
-  if (tabs) tabs.style.display = 'none';
-  const racePanel = document.getElementById('bp-panel-race');
-  if (racePanel) racePanel.style.display = 'none';
-  const gymPanel = document.getElementById('bp-panel-gym');
-  if (gymPanel) gymPanel.style.display = 'none';
-  const customPanel = document.getElementById('bp-panel-custom');
-  if (customPanel) customPanel.style.display = '';
-  // Render the custom plan builder (initCustomPlan sets defaults,
-  // renderCustomPlanBuilder paints the weekly grid)
+  const overlay = document.getElementById('custom-plan-overlay');
+  const host    = document.getElementById('custom-plan-host');
+  const section = document.getElementById('section-custom-plan');
+  if (!overlay || !host || !section) return;
+  if (section.parentElement !== host) host.appendChild(section);
+  overlay.classList.add('is-active');
+  overlay.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('ob-v2-lock');
   try {
     if (typeof initCustomPlan === 'function') initCustomPlan();
     if (typeof renderCustomPlanBuilder === 'function') renderCustomPlanBuilder();
   } catch (e) { console.warn('[IronZ] custom plan render failed', e); }
-  wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeCustomPlanBuilder() {
+  const overlay = document.getElementById('custom-plan-overlay');
+  const section = document.getElementById('section-custom-plan');
+  const panel   = document.getElementById('bp-panel-custom');
+  if (!overlay) return;
+  overlay.classList.remove('is-active');
+  overlay.setAttribute('aria-hidden', 'true');
+  // Move the section back to its original home so listeners + state
+  // survive for future opens.
+  if (section && panel && section.parentElement !== panel) panel.appendChild(section);
+  const bp = document.getElementById('bp-v2-overlay');
+  const ob = document.getElementById('ob-v2-root');
+  const anyOpen = (bp && bp.classList.contains('is-active')) || (ob && ob.classList.contains('is-active'));
+  if (!anyOpen) document.body.classList.remove('ob-v2-lock');
 }
 
 /* =====================================================================
