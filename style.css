@@ -18442,3 +18442,35 @@ body.ob-v2-lock { overflow: hidden; }
 }
 .session-card--b-race { border-left: 3px solid #e53e3e; }
 .session-card--b-window { border-left: 3px solid rgba(229,62,62,0.4); }
+
+/* Fueling plan transparency — factor breakdown + gel sanity line */
+.fueling-factors { margin: 4px 0 6px; }
+.fueling-factors-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(229,62,62,0.1);
+  color: #c53030;
+  letter-spacing: 0.03em;
+}
+.fueling-gel-line {
+  font-size: 12px;
+  color: var(--color-text-muted, #6b7280);
+  margin: 4px 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fueling-gel-change {
+  background: none;
+  border: none;
+  color: #e53e3e;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+.fueling-gel-change:hover { color: #c53030; }

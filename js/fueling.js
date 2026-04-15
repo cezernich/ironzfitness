@@ -66,12 +66,42 @@ function saveUserFuelingPrefs(prefs) {
   localStorage.setItem("fuelingPrefs", JSON.stringify(prefs)); if (typeof DB !== 'undefined') DB.syncKey('fuelingPrefs');
 }
 
+// Weight-based scaling factor. Reference athlete is 70 kg (~154 lbs).
+// A 90 kg athlete burns more absolute carbs; a 55 kg athlete less.
+// We clamp the factor between 0.75 and 1.3 so the number stays in
+// the gut-tolerable range (current science caps around 90-100 g/hr
+// for well-trained athletes).
+function _fuelingWeightFactor() {
+  try {
+    const profile = JSON.parse(localStorage.getItem("profile") || "{}") || {};
+    const lbs = parseFloat(profile.weight || profile.weight_lbs);
+    if (!lbs || lbs <= 0) return 1.0;
+    const kg = lbs * 0.453592;
+    const factor = kg / 70;
+    return Math.max(0.75, Math.min(1.3, factor));
+  } catch { return 1.0; }
+}
+
+// Intensity scaling factor. Easy / recovery days need less fueling;
+// race / threshold sessions burn carbs faster and demand more.
+function _fuelingIntensityFactor(load) {
+  const l = String(load || "moderate").toLowerCase();
+  if (l === "easy" || l === "recovery" || l === "rest") return 0.8;
+  if (l === "long") return 1.1;
+  if (l === "hard" || l === "threshold" || l === "interval") return 1.15;
+  if (l === "race") return 1.2;
+  return 1.0; // moderate default
+}
+
 /**
- * generateFuelingPlan(durationMinutes)
+ * generateFuelingPlan(durationMinutes, sessionCtx)
  * Returns a fueling plan object or null if no fueling needed.
- * Respects user customization for carb targets and fuel source.
+ *
+ * @param {number} durationMinutes
+ * @param {Object} [sessionCtx] - optional { load, discipline }
+ *        used to scale carbs/hour by intensity
  */
-function generateFuelingPlan(durationMinutes) {
+function generateFuelingPlan(durationMinutes, sessionCtx) {
   const durMin = parseFloat(durationMinutes);
   if (!durMin || durMin <= 0) return null;
 
@@ -79,15 +109,22 @@ function generateFuelingPlan(durationMinutes) {
   const rule = FUELING_DEFAULTS.thresholds.find(r => durMin >= r.minDuration && durMin < r.maxDuration);
   if (!rule || rule.carbsPerHour === 0) return null;
 
-  // User overrides
-  const carbsPerHour = prefs.carbsPerHour || rule.carbsPerHour;
+  // Compute automatic carbs/hour from the duration band, then scale
+  // by athlete weight and session intensity unless the user has
+  // explicitly overridden it via prefs.carbsPerHour.
+  const weightFactor = _fuelingWeightFactor();
+  const intensityFactor = _fuelingIntensityFactor(sessionCtx && sessionCtx.load);
+  const autoCarbsHour = Math.round(rule.carbsPerHour * weightFactor * intensityFactor);
+
+  // User hard override takes priority; otherwise use the scaled value.
+  const carbsPerHour = prefs.carbsPerHour || autoCarbsHour;
   const fuelSourceId = prefs.fuelSource || "gel";
   const fuelSource = FUEL_SOURCES.find(s => s.id === fuelSourceId) || FUEL_SOURCES[0];
   const carbsPerServing = prefs.customCarbsPerServing || fuelSource.carbs;
 
   // Calculate intervals based on carbs needed per hour and carbs per serving
   const servingsPerHour = carbsPerHour / carbsPerServing;
-  const intervalMinutes = Math.round(60 / servingsPerHour);
+  const intervalMinutes = Math.max(8, Math.round(60 / servingsPerHour));
   const startMinute = prefs.startMinute || rule.startMinute;
 
   const fuelTimes = [];
@@ -99,21 +136,30 @@ function generateFuelingPlan(durationMinutes) {
   return {
     totalCarbs: Math.round((carbsPerHour * durMin) / 60),
     carbsPerHour,
+    autoCarbsHour,
+    weightFactor,
+    intensityFactor,
+    isOverride: !!prefs.carbsPerHour,
     items: fuelTimes.map(t => ({ minute: t, carbs: carbsPerServing, source: fuelSource })),
     hydrationOz: durMin > 60 ? `${Math.round(durMin / 60 * 20)}-${Math.round(durMin / 60 * 24)} oz` : "Sip water as needed",
     note: rule.note,
     needsSodium: durMin >= 90,
     fuelSource,
+    carbsPerServing,
   };
 }
 
 /**
- * renderFuelingPlanHTML(durationMinutes, sessionName)
+ * renderFuelingPlanHTML(durationMinutes, sessionName, sessionCtx)
  * Returns HTML string for a collapsible fueling plan section.
+ *
+ * @param {number} durationMinutes
+ * @param {string} sessionName
+ * @param {Object} [sessionCtx] - { load, discipline } used for intensity scaling
  */
-function renderFuelingPlanHTML(durationMinutes, sessionName) {
+function renderFuelingPlanHTML(durationMinutes, sessionName, sessionCtx) {
   if (!isFuelingEnabled()) return "";
-  const plan = generateFuelingPlan(durationMinutes);
+  const plan = generateFuelingPlan(durationMinutes, sessionCtx);
   if (!plan) return "";
 
   const itemList = plan.items.map((item, i) =>
@@ -123,6 +169,15 @@ function renderFuelingPlanHTML(durationMinutes, sessionName) {
   const sodiumNote = plan.needsSodium
     ? `<div class="fueling-item fueling-sodium">Sodium: ${FUELING_DEFAULTS.hydration.sodium}</div>`
     : "";
+
+  // Show a tiny breakdown so users see why the number is what it is:
+  // weight factor + intensity factor applied to the duration-band base.
+  // Also surfaces the current gel size so the user can sanity-check it
+  // and tap Customize if it's wrong.
+  const factorsBadge = plan.isOverride
+    ? `<span class="fueling-factors-badge">User override</span>`
+    : `<span class="fueling-factors-badge">Weight ×${plan.weightFactor.toFixed(2)} · Intensity ×${plan.intensityFactor.toFixed(2)}</span>`;
+  const gelLine = `Using ${plan.fuelSource.name} at ${plan.carbsPerServing}g carbs each`;
 
   const id = "fueling-" + Math.random().toString(36).slice(2, 8);
   return `
@@ -134,7 +189,9 @@ function renderFuelingPlanHTML(durationMinutes, sessionName) {
       </button>
       <div class="fueling-plan-body" id="${id}">
         <div class="fueling-summary">~${plan.totalCarbs}g carbs needed (${plan.carbsPerHour}g/hr) | ${plan.hydrationOz} water</div>
+        <div class="fueling-factors">${factorsBadge}</div>
         <div class="fueling-note">${plan.note}</div>
+        <div class="fueling-gel-line">${gelLine} <button class="fueling-gel-change" onclick="openFuelingPrefs()">change</button></div>
         ${itemList}
         <div class="fueling-item"><span class="fueling-item-icon">${FUEL_ICON_SVG}</span> Hydration: ${plan.hydrationOz}, sip every 15 min</div>
         ${sodiumNote}

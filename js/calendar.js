@@ -1220,7 +1220,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
           </div>
         </div>
         ${buildIntensityStrip(s, cardId, w.type)}
-        <div class="card-body">${buildStepsList(s, w.type)}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(s.duration, s.name) : ""}${_genCompletion}</div>
+        <div class="card-body">${buildStepsList(s, w.type)}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(s.duration, s.name, { load: w.load || s.load, discipline: w.discipline || w.type }) : ""}${_genCompletion}</div>
       </div>`;
   }
 
@@ -3182,7 +3182,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
               </div>
             </div>
             ${buildIntensityStrip(session, cardId, p.discipline)}
-            <div class="card-body">${buildStepsList(session, p.discipline)}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(session.duration, session.name) : ""}${buildWorkoutExplanation(session, dateStr, p.discipline, effectLoad, p.sessionName, p)}${_planCompletion}</div>
+            <div class="card-body">${buildStepsList(session, p.discipline)}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(session.duration, session.name, { load: effectLoad, discipline: p.discipline }) : ""}${buildWorkoutExplanation(session, dateStr, p.discipline, effectLoad, p.sessionName, p)}${_planCompletion}</div>
           </div>`;
       } else {
         html += `
@@ -3251,7 +3251,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
                 </div>
               </div>
               ${buildIntensityStrip(session, cardId, w.discipline)}
-              <div class="card-body">${buildStepsList(session, w.discipline)}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(session.duration, session.name) : ""}${buildWorkoutExplanation(session, dateStr, w.discipline, effectLoad, w.sessionName, w)}${_swMovePanel}${_swCompletion}</div>
+              <div class="card-body">${buildStepsList(session, w.discipline)}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(session.duration, session.name, { load: w.load || effectLoad, discipline: w.discipline }) : ""}${buildWorkoutExplanation(session, dateStr, w.discipline, effectLoad, w.sessionName, w)}${_swMovePanel}${_swCompletion}</div>
             </div>`;
           return;
         }
@@ -3434,7 +3434,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
             <div class="session-header-right">${(_getCompletionDuration(cardId) || _swGenDurMin) ? `<span class="session-duration-badge">${_getCompletionDuration(cardId) || _swGenDurMin} min</span>` : ""}${_swGenUndoBtn}${_swGenOverflow}<span class="card-chevron">▾</span></div>
           </div>
           ${_swGenStrip}
-          <div class="card-body">${body}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(w.duration || _swGenDurMin, w.sessionName) : ""}${buildWorkoutExplanation(null, dateStr, w.discipline || w.type, w.load || "moderate", w.sessionName, w)}${_swGenEditPanel}${_swGenMovePanel}${_swGenCompletion}</div>
+          <div class="card-body">${body}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(w.duration || _swGenDurMin, w.sessionName, { load: w.load || "moderate", discipline: w.discipline || w.type }) : ""}${buildWorkoutExplanation(null, dateStr, w.discipline || w.type, w.load || "moderate", w.sessionName, w)}${_swGenEditPanel}${_swGenMovePanel}${_swGenCompletion}</div>
         </div>`;
     });
 
