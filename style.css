@@ -17415,3 +17415,34 @@ body.ob-v2-lock { overflow: hidden; }
   color: var(--muted, #9aa0a6);
   font-size: 0.85rem;
 }
+
+/* ===== BUILD PLAN MODAL OVERLAY =====
+   Shares .ob-v2-root base styles. Adds an X close button and
+   positions the progress bar so the close button doesn't collide. */
+.bp-v2-overlay .ob-v2-frame { position: relative; }
+.bp-v2-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: var(--text, #e7e9ee);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+.bp-v2-close:hover {
+  background: rgba(255,107,53,0.15);
+  border-color: rgba(255,107,53,0.45);
+}
+.bp-v2-overlay .ob-v2-progress-wrap {
+  padding-right: 56px; /* leave room for close button */
+}

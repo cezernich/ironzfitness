@@ -136,29 +136,47 @@
 
   // ── Screen navigation ──────────────────────────────────────────────
 
+  // goTo auto-detects which overlay the target screen lives in
+  // (#ob-v2-root or #bp-v2-overlay), activates that overlay, hides
+  // the other if it was open, and deactivates sibling screens only
+  // within the target screen's own container.
   function goTo(screenId) {
-    const root = document.getElementById("ob-v2-root");
-    if (!root) return;
-    root.querySelectorAll(".ob-v2-screen").forEach(s => s.classList.remove("is-active"));
     const target = document.getElementById(screenId);
     if (!target) {
       console.warn("[OnboardingV2] goTo: unknown screen", screenId);
       return;
     }
+    const container = target.closest(".ob-v2-screen-container");
+    const overlay = target.closest(".ob-v2-root");
+    if (!container || !overlay) {
+      console.warn("[OnboardingV2] goTo: screen has no overlay ancestor", screenId);
+      return;
+    }
+    // Activate the owning overlay and deactivate the other one
+    const obRoot = document.getElementById("ob-v2-root");
+    const bpRoot = document.getElementById("bp-v2-overlay");
+    if (overlay === obRoot) {
+      _showOverlay(obRoot);
+      if (bpRoot && bpRoot.classList.contains("is-active")) _hideOverlay(bpRoot);
+    } else if (overlay === bpRoot) {
+      _showOverlay(bpRoot);
+      if (obRoot && obRoot.classList.contains("is-active")) _hideOverlay(obRoot);
+    }
+    // Deactivate sibling screens in this container only
+    container.querySelectorAll(".ob-v2-screen").forEach(s => s.classList.remove("is-active"));
     target.classList.add("is-active");
     _state.currentScreen = screenId;
     _updateProgress(screenId);
     _hydrateIcons(target);
-    // Scroll the container to top so long screens start at the top
-    const container = root.querySelector(".ob-v2-screen-container");
-    if (container) container.scrollTop = 0;
+    container.scrollTop = 0;
   }
 
   function _updateProgress(screenId) {
     const meta = _progressBySreen[screenId];
     if (!meta) return;
-    const fill = document.getElementById("ob-v2-progress-fill");
-    const label = document.getElementById("ob-v2-progress-label");
+    const isBp = screenId.indexOf("bp-v2-") === 0;
+    const fill = document.getElementById(isBp ? "bp-v2-progress-fill" : "ob-v2-progress-fill");
+    const label = document.getElementById(isBp ? "bp-v2-progress-label" : "ob-v2-progress-label");
     if (fill) fill.style.width = meta.pct + "%";
     if (label) label.textContent = meta.label;
   }
@@ -186,11 +204,12 @@
   }
 
   // Standalone Build Plan entry point — pre-fills from stored state
-  // and enters at bp-v2-1 skipping the ob-* screens.
+  // and enters at bp-v2-1 skipping the ob-* screens. Opens the
+  // dedicated #bp-v2-overlay modal (not the onboarding overlay).
   function openBuildPlan() {
-    _openOverlay();
     _state.mode = "buildplan";
     _prefillFromStoredBuildPlan();
+    _openBuildPlanOverlay();
     goTo("bp-v2-1");
     _rehydrateBuildPlanScreens();
   }
@@ -223,23 +242,32 @@
     if (typeof _applyStrengthCountSideEffects === "function") _applyStrengthCountSideEffects();
   }
 
-  function _openOverlay() {
-    const root = document.getElementById("ob-v2-root");
-    if (!root) {
-      console.warn("[OnboardingV2] #ob-v2-root missing from DOM");
-      return;
-    }
-    root.classList.add("is-active");
-    root.setAttribute("aria-hidden", "false");
+  function _showOverlay(el) {
+    if (!el) return;
+    el.classList.add("is-active");
+    el.setAttribute("aria-hidden", "false");
     document.body.classList.add("ob-v2-lock");
   }
 
-  function _closeOverlay() {
-    const root = document.getElementById("ob-v2-root");
-    if (!root) return;
-    root.classList.remove("is-active");
-    root.setAttribute("aria-hidden", "true");
-    document.body.classList.remove("ob-v2-lock");
+  function _hideOverlay(el) {
+    if (!el) return;
+    el.classList.remove("is-active");
+    el.setAttribute("aria-hidden", "true");
+    // Only unlock body if neither overlay is visible
+    const ob = document.getElementById("ob-v2-root");
+    const bp = document.getElementById("bp-v2-overlay");
+    const anyActive = (ob && ob.classList.contains("is-active")) || (bp && bp.classList.contains("is-active"));
+    if (!anyActive) document.body.classList.remove("ob-v2-lock");
+  }
+
+  function _openOverlay() { _showOverlay(document.getElementById("ob-v2-root")); }
+  function _closeOverlay() { _hideOverlay(document.getElementById("ob-v2-root")); }
+  function _openBuildPlanOverlay() { _showOverlay(document.getElementById("bp-v2-overlay")); }
+  function _closeBuildPlanOverlay() { _hideOverlay(document.getElementById("bp-v2-overlay")); }
+
+  // Public: close Build Plan modal (X button + Escape future)
+  function closeBuildPlan() {
+    _closeBuildPlanOverlay();
   }
 
   // Pre-fill profile fields from existing localStorage.profile. Useful
@@ -511,7 +539,13 @@
     // Auto-advance after 350ms so the user sees the selection state
     setTimeout(() => {
       if (choice === "plan") {
-        _finishOnboarding(true);
+        // Transition from onboarding overlay into the Build Plan overlay.
+        // Keep mode=onboarding so _confirmAndSavePlan still stamps
+        // hasOnboarded=1 at the end of bp-done.
+        _prefillFromStoredBuildPlan();
+        _openBuildPlanOverlay();
+        goTo("bp-v2-1");
+        _rehydrateBuildPlanScreens();
       } else {
         goTo("ob-v2-manual-landing");
       }
@@ -525,14 +559,10 @@
     _finishOnboarding(false, target);
   }
 
-  // Final completion handler. Sets hasOnboarded=1, closes the overlay,
-  // and routes the user to their next destination:
-  //   - buildPlan=true → legacy openSurvey() (Phase 3 replaces with bp-1)
-  //   - buildPlan=false → the requested manual starting surface
-  function _finishOnboarding(buildPlan, manualTarget) {
+  // Final completion handler for the MANUAL (no-plan) path only.
+  // The plan fork is handled directly in _selectFork → openBuildPlan.
+  function _finishOnboarding(_buildPlan, manualTarget) {
     _lsSet("hasOnboarded", "1");
-    // Kick the home/training tab render so any profile-dependent UI
-    // (greeting, stats) picks up the new data.
     try {
       if (typeof loadProfileIntoForm === "function") loadProfileIntoForm();
       if (typeof updateNavInitials === "function") updateNavInitials();
@@ -541,19 +571,6 @@
 
     _closeOverlay();
 
-    if (buildPlan) {
-      // TEMP Phase 2 bridge: reuse the legacy Build Plan survey
-      // (openSurvey in js/onboarding-legacy.js). Phase 3 replaces
-      // this with the new bp-* flow.
-      if (typeof openSurvey === "function") {
-        setTimeout(openSurvey, 300);
-      } else {
-        console.warn("[OnboardingV2] openSurvey() not found — legacy onboarding may not be loaded");
-      }
-      return;
-    }
-
-    // Manual path — route to the requested surface, default to home.
     const dest = manualTarget === "library" ? "saved-library"
                : manualTarget === "explore" ? "home"
                : "home";
@@ -565,6 +582,7 @@
     window.OnboardingV2 = {
       maybeStart,
       openBuildPlan,
+      closeBuildPlan,
       openOnboarding,
       goTo,
       validateProfile,
@@ -593,7 +611,10 @@
 
   function _bpBack(currentScreen) {
     if (currentScreen === "bp-v2-1") {
-      if (_state.mode === "buildplan") { _closeOverlay(); return; }
+      // Standalone path: dismiss the Build Plan modal entirely.
+      if (_state.mode === "buildplan") { _closeBuildPlanOverlay(); return; }
+      // Onboarding fork path: close the BP overlay and return to ob-6.
+      _closeBuildPlanOverlay();
       goTo("ob-v2-6");
       return;
     }
@@ -1075,7 +1096,14 @@
     }));
   }
   function _goToTrainingTab() {
+    _closeBuildPlanOverlay();
     _closeOverlay();
+    // Re-render training tab UI so newly generated plan shows up.
+    try {
+      if (typeof renderRaceEvents === "function") renderRaceEvents();
+      if (typeof renderTrainingInputs === "function") renderTrainingInputs();
+      if (typeof renderCalendar === "function") renderCalendar();
+    } catch {}
     if (typeof showTab === "function") showTab("training");
   }
 

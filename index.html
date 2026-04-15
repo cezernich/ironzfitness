@@ -201,8 +201,12 @@
         </div>
       </section>
 
-      <!-- Build a Plan (unified) -->
-      <section class="card collapsible is-collapsed" id="section-build-plan">
+      <!-- Build a Plan (legacy section) — hidden; replaced by the
+           standalone Build Plan overlay (#bp-v2-overlay) triggered
+           from the "Build My Plan" CTA above. Races live in Active
+           Training Inputs now, not here. Kept in DOM so downstream
+           scripts (switchBuildPlanTab, etc.) don't null-ref. -->
+      <section class="card collapsible is-collapsed" id="section-build-plan" style="display:none">
         <div class="card-toggle" onclick="toggleSection('section-build-plan')">
           <h2>Build a Plan</h2>
           <span class="card-chevron">▾</span>
@@ -3199,6 +3203,26 @@
           </div>
         </div>
 
+      </div><!-- /screen-container -->
+    </div><!-- /frame -->
+  </div><!-- /ob-v2-root -->
+
+  <!-- ===== BUILD PLAN OVERLAY =====
+       Same pattern as #ob-v2-root but dedicated to the Build Plan flow.
+       Opened standalone from the Training tab "Build My Plan" CTA and
+       from the onboarding fork (ob-v2-6 → "Build a training plan").
+       ========================================= -->
+  <div id="bp-v2-overlay" class="ob-v2-root bp-v2-overlay" aria-hidden="true">
+    <div class="ob-v2-frame">
+      <button type="button" class="bp-v2-close" onclick="OnboardingV2.closeBuildPlan()" aria-label="Close">&times;</button>
+      <div class="ob-v2-progress-wrap">
+        <div class="ob-v2-progress-bar">
+          <div class="ob-v2-progress-fill" id="bp-v2-progress-fill"></div>
+        </div>
+        <div class="ob-v2-progress-label" id="bp-v2-progress-label">Build Plan</div>
+      </div>
+      <div class="ob-v2-screen-container">
+
         <!-- ═══════════════════════════════════════════════════════════
              BUILD PLAN SCREENS (bp-v2-1 through bp-v2-done) — spec §4.2
              Shared between onboarding fork and standalone Build Plan.
@@ -3470,9 +3494,11 @@
           <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._goToTrainingTab()">Go to Training</button>
         </div>
 
-      </div><!-- /screen-container -->
-    </div><!-- /frame -->
-  </div><!-- /ob-v2-root -->
+
+      </div><!-- /bp screen-container -->
+    </div><!-- /bp frame -->
+  </div><!-- /bp-v2-overlay -->
+
 
 </body>
 </html>
