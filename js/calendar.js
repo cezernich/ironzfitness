@@ -604,7 +604,9 @@ function _calV2BuildDayCard(dateStr, dateObj, todayStr, isCenter) {
   }
 
   const check = completed ? `<div class="s-check">${_CAL_V2_CHECK_SVG}</div>` : "";
-  const classes = `dc s${isSelected ? " selected" : ""}${sessionRemoved ? " cal-removed" : ""}`;
+  // Mark the side card that corresponds to today so users can see
+  // where today sits even when they've selected a different day.
+  const classes = `dc s${isSelected ? " selected" : ""}${isToday ? " is-today" : ""}${sessionRemoved ? " cal-removed" : ""}`;
 
   return `
     <div class="${classes}"

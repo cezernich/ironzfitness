@@ -17881,6 +17881,36 @@ body.ob-v2-lock { overflow: hidden; }
 .cal-today-btn svg {
   stroke: #fff;
 }
+/* Labeled "Today" pill — replaces the plain circle icon button so
+   the snap-to-today affordance is obvious on desktop and mobile. */
+.cal-today-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 12px 0 10px;
+  border: none;
+  border-radius: 14px;
+  background: var(--cal-red);
+  color: #fff;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(230, 57, 70, 0.3);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.cal-today-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(230, 57, 70, 0.38);
+}
+.cal-today-pill svg {
+  width: 10px;
+  height: 10px;
+  stroke: #fff;
+  fill: none;
+}
 .cal-mo {
   font-size: 12px;
   font-weight: 700;
@@ -18000,6 +18030,23 @@ body.ob-v2-lock { overflow: hidden; }
 }
 .dc.s.selected {
   opacity: 0.9;
+  border-color: var(--cal-red);
+}
+/* Today ring on a side card — visible whenever today isn't the
+   center (selected) day, so users can always see where today is. */
+.dc.s.is-today {
+  opacity: 1;
+  border-color: var(--cal-dark);
+  border-width: 2px;
+  background: #fff;
+}
+.dc.s.is-today .s-lb {
+  color: var(--cal-red);
+}
+.dc.s.is-today .s-nm {
+  color: var(--cal-dark);
+}
+.dc.s.is-today.selected {
   border-color: var(--cal-red);
 }
 .dc.s.cal-removed {
