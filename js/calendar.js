@@ -1366,11 +1366,25 @@ function hasAnyCompletedSession(dateStr) {
   if (dateStr > getTodayString()) return false;
   try {
     const workouts = JSON.parse(localStorage.getItem("workouts")) || [];
-    // Strava-imported activities carry source:"strava" (and completed:true)
-    // but NOT isCompletion — they come in as fully-formed logged workouts,
-    // not completion receipts. Treat any of these as "this day has work"
-    // so the calendar cell gets the green styling.
-    return workouts.some(w => w.date === dateStr && (w.isCompletion || w.source === "strava" || w.completed === true));
+    // Only count explicit completion receipts (isCompletion === true is
+    // what the Mark as Complete flow sets) and Strava imports (externally
+    // logged activity, always authoritative). The bare `completed: true`
+    // flag is too loose — some legacy code paths set it on scheduled
+    // workouts before they're actually finished, which made the calendar
+    // green-tint a day where nothing had been done.
+    const hasWorkoutCompletion = workouts.some(w =>
+      w.date === dateStr && (w.isCompletion === true || w.source === "strava")
+    );
+    if (hasWorkoutCompletion) return true;
+    // Secondary source of truth: the Mark as Complete flow also writes
+    // a metadata entry into completedSessions keyed by session id. If
+    // the entry's date matches, the day was actually completed.
+    const meta = JSON.parse(localStorage.getItem("completedSessions") || "{}");
+    for (const sid in meta) {
+      const entry = meta[sid];
+      if (entry && entry.date === dateStr) return true;
+    }
+    return false;
   } catch { return false; }
 }
 
