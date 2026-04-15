@@ -17334,3 +17334,24 @@ body.ob-v2-lock { overflow: hidden; }
 .ob-v2-mini-wk.ob-v2-mini-strength { border-left-color: #E65100; }
 .ob-v2-mini-wk.ob-v2-mini-hyrox    { border-left-color: #C62828; }
 .ob-v2-mini-wk.ob-v2-mini-rest     { border-left-color: #DDD; color: #AAA; font-style: italic; }
+
+/* Build My Plan CTA (Training tab entry point) */
+.build-plan-cta {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(255,107,53,0.12), rgba(255,107,53,0.04));
+  border: 1px solid rgba(255,107,53,0.35);
+  border-radius: 12px;
+  text-align: center;
+}
+.build-plan-cta-btn {
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 12px 28px;
+  min-width: 200px;
+}
+.build-plan-cta-hint {
+  margin: 8px 0 0;
+  color: var(--muted, #9aa0a6);
+  font-size: 0.85rem;
+}

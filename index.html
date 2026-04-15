@@ -182,6 +182,14 @@
            with the nearest race + countdown. -->
       <div id="training-next-race-banner"></div>
 
+      <!-- Build My Plan (v2 entry point) -->
+      <div class="build-plan-cta">
+        <button class="btn btn-primary build-plan-cta-btn" onclick="window.OnboardingV2 && window.OnboardingV2.openBuildPlan()">
+          Build My Plan
+        </button>
+        <p class="build-plan-cta-hint">Guided setup: sports, goals, races, thresholds, schedule.</p>
+      </div>
+
       <!-- Goals Section -->
       <section class="card collapsible is-collapsed" id="goals-section">
         <div class="card-toggle" onclick="toggleSection('goals-section')">
