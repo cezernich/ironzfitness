@@ -759,16 +759,19 @@ function buildStatsCompletedRaces(events) {
     .filter(e => e.date && e.date < today)
     .sort((a, b) => b.date.localeCompare(a.date));
 
+  const addBtn = `<button class="btn-secondary" style="font-size:0.78rem;padding:6px 12px" onclick="event.stopPropagation();openAddPastRaceModal()">+ Add Past Race</button>`;
+
   if (!past.length) {
     return `
-      <section class="card collapsible is-collapsed" id="section-stats-races-completed">
+      <section class="card collapsible" id="section-stats-races-completed">
         <div class="card-toggle" onclick="toggleSection('section-stats-races-completed')">
           <h2>Race Trophy Case</h2><span class="card-chevron">▾</span>
         </div>
         <div class="card-body">
-          <p class="empty-msg" style="margin:0">
+          <p class="empty-msg" style="margin:0 0 12px">
             No completed races yet. Your finishes will show up here.
           </p>
+          ${addBtn}
         </div>
       </section>`;
   }
@@ -776,7 +779,11 @@ function buildStatsCompletedRaces(events) {
   const cards = past.map(race => {
     const cfg = RACE_CONFIGS[race.type] || {};
     const trophyIcon = ICONS.trophy || ICONS.flag || "";
-    const distanceLabel = cfg.label || race.type || "Race";
+    const distanceLabel = race.type === "other"
+      ? (race.customType || "Race")
+      : (cfg.label || race.type || "Race");
+    const showTime = race.showFinishTime && race.finishTime;
+    const deleteBtn = `<button class="trophy-card-delete" title="Remove" onclick="event.stopPropagation();deletePastRace('${race.id}')">${ICONS.trash || "×"}</button>`;
     return `
       <div class="trophy-card">
         <div class="trophy-card-icon">${trophyIcon}</div>
@@ -784,8 +791,9 @@ function buildStatsCompletedRaces(events) {
           <div class="trophy-card-name">${_escapeStatsHtml(race.name || "Unnamed race")}</div>
           <div class="trophy-card-meta">${_escapeStatsHtml(distanceLabel)} · ${formatDisplayDate(race.date)}</div>
           ${race.location ? `<div class="trophy-card-detail">${_escapeStatsHtml(race.location)}</div>` : ""}
-          ${race.finishTime ? `<div class="trophy-card-time">${_escapeStatsHtml(race.finishTime)}</div>` : ""}
+          ${showTime ? `<div class="trophy-card-time">${_escapeStatsHtml(race.finishTime)}</div>` : ""}
         </div>
+        ${deleteBtn}
       </div>`;
   }).join("");
 
@@ -796,9 +804,223 @@ function buildStatsCompletedRaces(events) {
         <span class="card-chevron">▾</span>
       </div>
       <div class="card-body">
+        <div style="margin-bottom:12px">${addBtn}</div>
         <div class="trophy-case-grid">${cards}</div>
       </div>
     </section>`;
+}
+
+// ─── Add Past Race modal ───────────────────────────────────────────────
+// Lets the user backfill completed races into the trophy case. Separate
+// from the planner "add race" flow because that one requires a future
+// date (it generates a training plan). Past races are display-only.
+
+const _TRI_RACE_TYPES = ["ironman", "halfIronman", "olympic", "sprint"];
+
+function openAddPastRaceModal() {
+  let overlay = document.getElementById("add-past-race-overlay");
+  if (overlay) overlay.remove();
+
+  const today = getTodayString();
+  const typeOptions = Object.entries(RACE_CONFIGS || {})
+    .map(([k, cfg]) => `<option value="${k}">${_escapeStatsHtml(cfg.label || k)}</option>`)
+    .join("") + `<option value="other">Other</option>`;
+
+  overlay = document.createElement("div");
+  overlay.id = "add-past-race-overlay";
+  overlay.className = "quick-entry-overlay is-open";
+  overlay.style.cssText = "display:flex;z-index:10001";
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+
+  overlay.innerHTML = `
+    <div class="quick-entry-modal" style="max-width:440px;padding:24px">
+      <h3 style="margin:0 0 4px">Add Past Race</h3>
+      <p style="margin:0 0 16px;color:var(--color-text-muted);font-size:0.82rem">Log a completed race for your trophy case.</p>
+
+      <div class="form-row" style="margin-bottom:10px">
+        <label>Race Name</label>
+        <input type="text" id="past-race-name" placeholder="e.g. Chicago Marathon 2024" />
+      </div>
+
+      <div class="form-grid" style="margin-bottom:10px">
+        <div class="form-row">
+          <label>Date</label>
+          <input type="date" id="past-race-date" max="${today}" />
+        </div>
+        <div class="form-row">
+          <label>Type</label>
+          <select id="past-race-type" onchange="_onPastRaceTypeChange()">${typeOptions}</select>
+        </div>
+      </div>
+
+      <div class="form-row" id="past-race-custom-row" style="display:none;margin-bottom:10px">
+        <label>Sport / Distance</label>
+        <input type="text" id="past-race-custom-type" placeholder="e.g. Obstacle Course, Trail Run 50K" />
+      </div>
+
+      <div class="form-row" style="margin-bottom:10px">
+        <label>Location (optional)</label>
+        <input type="text" id="past-race-location" placeholder="e.g. Chicago, IL" />
+      </div>
+
+      <div id="past-race-time-section" style="margin-bottom:10px"></div>
+
+      <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;margin-bottom:16px;cursor:pointer">
+        <input type="checkbox" id="past-race-show-time" checked />
+        Display time under the trophy
+      </label>
+
+      <div style="display:flex;gap:8px">
+        <button class="btn-primary" style="flex:1" onclick="saveAddPastRace()">Save</button>
+        <button class="btn-secondary" style="flex:1" onclick="document.getElementById('add-past-race-overlay').remove()">Cancel</button>
+      </div>
+      <p id="past-race-msg" class="save-msg" style="margin-top:8px"></p>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  _onPastRaceTypeChange();
+}
+
+function _onPastRaceTypeChange() {
+  const type = document.getElementById("past-race-type")?.value;
+  const timeSection = document.getElementById("past-race-time-section");
+  const customRow = document.getElementById("past-race-custom-row");
+  if (!timeSection) return;
+
+  if (customRow) customRow.style.display = type === "other" ? "" : "none";
+
+  if (_TRI_RACE_TYPES.includes(type)) {
+    timeSection.innerHTML = `
+      <label style="font-size:0.82rem;color:var(--color-text-muted);margin-bottom:4px;display:block">Segment Times</label>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div class="form-row">
+          <label style="font-size:0.72rem">Swim</label>
+          <input type="text" id="past-race-swim" placeholder="mm:ss" />
+        </div>
+        <div class="form-row">
+          <label style="font-size:0.72rem">Bike</label>
+          <input type="text" id="past-race-bike" placeholder="h:mm:ss" />
+        </div>
+        <div class="form-row">
+          <label style="font-size:0.72rem">Run</label>
+          <input type="text" id="past-race-run" placeholder="h:mm:ss" />
+        </div>
+      </div>
+      <p style="font-size:0.72rem;color:var(--color-text-muted);margin:4px 0 0">Total time will be computed automatically.</p>
+    `;
+  } else {
+    timeSection.innerHTML = `
+      <div class="form-row">
+        <label>Finish Time</label>
+        <input type="text" id="past-race-time" placeholder="e.g. 3:45:12 or 22:30" />
+      </div>
+    `;
+  }
+}
+
+// Parse "h:mm:ss" / "mm:ss" / "ss" → total seconds. Returns null on invalid.
+function _parseTimeToSeconds(str) {
+  if (!str) return null;
+  const s = String(str).trim();
+  if (!s) return null;
+  const parts = s.split(":").map(p => p.trim());
+  if (parts.some(p => p === "" || !/^\d+(\.\d+)?$/.test(p))) return null;
+  const nums = parts.map(Number);
+  if (nums.length === 1) return nums[0];
+  if (nums.length === 2) return nums[0] * 60 + nums[1];
+  if (nums.length === 3) return nums[0] * 3600 + nums[1] * 60 + nums[2];
+  return null;
+}
+
+function _formatSecondsToTime(secs) {
+  if (secs == null || !isFinite(secs) || secs < 0) return "";
+  const total = Math.round(secs);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = n => n.toString().padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+function saveAddPastRace() {
+  const msg = document.getElementById("past-race-msg");
+  const showErr = t => { if (msg) { msg.textContent = t; msg.style.color = "var(--color-danger, #dc2626)"; } };
+  if (msg) msg.textContent = "";
+
+  const name = document.getElementById("past-race-name")?.value.trim();
+  const date = document.getElementById("past-race-date")?.value;
+  const type = document.getElementById("past-race-type")?.value;
+  const location = document.getElementById("past-race-location")?.value.trim();
+  const showFinishTime = !!document.getElementById("past-race-show-time")?.checked;
+
+  if (!name) return showErr("Please enter a race name.");
+  if (!date) return showErr("Please enter a race date.");
+  const today = getTodayString();
+  if (date > today) return showErr("Past races must be dated on or before today.");
+  if (!type) return showErr("Please select a race type.");
+
+  let customType = "";
+  if (type === "other") {
+    customType = document.getElementById("past-race-custom-type")?.value.trim() || "";
+    if (!customType) return showErr("Please describe the race.");
+  }
+
+  let finishTime = "";
+  if (_TRI_RACE_TYPES.includes(type)) {
+    const swimStr = document.getElementById("past-race-swim")?.value.trim();
+    const bikeStr = document.getElementById("past-race-bike")?.value.trim();
+    const runStr  = document.getElementById("past-race-run")?.value.trim();
+    const anyEntered = swimStr || bikeStr || runStr;
+    if (anyEntered) {
+      const swim = _parseTimeToSeconds(swimStr) || 0;
+      const bike = _parseTimeToSeconds(bikeStr) || 0;
+      const run  = _parseTimeToSeconds(runStr)  || 0;
+      if (swimStr && _parseTimeToSeconds(swimStr) == null) return showErr("Swim time format looks off (use mm:ss or h:mm:ss).");
+      if (bikeStr && _parseTimeToSeconds(bikeStr) == null) return showErr("Bike time format looks off.");
+      if (runStr  && _parseTimeToSeconds(runStr)  == null) return showErr("Run time format looks off.");
+      finishTime = _formatSecondsToTime(swim + bike + run);
+    } else if (showFinishTime) {
+      return showErr("Enter at least one segment time or uncheck 'Display time'.");
+    }
+  } else {
+    const timeStr = document.getElementById("past-race-time")?.value.trim();
+    if (timeStr) {
+      if (_parseTimeToSeconds(timeStr) == null) return showErr("Time format looks off (use h:mm:ss or mm:ss).");
+      finishTime = _formatSecondsToTime(_parseTimeToSeconds(timeStr));
+    } else if (showFinishTime) {
+      return showErr("Enter a finish time or uncheck 'Display time'.");
+    }
+  }
+
+  const race = {
+    id: Date.now().toString(),
+    name,
+    type,
+    date,
+    priority: "B",
+    level: "intermediate",
+    isPastRace: true,
+    createdAt: new Date().toISOString(),
+    ...(location && { location }),
+    ...(customType && { customType }),
+    ...(finishTime && { finishTime }),
+    showFinishTime,
+  };
+
+  const events = loadEvents();
+  events.push(race);
+  saveEvents(events);
+
+  document.getElementById("add-past-race-overlay")?.remove();
+  renderStats();
+}
+
+function deletePastRace(id) {
+  if (!confirm("Remove this race from your trophy case?")) return;
+  const events = loadEvents().filter(e => e.id !== id);
+  saveEvents(events);
+  renderStats();
 }
 
 // Local HTML-escape helper so the trophy-case renderer doesn't depend

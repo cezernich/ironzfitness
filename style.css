@@ -8956,6 +8956,7 @@ button:active {
   gap: 10px;
 }
 .trophy-card {
+  position: relative;
   display: flex;
   gap: 12px;
   align-items: flex-start;
@@ -8963,6 +8964,32 @@ button:active {
   border: 1px solid var(--color-border);
   border-radius: 12px;
   background: linear-gradient(135deg, rgba(245,158,11,0.10), rgba(245,158,11,0.02));
+}
+.trophy-card-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.55;
+}
+.trophy-card-delete:hover {
+  opacity: 1;
+  background: rgba(220, 38, 38, 0.12);
+  color: #dc2626;
+}
+.trophy-card-delete svg {
+  width: 14px;
+  height: 14px;
 }
 .trophy-card-icon {
   width: 40px;
