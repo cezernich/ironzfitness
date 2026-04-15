@@ -104,26 +104,60 @@
     });
   }
 
-  // Map sport keys to an ICONS.* glyph + color. Resolved at render time
-  // so we pick up the real SVG strings the rest of the app uses
-  // (calendar cards, Community tab, etc.) instead of emoji. Falls back
-  // to the strength icon if we don't know the sport.
-  function _sportInfo(sportId) {
+  // Resolve the icon + color + label for a saved workout. Takes the
+  // whole entry (not just sport_id) so it can keyword-fall-back against
+  // the workout name, session_type_id, and workout_kind when sport_id
+  // is null or unrecognized — which happens a lot for custom workouts
+  // saved with type "general". Mirrors calendar.js _resolveDiscipline.
+  function _sportInfo(s) {
     const I = (typeof ICONS !== "undefined") ? ICONS : {};
-    const key = String(sportId || "").toLowerCase();
-    const COLORS = {
-      run: "#f59e0b", bike: "#22d3ee", swim: "#3b82f6",
-      strength: "#a855f7", hybrid: "#ef4444",
-    };
-    const LABELS = { run: "Run", bike: "Bike", swim: "Swim", strength: "Strength", hybrid: "Hybrid" };
-    if (key === "run" || key === "running")      return { icon: I.run     || "", color: COLORS.run,      label: LABELS.run };
-    if (key === "bike" || key === "cycling")     return { icon: I.bike    || "", color: COLORS.bike,     label: LABELS.bike };
-    if (key === "swim" || key === "swimming")    return { icon: I.swim    || "", color: COLORS.swim,     label: LABELS.swim };
+    const make = (icon, color, label) => ({ icon: icon || "", color, label });
+    const COLORS = { run: "#f59e0b", bike: "#22d3ee", swim: "#3b82f6", strength: "#a855f7", hybrid: "#ef4444" };
+
+    // 1) Direct sport_id match — fast path.
+    const sportId = (typeof s === "object" && s ? s.sport_id : s) || "";
+    const key = String(sportId).toLowerCase();
+    if (key === "run" || key === "running")   return make(I.run,     COLORS.run,      "Run");
+    if (key === "bike" || key === "cycling")  return make(I.bike,    COLORS.bike,     "Bike");
+    if (key === "swim" || key === "swimming") return make(I.swim,    COLORS.swim,     "Swim");
     if (key === "strength" || key === "weightlifting" || key === "bodyweight") {
-      return { icon: I.weights || "", color: COLORS.strength, label: LABELS.strength };
+      return make(I.weights, COLORS.strength, "Strength");
     }
-    if (key === "hybrid" || key === "triathlon") return { icon: I.flame || I.zap || I.weights || "", color: COLORS.hybrid, label: LABELS.hybrid };
-    return { icon: I.weights || "", color: COLORS.strength, label: key ? key[0].toUpperCase() + key.slice(1) : "Workout" };
+    if (key === "hybrid" || key === "triathlon") {
+      return make(I.flame || I.zap || I.weights, COLORS.hybrid, "Hybrid");
+    }
+
+    // 2) No usable sport_id — look at the workout's other text fields.
+    // Custom workouts tagged "general" commonly carry the sport in the
+    // name (e.g. "Track Workout — 800m repeats" → running).
+    if (typeof s !== "object" || !s) {
+      return make(I.weights, COLORS.strength, "");
+    }
+    const blob = [
+      s.workout_kind || "",
+      s.session_type_id || "",
+      s.custom_name || "",
+      s.payload && s.payload.name || "",
+    ].join(" ").toLowerCase();
+
+    if (/\b(run|running|track|tempo|progression|threshold|pace|marathon|5k|10k|half[- ]?marathon|long[- ]?run|easy[- ]?run|speed[- ]?work|hill|vdot|brick[- ]?run)\b/.test(blob)) {
+      return make(I.run, COLORS.run, "Run");
+    }
+    if (/\b(bike|cycling|ride|ftp|sweet[- ]?spot|trainer|spin|z2[- ]?endurance|bike[- ]?intervals)\b/.test(blob)) {
+      return make(I.bike, COLORS.bike, "Bike");
+    }
+    if (/\b(swim|swimming|css|freestyle|pool|stroke|drill|breaststroke|butterfly|backstroke)\b/.test(blob)) {
+      return make(I.swim, COLORS.swim, "Swim");
+    }
+    if (/\b(hiit|tabata|emom|amrap|circuit|for[- ]?time|hybrid|triathlon|brick|crossfit)\b/.test(blob)) {
+      return make(I.flame || I.zap || I.weights, COLORS.hybrid, "Cross");
+    }
+    if (/\b(strength|lift|weight|weightlifting|bodyweight|squat|bench|deadlift|ohp|row|press|curl|push[- ]?up|pull[- ]?up|chest|back|leg[- ]?day|push|pull|upper|lower)\b/.test(blob)) {
+      return make(I.weights, COLORS.strength, "Strength");
+    }
+    // Last-resort neutral — empty label so the meta line doesn't read
+    // "Custom · Workout · ..." which is the ugly current behavior.
+    return make(I.weights, COLORS.strength, "");
   }
 
   // Share menu item — stashes the saved entry in the global fallback
@@ -172,14 +206,22 @@
     const cardId = (isCustom ? "sl-custom-" : "sl-card-") + _esc(s.id);
     const variantAttr = isCustom ? "" : ` data-variant="${_esc(s.variant_id || "")}"`;
 
-    const sport = _sportInfo(s.sport_id);
+    const sport = _sportInfo(s);
     const kindLabel = isCustom
       ? (s.workout_kind || "").replace(/_/g, " ")
       : (s.session_type_id || "").replace(/_/g, " ");
     const metaParts = [];
     metaParts.push(sourceLabel);
     if (sport.label) metaParts.push(sport.label);
-    if (kindLabel) metaParts.push(kindLabel.replace(/\b\w/g, c => c.toUpperCase()));
+    // Skip kindLabel when it just restates the sport (e.g. "Running"
+    // right after the "Run" badge) or when it duplicates the title.
+    if (kindLabel) {
+      const pretty = kindLabel.replace(/\b\w/g, c => c.toUpperCase());
+      const lc = pretty.toLowerCase();
+      if (lc !== (sport.label || "").toLowerCase() && !lc.startsWith((sport.label || "").toLowerCase())) {
+        metaParts.push(pretty);
+      }
+    }
     const metaLine = metaParts.filter(Boolean).join(" · ");
 
     const overflow = _buildSavedOverflow(s, cardId);
