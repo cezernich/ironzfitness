@@ -17417,32 +17417,77 @@ body.ob-v2-lock { overflow: hidden; }
 }
 
 /* ===== BUILD PLAN MODAL OVERLAY =====
-   Shares .ob-v2-root base styles. Adds an X close button and
-   positions the progress bar so the close button doesn't collide. */
-.bp-v2-overlay .ob-v2-frame { position: relative; }
+   Popup dialog variant of .ob-v2-root. Instead of filling the
+   whole viewport with a solid color, this dims the app behind
+   and renders the frame as a bounded, centered card. */
+.bp-v2-overlay {
+  background: rgba(10, 12, 18, 0.55);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  padding: 4vh 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.bp-v2-overlay.is-active {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+.bp-v2-overlay .ob-v2-frame {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  min-height: 0;
+  max-height: 92vh;
+  margin: 0;
+  background: #F5F0E8;
+  border-radius: 18px;
+  box-shadow: 0 20px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
+  padding: 18px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.bp-v2-overlay .ob-v2-screen-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 40px;
+}
 .bp-v2-close {
   position: absolute;
   top: 10px;
   right: 12px;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.12);
-  color: var(--text, #e7e9ee);
-  font-size: 20px;
+  background: rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.08);
+  color: #555;
+  font-size: 22px;
   line-height: 1;
   cursor: pointer;
   z-index: 10;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .bp-v2-close:hover {
-  background: rgba(255,107,53,0.15);
-  border-color: rgba(255,107,53,0.45);
+  background: rgba(232,83,14,0.12);
+  border-color: rgba(232,83,14,0.35);
+  color: #E8530E;
 }
 .bp-v2-overlay .ob-v2-progress-wrap {
-  padding-right: 56px; /* leave room for close button */
+  padding-right: 56px; /* room for X button */
+}
+@media (max-width: 560px) {
+  .bp-v2-overlay { padding: 0; }
+  .bp-v2-overlay .ob-v2-frame {
+    max-width: 100%;
+    max-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+  }
 }
