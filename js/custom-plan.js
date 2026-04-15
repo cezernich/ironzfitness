@@ -271,15 +271,27 @@ function customPlanAddAI(dow) {
   if (title) title.textContent = `AI Session for ${dayLabel}`;
 }
 
-function cpShowStrengthOptions(dow) {
+function cpShowStrengthOptions(dow, aiType) {
   const list = document.getElementById("cp-ai-type-list");
   const detailEl = document.getElementById("cp-ai-detail");
   if (list) list.style.display = "none";
   if (!detailEl) return;
   detailEl.style.display = "";
 
+  // Track which AI type triggered this options screen so the generator
+  // knows whether to enforce bodyweight-only, yoga, or standard strength.
+  // Previously the shared flow always hard-coded "strength", which meant
+  // the Bodyweight entry produced sessions with Barbell Bench Press 175lbs.
+  const effectiveType = aiType || "strength";
+  const modal = document.getElementById("cp-ai-modal");
+  if (modal) modal.dataset.aiType = effectiveType;
+
   const title = document.getElementById("cp-ai-modal-title");
-  if (title) title.textContent = "Strength Session";
+  if (title) {
+    title.textContent = effectiveType === "bodyweight" ? "Bodyweight Session"
+                      : effectiveType === "yoga"       ? "Yoga / Mobility Session"
+                      : "Strength Session";
+  }
 
   detailEl.innerHTML = `
     <div style="padding:0 16px 16px">
@@ -326,8 +338,12 @@ function cpGenerateStrength(dow) {
   const level = document.getElementById("cp-ai-level")?.value || "intermediate";
   const duration = document.getElementById("cp-ai-duration")?.value || "45";
   const muscleStr = muscles.join(", ");
+  // Honor the aiType the user originally picked (strength / bodyweight / yoga).
+  // Falls back to "strength" for safety.
+  const modal = document.getElementById("cp-ai-modal");
+  const aiType = (modal && modal.dataset.aiType) || "strength";
   closeCustomPlanAIModal();
-  customPlanGenerateAI(dow, "strength", `Target muscles: ${muscleStr}. Level: ${level}. Session length: ${duration} min.`);
+  customPlanGenerateAI(dow, aiType, `Target muscles: ${muscleStr}. Level: ${level}. Session length: ${duration} min.`);
 }
 
 // ── Cardio options pickers ───────────────────────────────────────────────
@@ -736,8 +752,32 @@ Include 5-8 exercises or 3-6 intervals. Match the user-requested duration — su
     const cleaned = text.replace(/```json|```/g, "").trim();
     const workout = JSON.parse(cleaned);
 
-    const rawEx2 = workout.exercises || null;
-    const persEx2 = rawEx2 && typeof _personalizeWeights === "function" ? _personalizeWeights(rawEx2) : rawEx2;
+    let rawEx2 = workout.exercises || null;
+    // Hard enforcement of the bodyweight constraint — even if the model
+    // returned a session with dumbbells or barbells, rewrite every weight
+    // to "Bodyweight" and strip equipment-heavy exercises from the name.
+    // Prompts alone aren't reliable for this.
+    if (isBodyweight && Array.isArray(rawEx2)) {
+      const _equipBlock = /(barbell|dumbbell|kettlebell|cable|machine|smith|ez[\s-]?bar|plate|trap[\s-]?bar|sled|rope|ball|band|plate)/i;
+      rawEx2 = rawEx2
+        // Drop any exercise whose name names a piece of equipment
+        .filter(ex => ex && ex.name && !_equipBlock.test(ex.name))
+        .map(ex => ({ ...ex, weight: "Bodyweight" }));
+      // If the filter wiped out the whole list, fall back to a safe seed
+      // so the user never sees an empty session.
+      if (rawEx2.length === 0) {
+        rawEx2 = [
+          { name: "Push-ups",          sets: 4, reps: 12, rest: "60s", weight: "Bodyweight" },
+          { name: "Pull-ups",          sets: 4, reps: 8,  rest: "90s", weight: "Bodyweight" },
+          { name: "Bodyweight Squats", sets: 4, reps: 15, rest: "60s", weight: "Bodyweight" },
+          { name: "Lunges",            sets: 3, reps: 12, rest: "60s", weight: "Bodyweight" },
+          { name: "Plank",             sets: 3, reps: "45s", rest: "45s", weight: "Bodyweight" },
+        ];
+      }
+    }
+    const persEx2 = rawEx2 && typeof _personalizeWeights === "function" && !isBodyweight
+      ? _personalizeWeights(rawEx2)
+      : rawEx2;
     _cpAddSession(dow, {
       id: _cpGenId(),
       mode: "ai",
