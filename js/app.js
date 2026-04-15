@@ -525,11 +525,19 @@ function init() {
   // Check for level-up on app start
   if (typeof checkLevelUp === "function") checkLevelUp();
 
-  // Show onboarding wizard on first visit, or Build Plan survey if onboarded but no plan
+  // Show onboarding wizard on first visit, or Build Plan survey if onboarded but no plan.
+  // Onboarding v2 (js/onboarding-v2.js) takes precedence — if it's loaded and
+  // the user hasn't completed onboarding, its overlay opens. Otherwise we fall
+  // back to the legacy flow so deployments that haven't picked up v2 yet still
+  // work.
   if (!localStorage.getItem("hasOnboarded")) {
-    setTimeout(showOnboarding, 400);
+    if (typeof OnboardingV2 !== "undefined" && OnboardingV2.maybeStart) {
+      setTimeout(() => OnboardingV2.maybeStart(), 400);
+    } else if (typeof showOnboarding === "function") {
+      setTimeout(showOnboarding, 400);
+    }
   } else if (!localStorage.getItem("surveyComplete")) {
-    setTimeout(openSurvey, 400);
+    if (typeof openSurvey === "function") setTimeout(openSurvey, 400);
   }
 
   // Weekly check-in prompt (Sunday)
