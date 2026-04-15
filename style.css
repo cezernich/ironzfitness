@@ -17809,3 +17809,433 @@ body.ob-v2-lock { overflow: hidden; }
 }
 .ob-v2-philosophy-list li { margin-bottom: 6px; }
 .ob-v2-philosophy-list strong { color: #1A1A1A; }
+
+/* ═══════════════════════════════════════════════════════
+   CALENDAR REDESIGN — new skin for the week carousel +
+   month grid. Only the visual shell — data, selection,
+   drag-and-drop, and day-detail rendering still go through
+   the existing js/calendar.js internals. Color tokens
+   scoped to --dark / --red / --green so they don't disturb
+   the rest of the app's palette.
+   ═══════════════════════════════════════════════════════ */
+
+:root {
+  --cal-dark:  #1a1a2e;
+  --cal-red:   #e63946;
+  --cal-green: #2ecc71;
+}
+
+/* Reset the old .calendar-grid base so it no longer imposes a
+   grid layout on the carousel's container. */
+#calendar-grid.calendar-grid {
+  display: block;
+  gap: 0;
+  padding: 0;
+  background: transparent;
+}
+
+/* ── Calendar card wrapper ── */
+.cal-card-wrap {
+  padding: 16px 0 12px !important;
+}
+
+/* ── Header ── */
+.cal-hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+  margin-bottom: 14px;
+}
+.cal-hdr-l,
+.cal-hdr-r {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cal-nb {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1.5px solid #e8e8ec;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s;
+}
+.cal-nb:hover {
+  background: #f0f0f4;
+}
+.cal-nb svg {
+  width: 12px;
+  height: 12px;
+  stroke: #999;
+}
+.cal-today-btn {
+  background: var(--cal-dark);
+  border-color: var(--cal-dark);
+}
+.cal-today-btn svg {
+  stroke: #fff;
+}
+.cal-mo {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cal-dark);
+  white-space: nowrap;
+}
+.cal-toggle {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1.5px solid #e8e8ec;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s;
+}
+.cal-toggle svg {
+  width: 14px;
+  height: 14px;
+  stroke: #999;
+  fill: none;
+}
+.cal-toggle.active {
+  background: var(--cal-dark);
+  border-color: var(--cal-dark);
+}
+.cal-toggle.active svg {
+  stroke: #fff;
+}
+.qa-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--cal-dark);
+  color: #fff;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+}
+.qa-btn svg {
+  width: 10px;
+  height: 10px;
+  stroke: #fff;
+}
+
+/* ── WEEK VIEW: Carousel ── */
+.car-w {
+  position: relative;
+  overflow: hidden;
+}
+.car {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 0 16px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  scroll-padding: 0 16px;
+}
+.car::-webkit-scrollbar {
+  display: none;
+}
+
+/* Day card base */
+.dc {
+  flex-shrink: 0;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  scroll-snap-align: center;
+  position: relative;
+}
+
+/* Side cards (non-selected days) */
+.dc.s {
+  width: 56px;
+  background: #f8f8fa;
+  border: 1.5px solid #eeeeef;
+  padding: 10px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  opacity: 0.65;
+}
+.dc.s:hover {
+  opacity: 0.85;
+  background: #f0f0f4;
+}
+.dc.s.selected {
+  opacity: 0.9;
+  border-color: var(--cal-red);
+}
+.dc.s.cal-removed {
+  border-color: var(--cal-red);
+  background: rgba(230, 57, 70, 0.08);
+}
+.s-lb {
+  font-size: 9px;
+  font-weight: 600;
+  color: #bbb;
+  text-transform: uppercase;
+}
+.s-nm {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--cal-dark);
+  margin: 3px 0 8px;
+}
+.s-dots {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+}
+.s-dot {
+  width: 16px;
+  height: 3.5px;
+  border-radius: 2px;
+}
+.s-rest {
+  font-size: 7px;
+  font-weight: 600;
+  color: #d0d0d0;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+.s-check {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--cal-green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+}
+.s-check svg {
+  width: 8px;
+  height: 8px;
+  stroke: #fff;
+  stroke-width: 3;
+}
+
+/* Center card (selected day) */
+.dc.c {
+  width: 140px;
+  background: var(--cal-dark);
+  border: 1.5px solid var(--cal-dark);
+  padding: 12px 10px;
+  color: #fff;
+  opacity: 1;
+}
+.dc.c::after {
+  content: '';
+  position: absolute;
+  top: -30px;
+  right: -30px;
+  width: 80px;
+  height: 80px;
+  background: rgba(230, 57, 70, 0.1);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.c-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+.c-dl {
+  font-size: 9px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.c-pill {
+  font-size: 7px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--cal-red);
+  background: rgba(230, 57, 70, 0.12);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.c-num {
+  font-size: 26px;
+  font-weight: 800;
+  margin: 0 0 8px;
+  line-height: 1;
+}
+.c-time {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 500;
+  margin-top: 6px;
+}
+.c-rest {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* Workout icon circles (inside center card) */
+.wo-cir {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.wc {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+}
+.wc svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.wc.run  { background: rgba(78, 205, 196, 0.22); color: #4ecdc4; }
+.wc.str  { background: rgba(230, 57, 70, 0.22);  color: #e63946; }
+.wc.swim { background: rgba(108, 92, 231, 0.22); color: #6c5ce7; }
+.wc.bike { background: rgba(244, 162, 97, 0.22); color: #f4a261; }
+.wc.race { background: rgba(230, 57, 70, 0.22);  color: #e63946; }
+.wc.rest { background: rgba(255, 255, 255, 0.1); color: rgba(255,255,255,0.4); }
+.wc svg { stroke: currentColor; }
+/* Intensity ring */
+.wc::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+}
+.wc.il::after { border-color: #4ecdc4; }
+.wc.im::after { border-color: #f4a261; }
+.wc.ih::after { border-color: #e63946; }
+.wc.ie::after { border-color: #6c5ce7; }
+
+/* ── MONTH VIEW: Grid ── */
+.month-grid {
+  padding: 0 12px;
+}
+.month-dow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 6px;
+}
+.month-dow span {
+  text-align: center;
+  font-size: 9px;
+  font-weight: 600;
+  color: #bbb;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.month-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+.md {
+  border-radius: 10px;
+  padding: 6px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  min-height: 56px;
+}
+.md:hover {
+  background: #f0f0f4;
+}
+.md.today {
+  background: var(--cal-dark);
+  border-radius: 10px;
+}
+.md.today .md-num { color: #fff; }
+.md.today .md-rest { color: rgba(255, 255, 255, 0.4); }
+.md.other-month { opacity: 0.3; }
+.md.selected {
+  box-shadow: inset 0 0 0 2px var(--cal-red);
+  border-radius: 10px;
+}
+.md.cal-removed {
+  background: rgba(230, 57, 70, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(230, 57, 70, 0.5);
+}
+.md-num {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cal-dark);
+  margin-bottom: 4px;
+}
+.md-dots {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.md-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.md-rest {
+  font-size: 6px;
+  color: #d0d0d0;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  margin-top: 2px;
+}
+.md-check {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--cal-green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+.md-check svg {
+  width: 6px;
+  height: 6px;
+  stroke: #fff;
+  stroke-width: 3;
+}
+
+/* Intensity color classes (shared between week dots and month dots) */
+.c-low  { background: #4ecdc4; }
+.c-med  { background: #f4a261; }
+.c-high { background: #e63946; }
+.c-end  { background: #6c5ce7; }

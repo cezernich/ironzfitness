@@ -174,30 +174,48 @@ function renderCalendar() {
   const thisWeekBtn = document.getElementById("cal-this-week-btn");
   if (!label) return;
 
+  // New .cal-toggle button keeps its SVG and just toggles .active in
+  // month mode — don't set textContent or we'd wipe the inline SVG.
   if (calendarMode === "week") {
-    if (zoomBtn) zoomBtn.textContent = "Month view";
+    if (zoomBtn) zoomBtn.classList.remove("active");
     label.textContent = formatWeekLabel(currentWeekStart);
     renderWeekView();
     renderWeekOverview();
   } else {
-    if (zoomBtn) zoomBtn.textContent = "Week view";
+    if (zoomBtn) zoomBtn.classList.add("active");
     label.textContent = `${MONTH_NAMES[currentMonth]} ${currentYear}`;
     renderMonthView();
     renderWeekOverview(); // clears the bar in month mode
   }
 
-  // Show "This Week" button only when the current week isn't visible
+  // Show "This Week" / today button only when the current week isn't
+  // already in view (week mode) or the current month isn't in view
+  // (month mode). The new SVG button has no text, so visibility toggle
+  // is the only thing that needs maintaining.
   if (thisWeekBtn) {
-    const todayWeekStart = getWeekStart(new Date());
-    const onThisWeek = calendarMode === "week" &&
-      currentWeekStart.getTime() === todayWeekStart.getTime();
-    thisWeekBtn.style.display = onThisWeek ? "none" : "";
+    let visible;
+    if (calendarMode === "week") {
+      const todayWeekStart = getWeekStart(new Date());
+      visible = currentWeekStart.getTime() !== todayWeekStart.getTime();
+    } else {
+      const today = new Date();
+      visible = !(currentYear === today.getFullYear() && currentMonth === today.getMonth());
+    }
+    thisWeekBtn.style.display = visible ? "" : "none";
   }
 }
 
 function goToThisWeek() {
-  calendarMode = "week";
-  currentWeekStart = getWeekStart(new Date());
+  const today = new Date();
+  if (calendarMode === "week") {
+    currentWeekStart = getWeekStart(today);
+  } else {
+    currentYear = today.getFullYear();
+    currentMonth = today.getMonth();
+  }
+  // Selecting today makes the carousel center on it so the redesigned
+  // week view highlights the correct card on return.
+  selectedDate = today.toISOString().slice(0, 10);
   renderCalendar();
 }
 
@@ -320,120 +338,229 @@ function renderWeekOverview() {
 
 // ─── Week view ────────────────────────────────────────────────────────────────
 
+// ─── Redesign helpers: map existing app state to the new visual tokens ─
+// These keep the data layer untouched — getDataForDate, _resolveDiscipline,
+// hasAnyCompletedSession, load labels, etc. still do all the work below.
+
+// Map a discipline/type string to the 4 CSS classes used by the new
+// .wc workout-circle and .md-dot / .s-dot styles (run / swim / bike /
+// str). Everything that isn't a pure endurance sport falls to str so
+// strength, HIIT, circuit, hyrox, bodyweight all share a red palette.
+function _calV2DiscClass(discOrType) {
+  const s = String(discOrType || "").toLowerCase();
+  if (s === "run" || s === "running") return "run";
+  if (s === "swim" || s === "swimming") return "swim";
+  if (s === "bike" || s === "cycling") return "bike";
+  if (s === "brick") return "bike";
+  if (s === "race") return "race";
+  return "str";
+}
+
+// Map an effective load string ("easy"|"moderate"|"hard"|"long"|"race")
+// to the new intensity-ring class on .wc and the dot-color class on
+// .s-dot / .md-dot.
+function _calV2LoadToRing(load) {
+  const s = String(load || "").toLowerCase();
+  if (s === "easy" || s === "recovery" || s === "low") return "il";
+  if (s === "moderate" || s === "medium" || s === "mod") return "im";
+  if (s === "hard" || s === "high" || s === "race") return "ih";
+  if (s === "long" || s === "endurance") return "ie";
+  return "";
+}
+function _calV2LoadToDot(load) {
+  const s = String(load || "").toLowerCase();
+  if (s === "easy" || s === "recovery" || s === "low") return "c-low";
+  if (s === "moderate" || s === "medium" || s === "mod") return "c-med";
+  if (s === "hard" || s === "high" || s === "race") return "c-high";
+  if (s === "long" || s === "endurance") return "c-end";
+  return "c-med";
+}
+
+// Small single-path stroke SVG keyed by the same CSS class we use on
+// .wc / .det-ic. Kept inline so the new calendar skin doesn't pull in
+// another sprite sheet — ICONS.run / .swim / .bike / .weights are a
+// different visual style that would clash with the new palette.
+const _CAL_V2_DISC_SVG = {
+  run:  '<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><path d="M7 20l3-7 2.5 2V20"/><path d="M17 8l-3 4-2.5-2-3 4"/></svg>',
+  swim: '<svg viewBox="0 0 24 24"><path d="M2 16c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2c1.3 0 1.9.5 2.5 1"/><circle cx="12" cy="7" r="2"/><path d="M9 12l3-3 3 3"/></svg>',
+  bike: '<svg viewBox="0 0 24 24"><circle cx="5.5" cy="17.5" r="3.5" fill="none"/><circle cx="18.5" cy="17.5" r="3.5" fill="none"/><path d="M15 6h2l3 8M5.5 17.5L8 10h4l2 4"/></svg>',
+  str:  '<svg viewBox="0 0 24 24"><path d="M6 5v14M18 5v14M2 8h4M18 8h4M2 16h4M18 16h4M6 12h12"/></svg>',
+  race: '<svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>',
+};
+const _CAL_V2_CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+
+// Collect an array of normalized session descriptors for a date, each
+// with the visual tokens the new skin needs. This is the ONLY new data
+// wrangling — everything below it feeds off the existing getDataForDate.
+function _calV2CollectSessions(dateStr, data) {
+  const sessionRemoved = data.restriction && data.restriction.action === "remove";
+  const p = data.planEntry;
+  const sw = data.scheduledWorkouts || [];
+  const out = [];
+
+  if (data.event && !p) {
+    out.push({ discCls: "race", loadLabel: "race", name: data.event.name || "Race day" });
+  }
+  if (p && !sessionRemoved) {
+    const effectLoad = getEffectiveLoad(p.load, data.restriction);
+    out.push({
+      discCls: _calV2DiscClass(p.discipline),
+      loadLabel: effectLoad,
+      name: capitalize(p.discipline),
+    });
+  }
+  if (!sessionRemoved) {
+    sw.forEach(w => {
+      out.push({
+        discCls: _calV2DiscClass(w.discipline || w.type),
+        loadLabel: w.load || w.intensity || "moderate",
+        name: w.sessionName || _wTypeLabel(w.type) || capitalize(w.discipline || w.type || ""),
+      });
+    });
+  }
+  (data.loggedWorkouts || []).forEach(w => {
+    out.push({
+      discCls: _calV2DiscClass(w.type),
+      loadLabel: w.load || "moderate",
+      name: (w.generatedSession && w.generatedSession.name) || _wTypeLabel(w.type) || "Logged",
+    });
+  });
+
+  return out;
+}
+
 function renderWeekView() {
   const grid = document.getElementById("calendar-grid");
   if (!grid) return;
+  grid.className = "calendar-grid";
+
   const todayStr  = getTodayString();
   const weekDates = getWeekDates(currentWeekStart);
-  grid.className  = "calendar-grid calendar-grid--week";
-  // Wrap each cell build in a try/catch so a single malformed
-  // session in workoutSchedule can't blank the entire grid.
-  grid.innerHTML  = weekDates.map(d => {
+
+  // Center card = selectedDate if it falls within this week, else today
+  // if today is in this week, else the first day. This matches the
+  // "today sits center, tap a side card to promote it" UX from the
+  // mockup while still honoring the user's last selection.
+  const weekDateStrs = weekDates.map(d => d.toISOString().slice(0, 10));
+  let centerStr = null;
+  if (selectedDate && weekDateStrs.includes(selectedDate)) centerStr = selectedDate;
+  else if (weekDateStrs.includes(todayStr)) centerStr = todayStr;
+  else centerStr = weekDateStrs[0];
+
+  const cards = weekDates.map(d => {
     const dateStr = d.toISOString().slice(0, 10);
     try {
-      return buildWeekCell(dateStr, d, todayStr);
+      return _calV2BuildDayCard(dateStr, d, todayStr, centerStr === dateStr);
     } catch (e) {
-      console.error("[calendar] buildWeekCell failed for", dateStr, e);
-      return '<div class="week-cell week-cell--error"><span class="cell-day-num">' + d.getDate() + '</span></div>';
+      console.error("[calendar] buildWeekCell (v2) failed for", dateStr, e);
+      return `<div class="dc s" onclick="selectDay('${dateStr}')"><span class="s-lb">${DAY_LABELS[d.getDay()].slice(0,3)}</span><span class="s-nm">${d.getDate()}</span></div>`;
     }
   }).join("");
+
+  grid.innerHTML = `<div class="car-w"><div class="car">${cards}</div></div>`;
 }
 
+// Kept for back-compat with any in-file references — the v2 design
+// builds day cards via _calV2BuildDayCard below instead.
 function buildWeekCell(dateStr, dateObj, todayStr) {
+  return _calV2BuildDayCard(dateStr, dateObj, todayStr, dateStr === (selectedDate || todayStr));
+}
+
+function _calV2BuildDayCard(dateStr, dateObj, todayStr, isCenter) {
   const data       = getDataForDate(dateStr);
   const isToday    = dateStr === todayStr;
   const isSelected = dateStr === selectedDate;
-  const p          = data.planEntry;
-  const sw         = data.scheduledWorkouts;
-
-  // Collect all sessions into a flat list — each gets an equal bubble
   const sessionRemoved = data.restriction && data.restriction.action === "remove";
-  const sessions = [];
-  if (data.event && !p) {
-    sessions.push({ icon: ICONS.flag, label: "Race Day", color: "var(--color-danger)", badge: null, drag: "" });
-  }
-  if (p && !sessionRemoved) {
-    const icon         = DISCIPLINE_ICONS[p.discipline] || ICONS.weights;
-    const color        = DISCIPLINE_COLORS[p.discipline] || "var(--color-accent)";
-    const effectLoad   = getEffectiveLoad(p.load, data.restriction);
-    const isReduced    = effectLoad !== p.load;
-    sessions.push({
-      icon, label: capitalize(p.discipline), color,
-      intensity: getIntensityLabel(effectLoad), intensityClass: getIntensityClass(effectLoad), isReduced,
-      drag: `draggable="true" data-drag-type="plan" data-drag-source="${dateStr}" data-drag-raceid="${p.raceId}" data-drag-discipline="${p.discipline}" ondragstart="onSessionDragStart(event)" ondragend="onSessionDragEnd(event)"`,
-    });
-  }
-  if (!sessionRemoved) sw.forEach(w => {
-    const { icon, color } = _resolveDiscipline(w);
-    sessions.push({
-      icon, label: w.sessionName, color, badge: null,
-      drag: `draggable="true" data-drag-type="scheduled" data-drag-source="${dateStr}" data-drag-id="${w.id}" ondragstart="onSessionDragStart(event)" ondragend="onSessionDragEnd(event)"`,
-    });
-  });
+  const completed = hasAnyCompletedSession(dateStr);
 
-  // Manually-added sessions get bubbles too
-  data.loggedWorkouts.forEach(w => {
-    const { icon, color } = _resolveDiscipline(w);
-    const label = w.generatedSession ? w.generatedSession.name : _wTypeLabel(w.type);
-    sessions.push({
-      icon, label, color,
-      drag: `draggable="true" data-drag-type="logged" data-drag-source="${dateStr}" data-drag-id="${w.id}" ondragstart="onSessionDragStart(event)" ondragend="onSessionDragEnd(event)"`,
-    });
-  });
+  const sessions = _calV2CollectSessions(dateStr, data);
 
-  // Primary discipline drives the cell's top-border accent color
-  const primaryDisc = sessionRemoved ? "rest"
-    : p ? p.discipline
-    : (data.event ? "race" : (sw.length > 0 ? sw[0].type : "rest"));
-  let classes = `week-cell week-cell--${primaryDisc}`;
-  if (isToday)    classes += " week-cell--today";
-  if (isSelected) classes += " week-cell--selected";
-  if (data.restriction && data.restriction.action === "remove") classes += " week-cell--restricted-out";
-  if (hasAnyCompletedSession(dateStr)) classes += " week-cell--completed";
+  const dowLong = DAY_LABELS[dateObj.getDay()];
+  const dowShort = dowLong.slice(0, 3);
+  const dayNum = dateObj.getDate();
 
-  const dowLabel = DAY_LABELS[dateObj.getDay()].slice(0, 3);
-  const dayNum   = dateObj.getDate();
+  // Drop handlers mirror the old week-cell — the whole card is a drop
+  // target so drag-and-drop between days still works.
+  const dragAttrs =
+    `ondragover="onCellDragOver(event,'${dateStr}')" ` +
+    `ondragleave="onCellDragLeave(event)" ` +
+    `ondrop="onCellDrop(event,'${dateStr}')"`;
 
-  // Build session bubbles — or Rest/Removed label
-  let body = "";
-  if (sessions.length === 0) {
-    body = sessionRemoved
-      ? `<div class="week-cell-rest-label" style="color:var(--color-danger);opacity:0.7">${ICONS.ban} Removed</div>`
-      : `<div class="week-cell-rest-label">Rest</div>`;
-  } else {
-    body = sessions.map(s => `
-      <div class="session-bubble" style="border-left-color:${s.color}" ${s.drag} onclick="event.stopPropagation();selectDay('${dateStr}')">
-        <span class="session-bubble-icon">${s.icon}</span>
-        <span class="session-bubble-label">${s.label}</span>
-      </div>`).join("");
-  }
+  if (isCenter) {
+    // Big center card: full day label, number, workout circles with
+    // intensity rings, optional TODAY pill, and total-time / rest
+    // footer line.
+    let pill = "";
+    if (isToday) pill = `<span class="c-pill">Today</span>`;
+    else if (isSelected) pill = `<span class="c-pill">Selected</span>`;
 
-  // Determine day intensity from plan entry (or scheduled workout) effective load
-  let dayIntensLabel = "";
-  let dayIntensClass = "";
-  if (!sessionRemoved) {
-    const dayLoad = p ? getEffectiveLoad(p.load, data.restriction)
-                  : data.event ? "race"
-                  : null;
-    if (dayLoad && dayLoad !== "rest") {
-      dayIntensLabel = getIntensityLabel(dayLoad);
-      dayIntensClass = getIntensityClass(dayLoad);
+    let body = "";
+    if (sessionRemoved) {
+      body = `<div class="c-rest">${ICONS.ban} Removed</div>`;
+    } else if (sessions.length === 0) {
+      body = `<div class="c-rest">Rest</div>`;
+    } else {
+      // Cap at 4 circles to keep the card from overflowing
+      const show = sessions.slice(0, 4);
+      body = `<div class="wo-cir">` + show.map(s => {
+        const ring = _calV2LoadToRing(s.loadLabel);
+        const svg = _CAL_V2_DISC_SVG[s.discCls] || _CAL_V2_DISC_SVG.str;
+        return `<span class="wc ${s.discCls}${ring ? " " + ring : ""}" title="${_escapeHtml(s.name)}">${svg}</span>`;
+      }).join("") + `</div>`;
     }
+
+    // Total estimated time for the day, reusing the existing helper
+    let timeStr = "";
+    try {
+      const t = getDayTotals(dateStr);
+      if (t && t.totalMin > 0) {
+        const h = Math.floor(t.totalMin / 60), m = Math.round(t.totalMin % 60);
+        timeStr = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+      }
+    } catch {}
+
+    const classes = `dc c${sessionRemoved ? " cal-removed" : ""}`;
+    return `
+      <div class="${classes}"
+        onclick="selectDay('${dateStr}')"
+        ondblclick="openQuickEntry('${dateStr}')"
+        ${dragAttrs}>
+        <div class="c-top">
+          <span class="c-dl">${_escapeHtml(dowLong)}</span>
+          ${pill}
+        </div>
+        <div class="c-num">${dayNum}</div>
+        ${body}
+        ${timeStr ? `<div class="c-time">${timeStr} est.</div>` : ""}
+      </div>`;
   }
+
+  // Compact side card: weekday label, day number, stack of intensity
+  // dots (one per session), optional Rest label, optional check mark.
+  let sidebody = "";
+  if (sessionRemoved) {
+    sidebody = `<div class="s-rest">OFF</div>`;
+  } else if (sessions.length === 0) {
+    sidebody = `<div class="s-rest">REST</div>`;
+  } else {
+    const show = sessions.slice(0, 3);
+    sidebody = `<div class="s-dots">` + show.map(s =>
+      `<span class="s-dot ${_calV2LoadToDot(s.loadLabel)}"></span>`
+    ).join("") + `</div>`;
+  }
+
+  const check = completed ? `<div class="s-check">${_CAL_V2_CHECK_SVG}</div>` : "";
+  const classes = `dc s${isSelected ? " selected" : ""}${sessionRemoved ? " cal-removed" : ""}`;
 
   return `
     <div class="${classes}"
       onclick="selectDay('${dateStr}')"
       ondblclick="openQuickEntry('${dateStr}')"
-      ondragover="onCellDragOver(event,'${dateStr}')"
-      ondragleave="onCellDragLeave(event)"
-      ondrop="onCellDrop(event,'${dateStr}')">
-      <div class="week-cell-header">
-        <span class="week-cell-dow">${dowLabel}</span>
-        <span class="week-cell-date">${dayNum}</span>
-      </div>
-      <div class="week-cell-sessions">${body}</div>
-      ${dayIntensLabel ? `<div class="week-cell-intensity ${dayIntensClass}">${dayIntensLabel}</div>` : ""}
+      ${dragAttrs}>
+      <span class="s-lb">${dowShort}</span>
+      <span class="s-nm">${dayNum}</span>
+      ${sidebody}
+      ${check}
     </div>`;
 }
 
@@ -442,27 +569,33 @@ function buildWeekCell(dateStr, dateObj, todayStr) {
 function renderMonthView() {
   const grid = document.getElementById("calendar-grid");
   if (!grid) return;
-  grid.className = "calendar-grid calendar-grid--month";
+  grid.className = "calendar-grid";
 
   const firstDay    = new Date(currentYear, currentMonth, 1).getDay();
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const todayStr    = getTodayString();
 
-  const headers = DAY_LABELS.map(d => `<div class="calendar-dow">${d}</div>`).join("");
+  const dowRow = DAY_LABELS.map(d => `<span>${d.slice(0,3).toUpperCase()}</span>`).join("");
+
   let cells = "";
-  for (let i = 0; i < firstDay; i++) cells += `<div class="calendar-cell empty"></div>`;
+  for (let i = 0; i < firstDay; i++) {
+    cells += `<div class="md other-month"></div>`;
+  }
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = formatDateStr(currentYear, currentMonth, d);
-    // Wrap each cell so one bad session entry in workoutSchedule
-    // can't blank the entire month grid.
     try {
       cells += buildDayCell(dateStr, d, todayStr);
     } catch (e) {
-      console.error("[calendar] buildDayCell failed for", dateStr, e);
-      cells += `<div class="calendar-cell"><span class="cell-day-num">${d}</span></div>`;
+      console.error("[calendar] buildDayCell (v2) failed for", dateStr, e);
+      cells += `<div class="md"><span class="md-num">${d}</span></div>`;
     }
   }
-  grid.innerHTML = headers + cells;
+
+  grid.innerHTML = `
+    <div class="month-grid">
+      <div class="month-dow">${dowRow}</div>
+      <div class="month-days">${cells}</div>
+    </div>`;
 }
 
 function formatDateStr(year, month, day) {
@@ -473,46 +606,40 @@ function buildDayCell(dateStr, dayNum, todayStr) {
   const data       = getDataForDate(dateStr);
   const isToday    = dateStr === todayStr;
   const isSelected = dateStr === selectedDate;
-  const isRace     = !!data.event;
   const removed    = data.restriction && data.restriction.action === "remove";
+  const completed  = hasAnyCompletedSession(dateStr);
 
-  let classes = "calendar-cell";
+  const sessions = _calV2CollectSessions(dateStr, data);
+
+  let classes = "md";
   if (isToday)    classes += " today";
   if (isSelected) classes += " selected";
-  if (isRace)     classes += " has-race";
-  if (removed)    classes += " day-restricted-out";
-  if (hasAnyCompletedSession(dateStr)) classes += " day-completed";
+  if (removed)    classes += " cal-removed";
 
-  // Collect discipline icons for all sessions that day
-  const icons = [];
-  if (isRace) {
-    icons.push({ icon: ICONS.flag, color: "var(--color-danger)" });
-  } else if (!removed) {
-    if (data.planEntry) {
-      const disc = data.planEntry.discipline;
-      icons.push({ icon: DISCIPLINE_ICONS[disc] || ICONS.weights, color: DISCIPLINE_COLORS[disc] || "var(--color-accent)" });
-    }
-    data.scheduledWorkouts.forEach(w => {
-      icons.push(_resolveDiscipline(w));
-    });
-    data.loggedWorkouts.forEach(w => {
-      icons.push(_resolveDiscipline(w));
-    });
-  }
-
-  let cellBody = "";
+  let body = "";
   if (removed) {
-    cellBody = `<span class="cell-removed-icon">${ICONS.ban}</span>`;
-  } else if (icons.length > 0) {
-    cellBody = icons.map(s =>
-      `<span class="cell-session-icon" style="color:${s.color}">${s.icon}</span>`
-    ).join("");
+    body = `<div class="md-rest">OFF</div>`;
+  } else if (sessions.length === 0) {
+    body = `<div class="md-rest">REST</div>`;
+  } else {
+    const show = sessions.slice(0, 4);
+    body = `<div class="md-dots">` + show.map(s =>
+      `<span class="md-dot ${_calV2LoadToDot(s.loadLabel)}"></span>`
+    ).join("") + `</div>`;
   }
+
+  const check = completed ? `<div class="md-check">${_CAL_V2_CHECK_SVG}</div>` : "";
 
   return `
-    <div class="${classes}" onclick="selectDay('${dateStr}')" ondblclick="openQuickEntry('${dateStr}')">
-      <span class="cell-day-num">${dayNum}</span>
-      <div class="cell-icons">${cellBody}</div>
+    <div class="${classes}"
+      onclick="selectDay('${dateStr}')"
+      ondblclick="openQuickEntry('${dateStr}')"
+      ondragover="onCellDragOver(event,'${dateStr}')"
+      ondragleave="onCellDragLeave(event)"
+      ondrop="onCellDrop(event,'${dateStr}')">
+      <span class="md-num">${dayNum}</span>
+      ${body}
+      ${check}
     </div>`;
 }
 
