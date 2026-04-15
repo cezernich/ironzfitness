@@ -974,10 +974,18 @@
     const date = document.getElementById("bp-v2-race-date")?.value;
     const text = document.getElementById("bp-v2-weeks-text");
     if (!text) return;
+    const gap = document.getElementById("bp-v2-gap-fill-section");
+    // B race short-circuits the whole plan flow — there's no new
+    // training block being generated, so the "extra time before your
+    // plan starts" lead-in block is meaningless. Hide it whenever the
+    // current race priority is B, regardless of how far out the race is.
+    const currentPriority = (_state.currentRace && _state.currentRace.priority) || "A";
+    if (currentPriority === "B") {
+      if (gap) gap.style.display = "none";
+    }
     if (!date) {
       text.textContent = "Pick a race date to see your timeline.";
-      const gap = document.getElementById("bp-v2-gap-fill-section");
-      if (gap) gap.style.display = "none";
+      if (gap && currentPriority !== "B") gap.style.display = "none";
       return;
     }
     const diffDays = Math.max(0, Math.ceil((new Date(date) - new Date()) / 86400000));
@@ -985,8 +993,9 @@
     const raceType = document.getElementById("bp-v2-race-type")?.value || "ironman";
     const planMax = _planWeeksForType(raceType);
     text.textContent = weeks + " weeks until your race. Recommended plan length: " + planMax[0] + "-" + planMax[1] + " weeks.";
-    const gap = document.getElementById("bp-v2-gap-fill-section");
-    if (gap) gap.style.display = weeks > planMax[1] ? "" : "none";
+    if (gap && currentPriority !== "B") {
+      gap.style.display = weeks > planMax[1] ? "" : "none";
+    }
   }
   function _planWeeksForType(type) {
     const map = {
@@ -1021,6 +1030,10 @@
     group.querySelectorAll(".ob-v2-chip").forEach(el => el.classList.remove("is-selected"));
     btn.classList.add("is-selected");
     _state.currentRace.priority = btn.getAttribute("data-race-priority") || "A";
+    // Re-run the weeks-callout so the lead-in / gap-fill section
+    // hides instantly when the user flips to B (and reappears for A
+    // if they have enough runway).
+    _updateWeeksCallout();
   }
 
   // Returns the first upcoming A-priority race in localStorage.events,
