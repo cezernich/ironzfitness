@@ -238,6 +238,7 @@ function customPlanAddAI(dow) {
   // constraint so users can still use AI here.
   const types = [
     { value: "strength",   label: "Strength",        fn: "cpShowStrengthOptions" },
+    { value: "circuit",    label: "Circuit",         fn: "cpShowCircuitOptions" },
     { value: "running",    label: "Running",         fn: "cpShowCardioOptions" },
     { value: "cycling",    label: "Cycling",         fn: "cpShowCardioOptions" },
     { value: "swimming",   label: "Swimming",        fn: "cpShowCardioOptions" },
@@ -1759,6 +1760,13 @@ function saveCustomPlan() {
   let schedule = [];
   try { schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]"); } catch {}
 
+  // Every save generates a fresh planId so that all of the sessions
+  // written for this block group together into a single "Training
+  // Block" card under Active Training Inputs (see _getBuildPlanInputs
+  // in planner.js). Previously, the absence of a planId caused each
+  // type to render as its own Schedule card.
+  const planId = `custom-${Date.now()}`;
+
   // Expand the week template across the requested number of weeks
   const newEntries = [];
   for (let w = 0; w < weeks; w++) {
@@ -1781,6 +1789,7 @@ function saveCustomPlan() {
           type: entry.data?.type || "general",
           sessionName: entry.data?.sessionName || entry.data?.title || "Session",
           source: "custom",
+          planId: planId,
           level: "intermediate",
         };
 

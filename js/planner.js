@@ -1267,14 +1267,18 @@ function _getScheduleInputs() {
   });
 }
 
-// Build Plan v2 sessions are materialized with source="onboarding_v2"
-// and a planId that ties every session in a block together. Group them
-// into one training-input card per planId so the user has one Edit /
-// Delete entry point for the whole plan.
+// Build Plan v2 AND the legacy custom-plan builder both materialize
+// sessions with a shared planId that ties every session in a block
+// together. Group them into one training-input card per planId so the
+// user has one Edit / Delete entry point for the whole block instead
+// of one row per session type.
 function _getBuildPlanInputs() {
   const schedule = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
   const todayStr = new Date().toISOString().slice(0, 10);
-  const future = schedule.filter(e => e && e.source === "onboarding_v2" && e.planId && e.date >= todayStr);
+  const future = schedule.filter(e =>
+    e && e.planId && e.date >= todayStr &&
+    (e.source === "onboarding_v2" || e.source === "custom")
+  );
   const byPlan = {};
   future.forEach(e => {
     if (!byPlan[e.planId]) {
