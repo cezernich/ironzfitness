@@ -751,6 +751,31 @@ function buildStatsPRs() {
 // that used to live in Stats — the Next Race banner now sits at the
 // top of the Training tab via planner.js renderNextRaceBanner(),
 // since that's where upcoming-race context actually matters.
+// Fixed race distances we can derive pace from. Keyed by race.type — only
+// the pure-running distances get a pace line on the trophy card; tris and
+// cycling events don't (pace isn't as meaningful across mixed disciplines
+// or for shorter/sprint distances).
+const _RACE_DISTANCES_MI = {
+  marathon:     26.2188,
+  halfMarathon: 13.1094,
+};
+
+function _formatRunPace(race) {
+  const distMi = _RACE_DISTANCES_MI[race?.type];
+  if (!distMi) return "";
+  const totalSec = _parseTimeToSeconds(race.finishTime);
+  if (!totalSec || totalSec <= 0) return "";
+
+  const metric = typeof getMeasurementSystem === "function" && getMeasurementSystem() === "metric";
+  const distance = metric ? distMi * 1.609344 : distMi;
+  const secPerUnit = totalSec / distance;
+  const m = Math.floor(secPerUnit / 60);
+  const s = Math.round(secPerUnit - m * 60);
+  const pad = n => n.toString().padStart(2, "0");
+  const carry = s === 60 ? 1 : 0;
+  return `${m + carry}:${pad(s === 60 ? 0 : s)} /${metric ? "km" : "mi"}`;
+}
+
 // Map race type → sport-themed inner icon for the trophy badge. Triathlon
 // races render as a stacked swim/bike/run triptych so the multisport
 // nature reads at a glance.
@@ -773,13 +798,36 @@ function _getTrophySportBadge(raceType) {
   return `<div class="trophy-badge-icon">${ICONS.trophy || ICONS.flag}</div>`;
 }
 
+// Maps a race.type to its broad sport group — used by the trophy-case
+// filter dropdown. Keeping this in one place means adding a new race
+// type to RACE_CONFIGS only requires a single update here.
+const _TROPHY_SPORT_GROUP = {
+  marathon: "running", halfMarathon: "running", tenK: "running", fiveK: "running",
+  ironman: "triathlon", halfIronman: "triathlon", olympic: "triathlon", sprint: "triathlon",
+  centuryRide: "cycling", granFondo: "cycling",
+  hyrox: "hyrox", hyroxDoubles: "hyrox",
+};
+
+// Trophy case filter state — module-level so rerenders preserve it.
+let _trophyFilter = { sport: "all", sort: "newest" };
+
+function _setTrophyFilter(key, value) {
+  _trophyFilter = { ..._trophyFilter, [key]: value };
+  renderStats();
+}
+
+function _shortTrophyDate(dateStr) {
+  if (!dateStr) return "";
+  // Parse at local noon to avoid TZ rolling the date back.
+  const d = new Date(dateStr + "T12:00:00");
+  if (isNaN(d)) return dateStr;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
 function buildStatsCompletedRaces(events) {
   const today = getTodayString();
   // A race is "completed" when its date is strictly in the past.
-  // Sort most-recent-first so the latest accomplishment leads.
-  const past = events
-    .filter(e => e.date && e.date < today)
-    .sort((a, b) => b.date.localeCompare(a.date));
+  const past = events.filter(e => e.date && e.date < today);
 
   const addBtn = `<button class="btn-secondary" style="font-size:0.78rem;padding:6px 12px" onclick="event.stopPropagation();openPastRaceModal()">+ Add Past Race</button>`;
 
@@ -798,15 +846,61 @@ function buildStatsCompletedRaces(events) {
       </section>`;
   }
 
-  const cards = past.map(race => {
+  // Only offer filter pills for sports actually present in the user's
+  // trophy case — no point showing a "Cycling" filter if they don't have
+  // any cycling finishes yet.
+  const presentSports = new Set(past.map(r => _TROPHY_SPORT_GROUP[r.type] || "other"));
+  const sportLabel = { running: "Running", triathlon: "Triathlon", cycling: "Cycling", hyrox: "Hyrox", other: "Other" };
+  const sportOrder = ["all", "running", "triathlon", "cycling", "hyrox", "other"];
+  const sportPills = sportOrder
+    .filter(s => s === "all" || presentSports.has(s))
+    .map(s => {
+      const label = s === "all" ? "All" : sportLabel[s];
+      const active = _trophyFilter.sport === s ? " trophy-filter-pill--active" : "";
+      return `<button class="trophy-filter-pill${active}" onclick="event.stopPropagation();_setTrophyFilter('sport','${s}')">${label}</button>`;
+    })
+    .join("");
+
+  const sortOptions = [
+    ["newest", "Newest"],
+    ["oldest", "Oldest"],
+    ["fastest", "Fastest"],
+  ].map(([v, l]) => `<option value="${v}" ${_trophyFilter.sort === v ? "selected" : ""}>${l}</option>`).join("");
+  const sortSelect = `<select class="trophy-filter-sort" onchange="event.stopPropagation();_setTrophyFilter('sort',this.value)" onclick="event.stopPropagation()">${sortOptions}</select>`;
+
+  // Apply filter
+  const filtered = past.filter(r => {
+    if (_trophyFilter.sport === "all") return true;
+    return (_TROPHY_SPORT_GROUP[r.type] || "other") === _trophyFilter.sport;
+  });
+
+  // Apply sort
+  filtered.sort((a, b) => {
+    if (_trophyFilter.sort === "oldest") return a.date.localeCompare(b.date);
+    if (_trophyFilter.sort === "fastest") {
+      const as = _parseTimeToSeconds(a.finishTime) || Infinity;
+      const bs = _parseTimeToSeconds(b.finishTime) || Infinity;
+      return as - bs;
+    }
+    return b.date.localeCompare(a.date);
+  });
+
+  const cards = filtered.map(race => {
     const showTime = race.showFinishTime && race.finishTime;
+    const paceLine = showTime ? _formatRunPace(race) : "";
     return `
       <div class="trophy-card-v2" title="Click to edit or delete" onclick="openPastRaceModal('${race.id}')">
+        <div class="trophy-card-v2-date">${_escapeStatsHtml(_shortTrophyDate(race.date))}</div>
         <div class="trophy-badge">${_getTrophySportBadge(race.type)}</div>
         <div class="trophy-card-v2-name">${_escapeStatsHtml(race.name || "Unnamed race")}</div>
         ${showTime ? `<div class="trophy-card-v2-time">${_escapeStatsHtml(race.finishTime)}</div>` : ""}
+        ${paceLine ? `<div class="trophy-card-v2-pace">${paceLine}</div>` : ""}
       </div>`;
   }).join("");
+
+  const emptyFilterMsg = filtered.length === 0
+    ? `<p class="empty-msg" style="margin:0">No races match this filter.</p>`
+    : "";
 
   return `
     <section class="card collapsible" id="section-stats-races-completed">
@@ -815,8 +909,12 @@ function buildStatsCompletedRaces(events) {
         <span class="card-chevron">▾</span>
       </div>
       <div class="card-body" style="gap:12px">
-        <div>${addBtn}</div>
-        <div class="trophy-case-grid-v2">${cards}</div>
+        <div class="trophy-toolbar">
+          ${addBtn}
+          <div class="trophy-filter-pills">${sportPills}</div>
+          ${sortSelect}
+        </div>
+        ${filtered.length ? `<div class="trophy-case-grid-v2">${cards}</div>` : emptyFilterMsg}
       </div>
     </section>`;
 }
