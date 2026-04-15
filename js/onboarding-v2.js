@@ -734,7 +734,59 @@
     const sports = selected.filter(s => s !== "triathlon");
     _state.selectedSports = sports;
     _lsSet("selectedSports", sports);
+    _renderGoalCards();
     goTo("bp-v2-2");
+  }
+
+  // Goal catalog. Each entry lists which sport buckets it's relevant
+  // to. Using "*" means "always show". Strength-specific goals only
+  // appear when "strength" is selected; endurance goals when at least
+  // one cardio sport is selected.
+  const _GOAL_CATALOG = [
+    { id: "race",      icon: "flag",     text: "Train for a Race",      buckets: ["endurance"] },
+    { id: "speed",     icon: "zap",      text: "Get Faster",             buckets: ["endurance"] },
+    { id: "endurance", icon: "activity", text: "Build Endurance",        buckets: ["endurance"] },
+    { id: "stronger",  icon: "weights",  text: "Get Stronger",           buckets: ["strength"] },
+    { id: "muscle",    icon: "weights",  text: "Build Muscle / Bulk",    buckets: ["strength"] },
+    { id: "prs",       icon: "trophy",   text: "Set New PRs",            buckets: ["strength"] },
+    { id: "cut",       icon: "flame",    text: "Cut / Lean Out",         buckets: ["strength"] },
+    { id: "maintain",  icon: "check",    text: "Maintain",               buckets: ["strength"] },
+    { id: "weight",    icon: "flame",    text: "Lose Weight",            buckets: ["*"] },
+    { id: "general",   icon: "target",   text: "General Fitness",        buckets: ["*"] },
+  ];
+
+  function _renderGoalCards() {
+    const host = document.getElementById("bp-v2-goal-cards");
+    if (!host) return;
+    const sports = _state.selectedSports || [];
+    const hasStrength = sports.includes("strength");
+    const hasEndurance = sports.some(s => ["run", "bike", "swim", "hyrox", "rowing"].includes(s));
+    const relevant = _GOAL_CATALOG.filter(g => {
+      if (g.buckets.includes("*")) return true;
+      if (g.buckets.includes("strength") && hasStrength) return true;
+      if (g.buckets.includes("endurance") && hasEndurance) return true;
+      return false;
+    });
+    host.innerHTML = relevant.map(g =>
+      '<button type="button" class="ob-v2-goal-card" data-goal="' + g.id + '" onclick="OnboardingV2._toggleGoal(this)">' +
+        '<span class="ob-v2-goal-icon" data-ob-icon="' + g.icon + '"></span>' +
+        '<span class="ob-v2-goal-text">' + _escape(g.text) + '</span>' +
+        '<span class="ob-v2-goal-check">&#10003;</span>' +
+      '</button>'
+    ).join("");
+    _hydrateIcons(host);
+    // Reapply any previously-selected goals (e.g. when user goes back)
+    (_state.trainingGoals || []).forEach(id => {
+      const el = host.querySelector('[data-goal="' + id + '"]');
+      if (el) el.classList.add("is-selected");
+    });
+    // Contextual subtitle
+    const sub = document.getElementById("bp-v2-goal-subtitle");
+    if (sub) {
+      if (hasStrength && !hasEndurance)      sub.textContent = "Select all that apply. These shape your strength volume and recovery.";
+      else if (!hasStrength && hasEndurance) sub.textContent = "Select all that apply. These shape your cardio intensity and volume.";
+      else                                    sub.textContent = "Select all that apply. These shape how your plan balances cardio and strength.";
+    }
   }
 
   function _toggleGoal(btn) { if (btn) btn.classList.toggle("is-selected"); }
@@ -743,6 +795,7 @@
       .map(el => el.getAttribute("data-goal"));
     _state.trainingGoals = goals;
     _lsSet("trainingGoals", goals);
+    // Skip the race path entirely if the user didn't pick "race".
     goTo(goals.includes("race") ? "bp-v2-3-race" : "bp-v2-3-norace");
   }
 
@@ -1610,7 +1663,7 @@
     Object.assign(window.OnboardingV2, {
       _bpBack,
       _toggleSport, _applySportSideEffects, _selectGym, _saveSportsAndContinue,
-      _toggleGoal, _saveGoalsAndContinue,
+      _toggleGoal, _saveGoalsAndContinue, _renderGoalCards,
       _updateRaceTypes, _updateWeeksCallout, _selectRaceGoal, _selectLeadInPhase, _adjustLeadIn, _saveRaceAndContinue,
       _selectPlanOption, _saveNoraceAndContinue,
       _renderThresholdSections, _toggleTestMe, _changeThresholdMethod, _saveThresholdsAndContinue, _testMeForEverythingAndContinue,
