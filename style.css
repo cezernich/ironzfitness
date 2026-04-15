@@ -8865,13 +8865,147 @@ button:active {
   text-align: right;
 }
 
-/* Next Race */
+/* Next Race — banner at the top of the Training tab */
+.next-race-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: linear-gradient(135deg, rgba(129,140,248,0.14), rgba(34,211,238,0.08));
+  border: 1px solid rgba(129,140,248,0.28);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.1s;
+}
+.next-race-banner:hover {
+  border-color: var(--color-accent);
+  transform: translateY(-1px);
+}
+.next-race-banner-icon {
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+.next-race-banner-icon svg {
+  width: 24px;
+  height: 24px;
+}
+.next-race-banner-text {
+  flex: 1;
+  min-width: 0;
+}
+.next-race-banner-name {
+  font-size: 1.02rem;
+  font-weight: 800;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.next-race-banner-meta {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+.next-race-banner-countdown {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--color-accent);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.next-race-banner-extra {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  background: rgba(255,255,255,0.06);
+  border-radius: 999px;
+  padding: 3px 8px;
+  flex-shrink: 0;
+}
+@media (max-width: 440px) {
+  .next-race-banner { flex-wrap: wrap; gap: 10px; padding: 12px 14px; }
+  .next-race-banner-countdown { font-size: 0.88rem; }
+}
+
+/* Next Race — legacy hero style kept for any older caller (Stats card
+   was removed in the 2026-04-15 cleanup). Harmless if unused. */
 .next-race-hero {
   background: linear-gradient(135deg, rgba(129,140,248,0.12), rgba(34,211,238,0.08));
   border: 1px solid rgba(129,140,248,0.25);
   border-radius: var(--radius);
   padding: 20px;
   margin-bottom: 16px;
+}
+
+/* ── Race trophy case (Stats tab) ─────────────────────────────────── */
+.trophy-count {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  background: var(--color-surface-2);
+  padding: 2px 8px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+.trophy-case-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.trophy-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(245,158,11,0.10), rgba(245,158,11,0.02));
+}
+.trophy-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(245,158,11,0.18);
+  color: #f59e0b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.trophy-card-icon svg {
+  width: 22px;
+  height: 22px;
+}
+.trophy-card-body {
+  flex: 1;
+  min-width: 0;
+}
+.trophy-card-name {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trophy-card-meta {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+.trophy-card-detail {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+.trophy-card-time {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #f59e0b;
+  margin-top: 4px;
 }
 
 .next-race-name {

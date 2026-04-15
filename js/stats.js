@@ -747,33 +747,66 @@ function buildStatsPRs() {
     </section>`;
 }
 
-function buildStatsNextRace(events) {
-  const today    = getTodayString();
-  const upcoming = events.filter(e => e.date >= today).sort((a,b) => a.date.localeCompare(b.date));
-  if (!upcoming.length) return "";
+// Trophy case of completed races. Replaces the old Next Race card
+// that used to live in Stats — the Next Race banner now sits at the
+// top of the Training tab via planner.js renderNextRaceBanner(),
+// since that's where upcoming-race context actually matters.
+function buildStatsCompletedRaces(events) {
+  const today = getTodayString();
+  // A race is "completed" when its date is strictly in the past.
+  // Sort most-recent-first so the latest accomplishment leads.
+  const past = events
+    .filter(e => e.date && e.date < today)
+    .sort((a, b) => b.date.localeCompare(a.date));
 
-  const race     = upcoming[0];
-  const daysAway = Math.ceil((new Date(race.date+"T00:00:00") - new Date()) / 86400000);
-  const cfg      = RACE_CONFIGS[race.type] || {};
-  const others   = upcoming.slice(1).map(r => {
-    const d = Math.ceil((new Date(r.date+"T00:00:00") - new Date()) / 86400000);
-    return `<div class="upcoming-row"><span>${r.name}</span><span class="upcoming-days">${d}d</span></div>`;
+  if (!past.length) {
+    return `
+      <section class="card collapsible is-collapsed" id="section-stats-races-completed">
+        <div class="card-toggle" onclick="toggleSection('section-stats-races-completed')">
+          <h2>Race Trophy Case</h2><span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body">
+          <p class="empty-msg" style="margin:0">
+            No completed races yet. Your finishes will show up here.
+          </p>
+        </div>
+      </section>`;
+  }
+
+  const cards = past.map(race => {
+    const cfg = RACE_CONFIGS[race.type] || {};
+    const trophyIcon = ICONS.trophy || ICONS.flag || "";
+    const distanceLabel = cfg.label || race.type || "Race";
+    return `
+      <div class="trophy-card">
+        <div class="trophy-card-icon">${trophyIcon}</div>
+        <div class="trophy-card-body">
+          <div class="trophy-card-name">${_escapeStatsHtml(race.name || "Unnamed race")}</div>
+          <div class="trophy-card-meta">${_escapeStatsHtml(distanceLabel)} · ${formatDisplayDate(race.date)}</div>
+          ${race.location ? `<div class="trophy-card-detail">${_escapeStatsHtml(race.location)}</div>` : ""}
+          ${race.finishTime ? `<div class="trophy-card-time">${_escapeStatsHtml(race.finishTime)}</div>` : ""}
+        </div>
+      </div>`;
   }).join("");
 
   return `
-    <section class="card collapsible" id="section-stats-race">
-      <div class="card-toggle" onclick="toggleSection('section-stats-race')">
-        <h2>Next Race</h2><span class="card-chevron">▾</span>
+    <section class="card collapsible" id="section-stats-races-completed">
+      <div class="card-toggle" onclick="toggleSection('section-stats-races-completed')">
+        <h2>Race Trophy Case <span class="trophy-count">${past.length}</span></h2>
+        <span class="card-chevron">▾</span>
       </div>
       <div class="card-body">
-        <div class="next-race-hero">
-          <div class="next-race-name">${ICONS.flag} ${race.name}</div>
-          <div class="next-race-meta">${cfg.label||race.type} · ${formatDisplayDate(race.date)}</div>
-          <div class="next-race-countdown">${daysAway} days to go</div>
-        </div>
-        ${others ? `<div class="section-label"><span>Also Upcoming</span></div>${others}` : ""}
+        <div class="trophy-case-grid">${cards}</div>
       </div>
     </section>`;
+}
+
+// Local HTML-escape helper so the trophy-case renderer doesn't depend
+// on an imported sanitizer from elsewhere in the app.
+function _escapeStatsHtml(str) {
+  const d = document.createElement("div");
+  d.textContent = str == null ? "" : String(str);
+  return d.innerHTML;
 }
 
 function buildStatsNutrition(meals) {
@@ -1333,7 +1366,7 @@ function renderStats() {
     buildStatsBreakdown(byType, workouts.length) +
     buildStatsHeatmap(workouts, streaks) +
     buildStatsPRs() +
-    buildStatsNextRace(events) +
+    buildStatsCompletedRaces(events) +
     buildStatsNutrition(meals) +
     buildStatsHydration() +
     (typeof buildCheckinTrend === "function" ? buildCheckinTrend() : "") +

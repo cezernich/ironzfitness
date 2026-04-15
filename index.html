@@ -177,6 +177,11 @@
       <!-- Training conflict banner -->
       <div id="training-conflict-banner" style="display:none"></div>
 
+      <!-- Next Race banner — filled by renderNextRaceBanner(). Empty when
+           the user has no upcoming races; otherwise renders a small card
+           with the nearest race + countdown. -->
+      <div id="training-next-race-banner"></div>
+
       <!-- Goals Section -->
       <section class="card collapsible is-collapsed" id="goals-section">
         <div class="card-toggle" onclick="toggleSection('goals-section')">

@@ -3334,7 +3334,46 @@ const DISCIPLINE_ICONS = {
   wellness:     ICONS.droplet,
 };
 
+// Small "Next Race" banner that sits at the top of the Training tab so
+// the user's most imminent race is always visible while they're looking
+// at their training inputs. Moved out of the Stats tab on 2026-04-15 —
+// Stats now shows a Completed Races trophy case instead.
+function renderNextRaceBanner() {
+  const container = document.getElementById("training-next-race-banner");
+  if (!container) return;
+  const events = loadEvents();
+  const todayStr = (typeof getTodayString === "function") ? getTodayString() : new Date().toISOString().slice(0, 10);
+  const upcoming = events
+    .filter(e => e.date && e.date >= todayStr)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (!upcoming.length) {
+    container.innerHTML = "";
+    return;
+  }
+  const race = upcoming[0];
+  const daysAway = Math.ceil((new Date(race.date + "T00:00:00") - new Date()) / 86400000);
+  const cfg = RACE_CONFIGS[race.type] || {};
+  const iconHtml = (typeof ICONS !== "undefined" && ICONS.flag) ? ICONS.flag : "";
+  const extraBadge = upcoming.length > 1
+    ? `<span class="next-race-banner-extra">+${upcoming.length - 1} more</span>`
+    : "";
+  const countdownLabel = daysAway === 0 ? "Race day" : daysAway === 1 ? "1 day to go" : `${daysAway} days to go`;
+  container.innerHTML = `
+    <div class="next-race-banner" onclick="showTab('training');toggleSection('section-build-plan',true)">
+      <span class="next-race-banner-icon">${iconHtml}</span>
+      <div class="next-race-banner-text">
+        <div class="next-race-banner-name">${_escapeHtml(race.name)}</div>
+        <div class="next-race-banner-meta">${_escapeHtml(cfg.label || race.type)} · ${formatDisplayDate(race.date)}</div>
+      </div>
+      <div class="next-race-banner-countdown">${countdownLabel}</div>
+      ${extraBadge}
+    </div>
+  `;
+}
+
 function renderRaceEvents() {
+  // Keep the Next Race banner in sync whenever the race list is rerendered.
+  try { renderNextRaceBanner(); } catch {}
   const container = document.getElementById("race-events-list");
   if (!container) return;
 
