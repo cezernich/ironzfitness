@@ -17771,3 +17771,41 @@ body.ob-v2-lock { overflow: hidden; }
 #cp-manual-modal {
   z-index: 10100;
 }
+
+/* "Why this plan?" philosophy block on bp-v2-7 preview */
+.ob-v2-philosophy {
+  margin-top: 16px;
+  background: #FFF;
+  border: 1px solid #EEE;
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+.ob-v2-philosophy > summary {
+  font-weight: 700;
+  font-size: 14px;
+  color: #E8530E;
+  cursor: pointer;
+  list-style: none;
+  padding: 4px 0;
+}
+.ob-v2-philosophy > summary::-webkit-details-marker { display: none; }
+.ob-v2-philosophy > summary::after {
+  content: " ▾";
+  color: #999;
+  font-weight: 400;
+}
+.ob-v2-philosophy[open] > summary::after { content: " ▴"; }
+.ob-v2-philosophy-intro {
+  margin: 10px 0 6px;
+  color: #666;
+  font-size: 13px;
+}
+.ob-v2-philosophy-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #333;
+}
+.ob-v2-philosophy-list li { margin-bottom: 6px; }
+.ob-v2-philosophy-list strong { color: #1A1A1A; }

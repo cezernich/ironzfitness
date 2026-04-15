@@ -1707,6 +1707,129 @@
     _renderPlanPreview();
   }
 
+  // Given the weekly template (a 7-day map of sport buckets), produce
+  // an enriched version where each slot carries a specific subtype like
+  // "run-long", "run-interval", "run-recovery", "bike-interval",
+  // "strength-push", "strength-pull", etc. The stored schedule keeps
+  // simple sport buckets for editability; enrichment happens here once
+  // and drives both the preview and the materialized calendar sessions.
+  //
+  // Rules (per week):
+  //  - First run → Long Run if this day matches longDays.longRun,
+  //    else Interval Run (hard day). Last run → Recovery Run.
+  //    Middle runs → Easy Run.
+  //  - First bike → Long Ride if longDays.longRide, else Interval Ride.
+  //    Other bikes → Easy Ride.
+  //  - Swim → CSS Swim for first, Endurance Swim for others.
+  //  - Strength → rotate by split: PPL (push/pull/legs), UL (upper/lower),
+  //    Full Body, or Custom (use strengthSetup.customMuscles).
+  //  - Brick stays as "brick" (single label).
+  function _enrichWeekTemplate() {
+    const enriched = {};
+    _BP_DAYS.forEach(d => { enriched[d] = []; });
+
+    // First pass: split long-anchored sports out of the pool so we can
+    // count the non-long sessions per sport for rotation logic.
+    const runDays = _BP_DAYS.filter(d => (_state.schedule[d] || []).includes("run"));
+    const bikeDays = _BP_DAYS.filter(d => (_state.schedule[d] || []).includes("bike"));
+    const swimDays = _BP_DAYS.filter(d => (_state.schedule[d] || []).includes("swim"));
+
+    const split = _state.strengthSetup && _state.strengthSetup.split || "ppl";
+    const customMuscles = _state.strengthSetup && _state.strengthSetup.customMuscles || {};
+
+    // Strength rotation templates keyed by split type.
+    const STRENGTH_ROTATION = {
+      ppl:      ["push", "pull", "legs", "push", "pull", "legs", "push"],
+      ul:       ["upper", "lower", "upper", "lower", "upper", "lower", "upper"],
+      fullBody: ["full", "full", "full", "full", "full", "full", "full"],
+    };
+
+    // For custom split, map selected muscle groups to a pretty label.
+    function _customDayLabel(dayIdx) {
+      const muscles = Array.isArray(customMuscles[String(dayIdx)]) ? customMuscles[String(dayIdx)] : [];
+      if (!muscles.length) return "custom";
+      const pushSet = ["chest", "shoulders", "triceps"];
+      const pullSet = ["back", "biceps"];
+      const legsSet = ["quads", "hamstrings", "glutes", "calves"];
+      const allPush = muscles.every(m => pushSet.includes(m));
+      const allPull = muscles.every(m => pullSet.includes(m));
+      const allLegs = muscles.every(m => legsSet.includes(m));
+      if (allPush) return "push";
+      if (allPull) return "pull";
+      if (allLegs) return "legs";
+      return "custom";
+    }
+
+    let strIdx = 0;
+    let runIdx = 0;
+    let bikeIdx = 0;
+    let swimIdx = 0;
+
+    _BP_DAYS.forEach(d => {
+      const slots = _state.schedule[d] || [];
+      const out = [];
+      slots.forEach(s => {
+        if (s === "run") {
+          const isLong = _state.longDays && _state.longDays.longRun === d && runIdx === 0;
+          const runTotal = runDays.length;
+          if (isLong) out.push("run-long");
+          else if (runTotal >= 3 && runIdx === runTotal - 1) out.push("run-recovery");
+          else if (runIdx === 0)                              out.push("run-interval");
+          else                                                out.push("run-easy");
+          runIdx++;
+        } else if (s === "bike") {
+          const isLong = _state.longDays && _state.longDays.longRide === d && bikeIdx === 0;
+          if (isLong)             out.push("bike-long");
+          else if (bikeIdx === 0) out.push("bike-interval");
+          else                    out.push("bike-easy");
+          bikeIdx++;
+        } else if (s === "swim") {
+          out.push(swimIdx === 0 ? "swim-css" : "swim-endurance");
+          swimIdx++;
+        } else if (s === "strength") {
+          let focus;
+          if (split === "custom") {
+            focus = _customDayLabel(strIdx + 1);
+          } else {
+            focus = (STRENGTH_ROTATION[split] || STRENGTH_ROTATION.ppl)[strIdx] || "full";
+          }
+          out.push("strength-" + focus);
+          strIdx++;
+        } else {
+          // long-anchored or non-rotating types: brick, run-long, bike-long,
+          // rest, yoga, hiit, etc. pass through unchanged.
+          out.push(s);
+        }
+      });
+      enriched[d] = out;
+    });
+    return enriched;
+  }
+
+  // Pretty label for enriched slot codes. Falls back to _prettySport().
+  function _enrichedLabel(code) {
+    const map = {
+      "run-long":     "Long Run",
+      "run-interval": "Interval Run",
+      "run-recovery": "Recovery Run",
+      "run-easy":     "Easy Run",
+      "bike-long":    "Long Ride",
+      "bike-interval":"Interval Ride",
+      "bike-easy":    "Easy Ride",
+      "swim-css":     "CSS Swim",
+      "swim-endurance":"Endurance Swim",
+      "strength-push":"Push Day",
+      "strength-pull":"Pull Day",
+      "strength-legs":"Leg Day",
+      "strength-upper":"Upper Body",
+      "strength-lower":"Lower Body",
+      "strength-full":"Full Body",
+      "strength-custom":"Strength",
+      "brick":        "Brick",
+    };
+    return map[code] || _prettySport(code);
+  }
+
   function _renderPlanPreview() {
     const body = document.getElementById("bp-v2-preview-body");
     if (!body) return;
@@ -1750,20 +1873,83 @@
           '<span class="ob-v2-timeline-seg ob-v2-timeline-base"></span><span class="ob-v2-timeline-seg ob-v2-timeline-build"></span><span class="ob-v2-timeline-seg ob-v2-timeline-peak"></span><span class="ob-v2-timeline-seg ob-v2-timeline-taper"></span>' +
           markerHtml +
         '</div>';
+    const enriched = _enrichWeekTemplate();
     const weekHtml = _BP_DAYS.map(d => {
-      const slots = _state.schedule[d] || [];
+      const slots = enriched[d] || [];
       const mini = slots.length
-        ? slots.map(s => '<div class="ob-v2-mini-wk ob-v2-mini-' + s.replace(/[^a-z0-9]/gi, "") + '">' + _escape(_prettySport(s)) + '</div>').join("")
+        ? slots.map(s => {
+            const bucket = _sportBucketFromEnriched(s);
+            return '<div class="ob-v2-mini-wk ob-v2-mini-' + bucket.replace(/[^a-z0-9]/gi, "") + '">' +
+              _escape(_enrichedLabel(s)) + '</div>';
+          }).join("")
         : '<div class="ob-v2-mini-wk ob-v2-mini-rest">Rest</div>';
       return '<div class="ob-v2-week-day-row"><div class="ob-v2-week-day-label">' + _BP_DAY_LABELS[d] + '</div><div class="ob-v2-week-day-workouts">' + mini + '</div></div>';
     }).join("");
+    // Only show the phase timeline when there's an actual race driving
+    // the Base/Build/Peak/Taper arc. Strength-only users and no-race
+    // endurance users just see the week preview — phases don't apply.
+    const showTimeline = hasRace && !strengthOnly;
     body.innerHTML =
-      (strengthOnly ? "" : '<div class="ob-v2-preview-timeline">' + timelineHtml + '</div>') +
+      (showTimeline ? '<div class="ob-v2-preview-timeline">' + timelineHtml + '</div>' : "") +
       '<div class="ob-v2-section-label">Plan Week 1</div>' +
-      '<div class="ob-v2-week-preview">' + weekHtml + '</div>';
+      '<div class="ob-v2-week-preview">' + weekHtml + '</div>' +
+      _renderPlanPhilosophyBlock(enriched);
     const anyTest = Object.values(_state.thresholds || {}).some(t => t && t.mode === "test");
     const callout = document.getElementById("bp-v2-test-callout");
     if (callout) callout.style.display = anyTest ? "" : "none";
+  }
+
+  // Strip the enriched suffix to the base sport bucket so we can reuse
+  // the existing color/class naming (ob-v2-mini-run, ob-v2-slot-bike, etc.)
+  function _sportBucketFromEnriched(code) {
+    if (!code) return "";
+    if (code.indexOf("run") === 0)      return "run";
+    if (code.indexOf("bike") === 0)     return "bike";
+    if (code.indexOf("swim") === 0)     return "swim";
+    if (code.indexOf("strength") === 0) return "strength";
+    return code;
+  }
+
+  // "Why this plan?" explainer — collapsible card under the week grid.
+  // Explains the intent behind each session type using plain language,
+  // so users can learn the why behind the structure. Copy is intentionally
+  // short today; the user is going to expand the philosophy in a follow-up.
+  function _renderPlanPhilosophyBlock(enriched) {
+    // Collect unique enriched codes used this week so we only explain
+    // what the user will actually see.
+    const seen = new Set();
+    _BP_DAYS.forEach(d => (enriched[d] || []).forEach(s => seen.add(s)));
+    const EXPLAIN = {
+      "run-long":     "Builds aerobic base and bone-tendon durability. Longest run of the week at conversational pace.",
+      "run-interval": "Drives VO2max and lactate threshold up. Hard reps with full recovery so each one is quality.",
+      "run-recovery": "Flush day. Easy effort the day after your hardest session so your body absorbs the work.",
+      "run-easy":     "Aerobic volume at conversational pace. 70–80% of your weekly run time should feel this easy.",
+      "bike-long":    "Endurance base for cycling. Long, steady, fuel well — the foundation for everything else.",
+      "bike-interval":"Sweet-spot or VO2 intervals on the bike. Raises your FTP ceiling.",
+      "bike-easy":    "Easy spin to accumulate volume without digging a hole.",
+      "swim-css":     "Threshold swim keyed to your CSS pace. The most time-efficient way to get faster in the pool.",
+      "swim-endurance":"Volume-focused swim. Longer intervals with short rest to build aerobic capacity.",
+      "strength-push":"Chest, shoulders, triceps. Barbell press + accessories.",
+      "strength-pull":"Back and biceps. Vertical and horizontal pulling work.",
+      "strength-legs":"Quads, hams, glutes, calves. Compound squat/hinge patterns.",
+      "strength-upper":"Upper body — mix of push and pull in one session.",
+      "strength-lower":"Lower body — squat, hinge, unilateral, accessories.",
+      "strength-full":"Full-body day. One compound per movement pattern.",
+      "strength-custom":"Your picked muscle focus for this day.",
+      "brick":        "Bike-to-run transition training — the core triathlon-specific session. Teaches your legs to run off the bike.",
+    };
+    const items = Array.from(seen)
+      .filter(s => EXPLAIN[s])
+      .map(s =>
+        '<li><strong>' + _escape(_enrichedLabel(s)) + '</strong> — ' + _escape(EXPLAIN[s]) + '</li>'
+      )
+      .join("");
+    if (!items) return "";
+    return '<details class="ob-v2-philosophy">' +
+      '<summary>Why this plan?</summary>' +
+      '<p class="ob-v2-philosophy-intro">Every session has a job. Here\'s what each one is doing for you:</p>' +
+      '<ul class="ob-v2-philosophy-list">' + items + '</ul>' +
+      '</details>';
   }
 
   // Persist Build Plan inputs AND materialize the weekly template into
