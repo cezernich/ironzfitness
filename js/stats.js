@@ -1615,48 +1615,50 @@ function buildStatsProgressiveOverload() {
 
   const plateaus = _detectPlateaus(history);
   const recentPRs = _detectPRs(history);
-
-  let html = `<div class="stats-card"><h3>Strength Progression</h3>`;
-
-  // Recent PRs
-  if (recentPRs.length > 0) {
-    html += `<div class="overload-section">
-      <div class="overload-section-title">${typeof ICONS !== "undefined" ? ICONS.trophy : ""} Recent PRs</div>`;
-    recentPRs.forEach(pr => {
-      html += `<div class="overload-pr-row">
-        <span class="overload-exercise">${pr.displayName}</span>
-        <span class="overload-pr-value">${pr.weight} lbs x ${pr.reps} (est. 1RM: ${pr.e1rm})</span>
-        <span class="overload-pr-date">${formatDisplayDate(pr.date)}</span>
-      </div>`;
-    });
-    html += `</div>`;
-  }
-
-  // Plateaus
-  if (plateaus.length > 0) {
-    html += `<div class="overload-section">
-      <div class="overload-section-title">${typeof ICONS !== "undefined" ? ICONS.target : ""} Plateau Alerts</div>`;
-    plateaus.forEach(p => {
-      html += `<div class="overload-plateau-row">
-        <div class="overload-exercise">${p.displayName}</div>
-        <div class="overload-plateau-detail">${p.weight} lbs x ${p.reps} for ${p.count} sessions</div>
-        <div class="overload-suggestion">Try ${p.suggestedWeight} lbs next time</div>
-      </div>`;
-    });
-    html += `</div>`;
-  }
-
-  // Top exercises — progression charts (top 4 by number of entries)
   const topExercises = exerciseNames
     .filter(n => history[n].length >= 3)
     .sort((a, b) => history[b].length - history[a].length)
     .slice(0, 4);
 
-  if (topExercises.length > 0) {
-    html += `<div class="overload-section">
-      <div class="overload-section-title">Estimated 1RM Progression</div>
-      <div class="overload-charts">`;
+  // If there's literally nothing to show (no PRs, no plateaus, not
+  // enough history for a progression chart), render nothing at all
+  // — previously this emitted a bare "Strength Progression" heading
+  // floating above the next card with no content beneath it.
+  if (!recentPRs.length && !plateaus.length && !topExercises.length) return "";
 
+  let body = "";
+
+  // Recent PRs
+  if (recentPRs.length > 0) {
+    body += `<div class="overload-section">
+      <div class="overload-section-title">${typeof ICONS !== "undefined" ? ICONS.trophy : ""} Recent PRs</div>`;
+    recentPRs.forEach(pr => {
+      body += `<div class="overload-pr-row">
+        <span class="overload-exercise">${pr.displayName}</span>
+        <span class="overload-pr-value">${pr.weight} lbs x ${pr.reps} (est. 1RM: ${pr.e1rm})</span>
+        <span class="overload-pr-date">${formatDisplayDate(pr.date)}</span>
+      </div>`;
+    });
+    body += `</div>`;
+  }
+
+  // Plateaus
+  if (plateaus.length > 0) {
+    body += `<div class="overload-section">
+      <div class="overload-section-title">${typeof ICONS !== "undefined" ? ICONS.target : ""} Plateau Alerts</div>`;
+    plateaus.forEach(p => {
+      body += `<div class="overload-plateau-row">
+        <div class="overload-exercise">${p.displayName}</div>
+        <div class="overload-plateau-detail">${p.weight} lbs x ${p.reps} for ${p.count} sessions</div>
+        <div class="overload-suggestion">Try ${p.suggestedWeight} lbs next time</div>
+      </div>`;
+    });
+    body += `</div>`;
+  }
+
+  // Top exercises — progression charts (top 4 by number of entries)
+  if (topExercises.length > 0) {
+    let chartsHtml = "";
     topExercises.forEach(name => {
       const entries = history[name];
       const e1rms = entries.map(e => e.e1rm).filter(v => v > 0);
@@ -1674,7 +1676,7 @@ function buildStatsProgressiveOverload() {
         return `${x},${y}`;
       });
 
-      html += `
+      chartsHtml += `
         <div class="overload-chart-card">
           <div class="overload-chart-title">${displayName}</div>
           <div class="overload-chart-value">${latest} lbs</div>
@@ -1684,10 +1686,23 @@ function buildStatsProgressiveOverload() {
           </svg>
         </div>`;
     });
-
-    html += `</div></div>`;
+    if (chartsHtml) {
+      body += `<div class="overload-section">
+        <div class="overload-section-title">Estimated 1RM Progression</div>
+        <div class="overload-charts">${chartsHtml}</div>
+      </div>`;
+    }
   }
 
-  html += `</div>`;
-  return html;
+  // Belt-and-suspenders: if every branch above produced nothing
+  // despite the outer guards, bail rather than emit an empty card.
+  if (!body) return "";
+
+  return `
+    <section class="card collapsible" id="section-stats-strength-progression">
+      <div class="card-toggle" onclick="toggleSection('section-stats-strength-progression')">
+        <h2>Strength Progression</h2><span class="card-chevron">▾</span>
+      </div>
+      <div class="card-body">${body}</div>
+    </section>`;
 }
