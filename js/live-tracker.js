@@ -99,14 +99,47 @@ function _buildCardioSteps(workout) {
       const dur = _parseMinutes(iv.duration || iv.duration_min);
       const reps = parseInt(iv.reps, 10) || 0;
       const rest = iv.restDuration ? _parseMinutes(iv.restDuration) : 0;
-      out.push({
-        type: _phaseType(name),
-        zone: _zoneNumFromString(iv.effort || iv.intensity || iv.zone),
-        duration: dur || 1,
-        label: name,
-        ...(reps > 1 ? { reps } : {}),
-        ...(rest > 0 ? { rest } : {}),
-      });
+      const type = _phaseType(name);
+      const zone = _zoneNumFromString(iv.effort || iv.intensity || iv.zone);
+
+      // For repeated blocks (e.g. "4 × 10 min sweet spot"), expand into
+      // N work steps interleaved with (N-1) Recovery steps so the live
+      // tracker walks through each rep and rest individually. Without
+      // this the whole block is one countdown that just jumps straight
+      // to the next phase after a single rep — the user never sees the
+      // structure.
+      if (reps > 1) {
+        // Strip a leading "N x M min" / "N × M" from the base name so
+        // the per-rep label doesn't double up on "4 × 10 min sweet spot
+        // — 1/4". Falls back to the original name if no prefix matches.
+        const cleanName = String(name)
+          .replace(/^\s*\d+\s*[x×]\s*\d+\s*(?:min|m|sec|s)?\s*/i, "")
+          .trim() || name;
+        for (let i = 1; i <= reps; i++) {
+          out.push({
+            type,
+            zone,
+            duration: dur || 1,
+            label: `${cleanName} — ${i} of ${reps}`,
+          });
+          if (i < reps && rest > 0) {
+            out.push({
+              type: "main",
+              zone: 1,
+              duration: rest,
+              label: "Recovery",
+            });
+          }
+        }
+      } else {
+        out.push({
+          type,
+          zone,
+          duration: dur || 1,
+          label: name,
+          ...(rest > 0 ? { rest } : {}),
+        });
+      }
     });
     return out;
   }
