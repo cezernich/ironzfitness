@@ -1507,7 +1507,7 @@ function renderTrainingInputs() {
         <div class="race-card-top">
           <span class="ti-card-badge ti-card-badge--schedule">Build Plan</span>
           <div class="ti-card-actions">
-            <button class="ti-edit-btn" onclick="window.OnboardingV2 && window.OnboardingV2.openBuildPlan()" title="Rebuild plan">Edit</button>
+            <button class="ti-edit-btn" onclick="window.OnboardingV2 && window.OnboardingV2.openBuildPlanEdit('${bp.planId}')" title="Edit schedule">Edit</button>
             <button class="delete-btn" onclick="removeTrainingInput('buildplan','${bp.planId}')" title="Remove plan"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
           </div>
         </div>

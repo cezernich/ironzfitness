@@ -238,6 +238,51 @@
     goTo("bp-v2-1");
   }
 
+  // Edit entry point — jump straight to the Weekly Schedule step
+  // with the existing Build Plan's inputs already loaded. Used by
+  // the "Edit" button on the Active Training Inputs card so users
+  // can tweak day-to-day composition without re-answering every
+  // question from sport selection onward.
+  function openBuildPlanEdit(planId) {
+    _state.mode = "buildplan";
+    _resetBuildPlanState();
+    _state._editingPlanId = planId || null;
+    // Pull everything back in from localStorage so the edit screen
+    // has the same context the user had when they first built it.
+    try {
+      const sports = _lsGet("selectedSports", null);
+      if (Array.isArray(sports)) _state.selectedSports = sports;
+    } catch {}
+    try {
+      const goals = _lsGet("trainingGoals", null);
+      if (Array.isArray(goals)) _state.trainingGoals = goals;
+    } catch {}
+    try {
+      const races = _lsGet("raceEvents", null);
+      if (Array.isArray(races) && races.length) {
+        _state.raceEvents = races;
+        _state.currentRace = Object.assign({}, _state.currentRace, races[0]);
+      }
+    } catch {}
+    try {
+      const str = _lsGet("strengthSetup", null);
+      if (str && typeof str === "object") _state.strengthSetup = Object.assign({}, _state.strengthSetup, str);
+    } catch {}
+    try {
+      const tpl = _lsGet("buildPlanTemplate", null);
+      if (tpl && typeof tpl === "object") {
+        _BP_DAYS.forEach(d => {
+          _state.schedule[d] = Array.isArray(tpl[d]) ? tpl[d].slice() : [];
+        });
+      }
+    } catch {}
+    _state.thresholds = _loadExistingThresholds();
+    _clearBuildPlanScreens();
+    _openBuildPlanOverlay();
+    goTo("bp-v2-5");
+    _renderSchedule();
+  }
+
   // Read the user's existing Training Zones & Strength Benchmarks
   // from localStorage.trainingZones and convert to the internal
   // _state.thresholds shape used by bp-v2-4. This lets the threshold
@@ -279,11 +324,29 @@
     _state.raceEvents = [];
     _state.currentRace = { name: "", category: "triathlon", type: "ironman", date: "", goal: "finish", priority: "A", leadIn: null };
     _state.leadInCount = 4;
-    _state.planDetails = { duration: "12", sessionLength: "60", daysPerWeek: "5" };
+    _state.planDetails = { duration: "12", sessionLength: "60", daysPerWeek: "5", startDate: _nextMondayISO() };
     _state.thresholds = {};
     _state.strengthSetup = { sessionsPerWeek: 3, split: "ppl", customMuscles: [], sessionLength: 45 };
     _state.longDays = { longRun: null, longRide: null };
     _state.schedule = { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] };
+    _state._editingPlanId = null;
+  }
+
+  // Default start = the Monday on or after today (ISO yyyy-mm-dd).
+  function _nextMondayISO() {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    const dow = d.getDay();
+    const daysToMon = (dow === 0 ? 1 : (8 - dow) % 7);
+    d.setDate(d.getDate() + daysToMon);
+    return d.toISOString().slice(0, 10);
+  }
+
+  // Update the start date from the bp-v2-5 date input.
+  function _setStartDate(val) {
+    if (val && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+      _state.planDetails.startDate = val;
+    }
   }
 
   // Wipe any `is-selected` / filled-in DOM state left over from a
@@ -659,6 +722,7 @@
     window.OnboardingV2 = {
       maybeStart,
       openBuildPlan,
+      openBuildPlanEdit,
       closeBuildPlan,
       openOnboarding,
       goTo,
@@ -700,6 +764,10 @@
       return;
     }
     if (currentScreen === "bp-v2-5") {
+      // When editing an existing plan we jump straight into bp-v2-5,
+      // so "Back" should dismiss the modal rather than walk backwards
+      // through screens the user never saw.
+      if (_state._editingPlanId) { _closeBuildPlanOverlay(); return; }
       goTo(_shouldShowLongDays() ? "bp-v2-4b" : (_state.selectedSports.includes("strength") ? "bp-v2-6" : "bp-v2-4"));
       return;
     }
@@ -1427,6 +1495,15 @@
     // Seed whenever the schedule is entirely empty (first entry to bp-5)
     const allEmpty = _BP_DAYS.every(d => _state.schedule[d].length === 0);
     if (allEmpty) _seedSchedule();
+    // Sync the start-date input with state, seeding the default if unset.
+    const dateInput = document.getElementById("bp-v2-start-date");
+    if (dateInput) {
+      if (!_state.planDetails.startDate) _state.planDetails.startDate = _nextMondayISO();
+      dateInput.value = _state.planDetails.startDate;
+      // Cap min to today so users can't backdate
+      const today = new Date(); today.setHours(0,0,0,0);
+      dateInput.min = today.toISOString().slice(0, 10);
+    }
     grid.innerHTML = _BP_DAYS.map(day => {
       const slots = _state.schedule[day] || [];
       const chipsHtml = slots.map((s, i) => {
@@ -2058,21 +2135,30 @@
     else if (dur === "custom") weeks = Math.max(1, Math.min(52, parseInt(_state.planDetails.customWeeks, 10) || 12));
     else weeks = Math.max(1, parseInt(dur, 10) || 12);
     const sessionLen = Math.max(15, parseInt(_state.planDetails.sessionLength, 10) || 60);
-    const planId = "ob-v2-" + Date.now();
+    // Reuse the planId we're editing so Training Inputs still groups
+    // the refreshed sessions under the same card. Otherwise mint new.
+    const planId = _state._editingPlanId || ("ob-v2-" + Date.now());
 
-    // Find the Monday on or after today
-    const start = new Date();
+    // Use the user-picked start date, falling back to next Monday.
+    const startIso = _state.planDetails.startDate || _nextMondayISO();
+    const start = new Date(startIso + "T00:00:00");
+    if (isNaN(start.getTime())) start.setTime(new Date().getTime());
     start.setHours(0, 0, 0, 0);
-    const dow = start.getDay(); // 0=Sun..6=Sat
-    const daysToMon = (dow === 0 ? 1 : (8 - dow) % 7);
-    start.setDate(start.getDate() + daysToMon);
 
     const existing = (() => {
       try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; }
       catch { return []; }
     })();
-    // Keep only array entries (defensive: previous bug wrote an object)
-    const existingArr = Array.isArray(existing) ? existing : [];
+    // Keep only array entries (defensive: previous bug wrote an object).
+    // If we're editing, drop all future sessions for this planId so the
+    // refreshed write replaces them cleanly.
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const existingArr = (Array.isArray(existing) ? existing : []).filter(e => {
+      if (!_state._editingPlanId) return true;
+      if (e.planId !== _state._editingPlanId) return true;
+      if (e.date < todayIso) return true; // keep past entries
+      return false;
+    });
 
     // Compute enriched codes per slot so materialized sessions get
     // richer names ("Interval Run", "Pull Day", "Long Ride") matching
@@ -2247,7 +2333,7 @@
       _toggleSport, _applySportSideEffects, _selectGym, _saveSportsAndContinue,
       _toggleGoal, _saveGoalsAndContinue, _renderGoalCards,
       _updateRaceTypes, _updateWeeksCallout, _selectRaceGoal, _selectLeadInPhase, _adjustLeadIn, _saveRaceAndContinue,
-      _selectPlanOption, _setCustomDuration, _adjustDaysPerWeek, _saveNoraceAndContinue,
+      _selectPlanOption, _setCustomDuration, _adjustDaysPerWeek, _setStartDate, _saveNoraceAndContinue,
       _renderThresholdSections, _toggleTestMe, _changeThresholdMethod, _saveThresholdsAndContinue, _testMeForEverythingAndContinue,
       _adjustStrengthCount, _applyStrengthCountSideEffects, _selectSplit, _toggleMuscle,
       _renderCustomDayList, _toggleMuscleForDay,
