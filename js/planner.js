@@ -3467,21 +3467,52 @@ function renderNextRaceBanner() {
   const daysAway = Math.ceil((new Date(race.date + "T00:00:00") - new Date()) / 86400000);
   const cfg = RACE_CONFIGS[race.type] || {};
   const iconHtml = (typeof ICONS !== "undefined" && ICONS.flag) ? ICONS.flag : "";
-  const extraBadge = upcoming.length > 1
-    ? `<span class="next-race-banner-extra">+${upcoming.length - 1} more</span>`
+  const extras = upcoming.slice(1);
+  // The "+N more" badge now expands an inline list below the banner
+  // showing every additional upcoming race, each clickable to open
+  // its edit modal. stopPropagation prevents the parent banner's
+  // onclick (which jumps to the Training tab) from firing.
+  const extraBadge = extras.length > 0
+    ? `<span class="next-race-banner-extra" onclick="event.stopPropagation();toggleNextRaceExtras()">+${extras.length} more</span>`
     : "";
   const countdownLabel = daysAway === 0 ? "Race day" : daysAway === 1 ? "1 day to go" : `${daysAway} days to go`;
+
+  const extrasHtml = extras.map(r => {
+    const rcfg = RACE_CONFIGS[r.type] || {};
+    const rDays = Math.ceil((new Date(r.date + "T00:00:00") - new Date()) / 86400000);
+    const rLabel = rDays === 0 ? "Race day" : rDays === 1 ? "1 day" : `${rDays} days`;
+    const rPriority = (r.priority || "A").toUpperCase();
+    return `
+      <div class="next-race-banner-extra-row" onclick="event.stopPropagation();editEvent('${r.id}')">
+        <span class="next-race-extra-priority priority-${rPriority.toLowerCase()}">${rPriority}</span>
+        <div class="next-race-extra-text">
+          <div class="next-race-extra-name">${_escapeHtml(r.name || rcfg.label || r.type)}</div>
+          <div class="next-race-extra-meta">${_escapeHtml(rcfg.label || r.type)} · ${formatDisplayDate(r.date)}</div>
+        </div>
+        <span class="next-race-extra-days">${rLabel}</span>
+      </div>`;
+  }).join("");
+
   container.innerHTML = `
-    <div class="next-race-banner" onclick="showTab('training');toggleSection('section-build-plan',true)">
-      <span class="next-race-banner-icon">${iconHtml}</span>
-      <div class="next-race-banner-text">
-        <div class="next-race-banner-name">${_escapeHtml(race.name)}</div>
-        <div class="next-race-banner-meta">${_escapeHtml(cfg.label || race.type)} · ${formatDisplayDate(race.date)}</div>
+    <div class="next-race-banner-wrap">
+      <div class="next-race-banner" onclick="showTab('training');toggleSection('section-build-plan',true)">
+        <span class="next-race-banner-icon">${iconHtml}</span>
+        <div class="next-race-banner-text">
+          <div class="next-race-banner-name">${_escapeHtml(race.name)}</div>
+          <div class="next-race-banner-meta">${_escapeHtml(cfg.label || race.type)} · ${formatDisplayDate(race.date)}</div>
+        </div>
+        <div class="next-race-banner-countdown">${countdownLabel}</div>
+        ${extraBadge}
       </div>
-      <div class="next-race-banner-countdown">${countdownLabel}</div>
-      ${extraBadge}
+      ${extras.length > 0 ? `<div class="next-race-banner-extras" id="next-race-banner-extras" style="display:none">${extrasHtml}</div>` : ""}
     </div>
   `;
+}
+
+function toggleNextRaceExtras() {
+  const el = document.getElementById("next-race-banner-extras");
+  if (!el) return;
+  el.style.display = el.style.display === "none" ? "" : "none";
 }
 
 function renderRaceEvents() {

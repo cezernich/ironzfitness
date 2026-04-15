@@ -9017,7 +9017,75 @@ button:active {
   color: var(--color-text-muted);
   background: rgba(255,255,255,0.06);
   border-radius: 999px;
+  padding: 3px 10px;
+  flex-shrink: 0;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.12s, border-color 0.12s;
+}
+.next-race-banner-extra:hover {
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.25);
+}
+/* Inline expandable list shown by toggleNextRaceExtras */
+.next-race-banner-extras {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.next-race-banner-extra-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s;
+}
+.next-race-banner-extra-row:hover {
+  transform: translateY(-1px);
+  border-color: var(--color-accent);
+}
+.next-race-extra-priority {
+  font-size: 0.7rem;
+  font-weight: 800;
   padding: 3px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+.next-race-extra-priority.priority-a {
+  background: rgba(230, 57, 70, 0.14);
+  color: #e63946;
+}
+.next-race-extra-priority.priority-b {
+  background: rgba(100, 116, 139, 0.14);
+  color: var(--color-text-muted);
+}
+.next-race-extra-text {
+  flex: 1;
+  min-width: 0;
+}
+.next-race-extra-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.next-race-extra-meta {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  margin-top: 1px;
+}
+.next-race-extra-days {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-text);
   flex-shrink: 0;
 }
 @media (max-width: 440px) {
