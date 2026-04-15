@@ -2176,8 +2176,16 @@ function submitSurveyPlan() {
   events.push(race);
   saveEvents(events);
 
-  const newEntries   = generateTrainingPlan(race);
-  const existingPlan = loadTrainingPlan().filter(e => e.raceId !== race.id);
+  // Build a multi-race calendar from the user's full race list so
+  // B races get a micro-taper window instead of being ignored or
+  // re-periodized as a separate plan. The A-race (usually the one
+  // just added for a new user; the later race for existing users
+  // with multiple entries) drives the arc.
+  const raceCalendar = (typeof prepareRaceCalendar === "function")
+    ? prepareRaceCalendar(events)
+    : { aRace: race, bRaces: [], all: [race] };
+  const newEntries   = generateTrainingPlan(raceCalendar);
+  const existingPlan = loadTrainingPlan().filter(e => e.raceId !== (raceCalendar.aRace && raceCalendar.aRace.id));
   saveTrainingPlanData([...existingPlan, ...newEntries]);
 
   // Handle gym/strength toggle based on survey answer

@@ -2295,13 +2295,192 @@ function getRunPatternKey(race) {
 }
 
 /**
- * generateTrainingPlan(race)
- * Builds a day-by-day training schedule from (raceDate - totalWeeks) → raceDate.
+ * prepareRaceCalendar(raceEvents)
+ * Normalizes a list of race events into { aRace, bRaces, all } for
+ * multi-race plan generation. Enforces the one-A-race rule: if zero
+ * A races exist the earliest is promoted; if multiple A races exist
+ * all but the latest are demoted to B. B races that fall AFTER the
+ * A race date are dropped (not relevant to the A-race plan arc).
  *
- * @param {Object} race - { id, type, date, level, longDay?, runGoal?, returningFromInjury? }
- * @returns {Array} plan entries: { date, raceId, phase, weekNumber, discipline, load, sessionName, details }
+ * @param {Array} raceEvents - race objects from localStorage.events / raceEvents
+ * @returns {{aRace: Object|null, bRaces: Array, all: Array}}
  */
-function generateTrainingPlan(race) {
+function prepareRaceCalendar(raceEvents) {
+  const list = Array.isArray(raceEvents) ? raceEvents.slice() : [];
+  if (!list.length) return { aRace: null, bRaces: [], all: [] };
+  // Sort by date ascending
+  list.sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+  // Normalize priority strings
+  list.forEach(r => { r.priority = String(r.priority || "A").toUpperCase() === "B" ? "B" : "A"; });
+  // Enforce exactly one A race
+  const aRaces = list.filter(r => r.priority === "A");
+  if (aRaces.length === 0) {
+    list[0].priority = "A";
+  } else if (aRaces.length > 1) {
+    // Keep only the LAST A race (user's biggest goal, furthest out)
+    aRaces.slice(0, -1).forEach(r => { r.priority = "B"; });
+  }
+  const aRace = list.find(r => r.priority === "A");
+  // Drop B races that fall after the A race — they belong to a
+  // different training block and shouldn't influence this arc.
+  const relevant = list.filter(r =>
+    r.priority === "A" || String(r.date) <= String(aRace.date)
+  );
+  return {
+    aRace,
+    bRaces: relevant.filter(r => r.priority === "B"),
+    all: relevant,
+  };
+}
+
+/**
+ * insertBRaceWindow(sessions, bRace, aRace)
+ * Applies a micro-taper + race-day + recovery window around each
+ * B race date, without disrupting the A race's discipline balance:
+ *
+ *   • 3 days before: reduce volume, drop long sessions
+ *   • Race day: replace with an easy shakeout (or leave the B race
+ *     itself untouched if the calendar already has a race event)
+ *   • 3 days after: easy recovery for all disciplines
+ *
+ * Critically, disciplines OTHER than the B race's discipline are NOT
+ * dropped during the window — a half-marathon B race during Ironman
+ * training keeps swim+bike easy, never skipped. Sessions outside the
+ * window are returned unchanged.
+ *
+ * @param {Array} sessions - mutable session array (modified in place)
+ * @param {Object} bRace - race event with .date, .category, .type
+ * @param {Object} aRace - the anchor A race (for context, unused directly)
+ * @returns {Array} the same session array with taper/recovery applied
+ */
+function insertBRaceWindow(sessions, bRace, aRace) {
+  if (!bRace || !bRace.date || !Array.isArray(sessions)) return sessions;
+  const bDateMs = new Date(bRace.date + "T00:00:00").getTime();
+  const TAPER_DAYS = 3;
+  const RECOVER_DAYS = 3;
+  const taperStartMs = bDateMs - TAPER_DAYS * 86400000;
+  const recoveryEndMs = bDateMs + RECOVER_DAYS * 86400000;
+
+  // Map race category → discipline code used by calendar sessions
+  const CAT_TO_DISC = {
+    running: "run", run: "run",
+    cycling: "bike", bike: "bike",
+    swimming: "swim", swim: "swim",
+    triathlon: "run", // tri B-race primary effort is the run leg
+    hyrox: "run",
+    rowing: "row",
+  };
+  const bDisc = CAT_TO_DISC[String(bRace.category || "").toLowerCase()]
+    || CAT_TO_DISC[String(bRace.type || "").toLowerCase()]
+    || "run";
+
+  sessions.forEach(s => {
+    if (!s || !s.date) return;
+    const sMs = new Date(s.date + "T00:00:00").getTime();
+    if (isNaN(sMs)) return;
+    if (sMs < taperStartMs || sMs > recoveryEndMs) return;
+
+    const isRaceDay = sMs === bDateMs;
+    const isPreRace = sMs >= taperStartMs && sMs < bDateMs;
+    const isPostRace = sMs > bDateMs && sMs <= recoveryEndMs;
+
+    // Tag every affected session so the calendar can show a B-race
+    // banner and the plan-save logic can differentiate these from
+    // the A-race arc.
+    s.bRaceWindow = true;
+    s.bRaceId = bRace.id || null;
+
+    if (isRaceDay) {
+      s.discipline = bDisc;
+      s.type = bRace.category === "triathlon" ? "triathlon"
+             : bDisc === "bike" ? "cycling"
+             : bDisc === "swim" ? "swimming"
+             : "running";
+      s.sessionName = bRace.name || (bRace.type ? bRace.type + " — Race Day" : "B Race");
+      s.load = "race";
+      s.isBRace = true;
+      s.notes = "B race — " + (bRace.name || bRace.type || "race day") + ". Race effort, then 3 easy recovery days.";
+      return;
+    }
+
+    if (isPreRace) {
+      const daysOut = Math.max(1, Math.round((bDateMs - sMs) / 86400000));
+      // If this session is the same discipline as the B race, shrink
+      // it aggressively and strip long/interval intent.
+      if (s.discipline === bDisc) {
+        s.load = "easy";
+        s.sessionName = "Pre-race Shakeout " + _bDiscName(bDisc);
+        if (typeof s.duration === "number") s.duration = Math.max(15, Math.round(s.duration * 0.5));
+        s.notes = "B race in " + daysOut + " day" + (daysOut === 1 ? "" : "s") + " — easy shakeout, no intensity.";
+      } else if (s.discipline !== "rest" && s.discipline !== "strength") {
+        // Other endurance disciplines: trim ~25% but keep the session.
+        s.load = "easy";
+        if (typeof s.duration === "number") s.duration = Math.max(20, Math.round(s.duration * 0.75));
+        s.notes = "B race taper window — keep it easy.";
+      } else if (s.discipline === "strength") {
+        // No heavy lifting in the 72 hours before a race.
+        s.sessionName = "Mobility / Light Lift";
+        s.load = "easy";
+        if (typeof s.duration === "number") s.duration = Math.max(20, Math.round(s.duration * 0.6));
+        s.notes = "B race taper — keep lifting light, no PRs.";
+      }
+      return;
+    }
+
+    if (isPostRace) {
+      const daysBack = Math.max(1, Math.round((sMs - bDateMs) / 86400000));
+      if (s.discipline === bDisc) {
+        s.load = "easy";
+        s.sessionName = "Recovery " + _bDiscName(bDisc);
+        if (typeof s.duration === "number") s.duration = Math.min(30, s.duration);
+        s.notes = "Post-B-race recovery (day " + daysBack + " of 3). Easy effort.";
+      } else if (s.discipline !== "rest") {
+        s.load = "easy";
+        if (typeof s.duration === "number") s.duration = Math.max(20, Math.round(s.duration * 0.8));
+        s.notes = "Post-B-race recovery window — keep it easy.";
+      }
+      return;
+    }
+  });
+
+  return sessions;
+}
+
+function _bDiscName(disc) {
+  return disc === "run" ? "Run"
+       : disc === "bike" ? "Ride"
+       : disc === "swim" ? "Swim"
+       : disc === "row" ? "Row"
+       : "Session";
+}
+
+/**
+ * generateTrainingPlan(raceOrCalendar)
+ *
+ * Accepts either a single race object (back-compat, used by the
+ * legacy survey.js flow) or a prepared race calendar object from
+ * prepareRaceCalendar(). In either case the plan is built from the
+ * A race's perspective and B races are post-processed with
+ * insertBRaceWindow to apply micro-tapers without disrupting the
+ * A race's discipline balance.
+ *
+ * @param {Object} raceOrCalendar - a race event OR { aRace, bRaces, all }
+ * @returns {Array} plan entries, same shape as before
+ */
+function generateTrainingPlan(raceOrCalendar) {
+  // Dispatch: if the caller passed a race calendar, use the A race
+  // as the driver and apply B race windows after generation.
+  if (raceOrCalendar && raceOrCalendar.aRace && Array.isArray(raceOrCalendar.bRaces)) {
+    const calendar = raceOrCalendar;
+    const plan = _generateSingleRacePlan(calendar.aRace);
+    calendar.bRaces.forEach(bRace => insertBRaceWindow(plan, bRace, calendar.aRace));
+    return plan;
+  }
+  // Legacy path: single race object passed directly.
+  return _generateSingleRacePlan(raceOrCalendar);
+}
+
+function _generateSingleRacePlan(race) {
   const config = RACE_CONFIGS[race.type];
   if (!config) return [];
 

@@ -233,9 +233,66 @@
     _state.mode = "buildplan";
     _resetBuildPlanState();
     _state.thresholds = _loadExistingThresholds();
+    // Multi-race awareness: if the user already has an A race on the
+    // calendar, pre-select its disciplines in bp-v2-1 so a triathlete
+    // doesn't have to re-pick swim/bike/run every time they open Build
+    // Plan. The sport grid still lets them deselect or add more.
+    _preselectSportsFromARace();
     _clearBuildPlanScreens();
     _openBuildPlanOverlay();
     goTo("bp-v2-1");
+    // Render the sport grid selections AFTER the clear + goTo so we
+    // don't wipe our own preselection. Uses the same is-selected
+    // mechanism as the user manually tapping cards.
+    _applyPreselectedSports();
+  }
+
+  // Inspect localStorage.events for an upcoming A-priority race and,
+  // if the race category implies multi-discipline training (triathlon,
+  // duathlon), pre-select those sports in _state.selectedSports so the
+  // Build Plan starts from a reasonable baseline for that race.
+  function _preselectSportsFromARace() {
+    let events = [];
+    try { events = JSON.parse(localStorage.getItem("events") || "[]") || []; } catch {}
+    if (!Array.isArray(events) || events.length === 0) return;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const upcoming = events.filter(e => e && e.date >= todayStr);
+    const aRace = upcoming.find(e => String(e.priority || "A").toUpperCase() === "A");
+    if (!aRace) return;
+    const cat = String(aRace.category || aRace.type || "").toLowerCase();
+    // Triathlon A race → pre-select swim + bike + run
+    if (/(triathlon|ironman|olympic|sprint)/.test(cat)) {
+      _state.selectedSports = Array.from(new Set([..._state.selectedSports, "swim", "bike", "run"]));
+      return;
+    }
+    if (/(marathon|5k|10k|halfmarathon|ultra|running)/.test(cat)) {
+      _state.selectedSports = Array.from(new Set([..._state.selectedSports, "run"]));
+      return;
+    }
+    if (/(century|granfondo|stage|crit|cycling)/.test(cat)) {
+      _state.selectedSports = Array.from(new Set([..._state.selectedSports, "bike"]));
+      return;
+    }
+    if (/hyrox/.test(cat)) {
+      _state.selectedSports = Array.from(new Set([..._state.selectedSports, "run", "strength"]));
+      return;
+    }
+  }
+
+  // Paint the pre-selected sport cards so they show as is-selected
+  // on first render. Called after _clearBuildPlanScreens wipes state.
+  function _applyPreselectedSports() {
+    if (!Array.isArray(_state.selectedSports) || !_state.selectedSports.length) return;
+    _state.selectedSports.forEach(sport => {
+      const el = document.querySelector('#bp-v2-sport-grid [data-sport="' + sport + '"]');
+      if (el) el.classList.add("is-selected");
+    });
+    // Show the triathlon helper note if all three tri sports are selected
+    if (["swim", "bike", "run"].every(s => _state.selectedSports.includes(s))) {
+      const triNote = document.getElementById("bp-v2-tri-note");
+      if (triNote) triNote.style.display = "";
+    }
+    if (typeof _applySportSideEffects === "function") _applySportSideEffects();
   }
 
   // Edit entry point — jump straight to the Weekly Schedule step
@@ -2348,6 +2405,21 @@
           if (session) sessions.push(session);
         });
       });
+    }
+
+    // Multi-race awareness: apply a micro-taper window around any
+    // upcoming B races that fall inside this plan's window. Uses the
+    // shared insertBRaceWindow helper from planner.js so the Build
+    // Plan and the legacy survey flow agree on the taper math.
+    try {
+      const raceCalendar = (typeof prepareRaceCalendar === "function")
+        ? prepareRaceCalendar(_lsGet("events", []) || [])
+        : null;
+      if (raceCalendar && raceCalendar.bRaces.length && typeof insertBRaceWindow === "function") {
+        raceCalendar.bRaces.forEach(bRace => insertBRaceWindow(sessions, bRace, raceCalendar.aRace));
+      }
+    } catch (e) {
+      console.warn("[OnboardingV2] B race window pass failed", e);
     }
 
     const merged = existingArr.concat(sessions);

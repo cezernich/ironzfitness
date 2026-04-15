@@ -3232,12 +3232,15 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
             _ovflMoveItem(cardId, "scheduled", w.id, dateStr) +
             _ovflShareItem(w) +
             _ovflDeleteItem(`deleteScheduledWorkout('${w.id}','${dateStr}')`));
+          const _bRacePill = w.isBRace
+            ? ` <span class="b-race-pill b-race-pill--day">B RACE</span>`
+            : (w.bRaceWindow ? ` <span class="b-race-pill b-race-pill--window">B RACE WINDOW</span>` : "");
           html += `
-            <div class="session-card collapsible${_swIsComplete ? " session-card--completed is-collapsed" : ""}${_swUserAddedCls}" id="${cardId}">
+            <div class="session-card collapsible${_swIsComplete ? " session-card--completed is-collapsed" : ""}${_swUserAddedCls}${w.isBRace ? " session-card--b-race" : w.bRaceWindow ? " session-card--b-window" : ""}" id="${cardId}">
               <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
                 <span class="session-icon" style="color:${color}">${icon}</span>
                 <div class="session-meta">
-                  <div class="session-name">${w.sessionName}${_swDoneIndicator}</div>
+                  <div class="session-name">${w.sessionName}${_bRacePill}${_swDoneIndicator}</div>
                   <div class="session-phase">${({ run: "Running", bike: "Cycling", swim: "Swimming", brick: "Brick" })[w.discipline] || capitalize(w.discipline || "")}</div>
                 </div>
                 <div class="session-header-right">

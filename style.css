@@ -18415,3 +18415,28 @@ body.ob-v2-lock { overflow: hidden; }
 .c-med  { background: #f4a261; }
 .c-high { background: #e63946; }
 .c-end  { background: #6c5ce7; }
+
+/* ===== B Race markers ===== */
+.b-race-pill {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+  text-transform: uppercase;
+}
+.b-race-pill--day {
+  background: #e53e3e;
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(229,62,62,0.3);
+}
+.b-race-pill--window {
+  background: rgba(229,62,62,0.12);
+  color: #c53030;
+  border: 1px solid rgba(229,62,62,0.35);
+}
+.session-card--b-race { border-left: 3px solid #e53e3e; }
+.session-card--b-window { border-left: 3px solid rgba(229,62,62,0.4); }
