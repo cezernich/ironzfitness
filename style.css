@@ -7730,6 +7730,28 @@ button:active {
   color: #dc2626;
   border-color: #dc2626;
 }
+.hydration-bottle-star {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 1.05rem;
+  line-height: 1;
+  background: transparent;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.hydration-bottle-star:hover {
+  color: #f59e0b;
+  border-color: #f59e0b;
+}
+.hydration-bottle-star--active {
+  color: #f59e0b;
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+}
 .hydration-secondary-row {
   display: flex; justify-content: center; gap: 16px; margin-top: 6px;
 }
