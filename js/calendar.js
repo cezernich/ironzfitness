@@ -668,8 +668,73 @@ function toggleMovePanel(cardId) {
   }
 }
 
-function doMoveSession(cardId, sourceType, sourceId, _origDate) {
-  const newDate = document.getElementById(`movedate-${cardId}`)?.value;
+// ─── Move / Duplicate popup dialog ─────────────────────────────────────────
+//
+// Replaces the inline movepanel-${cardId} panel when the user picks
+// "Move / Duplicate" from a card's overflow menu. The inline panel was
+// easy to miss visually (it just expanded inside the collapsed card
+// body), so we now open a centered modal instead. The dialog reuses
+// the rating-modal-overlay convention (fixed, fade-in via .visible).
+
+function openMoveDialog(cardId, sourceType, sourceId, origDate) {
+  // Close any overflow menu that might still be open.
+  try { if (typeof closeOverflowMenu === "function") closeOverflowMenu(); } catch {}
+
+  let overlay = document.getElementById("move-session-modal-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "move-session-modal-overlay";
+    overlay.className = "move-session-modal-overlay";
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) closeMoveDialog();
+    });
+    document.body.appendChild(overlay);
+  }
+  const safeDate = origDate || getTodayString();
+  overlay.innerHTML = `
+    <div class="move-session-modal" role="dialog" aria-modal="true" aria-label="Move or duplicate session">
+      <div class="move-session-modal-title">Move or duplicate session</div>
+      <label class="move-session-modal-label" for="movedate-dialog">New date</label>
+      <input type="date" id="movedate-dialog" class="move-session-modal-date" value="${safeDate}" />
+      <div class="move-session-modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeMoveDialog()">Cancel</button>
+        <button type="button" class="btn-secondary" onclick="_doMoveFromDialog('${cardId}','${sourceType}','${sourceId}','${safeDate}')">Move</button>
+        <button type="button" class="btn-primary"   onclick="_doDuplicateFromDialog('${cardId}','${sourceType}','${sourceId}','${safeDate}')">Duplicate</button>
+      </div>
+    </div>
+  `;
+  // Force a reflow before adding .visible so the CSS transition runs.
+  void overlay.offsetWidth;
+  overlay.classList.add("visible");
+}
+
+function closeMoveDialog() {
+  const overlay = document.getElementById("move-session-modal-overlay");
+  if (!overlay) return;
+  overlay.classList.remove("visible");
+  // Match the 200ms fade-out before removing from the DOM.
+  setTimeout(() => { const el = document.getElementById("move-session-modal-overlay"); if (el) el.remove(); }, 220);
+}
+
+function _doMoveFromDialog(cardId, sourceType, sourceId, origDate) {
+  const newDate = document.getElementById("movedate-dialog")?.value;
+  if (!newDate) return;
+  doMoveSession(cardId, sourceType, sourceId, origDate, newDate);
+  closeMoveDialog();
+}
+
+function _doDuplicateFromDialog(cardId, sourceType, sourceId, origDate) {
+  const newDate = document.getElementById("movedate-dialog")?.value;
+  if (!newDate) return;
+  doDuplicateSession(cardId, sourceType, sourceId, origDate, newDate);
+  closeMoveDialog();
+}
+
+// Optional newDateOverride lets the move-session popup dialog pass its
+// own date input value without colliding with the inline panel's
+// `movedate-${cardId}` input id.
+function doMoveSession(cardId, sourceType, sourceId, _origDate, newDateOverride) {
+  const newDate = newDateOverride || document.getElementById(`movedate-${cardId}`)?.value;
   if (!newDate) return;
   if (sourceType === "logged") {
     let workouts = [];
@@ -687,8 +752,8 @@ function doMoveSession(cardId, sourceType, sourceId, _origDate) {
   if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
 }
 
-function doDuplicateSession(cardId, sourceType, sourceId, _origDate) {
-  const newDate = document.getElementById(`movedate-${cardId}`)?.value;
+function doDuplicateSession(cardId, sourceType, sourceId, _origDate, newDateOverride) {
+  const newDate = newDateOverride || document.getElementById(`movedate-${cardId}`)?.value;
   if (!newDate) return;
   if (sourceType === "logged") {
     let workouts = [];
@@ -756,7 +821,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
     const _cSessionName = w.circuit.name || "Circuit";
     const _cOverflow   = _buildOverflowMenu(cardId,
       _ovflEditItem(w.id) +
-      _ovflMoveItem(cardId) +
+      _ovflMoveItem(cardId, "logged", w.id, dateStr) +
       _ovflShareItem(w) +
       _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
 
@@ -866,7 +931,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
     const _restrictNote = isReduced ? `<div class="restriction-session-note" style="margin-bottom:8px">${ICONS.lightbulb} Reduce intensity and duration per your restriction</div>` : "";
     const _aiOverflow = _buildOverflowMenu(cardId,
       _ovflEditItem(w.id) +
-      _ovflMoveItem(cardId) +
+      _ovflMoveItem(cardId, "logged", w.id, dateStr) +
       _ovflShareItem(w) +
       _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
     return `
@@ -944,7 +1009,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
     const movePanel = buildSessionMovePanel(cardId, "logged", w.id, dateStr);
     const _exOverflow = _buildOverflowMenu(cardId,
       _ovflEditItem(w.id) +
-      _ovflMoveItem(cardId) +
+      _ovflMoveItem(cardId, "logged", w.id, dateStr) +
       _ovflShareItem(w) +
       _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
     return `
@@ -1495,8 +1560,8 @@ function _buildOverflowMenu(cardId, innerHtml) {
 function _ovflEditItem(workoutId) {
   return `<button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();openEditWorkout('${workoutId}')">Edit</button>`;
 }
-function _ovflMoveItem(cardId) {
-  return `<button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();toggleMovePanel('${cardId}')">Move / Duplicate</button>`;
+function _ovflMoveItem(cardId, sourceType, sourceId, origDate) {
+  return `<button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();openMoveDialog('${cardId}','${sourceType}','${sourceId}','${origDate}')">Move / Duplicate</button>`;
 }
 // Delete takes a raw onclick expression because callers vary between
 // deleteWorkout(id), deleteScheduledWorkout(id, dateStr), etc., and some
@@ -2913,7 +2978,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
           const _swEditItem = `<button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();openEditScheduledWorkout('${w.id}')">Edit</button>`;
           const _swOverflow = _buildOverflowMenu(cardId,
             _swEditItem +
-            _ovflMoveItem(cardId) +
+            _ovflMoveItem(cardId, "scheduled", w.id, dateStr) +
             _ovflShareItem(w) +
             _ovflDeleteItem(`deleteScheduledWorkout('${w.id}','${dateStr}')`));
           html += `
@@ -3101,7 +3166,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       const _swGenEditItem = `<button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();openEditScheduledWorkout('${w.id}')">Edit</button>`;
       const _swGenOverflow = _buildOverflowMenu(cardId,
         _swGenEditItem +
-        _ovflMoveItem(cardId) +
+        _ovflMoveItem(cardId, "scheduled", w.id, dateStr) +
         _ovflShareItem(w) +
         _ovflDeleteItem(`deleteScheduledWorkout('${w.id}','${dateStr}')`));
       html += `

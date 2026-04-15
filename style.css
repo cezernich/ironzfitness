@@ -9728,6 +9728,67 @@ button:active {
 }
 .ovflow-item--danger:hover { background: rgba(239, 68, 68, 0.12); }
 
+/* ── Move / Duplicate session popup ────────────────────────────────────── */
+.move-session-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  padding: 16px;
+}
+.move-session-modal-overlay.visible { opacity: 1; }
+
+.move-session-modal {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 24px;
+  max-width: 380px;
+  width: 100%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+  transform: translateY(16px);
+  transition: transform 0.2s ease;
+}
+.move-session-modal-overlay.visible .move-session-modal { transform: translateY(0); }
+
+.move-session-modal-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 14px;
+  color: var(--color-text);
+}
+.move-session-modal-label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.move-session-modal-date {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  margin-bottom: 18px;
+}
+.move-session-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.move-session-modal-actions button {
+  min-width: 90px;
+}
+
 .qe-cardio-details {
   font-size: 0.8rem;
   color: var(--color-text-muted);
