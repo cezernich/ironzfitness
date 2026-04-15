@@ -58,7 +58,36 @@ function getHydrationTarget() {
 
 function getBottleSize() {
   const settings = getHydrationSettings();
+  // Prefer the first named bottle when the user has set some up — that
+  // becomes the "default bottle" the progress display (N / target
+  // bottles) normalizes against. Fall back to the legacy bottleSize
+  // setting, then to 12oz.
+  const bottles = Array.isArray(settings.bottles) ? settings.bottles : [];
+  if (bottles.length && bottles[0].size) return bottles[0].size;
   return settings.bottleSize || 12;
+}
+
+/** Returns the list of user-defined named bottles. Empty if the user
+ *  hasn't set any up yet — in that case the UI falls back to the legacy
+ *  "+ My Bottle" button. */
+function getNamedBottles() {
+  const settings = getHydrationSettings();
+  return Array.isArray(settings.bottles) ? settings.bottles : [];
+}
+
+function saveNamedBottles(bottles) {
+  const settings = getHydrationSettings();
+  settings.bottles = bottles;
+  saveHydrationSettingsData(settings);
+}
+
+/** Log one named bottle by id — thin wrapper around logWaterOz that
+ *  keeps the call site on the hydration card simple. */
+function logNamedBottle(bottleId) {
+  const bottles = getNamedBottles();
+  const b = bottles.find(x => x.id === bottleId);
+  if (!b) return;
+  logWaterOz(parseFloat(b.size) || 0);
 }
 
 function isHydrationEnabled() {
@@ -342,9 +371,11 @@ function renderHydration() {
   if (targetEl) targetEl.textContent = bottlesNeeded;
   if (ozEl) ozEl.textContent = `${effectiveOz} / ${targetOz} oz`;
 
-  // My Bottle button label
-  const myBottleBtn = document.getElementById("hydration-mybottle-btn");
-  if (myBottleBtn) myBottleBtn.textContent = `+ My Bottle (${bottleSize}oz)`;
+  // My Bottle button(s). If the user has named bottles set up, replace
+  // the single "+ My Bottle" button with a row of named-bottle buttons
+  // so they can tap the exact bottle they just drank. Otherwise fall
+  // back to the legacy single button + bottleSize label.
+  _renderBottleButtons();
 
   // Undo button
   const undoBtn = document.getElementById("hydration-undo-btn");
@@ -432,6 +463,45 @@ function renderHydrationContext(breakdown) {
     el.style.display = "none";
     el.innerHTML = "";
   }
+}
+
+function _renderBottleButtons() {
+  const legacyBtn = document.getElementById("hydration-mybottle-btn");
+  if (!legacyBtn) return;
+
+  const bottles = getNamedBottles();
+  const bottleSize = getBottleSize();
+
+  // Find or create the container that holds named bottle buttons. It
+  // sits in place of the legacy button; when there are no named bottles
+  // we hide it and show the legacy button instead.
+  let container = document.getElementById("hydration-bottle-buttons");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "hydration-bottle-buttons";
+    container.className = "hydration-bottle-buttons";
+    legacyBtn.insertAdjacentElement("afterend", container);
+  }
+
+  if (!bottles.length) {
+    // Legacy mode — keep the single "+ My Bottle" button and hide the
+    // multi-bottle container.
+    legacyBtn.style.display = "";
+    legacyBtn.textContent = `+ My Bottle (${bottleSize}oz)`;
+    container.style.display = "none";
+    container.innerHTML = "";
+    return;
+  }
+
+  // Multi-bottle mode — hide the legacy button, render a grid of named
+  // bottles. Each button logs its bottle's oz via logNamedBottle.
+  legacyBtn.style.display = "none";
+  container.style.display = "";
+  container.innerHTML = bottles.map(b => {
+    const name = escHtml(b.name || "Bottle");
+    const size = parseFloat(b.size) || 0;
+    return `<button class="btn-primary hydration-bottle-btn" onclick="logNamedBottle('${escHtml(b.id)}')">+ ${name} (${size}oz)</button>`;
+  }).join("");
 }
 
 function renderBeveragePicker() {
@@ -546,6 +616,48 @@ function openHydrationSettings() {
   const targetEl = document.getElementById("hydration-daily-target-oz");
   if (bottleSizeEl) bottleSizeEl.value = settings.bottleSize || 12;
   if (targetEl) targetEl.value = settings.dailyTargetOz || getBaseHydrationTarget();
+  _renderBottleEditor();
+}
+
+// ── Bottle editor (settings modal) ───────────────────────────────────
+// Lets the user set up multiple named bottles (e.g. "Hydroflask 32oz",
+// "Gym bottle 20oz") so the hydration card shows a button per bottle
+// instead of one generic "+ My Bottle" shortcut.
+
+function _renderBottleEditor() {
+  const list = document.getElementById("hydration-bottles-list");
+  if (!list) return;
+  const bottles = getNamedBottles();
+  if (!bottles.length) {
+    list.innerHTML = `<p class="hint" style="margin:0 0 8px">No custom bottles yet. Add one below — each bottle becomes a one-tap log button on the hydration card.</p>`;
+    return;
+  }
+  list.innerHTML = bottles.map(b => {
+    const id = escHtml(b.id);
+    return `
+      <div class="hydration-bottle-row" data-bottle-id="${id}">
+        <input type="text" class="hydration-bottle-name" value="${escHtml(b.name || "")}" placeholder="Name (e.g. Hydroflask)" />
+        <input type="number" class="hydration-bottle-size" value="${parseFloat(b.size) || ""}" min="1" max="128" placeholder="oz" />
+        <button class="hydration-bottle-delete" title="Remove" onclick="_removeBottle('${id}')">&times;</button>
+      </div>`;
+  }).join("");
+}
+
+function _addBottle() {
+  const bottles = getNamedBottles().slice();
+  bottles.push({
+    id: "b-" + Date.now().toString(36),
+    name: "",
+    size: 20,
+  });
+  saveNamedBottles(bottles);
+  _renderBottleEditor();
+}
+
+function _removeBottle(id) {
+  const bottles = getNamedBottles().filter(b => b.id !== id);
+  saveNamedBottles(bottles);
+  _renderBottleEditor();
 }
 
 function closeHydrationSettings() {
@@ -559,7 +671,20 @@ function saveHydrationSettings() {
   const bottleSize = parseInt(document.getElementById("hydration-bottle-size")?.value || "12");
   const dailyTargetOz = parseInt(document.getElementById("hydration-daily-target-oz")?.value || "96");
 
-  saveHydrationSettingsData({ bottleSize, dailyTargetOz });
+  // Harvest the bottle editor rows — each row carries its id and the
+  // latest name/size the user typed. Empty or zero-sized entries are
+  // dropped so the user can delete a bottle by clearing its fields.
+  const rows = Array.from(document.querySelectorAll(".hydration-bottle-row"));
+  const bottles = rows.map(row => {
+    const id = row.getAttribute("data-bottle-id");
+    const name = row.querySelector(".hydration-bottle-name")?.value.trim() || "";
+    const size = parseFloat(row.querySelector(".hydration-bottle-size")?.value) || 0;
+    return { id, name, size };
+  }).filter(b => b.size > 0 && b.name);
+
+  // Merge with existing settings so we don't blow away other keys.
+  const prev = getHydrationSettings();
+  saveHydrationSettingsData(Object.assign({}, prev, { bottleSize, dailyTargetOz, bottles }));
   closeHydrationSettings();
   renderHydration();
 }
