@@ -158,7 +158,32 @@ async function handleNewPassword() {
     setAuthMsg('auth-newpw-msg', error.message, true);
   } else {
     setAuthMsg('auth-newpw-msg', 'Password updated! Logging you in…', false);
-    setTimeout(() => {
+    // Clear the #access_token=...&type=recovery fragment so a refresh
+    // doesn't re-trigger the recovery flow and bounce the user back to
+    // this panel.
+    try {
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      } else {
+        window.location.hash = "";
+      }
+    } catch {}
+    setTimeout(async () => {
+      // Now run the same session-init sequence authBoot would have run
+      // if this had been a normal login: sync caches, pull user data,
+      // then show the main app. Skipping this leaves the app with a
+      // valid session but none of the per-user localStorage populated.
+      try {
+        const { data } = await window.supabaseClient.auth.getSession();
+        const session = data?.session;
+        if (session) {
+          try { DB.handleUserContext(session.user.id); } catch (e) { console.warn('Auth: handleUserContext error', e); }
+          try { await ensureProfile(session.user); } catch (e) { console.warn('Auth: ensureProfile error', e); }
+          try { await DB.migrateLocalStorage(); } catch (e) { console.warn('Auth: migration error', e); }
+          try { await DB.refreshAllKeys(); } catch (e) { console.warn('Auth: refreshAllKeys error', e); }
+          try { await DB.refreshAllTables(); } catch (e) { console.warn('Auth: refreshAllTables error', e); }
+        }
+      } catch (e) { console.warn('Auth: post-reset session-init failed', e); }
       hideAuthScreen();
       if (!window._appInitialized) {
         window._appInitialized = true;
@@ -308,6 +333,28 @@ async function ensureProfile(user) {
 async function authBoot() {
   console.log('[Auth] authBoot: starting');
 
+  // Password-recovery detection — must run BEFORE getSession().
+  //
+  // Supabase redirects the reset-password email link to our app with a
+  // fragment like `#access_token=...&refresh_token=...&type=recovery`.
+  // The JS client auto-processes this on createClient() (default
+  // detectSessionInUrl: true), creates a live session, and fires a
+  // PASSWORD_RECOVERY event — but our onAuthStateChange listener is
+  // attached much later in authBoot, so that event is lost to nobody.
+  // Result: authBoot's getSession() just sees a valid session and
+  // drops the user into the main app via init(), never prompting for
+  // a new password. They stay logged in on this device but don't know
+  // their password, so the moment the refresh token expires or they
+  // sign out they're locked out.
+  //
+  // We sniff `type=recovery` from the fragment ourselves and force the
+  // new-password panel even if getSession() shows a live session. The
+  // recovery session remains valid long enough for updateUser() to
+  // accept the new password — we just don't let the user into the
+  // main app until they've set one.
+  const _recoveryHashRe = /[#&]type=recovery\b/;
+  const isRecoveryFlow = _recoveryHashRe.test(window.location.hash || "");
+
   // Safety net: if getSession() stalls, fall back to login screen after 3s
   // so the user is never stuck staring at the splash indefinitely.
   const splashTimeout = setTimeout(() => {
@@ -334,6 +381,28 @@ async function authBoot() {
     clearTimeout(splashTimeout);
     hideSplashScreen();
     showAuthScreen();
+    return;
+  }
+
+  // If the URL says this is a password-recovery landing, force the
+  // new-password panel before doing anything else. We still register
+  // onAuthStateChange below so handleNewPassword's init() call picks
+  // up normally once the new password is saved.
+  if (isRecoveryFlow) {
+    console.log('[Auth] password-recovery flow detected, forcing new-password panel');
+    clearTimeout(splashTimeout);
+    hideSplashScreen();
+    showNewPasswordPanel();
+    window.supabaseClient.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        if (typeof window.Sentry !== 'undefined' && window.Sentry.setUser) {
+          try { window.Sentry.setUser(null); } catch {}
+        }
+        try { DB.clearLocalUserData(); } catch (e) { console.warn('Auth: clearLocalUserData error', e); }
+        window._appInitialized = false;
+        showAuthScreen();
+      }
+    });
     return;
   }
 
