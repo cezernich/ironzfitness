@@ -258,34 +258,14 @@
     schedule.push(entry);
     _writeSchedule(schedule);
 
-    // ALSO write a mirror record into localStorage.workouts so the session
-    // counts in Workout History, Total Workouts, This Week, and streaks.
-    // Flagged isCompletion:true so:
-    //   - loadCompletedSessions() dedup picks it up via the standaloneCompletions
-    //     path (same logic used for live-tracker and day-detail completions)
-    //   - filterWorkoutHistory() dedup includes it as a standalone entry
-    //   - getDataForDate()'s loggedWorkouts filter (!w.isCompletion) skips it,
-    //     so it doesn't double-render alongside the scheduledWorkouts card
-    try {
-      const workouts = JSON.parse(localStorage.getItem("workouts") || "[]");
-      workouts.unshift({
-        id: entry.id + "-mirror",
-        date: entry.date,
-        type: entry.type,
-        name: entry.sessionName,
-        notes: entry.notes || "",
-        duration: entry.duration,
-        aiSession: entry.aiSession,
-        phases: entry.phases,
-        source: "manual",
-        isCompletion: true,
-        linkedScheduleId: entry.id,
-      });
-      localStorage.setItem("workouts", JSON.stringify(workouts));
-      if (typeof DB !== "undefined" && DB.syncWorkouts) DB.syncWorkouts();
-    } catch (e) {
-      console.warn("[IronZ] Running session mirror-write to workouts failed:", e.message);
-    }
+    // NOTE: previously this flow also mirror-wrote a `workouts` record with
+    // isCompletion:true so newly-added sessions would appear in workout
+    // history + stats. That was wrong — Add Running Session is a *planning*
+    // flow (stores to workoutSchedule), so the mirror pre-marked unfinished
+    // plans as completed: calendar cells turned green and stats counted
+    // plans as done. The correct completion path is the normal Mark as
+    // Complete / live-tracker flow, which writes its own workouts record
+    // when the session is actually finished.
 
     // Refresh the calendar so the new entry shows immediately.
     try {
