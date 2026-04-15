@@ -814,9 +814,8 @@ function buildStatsCompletedRaces(events) {
         <h2>Race Trophy Case <span class="trophy-count">${past.length}</span></h2>
         <span class="card-chevron">▾</span>
       </div>
-      <div class="card-body">
-        <div style="margin-bottom:14px">${addBtn}</div>
-        <p class="hint" style="margin:0 0 10px">Click any trophy to edit or delete it.</p>
+      <div class="card-body" style="gap:12px">
+        <div>${addBtn}</div>
         <div class="trophy-case-grid-v2">${cards}</div>
       </div>
     </section>`;
