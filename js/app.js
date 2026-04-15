@@ -98,6 +98,35 @@ function openBuildPlanTab(tabName) {
   if (wrapper) wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// Opens the legacy custom-plan builder (the "Create Your Own" tab
+// inside #section-build-plan) as a focused surface. The legacy
+// section is hidden by default in favor of the v2 Build Plan overlay,
+// but we want this one tab reachable from the new "Create Your Own
+// Plan" card on the Training tab.
+function openCustomPlanBuilder() {
+  const wrapper = document.getElementById('section-build-plan');
+  if (!wrapper) return;
+  // Un-hide the whole section and expand it
+  wrapper.style.display = '';
+  wrapper.classList.remove('is-collapsed');
+  // Hide the tab selector + race/gym panels so only custom shows
+  const tabs = wrapper.querySelector('.build-plan-tabs');
+  if (tabs) tabs.style.display = 'none';
+  const racePanel = document.getElementById('bp-panel-race');
+  if (racePanel) racePanel.style.display = 'none';
+  const gymPanel = document.getElementById('bp-panel-gym');
+  if (gymPanel) gymPanel.style.display = 'none';
+  const customPanel = document.getElementById('bp-panel-custom');
+  if (customPanel) customPanel.style.display = '';
+  // Render the custom plan builder (initCustomPlan sets defaults,
+  // renderCustomPlanBuilder paints the weekly grid)
+  try {
+    if (typeof initCustomPlan === 'function') initCustomPlan();
+    if (typeof renderCustomPlanBuilder === 'function') renderCustomPlanBuilder();
+  } catch (e) { console.warn('[IronZ] custom plan render failed', e); }
+  wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 /* =====================================================================
    TAB NAVIGATION
    ===================================================================== */

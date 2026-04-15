@@ -16717,6 +16717,63 @@ body.ob-v2-lock { overflow: hidden; }
 }
 .ob-v2-form-group input:focus,
 .ob-v2-form-group select:focus { border-color: #E8530E; }
+/* Inline min/sec input rows (e.g. CSS swim test) */
+.ob-v2-combo-row {
+  display: flex;
+  gap: 10px;
+}
+.ob-v2-combo-part {
+  position: relative;
+  flex: 1;
+}
+.ob-v2-combo-part input {
+  padding-right: 44px;
+}
+.ob-v2-combo-suffix {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  font-weight: 600;
+  color: #888;
+  pointer-events: none;
+}
+
+/* Timeline "You are here" marker — bp-v2-7 preview */
+.ob-v2-timeline-bar {
+  position: relative;
+}
+.ob-v2-timeline-marker {
+  position: absolute;
+  top: -2px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 2;
+}
+.ob-v2-timeline-marker-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #1A1A1A;
+  border: 3px solid #FFF;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+  margin: 0 auto;
+}
+.ob-v2-timeline-marker-label {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
+  color: #1A1A1A;
+  background: #FFF;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid #E0E0E0;
+}
 .ob-v2-form-row {
   display: flex;
   gap: 10px;
@@ -17395,26 +17452,100 @@ body.ob-v2-lock { overflow: hidden; }
 .ob-v2-mini-wk.ob-v2-mini-hyrox    { border-left-color: #C62828; }
 .ob-v2-mini-wk.ob-v2-mini-rest     { border-left-color: #DDD; color: #AAA; font-style: italic; }
 
-/* Build My Plan CTA (Training tab entry point) */
-.build-plan-cta {
-  margin: 0 0 16px;
-  padding: 14px 16px;
-  background: linear-gradient(135deg, rgba(255,107,53,0.12), rgba(255,107,53,0.04));
-  border: 1px solid rgba(255,107,53,0.35);
+/* Build My Plan + Create Your Own Plan entry cards (Training tab) */
+.bp-cta-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 0 20px;
+}
+.bp-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 16px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s;
+  border: 1px solid transparent;
+}
+.bp-card:hover { transform: translateY(-1px); }
+.bp-card:active { transform: translateY(0); }
+.bp-card--primary {
+  background: linear-gradient(135deg, #1a1d24 0%, #14161c 100%);
+  color: #fff;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.04);
+}
+.bp-card--primary:hover { box-shadow: 0 10px 32px rgba(232,83,14,0.25), 0 0 0 1px rgba(232,83,14,0.35); }
+.bp-card--secondary {
+  background: #fff;
+  color: #1A1A1A;
+  border: 2px dashed #D6D0C4;
+}
+.bp-card--secondary:hover { border-color: #E8530E; background: #FFF9F5; }
+.bp-card-icon {
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
   border-radius: 12px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.build-plan-cta-btn {
-  font-size: 1rem;
-  font-weight: 600;
-  padding: 12px 28px;
-  min-width: 200px;
+.bp-card-icon svg { width: 26px; height: 26px; }
+.bp-card-icon--bolt {
+  background: linear-gradient(135deg, #F26423, #E8530E);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(232,83,14,0.35);
 }
-.build-plan-cta-hint {
-  margin: 8px 0 0;
-  color: var(--muted, #9aa0a6);
-  font-size: 0.85rem;
+.bp-card-icon--plus {
+  background: #F4EFE6;
+  color: #6b7280;
 }
+.bp-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.bp-card-badge {
+  display: inline-block;
+  align-self: flex-start;
+  background: rgba(232,83,14,0.15);
+  color: #FF8C5A;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+.bp-card-title {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.bp-card--primary .bp-card-title { color: #fff; }
+.bp-card-subtitle {
+  font-size: 13px;
+  line-height: 1.35;
+  color: #9ca3af;
+}
+.bp-card--secondary .bp-card-subtitle { color: #6b7280; }
+.bp-card-chevron {
+  flex-shrink: 0;
+  font-size: 28px;
+  font-weight: 300;
+  color: #E8530E;
+  padding-left: 6px;
+  line-height: 1;
+}
+.bp-card--secondary .bp-card-chevron { color: #9ca3af; }
 
 /* ===== BUILD PLAN MODAL OVERLAY =====
    Popup dialog variant of .ob-v2-root. Instead of filling the
