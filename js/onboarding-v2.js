@@ -222,12 +222,47 @@
   // Standalone Build Plan entry point — always starts fresh.
   // Resets in-flight state and UI selections on every open so the
   // user can rebuild without seeing leftover choices from last time.
+  // Thresholds ARE pre-filled from the user's existing Training
+  // Zones & Strength Benchmarks so they don't have to re-type them.
   function openBuildPlan() {
     _state.mode = "buildplan";
     _resetBuildPlanState();
+    _state.thresholds = _loadExistingThresholds();
     _clearBuildPlanScreens();
     _openBuildPlanOverlay();
     goTo("bp-v2-1");
+  }
+
+  // Read the user's existing Training Zones & Strength Benchmarks
+  // from localStorage.trainingZones and convert to the internal
+  // _state.thresholds shape used by bp-v2-4. This lets the threshold
+  // screen pre-fill inputs and pre-select the appropriate method,
+  // so users who've already set their numbers just keep them.
+  function _loadExistingThresholds() {
+    let zones = {};
+    try { zones = JSON.parse(localStorage.getItem("trainingZones") || "{}") || {}; }
+    catch { zones = {}; }
+    const result = {};
+    if (zones.running) {
+      const tp = zones.running.thresholdPace || zones.running.threshold_pace;
+      if (tp) result.run = { mode: "known", method: "pace", threshPace: String(tp) };
+    }
+    if (zones.biking && zones.biking.ftp) {
+      result.bike = { mode: "known", method: "ftp", ftp: String(zones.biking.ftp) };
+    }
+    if (zones.swimming && (zones.swimming.css || zones.swimming.cssPace)) {
+      const css = zones.swimming.cssPace || zones.swimming.css;
+      result.swim = { mode: "known", method: "pace", cssPace: String(css) };
+    }
+    if (zones.strength) {
+      const s = zones.strength;
+      const out = { mode: "known" };
+      if (s.squat && s.squat.weight)    out.squat = String(s.squat.weight);
+      if (s.bench && s.bench.weight)    out.bench = String(s.bench.weight);
+      if (s.deadlift && s.deadlift.weight) out.dead = String(s.deadlift.weight);
+      if (out.squat || out.bench || out.dead) result.strength = out;
+    }
+    return result;
   }
 
   // Reset every Build Plan state field back to its default.
@@ -579,6 +614,7 @@
         // hasOnboarded=1 at the end of bp-done. Start with a fresh
         // Build Plan state so first-time users see a blank slate.
         _resetBuildPlanState();
+        _state.thresholds = _loadExistingThresholds();
         _clearBuildPlanScreens();
         _openBuildPlanOverlay();
         goTo("bp-v2-1");
@@ -809,10 +845,14 @@
   const THRESHOLD_METHODS = {
     swim: [
       { id: "css-test", label: "CSS Test (400m + 200m)", fields: [
-        { id: "css400min", label: "400m time — min", placeholder: "6",  inputmode: "numeric" },
-        { id: "css400sec", label: "400m time — sec", placeholder: "30", inputmode: "numeric" },
-        { id: "css200min", label: "200m time — min", placeholder: "3",  inputmode: "numeric" },
-        { id: "css200sec", label: "200m time — sec", placeholder: "5",  inputmode: "numeric" },
+        { id: "css400", label: "400m time", combo: true, parts: [
+          { id: "css400min", placeholder: "6",  suffix: "min" },
+          { id: "css400sec", placeholder: "30", suffix: "sec" },
+        ]},
+        { id: "css200", label: "200m time", combo: true, parts: [
+          { id: "css200min", placeholder: "3", suffix: "min" },
+          { id: "css200sec", placeholder: "5", suffix: "sec" },
+        ]},
       ]},
       { id: "pace", label: "I know my CSS pace", fields: [
         { id: "cssPace", label: "CSS pace (sec / 100m)", placeholder: "85", inputmode: "numeric" },
@@ -840,7 +880,13 @@
         { id: "threshPace", label: "Threshold pace (min/mile)", placeholder: "7:30" },
       ]},
       { id: "race", label: "Recent race result", fields: [
-        { id: "raceDist", label: "Distance", placeholder: "5K / 10K / HM / M" },
+        { id: "raceDist", label: "Distance", select: true, options: [
+          ["mile",         "Mile"],
+          ["5k",           "5K"],
+          ["10k",          "10K"],
+          ["halfMarathon", "Half Marathon"],
+          ["marathon",     "Marathon"],
+        ]},
         { id: "raceTime", label: "Time (hh:mm:ss)", placeholder: "45:00" },
       ]},
     ],
@@ -866,10 +912,34 @@
     if (sports.includes("hyrox"))    sections.push(_thresholdSection("hyrox", "Hyrox", "trophy", THRESHOLD_METHODS.hyrox));
     container.innerHTML = sections.join("");
     _hydrateIcons(container);
-    // Render the default (first) method's fields for each section
+    // Render method fields AND pre-fill from existing trainingZones values
+    // that were loaded into _state.thresholds at openBuildPlan().
     container.querySelectorAll("[data-threshold]").forEach(section => {
       const key = section.getAttribute("data-threshold");
-      if (key !== "strength") _renderMethodFields(key);
+      const saved = _state.thresholds && _state.thresholds[key];
+      if (key === "strength") {
+        // Strength has no method dropdown — just fill the 3 1RM inputs
+        if (saved) {
+          ["squat", "bench", "dead"].forEach(id => {
+            if (saved[id] != null) {
+              const el = document.getElementById("bp-v2-str-" + id);
+              if (el) el.value = saved[id];
+            }
+          });
+        }
+        return;
+      }
+      // Pre-select saved method (fall back to first option)
+      const sel = document.querySelector('[data-threshold-method="' + key + '"]');
+      if (sel && saved && saved.method) sel.value = saved.method;
+      _renderMethodFields(key);
+      // Pre-fill the input values that match the selected method
+      if (saved) {
+        document.querySelectorAll('[data-threshold="' + key + '"] [data-threshold-input]').forEach(input => {
+          const id = input.getAttribute("data-threshold-input");
+          if (saved[id] != null) input.value = saved[id];
+        });
+      }
     });
   }
 
@@ -927,6 +997,30 @@
     if (!select || !container) return;
     const method = methods.find(m => m.id === select.value) || methods[0];
     container.innerHTML = method.fields.map(f => {
+      if (f.combo && Array.isArray(f.parts)) {
+        // Row of inline inputs with inline suffix labels — used for
+        // min/sec pairs so they read as a single time rather than two
+        // stacked form groups.
+        const parts = f.parts.map(p =>
+          '<div class="ob-v2-combo-part">' +
+            '<input type="text" id="bp-v2-' + key + '-' + p.id + '" data-threshold-input="' + p.id + '" placeholder="' + _escape(p.placeholder || "") + '" inputmode="numeric" />' +
+            '<span class="ob-v2-combo-suffix">' + _escape(p.suffix || "") + '</span>' +
+          '</div>'
+        ).join("");
+        return '<div class="ob-v2-form-group">' +
+          '<label>' + _escape(f.label) + '</label>' +
+          '<div class="ob-v2-combo-row">' + parts + '</div>' +
+        '</div>';
+      }
+      if (f.select && Array.isArray(f.options)) {
+        const opts = f.options.map(o =>
+          '<option value="' + _escape(o[0]) + '">' + _escape(o[1]) + '</option>'
+        ).join("");
+        return '<div class="ob-v2-form-group">' +
+          '<label for="bp-v2-' + key + '-' + f.id + '">' + _escape(f.label) + '</label>' +
+          '<select id="bp-v2-' + key + '-' + f.id + '" data-threshold-input="' + f.id + '">' + opts + '</select>' +
+        '</div>';
+      }
       const inputmode = f.inputmode ? ' inputmode="' + f.inputmode + '"' : "";
       return '<div class="ob-v2-form-group">' +
         '<label for="bp-v2-' + key + '-' + f.id + '">' + _escape(f.label) + '</label>' +
@@ -970,6 +1064,11 @@
     });
     _state.thresholds = result;
     _lsSet("thresholds", result);
+    // Round-trip any known values back into the app's Training Zones &
+    // Strength Benchmarks so the two surfaces stay in sync. The existing
+    // saveTrainingZonesData() stamps lastUpdated AND appends to
+    // trainingZonesHistory so prior versions are retained with a date.
+    _persistThresholdsToZones(result);
     if (!_state.selectedSports.includes("strength")) {
       if (_shouldShowLongDays()) { goTo("bp-v2-4b"); _renderLongDayBlocks(); }
       else { goTo("bp-v2-5"); _renderSchedule(); }
@@ -977,6 +1076,76 @@
     }
     goTo("bp-v2-6");
     _applyStrengthCountSideEffects();
+  }
+
+  // Writes any threshold values the user entered in bp-v2-4 back into
+  // localStorage.trainingZones via the app's saveTrainingZonesData()
+  // helper. History retention + lastUpdated stamping happen there.
+  function _persistThresholdsToZones(thresholds) {
+    if (!thresholds || typeof saveTrainingZonesData !== "function") return;
+    const nowIso = new Date().toISOString();
+
+    // Running — if user provided a threshold pace, sync it.
+    const r = thresholds.run;
+    if (r && r.mode === "known" && r.threshPace) {
+      try {
+        saveTrainingZonesData("running", {
+          thresholdPace: r.threshPace,
+          calculatedAt: nowIso,
+          source: "build_plan_v2",
+        });
+      } catch (e) { console.warn("[OnboardingV2] sync running zones failed", e); }
+    }
+
+    // Biking — FTP round-trip; compute zones if the helper is available.
+    const b = thresholds.bike;
+    if (b && b.mode === "known" && b.ftp) {
+      const ftp = parseInt(b.ftp, 10);
+      if (ftp > 0) {
+        let zones = null;
+        try {
+          if (typeof computeBikingZones === "function") zones = computeBikingZones(ftp).zones;
+        } catch {}
+        try {
+          saveTrainingZonesData("biking", {
+            ftp,
+            zones,
+            calculatedAt: nowIso,
+            source: "build_plan_v2",
+          });
+        } catch (e) { console.warn("[OnboardingV2] sync biking zones failed", e); }
+      }
+    }
+
+    // Swimming — CSS pace (seconds per 100m).
+    const s = thresholds.swim;
+    if (s && s.mode === "known" && s.cssPace) {
+      const css = parseInt(s.cssPace, 10);
+      if (css > 0) {
+        try {
+          saveTrainingZonesData("swimming", {
+            css,
+            cssPace: css,
+            calculatedAt: nowIso,
+            source: "build_plan_v2",
+          });
+        } catch (e) { console.warn("[OnboardingV2] sync swim zones failed", e); }
+      }
+    }
+
+    // Strength — 1RMs for squat/bench/deadlift.
+    const st = thresholds.strength;
+    if (st && st.mode === "known") {
+      const data = { updatedAt: nowIso, source: "build_plan_v2" };
+      const parse = v => parseInt(v, 10);
+      if (st.squat) data.squat    = { weight: parse(st.squat), type: "1rm" };
+      if (st.bench) data.bench    = { weight: parse(st.bench), type: "1rm" };
+      if (st.dead)  data.deadlift = { weight: parse(st.dead),  type: "1rm" };
+      if (data.squat || data.bench || data.deadlift) {
+        try { saveTrainingZonesData("strength", data); }
+        catch (e) { console.warn("[OnboardingV2] sync strength zones failed", e); }
+      }
+    }
   }
   function _testMeForEverythingAndContinue() {
     document.querySelectorAll("#bp-v2-thresholds-container .ob-v2-test-me").forEach(btn => {
@@ -1054,6 +1223,35 @@
     const showRide = needed.includes("bike") && _state.selectedSports.includes("bike");
     if (run)  run.style.display  = showRun  ? "" : "none";
     if (ride) ride.style.display = showRide ? "" : "none";
+
+    // Default recommendations:
+    //   Triathletes (run + bike selected) → Long Run Wed, Long Ride Sat.
+    //     Wed spaces the two hardest days mid-week so the Saturday long
+    //     ride isn't compromised by a fresh run.
+    //   Run-only athletes → Long Run Sat (the conventional weekend default).
+    //   Bike-only athletes → Long Ride Sat.
+    const isTri = showRun && showRide;
+    const defaultRun  = isTri ? "wed" : "sat";
+    const defaultRide = "sat";
+
+    if (showRun && !_state.longDays.longRun) {
+      _state.longDays.longRun = defaultRun;
+    }
+    if (showRide && !_state.longDays.longRide) {
+      _state.longDays.longRide = defaultRide;
+    }
+
+    // Sync chip selection UI with state
+    if (run) {
+      run.querySelectorAll("[data-longrun]").forEach(el => {
+        el.classList.toggle("is-selected", el.getAttribute("data-longrun") === _state.longDays.longRun);
+      });
+    }
+    if (ride) {
+      ride.querySelectorAll("[data-longride]").forEach(el => {
+        el.classList.toggle("is-selected", el.getAttribute("data-longride") === _state.longDays.longRide);
+      });
+    }
   }
   function _selectLongDay(btn, which) {
     if (!btn) return;
@@ -1122,6 +1320,33 @@
         _state.schedule[d].push(endurance[idx % endurance.length]);
         idx++;
       });
+    }
+
+    // Swim minimum: triathletes need at least 2 swim days per week —
+    // one swim/week is too little stimulus to maintain or build the
+    // feel-for-water that open-water and tri racing demand. If the
+    // round-robin only placed one swim, find the best spot for a
+    // second: prefer a day that isn't already carrying a long-run /
+    // long-ride session, isn't a rest day, and doesn't already have
+    // swim. If every day is full, fall back to adding swim as a
+    // second session on the lightest non-long day.
+    if (sports.includes("swim")) {
+      const swimCount = () => _BP_DAYS.reduce((n, d) => n + (_state.schedule[d].includes("swim") ? 1 : 0), 0);
+      if (swimCount() < 2) {
+        const isLongDay = d => _state.schedule[d].includes("run-long") || _state.schedule[d].includes("bike-long");
+        const candidates = _BP_DAYS.filter(d =>
+          !_state.schedule[d].includes("swim") &&
+          !_state.schedule[d].includes("rest") &&
+          !isLongDay(d)
+        );
+        // Prefer candidates that only have a single session so we don't
+        // cram swim on top of strength + something else.
+        candidates.sort((a, b) => _state.schedule[a].length - _state.schedule[b].length);
+        const target = candidates[0]
+          || _BP_DAYS.filter(d => !_state.schedule[d].includes("swim") && !isLongDay(d))
+               .sort((a, b) => _state.schedule[a].length - _state.schedule[b].length)[0];
+        if (target) _state.schedule[target].push("swim");
+      }
     }
     // Sprinkle strength sessions on alternating days, capped at requested count
     if (strength > 0) {
@@ -1195,11 +1420,40 @@
     if (!body) return;
     const race = _state.currentRace;
     const hasRace = _state.trainingGoals.includes("race") && race && race.date;
+
+    // "You are here" marker — computes the user's current position along
+    // the plan so they can see which phase they're in at a glance. At
+    // preview time (fresh plan) it sits at 0% (start of Base). If this
+    // preview is ever reshown mid-plan, the marker advances proportionally.
+    let markerPct = 0;
+    let currentPhaseLabel = "Base";
+    if (hasRace) {
+      const raceMs = new Date(race.date + "T00:00:00").getTime();
+      // Plan start = saved plan start, else today (preview case).
+      const startMs = _state.planStartMs || Date.now();
+      const totalMs = Math.max(1, raceMs - startMs);
+      const elapsed = Math.max(0, Date.now() - startMs);
+      markerPct = Math.min(100, Math.max(0, (elapsed / totalMs) * 100));
+      // Base 0-35%, Build 35-70%, Peak 70-90%, Taper 90-100%.
+      currentPhaseLabel = markerPct < 35 ? "Base" : markerPct < 70 ? "Build" : markerPct < 90 ? "Peak" : "Taper";
+    }
+    const markerHtml =
+      '<div class="ob-v2-timeline-marker" style="left:' + markerPct.toFixed(1) + '%">' +
+        '<div class="ob-v2-timeline-marker-dot"></div>' +
+        '<div class="ob-v2-timeline-marker-label">You are here · ' + _escape(currentPhaseLabel) + '</div>' +
+      '</div>';
+
     const timelineHtml = hasRace
       ? '<div class="ob-v2-timeline-labels"><span>Base</span><span>Build</span><span>Peak</span><span>Taper</span><span>Race</span></div>' +
-        '<div class="ob-v2-timeline-bar"><span class="ob-v2-timeline-seg ob-v2-timeline-base"></span><span class="ob-v2-timeline-seg ob-v2-timeline-build"></span><span class="ob-v2-timeline-seg ob-v2-timeline-peak"></span><span class="ob-v2-timeline-seg ob-v2-timeline-taper"></span><span class="ob-v2-timeline-seg ob-v2-timeline-race"></span></div>'
+        '<div class="ob-v2-timeline-bar">' +
+          '<span class="ob-v2-timeline-seg ob-v2-timeline-base"></span><span class="ob-v2-timeline-seg ob-v2-timeline-build"></span><span class="ob-v2-timeline-seg ob-v2-timeline-peak"></span><span class="ob-v2-timeline-seg ob-v2-timeline-taper"></span><span class="ob-v2-timeline-seg ob-v2-timeline-race"></span>' +
+          markerHtml +
+        '</div>'
       : '<div class="ob-v2-timeline-labels"><span>Week 1</span><span>Week 2</span><span>Week 3</span><span>Week 4</span></div>' +
-        '<div class="ob-v2-timeline-bar"><span class="ob-v2-timeline-seg ob-v2-timeline-base"></span><span class="ob-v2-timeline-seg ob-v2-timeline-build"></span><span class="ob-v2-timeline-seg ob-v2-timeline-peak"></span><span class="ob-v2-timeline-seg ob-v2-timeline-taper"></span></div>';
+        '<div class="ob-v2-timeline-bar">' +
+          '<span class="ob-v2-timeline-seg ob-v2-timeline-base"></span><span class="ob-v2-timeline-seg ob-v2-timeline-build"></span><span class="ob-v2-timeline-seg ob-v2-timeline-peak"></span><span class="ob-v2-timeline-seg ob-v2-timeline-taper"></span>' +
+          markerHtml +
+        '</div>';
     const weekHtml = _BP_DAYS.map(d => {
       const slots = _state.schedule[d] || [];
       const mini = slots.length
