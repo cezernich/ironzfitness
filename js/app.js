@@ -1171,13 +1171,29 @@ function loadTrainingZones(sport) {
 function saveTrainingZonesData(sport, data) {
   let all = {};
   try { all = JSON.parse(localStorage.getItem("trainingZones")) || {}; } catch {}
-  // Stamp lastUpdated so the 90-day staleness banner in threshold-reminders.js
-  // knows this sport was just refreshed. Previously only `calculatedAt` was
-  // set here, which the staleness check doesn't read — so even a 5-minute-
-  // old FTP was reported as "last updated a while ago".
   const nowIso = new Date().toISOString();
-  const stamped = { ...data, lastUpdated: nowIso };
-  all[sport] = stamped;
+
+  // Archive the PREVIOUS entry to history before overwriting — that
+  // way the user's historical record shows the actual value they had
+  // before, stamped with the date it was originally recorded. The
+  // new entry does NOT go to history on save; it's the current
+  // record until the next update, at which point it'll be archived.
+  const previous = all[sport];
+  if (previous && typeof previous === "object") {
+    const wasChanged = _zoneEntryMaterialDiff(previous, data);
+    if (wasChanged) {
+      const prevDate = previous.calculatedAt || previous.updatedAt || previous.lastUpdated || nowIso;
+      _appendZoneHistoryAt(sport, previous, prevDate);
+    }
+  }
+
+  // MERGE rather than replace — partial updates from the Build Plan
+  // threshold screen (e.g. only thresholdPace) shouldn't wipe out
+  // fields the full Training Zones form set (referenceDist, vdot,
+  // paceRange zones, etc). Spread existing first, new on top, then
+  // stamp lastUpdated so the staleness banner respects the write.
+  const merged = Object.assign({}, previous || {}, data, { lastUpdated: nowIso });
+  all[sport] = merged;
   localStorage.setItem("trainingZones", JSON.stringify(all));
   if (typeof DB !== 'undefined') DB.syncKey('trainingZones');
 
@@ -1197,9 +1213,44 @@ function saveTrainingZonesData(sport, data) {
       if (typeof DB !== 'undefined') DB.syncKey('profile');
     }
   } catch {}
+}
 
-  // Append to zone history
-  _appendZoneHistory(sport, stamped);
+// Returns true if the incoming data materially differs from the prior
+// entry on any threshold-relevant field. Used by saveTrainingZonesData
+// to decide whether the previous entry is worth archiving. Ignores
+// `lastUpdated` / `calculatedAt` / `source` so re-saves with the same
+// values don't spam history.
+function _zoneEntryMaterialDiff(prev, next) {
+  const fields = [
+    "thresholdPace", "vdot", "referenceDist", "referenceTime",
+    "ftp", "css", "cssPace",
+    // strength lifts are objects themselves — compare via JSON
+    "squat", "bench", "deadlift", "ohp", "row",
+  ];
+  for (const f of fields) {
+    const a = prev ? prev[f] : undefined;
+    const b = next ? next[f] : undefined;
+    if (a === undefined && b === undefined) continue;
+    const as = typeof a === "object" ? JSON.stringify(a) : String(a == null ? "" : a);
+    const bs = typeof b === "object" ? JSON.stringify(b) : String(b == null ? "" : b);
+    if (as !== bs) return true;
+  }
+  return false;
+}
+
+// Push a historical snapshot with an explicit date (rather than "now").
+// Used when archiving a previous zone entry so the history shows the
+// date the value was actually recorded, not the moment we replaced it.
+function _appendZoneHistoryAt(sport, data, dateIso) {
+  let history = [];
+  try { history = JSON.parse(localStorage.getItem("trainingZonesHistory")) || []; } catch {}
+  history.push({
+    sport,
+    date: dateIso || new Date().toISOString(),
+    data: JSON.parse(JSON.stringify(data)),
+  });
+  localStorage.setItem("trainingZonesHistory", JSON.stringify(history));
+  if (typeof DB !== 'undefined') DB.syncKey('trainingZonesHistory');
 }
 
 function _appendZoneHistory(sport, data) {
