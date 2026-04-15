@@ -5804,6 +5804,41 @@ button:active {
   text-decoration: line-through;
 }
 
+/* Edit Race modal — day-off picker rendered as a 7-col grid so Mon-Sun
+   always sit on one tidy row without the old flex-wrap drifting and
+   chips looking misaligned. */
+.edit-race-modal .edit-race-dow-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+}
+.edit-race-modal .edit-race-dow-btn {
+  padding: 10px 0;
+  border-radius: 10px;
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.edit-race-modal .edit-race-dow-btn:hover {
+  border-color: var(--color-accent);
+}
+.edit-race-modal .edit-race-dow-btn.is-off {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: var(--color-danger, #ef4444);
+  color: var(--color-danger, #ef4444);
+  text-decoration: line-through;
+}
+.edit-race-modal .form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
 .sv-day-picker-label {
   font-size: 0.75rem;
   font-weight: 700;

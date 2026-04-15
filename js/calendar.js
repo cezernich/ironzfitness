@@ -576,7 +576,7 @@ function _calV2BuildDayCard(dateStr, dateObj, todayStr, isCenter) {
       const show = sessions.slice(0, 4);
       body = `<div class="wo-cir">` + show.map(s => {
         const ring = _calV2LoadToRing(s.loadLabel);
-        const svg = _CAL_V2_DISC_SVG[s.discCls] || _CAL_V2_DISC_SVG.str;
+        const svg = _calV2IconFor(s.discCls);
         return `<span class="wc ${s.discCls}${ring ? " " + ring : ""}" title="${_escapeHtml(s.name)}">${svg}</span>`;
       }).join("") + `</div>`;
     }

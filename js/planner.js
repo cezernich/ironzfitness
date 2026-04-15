@@ -1116,8 +1116,15 @@ function detectTrainingConflicts() {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  // Active races: future date
-  const activeRaces = events.filter(e => e.date > today);
+  // Active races: future A races. B races are intentionally secondary
+  // goals that the A-race plan is expected to factor into its taper /
+  // recovery logic for that week, so they're NOT a conflict. Without
+  // this filter, dropping a B half-marathon into an Ironman plan
+  // always lights up the banner — exactly what the user called out.
+  const activeRaces = events.filter(e =>
+    e.date > today &&
+    (e.priority || "A").toUpperCase() === "A"
+  );
 
   // Active schedules: has at least one entry in the future, grouped by type
   const activeScheduleTypes = new Set(
@@ -3277,67 +3284,67 @@ function editEvent(id) {
   overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
 
   overlay.innerHTML = `
-    <div class="quick-entry-modal" style="max-width:420px;padding:24px">
+    <div class="quick-entry-modal edit-race-modal" style="max-width:460px;padding:24px">
       <h3 style="margin:0 0 4px">Edit Race</h3>
-      <p style="margin:0 0 16px;color:var(--color-text-muted);font-size:0.82rem">${cfg.label || race.type}</p>
+      <p style="margin:0 0 18px;color:var(--color-text-muted);font-size:0.82rem">${cfg.label || race.type}</p>
 
-      <div class="form-row" style="margin-bottom:10px">
+      <div class="form-row" style="margin-bottom:12px">
         <label>Race Name</label>
         <input type="text" id="edit-race-name" value="${_escapeHtml(race.name || "")}" placeholder="e.g. Boston Marathon 2026" />
       </div>
 
-      <div class="form-row" style="margin-bottom:10px">
+      <div class="form-row" style="margin-bottom:12px">
         <label>Race Date</label>
         <input type="date" id="edit-race-date" value="${race.date || ""}" />
       </div>
 
-      <div class="form-grid" style="margin-bottom:10px">
+      <div class="form-grid" style="margin-bottom:12px">
         <div class="form-row">
-          <label>Level</label>
-          <select id="edit-race-level">
-            <option value="beginner" ${sel(race.level, "beginner")}>Beginner</option>
-            <option value="intermediate" ${sel(race.level, "intermediate")}>Intermediate</option>
-            <option value="advanced" ${sel(race.level, "advanced")}>Advanced</option>
+          <label>Goal</label>
+          <select id="edit-race-goal">
+            <option value="finish"  ${sel(race.runGoal, "finish")}>Just finish</option>
+            <option value="time"    ${sel(race.runGoal, "time")}>Time goal</option>
+            <option value="compete" ${sel(race.runGoal, "compete")}>Compete</option>
           </select>
         </div>
         <div class="form-row">
           <label>Priority</label>
           <select id="edit-race-priority">
-            <option value="A" ${sel(race.priority, "A")}>A Race</option>
-            <option value="B" ${sel(race.priority, "B")}>B Race</option>
+            <option value="A" ${sel(race.priority, "A")}>A race</option>
+            <option value="B" ${sel(race.priority, "B")}>B race</option>
           </select>
         </div>
       </div>
 
-      <div class="form-grid" style="margin-bottom:10px">
+      <div class="form-grid" style="margin-bottom:12px">
         <div class="form-row">
-          <label>Days / Week</label>
+          <label>Days / week</label>
           <select id="edit-race-days">
             <option value="">Default</option>
             ${[3,4,5,6,7].map(n => `<option value="${n}" ${race.daysPerWeek === n ? "selected" : ""}>${n} days</option>`).join("")}
           </select>
         </div>
         <div class="form-row">
-          <label>Long Session Day</label>
+          <label>Long session day</label>
           <select id="edit-race-longday">
-            <option value="">Default (Saturday)</option>
+            <option value="">Default (Sat)</option>
             ${DOW_LABELS.map((d, i) => `<option value="${i}" ${race.longDay === i ? "selected" : ""}>${d}</option>`).join("")}
           </select>
         </div>
       </div>
 
-      <div class="form-row" style="margin-bottom:10px">
-        <label>Days Off (can't train)</label>
-        <div class="rf-day-picker" id="edit-race-unavail-days">
+      <div class="form-row" style="margin-bottom:16px">
+        <label>Days off <span style="color:var(--color-text-muted);font-weight:500">(can't train)</span></label>
+        <div class="edit-race-dow-grid" id="edit-race-unavail-days">
           ${DOW_LABELS.map((d, i) => {
             const isOff = race.unavailableDays && race.unavailableDays.includes(i);
-            return `<button type="button" class="rf-day-btn${isOff ? " rf-day-off" : ""}" data-dow="${i}" onclick="this.classList.toggle('rf-day-off')">${d.slice(0,3)}</button>`;
+            return `<button type="button" class="edit-race-dow-btn${isOff ? " is-off" : ""}" data-dow="${i}" onclick="this.classList.toggle('is-off')">${d.slice(0,3)}</button>`;
           }).join("")}
         </div>
       </div>
 
-      <div style="display:flex;gap:8px;margin-top:16px">
-        <button class="btn-primary" style="flex:1" onclick="_saveEditedRace('${race.id}')">Save Changes</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn-primary" style="flex:1" onclick="_saveEditedRace('${race.id}')">Save changes</button>
         <button class="btn-secondary" style="flex:1" onclick="document.getElementById('edit-race-overlay').remove()">Cancel</button>
       </div>
       <p id="edit-race-msg" class="save-msg" style="margin-top:8px"></p>
@@ -3354,7 +3361,10 @@ function _saveEditedRace(raceId) {
 
   race.name = document.getElementById("edit-race-name")?.value.trim() || race.name;
   race.date = document.getElementById("edit-race-date")?.value || race.date;
-  race.level = document.getElementById("edit-race-level")?.value || race.level;
+  // Goal replaced the removed Level dropdown — keep runGoal as the
+  // canonical field so generateTrainingPlan still sees it.
+  const goalVal = document.getElementById("edit-race-goal")?.value;
+  if (goalVal) race.runGoal = goalVal;
   race.priority = document.getElementById("edit-race-priority")?.value || race.priority;
 
   const days = document.getElementById("edit-race-days")?.value;
@@ -3363,8 +3373,8 @@ function _saveEditedRace(raceId) {
   const longDay = document.getElementById("edit-race-longday")?.value;
   race.longDay = longDay !== "" ? parseInt(longDay) : race.longDay;
 
-  // Read unavailable days from toggle buttons
-  const unavailBtns = document.querySelectorAll("#edit-race-unavail-days .rf-day-btn.rf-day-off");
+  // Read unavailable days from the new grid of toggle buttons
+  const unavailBtns = document.querySelectorAll("#edit-race-unavail-days .edit-race-dow-btn.is-off");
   const unavailDays = Array.from(unavailBtns).map(btn => parseInt(btn.dataset.dow));
   race.unavailableDays = unavailDays.length > 0 ? unavailDays : undefined;
 
