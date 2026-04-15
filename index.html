@@ -3347,6 +3347,17 @@
                 <button type="button" class="ob-v2-chip" data-race-goal="podium" onclick="OnboardingV2._selectRaceGoal(this)">PR / Podium</button>
               </div>
             </div>
+            <!-- Priority section — only rendered when the user already has
+                 an existing A race. You can only have one A race at a time;
+                 choosing A here demotes the existing one to B. -->
+            <div class="ob-v2-form-group" id="bp-v2-race-priority-group" style="display:none">
+              <label>Race Priority</label>
+              <p class="ob-v2-notif-hint" id="bp-v2-race-priority-hint" style="margin-top:-4px;margin-bottom:8px"></p>
+              <div class="ob-v2-chips">
+                <button type="button" class="ob-v2-chip is-selected" data-race-priority="B" onclick="OnboardingV2._selectRacePriority(this)">B Race</button>
+                <button type="button" class="ob-v2-chip" data-race-priority="A" onclick="OnboardingV2._selectRacePriority(this)">A Race</button>
+              </div>
+            </div>
           </div>
           <div class="ob-v2-callout ob-v2-callout--info" id="bp-v2-weeks-callout"><span id="bp-v2-weeks-text">Pick a race date to see your timeline.</span></div>
           <div id="bp-v2-gap-fill-section" style="display:none">

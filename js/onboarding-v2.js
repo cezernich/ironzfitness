@@ -866,7 +866,7 @@
       .map(el => el.getAttribute("data-goal"));
     _state.trainingGoals = goals;
     _lsSet("trainingGoals", goals);
-    if (goals.includes("race")) { goTo("bp-v2-3-race"); return; }
+    if (goals.includes("race")) { goTo("bp-v2-3-race"); _applyRacePrioritySection(); return; }
     // Strength-only users skip the generic Plan Details screen — the
     // same fields (block length, session length, days per week) live
     // on bp-v2-6 Strength Setup to avoid asking twice.
@@ -942,16 +942,85 @@
     const el = document.getElementById("bp-v2-leadin-count");
     if (el) el.textContent = String(next);
   }
+  function _selectRacePriority(btn) {
+    if (!btn) return;
+    const group = btn.parentElement;
+    if (!group) return;
+    group.querySelectorAll(".ob-v2-chip").forEach(el => el.classList.remove("is-selected"));
+    btn.classList.add("is-selected");
+    _state.currentRace.priority = btn.getAttribute("data-race-priority") || "A";
+  }
+
+  // Returns the first upcoming A-priority race in localStorage.events,
+  // or null if there isn't one. Used to decide whether to surface the
+  // A/B priority picker on bp-v2-3-race, and whether to demote an
+  // existing A race when the user sets the new one to A.
+  function _existingARace() {
+    let events = [];
+    try { events = JSON.parse(localStorage.getItem("events") || "[]") || []; } catch {}
+    const todayStr = new Date().toISOString().slice(0, 10);
+    return events.find(e => e && e.date >= todayStr && (e.priority || "A").toUpperCase() === "A") || null;
+  }
+
+  // Show / hide the priority picker when the race screen becomes
+  // visible. When there's already an upcoming A race, default the new
+  // one to B and surface the picker with a hint that mentions the
+  // existing race by name.
+  function _applyRacePrioritySection() {
+    const group = document.getElementById("bp-v2-race-priority-group");
+    if (!group) return;
+    const existing = _existingARace();
+    if (!existing) {
+      group.style.display = "none";
+      _state.currentRace.priority = "A";
+      return;
+    }
+    group.style.display = "";
+    const hint = document.getElementById("bp-v2-race-priority-hint");
+    if (hint) {
+      const name = existing.name || existing.type || "your current A race";
+      hint.textContent = 'You already have an A race (' + name + '). Only one A race at a time — pick A to demote ' + name + ' to B, or keep this as a B race.';
+    }
+    // Default the new race to B when an A race exists.
+    _state.currentRace.priority = "B";
+    group.querySelectorAll(".ob-v2-chip").forEach(el =>
+      el.classList.toggle("is-selected", el.getAttribute("data-race-priority") === "B")
+    );
+  }
+
   function _saveRaceAndContinue() {
     const name = document.getElementById("bp-v2-race-name")?.value.trim() || "";
     const category = document.getElementById("bp-v2-race-category")?.value || "triathlon";
     const type = document.getElementById("bp-v2-race-type")?.value || "ironman";
     const date = document.getElementById("bp-v2-race-date")?.value || "";
     const goal = document.querySelector("#bp-v2-3-race [data-race-goal].is-selected")?.getAttribute("data-race-goal") || "finish";
+    const priority = document.querySelector("#bp-v2-race-priority-group [data-race-priority].is-selected")?.getAttribute("data-race-priority") || _state.currentRace.priority || "A";
     const leadInPhase = document.querySelector("#bp-v2-gap-fill-section [data-leadin-phase].is-selected")?.getAttribute("data-leadin-phase") || null;
     const gapVisible = document.getElementById("bp-v2-gap-fill-section")?.style.display !== "none";
     const leadIn = gapVisible && leadInPhase ? { phase: leadInPhase, daysPerWeek: _state.leadInCount } : null;
-    const race = { name: name || type, category, type, date, priority: "A", goal, leadIn };
+
+    // If the user picks A and there's already an existing A race in
+    // localStorage.events, demote the existing one to B in-place.
+    // We only touch the priority field — other race metadata stays.
+    if (priority === "A") {
+      try {
+        const events = JSON.parse(localStorage.getItem("events") || "[]") || [];
+        const todayStr = new Date().toISOString().slice(0, 10);
+        let demoted = false;
+        events.forEach(e => {
+          if (e && e.date >= todayStr && (e.priority || "A").toUpperCase() === "A") {
+            e.priority = "B";
+            demoted = true;
+          }
+        });
+        if (demoted) {
+          localStorage.setItem("events", JSON.stringify(events));
+          if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("events");
+        }
+      } catch (err) { console.warn("[OnboardingV2] A-race demotion failed", err); }
+    }
+
+    const race = { name: name || type, category, type, date, priority, goal, leadIn };
     _state.currentRace = race;
     _state.raceEvents = [race];
     _lsSet("raceEvents", _state.raceEvents);
@@ -2478,7 +2547,7 @@
       _bpBack,
       _toggleSport, _applySportSideEffects, _selectGym, _saveSportsAndContinue,
       _toggleGoal, _saveGoalsAndContinue, _renderGoalCards,
-      _updateRaceTypes, _updateWeeksCallout, _selectRaceGoal, _selectLeadInPhase, _adjustLeadIn, _saveRaceAndContinue,
+      _updateRaceTypes, _updateWeeksCallout, _selectRaceGoal, _selectRacePriority, _applyRacePrioritySection, _selectLeadInPhase, _adjustLeadIn, _saveRaceAndContinue,
       _selectPlanOption, _setCustomDuration, _adjustDaysPerWeek, _setStartDate, _saveNoraceAndContinue,
       _renderThresholdSections, _toggleTestMe, _changeThresholdMethod, _saveThresholdsAndContinue, _testMeForEverythingAndContinue,
       _adjustStrengthCount, _applyStrengthCountSideEffects, _selectSplit, _toggleMuscle,
