@@ -28,6 +28,22 @@
 (function () {
   "use strict";
 
+  // One-time defensive repair: an earlier build of _confirmAndSavePlan
+  // wrote the weekly-template OBJECT to `workoutSchedule` localStorage,
+  // but the rest of the app expects an array. Detect and reset so
+  // calendar day-detail doesn't crash on .filter() of a non-array.
+  try {
+    const raw = localStorage.getItem("workoutSchedule");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        console.warn("[OnboardingV2] Resetting corrupted workoutSchedule (was object, expected array)");
+        localStorage.setItem("workoutSchedule", "[]");
+        if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("workoutSchedule");
+      }
+    }
+  } catch (e) { /* invalid JSON — leave it alone */ }
+
   // ── In-flight state ─────────────────────────────────────────────────
   const _state = {
     currentScreen: null,
@@ -203,43 +219,62 @@
     _prefillProfile();
   }
 
-  // Standalone Build Plan entry point — pre-fills from stored state
-  // and enters at bp-v2-1 skipping the ob-* screens. Opens the
-  // dedicated #bp-v2-overlay modal (not the onboarding overlay).
+  // Standalone Build Plan entry point — always starts fresh.
+  // Resets in-flight state and UI selections on every open so the
+  // user can rebuild without seeing leftover choices from last time.
   function openBuildPlan() {
     _state.mode = "buildplan";
-    _prefillFromStoredBuildPlan();
+    _resetBuildPlanState();
+    _clearBuildPlanScreens();
     _openBuildPlanOverlay();
     goTo("bp-v2-1");
-    _rehydrateBuildPlanScreens();
   }
 
-  function _prefillFromStoredBuildPlan() {
-    const sports = _lsGet("selectedSports", null);
-    if (Array.isArray(sports)) _state.selectedSports = sports;
-    const goals = _lsGet("trainingGoals", null);
-    if (Array.isArray(goals)) _state.trainingGoals = goals;
-    const races = _lsGet("raceEvents", null);
-    if (Array.isArray(races)) _state.raceEvents = races;
-    const thresholds = _lsGet("thresholds", null);
-    if (thresholds && typeof thresholds === "object") _state.thresholds = thresholds;
-    const strengthSetup = _lsGet("strengthSetup", null);
-    if (strengthSetup && typeof strengthSetup === "object") _state.strengthSetup = { ..._state.strengthSetup, ...strengthSetup };
-    const schedule = _lsGet("workoutSchedule", null);
-    if (schedule && typeof schedule === "object") _state.schedule = { ..._state.schedule, ...schedule };
+  // Reset every Build Plan state field back to its default.
+  // Profile/onboarding fields are left alone.
+  function _resetBuildPlanState() {
+    _state.selectedSports = [];
+    _state.gymAccess = "full";
+    _state.trainingGoals = [];
+    _state.raceEvents = [];
+    _state.currentRace = { name: "", category: "triathlon", type: "ironman", date: "", goal: "finish", priority: "A", leadIn: null };
+    _state.leadInCount = 4;
+    _state.planDetails = { duration: "12", sessionLength: "60", daysPerWeek: "5" };
+    _state.thresholds = {};
+    _state.strengthSetup = { sessionsPerWeek: 3, split: "ppl", customMuscles: [], sessionLength: 45 };
+    _state.longDays = { longRun: "sun", longRide: "sat" };
+    _state.schedule = { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] };
   }
 
-  function _rehydrateBuildPlanScreens() {
-    document.querySelectorAll("#bp-v2-sport-grid [data-sport]").forEach(el => {
-      el.classList.toggle("is-selected", _state.selectedSports.includes(el.getAttribute("data-sport")));
-    });
-    if (typeof _applySportSideEffects === "function") _applySportSideEffects();
-    document.querySelectorAll("#bp-v2-2 [data-goal]").forEach(el => {
-      el.classList.toggle("is-selected", _state.trainingGoals.includes(el.getAttribute("data-goal")));
-    });
+  // Wipe any `is-selected` / filled-in DOM state left over from a
+  // previous Build Plan run so each open renders a blank slate.
+  function _clearBuildPlanScreens() {
+    const ov = document.getElementById("bp-v2-overlay");
+    if (!ov) return;
+    ov.querySelectorAll(".is-selected").forEach(el => el.classList.remove("is-selected"));
+    ov.querySelectorAll("input[type=text], input[type=number], input[type=date], input[type=time]").forEach(el => { el.value = ""; });
+    ov.querySelectorAll("textarea").forEach(el => { el.value = ""; });
+    // Reset default long-day picks (Sun run / Sat ride)
+    const defRun  = ov.querySelector('[data-longrun="sun"]');
+    const defRide = ov.querySelector('[data-longride="sat"]');
+    if (defRun)  defRun.classList.add("is-selected");
+    if (defRide) defRide.classList.add("is-selected");
+    // Reset strength counter display
     const strCount = document.getElementById("bp-v2-strength-count");
     if (strCount) strCount.textContent = String(_state.strengthSetup.sessionsPerWeek);
-    if (typeof _applyStrengthCountSideEffects === "function") _applyStrengthCountSideEffects();
+    // Collapse any sport-conditional sections
+    const equip = document.getElementById("bp-v2-equipment-section");
+    if (equip) equip.style.display = "none";
+    const triNote = document.getElementById("bp-v2-tri-note");
+    if (triNote) triNote.style.display = "none";
+    // Clear any dynamically rendered containers so stale HTML from a
+    // previous run doesn't leak through to the next one.
+    const thresh = document.getElementById("bp-v2-thresholds-container");
+    if (thresh) thresh.innerHTML = "";
+    const grid = document.getElementById("bp-v2-schedule-grid");
+    if (grid) grid.innerHTML = "";
+    const summary = document.getElementById("bp-v2-schedule-summary");
+    if (summary) summary.innerHTML = "";
   }
 
   function _showOverlay(el) {
@@ -541,11 +576,12 @@
       if (choice === "plan") {
         // Transition from onboarding overlay into the Build Plan overlay.
         // Keep mode=onboarding so _confirmAndSavePlan still stamps
-        // hasOnboarded=1 at the end of bp-done.
-        _prefillFromStoredBuildPlan();
+        // hasOnboarded=1 at the end of bp-done. Start with a fresh
+        // Build Plan state so first-time users see a blank slate.
+        _resetBuildPlanState();
+        _clearBuildPlanScreens();
         _openBuildPlanOverlay();
         goTo("bp-v2-1");
-        _rehydrateBuildPlanScreens();
       } else {
         goTo("ob-v2-manual-landing");
       }
@@ -767,29 +803,79 @@
     _renderThresholdSections();
   }
 
+  // Per-spec threshold method definitions. Each sport (except strength)
+  // offers a method dropdown — the selected method determines which
+  // input fields are shown. Strength stays fixed with 3 1RM inputs.
+  const THRESHOLD_METHODS = {
+    swim: [
+      { id: "css-test", label: "CSS Test (400m + 200m)", fields: [
+        { id: "css400min", label: "400m time — min", placeholder: "6",  inputmode: "numeric" },
+        { id: "css400sec", label: "400m time — sec", placeholder: "30", inputmode: "numeric" },
+        { id: "css200min", label: "200m time — min", placeholder: "3",  inputmode: "numeric" },
+        { id: "css200sec", label: "200m time — sec", placeholder: "5",  inputmode: "numeric" },
+      ]},
+      { id: "pace", label: "I know my CSS pace", fields: [
+        { id: "cssPace", label: "CSS pace (sec / 100m)", placeholder: "85", inputmode: "numeric" },
+      ]},
+      { id: "race", label: "Recent race result", fields: [
+        { id: "raceDist", label: "Distance (meters)", placeholder: "1500", inputmode: "numeric" },
+        { id: "raceTime", label: "Time (mm:ss)", placeholder: "22:30" },
+      ]},
+    ],
+    bike: [
+      { id: "ftp", label: "I know my FTP", fields: [
+        { id: "ftp", label: "FTP (watts)", placeholder: "250", inputmode: "numeric" },
+      ]},
+      { id: "20min-test", label: "20-minute test result", fields: [
+        { id: "twentyMinWatts", label: "Avg watts over 20 min", placeholder: "265", inputmode: "numeric" },
+      ]},
+      { id: "race", label: "Recent race result", fields: [
+        { id: "raceDist", label: "Distance (miles)", placeholder: "40", inputmode: "numeric" },
+        { id: "raceTime", label: "Time (hh:mm)", placeholder: "1:55" },
+        { id: "raceWatts", label: "Avg watts (optional)", placeholder: "240", inputmode: "numeric" },
+      ]},
+    ],
+    run: [
+      { id: "pace", label: "I know my threshold pace", fields: [
+        { id: "threshPace", label: "Threshold pace (min/mile)", placeholder: "7:30" },
+      ]},
+      { id: "race", label: "Recent race result", fields: [
+        { id: "raceDist", label: "Distance", placeholder: "5K / 10K / HM / M" },
+        { id: "raceTime", label: "Time (hh:mm:ss)", placeholder: "45:00" },
+      ]},
+    ],
+    hyrox: [
+      { id: "finish", label: "Recent Hyrox finish time", fields: [
+        { id: "finishMin", label: "Finish time (minutes)", placeholder: "75", inputmode: "numeric" },
+      ]},
+      { id: "5k-fallback", label: "Use my 5K time as a fallback", fields: [
+        { id: "fiveKTime", label: "5K time (mm:ss)", placeholder: "22:30" },
+      ]},
+    ],
+  };
+
   function _renderThresholdSections() {
     const container = document.getElementById("bp-v2-thresholds-container");
     if (!container) return;
     const sports = _state.selectedSports || [];
     const sections = [];
-    if (sports.includes("swim"))     sections.push(_thresholdSection("swim", "Swimming", "swim", [{ id: "swim-css", label: "CSS pace (seconds per 100m)", placeholder: "85" }]));
-    if (sports.includes("bike"))     sections.push(_thresholdSection("bike", "Cycling", "bike", [{ id: "bike-ftp", label: "FTP (watts)", placeholder: "250" }]));
-    if (sports.includes("run"))      sections.push(_thresholdSection("run", "Running", "run", [{ id: "run-pace", label: "Threshold pace (min/mile, e.g. 7:30)", placeholder: "7:30" }]));
-    if (sports.includes("strength")) sections.push(_thresholdSection("strength", "Strength", "weights", [
-      { id: "str-squat", label: "Squat 1RM (lbs)", placeholder: "225" },
-      { id: "str-bench", label: "Bench Press 1RM (lbs)", placeholder: "185" },
-      { id: "str-dead",  label: "Deadlift 1RM (lbs)", placeholder: "315" },
-    ]));
-    if (sports.includes("hyrox"))    sections.push(_thresholdSection("hyrox", "Hyrox", "trophy", [{ id: "hyrox-time", label: "Recent Hyrox finish time (minutes)", placeholder: "75" }]));
+    if (sports.includes("swim"))     sections.push(_thresholdSection("swim", "Swimming", "swim", THRESHOLD_METHODS.swim));
+    if (sports.includes("bike"))     sections.push(_thresholdSection("bike", "Cycling", "bike", THRESHOLD_METHODS.bike));
+    if (sports.includes("run"))      sections.push(_thresholdSection("run", "Running", "run", THRESHOLD_METHODS.run));
+    if (sports.includes("strength")) sections.push(_strengthThresholdSection());
+    if (sports.includes("hyrox"))    sections.push(_thresholdSection("hyrox", "Hyrox", "trophy", THRESHOLD_METHODS.hyrox));
     container.innerHTML = sections.join("");
     _hydrateIcons(container);
+    // Render the default (first) method's fields for each section
+    container.querySelectorAll("[data-threshold]").forEach(section => {
+      const key = section.getAttribute("data-threshold");
+      if (key !== "strength") _renderMethodFields(key);
+    });
   }
-  function _thresholdSection(key, label, iconKey, fields) {
-    const inputsHtml = fields.map(f =>
-      '<div class="ob-v2-form-group">' +
-        '<label for="bp-v2-' + f.id + '">' + _escape(f.label) + '</label>' +
-        '<input type="text" id="bp-v2-' + f.id + '" placeholder="' + _escape(f.placeholder) + '" data-threshold-field="' + key + '" data-threshold-input="' + f.id + '" />' +
-      '</div>'
+
+  function _thresholdSection(key, label, iconKey, methods) {
+    const methodOpts = methods.map(m =>
+      '<option value="' + m.id + '">' + _escape(m.label) + '</option>'
     ).join("");
     return '<div class="ob-v2-threshold-section" data-threshold="' + key + '">' +
       '<div class="ob-v2-threshold-header">' +
@@ -797,17 +883,71 @@
         '<span class="ob-v2-threshold-name">' + _escape(label) + '</span>' +
         '<button type="button" class="ob-v2-test-me" data-threshold-key="' + key + '" onclick="OnboardingV2._toggleTestMe(this)">Test me</button>' +
       '</div>' +
-      '<div class="ob-v2-threshold-inputs" data-threshold-inputs="' + key + '">' + inputsHtml + '</div>' +
+      '<div class="ob-v2-threshold-body" data-threshold-body="' + key + '">' +
+        '<div class="ob-v2-form-group">' +
+          '<label for="bp-v2-method-' + key + '">How do you want to provide this?</label>' +
+          '<select id="bp-v2-method-' + key + '" data-threshold-method="' + key + '" onchange="OnboardingV2._changeThresholdMethod(\'' + key + '\')">' +
+            methodOpts +
+          '</select>' +
+        '</div>' +
+        '<div class="ob-v2-threshold-inputs" data-threshold-inputs="' + key + '"></div>' +
+      '</div>' +
     '</div>';
   }
+
+  function _strengthThresholdSection() {
+    const fields = [
+      { id: "squat", label: "Back Squat 1RM (lbs)", placeholder: "225" },
+      { id: "bench", label: "Bench Press 1RM (lbs)", placeholder: "185" },
+      { id: "dead",  label: "Deadlift 1RM (lbs)", placeholder: "315" },
+    ];
+    const inputs = fields.map(f =>
+      '<div class="ob-v2-form-group">' +
+        '<label for="bp-v2-str-' + f.id + '">' + _escape(f.label) + '</label>' +
+        '<input type="text" id="bp-v2-str-' + f.id + '" data-threshold-input="' + f.id + '" placeholder="' + _escape(f.placeholder) + '" inputmode="numeric" />' +
+      '</div>'
+    ).join("");
+    return '<div class="ob-v2-threshold-section" data-threshold="strength">' +
+      '<div class="ob-v2-threshold-header">' +
+        '<span class="ob-v2-threshold-icon" data-ob-icon="weights"></span>' +
+        '<span class="ob-v2-threshold-name">Strength</span>' +
+        '<button type="button" class="ob-v2-test-me" data-threshold-key="strength" onclick="OnboardingV2._toggleTestMe(this)">Test me</button>' +
+      '</div>' +
+      '<div class="ob-v2-threshold-body" data-threshold-body="strength">' +
+        '<div class="ob-v2-threshold-inputs" data-threshold-inputs="strength">' + inputs + '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function _renderMethodFields(key) {
+    const methods = THRESHOLD_METHODS[key];
+    if (!methods) return;
+    const select = document.querySelector('[data-threshold-method="' + key + '"]');
+    const container = document.querySelector('[data-threshold-inputs="' + key + '"]');
+    if (!select || !container) return;
+    const method = methods.find(m => m.id === select.value) || methods[0];
+    container.innerHTML = method.fields.map(f => {
+      const inputmode = f.inputmode ? ' inputmode="' + f.inputmode + '"' : "";
+      return '<div class="ob-v2-form-group">' +
+        '<label for="bp-v2-' + key + '-' + f.id + '">' + _escape(f.label) + '</label>' +
+        '<input type="text" id="bp-v2-' + key + '-' + f.id + '" data-threshold-input="' + f.id + '" placeholder="' + _escape(f.placeholder) + '"' + inputmode + ' />' +
+      '</div>';
+    }).join("");
+  }
+
+  function _changeThresholdMethod(key) {
+    _renderMethodFields(key);
+  }
+
   function _toggleTestMe(btn) {
     if (!btn) return;
     const key = btn.getAttribute("data-threshold-key");
     const isOn = btn.classList.toggle("is-active");
-    const inputs = document.querySelector('[data-threshold-inputs="' + key + '"]');
-    if (inputs) inputs.style.display = isOn ? "none" : "";
+    const body = document.querySelector('[data-threshold-body="' + key + '"]');
+    if (body) body.style.display = isOn ? "none" : "";
     btn.textContent = isOn ? "Testing" : "Test me";
   }
+
   function _saveThresholdsAndContinue() {
     const result = {};
     document.querySelectorAll("#bp-v2-thresholds-container [data-threshold]").forEach(section => {
@@ -820,7 +960,13 @@
         const v = input.value.trim();
         if (v) vals[id] = v;
       });
-      result[key] = Object.keys(vals).length ? Object.assign({ mode: "known" }, vals) : { mode: "test" };
+      const methodSel = section.querySelector('[data-threshold-method]');
+      const method = methodSel ? methodSel.value : null;
+      if (Object.keys(vals).length) {
+        result[key] = Object.assign({ mode: "known" }, method ? { method } : {}, vals);
+      } else {
+        result[key] = { mode: "test" };
+      }
     });
     _state.thresholds = result;
     _lsSet("thresholds", result);
@@ -884,19 +1030,30 @@
     else { goTo("bp-v2-5"); _renderSchedule(); }
   }
 
+  // Which long sessions make sense for a given race type.
+  // Only races where a dedicated weekly long session matters.
+  function _longSportsForRace(race) {
+    if (!race || !race.date || !race.type) return [];
+    const t = race.type;
+    if (["marathon", "halfMarathon", "ultra"].includes(t)) return ["run"];
+    if (["century", "granFondo", "stage"].includes(t))     return ["bike"];
+    if (["halfIronman", "ironman"].includes(t))            return ["run", "bike"];
+    return [];
+  }
   function _shouldShowLongDays() {
-    const sports = _state.selectedSports;
-    if (!sports.includes("run") && !sports.includes("bike")) return false;
-    const race = _state.currentRace;
-    const longTypes = ["halfIronman", "ironman", "marathon", "halfMarathon", "ultra", "century", "granFondo"];
-    return !!race && longTypes.includes(race.type);
+    const needed = _longSportsForRace(_state.currentRace);
+    if (!needed.length) return false;
+    // Only show the screen if at least one "long" sport is actually selected.
+    return needed.some(s => _state.selectedSports.includes(s));
   }
   function _renderLongDayBlocks() {
-    const run = document.getElementById("bp-v2-longrun-block");
+    const needed = _longSportsForRace(_state.currentRace);
+    const run  = document.getElementById("bp-v2-longrun-block");
     const ride = document.getElementById("bp-v2-longride-block");
-    const sports = _state.selectedSports;
-    if (run)  run.style.display  = sports.includes("run")  ? "" : "none";
-    if (ride) ride.style.display = sports.includes("bike") ? "" : "none";
+    const showRun  = needed.includes("run")  && _state.selectedSports.includes("run");
+    const showRide = needed.includes("bike") && _state.selectedSports.includes("bike");
+    if (run)  run.style.display  = showRun  ? "" : "none";
+    if (ride) ride.style.display = showRide ? "" : "none";
   }
   function _selectLongDay(btn, which) {
     if (!btn) return;
@@ -918,42 +1075,69 @@
   function _renderSchedule() {
     const grid = document.getElementById("bp-v2-schedule-grid");
     if (!grid) return;
-    if (_BP_DAYS.every(d => !_state.schedule[d] || _state.schedule[d].length === 0)) _seedSchedule();
+    // Guarantee all 7 day keys exist on the schedule object
+    _BP_DAYS.forEach(d => {
+      if (!Array.isArray(_state.schedule[d])) _state.schedule[d] = [];
+    });
+    // Seed whenever the schedule is entirely empty (first entry to bp-5)
+    const allEmpty = _BP_DAYS.every(d => _state.schedule[d].length === 0);
+    if (allEmpty) _seedSchedule();
     grid.innerHTML = _BP_DAYS.map(day => {
       const slots = _state.schedule[day] || [];
-      const chipsHtml = slots.map(s =>
-        '<span class="ob-v2-slot-chip ob-v2-slot-' + s.replace(/[^a-z0-9]/gi, "") + '">' + _escape(_prettySport(s)) +
-        '<button type="button" class="ob-v2-slot-remove" onclick="OnboardingV2._removeSlot(\'' + day + '\',\'' + s + '\')">&times;</button>' +
-        '</span>'
-      ).join("");
-      return '<div class="ob-v2-schedule-day"><div class="ob-v2-day-name">' + _BP_DAY_LABELS[day] + '</div><div class="ob-v2-day-slots">' +
-        chipsHtml +
-        '<button type="button" class="ob-v2-add-slot" onclick="OnboardingV2._promptAddSlot(\'' + day + '\')">+</button>' +
-        '</div></div>';
+      const chipsHtml = slots.map(s => {
+        const cls = s.replace(/[^a-z0-9]/gi, "");
+        return '<span class="ob-v2-slot-chip ob-v2-slot-' + cls + '">' +
+          _escape(_prettySport(s)) +
+          '<button type="button" class="ob-v2-slot-remove" onclick="OnboardingV2._removeSlot(\'' + day + '\',\'' + s + '\')">&times;</button>' +
+          '</span>';
+      }).join("");
+      return '<div class="ob-v2-schedule-day">' +
+        '<div class="ob-v2-day-name">' + _BP_DAY_LABELS[day] + '</div>' +
+        '<div class="ob-v2-day-slots">' + chipsHtml +
+          '<button type="button" class="ob-v2-add-slot" onclick="OnboardingV2._promptAddSlot(\'' + day + '\')">+</button>' +
+        '</div>' +
+      '</div>';
     }).join("");
     _renderScheduleSummary();
   }
   function _seedSchedule() {
-    const sports = _state.selectedSports;
+    const sports = _state.selectedSports.slice();
     const strength = _state.strengthSetup.sessionsPerWeek || 0;
-    const pattern = [];
-    if (sports.includes("run"))  pattern.push("run");
-    if (sports.includes("bike")) pattern.push("bike");
-    if (sports.includes("swim")) pattern.push("swim");
-    let strLeft = strength;
-    _BP_DAYS.forEach((d, i) => {
-      _state.schedule[d] = [];
-      if (sports.includes("run") && _state.longDays.longRun === d) _state.schedule[d].push("run-long");
-      else if (sports.includes("bike") && _state.longDays.longRide === d) _state.schedule[d].push("bike-long");
-      else if (pattern.length) _state.schedule[d].push(pattern[i % pattern.length]);
-      if (strLeft > 0 && i % 2 === 0 && _state.schedule[d].length < 2) {
-        _state.schedule[d].push("strength");
-        strLeft--;
+    const endurance = sports.filter(s => ["run", "bike", "swim"].includes(s));
+    const needed = _longSportsForRace(_state.currentRace);
+    _BP_DAYS.forEach(d => { _state.schedule[d] = []; });
+    // Anchor long sessions first (if race-relevant)
+    if (needed.includes("run") && _state.longDays.longRun) {
+      _state.schedule[_state.longDays.longRun] = ["run-long"];
+    }
+    if (needed.includes("bike") && _state.longDays.longRide) {
+      const d = _state.longDays.longRide;
+      if (!_state.schedule[d].length) _state.schedule[d] = ["bike-long"];
+    }
+    // Distribute remaining endurance sports round-robin across remaining days
+    if (endurance.length) {
+      let idx = 0;
+      _BP_DAYS.forEach(d => {
+        if (_state.schedule[d].length) return;
+        _state.schedule[d].push(endurance[idx % endurance.length]);
+        idx++;
+      });
+    }
+    // Sprinkle strength sessions on alternating days, capped at requested count
+    if (strength > 0) {
+      let placed = 0;
+      for (let i = 0; i < _BP_DAYS.length && placed < strength; i += 2) {
+        const d = _BP_DAYS[i];
+        if (_state.schedule[d].length < 2) {
+          _state.schedule[d].push("strength");
+          placed++;
+        }
       }
-    });
-    if (!Object.values(_state.schedule).some(arr => arr.includes("rest"))) {
-      const empty = _BP_DAYS.find(d => _state.schedule[d].length === 0);
-      if (empty) _state.schedule[empty] = ["rest"];
+    }
+    // If the user ended up with zero rest days, carve one from the lightest day.
+    if (!Object.values(_state.schedule).some(arr => !arr.length || arr.includes("rest"))) {
+      const lightest = _BP_DAYS.slice().sort((a, b) => _state.schedule[a].length - _state.schedule[b].length)[0];
+      if (lightest) _state.schedule[lightest] = ["rest"];
     }
   }
   function _prettySport(s) {
@@ -1032,52 +1216,113 @@
     if (callout) callout.style.display = anyTest ? "" : "none";
   }
 
+  // Persist Build Plan inputs AND materialize the weekly template into
+  // dated sessions appended to the real `workoutSchedule` array. Previously
+  // we overwrote `workoutSchedule` with the weekly-template OBJECT, which
+  // corrupted it (calendar expects an array) and caused day-detail crashes.
+  // We also no longer delegate to generateTrainingPlan for multi-sport
+  // users — the user's explicit schedule is the source of truth.
   function _confirmAndSavePlan() {
     _lsSet("selectedSports", _state.selectedSports);
     _lsSet("trainingGoals", _state.trainingGoals);
     _lsSet("raceEvents", _state.raceEvents);
     _lsSet("thresholds", _state.thresholds);
     _lsSet("strengthSetup", _state.strengthSetup);
-    _lsSet("workoutSchedule", _state.schedule);
+    // Template (weekly pattern) lives in its own key; do NOT write to workoutSchedule here.
+    _lsSet("buildPlanTemplate", _state.schedule);
+
+    // Map onboarding raceEvents into the legacy events shape so the
+    // calendar / renderRaceEvents keep working unchanged.
     const legacyEvents = _mapRacesToLegacyEvents(_state.raceEvents);
     if (legacyEvents.length) {
       const existing = _lsGet("events", []) || [];
       _lsSet("events", existing.concat(legacyEvents));
     }
-    let plan = null;
-    const race = legacyEvents[0];
-    if (typeof generateTrainingPlan === "function" && race) {
-      try { plan = generateTrainingPlan(race); }
-      catch (e) { console.warn("[OnboardingV2] generateTrainingPlan threw", e); }
+
+    // Materialize dated sessions from the weekly template.
+    try {
+      _writeScheduleSessions();
+    } catch (e) {
+      console.warn("[OnboardingV2] writing schedule sessions failed", e);
     }
-    if (plan) {
-      _lsSet("trainingPlan", plan);
-      if (typeof storeGeneratedPlan === "function") {
-        try {
-          storeGeneratedPlan({
-            plan_data: plan,
-            plan_metadata: {
-              philosophy_modules_used: [],
-              module_versions: {},
-              plan_version: "1.0",
-              generated_at: new Date().toISOString(),
-            },
-            assumptions: [],
-            inputs: {
-              selectedSports: _state.selectedSports,
-              trainingGoals: _state.trainingGoals,
-              raceEvents: _state.raceEvents,
-              thresholds: _state.thresholds,
-              strengthSetup: _state.strengthSetup,
-              schedule: _state.schedule,
-            },
-          }, "onboarding_v2");
-        } catch (e) { console.warn("[OnboardingV2] storeGeneratedPlan threw", e); }
-      }
-    }
+
     _lsSet("surveyComplete", "1");
     if (_state.mode === "onboarding") _lsSet("hasOnboarded", "1");
     goTo("bp-v2-done");
+  }
+
+  // Expand the weekly `_state.schedule` template into real sessions on
+  // the user's calendar for the next N weeks (planDetails.duration).
+  // Appends to the existing `workoutSchedule` array without touching
+  // past entries.
+  function _writeScheduleSessions() {
+    const weeks = Math.max(1, parseInt(_state.planDetails.duration, 10) || 12);
+    const sessionLen = Math.max(15, parseInt(_state.planDetails.sessionLength, 10) || 60);
+    const planId = "ob-v2-" + Date.now();
+
+    // Find the Monday on or after today
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const dow = start.getDay(); // 0=Sun..6=Sat
+    const daysToMon = (dow === 0 ? 1 : (8 - dow) % 7);
+    start.setDate(start.getDate() + daysToMon);
+
+    const existing = (() => {
+      try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; }
+      catch { return []; }
+    })();
+    // Keep only array entries (defensive: previous bug wrote an object)
+    const existingArr = Array.isArray(existing) ? existing : [];
+
+    const sessions = [];
+    let counter = 0;
+    for (let w = 0; w < weeks; w++) {
+      _BP_DAYS.forEach((day, idx) => {
+        const slots = (_state.schedule[day] || []).filter(s => s && s !== "rest");
+        slots.forEach(sport => {
+          const d = new Date(start);
+          d.setDate(start.getDate() + w * 7 + idx);
+          const dateStr = d.toISOString().slice(0, 10);
+          const session = _buildSessionForSport(sport, dateStr, sessionLen, w + 1, planId, counter++);
+          if (session) sessions.push(session);
+        });
+      });
+    }
+
+    const merged = existingArr.concat(sessions);
+    localStorage.setItem("workoutSchedule", JSON.stringify(merged));
+    if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("workoutSchedule");
+  }
+
+  // Build a single calendar session object in the shape other
+  // parts of the app (calendar, day detail, planner) already expect.
+  function _buildSessionForSport(sport, dateStr, sessionLen, weekNumber, planId, idx) {
+    const base = {
+      id: planId + "-" + idx,
+      date: dateStr,
+      weekNumber: weekNumber,
+      planId: planId,
+      duration: sessionLen,
+      source: "onboarding_v2",
+    };
+    const map = {
+      "run":      { type: "running",      discipline: "run",   sessionName: "Run",       load: "easy" },
+      "run-long": { type: "running",      discipline: "run",   sessionName: "Long Run",  load: "long",    duration: Math.round(sessionLen * 1.5) },
+      "bike":     { type: "cycling",      discipline: "bike",  sessionName: "Ride",      load: "easy" },
+      "bike-long":{ type: "cycling",      discipline: "bike",  sessionName: "Long Ride", load: "long",    duration: Math.round(sessionLen * 1.8) },
+      "swim":     { type: "swimming",     discipline: "swim",  sessionName: "Swim",      load: "easy" },
+      "strength": { type: "weightlifting",discipline: "strength", sessionName: "Strength", load: "moderate" },
+      "hiit":     { type: "hiit",         discipline: "hiit",  sessionName: "HIIT",      load: "hard",    duration: Math.max(20, Math.round(sessionLen * 0.5)) },
+      "yoga":     { type: "yoga",         discipline: "yoga",  sessionName: "Yoga",      load: "easy" },
+      "mobility": { type: "mobility",     discipline: "mobility", sessionName: "Mobility", load: "easy",  duration: 20 },
+      "walking":  { type: "walking",      discipline: "walk",  sessionName: "Walk",      load: "easy" },
+      "rowing":   { type: "rowing",       discipline: "row",   sessionName: "Row",       load: "moderate" },
+      "hyrox":    { type: "hiit",         discipline: "hyrox", sessionName: "Hyrox",     load: "hard" },
+      "circuit":  { type: "hiit",         discipline: "circuit", sessionName: "Circuit", load: "hard" },
+    };
+    const spec = map[sport];
+    if (!spec) return null;
+    return Object.assign({}, base, spec);
   }
   function _mapRacesToLegacyEvents(races) {
     const typeMap = {
@@ -1114,7 +1359,7 @@
       _toggleGoal, _saveGoalsAndContinue,
       _updateRaceTypes, _updateWeeksCallout, _selectRaceGoal, _selectLeadInPhase, _adjustLeadIn, _saveRaceAndContinue,
       _selectPlanOption, _saveNoraceAndContinue,
-      _renderThresholdSections, _toggleTestMe, _saveThresholdsAndContinue, _testMeForEverythingAndContinue,
+      _renderThresholdSections, _toggleTestMe, _changeThresholdMethod, _saveThresholdsAndContinue, _testMeForEverythingAndContinue,
       _adjustStrengthCount, _applyStrengthCountSideEffects, _selectSplit, _toggleMuscle, _selectStrLength, _saveStrengthAndContinue,
       _shouldShowLongDays, _renderLongDayBlocks, _selectLongDay, _saveLongDaysAndContinue,
       _renderSchedule, _removeSlot, _promptAddSlot, _saveScheduleAndContinue,
