@@ -382,17 +382,22 @@ function _calV2LoadToDot(load) {
   return "c-med";
 }
 
-// Small single-path stroke SVG keyed by the same CSS class we use on
-// .wc / .det-ic. Kept inline so the new calendar skin doesn't pull in
-// another sprite sheet — ICONS.run / .swim / .bike / .weights are a
-// different visual style that would clash with the new palette.
-const _CAL_V2_DISC_SVG = {
-  run:  '<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><path d="M7 20l3-7 2.5 2V20"/><path d="M17 8l-3 4-2.5-2-3 4"/></svg>',
-  swim: '<svg viewBox="0 0 24 24"><path d="M2 16c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2c1.3 0 1.9.5 2.5 1"/><circle cx="12" cy="7" r="2"/><path d="M9 12l3-3 3 3"/></svg>',
-  bike: '<svg viewBox="0 0 24 24"><circle cx="5.5" cy="17.5" r="3.5" fill="none"/><circle cx="18.5" cy="17.5" r="3.5" fill="none"/><path d="M15 6h2l3 8M5.5 17.5L8 10h4l2 4"/></svg>',
-  str:  '<svg viewBox="0 0 24 24"><path d="M6 5v14M18 5v14M2 8h4M18 8h4M2 16h4M18 16h4M6 12h12"/></svg>',
-  race: '<svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>',
-};
+// Workout-circle icons reuse the app's canonical ICONS sprite so the
+// runner / dumbbell / wheels / waves match what the rest of the app
+// (Add Session modal, quick entry, stats) already uses. Resolving
+// lazily from the global ICONS object lets this file be declared
+// before icons.js loads without caring about script order.
+function _calV2IconFor(discCls) {
+  const I = (typeof ICONS === "object" && ICONS) || {};
+  switch (discCls) {
+    case "run":  return I.run  || "";
+    case "swim": return I.swim || "";
+    case "bike": return I.bike || "";
+    case "race": return I.flag || "";
+    case "str":
+    default:     return I.weights || I.zap || "";
+  }
+}
 const _CAL_V2_CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
 // Collect an array of normalized session descriptors for a date, each
@@ -480,22 +485,26 @@ function _calV2WireCarouselSwipe() {
   let startX = 0;
   let dx = 0;
   let active = false;
+  // When a real drag completes, suppress the synthetic click that
+  // follows so day-card onclick=selectDay() doesn't fire on whatever
+  // card the pointer happened to be over. Plain taps (no drag) leave
+  // this flag false and the card's onclick runs normally.
+  let suppressClick = false;
 
   wrap.addEventListener("pointerdown", (ev) => {
-    // Ignore clicks on actual cards — let selectDay run. Only start
-    // a drag from blank space between cards or from the wrapper itself.
-    // We still commit navigation in pointerup if the pointer moved far
-    // enough, which beats the single-tap.
     if (ev.button !== 0) return;
     active = true;
     startX = ev.clientX;
     dx = 0;
-    wrap.setPointerCapture(ev.pointerId);
+    // Intentionally NOT calling setPointerCapture — capturing the
+    // pointer redirects the click to the wrap element and day-card
+    // onclick handlers never fire, which is why the first pass
+    // broke day selection entirely.
   });
   wrap.addEventListener("pointermove", (ev) => {
     if (!active) return;
     dx = ev.clientX - startX;
-    if (Math.abs(dx) > 5) wrap.classList.add("is-dragging");
+    if (Math.abs(dx) > 6) wrap.classList.add("is-dragging");
   });
   const end = () => {
     if (!active) return;
@@ -504,7 +513,7 @@ function _calV2WireCarouselSwipe() {
     dx = 0;
     wrap.classList.remove("is-dragging");
     if (Math.abs(moved) >= THRESHOLD) {
-      // Natural direction: drag right → previous week, drag left → next
+      suppressClick = true;
       if (moved > 0) calPrev();
       else calNext();
     }
@@ -512,6 +521,15 @@ function _calV2WireCarouselSwipe() {
   wrap.addEventListener("pointerup", end);
   wrap.addEventListener("pointercancel", end);
   wrap.addEventListener("pointerleave", end);
+  // Capture-phase click blocker — only eats the click when a drag
+  // just ended. Any other click (a tap on a day card) passes through.
+  wrap.addEventListener("click", (ev) => {
+    if (suppressClick) {
+      suppressClick = false;
+      ev.stopPropagation();
+      ev.preventDefault();
+    }
+  }, true);
 }
 
 // Kept for back-compat with any in-file references — the v2 design
