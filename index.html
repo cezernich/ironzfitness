@@ -156,7 +156,7 @@
         <span class="logo-mark"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
         <span class="logo-text">IronZ</span>
       </div>
-      <button class="sv-open-btn" onclick="openSurvey()"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Build Plan</button>
+      <button class="sv-open-btn" onclick="window.OnboardingV2 && window.OnboardingV2.openBuildPlan()"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Build Plan</button>
     </div>
     <div class="header-right">
       <!-- Inbox badge (shared workouts) — kept in header for visibility -->
@@ -182,6 +182,14 @@
            with the nearest race + countdown. -->
       <div id="training-next-race-banner"></div>
 
+      <!-- Build My Plan (v2 entry point) -->
+      <div class="build-plan-cta">
+        <button class="btn btn-primary build-plan-cta-btn" onclick="window.OnboardingV2 && window.OnboardingV2.openBuildPlan()">
+          Build My Plan
+        </button>
+        <p class="build-plan-cta-hint">Guided setup: sports, goals, races, thresholds, schedule.</p>
+      </div>
+
       <!-- Goals Section -->
       <section class="card collapsible is-collapsed" id="goals-section">
         <div class="card-toggle" onclick="toggleSection('goals-section')">
@@ -193,8 +201,12 @@
         </div>
       </section>
 
-      <!-- Build a Plan (unified) -->
-      <section class="card collapsible is-collapsed" id="section-build-plan">
+      <!-- Build a Plan (legacy section) — hidden; replaced by the
+           standalone Build Plan overlay (#bp-v2-overlay) triggered
+           from the "Build My Plan" CTA above. Races live in Active
+           Training Inputs now, not here. Kept in DOM so downstream
+           scripts (switchBuildPlanTab, etc.) don't null-ref. -->
+      <section class="card collapsible is-collapsed" id="section-build-plan" style="display:none">
         <div class="card-toggle" onclick="toggleSection('section-build-plan')">
           <h2>Build a Plan</h2>
           <span class="card-chevron">▾</span>
@@ -2876,7 +2888,17 @@
   <script src="js/safety-guardrails.js"></script>
   <script src="js/weekly-checkin.js"></script>
   <script src="js/barcode-scanner.js"></script>
-  <script src="js/onboarding.js"></script>
+  <!-- Legacy onboarding (renamed from js/onboarding.js in Phase 2 of
+       the onboarding-v2 rollout). Still loaded because several of its
+       window.* exports are used by the Build Plan flow as a temporary
+       bridge until Phase 3 lands the new bp-* screens. Once Phase 3
+       ships and every caller has moved to OnboardingV2, this file can
+       be removed. -->
+  <script src="js/onboarding-legacy.js"></script>
+  <!-- Onboarding v2 — real onboarding flow. Must come after
+       planner.js / philosophy-planner.js (loaded above) and before
+       auth.js so init() can call OnboardingV2.maybeStart(). -->
+  <script src="js/onboarding-v2.js"></script>
   <script src="js/admin.js"></script>
   <script src="js/analytics.js"></script>
   <script src="js/push.js"></script>
@@ -2910,6 +2932,573 @@
       <span>Profile</span>
     </button>
   </nav>
+
+  <!-- ===== ONBOARDING V2 — shown once to first-time users =====
+       Hidden by default; OnboardingV2.maybeStart() flips is-active
+       when hasOnboarded !== "1". See js/onboarding-v2.js. -->
+  <div id="ob-v2-root" class="ob-v2-root" aria-hidden="true">
+    <div class="ob-v2-frame">
+      <div class="ob-v2-progress-wrap">
+        <div class="ob-v2-progress-bar">
+          <div class="ob-v2-progress-fill" id="ob-v2-progress-fill"></div>
+        </div>
+        <div class="ob-v2-progress-label" id="ob-v2-progress-label">Welcome</div>
+      </div>
+      <div class="ob-v2-screen-container">
+
+        <!-- ob-1: Welcome -->
+        <div class="ob-v2-screen is-active" id="ob-v2-1">
+          <div class="ob-v2-welcome-logo">
+            <span class="ob-v2-welcome-bolt" data-ob-icon="zap"></span>
+            <div class="ob-v2-welcome-wordmark">IRONZ</div>
+          </div>
+          <h2 class="ob-v2-h2 ob-v2-center">Welcome to IronZ</h2>
+          <p class="ob-v2-subtitle ob-v2-center">Your training partner. Let's get you set up in under two minutes.</p>
+          <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2.goTo('ob-v2-2')">Let's Go</button>
+        </div>
+
+        <!-- ob-2: Athlete Profile -->
+        <div class="ob-v2-screen" id="ob-v2-2">
+          <button type="button" class="ob-v2-back" onclick="OnboardingV2.goTo('ob-v2-1')">&larr; Back</button>
+          <h2 class="ob-v2-h2">Athlete Profile</h2>
+          <p class="ob-v2-subtitle">These basics help us build the right plan for you.</p>
+
+          <div class="ob-v2-form-group">
+            <label for="ob-v2-name">Name</label>
+            <input type="text" id="ob-v2-name" placeholder="Alex" />
+          </div>
+          <div class="ob-v2-form-group">
+            <label for="ob-v2-bday">Birthday</label>
+            <input type="date" id="ob-v2-bday" min="1930-01-01" max="2015-12-31" />
+            <div class="ob-v2-error-msg" id="ob-v2-err-bday"></div>
+          </div>
+          <div class="ob-v2-form-group">
+            <label for="ob-v2-weight">Weight</label>
+            <div class="ob-v2-form-row">
+              <input type="number" id="ob-v2-weight" placeholder="175" min="50" max="500" />
+              <span class="ob-v2-unit">lbs</span>
+            </div>
+            <div class="ob-v2-error-msg" id="ob-v2-err-weight"></div>
+          </div>
+          <div class="ob-v2-form-group">
+            <label>Height</label>
+            <div class="ob-v2-form-row">
+              <input type="number" id="ob-v2-height-ft" placeholder="5" min="3" max="8" style="width:70px" />
+              <span class="ob-v2-unit">ft</span>
+              <input type="number" id="ob-v2-height-in" placeholder="11" min="0" max="11" style="width:70px" />
+              <span class="ob-v2-unit">in</span>
+            </div>
+            <div class="ob-v2-error-msg" id="ob-v2-err-height"></div>
+          </div>
+          <div class="ob-v2-form-group">
+            <label for="ob-v2-gender">Gender</label>
+            <select id="ob-v2-gender">
+              <option value="">Select...</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="non-binary">Non-binary</option>
+              <option value="prefer_not_to_say">Prefer not to say</option>
+            </select>
+          </div>
+
+          <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2.validateProfile()">Continue</button>
+        </div>
+
+        <!-- ob-3: Preferences -->
+        <div class="ob-v2-screen" id="ob-v2-3">
+          <button type="button" class="ob-v2-back" onclick="OnboardingV2.goTo('ob-v2-2')">&larr; Back</button>
+          <h2 class="ob-v2-h2">Your Preferences</h2>
+          <p class="ob-v2-subtitle">Toggle what you want to see in the app. You can change these anytime in Settings.</p>
+
+          <div class="ob-v2-toggle-row">
+            <div class="ob-v2-toggle-label"><span class="ob-v2-toggle-ico" data-ob-icon="weights"></span> Workout Plans</div>
+            <button type="button" class="ob-v2-toggle on" data-pref="workoutPlans" onclick="OnboardingV2._togglePref(this)"><span class="ob-v2-knob"></span></button>
+          </div>
+          <div class="ob-v2-toggle-row">
+            <div class="ob-v2-toggle-label"><span class="ob-v2-toggle-ico" data-ob-icon="utensils"></span> Nutrition Tracking</div>
+            <button type="button" class="ob-v2-toggle on" data-pref="nutrition" onclick="OnboardingV2._togglePref(this)"><span class="ob-v2-knob"></span></button>
+          </div>
+          <div class="ob-v2-toggle-row">
+            <div class="ob-v2-toggle-label"><span class="ob-v2-toggle-ico" data-ob-icon="droplet"></span> Hydration Tracking</div>
+            <button type="button" class="ob-v2-toggle on" data-pref="hydration" onclick="OnboardingV2._togglePref(this)"><span class="ob-v2-knob"></span></button>
+          </div>
+          <div class="ob-v2-toggle-row">
+            <div class="ob-v2-toggle-label"><span class="ob-v2-toggle-ico" data-ob-icon="flame"></span> Race Fueling Guidance</div>
+            <button type="button" class="ob-v2-toggle on" data-pref="fueling" onclick="OnboardingV2._togglePref(this)"><span class="ob-v2-knob"></span></button>
+          </div>
+
+          <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._savePrefsAndContinue()">Continue</button>
+        </div>
+
+        <!-- ob-4: Injuries -->
+        <div class="ob-v2-screen" id="ob-v2-4">
+          <button type="button" class="ob-v2-back" onclick="OnboardingV2.goTo('ob-v2-3')">&larr; Back</button>
+          <h2 class="ob-v2-h2">Any Limitations?</h2>
+          <p class="ob-v2-subtitle">Select any current injuries or problem areas so we can pick safe exercises.</p>
+
+          <div class="ob-v2-injury-chips" id="ob-v2-injury-chips">
+            <button type="button" class="ob-v2-injury-chip" data-injury="shoulder" onclick="OnboardingV2._toggleInjury(this)">Shoulder</button>
+            <button type="button" class="ob-v2-injury-chip" data-injury="knee" onclick="OnboardingV2._toggleInjury(this)">Knee</button>
+            <button type="button" class="ob-v2-injury-chip" data-injury="back" onclick="OnboardingV2._toggleInjury(this)">Back / Spine</button>
+            <button type="button" class="ob-v2-injury-chip" data-injury="hip" onclick="OnboardingV2._toggleInjury(this)">Hip</button>
+            <button type="button" class="ob-v2-injury-chip" data-injury="ankle" onclick="OnboardingV2._toggleInjury(this)">Ankle / Foot</button>
+            <button type="button" class="ob-v2-injury-chip" data-injury="wrist" onclick="OnboardingV2._toggleInjury(this)">Wrist / Elbow</button>
+            <button type="button" class="ob-v2-injury-chip ob-v2-injury-chip--none" data-injury="none" onclick="OnboardingV2._toggleInjury(this)">None</button>
+          </div>
+
+          <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._saveInjuriesAndContinue()">Continue</button>
+          <button type="button" class="ob-v2-btn-skip" onclick="OnboardingV2._saveInjuriesAndContinue()">Skip for now</button>
+        </div>
+
+        <!-- ob-5: Connect Apps -->
+        <div class="ob-v2-screen" id="ob-v2-5">
+          <button type="button" class="ob-v2-back" onclick="OnboardingV2.goTo('ob-v2-4')">&larr; Back</button>
+          <h2 class="ob-v2-h2">Connect Your Apps</h2>
+          <p class="ob-v2-subtitle">Sync your data for a better experience. You can always do this later.</p>
+
+          <div class="ob-v2-app-cards">
+            <div class="ob-v2-app-card">
+              <div class="ob-v2-app-icon ob-v2-app-icon--strava">S</div>
+              <div class="ob-v2-app-name">Strava</div>
+              <button type="button" class="ob-v2-connect-btn" data-app="strava" onclick="OnboardingV2._toggleApp(this)">Connect</button>
+            </div>
+            <div class="ob-v2-app-card">
+              <div class="ob-v2-app-icon ob-v2-app-icon--apple">♥</div>
+              <div class="ob-v2-app-name">Apple Health</div>
+              <button type="button" class="ob-v2-connect-btn" data-app="apple_health" onclick="OnboardingV2._toggleApp(this)">Connect</button>
+            </div>
+            <div class="ob-v2-app-card">
+              <div class="ob-v2-app-icon ob-v2-app-icon--garmin">G</div>
+              <div class="ob-v2-app-name">Garmin Connect</div>
+              <button type="button" class="ob-v2-connect-btn" data-app="garmin" onclick="OnboardingV2._toggleApp(this)">Connect</button>
+            </div>
+          </div>
+
+          <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._saveAppsAndContinue()">Continue</button>
+          <button type="button" class="ob-v2-btn-skip" onclick="OnboardingV2._saveAppsAndContinue()">Skip for now</button>
+        </div>
+
+        <!-- ob-5b: Notifications -->
+        <div class="ob-v2-screen" id="ob-v2-5b">
+          <button type="button" class="ob-v2-back" onclick="OnboardingV2.goTo('ob-v2-5')">&larr; Back</button>
+          <h2 class="ob-v2-h2">Stay on Track</h2>
+          <p class="ob-v2-subtitle">Smart reminders that actually help. Customize these anytime in Settings.</p>
+
+          <div class="ob-v2-notif-hero"><span data-ob-icon="alertCircle"></span></div>
+
+          <!-- Workout reminder — always visible -->
+          <div class="ob-v2-toggle-row">
+            <div class="ob-v2-toggle-label"><span class="ob-v2-toggle-ico" data-ob-icon="weights"></span> Daily Workout Reminder</div>
+            <button type="button" class="ob-v2-toggle on" data-notif="workoutReminder" onclick="OnboardingV2._toggleNotif(this)"><span class="ob-v2-knob"></span></button>
+          </div>
+          <div class="ob-v2-notif-freq" id="ob-v2-notif-workout-freq">
+            <p class="ob-v2-notif-hint">What time?</p>
+            <div class="ob-v2-chips">
+              <button type="button" class="ob-v2-chip" data-notif-opt="workoutTime" data-value="6AM" onclick="OnboardingV2._selectNotifSingle(this)">6 AM</button>
+              <button type="button" class="ob-v2-chip is-selected" data-notif-opt="workoutTime" data-value="7AM" onclick="OnboardingV2._selectNotifSingle(this)">7 AM</button>
+              <button type="button" class="ob-v2-chip" data-notif-opt="workoutTime" data-value="8AM" onclick="OnboardingV2._selectNotifSingle(this)">8 AM</button>
+              <button type="button" class="ob-v2-chip" data-notif-opt="workoutTime" data-value="9AM" onclick="OnboardingV2._selectNotifSingle(this)">9 AM</button>
+            </div>
+          </div>
+
+          <!-- Hydration reminder — conditional on ob-3 -->
+          <div class="ob-v2-notif-section" id="ob-v2-notif-hydration-section">
+            <div class="ob-v2-toggle-row">
+              <div class="ob-v2-toggle-label"><span class="ob-v2-toggle-ico" data-ob-icon="droplet"></span> Hydration Reminders</div>
+              <button type="button" class="ob-v2-toggle on" data-notif="hydration" onclick="OnboardingV2._toggleNotif(this)"><span class="ob-v2-knob"></span></button>
+            </div>
+            <div class="ob-v2-notif-freq" id="ob-v2-notif-hydration-freq">
+              <p class="ob-v2-notif-hint">How often?</p>
+              <div class="ob-v2-chips">
+                <button type="button" class="ob-v2-chip" data-notif-opt="hydrationFreq" data-value="1hr" onclick="OnboardingV2._selectNotifSingle(this)">Every hour</button>
+                <button type="button" class="ob-v2-chip is-selected" data-notif-opt="hydrationFreq" data-value="2hr" onclick="OnboardingV2._selectNotifSingle(this)">Every 2 hours</button>
+                <button type="button" class="ob-v2-chip" data-notif-opt="hydrationFreq" data-value="3hr" onclick="OnboardingV2._selectNotifSingle(this)">Every 3 hours</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Nutrition reminder — conditional on ob-3 -->
+          <div class="ob-v2-notif-section" id="ob-v2-notif-nutrition-section">
+            <div class="ob-v2-toggle-row">
+              <div class="ob-v2-toggle-label"><span class="ob-v2-toggle-ico" data-ob-icon="utensils"></span> Nutrition Reminders</div>
+              <button type="button" class="ob-v2-toggle on" data-notif="nutrition" onclick="OnboardingV2._toggleNotif(this)"><span class="ob-v2-knob"></span></button>
+            </div>
+            <div class="ob-v2-notif-freq" id="ob-v2-notif-nutrition-freq">
+              <p class="ob-v2-notif-hint">When should we nudge you?</p>
+              <div class="ob-v2-chips" id="ob-v2-nutrition-triggers">
+                <button type="button" class="ob-v2-chip is-selected" data-notif-opt="nutritionTrigger" data-value="nolog" onclick="OnboardingV2._toggleNotifMulti(this)">Haven't logged</button>
+                <button type="button" class="ob-v2-chip" data-notif-opt="nutritionTrigger" data-value="mealtime" onclick="OnboardingV2._toggleNotifMulti(this)">Meal times</button>
+                <button type="button" class="ob-v2-chip" data-notif-opt="nutritionTrigger" data-value="offtarget" onclick="OnboardingV2._toggleNotifMulti(this)">Off target</button>
+              </div>
+              <p class="ob-v2-notif-hint ob-v2-notif-hint--sub" id="ob-v2-nutrition-desc">If you haven't logged anything by mid-morning, we'll send a friendly reminder.</p>
+            </div>
+          </div>
+
+          <!-- Weekly summary — always visible -->
+          <div class="ob-v2-toggle-row">
+            <div class="ob-v2-toggle-label"><span class="ob-v2-toggle-ico" data-ob-icon="trendingUp"></span> Weekly Progress Summary</div>
+            <button type="button" class="ob-v2-toggle on" data-notif="weeklySummary" onclick="OnboardingV2._toggleNotif(this)"><span class="ob-v2-knob"></span></button>
+          </div>
+
+          <div class="ob-v2-callout ob-v2-callout--info">
+            You'll see a permission prompt from your phone. Tap "Allow" to enable notifications.
+          </div>
+
+          <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._saveNotifsAndContinue()">Enable Notifications</button>
+          <button type="button" class="ob-v2-btn-skip" onclick="OnboardingV2._saveNotifsAndContinue()">Maybe Later</button>
+        </div>
+
+        <!-- ob-6: The Fork -->
+        <div class="ob-v2-screen" id="ob-v2-6">
+          <button type="button" class="ob-v2-back" onclick="OnboardingV2.goTo('ob-v2-5b')">&larr; Back</button>
+          <h2 class="ob-v2-h2">How do you want to use IronZ?</h2>
+          <p class="ob-v2-subtitle">You can always switch later.</p>
+
+          <div class="ob-v2-fork-card" id="ob-v2-fork-plan" onclick="OnboardingV2._selectFork('plan')">
+            <div class="ob-v2-fork-header">
+              <div class="ob-v2-fork-icon ob-v2-fork-icon--plan"><span data-ob-icon="zap"></span></div>
+              <h3>Build My Plan</h3>
+            </div>
+            <p>IronZ builds a personalized training plan based on your goals, schedule, and fitness level.</p>
+          </div>
+
+          <div class="ob-v2-fork-card" id="ob-v2-fork-manual" onclick="OnboardingV2._selectFork('manual')">
+            <div class="ob-v2-fork-header">
+              <div class="ob-v2-fork-icon ob-v2-fork-icon--manual"><span data-ob-icon="pencil"></span></div>
+              <h3>I'll Do My Own Thing</h3>
+            </div>
+            <p>Log your own workouts, browse our library, and track your progress your way.</p>
+          </div>
+        </div>
+
+        <!-- manual-landing -->
+        <div class="ob-v2-screen" id="ob-v2-manual-landing">
+          <h2 class="ob-v2-h2">You're all set!</h2>
+          <p class="ob-v2-subtitle">Your profile is ready. What would you like to do first?</p>
+
+          <button type="button" class="ob-v2-manual-action" onclick="OnboardingV2._finishManual('home')">
+            <span class="ob-v2-ma-icon"><span data-ob-icon="weights"></span></span>
+            <div>
+              <h4>Log a Workout</h4>
+              <p>Record what you did today</p>
+            </div>
+          </button>
+          <button type="button" class="ob-v2-manual-action" onclick="OnboardingV2._finishManual('library')">
+            <span class="ob-v2-ma-icon ob-v2-ma-icon--blue"><span data-ob-icon="calendar"></span></span>
+            <div>
+              <h4>Browse the Library</h4>
+              <p>Explore workouts by sport and type</p>
+            </div>
+          </button>
+          <button type="button" class="ob-v2-manual-action" onclick="OnboardingV2._finishManual('explore')">
+            <span class="ob-v2-ma-icon ob-v2-ma-icon--violet"><span data-ob-icon="sparkles"></span></span>
+            <div>
+              <h4>Just Look Around</h4>
+              <p>Explore the app at your own pace</p>
+            </div>
+          </button>
+
+          <div class="ob-v2-callout ob-v2-callout--info">
+            Build Plan is always available in the Training tab if you change your mind.
+          </div>
+        </div>
+
+      </div><!-- /screen-container -->
+    </div><!-- /frame -->
+  </div><!-- /ob-v2-root -->
+
+  <!-- ===== BUILD PLAN OVERLAY =====
+       Same pattern as #ob-v2-root but dedicated to the Build Plan flow.
+       Opened standalone from the Training tab "Build My Plan" CTA and
+       from the onboarding fork (ob-v2-6 → "Build a training plan").
+       ========================================= -->
+  <div id="bp-v2-overlay" class="ob-v2-root bp-v2-overlay" aria-hidden="true">
+    <div class="ob-v2-frame">
+      <button type="button" class="bp-v2-close" onclick="OnboardingV2.closeBuildPlan()" aria-label="Close">&times;</button>
+      <div class="ob-v2-progress-wrap">
+        <div class="ob-v2-progress-bar">
+          <div class="ob-v2-progress-fill" id="bp-v2-progress-fill"></div>
+        </div>
+        <div class="ob-v2-progress-label" id="bp-v2-progress-label">Build Plan</div>
+      </div>
+      <div class="ob-v2-screen-container">
+
+        <!-- ═══════════════════════════════════════════════════════════
+             BUILD PLAN SCREENS (bp-v2-1 through bp-v2-done) — spec §4.2
+             Shared between onboarding fork and standalone Build Plan.
+             ═══════════════════════════════════════════════════════════ -->
+
+        <!-- bp-1: Sport Selection -->
+        <div class="ob-v2-screen" id="bp-v2-1">
+          <button type="button" class="ob-v2-back" onclick="OnboardingV2._bpBack('bp-v2-1')">&larr; Back</button>
+          <h2 class="ob-v2-h2">What do you want to train?</h2>
+          <p class="ob-v2-subtitle">Select all that apply.</p>
+          <div class="ob-v2-sport-grid" id="bp-v2-sport-grid">
+            <button type="button" class="ob-v2-sport-card" data-sport="triathlon" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="zap"></span><span class="ob-v2-sport-name">Triathlon</span></button>
+            <button type="button" class="ob-v2-sport-card" data-sport="strength" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="weights"></span><span class="ob-v2-sport-name">Strength</span></button>
+            <button type="button" class="ob-v2-sport-card" data-sport="run" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="run"></span><span class="ob-v2-sport-name">Running</span></button>
+            <button type="button" class="ob-v2-sport-card" data-sport="bike" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="bike"></span><span class="ob-v2-sport-name">Cycling</span></button>
+            <button type="button" class="ob-v2-sport-card" data-sport="swim" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="swim"></span><span class="ob-v2-sport-name">Swimming</span></button>
+            <button type="button" class="ob-v2-sport-card" data-sport="hiit" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="flame"></span><span class="ob-v2-sport-name">HIIT</span></button>
+            <button type="button" class="ob-v2-sport-card" data-sport="yoga" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="yoga"></span><span class="ob-v2-sport-name">Yoga</span></button>
+            <button type="button" class="ob-v2-sport-card" data-sport="mobility" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="activity"></span><span class="ob-v2-sport-name">Mobility</span></button>
+            <button type="button" class="ob-v2-sport-card" data-sport="walking" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="walking"></span><span class="ob-v2-sport-name">Walking</span></button>
+            <button type="button" class="ob-v2-sport-card" data-sport="rowing" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="rowing"></span><span class="ob-v2-sport-name">Rowing</span></button>
+            <button type="button" class="ob-v2-sport-card" data-sport="hyrox" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="trophy"></span><span class="ob-v2-sport-name">Hyrox</span></button>
+            <button type="button" class="ob-v2-sport-card" data-sport="circuit" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="circuit"></span><span class="ob-v2-sport-name">Circuit</span></button>
+          </div>
+          <div class="ob-v2-callout ob-v2-callout--info" id="bp-v2-tri-note" style="display:none">Triathlon includes Swimming, Cycling, and Running. We'll program all three.</div>
+          <div id="bp-v2-equipment-section" style="display:none">
+            <div class="ob-v2-section-label">Gym Access</div>
+            <div class="ob-v2-chips">
+              <button type="button" class="ob-v2-chip is-selected" data-gym="full" onclick="OnboardingV2._selectGym(this)">Full Gym</button>
+              <button type="button" class="ob-v2-chip" data-gym="home" onclick="OnboardingV2._selectGym(this)">Home Gym</button>
+              <button type="button" class="ob-v2-chip" data-gym="minimal" onclick="OnboardingV2._selectGym(this)">Minimal / BW</button>
+            </div>
+          </div>
+          <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._saveSportsAndContinue()">Continue</button>
+        </div>
+
+        <!-- bp-2: Goals -->
+        <div class="ob-v2-screen" id="bp-v2-2">
+          <button type="button" class="ob-v2-back" onclick="OnboardingV2.goTo('bp-v2-1')">&larr; Back</button>
+          <h2 class="ob-v2-h2">What are your goals?</h2>
+          <p class="ob-v2-subtitle">Select all that apply. These shape how your plan balances cardio and strength.</p>
+          <div class="ob-v2-goal-cards">
+            <button type="button" class="ob-v2-goal-card" data-goal="race" onclick="OnboardingV2._toggleGoal(this)"><span class="ob-v2-goal-icon" data-ob-icon="flag"></span><span class="ob-v2-goal-text">Train for a Race</span><span class="ob-v2-goal-check">&#10003;</span></button>
+            <button type="button" class="ob-v2-goal-card" data-goal="speed" onclick="OnboardingV2._toggleGoal(this)"><span class="ob-v2-goal-icon" data-ob-icon="zap"></span><span class="ob-v2-goal-text">Get Faster</span><span class="ob-v2-goal-check">&#10003;</span></button>
+            <button type="button" class="ob-v2-goal-card" data-goal="endurance" onclick="OnboardingV2._toggleGoal(this)"><span class="ob-v2-goal-icon" data-ob-icon="activity"></span><span class="ob-v2-goal-text">Build Endurance</span><span class="ob-v2-goal-check">&#10003;</span></button>
+            <button type="button" class="ob-v2-goal-card" data-goal="muscle" onclick="OnboardingV2._toggleGoal(this)"><span class="ob-v2-goal-icon" data-ob-icon="weights"></span><span class="ob-v2-goal-text">Put on Muscle</span><span class="ob-v2-goal-check">&#10003;</span></button>
+            <button type="button" class="ob-v2-goal-card" data-goal="weight" onclick="OnboardingV2._toggleGoal(this)"><span class="ob-v2-goal-icon" data-ob-icon="flame"></span><span class="ob-v2-goal-text">Lose Weight</span><span class="ob-v2-goal-check">&#10003;</span></button>
+            <button type="button" class="ob-v2-goal-card" data-goal="general" onclick="OnboardingV2._toggleGoal(this)"><span class="ob-v2-goal-icon" data-ob-icon="target"></span><span class="ob-v2-goal-text">General Fitness</span><span class="ob-v2-goal-check">&#10003;</span></button>
+          </div>
+          <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._saveGoalsAndContinue()">Continue</button>
+        </div>
+
+        <!-- bp-3-race: Race Details -->
+        <div class="ob-v2-screen" id="bp-v2-3-race">
+          <button type="button" class="ob-v2-back" onclick="OnboardingV2.goTo('bp-v2-2')">&larr; Back</button>
+          <h2 class="ob-v2-h2">Your Race</h2>
+          <p class="ob-v2-subtitle">Tell us about your upcoming race.</p>
+          <div class="ob-v2-race-entry">
+            <div class="ob-v2-form-group"><label for="bp-v2-race-name">Race name</label><input type="text" id="bp-v2-race-name" placeholder="Ironman 70.3 Austin" /></div>
+            <div class="ob-v2-form-group"><label for="bp-v2-race-category">Race Category</label>
+              <select id="bp-v2-race-category" onchange="OnboardingV2._updateRaceTypes()">
+                <option value="">Select category...</option>
+                <option value="triathlon" selected>Triathlon</option>
+                <option value="running">Running</option>
+                <option value="cycling">Cycling</option>
+                <option value="swimming">Swimming</option>
+                <option value="hyrox">Hyrox</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="ob-v2-form-group"><label for="bp-v2-race-type">Race Distance</label>
+              <select id="bp-v2-race-type" onchange="OnboardingV2._updateWeeksCallout()">
+                <option value="sprint">Sprint Triathlon</option>
+                <option value="olympic">Olympic Triathlon</option>
+                <option value="halfIronman">Half Ironman (70.3)</option>
+                <option value="ironman" selected>Full Ironman (140.6)</option>
+              </select>
+            </div>
+            <div class="ob-v2-form-group"><label for="bp-v2-race-date">Race Date</label><input type="date" id="bp-v2-race-date" onchange="OnboardingV2._updateWeeksCallout()" /></div>
+            <div class="ob-v2-form-group"><label>Goal</label>
+              <div class="ob-v2-chips">
+                <button type="button" class="ob-v2-chip is-selected" data-race-goal="finish" onclick="OnboardingV2._selectRaceGoal(this)">Just Finish</button>
+                <button type="button" class="ob-v2-chip" data-race-goal="time" onclick="OnboardingV2._selectRaceGoal(this)">Time Goal</button>
+                <button type="button" class="ob-v2-chip" data-race-goal="podium" onclick="OnboardingV2._selectRaceGoal(this)">PR / Podium</button>
+              </div>
+            </div>
+          </div>
+          <div class="ob-v2-callout ob-v2-callout--info" id="bp-v2-weeks-callout"><span id="bp-v2-weeks-text">Pick a race date to see your timeline.</span></div>
+          <div id="bp-v2-gap-fill-section" style="display:none">
+            <div class="ob-v2-section-label">You have extra time before your plan starts</div>
+            <p class="ob-v2-subtitle">How do you want to use the lead-in?</p>
+            <div class="ob-v2-phase-cards">
+              <button type="button" class="ob-v2-phase-card is-selected" data-leadin-phase="structured" onclick="OnboardingV2._selectLeadInPhase(this)">
+                <div class="ob-v2-phase-name">Structured Lead-In</div>
+                <div class="ob-v2-phase-desc">We'll build a mini training block: aerobic base, strength, and easy volume to prep you for race training.</div>
+              </button>
+              <button type="button" class="ob-v2-phase-card" data-leadin-phase="speed" onclick="OnboardingV2._selectLeadInPhase(this)">
+                <div class="ob-v2-phase-name">Get Faster First</div>
+                <div class="ob-v2-phase-desc">Focus on speed, intervals, and intensity. Build turnover and power before volume ramps up.</div>
+              </button>
+              <button type="button" class="ob-v2-phase-card" data-leadin-phase="loose" onclick="OnboardingV2._selectLeadInPhase(this)">
+                <div class="ob-v2-phase-name">Stay Loose</div>
+                <div class="ob-v2-phase-desc">Train freestyle at your own pace until your structured plan begins.</div>
+              </button>
+            </div>
+            <div class="ob-v2-section-label">How often during lead-in?</div>
+            <div class="ob-v2-counter-row">
+              <button type="button" class="ob-v2-counter-btn" onclick="OnboardingV2._adjustLeadIn(-1)">&minus;</button>
+              <span class="ob-v2-counter-value" id="bp-v2-leadin-count">4</span>
+              <button type="button" class="ob-v2-counter-btn" onclick="OnboardingV2._adjustLeadIn(1)">+</button>
+            </div>
+            <p class="ob-v2-notif-hint ob-v2-center">days per week</p>
+          </div>
+          <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._saveRaceAndContinue()">Continue</button>
+        </div>
+
+        <!-- bp-3-norace: No-Race Plan Details -->
+        <div class="ob-v2-screen" id="bp-v2-3-norace">
+          <button type="button" class="ob-v2-back" onclick="OnboardingV2.goTo('bp-v2-2')">&larr; Back</button>
+          <h2 class="ob-v2-h2">Plan Details</h2>
+          <p class="ob-v2-subtitle">We'll build your plan around the goals you selected.</p>
+          <div class="ob-v2-section-label">How long do you want to train?</div>
+          <div class="ob-v2-chips">
+            <button type="button" class="ob-v2-chip" data-duration="4" onclick="OnboardingV2._selectPlanOption(this,'duration')">4 weeks</button>
+            <button type="button" class="ob-v2-chip" data-duration="8" onclick="OnboardingV2._selectPlanOption(this,'duration')">8 weeks</button>
+            <button type="button" class="ob-v2-chip is-selected" data-duration="12" onclick="OnboardingV2._selectPlanOption(this,'duration')">12 weeks</button>
+            <button type="button" class="ob-v2-chip" data-duration="indefinite" onclick="OnboardingV2._selectPlanOption(this,'duration')">Indefinite</button>
+          </div>
+          <div class="ob-v2-section-label">Max time per session</div>
+          <div class="ob-v2-chips">
+            <button type="button" class="ob-v2-chip" data-session-length="30" onclick="OnboardingV2._selectPlanOption(this,'sessionLength')">30 min</button>
+            <button type="button" class="ob-v2-chip" data-session-length="45" onclick="OnboardingV2._selectPlanOption(this,'sessionLength')">45 min</button>
+            <button type="button" class="ob-v2-chip is-selected" data-session-length="60" onclick="OnboardingV2._selectPlanOption(this,'sessionLength')">60 min</button>
+            <button type="button" class="ob-v2-chip" data-session-length="90" onclick="OnboardingV2._selectPlanOption(this,'sessionLength')">90 min</button>
+            <button type="button" class="ob-v2-chip" data-session-length="nolimit" onclick="OnboardingV2._selectPlanOption(this,'sessionLength')">No limit</button>
+          </div>
+          <div class="ob-v2-section-label">Days per week</div>
+          <div class="ob-v2-chips">
+            <button type="button" class="ob-v2-chip" data-days="3" onclick="OnboardingV2._selectPlanOption(this,'daysPerWeek')">3</button>
+            <button type="button" class="ob-v2-chip" data-days="4" onclick="OnboardingV2._selectPlanOption(this,'daysPerWeek')">4</button>
+            <button type="button" class="ob-v2-chip is-selected" data-days="5" onclick="OnboardingV2._selectPlanOption(this,'daysPerWeek')">5</button>
+            <button type="button" class="ob-v2-chip" data-days="6" onclick="OnboardingV2._selectPlanOption(this,'daysPerWeek')">6</button>
+            <button type="button" class="ob-v2-chip" data-days="7" onclick="OnboardingV2._selectPlanOption(this,'daysPerWeek')">7</button>
+          </div>
+          <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._saveNoraceAndContinue()">Continue</button>
+        </div>
+
+        <!-- bp-4: Thresholds -->
+        <div class="ob-v2-screen" id="bp-v2-4">
+          <button type="button" class="ob-v2-back" onclick="OnboardingV2._bpBack('bp-v2-4')">&larr; Back</button>
+          <h2 class="ob-v2-h2">Your Numbers</h2>
+          <p class="ob-v2-subtitle">Enter what you know. Skip what you don't — we'll test for it early in your plan.</p>
+          <div id="bp-v2-thresholds-container"></div>
+          <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._saveThresholdsAndContinue()">Continue</button>
+          <button type="button" class="ob-v2-btn-skip" onclick="OnboardingV2._testMeForEverythingAndContinue()">Test me for everything</button>
+        </div>
+
+        <!-- bp-6: Strength Setup -->
+        <div class="ob-v2-screen" id="bp-v2-6">
+          <button type="button" class="ob-v2-back" onclick="OnboardingV2.goTo('bp-v2-4')">&larr; Back</button>
+          <h2 class="ob-v2-h2">Strength Setup</h2>
+          <p class="ob-v2-subtitle">How many strength days do you want per week?</p>
+          <div class="ob-v2-counter-row">
+            <button type="button" class="ob-v2-counter-btn" onclick="OnboardingV2._adjustStrengthCount(-1)">&minus;</button>
+            <span class="ob-v2-counter-value" id="bp-v2-strength-count">3</span>
+            <button type="button" class="ob-v2-counter-btn" onclick="OnboardingV2._adjustStrengthCount(1)">+</button>
+          </div>
+          <p class="ob-v2-notif-hint ob-v2-center">days per week</p>
+          <div id="bp-v2-strength-rest" style="display:none">
+            <div class="ob-v2-section-label">Weekly Split</div>
+            <div class="ob-v2-chips" id="bp-v2-split-chips">
+              <button type="button" class="ob-v2-chip is-selected" data-split="ppl" onclick="OnboardingV2._selectSplit(this)">Push / Pull / Legs</button>
+              <button type="button" class="ob-v2-chip" data-split="ul" onclick="OnboardingV2._selectSplit(this)">Upper / Lower</button>
+              <button type="button" class="ob-v2-chip" data-split="fullBody" onclick="OnboardingV2._selectSplit(this)">Full Body</button>
+              <button type="button" class="ob-v2-chip" data-split="custom" onclick="OnboardingV2._selectSplit(this)">Custom</button>
+            </div>
+            <p class="ob-v2-notif-hint ob-v2-notif-hint--sub" id="bp-v2-split-rec">Recommended for your session count.</p>
+            <div id="bp-v2-custom-muscles" style="display:none">
+              <div class="ob-v2-section-label">Pick muscle groups</div>
+              <div class="ob-v2-chips">
+                <button type="button" class="ob-v2-chip" data-muscle="chest" onclick="OnboardingV2._toggleMuscle(this)">Chest</button>
+                <button type="button" class="ob-v2-chip" data-muscle="back" onclick="OnboardingV2._toggleMuscle(this)">Back</button>
+                <button type="button" class="ob-v2-chip" data-muscle="shoulders" onclick="OnboardingV2._toggleMuscle(this)">Shoulders</button>
+                <button type="button" class="ob-v2-chip" data-muscle="biceps" onclick="OnboardingV2._toggleMuscle(this)">Biceps</button>
+                <button type="button" class="ob-v2-chip" data-muscle="triceps" onclick="OnboardingV2._toggleMuscle(this)">Triceps</button>
+                <button type="button" class="ob-v2-chip" data-muscle="quads" onclick="OnboardingV2._toggleMuscle(this)">Quads</button>
+                <button type="button" class="ob-v2-chip" data-muscle="hamstrings" onclick="OnboardingV2._toggleMuscle(this)">Hamstrings</button>
+                <button type="button" class="ob-v2-chip" data-muscle="glutes" onclick="OnboardingV2._toggleMuscle(this)">Glutes</button>
+                <button type="button" class="ob-v2-chip" data-muscle="calves" onclick="OnboardingV2._toggleMuscle(this)">Calves</button>
+                <button type="button" class="ob-v2-chip" data-muscle="core" onclick="OnboardingV2._toggleMuscle(this)">Core</button>
+                <button type="button" class="ob-v2-chip" data-muscle="fullbody" onclick="OnboardingV2._toggleMuscle(this)">Full Body</button>
+              </div>
+            </div>
+            <div class="ob-v2-section-label">Session length</div>
+            <div class="ob-v2-chips">
+              <button type="button" class="ob-v2-chip" data-str-length="30" onclick="OnboardingV2._selectStrLength(this)">30 min</button>
+              <button type="button" class="ob-v2-chip is-selected" data-str-length="45" onclick="OnboardingV2._selectStrLength(this)">45 min</button>
+              <button type="button" class="ob-v2-chip" data-str-length="60" onclick="OnboardingV2._selectStrLength(this)">60 min</button>
+              <button type="button" class="ob-v2-chip" data-str-length="75" onclick="OnboardingV2._selectStrLength(this)">75 min</button>
+              <button type="button" class="ob-v2-chip" data-str-length="90" onclick="OnboardingV2._selectStrLength(this)">90 min</button>
+            </div>
+          </div>
+          <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._saveStrengthAndContinue()">Continue</button>
+        </div>
+
+        <!-- bp-4b: Long Day Anchoring -->
+        <div class="ob-v2-screen" id="bp-v2-4b">
+          <button type="button" class="ob-v2-back" onclick="OnboardingV2.goTo('bp-v2-6')">&larr; Back</button>
+          <h2 class="ob-v2-h2">Long Days</h2>
+          <p class="ob-v2-subtitle">Which day works best for your longer sessions? We'll anchor the rest of the week around these.</p>
+          <div id="bp-v2-longrun-block" style="display:none">
+            <div class="ob-v2-section-label">Long Run</div>
+            <div class="ob-v2-chips">
+              <button type="button" class="ob-v2-chip" data-longrun="mon" onclick="OnboardingV2._selectLongDay(this,'longRun')">Mon</button>
+              <button type="button" class="ob-v2-chip" data-longrun="tue" onclick="OnboardingV2._selectLongDay(this,'longRun')">Tue</button>
+              <button type="button" class="ob-v2-chip" data-longrun="wed" onclick="OnboardingV2._selectLongDay(this,'longRun')">Wed</button>
+              <button type="button" class="ob-v2-chip" data-longrun="thu" onclick="OnboardingV2._selectLongDay(this,'longRun')">Thu</button>
+              <button type="button" class="ob-v2-chip" data-longrun="fri" onclick="OnboardingV2._selectLongDay(this,'longRun')">Fri</button>
+              <button type="button" class="ob-v2-chip" data-longrun="sat" onclick="OnboardingV2._selectLongDay(this,'longRun')">Sat</button>
+              <button type="button" class="ob-v2-chip is-selected" data-longrun="sun" onclick="OnboardingV2._selectLongDay(this,'longRun')">Sun</button>
+            </div>
+          </div>
+          <div id="bp-v2-longride-block" style="display:none">
+            <div class="ob-v2-section-label">Long Ride</div>
+            <div class="ob-v2-chips">
+              <button type="button" class="ob-v2-chip" data-longride="mon" onclick="OnboardingV2._selectLongDay(this,'longRide')">Mon</button>
+              <button type="button" class="ob-v2-chip" data-longride="tue" onclick="OnboardingV2._selectLongDay(this,'longRide')">Tue</button>
+              <button type="button" class="ob-v2-chip" data-longride="wed" onclick="OnboardingV2._selectLongDay(this,'longRide')">Wed</button>
+              <button type="button" class="ob-v2-chip" data-longride="thu" onclick="OnboardingV2._selectLongDay(this,'longRide')">Thu</button>
+              <button type="button" class="ob-v2-chip" data-longride="fri" onclick="OnboardingV2._selectLongDay(this,'longRide')">Fri</button>
+              <button type="button" class="ob-v2-chip is-selected" data-longride="sat" onclick="OnboardingV2._selectLongDay(this,'longRide')">Sat</button>
+              <button type="button" class="ob-v2-chip" data-longride="sun" onclick="OnboardingV2._selectLongDay(this,'longRide')">Sun</button>
+            </div>
+          </div>
+          <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._saveLongDaysAndContinue()">Continue</button>
+        </div>
+
+        <!-- bp-5: Weekly Schedule -->
+        <div class="ob-v2-screen" id="bp-v2-5">
+          <button type="button" class="ob-v2-back" onclick="OnboardingV2._bpBack('bp-v2-5')">&larr; Back</button>
+          <h2 class="ob-v2-h2">Weekly Schedule</h2>
+          <p class="ob-v2-subtitle">Tap a day to add a sport. We've pre-filled based on your selections.</p>
+          <div class="ob-v2-schedule-grid" id="bp-v2-schedule-grid"></div>
+          <div class="ob-v2-schedule-summary" id="bp-v2-schedule-summary"></div>
+          <div class="ob-v2-callout ob-v2-callout--warning" id="bp-v2-rest-warning" style="display:none">
+            No rest days in your schedule — most athletes benefit from at least one full recovery day per week.
+          </div>
+          <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._saveScheduleAndContinue()">Continue</button>
+        </div>
+
+        <!-- bp-7: Plan Preview -->
+        <div class="ob-v2-screen" id="bp-v2-7">
+          <button type="button" class="ob-v2-back" onclick="OnboardingV2.goTo('bp-v2-5')">&larr; Back</button>
+          <h2 class="ob-v2-h2">Here's Your Plan</h2>
+          <p class="ob-v2-subtitle">Review, then hit start to save your plan and see it in your calendar.</p>
+          <div id="bp-v2-preview-body"></div>
+          <div class="ob-v2-callout ob-v2-callout--info" id="bp-v2-test-callout" style="display:none">
+            Tests for your missing thresholds are scheduled in week 1 so we can dial in your zones fast.
+          </div>
+          <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._confirmAndSavePlan()">Looks Good — Start Training</button>
+          <button type="button" class="ob-v2-btn-skip" onclick="OnboardingV2.goTo('bp-v2-5')">Adjust My Plan</button>
+        </div>
+
+        <!-- bp-done: Confirmation -->
+        <div class="ob-v2-screen" id="bp-v2-done">
+          <div class="ob-v2-welcome-logo"><span class="ob-v2-welcome-bolt" data-ob-icon="zap"></span></div>
+          <h2 class="ob-v2-h2 ob-v2-center">You're Ready</h2>
+          <p class="ob-v2-subtitle ob-v2-center">Your plan is saved. Head to the Training tab to see week 1 on your calendar.</p>
+          <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._goToTrainingTab()">Go to Training</button>
+        </div>
+
+
+      </div><!-- /bp screen-container -->
+    </div><!-- /bp frame -->
+  </div><!-- /bp-v2-overlay -->
+
 
 </body>
 </html>

@@ -525,11 +525,14 @@ function init() {
   // Check for level-up on app start
   if (typeof checkLevelUp === "function") checkLevelUp();
 
-  // Show onboarding wizard on first visit, or Build Plan survey if onboarded but no plan
+  // Show onboarding wizard on first visit. Post-onboarding, no auto-open —
+  // users trigger Build Plan manually from the Training tab or header CTA.
   if (!localStorage.getItem("hasOnboarded")) {
-    setTimeout(showOnboarding, 400);
-  } else if (!localStorage.getItem("surveyComplete")) {
-    setTimeout(openSurvey, 400);
+    if (typeof OnboardingV2 !== "undefined" && OnboardingV2.maybeStart) {
+      setTimeout(() => OnboardingV2.maybeStart(), 400);
+    } else if (typeof showOnboarding === "function") {
+      setTimeout(showOnboarding, 400);
+    }
   }
 
   // Weekly check-in prompt (Sunday)

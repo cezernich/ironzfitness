@@ -1,0 +1,2700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IronZ — Onboarding + Build Plan v3</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #E8E0D4; min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; padding: 20px; gap: 32px; flex-wrap: wrap; }
+
+  /* Phone frame */
+  .phone-frame { width: 390px; min-height: 780px; background: #F5F0E8; border-radius: 40px; border: 3px solid #222; overflow: hidden; position: relative; box-shadow: 0 20px 60px rgba(0,0,0,0.15); flex-shrink: 0; }
+  .status-bar { height: 50px; background: #F5F0E8; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; font-size: 14px; font-weight: 600; }
+  .screen-container { position: relative; overflow: hidden; }
+  .screen { display: none; padding: 0 24px 100px; animation: slideIn 0.3s ease; }
+  .screen.active { display: block; }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
+
+  /* Progress bar */
+  .progress-wrap { padding: 8px 24px 16px; }
+  .progress-bar-bg { height: 4px; background: #E0D8CC; border-radius: 2px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; background: #E8530E; border-radius: 2px; transition: width 0.4s ease; }
+  .progress-label { font-size: 11px; color: #AAA; font-weight: 600; margin-top: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* Typography */
+  h2 { font-size: 22px; color: #1A1A1A; margin-bottom: 6px; }
+  .subtitle { font-size: 14px; color: #888; margin-bottom: 20px; line-height: 1.4; }
+  .section-label { font-size: 13px; font-weight: 700; color: #1A1A1A; margin: 20px 0 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* Form fields */
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px; }
+  .form-row { display: flex; gap: 10px; align-items: center; }
+  .form-row .unit { font-size: 13px; color: #888; font-weight: 600; min-width: 24px; }
+  input, select { width: 100%; padding: 12px 14px; border: 2px solid #E0E0E0; border-radius: 10px; font-size: 15px; background: #FFF; color: #333; outline: none; transition: border 0.2s; }
+  input:focus, select:focus { border-color: #E8530E; }
+  input::placeholder { color: #CCC; }
+  .inline-label { font-size: 12px; color: #999; }
+
+  /* Sport cards — 3-column compact grid matching app's Add Session */
+  .sport-cards { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+  .sport-card { background: #FFF; border-radius: 12px; padding: 12px 6px; text-align: center; border: 2px solid #EEE; cursor: pointer; transition: all 0.2s; }
+  .sport-card:hover { border-color: #E8530E; }
+  .sport-card.selected { border-color: #E8530E; background: #FFF5F0; }
+  .sport-card .icon { font-size: 22px; margin-bottom: 4px; }
+  .sport-card .name { font-size: 11px; font-weight: 700; color: #333; }
+
+  /* Strength session counter */
+  .counter-row { display: flex; align-items: center; justify-content: center; gap: 18px; margin: 12px 0 16px; }
+  .counter-btn { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #E8530E; background: #FFF; color: #E8530E; font-size: 20px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+  .counter-btn:hover { background: #E8530E; color: #FFF; }
+  .counter-value { font-size: 32px; font-weight: 800; color: #1A1A1A; min-width: 40px; text-align: center; }
+
+  /* Chips */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .chip { padding: 10px 16px; border-radius: 24px; border: 2px solid #DDD; background: #FFF; font-size: 13px; font-weight: 600; color: #666; cursor: pointer; transition: all 0.2s; }
+  .chip:hover { border-color: #E8530E; }
+  .chip.selected { background: #E8530E; color: #FFF; border-color: #E8530E; }
+
+  /* Toggle rows */
+  .toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #EEE; }
+  .toggle-row:last-child { border-bottom: none; }
+  .toggle-row .label { font-size: 14px; color: #333; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+  .toggle-row .label .emoji { font-size: 18px; }
+  .toggle { width: 48px; height: 28px; border-radius: 14px; background: #DDD; position: relative; cursor: pointer; transition: all 0.3s; flex-shrink: 0; }
+  .toggle.on { background: #E8530E; }
+  .toggle .knob { width: 22px; height: 22px; border-radius: 50%; background: #FFF; position: absolute; top: 3px; left: 3px; transition: all 0.3s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  .toggle.on .knob { left: 23px; }
+
+  /* Injury chips */
+  .injury-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .injury-chip { padding: 8px 14px; border-radius: 20px; border: 2px solid #EEE; background: #FFF; font-size: 13px; color: #555; cursor: pointer; transition: all 0.2s; }
+  .injury-chip:hover { border-color: #E8530E; }
+  .injury-chip.selected { border-color: #E85A5A; background: #FFF0F0; color: #C0392B; }
+  .injury-chip.none.selected { border-color: #27AE60; background: #F0FFF4; color: #27AE60; }
+
+  /* App connect cards */
+  .app-cards { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+  .app-card { background: #FFF; border-radius: 12px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; border: 2px solid #EEE; }
+  .app-card .app-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .app-card .app-icon.strava { background: #FC4C02; color: #FFF; }
+  .app-card .app-icon.apple { background: #000; color: #FFF; }
+  .app-card .app-icon.garmin { background: #007CC3; color: #FFF; }
+  .app-card .app-name { flex: 1; font-size: 14px; font-weight: 600; color: #333; }
+  .app-card .connect-btn { padding: 6px 14px; border-radius: 8px; border: 2px solid #E8530E; background: transparent; color: #E8530E; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+  .app-card .connect-btn:hover { background: #E8530E; color: #FFF; }
+  .app-card .connect-btn.connected { background: #27AE60; color: #FFF; border-color: #27AE60; }
+
+  /* Fork cards */
+  .fork-card { background: #FFF; border-radius: 16px; padding: 20px; margin-bottom: 12px; border: 2px solid transparent; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+  .fork-card:hover { border-color: #E8530E; }
+  .fork-card.selected { border-color: #E8530E; background: #FFF5F0; }
+  .fork-card .fork-header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .fork-card .fork-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+  .fork-card .fork-icon.plan { background: #FFF0E8; }
+  .fork-card .fork-icon.manual { background: #E8F5E8; }
+  .fork-card h3 { font-size: 16px; color: #1A1A1A; }
+  .fork-card p { font-size: 13px; color: #888; line-height: 1.4; margin-left: 56px; }
+
+  /* Goal cards (multi-select) */
+  .goal-cards { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+  .goal-card { background: #FFF; border-radius: 12px; padding: 14px 16px; border: 2px solid #EEE; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 12px; }
+  .goal-card:hover { border-color: #E8530E; }
+  .goal-card.selected { border-color: #E8530E; background: #FFF5F0; }
+  .goal-card .emoji { font-size: 20px; flex-shrink: 0; }
+  .goal-card .text { font-size: 14px; font-weight: 600; color: #333; }
+  .goal-card .check { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #DDD; margin-left: auto; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; color: transparent; transition: all 0.2s; }
+  .goal-card.selected .check { background: #E8530E; border-color: #E8530E; color: #FFF; }
+
+  /* Race entry */
+  .race-entry { background: #FFF; border-radius: 14px; padding: 16px; margin-bottom: 12px; border: 2px solid #EEE; }
+  .race-entry .race-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .race-entry .race-label { font-size: 14px; font-weight: 700; color: #333; }
+  .race-entry .race-priority { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+  .race-entry .race-priority.a-race { background: #E8530E; color: #FFF; }
+  .race-entry .race-priority.b-race { background: #FFF0E8; color: #E8530E; }
+  .add-race-btn { width: 100%; padding: 12px; border: 2px dashed #DDD; border-radius: 12px; background: transparent; color: #888; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-bottom: 16px; }
+  .add-race-btn:hover { border-color: #E8530E; color: #E8530E; }
+
+  /* Threshold inputs */
+  .threshold-section { background: #FFF; border-radius: 14px; padding: 16px; margin-bottom: 12px; }
+  .threshold-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .threshold-header .sport-icon { font-size: 20px; }
+  .threshold-header .sport-name { font-size: 15px; font-weight: 700; color: #333; }
+  .threshold-header .derived-level { padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; margin-left: auto; }
+  .derived-level.beginner { background: #E8F5E8; color: #2E7D32; }
+  .derived-level.intermediate { background: #FFF3E0; color: #E65100; }
+  .derived-level.advanced { background: #FCE4EC; color: #C62828; }
+  .threshold-hint { font-size: 12px; color: #AAA; margin-top: 4px; font-style: italic; }
+
+  /* Weekly schedule grid */
+  .schedule-grid { margin-bottom: 16px; }
+  .schedule-day { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid #F0EBE3; }
+  .schedule-day:last-child { border-bottom: none; }
+  .day-name { width: 36px; font-size: 13px; font-weight: 700; color: #555; }
+  .day-slots { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-height: 34px; }
+  .slot-chip { padding: 6px 12px; border-radius: 16px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+  .slot-chip.swim { background: #E3F2FD; color: #1565C0; }
+  .slot-chip.bike { background: #F3E5F5; color: #7B1FA2; }
+  .slot-chip.run { background: #E8F5E9; color: #2E7D32; }
+  .slot-chip.strength, .slot-chip[class*="str-"] { background: #FFF3E0; color: #E65100; }
+  .slot-chip.brick { background: #FBE9E7; color: #D84315; }
+  .slot-chip.hyrox { background: #FCE4EC; color: #C62828; }
+  .slot-chip.rest { background: #F5F5F5; color: #AAA; font-style: italic; }
+  .slot-chip .remove { margin-left: 4px; cursor: pointer; opacity: 0.5; }
+  .slot-chip .remove:hover { opacity: 1; }
+  .add-slot-btn { width: 28px; height: 28px; border-radius: 50%; border: 2px dashed #CCC; background: transparent; color: #AAA; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+  .add-slot-btn:hover { border-color: #E8530E; color: #E8530E; }
+
+  /* Schedule summary */
+  .schedule-summary { background: #FFF; border-radius: 12px; padding: 14px; margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 12px; }
+  .summary-stat { text-align: center; flex: 1; min-width: 60px; }
+  .summary-stat .num { font-size: 20px; font-weight: 800; color: #1A1A1A; }
+  .summary-stat .label { font-size: 10px; color: #888; font-weight: 600; text-transform: uppercase; }
+
+  /* Phase selection */
+  .phase-cards { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+  .phase-card { background: #FFF; border-radius: 12px; padding: 14px 16px; border: 2px solid #EEE; cursor: pointer; transition: all 0.2s; }
+  .phase-card:hover { border-color: #E8530E; }
+  .phase-card.selected { border-color: #E8530E; background: #FFF5F0; }
+  .phase-card .phase-name { font-size: 14px; font-weight: 700; color: #333; }
+  .phase-card .phase-desc { font-size: 12px; color: #888; margin-top: 4px; }
+
+  /* Strength preferences */
+  .split-options { display: flex; gap: 8px; margin-bottom: 16px; }
+  .split-option { flex: 1; background: #FFF; border-radius: 10px; padding: 12px 8px; text-align: center; border: 2px solid #EEE; cursor: pointer; transition: all 0.2s; font-size: 12px; font-weight: 600; color: #555; }
+  .split-option:hover { border-color: #E8530E; }
+  .split-option.selected { border-color: #E8530E; background: #FFF5F0; color: #E8530E; }
+  .split-option .rec { font-size: 10px; color: #AAA; display: block; margin-top: 4px; }
+
+  /* Plan preview */
+  .preview-timeline { margin-bottom: 16px; }
+  .timeline-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 8px; gap: 2px; }
+  .timeline-seg { border-radius: 3px; }
+  .timeline-seg.base { background: #4FC3F7; }
+  .timeline-seg.build { background: #FF9800; }
+  .timeline-seg.peak { background: #E53935; }
+  .timeline-seg.taper { background: #66BB6A; }
+  .timeline-seg.race { background: #1A1A1A; }
+  .timeline-labels { display: flex; justify-content: space-between; }
+  .timeline-label { font-size: 10px; color: #888; font-weight: 600; }
+
+  /* Week preview */
+  .week-preview { margin-bottom: 16px; }
+  .week-day-row { display: flex; align-items: stretch; gap: 6px; padding: 8px 0; border-bottom: 1px solid #F0EBE3; }
+  .week-day-row:last-child { border-bottom: none; }
+  .week-day-label { width: 32px; font-size: 12px; font-weight: 700; color: #888; padding-top: 6px; }
+  .week-day-workouts { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .mini-workout { background: #FFF; border-radius: 8px; padding: 8px 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .mini-workout .mw-name { font-size: 12px; font-weight: 700; color: #333; }
+  .mini-workout .mw-detail { font-size: 11px; color: #999; }
+  .mini-workout.swim { border-left: 3px solid #1565C0; }
+  .mini-workout.bike { border-left: 3px solid #7B1FA2; }
+  .mini-workout.run { border-left: 3px solid #2E7D32; }
+  .mini-workout.strength { border-left: 3px solid #E65100; }
+  .mini-workout.brick { border-left: 3px solid #D84315; }
+  .mini-workout.hyrox { border-left: 3px solid #C62828; }
+  .mini-workout.rest-day { border-left: 3px solid #EEE; background: #FAFAF7; }
+
+  /* Warning / info callout */
+  .callout { padding: 12px 14px; border-radius: 10px; font-size: 13px; line-height: 1.4; margin-bottom: 16px; }
+  .callout.info { background: #E3F2FD; color: #1565C0; }
+  .callout.warning { background: #FFF3E0; color: #E65100; }
+  .callout.success { background: #E8F5E9; color: #2E7D32; }
+
+  /* Buttons */
+  .btn-primary { width: 100%; padding: 16px; background: #E8530E; color: #FFF; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.2s; margin-top: 8px; }
+  .btn-primary:hover { background: #D04A0C; transform: translateY(-1px); }
+  .btn-secondary { width: 100%; padding: 14px; background: transparent; color: #E8530E; border: 2px solid #E8530E; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+  .btn-skip { width: 100%; padding: 12px; background: transparent; color: #AAA; border: none; font-size: 14px; cursor: pointer; text-align: center; margin-top: 6px; }
+  .btn-back { background: none; border: none; font-size: 14px; color: #888; cursor: pointer; padding: 4px 0; margin-bottom: 10px; display: flex; align-items: center; gap: 4px; }
+
+  /* Manual user landing */
+  .manual-action { background: #FFF; border-radius: 14px; padding: 16px; display: flex; align-items: center; gap: 14px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); cursor: pointer; transition: all 0.2s; }
+  .manual-action:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .manual-action .ma-icon { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+  .manual-action .ma-icon.log { background: #FFF0E8; }
+  .manual-action .ma-icon.browse { background: #E3F2FD; }
+  .manual-action .ma-icon.explore { background: #F3E5F5; }
+  .manual-action h4 { font-size: 14px; color: #333; margin-bottom: 2px; }
+  .manual-action p { font-size: 12px; color: #888; }
+
+  /* Dropdown for adding sports to schedule */
+  .sport-dropdown { position: absolute; background: #FFF; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); padding: 8px; z-index: 100; display: none; }
+  .sport-dropdown.show { display: block; }
+  .sport-dropdown-item { padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .sport-dropdown-item:hover { background: #FFF5F0; }
+
+  /* Equipment checkboxes */
+  .equip-check { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #FFF; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 500; color: #333; border: 1px solid #EEE; }
+  .equip-check input[type="checkbox"] { width: 18px; height: 18px; accent-color: #E8530E; }
+
+  /* Drag hint for schedule */
+  .drag-hint { font-size: 11px; color: #BBB; text-align: center; margin-bottom: 12px; font-style: italic; }
+
+  /* Dragging states */
+  .schedule-day.drag-over { background: #FFF5F0; border-radius: 8px; }
+  .slot-chip[draggable="true"] { cursor: grab; }
+  .slot-chip[draggable="true"]:active { cursor: grabbing; opacity: 0.6; }
+
+  /* Sport bank for dragging */
+  .sport-bank { display: flex; gap: 8px; padding: 12px; background: #FFF; border-radius: 12px; margin-bottom: 12px; justify-content: center; flex-wrap: wrap; }
+  .bank-chip { padding: 8px 14px; border-radius: 16px; font-size: 12px; font-weight: 700; cursor: grab; user-select: none; }
+  .bank-chip:active { cursor: grabbing; opacity: 0.6; }
+  .bank-chip.swim { background: #E3F2FD; color: #1565C0; }
+  .bank-chip.bike { background: #F3E5F5; color: #7B1FA2; }
+  .bank-chip.run { background: #E8F5E9; color: #2E7D32; }
+  .bank-chip.brick { background: #FBE9E7; color: #D84315; }
+  .bank-chip.strength { background: #FFF3E0; color: #E65100; }
+  .bank-chip.hyrox { background: #FCE4EC; color: #C62828; }
+  .bank-chip.rest { background: #F5F5F5; color: #AAA; }
+  .bank-chip.hiit { background: #FFF3E0; color: #FF6F00; }
+  .bank-chip.yoga { background: #E0F2F1; color: #00897B; }
+  .bank-chip.rowing { background: #ECEFF1; color: #455A64; }
+  .bank-chip.mobility { background: #E8EAF6; color: #5C6BC0; }
+  .bank-chip.walking { background: #ECEFF1; color: #78909C; }
+  .bank-chip.circuit { background: #EFEBE9; color: #6D4C41; }
+  .slot-chip.hiit { background: #FFF3E0; color: #FF6F00; }
+  .slot-chip.yoga { background: #E0F2F1; color: #00897B; }
+  .slot-chip.rowing { background: #ECEFF1; color: #455A64; }
+  .slot-chip.mobility { background: #E8EAF6; color: #5C6BC0; }
+  .slot-chip.walking { background: #ECEFF1; color: #78909C; }
+  .slot-chip.circuit { background: #EFEBE9; color: #6D4C41; }
+
+  /* Locked/anchored long day chips */
+  .slot-chip.anchored { position: relative; padding-right: 8px; }
+  .slot-chip.anchored::before { content: ''; position: absolute; top: -2px; right: -2px; width: 14px; height: 14px; background: #E8530E; border-radius: 50%; border: 2px solid #FFF; }
+  .slot-chip.anchored::after { content: '📌'; position: absolute; top: -5px; right: -5px; font-size: 10px; }
+  .slot-chip.anchored .remove { display: none; }
+
+  /* Threshold toggle (I know this / Test me) */
+  .threshold-toggle { display: flex; gap: 6px; margin-left: auto; }
+  .threshold-toggle .t-btn { padding: 4px 10px; border-radius: 6px; border: 1.5px solid #DDD; background: #FFF; font-size: 11px; font-weight: 600; color: #888; cursor: pointer; transition: all 0.2s; }
+  .threshold-toggle .t-btn.active { border-color: #E8530E; color: #E8530E; background: #FFF5F0; }
+  .threshold-toggle .t-btn.test-active { border-color: #4FC3F7; color: #1565C0; background: #E3F2FD; }
+  .test-me-note { font-size: 12px; color: #1565C0; background: #E3F2FD; padding: 8px 12px; border-radius: 8px; margin-top: 8px; }
+
+  /* Equipment weight conditional inputs */
+  .equip-weight-input { margin-top: 10px; display: none; }
+  .equip-weight-input.visible { display: block; }
+  .field-error { border-color: #E53935 !important; background: #FFF5F5 !important; }
+  .error-msg { font-size: 11px; color: #E53935; margin-top: 4px; display: none; }
+  .preview-pill-toggle { display: flex; background: #E8E2D8; border-radius: 24px; padding: 3px; margin-bottom: 16px; }
+  .preview-pill-toggle .pill-btn { flex: 1; padding: 8px 0; text-align: center; border-radius: 22px; font-size: 13px; font-weight: 700; color: #888; cursor: pointer; transition: all 0.25s; border: none; background: transparent; }
+  .preview-pill-toggle .pill-btn.active { background: #1A1A1A; color: #FFF; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+</style>
+</head>
+<body>
+
+<div class="phone-frame" id="onboarding-frame">
+  <div class="status-bar">
+    <span>9:41</span>
+    <span style="font-size:12px;">●●●● ▶ 🔋</span>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-fill" style="width: 16.6%"></div></div>
+    <div class="progress-label" id="progress-label">Profile</div>
+  </div>
+
+  <!-- ============ ONBOARDING SCREEN 1: WELCOME ============ -->
+  <div class="screen active" id="ob-1">
+    <div style="text-align:center; margin: 30px 0 12px;">
+      <div style="font-size:40px; margin-bottom:4px;">⚡</div>
+      <div style="font-size:34px; font-weight:900; color:#1A1A1A; letter-spacing:3px;">IRONZ</div>
+    </div>
+    <h2 style="text-align:center;">Welcome to IronZ</h2>
+    <p class="subtitle" style="text-align:center;">Your AI-powered training partner. Let's get you set up in under 2 minutes.</p>
+    <button class="btn-primary" onclick="goTo('ob-2')">Let's Go</button>
+  </div>
+
+  <!-- ============ ONBOARDING SCREEN 2: ATHLETE PROFILE ============ -->
+  <div class="screen" id="ob-2">
+    <button class="btn-back" onclick="goTo('ob-1')">← Back</button>
+    <h2>Athlete Profile</h2>
+    <p class="subtitle">These basics help us build the right plan for you.</p>
+
+    <div class="form-group">
+      <label>Name</label>
+      <input type="text" placeholder="Chase" id="inp-name" />
+    </div>
+    <div class="form-group">
+      <label>Birthday</label>
+      <input type="date" id="inp-bday" value="1999-03-15" min="1930-01-01" max="2015-12-31" />
+      <div class="error-msg" id="err-bday"></div>
+    </div>
+    <div class="form-group">
+      <label>Weight</label>
+      <div class="form-row">
+        <input type="number" placeholder="175" id="inp-weight" min="50" max="500" />
+        <div class="unit">lbs</div>
+      </div>
+      <div class="error-msg" id="err-weight"></div>
+    </div>
+    <div class="form-group">
+      <label>Height</label>
+      <div class="form-row">
+        <input type="number" placeholder="5" style="width:70px;" id="inp-height-ft" min="3" max="8" /> <div class="unit">ft</div>
+        <input type="number" placeholder="11" style="width:70px;" id="inp-height-in" min="0" max="11" /> <div class="unit">in</div>
+      </div>
+      <div class="error-msg" id="err-height"></div>
+    </div>
+    <div class="form-group">
+      <label>Gender</label>
+      <select>
+        <option value="">Select...</option>
+        <option>Male</option>
+        <option>Female</option>
+        <option>Non-binary</option>
+        <option>Prefer not to say</option>
+      </select>
+    </div>
+    <button class="btn-primary" onclick="validateProfile()">Continue</button>
+  </div>
+
+  <!-- ============ ONBOARDING SCREEN 3: PREFERENCES ============ -->
+  <div class="screen" id="ob-3">
+    <button class="btn-back" onclick="goTo('ob-2')">← Back</button>
+    <h2>Your Preferences</h2>
+    <p class="subtitle">Toggle what you want to see in the app. You can change these anytime in Settings.</p>
+
+    <div class="toggle-row">
+      <div class="label"><span class="emoji">📋</span> Workout Plans</div>
+      <div class="toggle on" onclick="this.classList.toggle('on')"><div class="knob"></div></div>
+    </div>
+    <div class="toggle-row">
+      <div class="label"><span class="emoji">🥗</span> Nutrition Tracking</div>
+      <div class="toggle on" onclick="this.classList.toggle('on')"><div class="knob"></div></div>
+    </div>
+    <div class="toggle-row">
+      <div class="label"><span class="emoji">💧</span> Hydration Tracking</div>
+      <div class="toggle on" onclick="this.classList.toggle('on')"><div class="knob"></div></div>
+    </div>
+    <div class="toggle-row">
+      <div class="label"><span class="emoji">⛽</span> Race Fueling Guidance</div>
+      <div class="toggle on" onclick="this.classList.toggle('on')"><div class="knob"></div></div>
+    </div>
+
+    <button class="btn-primary" onclick="goTo('ob-4')">Continue</button>
+  </div>
+
+  <!-- ============ ONBOARDING SCREEN 4: INJURIES ============ -->
+  <div class="screen" id="ob-4">
+    <button class="btn-back" onclick="goTo('ob-3')">← Back</button>
+    <h2>Any Limitations?</h2>
+    <p class="subtitle">Select any current injuries or problem areas. This helps us pick safe exercises.</p>
+
+    <div class="injury-chips">
+      <div class="injury-chip" onclick="toggleInjury(this)">Shoulder</div>
+      <div class="injury-chip" onclick="toggleInjury(this)">Knee</div>
+      <div class="injury-chip" onclick="toggleInjury(this)">Back / Spine</div>
+      <div class="injury-chip" onclick="toggleInjury(this)">Hip</div>
+      <div class="injury-chip" onclick="toggleInjury(this)">Ankle / Foot</div>
+      <div class="injury-chip" onclick="toggleInjury(this)">Wrist / Elbow</div>
+      <div class="injury-chip none" onclick="selectNone(this)">None</div>
+    </div>
+
+    <button class="btn-primary" onclick="goTo('ob-5')">Continue</button>
+    <button class="btn-skip" onclick="goTo('ob-5')">Skip for now</button>
+  </div>
+
+  <!-- ============ ONBOARDING SCREEN 5: CONNECT APPS ============ -->
+  <div class="screen" id="ob-5">
+    <button class="btn-back" onclick="goTo('ob-4')">← Back</button>
+    <h2>Connect Your Apps</h2>
+    <p class="subtitle">Sync your data for a better experience. You can always do this later.</p>
+
+    <div class="app-cards">
+      <div class="app-card">
+        <div class="app-icon strava">S</div>
+        <div class="app-name">Strava</div>
+        <button class="connect-btn" onclick="this.textContent='Connected'; this.classList.add('connected')">Connect</button>
+      </div>
+      <div class="app-card">
+        <div class="app-icon apple">♥</div>
+        <div class="app-name">Apple Health</div>
+        <button class="connect-btn" onclick="this.textContent='Connected'; this.classList.add('connected')">Connect</button>
+      </div>
+      <div class="app-card">
+        <div class="app-icon garmin">G</div>
+        <div class="app-name">Garmin Connect</div>
+        <button class="connect-btn" onclick="this.textContent='Connected'; this.classList.add('connected')">Connect</button>
+      </div>
+    </div>
+
+    <button class="btn-primary" onclick="goTo('ob-5b')">Continue</button>
+    <button class="btn-skip" onclick="goTo('ob-5b')">Skip for now</button>
+  </div>
+
+  <!-- ============ ONBOARDING SCREEN 5B: NOTIFICATIONS ============ -->
+  <div class="screen" id="ob-5b">
+    <button class="btn-back" onclick="goTo('ob-5')">← Back</button>
+    <h2>Stay on Track</h2>
+    <p class="subtitle">Smart reminders that actually help. Customize these anytime in Settings.</p>
+
+    <div style="text-align:center; margin: 16px 0 12px;">
+      <div style="font-size:44px;">🔔</div>
+    </div>
+
+    <!-- WORKOUT REMINDERS -->
+    <div class="toggle-row" id="notif-workout">
+      <div class="label"><span class="emoji">🏋️</span> Daily Workout Reminder</div>
+      <div class="toggle on" onclick="this.classList.toggle('on'); toggleNotifFreq('workout', this.classList.contains('on'))"><div class="knob"></div></div>
+    </div>
+    <div id="notif-workout-freq" style="padding: 4px 0 12px 36px;">
+      <p style="font-size:11px; color:#888; margin-bottom:6px;">What time?</p>
+      <div class="chips" style="gap:6px;">
+        <div class="chip" onclick="selectNotifOpt(this)" style="font-size:11px; padding:5px 10px;">6 AM</div>
+        <div class="chip selected" onclick="selectNotifOpt(this)" style="font-size:11px; padding:5px 10px;">7 AM</div>
+        <div class="chip" onclick="selectNotifOpt(this)" style="font-size:11px; padding:5px 10px;">8 AM</div>
+        <div class="chip" onclick="selectNotifOpt(this)" style="font-size:11px; padding:5px 10px;">9 AM</div>
+      </div>
+    </div>
+
+    <!-- HYDRATION REMINDERS -->
+    <div class="toggle-row" id="notif-hydration">
+      <div class="label"><span class="emoji">💧</span> Hydration Reminders</div>
+      <div class="toggle on" onclick="this.classList.toggle('on'); toggleNotifFreq('hydration', this.classList.contains('on'))"><div class="knob"></div></div>
+    </div>
+    <div id="notif-hydration-freq" style="padding: 4px 0 12px 36px;">
+      <p style="font-size:11px; color:#888; margin-bottom:6px;">How often?</p>
+      <div class="chips" style="gap:6px;">
+        <div class="chip" onclick="selectNotifOpt(this)" style="font-size:11px; padding:5px 10px;">Every hour</div>
+        <div class="chip selected" onclick="selectNotifOpt(this)" style="font-size:11px; padding:5px 10px;">Every 2 hours</div>
+        <div class="chip" onclick="selectNotifOpt(this)" style="font-size:11px; padding:5px 10px;">Every 3 hours</div>
+      </div>
+      <p style="font-size:10px; color:#BBB; margin-top:4px;">Gentle reminders throughout the day to stay hydrated.</p>
+    </div>
+
+    <!-- NUTRITION REMINDERS -->
+    <div class="toggle-row" id="notif-nutrition">
+      <div class="label"><span class="emoji">🥗</span> Nutrition Reminders</div>
+      <div class="toggle on" onclick="this.classList.toggle('on'); toggleNotifFreq('nutrition', this.classList.contains('on'))"><div class="knob"></div></div>
+    </div>
+    <div id="notif-nutrition-freq" style="padding: 4px 0 12px 36px;">
+      <p style="font-size:11px; color:#888; margin-bottom:6px;">When should we nudge you?</p>
+      <div class="chips" style="gap:6px;" id="nutrition-trigger-chips">
+        <div class="chip selected" onclick="toggleNutritionOpt(this)" style="font-size:11px; padding:5px 10px;">Haven't logged</div>
+        <div class="chip" onclick="toggleNutritionOpt(this)" style="font-size:11px; padding:5px 10px;">Meal times</div>
+        <div class="chip" onclick="toggleNutritionOpt(this)" style="font-size:11px; padding:5px 10px;">Off target</div>
+      </div>
+      <p style="font-size:10px; color:#BBB; margin-top:4px; line-height:1.3;" id="nutrition-desc">If you haven't logged anything by mid-morning, we'll send a friendly reminder.</p>
+    </div>
+
+    <!-- WEEKLY SUMMARY -->
+    <div class="toggle-row" style="margin-top:4px;">
+      <div class="label"><span class="emoji">📊</span> Weekly Progress Summary</div>
+      <div class="toggle on" onclick="this.classList.toggle('on')"><div class="knob"></div></div>
+    </div>
+
+    <div class="callout info" style="margin-top:16px;">
+      You'll see a permission prompt from your phone. Tap "Allow" to enable notifications.
+    </div>
+
+    <button class="btn-primary" onclick="goTo('ob-6')">Enable Notifications</button>
+    <button class="btn-skip" onclick="goTo('ob-6')">Maybe Later</button>
+  </div>
+
+  <!-- ============ ONBOARDING SCREEN 6: THE FORK ============ -->
+  <div class="screen" id="ob-6">
+    <button class="btn-back" onclick="goTo('ob-5b')">← Back</button>
+    <h2>How do you want to use IronZ?</h2>
+    <p class="subtitle">You can always switch later.</p>
+
+    <div class="fork-card" id="fork-plan" onclick="selectFork('plan')">
+      <div class="fork-header">
+        <div class="fork-icon plan">⚡</div>
+        <h3>Build My Plan</h3>
+      </div>
+      <p>IronZ builds a personalized training plan based on your goals, schedule, and fitness level.</p>
+    </div>
+
+    <div class="fork-card" id="fork-manual" onclick="selectFork('manual')">
+      <div class="fork-header">
+        <div class="fork-icon manual">📝</div>
+        <h3>I'll Do My Own Thing</h3>
+      </div>
+      <p>Log your own workouts, browse our library, and track your progress your way.</p>
+    </div>
+  </div>
+
+  <!-- ============ MANUAL USER LANDING ============ -->
+  <div class="screen" id="manual-landing">
+    <h2>You're all set!</h2>
+    <p class="subtitle">Your profile is ready. What would you like to do first?</p>
+
+    <div class="manual-action">
+      <div class="ma-icon log">🏋️</div>
+      <div><h4>Log a Workout</h4><p>Record what you did today</p></div>
+    </div>
+    <div class="manual-action">
+      <div class="ma-icon browse">📖</div>
+      <div><h4>Browse the Library</h4><p>Explore workouts by sport and type</p></div>
+    </div>
+    <div class="manual-action">
+      <div class="ma-icon explore">👀</div>
+      <div><h4>Just Look Around</h4><p>Explore the app at your own pace</p></div>
+    </div>
+
+    <div class="callout info" style="margin-top:16px;">
+      Build Plan is always available in the Training tab if you change your mind.
+    </div>
+  </div>
+
+  <!-- ============ BUILD PLAN STEP 1: SPORTS ============ -->
+  <div class="screen" id="bp-1">
+    <button class="btn-back" onclick="goTo('ob-6')">← Back</button>
+    <h2>What do you want to train?</h2>
+    <p class="subtitle">Select all that apply.</p>
+
+    <div class="sport-cards">
+      <div class="sport-card" onclick="toggleSport(this, 'triathlon')">
+        <div class="icon"><svg style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="#E8530E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+        <div class="name">Triathlon</div>
+      </div>
+      <div class="sport-card" onclick="toggleSport(this, 'strength')">
+        <div class="icon"><svg style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="#E65100" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v16"/><path d="M18 4v16"/><path d="M4 7.5h4"/><path d="M4 16.5h4"/><path d="M16 7.5h4"/><path d="M16 16.5h4"/></svg></div>
+        <div class="name">Strength</div>
+      </div>
+      <div class="sport-card" onclick="toggleSport(this, 'run')">
+        <div class="icon"><svg style="width:22px;height:22px;" viewBox="0 0 464 560" fill="#2E7D32" stroke="none"><path d="M254.4,450.4C264.6,439,274.5,427.8,284.5,416.5C282.9,412.4,279.1,410.8,276.3,408.4C258.5,392.9,240.4,377.7,222.4,362.4C218.7,359.2,217,361.3,215.2,364.4C205,381.7,194.5,398.9,184.3,416.3C181,421.9,176.8,426.9,172.8,432C170.6,434.7,167.7,436.5,164.3,437.7C130.2,449.3,96.2,461,62.2,472.7C60.2,473.4,58.3,474.5,56.4,475.5C43.4,482.4,29.9,479.7,20.5,468.3C12.5,458.6,12.8,443.9,21.2,433.2C23.5,430.4,26.3,428.6,29.8,427.5C61.8,416.8,93.8,406,125.9,395.5C130.8,393.8,134.2,391.3,136.8,386.8C156.2,354.1,176,321.5,195,288.6C201.2,277.8,205.5,266,210.7,254.6C217.6,239.6,224.4,224.7,231.3,209.7C237.9,195.3,244.5,181,251.3,166.7C252.9,163.2,252.2,161.6,248.5,160.6C238.6,158,228.6,155.3,218.7,152.3C215.1,151.3,213.4,152.2,212.1,155.8C203.6,178.2,194.8,200.5,186.1,222.8C181.3,235.3,169.1,240,157.8,233.7C150.2,229.4,146.7,219.7,150.1,210.6C155.7,195.5,161.7,180.5,167.5,165.5C172.7,152.1,178,138.8,183.1,125.5C187.5,114,199.4,107.7,211.3,110.9C240.5,118.9,269.8,126.8,298.8,135.4C308.7,138.3,319.2,140,327.8,146.7C340.1,156.4,346.7,169.6,352.3,183.6C357.8,197.4,363.4,211.1,368.9,224.8C369.6,226.3,370,228,371.9,229.1C377.1,226.2,381.4,221.8,386.1,217.9C397.7,208.4,409,198.6,420.5,189C427.4,183.1,435.1,181.8,443.3,185.9C450.2,189.4,456,200.4,455.3,208.1C454.8,212.1,452.9,215.3,449.9,217.9C427,237.3,404.2,256.7,381.3,276C376.8,279.8,373,284.5,366.5,285.6C357.1,287.1,348.2,282.6,344.9,273.8C341.4,264.6,338.1,255.4,334.7,246.2C334,244.2,333.5,242,331.4,240.7C328.6,241.9,328,244.7,326.9,247C315.5,271.6,304.3,296.3,292.9,320.9C290.8,325.4,288.7,330,285.2,333.7C281.7,337.4,282.5,340.2,286.1,343.2C296.2,351.7,306.2,360.2,316.1,368.8C325,376.4,334,383.8,342.5,391.7C355,403.2,355.4,421.1,344.1,433.7C318.4,462.7,292.7,491.8,267,520.8C262.7,525.6,258.3,530.4,253.8,535.1C243.2,545.8,226.3,546.4,215.5,536.4C203.8,525.8,202.7,508.8,213.1,497C226.7,481.5,240.5,466.1,254.4,450.4z"/><path d="M406.4,85.9C412,111.3,393.2,139.7,367.5,145.3C334.4,152.4,304.3,129.9,303,96.1C301.9,65.8,326.7,43.2,353.5,42.5C379.6,41.8,402.3,60.6,406.4,85.9z"/></svg></div>
+        <div class="name">Running</div>
+      </div>
+      <div class="sport-card" onclick="toggleSport(this, 'bike')">
+        <div class="icon"><svg style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="#7B1FA2" stroke-width="2"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg></div>
+        <div class="name">Cycling</div>
+      </div>
+      <div class="sport-card" onclick="toggleSport(this, 'swim')">
+        <div class="icon"><svg style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="#1565C0" stroke-width="2"><path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/></svg></div>
+        <div class="name">Swimming</div>
+      </div>
+      <div class="sport-card" onclick="toggleSport(this, 'hiit')">
+        <div class="icon"><svg style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="#FF6F00" stroke-width="2" stroke-linecap="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg></div>
+        <div class="name">HIIT</div>
+      </div>
+      <div class="sport-card" onclick="toggleSport(this, 'yoga')">
+        <div class="icon"><svg style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="#00897B" stroke-width="2" stroke-linecap="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg></div>
+        <div class="name">Yoga</div>
+      </div>
+      <div class="sport-card" onclick="toggleSport(this, 'mobility')">
+        <div class="icon"><svg style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="#5C6BC0" stroke-width="2" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+        <div class="name">Mobility</div>
+      </div>
+      <div class="sport-card" onclick="toggleSport(this, 'walking')">
+        <div class="icon"><svg style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="#78909C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><path d="m9 20 3-6 3 6"/><path d="m6 8 6 2 6-2"/></svg></div>
+        <div class="name">Walking</div>
+      </div>
+      <div class="sport-card" onclick="toggleSport(this, 'rowing')">
+        <div class="icon"><svg style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="#455A64" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="1.5"/><path d="M3 19h18"/><path d="M6 19v-4l4-3 4 1"/><path d="M10 12l3-4"/><path d="M14 13h4"/></svg></div>
+        <div class="name">Rowing</div>
+      </div>
+      <div class="sport-card" onclick="toggleSport(this, 'hyrox')">
+        <div class="icon"><svg style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="#C62828" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="5"/><path d="M12 9V2"/><path d="M8 2h8"/><path d="M12 14l2-2"/></svg></div>
+        <div class="name">Hyrox</div>
+      </div>
+      <div class="sport-card" onclick="toggleSport(this, 'circuit')">
+        <div class="icon"><svg style="width:22px;height:22px;" viewBox="0 0 24 24" fill="none" stroke="#6D4C41" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg></div>
+        <div class="name">Circuit</div>
+      </div>
+    </div>
+
+    <div class="callout info" id="tri-note" style="display:none;">
+      Triathlon includes Swimming, Cycling, and Running. We'll program all three sports in your plan.
+    </div>
+
+    <!-- Equipment: only shows when strength is selected -->
+    <div id="equipment-section" style="display:none;">
+      <div class="section-label">Gym Access</div>
+      <p style="font-size:12px; color:#888; margin-bottom:12px;">We'll program exercises based on what you have access to.</p>
+      <div class="chips" id="gym-access-chips">
+        <div class="chip selected" onclick="selectGymAccess(this, 'full')">Full Gym</div>
+        <div class="chip" onclick="selectGymAccess(this, 'home')">Home Gym</div>
+        <div class="chip" onclick="selectGymAccess(this, 'minimal')">Minimal / BW Only</div>
+      </div>
+      <div id="home-gym-details" style="display:none; margin-top:12px;">
+        <p style="font-size:12px; color:#888; margin-bottom:8px;">What equipment do you have?</p>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          <div class="chip" onclick="toggleEquipChip(this, 'dumbbells')" style="font-size:12px; padding:6px 10px;">Dumbbells</div>
+          <div class="chip" onclick="this.classList.toggle('selected')" style="font-size:12px; padding:6px 10px;">Barbell & Rack</div>
+          <div class="chip" onclick="this.classList.toggle('selected')" style="font-size:12px; padding:6px 10px;">Cables / Machines</div>
+          <div class="chip" onclick="toggleEquipChip(this, 'kettlebells')" style="font-size:12px; padding:6px 10px;">Kettlebells</div>
+          <div class="chip" onclick="this.classList.toggle('selected')" style="font-size:12px; padding:6px 10px;">Resistance Bands</div>
+          <div class="chip" onclick="this.classList.toggle('selected')" style="font-size:12px; padding:6px 10px;">Pull-up Bar</div>
+          <div class="chip" onclick="this.classList.toggle('selected')" style="font-size:12px; padding:6px 10px;">Bench</div>
+        </div>
+        <div class="equip-weight-input" id="dumbbell-weight">
+          <div class="form-group" style="margin-top:10px;">
+            <label style="font-size:12px;">Heaviest dumbbell</label>
+            <div class="form-row">
+              <input type="number" placeholder="50" style="width:80px;" /> <div class="unit">lbs</div>
+            </div>
+          </div>
+        </div>
+        <div class="equip-weight-input" id="kettlebell-weight">
+          <div class="form-group" style="margin-top:10px;">
+            <label style="font-size:12px;">Heaviest kettlebell</label>
+            <div class="form-row">
+              <input type="number" placeholder="35" style="width:80px;" /> <div class="unit">lbs</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-primary" onclick="goTo('bp-2')">Continue</button>
+  </div>
+
+  <!-- ============ BUILD PLAN STEP 2: GOALS ============ -->
+  <div class="screen" id="bp-2">
+    <button class="btn-back" onclick="goTo('bp-1')">← Back</button>
+    <h2>What are your goals?</h2>
+    <p class="subtitle">Select all that apply. These shape how your plan balances cardio and strength.</p>
+
+    <div class="goal-cards">
+      <div class="goal-card" onclick="toggleGoal(this)">
+        <div class="emoji">🏁</div><div class="text">Train for a Race</div><div class="check">✓</div>
+      </div>
+      <div class="goal-card" onclick="toggleGoal(this)">
+        <div class="emoji">⚡</div><div class="text">Get Faster</div><div class="check">✓</div>
+      </div>
+      <div class="goal-card" onclick="toggleGoal(this)">
+        <div class="emoji">🫁</div><div class="text">Build Endurance</div><div class="check">✓</div>
+      </div>
+      <div class="goal-card" onclick="toggleGoal(this)">
+        <div class="emoji">💪</div><div class="text">Put on Muscle</div><div class="check">✓</div>
+      </div>
+      <div class="goal-card" onclick="toggleGoal(this)">
+        <div class="emoji">🔥</div><div class="text">Lose Weight</div><div class="check">✓</div>
+      </div>
+      <div class="goal-card" onclick="toggleGoal(this)">
+        <div class="emoji">🎯</div><div class="text">General Fitness</div><div class="check">✓</div>
+      </div>
+    </div>
+
+    <button class="btn-primary" onclick="goTo(hasRaceGoal() ? 'bp-3-race' : 'bp-3-norace')">Continue</button>
+  </div>
+
+  <!-- ============ BUILD PLAN STEP 3A: RACE ENTRY ============ -->
+  <div class="screen" id="bp-3-race">
+    <button class="btn-back" onclick="goTo('bp-2')">← Back</button>
+    <h2>Your Race</h2>
+    <p class="subtitle">Tell us about your upcoming race.</p>
+
+    <div class="race-entry">
+      <div class="race-header">
+        <div class="race-label">Race 1</div>
+        <div class="race-priority a-race">A RACE</div>
+      </div>
+      <div class="form-group">
+        <label>Race Category</label>
+        <select id="race-category-1" onchange="updateRaceTypes(this, 'race-type-1')">
+          <option value="">Select category...</option>
+          <option value="triathlon" selected>Triathlon</option>
+          <option value="running">Running</option>
+          <option value="cycling">Cycling</option>
+          <option value="swimming">Swimming</option>
+          <option value="hyrox">Hyrox</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Race Distance</label>
+        <select id="race-type-1" onchange="updateWeeksCallout()">
+          <option>Sprint Triathlon</option>
+          <option>Olympic Triathlon</option>
+          <option>Half Ironman (70.3)</option>
+          <option selected>Full Ironman (140.6)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Race Date</label>
+        <input type="date" value="2027-01-10" id="race-date-1" onchange="updateWeeksCallout()" />
+      </div>
+      <div class="form-group">
+        <label>Race Name <span class="inline-label">(optional)</span></label>
+        <input type="text" placeholder="Ironman 70.3 Michigan" />
+      </div>
+      <div class="form-group">
+        <label>Goal</label>
+        <div class="chips" style="flex-wrap:nowrap;">
+          <div class="chip selected" onclick="this.parentElement.querySelectorAll('.chip').forEach(c=>c.classList.remove('selected')); this.classList.add('selected')" style="padding:8px 12px; font-size:12px;">Just Finish</div>
+          <div class="chip" onclick="this.parentElement.querySelectorAll('.chip').forEach(c=>c.classList.remove('selected')); this.classList.add('selected')" style="padding:8px 12px; font-size:12px;">Time Goal</div>
+          <div class="chip" onclick="this.parentElement.querySelectorAll('.chip').forEach(c=>c.classList.remove('selected')); this.classList.add('selected')" style="padding:8px 12px; font-size:12px;">PR / Podium</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="extra-races"></div>
+
+    <button class="add-race-btn" onclick="addRaceEntry()">+ Add Another Race</button>
+
+    <div class="callout info" id="weeks-callout">
+      <span id="weeks-text">22 weeks until your A Race.</span> <span id="weeks-rec">Recommended plan: 18–22 weeks for Half Ironman.</span> <span id="weeks-fit">You're right in the sweet spot.</span>
+    </div>
+
+    <!-- GAP-FILL: only shows when weeks-to-race > recommended plan max -->
+    <div id="gap-fill-section" style="display:none;">
+      <div class="section-label">You have extra time before your plan starts</div>
+      <p style="font-size:13px; color:#666; margin-bottom:12px; line-height:1.4;">
+        Your <span id="gap-plan-length">24</span>-week training plan starts in <span id="gap-extra-weeks">14</span> weeks. How do you want to spend that lead-in time?
+      </p>
+
+      <div class="phase-cards">
+        <div class="phase-card selected" onclick="selectGapFill(this)">
+          <div class="phase-name">🏗️ Structured Lead-In</div>
+          <div class="phase-desc">We'll build a mini training block: aerobic base, strength, and easy volume to prep you for race training.</div>
+        </div>
+        <div class="phase-card" onclick="selectGapFill(this)">
+          <div class="phase-name">⚡ Get Faster First</div>
+          <div class="phase-desc">Focus on speed, intervals, and intensity. Build turnover and power before volume ramps up.</div>
+        </div>
+        <div class="phase-card" onclick="selectGapFill(this)">
+          <div class="phase-name">🎯 Stay Loose</div>
+          <div class="phase-desc">Train freestyle at your own pace until your structured plan begins. No rigid schedule.</div>
+        </div>
+      </div>
+
+      <div class="section-label">How often do you want to train during lead-in?</div>
+      <p style="font-size:12px; color:#888; margin-bottom:12px;">This is before your structured plan starts. You can always adjust.</p>
+      <div class="counter-row">
+        <button class="counter-btn" onclick="adjustLeadIn(-1)">−</button>
+        <div class="counter-value" id="leadin-count">4</div>
+        <button class="counter-btn" onclick="adjustLeadIn(1)">+</button>
+      </div>
+      <p style="font-size:11px; color:#AAA; text-align:center;">days per week</p>
+    </div>
+
+    <button class="btn-primary" onclick="goTo('bp-4')">Continue</button>
+  </div>
+
+  <!-- ============ BUILD PLAN STEP 3B: NO RACE — PLAN DETAILS ============ -->
+  <div class="screen" id="bp-3-norace">
+    <button class="btn-back" onclick="goTo('bp-2')">← Back</button>
+    <h2>Plan Details</h2>
+    <p class="subtitle">We'll build your plan around the goals you selected. Just a few more details.</p>
+
+    <div class="section-label">How long do you want to train?</div>
+    <div class="chips">
+      <div class="chip" onclick="selectDuration(this)">4 weeks</div>
+      <div class="chip" onclick="selectDuration(this)">8 weeks</div>
+      <div class="chip selected" onclick="selectDuration(this)">12 weeks</div>
+      <div class="chip" onclick="selectDuration(this)">Indefinite</div>
+    </div>
+    <p style="font-size:11px; color:#AAA; margin-top:4px;">Indefinite plans auto-renew in 4-week mesocycles.</p>
+
+    <div class="section-label" style="margin-top:16px;">Max time per session</div>
+    <div class="chips">
+      <div class="chip" onclick="selectSessionLen(this)">30 min</div>
+      <div class="chip" onclick="selectSessionLen(this)">45 min</div>
+      <div class="chip selected" onclick="selectSessionLen(this)">60 min</div>
+      <div class="chip" onclick="selectSessionLen(this)">90 min</div>
+      <div class="chip" onclick="selectSessionLen(this)">No limit</div>
+    </div>
+
+    <div class="section-label" style="margin-top:16px;">Days per week</div>
+    <div class="chips">
+      <div class="chip" onclick="selectDaysPerWeek(this)">3</div>
+      <div class="chip" onclick="selectDaysPerWeek(this)">4</div>
+      <div class="chip selected" onclick="selectDaysPerWeek(this)">5</div>
+      <div class="chip" onclick="selectDaysPerWeek(this)">6</div>
+      <div class="chip" onclick="selectDaysPerWeek(this)">7</div>
+    </div>
+
+    <button class="btn-primary" onclick="goTo('bp-4')">Continue</button>
+  </div>
+
+  <!-- ============ BUILD PLAN STEP 4: THRESHOLDS ============ -->
+  <div class="screen" id="bp-4">
+    <button class="btn-back" onclick="goTo(lastRaceScreen || 'bp-3-norace')">← Back</button>
+    <h2>Your Numbers</h2>
+    <p class="subtitle">Enter what you know. Skip what you don't — we'll test for it early in your plan.</p>
+
+    <div class="threshold-section">
+      <div class="threshold-header">
+        <div class="sport-icon"><svg style="width:20px;height:20px;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#1565C0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/></svg></div>
+        <div class="sport-name">Swimming</div>
+        <div class="threshold-toggle">
+          <div class="t-btn" onclick="toggleTestMe('swim',this)">Test me</div>
+        </div>
+        <div class="derived-level" id="swim-level" style="display:none;"></div>
+      </div>
+      <div id="swim-inputs">
+      <div class="form-group">
+        <label>How do you know your pace?</label>
+        <select onchange="showSwimInput(this.value)">
+          <option value="">Select method...</option>
+          <option value="css">CSS Test (400m + 200m times)</option>
+          <option value="pace">I know my pace per 100m</option>
+          <option value="race">Recent swim race result</option>
+        </select>
+      </div>
+      <div id="swim-input-css" style="display:none;">
+        <div class="form-group">
+          <label>400m Time</label>
+          <div class="form-row">
+            <input type="number" placeholder="6" style="width:72px;" oninput="calcSwimLevel()" /> <div class="unit">min</div>
+            <input type="number" placeholder="30" style="width:72px;" oninput="calcSwimLevel()" /> <div class="unit">sec</div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>200m Time</label>
+          <div class="form-row">
+            <input type="number" placeholder="3" style="width:72px;" oninput="calcSwimLevel()" /> <div class="unit">min</div>
+            <input type="number" placeholder="00" style="width:72px;" oninput="calcSwimLevel()" /> <div class="unit">sec</div>
+          </div>
+        </div>
+      </div>
+      <div id="swim-input-pace" style="display:none;">
+        <div class="form-group">
+          <label>Pace per 100m</label>
+          <div class="form-row">
+            <input type="number" placeholder="1" style="width:72px;" oninput="calcSwimLevel()" /> <div class="unit">min</div>
+            <input type="number" placeholder="45" style="width:72px;" oninput="calcSwimLevel()" /> <div class="unit">sec</div>
+          </div>
+        </div>
+      </div>
+      <div id="swim-input-race" style="display:none;">
+        <div class="form-group">
+          <label>Race Distance & Time</label>
+          <div class="form-row">
+            <select style="width:100px;"><option>200m</option><option>400m</option><option>800m</option><option>1500m</option></select>
+            <input type="number" placeholder="min" style="width:65px;" oninput="calcSwimLevel()" /> <div class="unit">min</div>
+            <input type="number" placeholder="sec" style="width:65px;" oninput="calcSwimLevel()" /> <div class="unit">sec</div>
+          </div>
+        </div>
+      </div>
+      <div class="threshold-hint" id="swim-hint" style="display:none;"></div>
+      </div><!-- end swim-inputs -->
+      <div class="test-me-note" id="swim-test-note" style="display:none;">We'll schedule a CSS test in Week 1 to find your swim zones.</div>
+    </div>
+
+    <div class="threshold-section">
+      <div class="threshold-header">
+        <div class="sport-icon"><svg style="width:20px;height:20px;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#7B1FA2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg></div>
+        <div class="sport-name">Cycling</div>
+        <div class="threshold-toggle">
+          <div class="t-btn" onclick="toggleTestMe('bike',this)">Test me</div>
+        </div>
+        <div class="derived-level" id="bike-level" style="display:none;"></div>
+      </div>
+      <div id="bike-inputs">
+      <div class="form-group">
+        <label>How do you know your FTP?</label>
+        <select onchange="showBikeInput(this.value)">
+          <option value="">Select method...</option>
+          <option value="ftp">I know my FTP (watts)</option>
+          <option value="test">20-minute test result</option>
+          <option value="race">Recent cycling race / TT</option>
+        </select>
+      </div>
+      <div id="bike-input-ftp" style="display:none;">
+        <div class="form-group">
+          <label>FTP</label>
+          <div class="form-row">
+            <input type="number" placeholder="180" oninput="calcBikeLevel()" /> <div class="unit">watts</div>
+          </div>
+        </div>
+      </div>
+      <div id="bike-input-test" style="display:none;">
+        <div class="form-group">
+          <label>20-Minute Test Average Power</label>
+          <div class="form-row">
+            <input type="number" placeholder="200" oninput="calcBikeLevel()" /> <div class="unit">watts</div>
+          </div>
+          <div class="threshold-hint">FTP = 95% of your 20-min average</div>
+        </div>
+      </div>
+      <div id="bike-input-race" style="display:none;">
+        <div class="form-group">
+          <label>Race Distance & Average Power</label>
+          <div class="form-row">
+            <select style="width:110px;"><option>Time Trial</option><option>40K TT</option><option>Century</option></select>
+            <input type="number" placeholder="watts" style="width:80px;" oninput="calcBikeLevel()" /> <div class="unit">watts</div>
+          </div>
+        </div>
+      </div>
+      <div class="threshold-hint" id="bike-hint" style="display:none;"></div>
+      </div><!-- end bike-inputs -->
+      <div class="test-me-note" id="bike-test-note" style="display:none;">We'll schedule an FTP test in Week 1 to find your power zones.</div>
+    </div>
+
+    <div class="threshold-section">
+      <div class="threshold-header">
+        <div class="sport-icon"><svg style="width:20px;height:20px;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 464 560" fill="#2E7D32" stroke="none"><path d="M254.4,450.4C264.6,439,274.5,427.8,284.5,416.5C282.9,412.4,279.1,410.8,276.3,408.4C258.5,392.9,240.4,377.7,222.4,362.4C218.7,359.2,217,361.3,215.2,364.4C205,381.7,194.5,398.9,184.3,416.3C181,421.9,176.8,426.9,172.8,432C170.6,434.7,167.7,436.5,164.3,437.7C130.2,449.3,96.2,461,62.2,472.7C60.2,473.4,58.3,474.5,56.4,475.5C43.4,482.4,29.9,479.7,20.5,468.3C12.5,458.6,12.8,443.9,21.2,433.2C23.5,430.4,26.3,428.6,29.8,427.5C61.8,416.8,93.8,406,125.9,395.5C130.8,393.8,134.2,391.3,136.8,386.8C156.2,354.1,176,321.5,195,288.6C201.2,277.8,205.5,266,210.7,254.6C217.6,239.6,224.4,224.7,231.3,209.7C237.9,195.3,244.5,181,251.3,166.7C252.9,163.2,252.2,161.6,248.5,160.6C238.6,158,228.6,155.3,218.7,152.3C215.1,151.3,213.4,152.2,212.1,155.8C203.6,178.2,194.8,200.5,186.1,222.8C181.3,235.3,169.1,240,157.8,233.7C150.2,229.4,146.7,219.7,150.1,210.6C155.7,195.5,161.7,180.5,167.5,165.5C172.7,152.1,178,138.8,183.1,125.5C187.5,114,199.4,107.7,211.3,110.9C240.5,118.9,269.8,126.8,298.8,135.4C308.7,138.3,319.2,140,327.8,146.7C340.1,156.4,346.7,169.6,352.3,183.6C357.8,197.4,363.4,211.1,368.9,224.8C369.6,226.3,370,228,371.9,229.1C377.1,226.2,381.4,221.8,386.1,217.9C397.7,208.4,409,198.6,420.5,189C427.4,183.1,435.1,181.8,443.3,185.9C450.2,189.4,456,200.4,455.3,208.1C454.8,212.1,452.9,215.3,449.9,217.9C427,237.3,404.2,256.7,381.3,276C376.8,279.8,373,284.5,366.5,285.6C357.1,287.1,348.2,282.6,344.9,273.8C341.4,264.6,338.1,255.4,334.7,246.2C334,244.2,333.5,242,331.4,240.7C328.6,241.9,328,244.7,326.9,247C315.5,271.6,304.3,296.3,292.9,320.9C290.8,325.4,288.7,330,285.2,333.7C281.7,337.4,282.5,340.2,286.1,343.2C296.2,351.7,306.2,360.2,316.1,368.8C325,376.4,334,383.8,342.5,391.7C355,403.2,355.4,421.1,344.1,433.7C318.4,462.7,292.7,491.8,267,520.8C262.7,525.6,258.3,530.4,253.8,535.1C243.2,545.8,226.3,546.4,215.5,536.4C203.8,525.8,202.7,508.8,213.1,497C226.7,481.5,240.5,466.1,254.4,450.4z"/><path d="M406.4,85.9C412,111.3,393.2,139.7,367.5,145.3C334.4,152.4,304.3,129.9,303,96.1C301.9,65.8,326.7,43.2,353.5,42.5C379.6,41.8,402.3,60.6,406.4,85.9z"/></svg></div>
+        <div class="sport-name">Running</div>
+        <div class="threshold-toggle">
+          <div class="t-btn" onclick="toggleTestMe('run',this)">Test me</div>
+        </div>
+        <div class="derived-level" id="run-level" style="display:none;"></div>
+      </div>
+      <div id="run-inputs">
+      <div class="form-group">
+        <label>How do you know your pace?</label>
+        <select onchange="showRunInput(this.value)">
+          <option value="">Select method...</option>
+          <option value="race">Recent race result</option>
+          <option value="pace">I know my threshold pace</option>
+        </select>
+      </div>
+      <div id="run-input-race" style="display:none;">
+        <div class="form-group">
+          <label>Race Distance & Time</label>
+          <div class="form-row">
+            <select style="width:95px;">
+              <option>5K</option>
+              <option>10K</option>
+              <option>Half Marathon</option>
+              <option>Marathon</option>
+            </select>
+            <input type="number" placeholder="min" style="width:65px;" oninput="calcRunLevel()" />
+            <div class="unit">min</div>
+            <input type="number" placeholder="sec" style="width:65px;" oninput="calcRunLevel()" />
+            <div class="unit">sec</div>
+          </div>
+        </div>
+      </div>
+      <div id="run-input-pace" style="display:none;">
+        <div class="form-group">
+          <label>Threshold Pace</label>
+          <div class="form-row">
+            <input type="number" placeholder="7" style="width:55px;" oninput="calcRunLevel()" /> <div class="unit">min</div>
+            <input type="number" placeholder="00" style="width:55px;" oninput="calcRunLevel()" /> <div class="unit">sec / mile</div>
+          </div>
+        </div>
+      </div>
+      <div class="threshold-hint" id="run-hint" style="display:none;"></div>
+      </div><!-- end run-inputs -->
+      <div class="test-me-note" id="run-test-note" style="display:none;">We'll schedule a threshold test in Week 1 to find your run zones.</div>
+    </div>
+
+    <div class="threshold-section">
+      <div class="threshold-header">
+        <div class="sport-icon"><svg style="width:20px;height:20px;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#E65100" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4v16"/><path d="M18 4v16"/><path d="M4 7.5h4"/><path d="M4 16.5h4"/><path d="M16 7.5h4"/><path d="M16 16.5h4"/></svg></div>
+        <div class="sport-name">Strength</div>
+        <div class="threshold-toggle">
+          <div class="t-btn" onclick="toggleTestMe('strength',this)">Test me</div>
+        </div>
+        <div class="derived-level" id="strength-level" style="display:none;"></div>
+      </div>
+      <div id="strength-inputs">
+      <div class="form-group">
+        <label>Back Squat 1RM <span class="inline-label">(optional)</span></label>
+        <div class="form-row">
+          <input type="number" placeholder="" /> <div class="unit">lbs</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Bench Press 1RM <span class="inline-label">(optional)</span></label>
+        <div class="form-row">
+          <input type="number" placeholder="" /> <div class="unit">lbs</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Deadlift 1RM <span class="inline-label">(optional)</span></label>
+        <div class="form-row">
+          <input type="number" placeholder="" /> <div class="unit">lbs</div>
+        </div>
+      </div>
+      </div><!-- end strength-inputs -->
+      <div class="test-me-note" id="strength-test-note" style="display:none;">We'll start with conservative weights and ramp up based on your feedback.</div>
+    </div>
+
+    <div class="threshold-section" id="hyrox-threshold-section" style="display:none;">
+      <div class="threshold-header">
+        <div class="sport-icon"><svg style="width:20px;height:20px;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#C62828" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg></div>
+        <div class="sport-name">Hyrox</div>
+        <div class="derived-level" id="hyrox-level" style="display:none;"></div>
+      </div>
+      <div class="form-group">
+        <label>How do you know your fitness?</label>
+        <select onchange="showHyroxInput(this.value)">
+          <option value="">Select method...</option>
+          <option value="race">Hyrox finish time</option>
+          <option value="5k">5K run time (fallback)</option>
+        </select>
+      </div>
+      <div id="hyrox-input-race" style="display:none;">
+        <div class="form-group">
+          <label>Hyrox Finish Time</label>
+          <div class="form-row">
+            <input type="number" placeholder="1" style="width:55px;" /> <div class="unit">hr</div>
+            <input type="number" placeholder="25" style="width:55px;" /> <div class="unit">min</div>
+          </div>
+        </div>
+      </div>
+      <div id="hyrox-input-5k" style="display:none;">
+        <div class="form-group">
+          <label>5K Time</label>
+          <div class="form-row">
+            <input type="number" placeholder="min" style="width:55px;" /> <div class="unit">min</div>
+            <input type="number" placeholder="sec" style="width:55px;" /> <div class="unit">sec</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout info" id="threshold-summary" style="display:none;">
+      Levels auto-calculated from your numbers and saved across the app. We'll schedule retests every 90 days.
+    </div>
+
+    <button class="btn-primary" onclick="goTo('bp-6')">Continue</button>
+    <button class="btn-skip" onclick="testMeForAll(); goTo('bp-6')">Test me for everything</button>
+  </div>
+
+  <!-- ============ BUILD PLAN STEP 4B: LONG DAY ANCHORING ============ -->
+  <div class="screen" id="bp-4b">
+    <button class="btn-back" onclick="goTo('bp-6')">← Back</button>
+    <h2>Anchor Your Key Days</h2>
+    <p class="subtitle">Long sessions are the most important workouts of your week. Your plan builds around them.</p>
+
+    <div id="long-run-pick" style="display:none;">
+      <div class="section-label">Long Run Day</div>
+      <p style="font-size:12px; color:#888; margin-bottom:10px;">Which day works best for your longest run each week?</p>
+      <div class="chips" id="long-run-chips">
+        <div class="chip" onclick="selectLongDay(this, 'run')">Mon</div>
+        <div class="chip" onclick="selectLongDay(this, 'run')">Tue</div>
+        <div class="chip" onclick="selectLongDay(this, 'run')">Wed</div>
+        <div class="chip" onclick="selectLongDay(this, 'run')">Thu</div>
+        <div class="chip" onclick="selectLongDay(this, 'run')">Fri</div>
+        <div class="chip" onclick="selectLongDay(this, 'run')">Sat</div>
+        <div class="chip selected" onclick="selectLongDay(this, 'run')">Sun</div>
+      </div>
+    </div>
+
+    <div id="long-ride-pick" style="display:none;">
+      <div class="section-label" style="margin-top:20px;">Long Ride Day</div>
+      <p style="font-size:12px; color:#888; margin-bottom:10px;">Which day works best for your longest bike ride each week?</p>
+      <div class="chips" id="long-ride-chips">
+        <div class="chip" onclick="selectLongDay(this, 'ride')">Mon</div>
+        <div class="chip" onclick="selectLongDay(this, 'ride')">Tue</div>
+        <div class="chip" onclick="selectLongDay(this, 'ride')">Wed</div>
+        <div class="chip" onclick="selectLongDay(this, 'ride')">Thu</div>
+        <div class="chip" onclick="selectLongDay(this, 'ride')">Fri</div>
+        <div class="chip selected" onclick="selectLongDay(this, 'ride')">Sat</div>
+        <div class="chip" onclick="selectLongDay(this, 'ride')">Sun</div>
+      </div>
+    </div>
+
+    <div class="callout info" style="margin-top:20px;">
+      Your key sessions will be locked in the schedule. Everything else fills in around them.
+    </div>
+
+    <button class="btn-primary" onclick="applyLongDaysAndGoToSchedule()">Continue</button>
+  </div>
+
+  <!-- ============ BUILD PLAN STEP 5: WEEKLY SCHEDULE ============ -->
+  <div class="screen" id="bp-5">
+    <button class="btn-back" onclick="goTo('bp-4b')">← Back</button>
+    <h2>Your Weekly Schedule</h2>
+    <p class="subtitle">Drag sports from the bank below onto your days, or tap + to add.</p>
+
+    <div class="sport-bank" id="sport-bank">
+      <!-- Populated dynamically from selected sports -->
+    </div>
+    <div class="drag-hint">Drag a sport onto a day, or use the + buttons</div>
+
+    <div class="schedule-grid" id="schedule-grid">
+      <div class="schedule-day" data-day="mon">
+        <div class="day-name">Mon</div>
+        <div class="day-slots"></div>
+        <button class="add-slot-btn" onclick="showSportPicker(this)">+</button>
+      </div>
+      <div class="schedule-day" data-day="tue">
+        <div class="day-name">Tue</div>
+        <div class="day-slots"></div>
+        <button class="add-slot-btn" onclick="showSportPicker(this)">+</button>
+      </div>
+      <div class="schedule-day" data-day="wed">
+        <div class="day-name">Wed</div>
+        <div class="day-slots"></div>
+        <button class="add-slot-btn" onclick="showSportPicker(this)">+</button>
+      </div>
+      <div class="schedule-day" data-day="thu">
+        <div class="day-name">Thu</div>
+        <div class="day-slots"></div>
+        <button class="add-slot-btn" onclick="showSportPicker(this)">+</button>
+      </div>
+      <div class="schedule-day" data-day="fri">
+        <div class="day-name">Fri</div>
+        <div class="day-slots"></div>
+        <button class="add-slot-btn" onclick="showSportPicker(this)">+</button>
+      </div>
+      <div class="schedule-day" data-day="sat">
+        <div class="day-name">Sat</div>
+        <div class="day-slots"></div>
+        <button class="add-slot-btn" onclick="showSportPicker(this)">+</button>
+      </div>
+      <div class="schedule-day" data-day="sun">
+        <div class="day-name">Sun</div>
+        <div class="day-slots"></div>
+        <button class="add-slot-btn" onclick="showSportPicker(this)">+</button>
+      </div>
+    </div>
+
+    <div class="schedule-summary" id="schedule-summary">
+      <!-- Populated dynamically -->
+    </div>
+
+    <div class="callout warning" id="schedule-warning" style="display:none;">
+      No rest days scheduled. Recovery is when your body adapts. Consider at least 1 rest day per week.
+    </div>
+
+    <div class="callout info" id="rotation-note" style="display:none;">
+      Strength days rotate each week. This shows Week 1 — the cycle continues from where it left off.
+    </div>
+
+    <button class="btn-primary" onclick="goTo('bp-7')">Continue</button>
+  </div>
+
+  <!-- Sport picker dropdown (inside frame for correct positioning) -->
+  <div class="sport-dropdown" id="sport-picker" style="position:absolute;"></div>
+
+  <!-- ============ BUILD PLAN STEP 6: STRENGTH SETUP (now before calendar) ============ -->
+  <div class="screen" id="bp-6">
+    <button class="btn-back" onclick="goTo('bp-4')">← Back</button>
+    <h2>Strength Setup</h2>
+    <p class="subtitle">How should we program your lifting?</p>
+
+    <div class="section-label">Sessions Per Week</div>
+    <p style="font-size:12px; color:#888; margin-bottom:10px;">Functional strength prevents injury and improves performance.</p>
+    <div class="counter-row">
+      <button class="counter-btn" onclick="adjustStrength(-1)">−</button>
+      <div class="counter-value" id="strength-count-2">3</div>
+      <button class="counter-btn" onclick="adjustStrength(1)">+</button>
+    </div>
+    <p style="font-size:11px; color:#AAA; text-align:center; margin-bottom:16px;">Set to 0 to skip strength training</p>
+
+    <div id="strength-details">
+      <div class="section-label">Weekly Split</div>
+      <div class="split-options">
+        <div class="split-option selected" onclick="selectSplit(this)" data-split="ppl">Push / Pull / Legs<span class="rec" id="split-rec">Recommended for 3 days</span></div>
+        <div class="split-option" onclick="selectSplit(this)" data-split="ul">Upper / Lower</div>
+        <div class="split-option" onclick="selectSplit(this)" data-split="full">Full Body</div>
+        <div class="split-option" onclick="selectSplit(this)" data-split="custom">Custom / I Have My Own</div>
+      </div>
+
+      <div id="custom-split-section" style="display:none; margin-top:12px;">
+        <div class="section-label">Which muscles are you targeting?</div>
+        <p style="font-size:12px; color:#888; margin-bottom:10px;">Select the muscle groups you want in your split. We'll build your days from these.</p>
+        <div class="chips" id="custom-muscle-chips" style="gap:6px; flex-wrap:wrap;">
+          <div class="chip" onclick="toggleMuscleChip(this)" style="font-size:12px; padding:6px 14px;">Chest</div>
+          <div class="chip" onclick="toggleMuscleChip(this)" style="font-size:12px; padding:6px 14px;">Back</div>
+          <div class="chip" onclick="toggleMuscleChip(this)" style="font-size:12px; padding:6px 14px;">Shoulders</div>
+          <div class="chip" onclick="toggleMuscleChip(this)" style="font-size:12px; padding:6px 14px;">Biceps</div>
+          <div class="chip" onclick="toggleMuscleChip(this)" style="font-size:12px; padding:6px 14px;">Triceps</div>
+          <div class="chip" onclick="toggleMuscleChip(this)" style="font-size:12px; padding:6px 14px;">Quads</div>
+          <div class="chip" onclick="toggleMuscleChip(this)" style="font-size:12px; padding:6px 14px;">Hamstrings</div>
+          <div class="chip" onclick="toggleMuscleChip(this)" style="font-size:12px; padding:6px 14px;">Glutes</div>
+          <div class="chip" onclick="toggleMuscleChip(this)" style="font-size:12px; padding:6px 14px;">Core</div>
+          <div class="chip" onclick="toggleMuscleChip(this)" style="font-size:12px; padding:6px 14px;">Calves</div>
+          <div class="chip" onclick="toggleMuscleChip(this)" style="font-size:12px; padding:6px 14px;">Full Body</div>
+        </div>
+        <div class="section-label" style="margin-top:14px;">Session Length</div>
+        <select id="custom-session-length" style="font-size:13px; padding:8px 12px; width:100%;">
+          <option value="30">30 min</option>
+          <option value="45" selected>45 min</option>
+          <option value="60">60 min</option>
+          <option value="75">75 min</option>
+          <option value="90">90 min</option>
+        </select>
+      </div>
+
+      <div id="integration-section">
+        <div class="section-label">Strength Philosophy</div>
+        <p style="font-size:12px; color:#888; margin-bottom:10px;" id="philosophy-context"></p>
+        <div class="goal-cards" id="integration-cards">
+          <!-- Populated dynamically based on split + selected sports -->
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-primary" onclick="goTo('bp-4b')">Continue</button>
+  </div>
+
+  <!-- ============ BUILD PLAN STEP 7: PLAN PREVIEW ============ -->
+  <div class="screen" id="bp-7">
+    <button class="btn-back" onclick="goTo('bp-5')">← Back</button>
+    <h2>Your Plan</h2>
+    <p class="subtitle">Here's Week 1. Your plan lives in the Training tab and is always editable.</p>
+
+    <!-- Race path: periodized timeline -->
+    <div class="preview-timeline" id="race-timeline">
+      <div class="timeline-bar">
+        <div class="timeline-seg base" style="flex:4;"></div>
+        <div class="timeline-seg build" style="flex:6;"></div>
+        <div class="timeline-seg peak" style="flex:3;"></div>
+        <div class="timeline-seg taper" style="flex:2;"></div>
+        <div class="timeline-seg race" style="flex:0.5;"></div>
+      </div>
+      <div class="timeline-labels">
+        <div class="timeline-label">Base (4 wk)</div>
+        <div class="timeline-label">Build (6 wk)</div>
+        <div class="timeline-label">Peak (3 wk)</div>
+        <div class="timeline-label">Taper</div>
+        <div class="timeline-label">🏁</div>
+      </div>
+    </div>
+
+    <!-- No-race path: rolling mesocycle -->
+    <div class="preview-timeline" id="norace-timeline" style="display:none;">
+      <div class="timeline-bar">
+        <div class="timeline-seg base" style="flex:1;"></div>
+        <div class="timeline-seg build" style="flex:1;"></div>
+        <div class="timeline-seg peak" style="flex:1;"></div>
+        <div class="timeline-seg base" style="flex:1; opacity:0.5;"></div>
+      </div>
+      <div class="timeline-labels">
+        <div class="timeline-label">Weeks 1–4</div>
+        <div class="timeline-label">Weeks 5–8</div>
+        <div class="timeline-label">Weeks 9–12</div>
+        <div class="timeline-label">Renews →</div>
+      </div>
+      <p style="font-size:11px; color:#AAA; margin-top:4px;">Rolling 4-week mesocycles. Volume and intensity progress, then reset.</p>
+    </div>
+
+    <!-- PILL TOGGLE (only shown for lead-in users) -->
+    <div id="preview-pill-container" style="display:none;">
+      <div class="preview-pill-toggle">
+        <button class="pill-btn active" onclick="switchPreviewTab('leadin')">Lead-In</button>
+        <button class="pill-btn" onclick="switchPreviewTab('plan')">Plan Week 1</button>
+      </div>
+    </div>
+
+    <!-- LEAD-IN TAB CONTENT -->
+    <div id="leadin-preview-section" style="display:none;">
+      <div class="callout info" id="leadin-callout">
+        You're in your <strong>lead-in phase</strong>. Your structured race plan begins on <span id="leadin-start-date"></span>.
+      </div>
+      <p style="font-size:12px; color:#888; margin-bottom:10px;" id="leadin-phase-desc"></p>
+      <div class="week-preview" id="leadin-week-preview">
+        <!-- Populated dynamically -->
+      </div>
+      <div class="schedule-summary" id="leadin-summary">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+
+    <!-- PLAN WEEK 1 TAB CONTENT -->
+    <div id="plan-week1-section">
+      <div class="section-label" id="week1-label">Week 1</div>
+      <div class="callout info" id="test-callout" style="margin-bottom:12px; display:none;"></div>
+      <div class="week-preview" id="plan-week-preview">
+        <!-- Populated dynamically -->
+      </div>
+      <div class="schedule-summary" id="plan-summary">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+
+    <button class="btn-primary" onclick="goTo('bp-done')" style="font-size:17px;">Looks Good — Start Training ⚡</button>
+    <button class="btn-secondary" onclick="goTo('bp-5')">Adjust My Plan</button>
+  </div>
+
+  <!-- ============ BUILD PLAN DONE ============ -->
+  <div class="screen" id="bp-done">
+    <div style="text-align:center; margin:40px 0 20px;">
+      <div style="font-size:60px;">⚡</div>
+      <h2 style="font-size:26px; margin-top:12px;">You're Ready</h2>
+      <p class="subtitle">Your plan is live in the Training tab. Week 1 starts today.</p>
+    </div>
+
+    <div class="callout success">
+      Plan saved to Active Training. Edit anytime from the Training tab.
+    </div>
+
+    <button class="btn-primary">Go to My Plan</button>
+  </div>
+
+</div>
+
+<!-- Sport picker dropdown removed from here - now inside phone frame -->
+
+<script>
+// Navigation
+const progressSteps = {
+  'ob-1': { pct: 8, label: 'Welcome' },
+  'ob-2': { pct: 16, label: 'Profile' },
+  'ob-3': { pct: 25, label: 'Preferences' },
+  'ob-4': { pct: 33, label: 'Limitations' },
+  'ob-5': { pct: 42, label: 'Apps' },
+  'ob-5b': { pct: 46, label: 'Notifications' },
+  'ob-6': { pct: 52, label: 'Training Style' },
+  'manual-landing': { pct: 100, label: 'Ready!' },
+  'bp-1': { pct: 55, label: 'Sports' },
+  'bp-2': { pct: 62, label: 'Goals' },
+  'bp-3-race': { pct: 70, label: 'Races' },
+  'bp-3-norace': { pct: 70, label: 'Phase' },
+  'bp-4': { pct: 75, label: 'Thresholds' },
+  'bp-6': { pct: 80, label: 'Strength' },
+  'bp-4b': { pct: 85, label: 'Key Days' },
+  'bp-5': { pct: 90, label: 'Schedule' },
+  'bp-7': { pct: 97, label: 'Preview' },
+  'bp-done': { pct: 100, label: 'Done!' },
+};
+
+let lastRaceScreen = 'bp-3-norace';
+
+// Profile validation
+function validateProfile() {
+  let valid = true;
+
+  // Clear previous errors
+  document.querySelectorAll('#ob-2 .field-error').forEach(el => el.classList.remove('field-error'));
+  document.querySelectorAll('#ob-2 .error-msg').forEach(el => { el.style.display = 'none'; el.textContent = ''; });
+
+  // Birthday
+  const bday = document.getElementById('inp-bday');
+  const errBday = document.getElementById('err-bday');
+  if (bday && bday.value) {
+    const year = parseInt(bday.value.split('-')[0]);
+    if (year < 1930 || year > 2015) {
+      bday.classList.add('field-error');
+      errBday.textContent = 'Enter a year between 1930 and 2015';
+      errBday.style.display = 'block';
+      valid = false;
+    }
+  }
+
+  // Weight
+  const weight = document.getElementById('inp-weight');
+  const errWeight = document.getElementById('err-weight');
+  const w = parseFloat(weight ? weight.value : '');
+  if (weight && weight.value !== '') {
+    if (isNaN(w) || w < 50 || w > 500) {
+      weight.classList.add('field-error');
+      errWeight.textContent = 'Enter a weight between 50 and 500 lbs';
+      errWeight.style.display = 'block';
+      valid = false;
+    }
+  }
+
+  // Height
+  const ft = document.getElementById('inp-height-ft');
+  const inches = document.getElementById('inp-height-in');
+  const errHeight = document.getElementById('err-height');
+  const fv = parseFloat(ft ? ft.value : '');
+  const iv = parseFloat(inches ? inches.value : '');
+  if (ft && ft.value !== '') {
+    if (isNaN(fv) || fv < 3 || fv > 8) {
+      ft.classList.add('field-error');
+      errHeight.textContent = 'Enter a height between 3\u20198\u2033 and 8\u20190\u2033';
+      errHeight.style.display = 'block';
+      valid = false;
+    }
+  }
+  if (inches && inches.value !== '' && !isNaN(iv) && (iv < 0 || iv > 11)) {
+    inches.classList.add('field-error');
+    if (errHeight.style.display !== 'block') {
+      errHeight.textContent = 'Inches must be 0–11';
+      errHeight.style.display = 'block';
+    }
+    valid = false;
+  }
+
+  if (valid) goTo('ob-3');
+}
+
+function goTo(id) {
+  // Track which race/norace screen we came from
+  if (id === 'bp-4') {
+    const current = document.querySelector('.screen.active');
+    if (current && (current.id === 'bp-3-race' || current.id === 'bp-3-norace')) {
+      lastRaceScreen = current.id;
+    }
+    // Show Hyrox threshold section only if hyrox is selected
+    const hyroxSection = document.getElementById('hyrox-threshold-section');
+    if (hyroxSection) hyroxSection.style.display = selectedSports.has('hyrox') ? 'block' : 'none';
+  }
+  // When entering bp-7 (Preview), show correct timeline
+  if (id === 'bp-7') {
+    const isRacePath = lastRaceScreen === 'bp-3-race';
+    const raceTimeline = document.getElementById('race-timeline');
+    const noraceTimeline = document.getElementById('norace-timeline');
+    const previewWks = document.getElementById('preview-wks');
+    if (raceTimeline) raceTimeline.style.display = isRacePath ? 'block' : 'none';
+    if (noraceTimeline) noraceTimeline.style.display = isRacePath ? 'none' : 'block';
+    if (previewWks) {
+      if (isRacePath) {
+        previewWks.innerHTML = '<div class="num">22</div><div class="label">Wks to Race</div>';
+      } else {
+        previewWks.innerHTML = '<div class="num">12</div><div class="label">Weeks</div>';
+      }
+    }
+  }
+  // When entering bp-6 (Strength Setup), show/hide details based on count
+  if (id === 'bp-6') {
+    const details = document.getElementById('strength-details');
+    if (details) details.style.display = strengthSessionCount > 0 ? 'block' : 'none';
+    updateSplitRec();
+    updateIntegrationCards();
+  }
+  // When entering bp-4b, show/hide long day options based on selected sports AND goals
+  // Skip long days for general fitness users (they do short runs, no need for anchored long sessions)
+  if (id === 'bp-4b') {
+    const isTri = selectedSports.has('triathlon');
+    const hasRunOnly = selectedSports.has('run') && !isTri;
+    const hasBikeOnly = selectedSports.has('bike') && !isTri;
+
+    // Determine if long days are warranted based on race distance or goals
+    // Long run: only Half Marathon, Marathon, Ultra
+    // Long ride: only Half IM, Full IM (tri), Century, Gran Fondo (cycling)
+    let needsLongRun = false;
+    let needsLongRide = false;
+
+    if (lastRaceScreen === 'bp-3-race') {
+      // Race path: check the actual race distance
+      const raceType = document.getElementById('race-type-1');
+      const raceVal = raceType ? (raceType.options[raceType.selectedIndex]?.text || '') : '';
+      // Long run distances
+      if (raceVal.includes('Half Marathon') || raceVal.includes('Marathon') || raceVal.includes('Ultra')) {
+        needsLongRun = true;
+      }
+      // Long ride distances (tri)
+      if (raceVal.includes('Half Ironman') || raceVal.includes('70.3') || raceVal.includes('Full Ironman') || raceVal.includes('140.6')) {
+        needsLongRide = true;
+      }
+      // Long ride distances (cycling)
+      if (raceVal.includes('Century') || raceVal.includes('Gran Fondo')) {
+        needsLongRide = true;
+      }
+    } else {
+      // No-race path: check goals
+      const goalCards = document.querySelectorAll('#bp-2 .goal-card');
+      const hasEnduranceGoal = goalCards[2] && goalCards[2].classList.contains('selected');
+      // Only show long days if they have endurance goals AND relevant sport
+      if (hasEnduranceGoal) {
+        if (hasRunOnly) needsLongRun = true;
+        if (isTri || hasBikeOnly) needsLongRide = true;
+      }
+    }
+
+    const showLongRun = needsLongRun && (hasRunOnly || isTri);
+    const showLongRide = needsLongRide;
+    document.getElementById('long-run-pick').style.display = showLongRun ? 'block' : 'none';
+    document.getElementById('long-ride-pick').style.display = showLongRide ? 'block' : 'none';
+    // If no long days needed, skip straight to schedule generation
+    if (!showLongRun && !showLongRide) {
+      applyLongDaysAndGoToSchedule();
+      return;
+    }
+  }
+  // When entering ob-5b (Notifications), show/hide based on ob-3 preferences
+  if (id === 'ob-5b') {
+    const prefToggles = document.querySelectorAll('#ob-3 .toggle-row');
+    // Hydration Tracking is 3rd toggle (index 2)
+    const hydrationPref = prefToggles[2];
+    const hydrationOn = hydrationPref && hydrationPref.querySelector('.toggle').classList.contains('on');
+    const notifHydration = document.getElementById('notif-hydration');
+    const notifHydrationFreq = document.getElementById('notif-hydration-freq');
+    if (notifHydration) notifHydration.style.display = hydrationOn ? 'flex' : 'none';
+    if (notifHydrationFreq) notifHydrationFreq.style.display = hydrationOn ? 'block' : 'none';
+    // Nutrition Tracking is 2nd toggle (index 1)
+    const nutritionPref = prefToggles[1];
+    const nutritionOn = nutritionPref && nutritionPref.querySelector('.toggle').classList.contains('on');
+    const notifNutrition = document.getElementById('notif-nutrition');
+    const notifNutritionFreq = document.getElementById('notif-nutrition-freq');
+    if (notifNutrition) notifNutrition.style.display = nutritionOn ? 'flex' : 'none';
+    if (notifNutritionFreq) notifNutritionFreq.style.display = nutritionOn ? 'block' : 'none';
+  }
+  // When entering bp-7, generate dynamic week previews
+  if (id === 'bp-7') {
+    setTimeout(generateWeekPreviews, 50);
+  }
+  // When entering bp-5, populate sport bank dynamically
+  if (id === 'bp-5') {
+    populateSportBank();
+    updateScheduleSummary();
+  }
+
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const step = progressSteps[id];
+  if (step) {
+    document.getElementById('progress-fill').style.width = step.pct + '%';
+    document.getElementById('progress-label').textContent = step.label;
+  }
+  // scroll to top of frame
+  document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Fork selection
+let selectedFork = null;
+function selectFork(type) {
+  selectedFork = type;
+  document.querySelectorAll('.fork-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('fork-' + type).classList.add('selected');
+  // Auto-advance after brief highlight
+  setTimeout(() => forkContinue(), 350);
+}
+function forkContinue() {
+  if (selectedFork === 'plan') goTo('bp-1');
+  else goTo('manual-landing');
+}
+
+// Sport selection
+const selectedSports = new Set();
+function toggleSport(el, sport) {
+  el.classList.toggle('selected');
+  if (selectedSports.has(sport)) selectedSports.delete(sport);
+  else selectedSports.add(sport);
+
+  // If triathlon is selected, also show tri note
+  const triNote = document.getElementById('tri-note');
+  if (triNote) triNote.style.display = selectedSports.has('triathlon') ? 'block' : 'none';
+
+  // Show equipment if strength selected
+  document.getElementById('equipment-section').style.display =
+    selectedSports.has('strength') ? 'block' : 'none';
+}
+
+// Gym access toggle
+function selectGymAccess(el, type) {
+  el.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  const details = document.getElementById('home-gym-details');
+  if (details) details.style.display = type === 'home' ? 'block' : 'none';
+}
+
+// Race category → type mapping
+function updateRaceTypes(catSelect, typeSelectId) {
+  const typeSelect = document.getElementById(typeSelectId);
+  const types = {
+    triathlon: ['Sprint Triathlon', 'Olympic Triathlon', 'Half Ironman (70.3)', 'Full Ironman (140.6)'],
+    running: ['5K', '10K', 'Half Marathon', 'Marathon', 'Ultra Marathon'],
+    cycling: ['Time Trial', 'Century (100 mi)', 'Gran Fondo', 'Criterium'],
+    swimming: ['Open Water 1 mi', 'Open Water 2.4 mi', '5K Swim', '10K Swim'],
+    hyrox: ['Hyrox Singles', 'Hyrox Doubles', 'Hyrox Relay'],
+    other: ['Custom Distance']
+  };
+  const cat = catSelect.value;
+  if (!types[cat]) return;
+  typeSelect.innerHTML = types[cat].map(t => '<option>' + t + '</option>').join('');
+  updateWeeksCallout();
+}
+
+// Add race entry
+let raceCount = 1;
+function addRaceEntry() {
+  raceCount++;
+  const container = document.getElementById('extra-races');
+  const div = document.createElement('div');
+  div.className = 'race-entry';
+  div.innerHTML = '<div class="race-header"><div class="race-label">Race ' + raceCount + '</div><div class="race-priority b-race">B RACE</div></div>' +
+    '<div class="form-group"><label>Race Category</label><select onchange="updateRaceTypes(this, \'race-type-' + raceCount + '\')"><option value="">Select category...</option><option value="triathlon">Triathlon</option><option value="running">Running</option><option value="cycling">Cycling</option><option value="swimming">Swimming</option><option value="hyrox">Hyrox</option><option value="other">Other</option></select></div>' +
+    '<div class="form-group"><label>Race Distance</label><select id="race-type-' + raceCount + '"><option>Select category first...</option></select></div>' +
+    '<div class="form-group"><label>Race Date</label><input type="date" /></div>' +
+    '<div class="form-group"><label>Race Name <span class="inline-label">(optional)</span></label><input type="text" placeholder="Race name" /></div>';
+  container.appendChild(div);
+}
+
+// Threshold input toggles
+function showSwimInput(method) {
+  ['css','pace','race'].forEach(m => { const el = document.getElementById('swim-input-'+m); if(el) el.style.display = m===method ? 'block' : 'none'; });
+}
+function showBikeInput(method) {
+  ['ftp','test','race'].forEach(m => { const el = document.getElementById('bike-input-'+m); if(el) el.style.display = m===method ? 'block' : 'none'; });
+}
+function showRunInput(method) {
+  ['race','pace'].forEach(m => { const el = document.getElementById('run-input-'+m); if(el) el.style.display = m===method ? 'block' : 'none'; });
+}
+function showHyroxInput(method) {
+  ['race','5k'].forEach(m => { const el = document.getElementById('hyrox-input-'+m); if(el) el.style.display = m===method ? 'block' : 'none'; });
+}
+
+// Level derivation (simplified demo)
+function showLevel(elId, level) {
+  const el = document.getElementById(elId);
+  el.style.display = 'inline-block';
+  el.textContent = level.charAt(0).toUpperCase() + level.slice(1);
+  el.className = 'derived-level ' + level;
+  // Show summary callout
+  const summary = document.getElementById('threshold-summary');
+  if (summary) summary.style.display = 'block';
+}
+function calcSwimLevel() {
+  showLevel('swim-level', 'intermediate');
+  document.getElementById('swim-hint').style.display='block';
+  document.getElementById('swim-hint').textContent='CSS auto-calculated from your times';
+}
+function calcBikeLevel() {
+  // Read FTP from whichever input is visible
+  let ftp = 0;
+  const ftpInput = document.querySelector('#bike-input-ftp input');
+  const testInput = document.querySelector('#bike-input-test input');
+  const raceInput = document.querySelector('#bike-input-race input[type="number"]');
+  if (ftpInput && ftpInput.value) ftp = parseInt(ftpInput.value);
+  else if (testInput && testInput.value) ftp = Math.round(parseInt(testInput.value) * 0.95);
+  else if (raceInput && raceInput.value) ftp = parseInt(raceInput.value);
+
+  // Estimate w/kg (assume ~80kg / 175lbs if no weight entered)
+  const weightLbs = parseInt(document.getElementById('inp-weight')?.value) || 175;
+  const weightKg = weightLbs * 0.453592;
+  const wkg = ftp / weightKg;
+
+  let level = 'beginner';
+  if (wkg >= 3.5) level = 'advanced';
+  else if (wkg >= 2.5) level = 'intermediate';
+
+  showLevel('bike-level', level);
+  document.getElementById('bike-hint').style.display='block';
+  document.getElementById('bike-hint').textContent = ftp + 'w → ' + wkg.toFixed(1) + ' w/kg → ' + level;
+}
+function calcRunLevel() {
+  // Read time from whichever input is visible
+  let totalSec = 0;
+  const raceMin = document.querySelector('#run-input-race input[placeholder="min"]');
+  const raceSec = document.querySelector('#run-input-race input[placeholder="sec"]');
+  const paceMin = document.querySelector('#run-input-pace input[placeholder="7"]');
+  const paceSec = document.querySelector('#run-input-pace input[placeholder="00"]');
+
+  if (raceMin && raceMin.value) {
+    const m = parseInt(raceMin.value) || 0;
+    const s = parseInt(raceSec?.value) || 0;
+    totalSec = m * 60 + s;
+    // For 5K: <20min = advanced, <25min = intermediate, else beginner
+    const dist = document.querySelector('#run-input-race select')?.value || '5K';
+    let level = 'beginner';
+    if (dist === '5K') {
+      if (totalSec < 1200) level = 'advanced';
+      else if (totalSec < 1500) level = 'intermediate';
+    } else if (dist === '10K') {
+      if (totalSec < 2700) level = 'advanced';
+      else if (totalSec < 3300) level = 'intermediate';
+    } else if (dist === 'Half Marathon') {
+      if (totalSec < 5700) level = 'advanced';
+      else if (totalSec < 7200) level = 'intermediate';
+    } else if (dist === 'Marathon') {
+      if (totalSec < 12000) level = 'advanced';
+      else if (totalSec < 15000) level = 'intermediate';
+    }
+    showLevel('run-level', level);
+    document.getElementById('run-hint').style.display='block';
+    document.getElementById('run-hint').textContent = 'Threshold pace estimated from your ' + dist + ' result';
+  } else if (paceMin && paceMin.value) {
+    const m = parseInt(paceMin.value) || 0;
+    const s = parseInt(paceSec?.value) || 0;
+    const paceTotalSec = m * 60 + s;
+    let level = 'beginner';
+    if (paceTotalSec < 390) level = 'advanced';
+    else if (paceTotalSec < 510) level = 'intermediate';
+    showLevel('run-level', level);
+    document.getElementById('run-hint').style.display='block';
+    document.getElementById('run-hint').textContent = m + ':' + String(s).padStart(2,'0') + '/mi threshold pace';
+  }
+}
+
+// Drag and drop for schedule
+let draggedSport = null;
+let draggedChipEl = null;
+function bankDragStart(e, sport) {
+  draggedSport = sport;
+  e.dataTransfer.effectAllowed = 'copy';
+}
+
+// Set up drop zones on schedule days
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.schedule-day').forEach(day => {
+    day.addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('drag-over'); });
+    day.addEventListener('dragleave', function() { this.classList.remove('drag-over'); });
+    day.addEventListener('drop', function(e) {
+      e.preventDefault();
+      this.classList.remove('drag-over');
+      if (draggedChipEl) {
+        // Moving an existing chip between days
+        const slotsDiv = this.querySelector('.day-slots');
+        slotsDiv.appendChild(draggedChipEl);
+        draggedChipEl.style.opacity = '1';
+        draggedChipEl = null;
+        updateScheduleSummary();
+      } else if (draggedSport) {
+        const slotsDiv = this.querySelector('.day-slots');
+        addSportChip(slotsDiv, draggedSport);
+        draggedSport = null;
+      }
+    });
+  });
+});
+
+const sportNames = {
+  swim:'Swim', bike:'Bike', run:'Run', brick:'Brick', strength:'Strength',
+  'str-push':'Str - Push', 'str-pull':'Str - Pull', 'str-legs':'Str - Legs',
+  'str-upper':'Str - Upper', 'str-lower':'Str - Lower', 'str-full':'Str - Full',
+  hyrox:'Hyrox', rest:'Rest', hiit:'HIIT', yoga:'Yoga', rowing:'Rowing',
+  mobility:'Mobility', walking:'Walking', circuit:'Circuit'
+};
+
+function addSportChip(container, sport, anchored) {
+  // If adding Rest, clear all non-anchored sessions first
+  if (sport === 'rest') {
+    container.querySelectorAll('.slot-chip:not(.anchored)').forEach(c => c.remove());
+  }
+  // If adding a sport to a rest day, remove the rest chip first
+  if (sport !== 'rest') {
+    container.querySelectorAll('.slot-chip.rest').forEach(c => c.remove());
+  }
+  const chip = document.createElement('div');
+  chip.className = 'slot-chip ' + sport + (anchored ? ' anchored' : '');
+  chip.draggable = true;
+  chip.innerHTML = sportNames[sport] + ' <span class="remove" onclick="this.parentElement.remove(); updateScheduleSummary()">×</span>';
+  // Enable dragging existing chips between days
+  chip.addEventListener('dragstart', function(e) {
+    draggedChipEl = this;
+    e.dataTransfer.effectAllowed = 'move';
+    setTimeout(() => this.style.opacity = '0.3', 0);
+  });
+  chip.addEventListener('dragend', function() { this.style.opacity = '1'; draggedChipEl = null; });
+  container.appendChild(chip);
+  updateScheduleSummary();
+}
+
+// Goal selection (multi)
+function toggleGoal(el) {
+  el.classList.toggle('selected');
+}
+function hasRaceGoal() {
+  const goals = document.querySelectorAll('#bp-2 .goal-card');
+  return goals[0].classList.contains('selected'); // "Train for a Race" is first
+}
+
+// Injury chips
+function toggleInjury(el) {
+  if (el.classList.contains('none')) return;
+  el.classList.toggle('selected');
+  // Deselect "None" if an injury is selected
+  document.querySelector('.injury-chip.none').classList.remove('selected');
+}
+function selectNone(el) {
+  document.querySelectorAll('.injury-chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+// Phase selection
+function selectPhase(el) {
+  el.parentElement.querySelectorAll('.phase-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+function selectDuration(el) {
+  el.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+function selectSessionLen(el) {
+  el.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+function selectDaysPerWeek(el) {
+  el.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+// Split selection
+function selectSplit(el) {
+  el.parentElement.querySelectorAll('.split-option').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedSplit = el.getAttribute('data-split') || 'ppl';
+  // Show/hide custom split section
+  const customSection = document.getElementById('custom-split-section');
+  if (customSection) {
+    customSection.style.display = selectedSplit === 'custom' ? 'block' : 'none';
+    if (selectedSplit === 'custom') populateCustomSplitInputs();
+  }
+  updateIntegrationCards();
+}
+
+function populateCustomSplitInputs() {
+  // No-op — custom split now uses muscle group bubbles in the HTML
+}
+function toggleMuscleChip(el) {
+  el.classList.toggle('selected');
+}
+function updateIntegrationCards() {
+  const container = document.getElementById('integration-cards');
+  if (!container) return;
+  const isTri = selectedSports.has('triathlon');
+  const hasRun = selectedSports.has('run') || isTri;
+  const hasBike = selectedSports.has('bike') || isTri;
+  const hasSwim = selectedSports.has('swim') || isTri;
+  const hasCardio = hasRun || hasBike || hasSwim;
+
+  let cards = [];
+  const contextEl = document.getElementById('philosophy-context');
+
+  if (selectedSplit === 'full') {
+    // Full Body doesn't pair muscle groups with sports — different options
+    if (contextEl) contextEl.textContent = 'Full body sessions train everything at once, so the key question is when to lift relative to your cardio.';
+    cards = [
+      { emoji:'📅', title:'Separate Days', desc:'Keep strength on its own days away from hard cardio. Best for recovery.', selected:true },
+      { emoji:'🏋️', title:'Strength First', desc:'Lift before cardio when doubled up. Prioritize muscle and power gains.' },
+      { emoji:'🏃', title:'Cardio First', desc:'Run or ride first, lift after. Prioritize endurance and aerobic adaptations.' }
+    ];
+  } else if (!hasCardio) {
+    // Strength-only user — no cardio to complement
+    if (contextEl) contextEl.textContent = 'Since you\'re strength-only, pick the programming style that fits your goals.';
+    cards = [
+      { emoji:'🏋️', title:'Hypertrophy Focused', desc:'Traditional bodybuilding programming. Max muscle growth.', selected:true },
+      { emoji:'💪', title:'Strength / Power', desc:'Lower rep ranges, heavier loads. Build max strength.' },
+      { emoji:'⚖️', title:'Balanced', desc:'Mix of hypertrophy and strength. Well-rounded approach.' }
+    ];
+  } else {
+    // PPL / UL with cardio — build dynamic description
+    if (contextEl) {
+      if (selectedSplit === 'ppl') contextEl.textContent = 'We can pair specific muscle groups with your cardio sports for smarter recovery.';
+      else if (selectedSplit === 'ul') contextEl.textContent = 'Upper/lower splits pair naturally with cardio — upper on swim/bike days, lower on run days.';
+      else contextEl.textContent = '';
+    }
+    let complementDesc = '';
+    if (selectedSplit === 'ppl') {
+      const parts = [];
+      if (hasSwim) parts.push('Pull + core on swim days');
+      if (hasRun) parts.push('Legs on run days');
+      if (hasBike) parts.push('Push + power on bike days');
+      complementDesc = parts.join(', ') || 'Pair muscle groups with your cardio sports';
+    } else if (selectedSplit === 'ul') {
+      const parts = [];
+      if (hasSwim || hasBike) parts.push('Upper on swim/bike days');
+      if (hasRun) parts.push('Lower on run days');
+      complementDesc = parts.join(', ') || 'Pair upper/lower with your cardio';
+    } else {
+      complementDesc = 'We\'ll program strength to match your training';
+    }
+    cards = [
+      { emoji:'🔗', title:'Complement My Cardio', desc:complementDesc, selected:true },
+      { emoji:'🏋️', title:'Hypertrophy Focused', desc:'Traditional bodybuilding split. Max muscle growth.' },
+      { emoji:'⚖️', title:'Balanced', desc:'Mix of functional and hypertrophy. Best of both worlds.' }
+    ];
+  }
+
+  container.innerHTML = cards.map(c =>
+    '<div class="goal-card' + (c.selected ? ' selected' : '') + '" onclick="selectIntegration(this)">' +
+    '<div class="emoji">' + c.emoji + '</div>' +
+    '<div><div class="text">' + c.title + '</div>' +
+    '<div style="font-size:12px; color:#888; margin-top:2px;">' + c.desc + '</div></div></div>'
+  ).join('');
+}
+function selectIntegration(el) {
+  el.parentElement.querySelectorAll('.goal-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+// Schedule sport picker
+let activePlusBtn = null;
+function showSportPicker(btn) {
+  const picker = document.getElementById('sport-picker');
+  // Position relative to the btn within the phone frame
+  const frameEl = document.getElementById('onboarding-frame');
+  const rect = btn.getBoundingClientRect();
+  const frameRect = frameEl.getBoundingClientRect();
+  picker.style.top = (rect.bottom - frameRect.top + 4) + 'px';
+  picker.style.left = 'auto';
+  picker.style.right = '24px';
+  picker.classList.add('show');
+  activePlusBtn = btn;
+
+  setTimeout(() => {
+    document.addEventListener('click', closePicker, { once: true });
+  }, 10);
+}
+function closePicker() {
+  document.getElementById('sport-picker').classList.remove('show');
+}
+function addSportToDay(sport) {
+  if (!activePlusBtn) return;
+  const slotsDiv = activePlusBtn.previousElementSibling;
+  addSportChip(slotsDiv, sport);
+  closePicker();
+}
+
+// Dynamic weeks calculation
+function updateWeeksCallout() {
+  const dateInput = document.getElementById('race-date-1');
+  if (!dateInput || !dateInput.value) return;
+  const raceDate = new Date(dateInput.value + 'T00:00:00');
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const diffMs = raceDate - today;
+  const weeks = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
+
+  const weeksText = document.getElementById('weeks-text');
+  const weeksRec = document.getElementById('weeks-rec');
+  const weeksFit = document.getElementById('weeks-fit');
+
+  if (weeks > 0) {
+    weeksText.textContent = weeks + ' weeks until your A Race.';
+    const raceType = document.getElementById('race-type-1');
+    const val = raceType ? raceType.options[raceType.selectedIndex]?.text || '' : '';
+    // Get recommended range based on race distance
+    let rec = '', minW = 0, maxW = 0;
+    if (val.includes('Sprint')) { rec = '8–12 weeks for Sprint'; minW = 8; maxW = 12; }
+    else if (val.includes('Olympic')) { rec = '12–16 weeks for Olympic'; minW = 12; maxW = 16; }
+    else if (val.includes('Half') || val.includes('70.3')) { rec = '18–22 weeks for Half Ironman'; minW = 18; maxW = 22; }
+    else if (val.includes('Full') || val.includes('140.6')) { rec = '22–30 weeks for Full Ironman'; minW = 22; maxW = 30; }
+    else if (val.includes('5K')) { rec = '8–12 weeks for 5K'; minW = 8; maxW = 12; }
+    else if (val.includes('10K')) { rec = '10–14 weeks for 10K'; minW = 10; maxW = 14; }
+    else if (val.includes('Half Marathon')) { rec = '14–18 weeks for Half Marathon'; minW = 14; maxW = 18; }
+    else if (val.includes('Marathon')) { rec = '18–24 weeks for Marathon'; minW = 18; maxW = 24; }
+    else if (val.includes('Hyrox')) { rec = '12–16 weeks for Hyrox'; minW = 12; maxW = 16; }
+    else { rec = '12–20 weeks recommended'; minW = 12; maxW = 20; }
+
+    weeksRec.textContent = 'Recommended plan: ' + rec + '.';
+
+    // Gap-fill logic: show when weeks exceed plan max by more than 2
+    const gapSection = document.getElementById('gap-fill-section');
+    const extraWeeks = weeks - maxW;
+    if (extraWeeks > 2 && gapSection) {
+      gapSection.style.display = 'block';
+      document.getElementById('gap-plan-length').textContent = maxW;
+      document.getElementById('gap-extra-weeks').textContent = extraWeeks;
+      weeksFit.textContent = 'You have ' + extraWeeks + ' extra weeks before your plan needs to start.';
+    } else if (gapSection) {
+      gapSection.style.display = 'none';
+      if (weeks < minW) weeksFit.textContent = 'That\'s tight — we\'ll build a compressed plan.';
+      else weeksFit.textContent = 'You\'re in the sweet spot.';
+    }
+  } else {
+    weeksText.textContent = 'Race date is in the past!';
+    weeksRec.textContent = '';
+    weeksFit.textContent = 'Please select a future date.';
+    const gapSection = document.getElementById('gap-fill-section');
+    if (gapSection) gapSection.style.display = 'none';
+  }
+}
+
+// Gap-fill phase selection
+function selectGapFill(el) {
+  el.parentElement.querySelectorAll('.phase-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+// Strength session counter
+let strengthSessionCount = 3;
+let selectedSplit = 'ppl';
+function adjustStrength(delta) {
+  strengthSessionCount = Math.max(0, Math.min(6, strengthSessionCount + delta));
+  // Update all counter displays
+  const c1 = document.getElementById('strength-count');
+  const c2 = document.getElementById('strength-count-2');
+  if (c1) c1.textContent = strengthSessionCount;
+  if (c2) c2.textContent = strengthSessionCount;
+  // Show/hide strength details based on count
+  const details = document.getElementById('strength-details');
+  if (details) details.style.display = strengthSessionCount > 0 ? 'block' : 'none';
+  // Update split recommendation
+  updateSplitRec();
+}
+function updateSplitRec() {
+  // Clear all recs first
+  document.querySelectorAll('.split-option .rec').forEach(r => r.textContent = '');
+  const n = strengthSessionCount;
+  if (n <= 2) {
+    const fullOpt = document.querySelector('.split-option[data-split="full"] .rec');
+    if (fullOpt) fullOpt.textContent = 'Recommended';
+  } else if (n === 3) {
+    const pplOpt = document.querySelector('.split-option[data-split="ppl"] .rec');
+    if (pplOpt) pplOpt.textContent = 'Recommended';
+  } else if (n >= 4) {
+    const pplOpt = document.querySelector('.split-option[data-split="ppl"] .rec');
+    const ulOpt = document.querySelector('.split-option[data-split="ul"] .rec');
+    if (pplOpt) pplOpt.textContent = 'Recommended';
+    if (ulOpt) ulOpt.textContent = 'Also great';
+  }
+  // Update custom split inputs if visible
+  if (selectedSplit === 'custom') populateCustomSplitInputs();
+}
+
+// Long day selection
+let longRunDay = 'Sun';
+let longRideDay = 'Sat';
+
+function selectLongDay(el, type) {
+  const container = type === 'run' ? document.getElementById('long-run-chips') : document.getElementById('long-ride-chips');
+  container.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  if (type === 'run') longRunDay = el.textContent.trim();
+  else longRideDay = el.textContent.trim();
+}
+
+function applyLongDaysAndGoToSchedule() {
+  const dayMap = { 'Mon':'mon', 'Tue':'tue', 'Wed':'wed', 'Thu':'thu', 'Fri':'fri', 'Sat':'sat', 'Sun':'sun' };
+  const dayOrder = ['mon','tue','wed','thu','fri','sat','sun'];
+  const isTri = selectedSports.has('triathlon');
+  const hasRun = selectedSports.has('run') || isTri;
+  const hasBike = selectedSports.has('bike') || isTri;
+  const hasSwim = selectedSports.has('swim') || isTri;
+
+  // Determine if long days are needed based on race distance
+  let longRideNeeded = false;
+  let longRunNeeded = false;
+  const raceType = document.getElementById('race-type-1');
+  const raceVal = raceType ? (raceType.options[raceType.selectedIndex]?.text || '') : '';
+  if (raceVal.includes('Half Ironman') || raceVal.includes('70.3') || raceVal.includes('Full Ironman') || raceVal.includes('140.6') || raceVal.includes('Century') || raceVal.includes('Gran Fondo')) {
+    longRideNeeded = true;
+  }
+  if (raceVal.includes('Half Marathon') || raceVal.includes('Marathon') || raceVal.includes('Ultra')) {
+    longRunNeeded = true;
+  }
+  // No-race path: check goals for endurance
+  if (lastRaceScreen === 'bp-3-norace') {
+    const goalCards = document.querySelectorAll('#bp-2 .goal-card');
+    const hasEndurance = goalCards[2] && goalCards[2].classList.contains('selected');
+    if (hasEndurance && hasRun) longRunNeeded = true;
+    if (hasEndurance && hasBike) longRideNeeded = true;
+  }
+
+  const numStrength = strengthSessionCount;
+
+  // Clear all slots first
+  document.querySelectorAll('.day-slots').forEach(ds => ds.innerHTML = '');
+
+  // Build the template
+  const template = { mon:[], tue:[], wed:[], thu:[], fri:[], sat:[], sun:[] };
+  const longRideKey = dayMap[longRideDay] || 'sat';
+  const longRunKey = dayMap[longRunDay] || 'sun';
+
+  if (isTri) {
+    if (longRideNeeded) {
+      // Long-course tri: anchor long ride + brick run on chosen day
+      template[longRideKey].push('bike');
+      template[longRideKey].push('brick');
+      const triPlan = [
+        { sport: 'swim', days: ['mon', 'thu'] },
+        { sport: 'bike', days: ['tue'] },
+        { sport: 'run', days: ['wed', 'fri'] }
+      ];
+      triPlan.forEach(({ sport, days }) => {
+        days.forEach(d => {
+          if (d !== longRideKey || sport !== 'bike') {
+            template[d].push(sport);
+          }
+        });
+      });
+      // Long run on Sunday
+      if (template['sun'].length === 0) {
+        template['sun'].push('run');
+      }
+    } else {
+      // Short-course tri (Sprint/Olympic): balanced week, no anchored long day
+      // Mon=Swim, Tue=Bike, Wed=Run, Thu=Swim, Fri=Bike, Sat=Run, Sun=Rest
+      template['mon'].push('swim');
+      template['tue'].push('bike');
+      template['wed'].push('run');
+      template['thu'].push('swim');
+      template['fri'].push('bike');
+      template['sat'].push('run');
+    }
+  } else {
+    // Non-tri: build based on individual sports
+    if (hasRun) {
+      if (longRunNeeded) {
+        // Half Marathon+: anchor long run, distribute others around it
+        template[longRunKey].push('run');
+        ['tue', 'thu'].forEach(d => { if (d !== longRunKey) template[d].push('run'); });
+      } else {
+        // 5K/10K or general: evenly distributed runs, no anchor
+        ['tue', 'thu', 'sat'].forEach(d => template[d].push('run'));
+      }
+    }
+    if (hasBike) {
+      if (longRideNeeded) {
+        template[longRideKey].push('bike');
+        if (!template['tue'].includes('bike') && longRideKey !== 'tue') template['mon'].push('bike');
+      } else {
+        // Short distance cycling: evenly distributed
+        ['mon', 'wed'].forEach(d => template[d].push('bike'));
+      }
+    }
+    if (hasSwim) {
+      ['mon', 'wed', 'fri'].forEach(d => template[d].push('swim'));
+    }
+    // Add other selected sports to empty-ish days
+    ['hiit','yoga','rowing','mobility','walking','circuit','hyrox'].forEach(sport => {
+      if (selectedSports.has(sport)) {
+        const emptyDay = dayOrder.find(d => template[d].length === 0);
+        if (emptyDay) template[emptyDay].push(sport);
+        else {
+          const lightDay = dayOrder.find(d => template[d].length <= 1 && !template[d].includes('rest'));
+          if (lightDay) template[lightDay].push(sport);
+        }
+      }
+    });
+  }
+
+  // Add labeled strength sessions with proper spacing (min 1 day gap)
+  if (numStrength > 0) {
+    // Generate the split label sequence
+    let splitLabels = [];
+    if (selectedSplit === 'ppl') {
+      // PPL is a 3-day cycle that rotates
+      const cycle = ['str-push', 'str-pull', 'str-legs'];
+      for (let i = 0; i < numStrength; i++) splitLabels.push(cycle[i % 3]);
+    } else if (selectedSplit === 'ul') {
+      const cycle = ['str-upper', 'str-lower'];
+      for (let i = 0; i < numStrength; i++) splitLabels.push(cycle[i % 2]);
+    } else if (selectedSplit === 'full') {
+      for (let i = 0; i < numStrength; i++) splitLabels.push('str-full');
+    } else {
+      // Custom — just use generic "Strength"
+      for (let i = 0; i < numStrength; i++) splitLabels.push('strength');
+    }
+
+    // Find days with proper spacing (at least 1 day gap between strength)
+    // Sort by load (lightest first), then greedily assign ensuring gaps
+    const sortedByLoad = [...dayOrder].sort((a, b) => template[a].length - template[b].length);
+    const strengthDays = [];
+    for (let i = 0; i < sortedByLoad.length && strengthDays.length < numStrength; i++) {
+      const d = sortedByLoad[i];
+      const dayIdx = dayOrder.indexOf(d);
+      // Check min 1-day gap from already assigned strength days
+      const hasConflict = strengthDays.some(sd => {
+        const sdIdx = dayOrder.indexOf(sd);
+        return Math.abs(dayIdx - sdIdx) <= 1 || (dayIdx === 0 && sdIdx === 6) || (dayIdx === 6 && sdIdx === 0);
+      });
+      if (!hasConflict && template[d].length < 3) {
+        strengthDays.push(d);
+      }
+    }
+    // If we couldn't place all with gaps (e.g. 5+ strength days), relax constraint
+    if (strengthDays.length < numStrength) {
+      for (let i = 0; i < sortedByLoad.length && strengthDays.length < numStrength; i++) {
+        const d = sortedByLoad[i];
+        if (!strengthDays.includes(d) && template[d].length < 3) {
+          strengthDays.push(d);
+        }
+      }
+    }
+    // Sort strength days back into week order and assign labels
+    strengthDays.sort((a, b) => dayOrder.indexOf(a) - dayOrder.indexOf(b));
+    strengthDays.forEach((d, i) => {
+      template[d].push(splitLabels[i]);
+    });
+
+    // Show rotation note if split cycle doesn't evenly divide into # of days
+    const rotNote = document.getElementById('rotation-note');
+    if (rotNote) {
+      const cycleLen = selectedSplit === 'ppl' ? 3 : selectedSplit === 'ul' ? 2 : 0;
+      rotNote.style.display = (cycleLen > 0 && numStrength > cycleLen) ? 'block' : 'none';
+    }
+  }
+
+  // Fill any completely empty days with rest
+  dayOrder.forEach(d => { if (template[d].length === 0) template[d] = ['rest']; });
+
+  // Render
+  dayOrder.forEach(d => {
+    const row = document.querySelector('.schedule-day[data-day="' + d + '"] .day-slots');
+    if (!row) return;
+    template[d].forEach(sport => {
+      const isAnchored = (sport === 'bike' && d === longRideKey && longRideNeeded) ||
+                         (sport === 'brick' && d === longRideKey && longRideNeeded) ||
+                         (sport === 'run' && d === longRunKey && longRunNeeded && !isTri);
+      addSportChip(row, sport, isAnchored);
+    });
+  });
+
+  goTo('bp-5');
+}
+
+// Populate sport bank based on selected sports
+function populateSportBank() {
+  const bank = document.getElementById('sport-bank');
+  bank.innerHTML = '';
+  // Get all sports, expanding triathlon into swim/bike/run + brick
+  const bankSports = new Set();
+  selectedSports.forEach(s => {
+    if (s === 'triathlon') { bankSports.add('swim'); bankSports.add('bike'); bankSports.add('run'); bankSports.add('brick'); }
+    else bankSports.add(s);
+  });
+  // Always include strength if user set strength sessions > 0
+  if (strengthSessionCount > 0) bankSports.add('strength');
+  bankSports.add('rest'); // Always available
+
+  bankSports.forEach(sport => {
+    const chip = document.createElement('div');
+    chip.className = 'bank-chip ' + sport;
+    chip.draggable = true;
+    chip.setAttribute('ondragstart', "bankDragStart(event, '" + sport + "')");
+    chip.textContent = sportNames[sport] || sport;
+    bank.appendChild(chip);
+  });
+
+  // Also update the + picker dropdown with colored labels matching the bank chips
+  const picker = document.getElementById('sport-picker');
+  picker.innerHTML = '';
+  const sportColors = { swim:'#1565C0', bike:'#7B1FA2', run:'#2E7D32', brick:'#D84315', strength:'#E65100', hyrox:'#C62828', rest:'#AAA', hiit:'#FF6F00', yoga:'#00897B', rowing:'#455A64', mobility:'#5C6BC0', walking:'#78909C', circuit:'#6D4C41' };
+  bankSports.forEach(sport => {
+    const item = document.createElement('div');
+    item.className = 'sport-dropdown-item';
+    item.style.color = sportColors[sport] || '#333';
+    item.style.fontWeight = '600';
+    item.setAttribute('onclick', "addSportToDay('" + sport + "')");
+    item.textContent = sportNames[sport] || sport;
+    picker.appendChild(item);
+  });
+}
+
+// Update schedule summary counts
+function updateScheduleSummary() {
+  const summaryEl = document.getElementById('schedule-summary');
+  if (!summaryEl) return;
+  const allChips = document.querySelectorAll('#schedule-grid .slot-chip');
+  const counts = {};
+  allChips.forEach(chip => {
+    // Extract sport from class list, grouping str-* under 'strength'
+    let matched = false;
+    chip.classList.forEach(cls => {
+      if (cls.startsWith('str-')) { counts['strength'] = (counts['strength'] || 0) + 1; matched = true; }
+    });
+    if (!matched) {
+      ['swim','bike','run','brick','strength','hyrox','rest','hiit','yoga','rowing','mobility','walking','circuit'].forEach(s => {
+        if (chip.classList.contains(s)) counts[s] = (counts[s] || 0) + 1;
+      });
+    }
+  });
+  let html = '';
+  Object.keys(counts).forEach(s => {
+    const label = s === 'strength' ? 'Strength' : (sportNames[s] || s);
+    html += '<div class="summary-stat"><div class="num">' + counts[s] + '</div><div class="label">' + label + '</div></div>';
+  });
+  if (!html) html = '<div class="summary-stat" style="color:#AAA; font-size:13px;">Drag sports onto days to build your week</div>';
+  summaryEl.innerHTML = html;
+
+  // Show/hide rest warning
+  const warning = document.getElementById('schedule-warning');
+  if (warning) {
+    const hasRest = counts['rest'] > 0;
+    const totalDays = document.querySelectorAll('#schedule-grid .schedule-day').length;
+    const daysWithSports = document.querySelectorAll('#schedule-grid .day-slots').length;
+    let emptyDays = 0;
+    document.querySelectorAll('#schedule-grid .day-slots').forEach(ds => { if (ds.children.length === 0) emptyDays++; });
+    warning.style.display = (!hasRest && emptyDays === 0 && allChips.length > 0) ? 'block' : 'none';
+  }
+}
+
+// Equipment chip toggle with weight inputs
+function toggleEquipChip(el, type) {
+  el.classList.toggle('selected');
+  const weightEl = document.getElementById(type === 'dumbbells' ? 'dumbbell-weight' : 'kettlebell-weight');
+  if (weightEl) {
+    weightEl.classList.toggle('visible', el.classList.contains('selected'));
+  }
+}
+
+// Lead-in frequency counter
+let leadInDays = 4;
+function adjustLeadIn(delta) {
+  leadInDays = Math.max(1, Math.min(7, leadInDays + delta));
+  document.getElementById('leadin-count').textContent = leadInDays;
+}
+
+// Notification helpers
+function toggleNotifFreq(type, isOn) {
+  const freq = document.getElementById('notif-' + type + '-freq');
+  if (freq) freq.style.display = isOn ? 'block' : 'none';
+}
+function selectNotifOpt(el) {
+  el.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+// Nutrition reminder chips (multi-select with dynamic description)
+function toggleNutritionOpt(el) {
+  el.classList.toggle('selected');
+  const desc = document.getElementById('nutrition-desc');
+  if (!desc) return;
+  const selected = [];
+  document.querySelectorAll('#nutrition-trigger-chips .chip.selected').forEach(c => selected.push(c.textContent.trim()));
+  if (selected.length === 0) {
+    desc.textContent = 'Select at least one trigger to get nutrition reminders.';
+    return;
+  }
+  const parts = [];
+  if (selected.includes("Haven't logged")) parts.push("remind you if you haven't logged a meal by mid-morning");
+  if (selected.includes('Meal times')) parts.push('send a nudge at breakfast, lunch, and dinner');
+  if (selected.includes('Off target')) parts.push("suggest what to eat if you're falling short of your macro or calorie targets");
+  desc.textContent = "We'll " + parts.join(', and ') + '.';
+}
+
+// Threshold mode toggle — simple "Test me" toggle per sport
+const thresholdModes = { swim: null, bike: null, run: null, strength: null };
+function toggleTestMe(sport, btn) {
+  const isTest = thresholdModes[sport] === 'test';
+  thresholdModes[sport] = isTest ? null : 'test';
+  btn.classList.toggle('test-active', !isTest);
+  // Show/hide inputs
+  const inputs = document.getElementById(sport + '-inputs');
+  const testNote = document.getElementById(sport + '-test-note');
+  if (inputs) inputs.style.display = (!isTest) ? 'none' : 'block';
+  if (testNote) testNote.style.display = (!isTest) ? 'block' : 'none';
+}
+function testMeForAll() {
+  ['swim','bike','run','strength'].forEach(sport => {
+    thresholdModes[sport] = 'test';
+    const inputs = document.getElementById(sport + '-inputs');
+    const testNote = document.getElementById(sport + '-test-note');
+    if (inputs) inputs.style.display = 'none';
+    if (testNote) testNote.style.display = 'block';
+    // Update button state
+    const section = document.getElementById(sport + '-inputs');
+    if (section) {
+      const toggle = section.closest('.threshold-section').querySelector('.t-btn');
+      if (toggle) toggle.classList.add('test-active');
+    }
+  });
+}
+
+// ===== DYNAMIC PLAN PREVIEW GENERATION =====
+
+function switchPreviewTab(tab) {
+  const pillContainer = document.getElementById('preview-pill-container');
+  const pills = pillContainer.querySelectorAll('.pill-btn');
+  const leadinSection = document.getElementById('leadin-preview-section');
+  const planSection = document.getElementById('plan-week1-section');
+  if (tab === 'leadin') {
+    pills[0].classList.add('active');
+    pills[1].classList.remove('active');
+    leadinSection.style.display = 'block';
+    planSection.style.display = 'none';
+  } else {
+    pills[0].classList.remove('active');
+    pills[1].classList.add('active');
+    leadinSection.style.display = 'none';
+    planSection.style.display = 'block';
+  }
+}
+
+function generateWeekPreviews() {
+  // 1. Read schedule from bp-5 grid
+  const days = ['mon','tue','wed','thu','fri','sat','sun'];
+  const dayLabels = { mon:'Mon', tue:'Tue', wed:'Wed', thu:'Thu', fri:'Fri', sat:'Sat', sun:'Sun' };
+  const schedule = {}; // { mon: ['swim','strength'], tue: ['run'], ... }
+  days.forEach(day => {
+    const dayEl = document.querySelector('#schedule-grid .schedule-day[data-day="' + day + '"]');
+    if (!dayEl) return;
+    const chips = dayEl.querySelectorAll('.day-slots .slot-chip');
+    schedule[day] = [];
+    chips.forEach(chip => {
+      let sport = null;
+      // Check str-* classes first
+      chip.classList.forEach(cls => {
+        if (cls.startsWith('str-')) sport = cls;
+      });
+      if (!sport) {
+        ['swim','bike','run','brick','hyrox','rest','hiit','yoga','rowing','mobility','walking','circuit','strength'].forEach(s => {
+          if (chip.classList.contains(s)) sport = s;
+        });
+      }
+      if (sport) schedule[day].push(sport);
+    });
+  });
+
+  // 2. Determine lead-in status
+  const gapSection = document.getElementById('gap-fill-section');
+  const inLeadIn = gapSection && gapSection.style.display !== 'none';
+  let leadInPhase = 'structured'; // default
+  if (inLeadIn) {
+    const selectedCard = document.querySelector('#gap-fill-section .phase-card.selected .phase-name');
+    if (selectedCard) {
+      const txt = selectedCard.textContent.toLowerCase();
+      if (txt.includes('get faster')) leadInPhase = 'speed';
+      else if (txt.includes('stay loose')) leadInPhase = 'loose';
+      else leadInPhase = 'structured';
+    }
+  }
+
+  // 3. Determine which sections to show
+  const leadinSection = document.getElementById('leadin-preview-section');
+  const planSection = document.getElementById('plan-week1-section');
+  const pillContainer = document.getElementById('preview-pill-container');
+  const showLeadIn = inLeadIn && (leadInPhase === 'speed' || leadInPhase === 'loose');
+
+  if (showLeadIn) {
+    // Show pill toggle, default to lead-in tab
+    pillContainer.style.display = 'block';
+    leadinSection.style.display = 'block';
+    planSection.style.display = 'none';
+    // Reset pills to lead-in active
+    pillContainer.querySelectorAll('.pill-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+    // Calculate plan start date
+    const dateInput = document.getElementById('race-date-1');
+    const maxWText = document.getElementById('gap-plan-length');
+    if (dateInput && dateInput.value && maxWText) {
+      const raceDate = new Date(dateInput.value + 'T00:00:00');
+      const planWeeks = parseInt(maxWText.textContent) || 22;
+      const startDate = new Date(raceDate.getTime() - planWeeks * 7 * 24 * 60 * 60 * 1000);
+      const startStr = startDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      document.getElementById('leadin-start-date').textContent = startStr;
+    }
+    // Lead-in phase description
+    const descEl = document.getElementById('leadin-phase-desc');
+    if (descEl) {
+      if (leadInPhase === 'speed') descEl.textContent = 'Speed & intensity focus. Short, sharp sessions to build turnover before volume ramps up.';
+      else descEl.textContent = 'Freestyle training at your own pace. Stay active without a rigid structure.';
+    }
+    // Generate both (plan tab content ready when they switch)
+    generateLeadInWeek(schedule, days, dayLabels);
+    generatePlanWeek(schedule, days, dayLabels);
+  } else {
+    // No lead-in: hide pill toggle, only show plan week 1
+    pillContainer.style.display = 'none';
+    leadinSection.style.display = 'none';
+    planSection.style.display = 'block';
+    generatePlanWeek(schedule, days, dayLabels);
+  }
+
+  // 4. Update week 1 label
+  const weekLabel = document.getElementById('week1-label');
+  if (weekLabel) {
+    const needsTests = Object.entries(thresholdModes).some(([k,v]) => v === 'test' && k !== 'strength');
+    if (needsTests) weekLabel.textContent = 'Week 1 — Testing & Assessment';
+    else weekLabel.textContent = 'Week 1';
+  }
+
+  // 5. Update test callout in plan section
+  const testCallout = document.getElementById('test-callout');
+  if (testCallout) {
+    const testSports = [];
+    if (thresholdModes.swim === 'test') testSports.push('swimming');
+    if (thresholdModes.bike === 'test') testSports.push('cycling');
+    if (thresholdModes.run === 'test') testSports.push('running');
+    if (testSports.length === 0) {
+      testCallout.style.display = 'none';
+    } else if (testSports.length === 3) {
+      testCallout.style.display = 'block';
+      testCallout.textContent = 'Since you skipped thresholds, Week 1 includes test sessions to establish your baseline. Your plan adjusts automatically once we have your numbers.';
+    } else {
+      testCallout.style.display = 'block';
+      testCallout.textContent = 'Week 1 includes tests for ' + testSports.join(' and ') + '. Other sessions start at your entered levels.';
+    }
+  }
+}
+
+// Generate lead-in week preview (respects leadInDays count)
+function generateLeadInWeek(schedule, days, dayLabels) {
+  const container = document.getElementById('leadin-week-preview');
+  const summaryEl = document.getElementById('leadin-summary');
+  if (!container) return;
+  container.innerHTML = '';
+
+  // Evenly distribute leadInDays active days across the 7-day week
+  // First get all days that have sports in the schedule
+  const daysWithSports = days.filter(d => schedule[d] && schedule[d].length > 0 && !schedule[d].includes('rest'));
+  let leadInActiveDays;
+  if (daysWithSports.length <= leadInDays) {
+    // Fewer scheduled days than lead-in days — use all of them
+    leadInActiveDays = daysWithSports;
+  } else {
+    // More scheduled days than lead-in days — pick evenly spaced ones
+    const step = daysWithSports.length / leadInDays;
+    leadInActiveDays = [];
+    for (let i = 0; i < leadInDays; i++) {
+      leadInActiveDays.push(daysWithSports[Math.round(i * step)]);
+    }
+  }
+  // If user has fewer scheduled days than leadInDays, also fill with evenly spaced days
+  if (leadInActiveDays.length < leadInDays) {
+    const emptyDays = days.filter(d => !leadInActiveDays.includes(d));
+    const needed = leadInDays - leadInActiveDays.length;
+    const step = emptyDays.length / needed;
+    for (let i = 0; i < needed; i++) {
+      leadInActiveDays.push(emptyDays[Math.round(i * step)]);
+    }
+  }
+  let sessionCount = 0;
+  let totalMinutes = 0;
+
+  days.forEach(day => {
+    const isActiveLeadIn = leadInActiveDays.includes(day);
+    const hasSports = schedule[day] && schedule[day].length > 0 && !schedule[day].includes('rest');
+
+    if (isActiveLeadIn) {
+      let html = '<div class="week-day-row"><div class="week-day-label">' + dayLabels[day] + '</div><div class="week-day-workouts">';
+      if (hasSports) {
+        // Use the sports from the schedule
+        schedule[day].forEach(sport => {
+          const wo = getLeadInWorkout(sport);
+          const sportClass = sport.startsWith('str-') ? 'strength' : sport;
+          html += '<div class="mini-workout ' + sportClass + '"><div class="mw-name">' + wo.name + '</div><div class="mw-detail">' + wo.detail + '</div></div>';
+          sessionCount++;
+          totalMinutes += wo.minutes;
+        });
+      } else {
+        // Active lead-in day but no scheduled sport — add a general session
+        const wo = { name: 'Easy Cross-Train', detail: 'Light activity of your choice • 30 min', minutes: 30 };
+        html += '<div class="mini-workout strength"><div class="mw-name">' + wo.name + '</div><div class="mw-detail">' + wo.detail + '</div></div>';
+        sessionCount++;
+        totalMinutes += wo.minutes;
+      }
+      html += '</div></div>';
+      container.innerHTML += html;
+    } else {
+      // Rest day
+      container.innerHTML += '<div class="week-day-row"><div class="week-day-label">' + dayLabels[day] + '</div><div class="week-day-workouts"><div class="mini-workout rest-day"><div class="mw-name">Rest</div><div class="mw-detail">Recovery & mobility</div></div></div></div>';
+    }
+  });
+
+  // Summary
+  if (summaryEl) {
+    const hours = (totalMinutes / 60).toFixed(1);
+    summaryEl.innerHTML = '<div class="summary-stat"><div class="num">' + sessionCount + '</div><div class="label">Sessions</div></div>' +
+      '<div class="summary-stat"><div class="num">~' + hours + '</div><div class="label">Hours</div></div>' +
+      '<div class="summary-stat"><div class="num">' + leadInDays + '</div><div class="label">Active Days</div></div>';
+  }
+}
+
+// Generate plan week 1 preview (uses full schedule)
+function generatePlanWeek(schedule, days, dayLabels) {
+  const container = document.getElementById('plan-week-preview');
+  const summaryEl = document.getElementById('plan-summary');
+  if (!container) return;
+  container.innerHTML = '';
+
+  let sessionCount = 0;
+  let totalMinutes = 0;
+
+  days.forEach(day => {
+    const sports = schedule[day] || [];
+    if (sports.length === 0 || (sports.length === 1 && sports[0] === 'rest')) {
+      // Rest day
+      container.innerHTML += '<div class="week-day-row"><div class="week-day-label">' + dayLabels[day] + '</div><div class="week-day-workouts"><div class="mini-workout rest-day"><div class="mw-name">Rest</div><div class="mw-detail">Recovery & mobility</div></div></div></div>';
+      return;
+    }
+
+    let html = '<div class="week-day-row"><div class="week-day-label">' + dayLabels[day] + '</div><div class="week-day-workouts">';
+    sports.forEach(sport => {
+      const wo = getPlanWorkout(sport);
+      const sportClass = sport.startsWith('str-') ? 'strength' : sport;
+      html += '<div class="mini-workout ' + sportClass + '"><div class="mw-name">' + wo.name + '</div><div class="mw-detail">' + wo.detail + '</div></div>';
+      sessionCount++;
+      totalMinutes += wo.minutes;
+    });
+    html += '</div></div>';
+    container.innerHTML += html;
+  });
+
+  // Summary
+  if (summaryEl) {
+    const hours = (totalMinutes / 60).toFixed(1);
+    let wksHtml = '';
+    if (lastRaceScreen === 'bp-3-race') {
+      const wksEl = document.getElementById('weeks-text');
+      const wksNum = wksEl ? parseInt(wksEl.textContent) || 22 : 22;
+      wksHtml = '<div class="summary-stat"><div class="num">' + wksNum + '</div><div class="label">Wks to Race</div></div>';
+    }
+    summaryEl.innerHTML = '<div class="summary-stat"><div class="num">' + sessionCount + '</div><div class="label">Sessions</div></div>' +
+      '<div class="summary-stat"><div class="num">~' + hours + '</div><div class="label">Hours</div></div>' +
+      wksHtml;
+  }
+}
+
+// Get a lead-in workout for a sport (lighter/speed-focused)
+function getLeadInWorkout(sport) {
+  // Check if gap fill is "speed" or "loose"
+  const selectedCard = document.querySelector('#gap-fill-section .phase-card.selected .phase-name');
+  const isSpeed = selectedCard && selectedCard.textContent.toLowerCase().includes('get faster');
+
+  const workouts = {
+    swim: isSpeed
+      ? { name: 'Speed Swim', detail: 'Sprint intervals • 50s & 100s • 30 min', minutes: 30 }
+      : { name: 'Easy Swim', detail: 'Relaxed pace • technique focus • 30 min', minutes: 30 },
+    bike: isSpeed
+      ? { name: 'Tempo Intervals', detail: 'High cadence • 4×5 min efforts • 45 min', minutes: 45 }
+      : { name: 'Easy Ride', detail: 'Zone 2 • steady effort • 45 min', minutes: 45 },
+    run: isSpeed
+      ? { name: 'Speed Work', detail: '8×400m repeats • 90s rest • 35 min', minutes: 35 }
+      : { name: 'Easy Run', detail: 'Conversational pace • 30 min', minutes: 30 },
+    brick: isSpeed
+      ? { name: 'Brick Tempo', detail: 'Bike to run transition • moderate effort • 45 min', minutes: 45 }
+      : { name: 'Easy Brick', detail: 'Easy bike + short run • 40 min', minutes: 40 },
+    strength: { name: getStrengthName(sport), detail: 'Moderate load • foundational moves • 35 min', minutes: 35 },
+    hyrox: isSpeed
+      ? { name: 'Hyrox Speed Drills', detail: 'Station practice • race pace efforts • 40 min', minutes: 40 }
+      : { name: 'Hyrox Basics', detail: 'Station familiarization • easy effort • 35 min', minutes: 35 }
+  };
+
+  // Handle str-* variants
+  if (sport.startsWith('str-')) {
+    return { name: getStrengthName(sport), detail: 'Moderate load • foundational moves • 35 min', minutes: 35 };
+  }
+
+  return workouts[sport] || { name: sportNames[sport] || sport, detail: 'General training • 30 min', minutes: 30 };
+}
+
+// Get a plan Week 1 workout for a sport (base phase, with test variations)
+function getPlanWorkout(sport) {
+  // Check threshold modes for test sessions
+  const isTestSwim = thresholdModes.swim === 'test';
+  const isTestBike = thresholdModes.bike === 'test';
+  const isTestRun = thresholdModes.run === 'test';
+  const isTestStrength = thresholdModes.strength === 'test';
+
+  const workouts = {
+    swim: isTestSwim
+      ? { name: 'CSS Test', detail: 'Warm-up • 400m TT • rest • 200m TT • cool-down', minutes: 40 }
+      : { name: 'Base Swim', detail: 'Aerobic endurance • drills + steady • 2,000m', minutes: 40 },
+    bike: isTestBike
+      ? { name: 'FTP Test', detail: 'Warm-up • 20 min all-out effort • cool-down', minutes: 50 }
+      : { name: 'Base Ride', detail: 'Zone 2 • steady aerobic build • 60 min', minutes: 60 },
+    run: isTestRun
+      ? { name: 'Threshold Test', detail: 'Warm-up • 5K time trial • cool-down', minutes: 35 }
+      : { name: 'Easy Run', detail: 'Conversational pace • aerobic base • 35 min', minutes: 35 },
+    brick: { name: 'Brick Session', detail: 'Bike to run transition • easy effort • 50 min', minutes: 50 },
+    hyrox: { name: 'Hyrox Training', detail: 'Station rotation • build effort • 45 min', minutes: 45 }
+  };
+
+  // Handle strength - respects split selection
+  if (sport === 'strength' || sport.startsWith('str-')) {
+    if (isTestStrength) {
+      return { name: getStrengthName(sport) + ' (Assessment)', detail: 'Conservative weights • form check • ramp up based on feedback', minutes: 40 };
+    }
+    return { name: getStrengthName(sport), detail: getStrengthDetail(sport), minutes: 40 };
+  }
+
+  return workouts[sport] || { name: sportNames[sport] || sport, detail: 'General training • 30 min', minutes: 30 };
+}
+
+// Map strength chip classes to display names based on selected split
+function getStrengthName(sport) {
+  // If it's a specific str-* class, use its name directly
+  if (sport === 'str-push') return 'Push Day';
+  if (sport === 'str-pull') return 'Pull + Core';
+  if (sport === 'str-legs') return 'Legs + Hips';
+  if (sport === 'str-upper') return 'Upper Body';
+  if (sport === 'str-lower') return 'Lower Body';
+  if (sport === 'str-full') return 'Full Body';
+
+  // Generic "strength" chip — name based on selected split
+  if (selectedSplit === 'full') return 'Full Body';
+  if (selectedSplit === 'ul') return 'Upper / Lower';
+  if (selectedSplit === 'ppl') return 'Push / Pull / Legs';
+  if (selectedSplit === 'custom') {
+    // Try to read custom input
+    const inputs = document.querySelectorAll('#custom-split-inputs input');
+    if (inputs.length > 0 && inputs[0].value.trim()) return inputs[0].value.trim();
+    return 'Custom Split';
+  }
+  return 'Strength';
+}
+
+// Get strength workout detail based on split type
+function getStrengthDetail(sport) {
+  if (sport === 'str-push') return 'Bench, press, dips • moderate load • 40 min';
+  if (sport === 'str-pull') return 'Rows, pull-ups, dead bugs • moderate load • 35 min';
+  if (sport === 'str-legs') return 'Squats, lunges, hip bridges • moderate load • 40 min';
+  if (sport === 'str-upper') return 'Push + pull compound lifts • moderate load • 40 min';
+  if (sport === 'str-lower') return 'Squats, deadlifts, lunges • moderate load • 40 min';
+  if (sport === 'str-full') return 'Compound full body circuit • moderate load • 40 min';
+  if (selectedSplit === 'full') return 'Compound full body circuit • moderate load • 40 min';
+  if (selectedSplit === 'ul') return 'Alternating upper/lower • moderate load • 40 min';
+  if (selectedSplit === 'ppl') return 'Push/pull/legs rotation • moderate load • 40 min';
+  return 'Functional strength • moderate load • 40 min';
+}
+
+// Initialize weeks on page load
+document.addEventListener('DOMContentLoaded', function() {
+  updateWeeksCallout();
+  // Also listen to race type changes for recalculation
+  const raceType1 = document.getElementById('race-type-1');
+  if (raceType1) raceType1.addEventListener('change', updateWeeksCallout);
+});
+</script>
+
+</body>
+</html>
