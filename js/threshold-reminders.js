@@ -84,9 +84,14 @@
         candidates.push(profile.last_test.recorded_at);
       }
     } else if (sport === "strength") {
-      // SPEC_strength_level_v1 §4 — strengthThresholdUpdatedAt stamped by
-      // saveProfile when any 1RM field actually changes.
+      // Legacy: saveProfile used to stamp strengthThresholdUpdatedAt when
+      // the profile-level 1RM fields changed. Those fields have moved to
+      // the Training Zones → Strength form, which writes lastUpdated /
+      // updatedAt onto zones.strength. Keep the legacy candidate so users
+      // who saved a 1RM before the move still get a correct timestamp.
       if (profile.strengthThresholdUpdatedAt) candidates.push(profile.strengthThresholdUpdatedAt);
+      if (zones.strength && zones.strength.lastUpdated) candidates.push(zones.strength.lastUpdated);
+      if (zones.strength && zones.strength.updatedAt) candidates.push(zones.strength.updatedAt);
     }
     if (!candidates.length) return null;
     // Return the most recent
@@ -108,8 +113,18 @@
         || (zones.running && (zones.running.vdot || zones.running.thresholdPaceMin || zones.running.tempo || zones.running.easyPaceMin)));
     }
     if (sport === "strength") {
-      // Any of the three 1RM lifts counts as "threshold set".
-      return !!(profile.squat1RM || profile.bench1RM || profile.deadlift1RM);
+      // Any reference lift in Training Zones → Strength counts as "set".
+      // Also honor the legacy profile.*1RM fields so users who saved
+      // 1RMs before the profile form was removed don't lose the banner.
+      const s = zones.strength || {};
+      const hasZoneLift = !!(
+        (s.squat    && s.squat.weight > 0)    ||
+        (s.bench    && s.bench.weight > 0)    ||
+        (s.deadlift && s.deadlift.weight > 0) ||
+        (s.ohp      && s.ohp.weight > 0)      ||
+        (s.row      && s.row.weight > 0)
+      );
+      return hasZoneLift || !!(profile.squat1RM || profile.bench1RM || profile.deadlift1RM);
     }
     return false;
   }

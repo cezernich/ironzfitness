@@ -740,23 +740,10 @@ function saveProfile() {
   let existing = {};
   try { existing = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
 
-  // 1RM fields (SPEC_strength_level_v1 §3.1) — any subset may be set.
-  // Track whether any value actually changed so the refresh timestamp
-  // only advances when a real edit lands, not on every profile save.
-  const readPositiveNumber = (id) => {
-    const raw = document.getElementById(id)?.value;
-    const n = parseFloat(raw);
-    return (n > 0) ? n : null;
-  };
-  const squat1RM    = readPositiveNumber("profile-squat-1rm");
-  const bench1RM    = readPositiveNumber("profile-bench-1rm");
-  const deadlift1RM = readPositiveNumber("profile-deadlift-1rm");
-  const strengthChanged = (
-    (squat1RM    ?? null) !== (existing.squat1RM    ?? null) ||
-    (bench1RM    ?? null) !== (existing.bench1RM    ?? null) ||
-    (deadlift1RM ?? null) !== (existing.deadlift1RM ?? null)
-  );
-
+  // Strength 1RMs used to live here too, but that duplicated the Training
+  // Zones → Strength form — which is the canonical place. The spread of
+  // `existing` below preserves any legacy profile.squat1RM / bench1RM /
+  // deadlift1RM values a prior save wrote, so we don't clobber them.
   const profile = {
     ...existing,
     name:   document.getElementById("profile-name").value.trim(),
@@ -767,11 +754,7 @@ function saveProfile() {
     gender: document.getElementById("profile-gender").value,
     goal:   document.getElementById("profile-goal").value,
     pool_size: document.getElementById("profile-pool-size")?.value || "25m",
-    squat1RM, bench1RM, deadlift1RM,
   };
-  if (strengthChanged && (squat1RM || bench1RM || deadlift1RM)) {
-    profile.strengthThresholdUpdatedAt = new Date().toISOString();
-  }
 
   localStorage.setItem("profile", JSON.stringify(profile));
   if (typeof DB !== 'undefined') DB.profile.save(profile).catch(() => {});
@@ -811,14 +794,6 @@ async function loadProfileIntoForm() {
     if (profile.goal)   document.getElementById("profile-goal").value   = profile.goal;
     const poolSel = document.getElementById("profile-pool-size");
     if (poolSel) poolSel.value = profile.pool_size || profile.poolSize || "25m";
-    // 1RM fields (SPEC_strength_level_v1 §3.1)
-    const setNum = (id, val) => {
-      const el = document.getElementById(id);
-      if (el && val != null && val !== "") el.value = val;
-    };
-    setNum("profile-squat-1rm",    profile.squat1RM);
-    setNum("profile-bench-1rm",    profile.bench1RM);
-    setNum("profile-deadlift-1rm", profile.deadlift1RM);
   } catch { /* ignore */ }
 }
 
