@@ -1267,6 +1267,38 @@ function _getScheduleInputs() {
   });
 }
 
+// Build Plan v2 sessions are materialized with source="onboarding_v2"
+// and a planId that ties every session in a block together. Group them
+// into one training-input card per planId so the user has one Edit /
+// Delete entry point for the whole plan.
+function _getBuildPlanInputs() {
+  const schedule = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const future = schedule.filter(e => e && e.source === "onboarding_v2" && e.planId && e.date >= todayStr);
+  const byPlan = {};
+  future.forEach(e => {
+    if (!byPlan[e.planId]) {
+      byPlan[e.planId] = { planId: e.planId, sessions: [], startDate: e.date, endDate: e.date, types: new Set() };
+    }
+    const b = byPlan[e.planId];
+    b.sessions.push(e);
+    if (e.date < b.startDate) b.startDate = e.date;
+    if (e.date > b.endDate)   b.endDate = e.date;
+    if (e.type) b.types.add(e.type);
+  });
+  return Object.values(byPlan).map(b => {
+    const wk = Math.max(1, Math.round((new Date(b.endDate + "T00:00:00") - new Date(b.startDate + "T00:00:00")) / (7 * 864e5)) + 1);
+    return {
+      planId:   b.planId,
+      sessions: b.sessions.length,
+      weeks:    wk,
+      startDate:b.startDate,
+      endDate:  b.endDate,
+      types:    Array.from(b.types),
+    };
+  });
+}
+
 function _escapeHtml(str) {
   return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
@@ -1371,11 +1403,12 @@ function renderTrainingInputs() {
   const todayStr  = new Date().toISOString().slice(0, 10);
   const races     = loadEvents().filter(e => e.date > todayStr);
   const schedules = _getScheduleInputs();
+  const buildPlans= _getBuildPlanInputs();
   const notes     = loadTrainingNotes();
   const imported  = (() => { try { return JSON.parse(localStorage.getItem("importedPlans")) || []; } catch { return []; } })()
     .filter(p => p.sessions && p.sessions.some(s => s.date >= todayStr));
 
-  if (races.length === 0 && schedules.length === 0 && notes.length === 0 && imported.length === 0) {
+  if (races.length === 0 && schedules.length === 0 && buildPlans.length === 0 && notes.length === 0 && imported.length === 0) {
     container.innerHTML = `<p class="empty-msg" style="margin-bottom:12px">No active training inputs yet. Add a race or generate a plan to see them here.</p>`;
     return;
   }
@@ -1451,6 +1484,36 @@ function renderTrainingInputs() {
         </div>
         <div class="race-card-name">${s.icon} ${_escapeHtml(s.label)}</div>
         <div class="race-card-meta">${s.freq}× per week${s.days ? " · " + s.days : ""}</div>
+      </div>`;
+  });
+
+  // ── Build Plan v2 cards ── one per planId, grouping every session
+  // the Build Plan v2 flow materialized. Edit re-opens the Build Plan
+  // modal (so the user can rebuild), Delete removes all future
+  // sessions with that planId.
+  buildPlans.forEach(bp => {
+    const rangeStart = formatDisplayDate(bp.startDate);
+    const rangeEnd   = formatDisplayDate(bp.endDate);
+    const typeChips  = bp.types.map(t => {
+      const label = SCHEDULE_TYPE_LABEL[t] || capitalize(t);
+      return `<span class="race-tag">${_escapeHtml(label)}</span>`;
+    }).join("");
+    html += `
+      <div class="ti-card ti-card--schedule">
+        <div class="race-card-top">
+          <span class="ti-card-badge ti-card-badge--schedule">Build Plan</span>
+          <div class="ti-card-actions">
+            <button class="ti-edit-btn" onclick="window.OnboardingV2 && window.OnboardingV2.openBuildPlan()" title="Rebuild plan">Edit</button>
+            <button class="delete-btn" onclick="removeTrainingInput('buildplan','${bp.planId}')" title="Remove plan"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
+          </div>
+        </div>
+        <div class="race-card-name">Training Block</div>
+        <div class="race-card-meta">${bp.sessions} session${bp.sessions !== 1 ? "s" : ""} · ${bp.weeks} week${bp.weeks !== 1 ? "s" : ""}</div>
+        ${typeChips ? `<div class="race-tags">${typeChips}</div>` : ""}
+        <div class="race-card-footer">
+          <span class="race-date-badge">${rangeStart}</span>
+          <span class="race-countdown">through ${rangeEnd}</span>
+        </div>
       </div>`;
   });
 
@@ -1782,6 +1845,18 @@ function removeTrainingInput(kind, id) {
     if (typeof renderCalendar === "function") renderCalendar();
   } else if (kind === "note") {
     saveTrainingNotes(loadTrainingNotes().filter(n => n.id !== id));
+  } else if (kind === "buildplan") {
+    // id is the planId — remove every future session with matching planId.
+    if (!confirm("Remove this training block and all of its future sessions?")) return;
+    const existing = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
+    const filtered = existing.filter(e => {
+      if (e.planId !== id) return true;     // different plan — keep
+      if (e.date < todayStr) return true;   // past — keep
+      return false;                          // future with this planId — remove
+    });
+    localStorage.setItem("workoutSchedule", JSON.stringify(filtered));
+    if (typeof DB !== 'undefined') DB.syncSchedule();
+    if (typeof renderCalendar === "function") renderCalendar();
   }
   renderTrainingInputs();
 }
