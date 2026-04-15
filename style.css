@@ -9675,6 +9675,59 @@ button:active {
   margin-bottom: 4px;
 }
 
+/* ── Workout card overflow menu (••• → Edit / Move / Delete) ───────────── */
+.overflow-menu-wrap {
+  position: relative;
+  display: inline-block;
+}
+.overflow-menu-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  color: var(--color-text-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  border-radius: 4px;
+}
+.overflow-menu-btn:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--color-text);
+}
+.overflow-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 4px 0;
+  min-width: 170px;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.overflow-menu[hidden] { display: none; }
+.ovflow-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 9px 14px;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  cursor: pointer;
+  font-weight: 500;
+}
+.ovflow-item:hover { background: rgba(255, 255, 255, 0.07); }
+.ovflow-item--danger {
+  color: var(--color-danger);
+  border-top: 1px solid var(--color-border);
+  margin-top: 4px;
+}
+.ovflow-item--danger:hover { background: rgba(239, 68, 68, 0.12); }
+
 .qe-cardio-details {
   font-size: 0.8rem;
   color: var(--color-text-muted);
