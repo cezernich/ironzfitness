@@ -32,7 +32,15 @@ const DB = (() => {
   }
 
   function _lsSet(key, data) {
-    try { localStorage.setItem(key, JSON.stringify(data)); } catch (e) {
+    // Mirror the inverse of _doSyncKey: primitive strings are stored raw in
+    // localStorage (that's how setMeasurementSystem/setTheme/etc. write
+    // them), so on the way back from Supabase we must NOT re-JSON.stringify
+    // — that would turn "imperial" into '"imperial"' and break selects that
+    // compare option.value against the raw string.
+    try {
+      const toStore = (typeof data === 'string') ? data : JSON.stringify(data);
+      localStorage.setItem(key, toStore);
+    } catch (e) {
       console.warn('DB: localStorage write failed for', key, e);
     }
   }
