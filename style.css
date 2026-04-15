@@ -9027,10 +9027,10 @@ button:active {
   letter-spacing: 0.2px;
 }
 .trophy-card-v2-pace {
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   font-weight: 600;
   color: var(--color-text-muted);
-  margin-top: -4px;
+  margin-left: 2px;
   font-variant-numeric: tabular-nums;
 }
 .trophy-card-v2-date {
