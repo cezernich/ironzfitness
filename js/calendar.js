@@ -326,7 +326,17 @@ function renderWeekView() {
   const todayStr  = getTodayString();
   const weekDates = getWeekDates(currentWeekStart);
   grid.className  = "calendar-grid calendar-grid--week";
-  grid.innerHTML  = weekDates.map(d => buildWeekCell(d.toISOString().slice(0, 10), d, todayStr)).join("");
+  // Wrap each cell build in a try/catch so a single malformed
+  // session in workoutSchedule can't blank the entire grid.
+  grid.innerHTML  = weekDates.map(d => {
+    const dateStr = d.toISOString().slice(0, 10);
+    try {
+      return buildWeekCell(dateStr, d, todayStr);
+    } catch (e) {
+      console.error("[calendar] buildWeekCell failed for", dateStr, e);
+      return '<div class="week-cell week-cell--error"><span class="cell-day-num">' + d.getDate() + '</span></div>';
+    }
+  }).join("");
 }
 
 function buildWeekCell(dateStr, dateObj, todayStr) {
@@ -443,7 +453,14 @@ function renderMonthView() {
   for (let i = 0; i < firstDay; i++) cells += `<div class="calendar-cell empty"></div>`;
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = formatDateStr(currentYear, currentMonth, d);
-    cells += buildDayCell(dateStr, d, todayStr);
+    // Wrap each cell so one bad session entry in workoutSchedule
+    // can't blank the entire month grid.
+    try {
+      cells += buildDayCell(dateStr, d, todayStr);
+    } catch (e) {
+      console.error("[calendar] buildDayCell failed for", dateStr, e);
+      cells += `<div class="calendar-cell"><span class="cell-day-num">${d}</span></div>`;
+    }
   }
   grid.innerHTML = headers + cells;
 }
