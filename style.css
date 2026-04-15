@@ -17758,3 +17758,13 @@ body.ob-v2-lock { overflow: hidden; }
   letter-spacing: 0.08em;
   margin-bottom: 8px;
 }
+
+/* Custom Plan sub-modals: keep them above the #custom-plan-overlay
+   (which inherits .ob-v2-root z-index:10000). Without this bump the
+   AI Generate / From Saved / Manual modals render under the custom
+   plan modal and the user only sees a dimming behind it. */
+#cp-ai-modal,
+#cp-saved-modal,
+#cp-manual-modal {
+  z-index: 10100;
+}
