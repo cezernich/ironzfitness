@@ -15483,7 +15483,9 @@ body.auth-visible #bottom-nav { display: none !important; }
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
   max-height: 300px;
   overflow-y: auto;
-  z-index: 10005;
+  /* Must float above every modal, including the Custom Plan sub-modals
+     which were bumped to 10100 to clear #custom-plan-overlay (10000). */
+  z-index: 10200;
   font-size: 0.92rem;
   -webkit-overflow-scrolling: touch;
 }
