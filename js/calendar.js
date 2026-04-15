@@ -3488,28 +3488,17 @@ function _generateWorkoutRationale(dateStr, discipline, load, sessionName, entry
   // → community → saved → manually added → plan-generated.
   const source = _detectWorkoutSource(entry);
 
-  // Manually added — the user already knows they added it. Returning ""
-  // suppresses the whole "Why this workout?" toggle (buildWorkoutExplanation
-  // skips rendering when rationale is empty).
-  if (source === "manual") return "";
-  if (source === "community") {
-    const author = entry && (entry.author || entry.community_author);
-    return author
-      ? `Scheduled from the community — shared by ${_escEsc(author)}.`
-      : "Scheduled from a community workout.";
-  }
-  if (source === "saved") {
-    const sharedBy = entry && (entry.shared_from_name || entry.shared_from);
-    return sharedBy
-      ? `Scheduled from your saved library — originally shared by ${_escEsc(sharedBy)}.`
-      : "Scheduled from your saved workout library.";
-  }
-  if (source === "shared") {
-    const sharedBy = entry && (entry.shared_from_name || entry.sender_display_name);
-    return sharedBy
-      ? `A friend sent this to you. Originally from ${_escEsc(sharedBy)}.`
-      : "A friend sent this to you.";
-  }
+  // Only AI- and plan-generated workouts get a "Why this workout?" — the
+  // user didn't ask us to generate a manual or library entry, so we
+  // shouldn't tell them why it's there. An entry counts as AI-generated
+  // when it carries an aiSession blob or an explicit ai_generated flag,
+  // even if it came in via a saved/custom source.
+  const isAiGenerated = !!(entry && (entry.aiSession || entry.why_text || entry.ai_generated || entry.source === "ai_generated"));
+
+  if (source === "manual")    return "";
+  if (source === "community") return "";
+  if (source === "shared")    return "";
+  if (source === "saved" && !isAiGenerated) return "";
 
   // AI-generated / plan-scheduled — build contextual rationale
   const parts = [];
