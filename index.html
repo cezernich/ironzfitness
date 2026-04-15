@@ -3287,15 +3287,8 @@
         <div class="ob-v2-screen" id="bp-v2-2">
           <button type="button" class="ob-v2-back" onclick="OnboardingV2.goTo('bp-v2-1')">&larr; Back</button>
           <h2 class="ob-v2-h2">What are your goals?</h2>
-          <p class="ob-v2-subtitle">Select all that apply. These shape how your plan balances cardio and strength.</p>
-          <div class="ob-v2-goal-cards">
-            <button type="button" class="ob-v2-goal-card" data-goal="race" onclick="OnboardingV2._toggleGoal(this)"><span class="ob-v2-goal-icon" data-ob-icon="flag"></span><span class="ob-v2-goal-text">Train for a Race</span><span class="ob-v2-goal-check">&#10003;</span></button>
-            <button type="button" class="ob-v2-goal-card" data-goal="speed" onclick="OnboardingV2._toggleGoal(this)"><span class="ob-v2-goal-icon" data-ob-icon="zap"></span><span class="ob-v2-goal-text">Get Faster</span><span class="ob-v2-goal-check">&#10003;</span></button>
-            <button type="button" class="ob-v2-goal-card" data-goal="endurance" onclick="OnboardingV2._toggleGoal(this)"><span class="ob-v2-goal-icon" data-ob-icon="activity"></span><span class="ob-v2-goal-text">Build Endurance</span><span class="ob-v2-goal-check">&#10003;</span></button>
-            <button type="button" class="ob-v2-goal-card" data-goal="muscle" onclick="OnboardingV2._toggleGoal(this)"><span class="ob-v2-goal-icon" data-ob-icon="weights"></span><span class="ob-v2-goal-text">Put on Muscle</span><span class="ob-v2-goal-check">&#10003;</span></button>
-            <button type="button" class="ob-v2-goal-card" data-goal="weight" onclick="OnboardingV2._toggleGoal(this)"><span class="ob-v2-goal-icon" data-ob-icon="flame"></span><span class="ob-v2-goal-text">Lose Weight</span><span class="ob-v2-goal-check">&#10003;</span></button>
-            <button type="button" class="ob-v2-goal-card" data-goal="general" onclick="OnboardingV2._toggleGoal(this)"><span class="ob-v2-goal-icon" data-ob-icon="target"></span><span class="ob-v2-goal-text">General Fitness</span><span class="ob-v2-goal-check">&#10003;</span></button>
-          </div>
+          <p class="ob-v2-subtitle" id="bp-v2-goal-subtitle">Select all that apply.</p>
+          <div class="ob-v2-goal-cards" id="bp-v2-goal-cards"></div>
           <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._saveGoalsAndContinue()">Continue</button>
         </div>
 
