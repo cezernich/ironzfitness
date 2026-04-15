@@ -1281,6 +1281,12 @@ function buildAiIntervalsList(session, type) {
 
   function _getIntervalZones(ivSport) {
     if (!allZones) return null;
+    // Walking and rowing don't borrow running pace zones. A walker
+    // shouldn't see "Z2 7:01/mi" and a rower should see /500m splits,
+    // not /mi. Returning null means the renderer shows just the
+    // zone tag (e.g., "Z2") with no numeric pace.
+    if (type === "walking" || ivSport === "walking") return null;
+    if (type === "rowing"  || ivSport === "rowing" || ivSport === "row") return null;
     const key = ivSport === "bike" || ivSport === "cycling" ? "biking"
               : ivSport === "run" || ivSport === "running" ? "running"
               : ivSport === "swim" || ivSport === "swimming" ? "swimming"
@@ -6390,7 +6396,39 @@ function _qeBuildCardioWorkout(opts) {
       { name: "Cool-Down", duration: cooldownMin + " min", effort: iz.cooldown, details: _swimCooldownText(cooldownMin, swimCss) },
     ];
   } else if (type === "walking") {
-    intervals = [{ name: "Walk", duration: durMin + " min" }];
+    // Walking is always active-recovery zone — conversational, restorative.
+    // Explicit effort "walk" is picked up by the renderer and skips the
+    // running pace-zone overlay that would otherwise mis-label a walk as
+    // "Z2 7:01/mi".
+    intervals = [{
+      name: "Walk",
+      duration: durMin + " min",
+      effort: "Z1",
+      details: "Brisk walk, comfortable and conversational — this is active recovery, not a run.",
+    }];
+  } else if (type === "rowing") {
+    // Rowing sessions are measured in seconds-per-500m, not minutes-per-mile.
+    // We don't currently store rowing zones in trainingZones, so we output
+    // descriptive effort tiers keyed to RPE without a numeric pace overlay.
+    // _getIntervalZones returns null for rowing so the renderer won't try
+    // to paint a /mi label onto the tag.
+    const mainMin = durMin - warmupMin - cooldownMin;
+    const rowEffortText = {
+      Z1: "Very easy /500m — easy breathing, long smooth strokes.",
+      Z2: "Steady /500m — all-day pace, conversational.",
+      Z3: "Tempo /500m — comfortably hard, controlled breath.",
+      Z4: "Threshold /500m — hard but sustainable for ~20 minutes.",
+      Z5: "Max /500m — near all-out, only sustainable for short reps.",
+    };
+    intervals = [
+      { name: "Warm-Up",   duration: warmupMin  + " min", effort: "Z1",     details: rowEffortText.Z1 },
+      { name: "Main Set",  duration: mainMin    + " min", effort: iz.main,  details: rowEffortText[iz.main] || "Steady /500m" },
+      { name: "Cool-Down", duration: cooldownMin + " min", effort: "Z1",    details: rowEffortText.Z1 },
+    ];
+    if (intensity === "intense" || intensity === "max") {
+      // Swap in a tempo block for intense rows
+      intervals[1] = { name: "Tempo Set", duration: mainMin + " min", effort: iz.hard, details: rowEffortText[iz.hard] || "Hard /500m" };
+    }
   } else {
     const mainMin = durMin - warmupMin - cooldownMin;
     intervals = [
