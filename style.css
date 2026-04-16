@@ -2686,7 +2686,9 @@ button:active {
 }
 
 .completion-dur-minsec .completion-dur-input {
-  width: 60px;
+  width: 72px;
+  padding-left: 6px;
+  padding-right: 6px;
 }
 
 .completion-dur-sep {
