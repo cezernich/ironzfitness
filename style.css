@@ -18116,6 +18116,8 @@ body.ob-v2-lock { overflow: hidden; }
   font-weight: 700;
   color: var(--color-text);
   white-space: nowrap;
+  min-width: 160px;
+  text-align: center;
 }
 .cal-toggle {
   width: 28px;
