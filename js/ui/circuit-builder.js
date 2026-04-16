@@ -485,34 +485,45 @@
   function addStep(kind) {
     if (!_manualDraft) return;
     if (kind === "repeat") {
-      const cnt = parseInt(prompt("How many rounds?", "3") || "", 10);
-      if (!cnt || cnt < 1) return;
-      _manualDraft.steps.push({ kind: "repeat", count: cnt, children: [] });
+      _openRepeatModal(null, (cnt) => {
+        if (!cnt || cnt < 1) return;
+        _manualDraft.steps.push({ kind: "repeat", count: cnt, children: [] });
+        _renderManualBuilder();
+      });
     } else if (kind === "exercise") {
-      const step = _promptExercise();
-      if (step) _manualDraft.steps.push(step);
+      _openExerciseModal(null, (step) => {
+        if (step) _manualDraft.steps.push(step);
+        _renderManualBuilder();
+      });
     } else if (kind === "cardio") {
-      const step = _promptCardio();
-      if (step) _manualDraft.steps.push(step);
+      _openCardioModal(null, (step) => {
+        if (step) _manualDraft.steps.push(step);
+        _renderManualBuilder();
+      });
     }
-    _renderManualBuilder();
   }
 
   function addStepInside(parentIdx, kind) {
     if (!_manualDraft) return;
     const parent = _manualDraft.steps[parentIdx];
     if (!parent || parent.kind !== "repeat") return;
-    const step = kind === "exercise" ? _promptExercise() : _promptCardio();
-    if (step) parent.children.push(step);
-    _renderManualBuilder();
+    const cb = (step) => {
+      if (step) parent.children.push(step);
+      _renderManualBuilder();
+    };
+    if (kind === "exercise") _openExerciseModal(null, cb);
+    else _openCardioModal(null, cb);
   }
 
   function editStep(idx) {
     const step = _manualDraft.steps[idx];
     if (!step) return;
-    const updated = step.kind === "cardio" ? _promptCardio(step) : _promptExercise(step);
-    if (updated) _manualDraft.steps[idx] = updated;
-    _renderManualBuilder();
+    const cb = (updated) => {
+      if (updated) _manualDraft.steps[idx] = updated;
+      _renderManualBuilder();
+    };
+    if (step.kind === "cardio") _openCardioModal(step, cb);
+    else _openExerciseModal(step, cb);
   }
 
   function editChildStep(parentIdx, childIdx) {
@@ -520,17 +531,21 @@
     if (!parent || parent.kind !== "repeat") return;
     const step = parent.children[childIdx];
     if (!step) return;
-    const updated = step.kind === "cardio" ? _promptCardio(step) : _promptExercise(step);
-    if (updated) parent.children[childIdx] = updated;
-    _renderManualBuilder();
+    const cb = (updated) => {
+      if (updated) parent.children[childIdx] = updated;
+      _renderManualBuilder();
+    };
+    if (step.kind === "cardio") _openCardioModal(step, cb);
+    else _openExerciseModal(step, cb);
   }
 
   function editRepeatCount(idx) {
     const step = _manualDraft.steps[idx];
     if (!step || step.kind !== "repeat") return;
-    const cnt = parseInt(prompt("Rounds?", step.count || 3) || "", 10);
-    if (cnt && cnt >= 1) step.count = cnt;
-    _renderManualBuilder();
+    _openRepeatModal(step.count || 3, (cnt) => {
+      if (cnt && cnt >= 1) step.count = cnt;
+      _renderManualBuilder();
+    });
   }
 
   function deleteStep(idx) {
@@ -544,42 +559,190 @@
     _renderManualBuilder();
   }
 
-  function _promptExercise(existing) {
-    const name = prompt("Exercise name:", existing?.name || "") || "";
-    if (!name.trim()) return null;
-    const reps = parseInt(prompt("Reps (leave blank for none):", existing?.reps || "10") || "", 10) || null;
-    const weightStr = prompt("Weight in lbs (blank for bodyweight):", existing?.weight || "") || "";
-    const weight = weightStr ? parseInt(weightStr, 10) : null;
-    return {
-      kind: "exercise",
-      name: name.trim(),
-      reps,
-      weight,
-      weight_unit: weight ? "lbs" : null,
-    };
+  // ── Inline step modals ───────────────────────────────────────
+  // These replace the native prompt() calls with full-chrome
+  // modals that reuse the same _mountModal + _modalHeader shell
+  // (.circuit-modal-overlay → .circuit-modal) as the main Circuit
+  // Session entry flow, so the look — dark sheet, rounded Back/
+  // close header, .builder-field labels, .focus-chip style chips,
+  // .circuit-btn primary/secondary footer — stays consistent
+  // across the whole circuit builder.
+
+  function _openRepeatModal(existingCount, callback) {
+    const initial = existingCount || 3;
+    const body = `
+      ${_modalHeader(existingCount ? "Edit Rounds" : "Add Rounds", null)}
+      <div class="circuit-modal-body">
+        <div class="builder-field">
+          <div class="builder-label">Rounds</div>
+          <input class="builder-input" id="cb-inline-rounds" type="number" min="1" max="50" value="${initial}" inputmode="numeric" />
+        </div>
+      </div>
+      <div class="circuit-modal-footer circuit-modal-footer--dual">
+        <button class="circuit-btn circuit-btn-primary" id="cb-inline-ok">Save</button>
+        <button class="circuit-btn circuit-btn-secondary" id="cb-inline-cancel">Cancel</button>
+      </div>
+    `;
+    _mountModal("cb-inline-modal", body);
+    _wireInlineOkCancel("cb-inline-modal", (ov) => {
+      const n = parseInt(ov.querySelector("#cb-inline-rounds").value, 10);
+      callback(n && n >= 1 ? n : null);
+    }, () => callback(null));
   }
 
-  function _promptCardio(existing) {
-    const name = prompt("Cardio type (Run, Row, Bike, etc.):", existing?.name || "Run") || "";
-    if (!name.trim()) return null;
-    const distance = prompt("Distance (e.g. 400m, 1 mile) — or leave blank:", existing?.distance_display || "") || "";
-    const step = { kind: "cardio", name: name.trim() };
-    if (distance) {
-      step.distance_display = distance;
-      const metersMatch = distance.match(/([\d.]+)\s*m/i);
-      const milesMatch = distance.match(/([\d.]+)\s*mi/i);
-      const kmMatch = distance.match(/([\d.]+)\s*km/i);
-      if (metersMatch && !milesMatch) step.distance_m = parseFloat(metersMatch[1]);
-      else if (milesMatch) step.distance_m = Math.round(parseFloat(milesMatch[1]) * 1609.34);
-      else if (kmMatch) step.distance_m = Math.round(parseFloat(kmMatch[1]) * 1000);
-    } else {
-      const durMin = parseInt(prompt("Or duration in minutes:", "5") || "", 10);
-      if (durMin) {
-        step.duration_sec = durMin * 60;
-        step.distance_display = durMin + " min";
+  function _openExerciseModal(existing, callback) {
+    const body = `
+      ${_modalHeader(existing ? "Edit Exercise" : "Add Exercise", null)}
+      <div class="circuit-modal-body">
+        <div class="builder-field">
+          <div class="builder-label">Exercise name</div>
+          <input class="builder-input" id="cb-inline-name" type="text" value="${_esc(existing?.name || "")}" placeholder="e.g. Push-up" />
+        </div>
+        <div class="builder-field">
+          <div class="builder-label">Reps</div>
+          <input class="builder-input" id="cb-inline-reps" type="number" min="1" max="999" value="${existing?.reps || 10}" inputmode="numeric" />
+        </div>
+        <div class="builder-field">
+          <div class="builder-label">Weight (lbs)</div>
+          <input class="builder-input" id="cb-inline-weight" type="number" min="0" max="1000" value="${existing?.weight || ""}" placeholder="Bodyweight if blank" inputmode="numeric" />
+        </div>
+      </div>
+      <div class="circuit-modal-footer circuit-modal-footer--dual">
+        <button class="circuit-btn circuit-btn-primary" id="cb-inline-ok">Save</button>
+        <button class="circuit-btn circuit-btn-secondary" id="cb-inline-cancel">Cancel</button>
+      </div>
+    `;
+    _mountModal("cb-inline-modal", body);
+    _wireInlineOkCancel("cb-inline-modal", (ov) => {
+      const name = ov.querySelector("#cb-inline-name").value.trim();
+      if (!name) {
+        ov.querySelector("#cb-inline-name").focus();
+        return false;
       }
+      const reps = parseInt(ov.querySelector("#cb-inline-reps").value, 10) || null;
+      const wStr = ov.querySelector("#cb-inline-weight").value;
+      const weight = wStr ? parseInt(wStr, 10) : null;
+      callback({
+        kind: "exercise",
+        name,
+        reps,
+        weight,
+        weight_unit: weight ? "lbs" : null,
+      });
+    }, () => callback(null));
+  }
+
+  function _openCardioModal(existing, callback) {
+    const CARDIO_TYPES = ["Run", "Row", "Bike", "Ski Erg", "Assault Bike", "Walk", "Swim"];
+    const currentType = existing?.name || "Run";
+    const chips = CARDIO_TYPES.map(t =>
+      `<button type="button" class="focus-chip${t === currentType ? " is-active" : ""}" data-cb-cardio="${_esc(t)}">${_esc(t)}</button>`
+    ).join("");
+    const distDisplay = existing?.distance_display && !/min/.test(existing.distance_display)
+      ? existing.distance_display : "";
+    const durVal = existing?.duration_sec ? Math.round(existing.duration_sec / 60) : "";
+    const body = `
+      ${_modalHeader(existing ? "Edit Cardio" : "Add Cardio", null)}
+      <div class="circuit-modal-body">
+        <div class="builder-field">
+          <div class="builder-label">Cardio type</div>
+          <div class="focus-chip-row" id="cb-inline-cardio-row">${chips}</div>
+        </div>
+        <div class="builder-field">
+          <div class="builder-label">Distance</div>
+          <input class="builder-input" id="cb-inline-distance" type="text" value="${_esc(distDisplay)}" placeholder="400m, 1 mile — or leave blank" />
+        </div>
+        <div class="builder-field">
+          <div class="builder-label">or Duration (min)</div>
+          <input class="builder-input" id="cb-inline-duration" type="number" min="1" max="240" value="${durVal}" placeholder="5" inputmode="numeric" />
+        </div>
+      </div>
+      <div class="circuit-modal-footer circuit-modal-footer--dual">
+        <button class="circuit-btn circuit-btn-primary" id="cb-inline-ok">Save</button>
+        <button class="circuit-btn circuit-btn-secondary" id="cb-inline-cancel">Cancel</button>
+      </div>
+    `;
+    _mountModal("cb-inline-modal", body);
+
+    // Wire chip toggling
+    const chipRow = document.getElementById("cb-inline-cardio-row");
+    let selectedCardio = currentType;
+    if (chipRow) {
+      chipRow.addEventListener("click", (ev) => {
+        const btn = ev.target.closest(".focus-chip");
+        if (!btn) return;
+        chipRow.querySelectorAll(".focus-chip").forEach(b => b.classList.remove("is-active"));
+        btn.classList.add("is-active");
+        selectedCardio = btn.getAttribute("data-cb-cardio");
+      });
     }
-    return step;
+
+    _wireInlineOkCancel("cb-inline-modal", (ov) => {
+      const name = (selectedCardio || "").trim();
+      if (!name) return false;
+      const distance = ov.querySelector("#cb-inline-distance").value.trim();
+      const durStr = ov.querySelector("#cb-inline-duration").value;
+      const step = { kind: "cardio", name };
+      if (distance) {
+        step.distance_display = distance;
+        const metersMatch = distance.match(/([\d.]+)\s*m\b/i);
+        const milesMatch = distance.match(/([\d.]+)\s*mi/i);
+        const kmMatch = distance.match(/([\d.]+)\s*km/i);
+        if (metersMatch && !milesMatch) step.distance_m = parseFloat(metersMatch[1]);
+        else if (milesMatch) step.distance_m = Math.round(parseFloat(milesMatch[1]) * 1609.34);
+        else if (kmMatch) step.distance_m = Math.round(parseFloat(kmMatch[1]) * 1000);
+      } else if (durStr) {
+        const durMin = parseInt(durStr, 10);
+        if (durMin) {
+          step.duration_sec = durMin * 60;
+          step.distance_display = durMin + " min";
+        }
+      }
+      callback(step);
+    }, () => callback(null));
+  }
+
+  // Shared OK/Cancel wiring for the three step modals. Focuses the
+  // first input, lets Enter submit, and closes the modal after the
+  // save callback unless it returns false (validation failure).
+  // Also rebinds the reused _modalHeader close (X) button so it
+  // only dismisses THIS step modal instead of calling closeAll(),
+  // which would also tear down the underlying manual builder.
+  function _wireInlineOkCancel(modalId, onOk, onCancel) {
+    const ov = document.getElementById(modalId);
+    if (!ov) return;
+    const okBtn = ov.querySelector("#cb-inline-ok");
+    const cancelBtn = ov.querySelector("#cb-inline-cancel");
+    const closeHeaderBtn = ov.querySelector(".circuit-modal-close");
+    if (closeHeaderBtn) {
+      closeHeaderBtn.setAttribute("onclick", "");
+      closeHeaderBtn.onclick = () => {
+        if (typeof onCancel === "function") onCancel();
+        _closeModal(modalId);
+      };
+    }
+    if (okBtn) {
+      okBtn.onclick = () => {
+        const result = onOk(ov);
+        if (result !== false) _closeModal(modalId);
+      };
+    }
+    if (cancelBtn) {
+      cancelBtn.onclick = () => {
+        if (typeof onCancel === "function") onCancel();
+        _closeModal(modalId);
+      };
+    }
+    ov.querySelectorAll("input").forEach(el => {
+      el.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") { ev.preventDefault(); okBtn && okBtn.click(); }
+      });
+    });
+    setTimeout(() => {
+      const first = ov.querySelector("input:not([type=hidden])");
+      if (first) first.focus();
+      if (first && first.type === "text") first.select();
+    }, 0);
   }
 
   function backFromManual() {
