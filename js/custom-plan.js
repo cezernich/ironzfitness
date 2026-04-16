@@ -1104,6 +1104,26 @@ function cpManualSelectType(type) {
     _cpManualCardioRowCount = 0;
     document.getElementById("cp-manual-cardio-rows").innerHTML = "";
     cpManualAddCardioRow();
+  } else if (type === "hyrox" && typeof window !== "undefined" && Array.isArray(window.HYROX_STATIONS)) {
+    // Pre-populate exercise rows with the standard Hyrox station sequence
+    // (Phase 5, UNIFIED_BUILDER_SPEC.md). User can edit distance / weight
+    // per row. Save tags the session with isHyrox so the calendar renders
+    // it through the Hyrox-aware paths instead of generic exercise rows.
+    _cpManualRowCount = 0;
+    document.getElementById("cp-manual-exercise-rows").innerHTML = "";
+    const stations = window.HYROX_STATIONS;
+    let idx = 0;
+    stations.forEach((s) => {
+      idx++;
+      cpManualAddExRow({ name: `Run ${idx}`, sets: "1", reps: "0.5 mi", weight: "" });
+      cpManualAddExRow({
+        name: s.name,
+        sets: "1",
+        reps: `${s.defaultDistance} ${s.unit}`,
+        weight: s.defaultWeight ? `${s.defaultWeight} lb` : "",
+      });
+    });
+    cpManualAddExRow({ name: `Run ${idx + 1}`, sets: "1", reps: "0.5 mi", weight: "" });
   } else {
     _cpManualRowCount = 0;
     document.getElementById("cp-manual-exercise-rows").innerHTML = "";
@@ -1817,6 +1837,7 @@ function customPlanSaveManual() {
         details: notes || undefined,
         exercises: exercises.length ? exercises : undefined,
         ...(hiitMeta ? { hiitMeta } : {}),
+        ...(type === "hyrox" ? { isHyrox: true } : {}),
       }
     };
   }

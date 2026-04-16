@@ -4646,6 +4646,8 @@ function qeShowStep(step, subType) {
 // Default weights are Men's Open division. Users can edit in the builder.
 // Men's Open: Sled Push 152kg/335lb, Sled Pull 103kg/227lb, Farmer 2x24kg/53lb, Sandbag 20kg/44lb, Wall Ball 6kg/14lb
 // Women's Open: Sled Push 103kg/227lb, Sled Pull 78kg/172lb, Farmer 2x16kg/35lb, Sandbag 10kg/22lb, Wall Ball 4kg/9lb
+// Exposed as a window global so Build a Plan Manual can re-use the same
+// station set (Phase 5, UNIFIED_BUILDER_SPEC.md).
 const HYROX_STATIONS = [
   { id: "ski",               name: "SkiErg",              defaultDistance: "1000",  unit: "m",    defaultWeight: "" },
   { id: "sled-push",         name: "Sled Push",           defaultDistance: "50",    unit: "m",    defaultWeight: "335" },
@@ -4656,6 +4658,7 @@ const HYROX_STATIONS = [
   { id: "sandbag-lunges",    name: "Sandbag Lunges",      defaultDistance: "100",   unit: "m",    defaultWeight: "44" },
   { id: "wall-balls",        name: "Wall Balls",          defaultDistance: "75",    unit: "reps", defaultWeight: "14" },
 ];
+if (typeof window !== "undefined") window.HYROX_STATIONS = HYROX_STATIONS;
 
 let _hyroxRunDist = "0.5";
 let _hyroxRunUnit = "mi";
