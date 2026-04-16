@@ -1917,7 +1917,15 @@
   function _seedSchedule() {
     const sports = _state.selectedSports.slice();
     const strength = _state.strengthSetup.sessionsPerWeek || 0;
-    const endurance = sports.filter(s => ["run", "bike", "swim"].includes(s));
+    // "Distributable" sports fill non-strength slots — everything the
+    // user selected except strength itself. Previously the filter was
+    // hard-coded to run/bike/swim, so picking walking or yoga (or
+    // rowing / hiit / circuit / mobility / hyrox) silently dropped
+    // those selections and the schedule came back with only the sports
+    // in the hard-coded list plus strength, which didn't match what the
+    // user had tapped. Now any selected sport that isn't strength gets
+    // round-robined into the remaining day slots.
+    const endurance = sports.filter(s => s !== "strength");
     const needed = _longSportsForRace(_state.currentRace);
     _BP_DAYS.forEach(d => { _state.schedule[d] = []; });
     // Anchor long sessions first (if race-relevant)
