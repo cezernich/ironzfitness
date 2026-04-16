@@ -2770,6 +2770,33 @@
           <div id="cp-manual-exercise-rows"></div>
           <button class="btn-secondary" style="width:100%;margin-top:8px" onclick="cpManualAddExRow()">+ Add Exercise</button>
         </div>
+        <!-- HIIT meta fields (Phase 4, UNIFIED_BUILDER_SPEC.md). Only shown
+             when the selected type is "hiit"; keeps the format / rounds /
+             rest metadata in sync with what Add Session captures so the
+             resulting session renders identically. -->
+        <div id="cp-manual-hiit-meta" style="display:none">
+          <div class="form-row">
+            <label for="cp-manual-hiit-format">Format</label>
+            <select id="cp-manual-hiit-format">
+              <option value="circuit" selected>Circuit</option>
+              <option value="tabata">Tabata</option>
+              <option value="emom">EMOM</option>
+              <option value="amrap">AMRAP</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="cp-manual-hiit-rounds">Rounds</label>
+            <input type="number" id="cp-manual-hiit-rounds" min="1" value="3" />
+          </div>
+          <div class="form-row">
+            <label for="cp-manual-hiit-rest-ex">Rest between exercises (optional)</label>
+            <input type="text" id="cp-manual-hiit-rest-ex" placeholder="e.g. 20s" />
+          </div>
+          <div class="form-row">
+            <label for="cp-manual-hiit-rest-rnd">Rest between rounds (optional)</label>
+            <input type="text" id="cp-manual-hiit-rest-rnd" placeholder="e.g. 60s" />
+          </div>
+        </div>
         <div id="cp-manual-cardio" style="display:none">
           <div id="cp-manual-cardio-rows"></div>
           <button class="btn-secondary" style="width:100%;margin-top:8px" onclick="cpManualAddCardioRow()">+ Add Interval / Phase</button>

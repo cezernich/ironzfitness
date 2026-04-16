@@ -973,6 +973,19 @@ function _cpManualPrefillFromEntry(entry) {
   if (notesLabel) notesLabel.textContent = isCardio ? "Session Title / Notes (optional)" : "Session Notes (optional)";
   document.getElementById("cp-manual-exercises").style.display = isCardio ? "none" : "";
   document.getElementById("cp-manual-cardio").style.display = isCardio ? "" : "none";
+  const hiitMetaEl = document.getElementById("cp-manual-hiit-meta");
+  if (hiitMetaEl) hiitMetaEl.style.display = type === "hiit" ? "" : "none";
+  // Pre-fill hiitMeta inputs from existing entry (Phase 4)
+  if (type === "hiit" && d.hiitMeta) {
+    const f = document.getElementById("cp-manual-hiit-format");
+    const r = document.getElementById("cp-manual-hiit-rounds");
+    const re = document.getElementById("cp-manual-hiit-rest-ex");
+    const rr = document.getElementById("cp-manual-hiit-rest-rnd");
+    if (f && d.hiitMeta.format) f.value = d.hiitMeta.format;
+    if (r && d.hiitMeta.rounds) r.value = d.hiitMeta.rounds;
+    if (re && d.hiitMeta.restBetweenExercises) re.value = d.hiitMeta.restBetweenExercises;
+    if (rr && d.hiitMeta.restBetweenRounds) rr.value = d.hiitMeta.restBetweenRounds;
+  }
 
   if (isCardio) {
     _cpManualCardioRowCount = 0;
@@ -1085,6 +1098,8 @@ function cpManualSelectType(type) {
   document.querySelector('label[for="cp-manual-notes"]').textContent = isCardio ? "Session Title / Notes (optional)" : "Session Notes (optional)";
   document.getElementById("cp-manual-exercises").style.display = isCardio ? "none" : "";
   document.getElementById("cp-manual-cardio").style.display = isCardio ? "" : "none";
+  const hiitMeta = document.getElementById("cp-manual-hiit-meta");
+  if (hiitMeta) hiitMeta.style.display = type === "hiit" ? "" : "none";
   if (isCardio) {
     _cpManualCardioRowCount = 0;
     document.getElementById("cp-manual-cardio-rows").innerHTML = "";
@@ -1778,6 +1793,22 @@ function customPlanSaveManual() {
       }
       exercises.push(ex);
     });
+    // Phase 4 — capture hiitMeta alongside the exercise list so Build
+    // a Plan HIIT sessions match the format/rounds shape Add Session
+    // emits. Without this, CP-saved HIIT rendered without round structure.
+    let hiitMeta = null;
+    if (type === "hiit") {
+      const rounds = parseInt(document.getElementById("cp-manual-hiit-rounds")?.value) || 1;
+      hiitMeta = {
+        format: document.getElementById("cp-manual-hiit-format")?.value || "circuit",
+        rounds,
+      };
+      const rex = (document.getElementById("cp-manual-hiit-rest-ex")?.value || "").trim();
+      const rrd = (document.getElementById("cp-manual-hiit-rest-rnd")?.value || "").trim();
+      if (rex) hiitMeta.restBetweenExercises = rex;
+      if (rrd) hiitMeta.restBetweenRounds = rrd;
+    }
+
     session = {
       mode: "manual",
       data: {
@@ -1785,6 +1816,7 @@ function customPlanSaveManual() {
         sessionName: name,
         details: notes || undefined,
         exercises: exercises.length ? exercises : undefined,
+        ...(hiitMeta ? { hiitMeta } : {}),
       }
     };
   }
@@ -1922,6 +1954,8 @@ function saveCustomPlan() {
             steps: entry.data.circuit.steps || [],
           };
         }
+        if (entry.data?.hiitMeta) scheduleEntry.hiitMeta = entry.data.hiitMeta;
+        if (entry.data?.isHyrox)  scheduleEntry.isHyrox  = true;
 
         // For cardio types without intervals, add discipline/load for rich rendering
         const _discMap = { running: "run", cycling: "bike", swimming: "swim" };
