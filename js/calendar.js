@@ -326,6 +326,7 @@ function renderWeekOverview() {
     general: ICONS.activity, hiit: ICONS.flame, bodyweight: ICONS.activity, yoga: ICONS.yoga,
     stairstepper: ICONS.steps,
     hyroxStrength: ICONS.weights,
+    wellness: ICONS.droplet, sauna: ICONS.droplet,
   };
 
   const pills = Object.entries(byType).map(([type, count]) => {
@@ -368,6 +369,7 @@ function _calV2DiscClass(discOrType) {
   if (s === "bike" || s === "cycling") return "bike";
   if (s === "brick") return "bike";
   if (s === "race") return "race";
+  if (s === "wellness" || s === "sauna") return "wellness";
   return "str";
 }
 
@@ -403,6 +405,7 @@ function _calV2IconFor(discCls) {
     case "swim": return I.swim || "";
     case "bike": return I.bike || "";
     case "race": return I.flag || "";
+    case "wellness": return I.droplet || I.activity || "";
     case "str":
     default:     return I.weights || I.zap || "";
   }
