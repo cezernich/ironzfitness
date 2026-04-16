@@ -486,20 +486,71 @@ function parseDumbbellWeight(weightStr) {
 
 /**
  * Filters exercises to only those compatible with the equipment restriction.
- * equipmentRestriction: { available: ["dumbbells", ...], dumbbellMaxWeight?: number }  Bodyweight is always allowed.
+ * equipmentRestriction: { available: ["dumbbells", ...], dumbbellMaxWeight?: number }
+ *
+ * Bodyweight is always allowed. Dumbbell exercises that exceed the
+ * user's max dumbbell weight get CLAMPED to that max and their rep
+ * count scales up to compensate (sqrt(originalWeight / clampedWeight)
+ * — a rough effort-equivalence scaler), instead of being dropped
+ * outright. That way a user with 20lb dumbbells still gets
+ * Dumbbell Bench Press programmed at 20 /hand × ~23 reps instead of
+ * seeing the whole exercise disappear.
+ *
+ * Extremely low-clamp cases (< 25% of prescribed weight) are still
+ * dropped so the substitute path can reach for a bodyweight variant
+ * that's actually stimulative — 40 dumbbell bench reps at 5 lbs is
+ * not productive strength training.
  */
 function filterByEquipment(exercises, equipmentRestriction) {
   if (!equipmentRestriction) return exercises;
   const allowed = new Set(["bodyweight", ...(equipmentRestriction.available || [])]);
-  return exercises.filter(ex => {
+  const out = [];
+  exercises.forEach(ex => {
     const equip = inferEquipment(ex);
-    if (!allowed.has(equip)) return false;
+    if (!allowed.has(equip)) return;
     if (equip === "dumbbells" && equipmentRestriction.dumbbellMaxWeight) {
-      const w = parseDumbbellWeight(ex.weight);
-      if (w !== null && w > equipmentRestriction.dumbbellMaxWeight) return false;
+      // Stored dumbbell weight is TOTAL (pair weight). User's max
+      // dumbbellMaxWeight is PER-HAND. Compare apples-to-apples by
+      // halving the stored total when the saved weight reads as a
+      // bare number (via parseDumbbellWeight).
+      const storedTotal = parseDumbbellWeight(ex.weight);
+      const maxPerHand = parseFloat(equipmentRestriction.dumbbellMaxWeight);
+      if (storedTotal !== null && maxPerHand > 0) {
+        const storedPerHand = storedTotal / 2;
+        if (storedPerHand > maxPerHand) {
+          // Drop if the user's max is less than a quarter of the
+          // prescribed weight — substitute lookup in the caller
+          // will offer a bodyweight alternative with real stimulus.
+          if (maxPerHand / storedPerHand < 0.25) return;
+          // Otherwise clamp + bump reps.
+          const clampedTotal = Math.round(maxPerHand * 2);
+          const repRatio = Math.sqrt(storedPerHand / maxPerHand);
+          const newEx = { ...ex };
+          // Preserve the original prescription as a subtitle so the
+          // user can see what was originally programmed.
+          newEx.weight = String(clampedTotal);
+          newEx._originalWeight = ex.weight;
+          newEx._equipmentClamped = true;
+          // Rep scaling: accept rep strings like "8", "8-10", "AMRAP".
+          const repsStr = String(ex.reps || "");
+          const range = repsStr.match(/^(\d+)\s*-\s*(\d+)$/);
+          const bare = repsStr.match(/^(\d+)$/);
+          if (range) {
+            const lo = Math.round(parseInt(range[1], 10) * repRatio);
+            const hi = Math.round(parseInt(range[2], 10) * repRatio);
+            newEx.reps = `${lo}-${hi}`;
+          } else if (bare) {
+            newEx.reps = String(Math.round(parseInt(bare[1], 10) * repRatio));
+          }
+          // AMRAP / time-based / text reps are left unchanged.
+          out.push(newEx);
+          return;
+        }
+      }
     }
-    return true;
+    out.push(ex);
   });
+  return out;
 }
 
 /**
