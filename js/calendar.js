@@ -1286,6 +1286,9 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
       _ovflMoveItem(cardId, "logged", w.id, dateStr) +
       _ovflShareItem(w) +
       _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
+    const _exDurationBadge = w.duration
+      ? `<span class="session-duration-badge">${_getCompletionDuration(cardId) || w.duration} min</span>`
+      : "";
     return `
       <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
         <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
@@ -1295,7 +1298,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
             <div class="session-phase">${w.fromSaved ? "Logged · " + _wTypeLabel(w.type) : "Planned"}${(!w.fromSaved && w.notes) ? " · " + w.notes : ""}</div>
           </div>
           <div class="session-header-right">
-            ${_buildUndoHeaderBtn(cardId, dateStr)}${_exOverflow}
+            ${_exDurationBadge}${_buildUndoHeaderBtn(cardId, dateStr)}${_exOverflow}
             <span class="card-chevron">▾</span>
           </div>
         </div>
@@ -6000,7 +6003,12 @@ function qeSaveGeneratedStrength() {
     ...ex,
     weight: document.getElementById(`qe-weight-${i}`)?.value || ex.weight || "",
   }));
-  _qeSaveStrengthWorkout(dateStr, label, muscles, exercises);
+  // Carry the requested session duration from step 1 into the saved
+  // entry so the session card shows the target time ("45 min") the
+  // user asked for. Previously this was dropped at save time.
+  const durEl = document.getElementById("qe-strength-duration");
+  const duration = durEl && durEl.value ? parseInt(durEl.value, 10) || null : null;
+  _qeSaveStrengthWorkout(dateStr, label, muscles, exercises, null, duration);
 }
 
 // ── Per-exercise editing helpers ──────────────────────────────────────────────
@@ -7837,7 +7845,7 @@ function qeSaveManual() {
   _qeSaveStrengthWorkout(dateStr, manualName, notes, exercises, hiitMeta);
 }
 
-function _qeSaveStrengthWorkout(dateStr, label, notes, exercises, hiitMeta) {
+function _qeSaveStrengthWorkout(dateStr, label, notes, exercises, hiitMeta, duration) {
   let restrictions = {};
   try { restrictions = JSON.parse(localStorage.getItem("dayRestrictions")) || {}; } catch {}
   const existingR = restrictions[dateStr];
@@ -7854,6 +7862,7 @@ function _qeSaveStrengthWorkout(dateStr, label, notes, exercises, hiitMeta) {
                   : "weightlifting";
   const entry = { id: generateId(), date: dateStr, type: _saveType, name: label, notes, exercises };
   if (hiitMeta) entry.hiitMeta = hiitMeta;
+  if (duration && duration > 0) entry.duration = duration;
   workouts.unshift(entry);
   localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
 
