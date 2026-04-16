@@ -1278,7 +1278,25 @@ function deleteZoneHistoryEntry(dateISO) {
   history = history.filter(h => h.date !== dateISO);
   localStorage.setItem("trainingZonesHistory", JSON.stringify(history));
   if (typeof DB !== 'undefined') DB.syncKey('trainingZonesHistory');
-  renderZones();
+
+  // Remove the row from the DOM in place and update the counter,
+  // rather than calling renderZones() which rebuilds the section
+  // and collapses the Zone History expander on every click.
+  const section = document.querySelector(".zone-history-section");
+  if (!section) { renderZones(); return; }
+  const rows = section.querySelectorAll(".zone-history-row");
+  for (const row of rows) {
+    const btn = row.querySelector(".zone-history-delete");
+    if (btn && btn.getAttribute("onclick") && btn.getAttribute("onclick").indexOf(dateISO) >= 0) {
+      row.remove();
+      break;
+    }
+  }
+  const remaining = section.querySelectorAll(".zone-history-row").length;
+  const header = section.querySelector(".zone-history-header span:first-child");
+  if (header) header.textContent = "Zone History (" + remaining + ")";
+  // If nothing left, drop the whole section so it doesn't linger empty.
+  if (remaining === 0) section.remove();
 }
 
 function _renderZoneHistoryRow(entry) {
