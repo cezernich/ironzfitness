@@ -2771,6 +2771,24 @@
     } else if (_strengthFocus && _STRENGTH_TEMPLATES[_strengthFocus]) {
       session.exercises = _STRENGTH_TEMPLATES[_strengthFocus].map(ex => ({ ...ex }));
     }
+
+    // Walking / rowing / yoga / mobility get a matching aiSession
+    // interval structure so they render with an intensity strip and
+    // duration badge — matches the "Walk — 45 min" card that the
+    // Quick Add path produces. Without this the Build Plan walk
+    // card was showing a bare "Walk / Walking" with no badge.
+    if (session.type === "walking") {
+      session.sessionName = `Walk — ${session.duration} min`;
+      session.aiSession = {
+        title: session.sessionName,
+        intervals: [{
+          name: "Walk",
+          duration: session.duration + " min",
+          effort: "Z1",
+          details: "Brisk walk, comfortable and conversational — this is active recovery, not a run.",
+        }],
+      };
+    }
     // Persist strengthFocus on the saved session so the calendar
     // equipment-restriction filter can look it up by field instead
     // of parsing the id. Legacy cards used a `weightlifting-<focus>`
