@@ -2809,6 +2809,11 @@ function getDayTotals(dateStr) {
     const isRun = sport === "running" || sport === "run";
     let sessionMin = 0;
     let sessionKm = 0;
+    // Completion duration (from Mark-Complete) wins over the original
+    // logged duration, matching what the session-card badge displays.
+    // Without this, a 90-min logged session completed in 37 min still
+    // contributed 90 min to the day total.
+    const completionDur = _parseDurMin(String(_getCompletionDuration(`session-log-${w.id}`) || ""));
 
     if (w.aiSession?.intervals) {
       _expandRepeatGroups(w.aiSession.intervals).forEach(iv => {
@@ -2848,7 +2853,7 @@ function getDayTotals(dateStr) {
       sessionMin = _estimateStrengthSessionMin(w.exercises);
     }
 
-    totalMin += sessionMin;
+    totalMin += (completionDur > 0 ? completionDur : sessionMin);
     if (sessionKm > 0) _addKm(sport, sessionKm);
   });
 
