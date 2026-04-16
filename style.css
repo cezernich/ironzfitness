@@ -17983,6 +17983,44 @@ body.ob-v2-lock { overflow: hidden; }
   --cal-dark:  #1a1a2e;
   --cal-red:   #e63946;
   --cal-green: #2ecc71;
+  /* Center-card accent — each theme picks what pops against its
+     own background. Light (default) uses a dark-navy card so it
+     stands out against the cream surface; dark themes override
+     below with an accent-filled or bordered treatment. */
+  --cal-center-bg:     #1a1a2e;
+  --cal-center-border: #1a1a2e;
+  --cal-center-text:   #ffffff;
+  --cal-center-muted:  rgba(255, 255, 255, 0.45);
+  --cal-center-time:   rgba(255, 255, 255, 0.55);
+  --cal-center-glow:   rgba(230, 57, 70, 0.10);
+  /* Daily rings track — visible dim-gray across all themes so the
+     empty (0%) state still reads as a ring, not a ghost. Overridden
+     below for blackout / iron where the default is invisible. */
+  --ring-track:        rgba(0, 0, 0, 0.12);
+}
+:root[data-theme="blackout"] {
+  /* Pure black background — a navy card disappears. Use the
+     surface-2 tone (dark gray) with the accent red as a bright
+     border + glow so the card reads as a lit "active day" frame. */
+  --cal-center-bg:     var(--color-surface-2);
+  --cal-center-border: var(--color-accent);
+  --cal-center-text:   #ffffff;
+  --cal-center-muted:  rgba(255, 255, 255, 0.55);
+  --cal-center-time:   rgba(255, 255, 255, 0.65);
+  --cal-center-glow:   rgba(229, 62, 62, 0.28);
+  --ring-track:        rgba(255, 255, 255, 0.16);
+}
+:root[data-theme="iron"] {
+  /* Iron's background is already navy-charcoal — the default navy
+     card blends in. Shift the card to a subtly-elevated surface
+     with the accent border so it pops against the iron base. */
+  --cal-center-bg:     #2a3452;
+  --cal-center-border: var(--color-accent);
+  --cal-center-text:   #ffffff;
+  --cal-center-muted:  rgba(232, 237, 245, 0.55);
+  --cal-center-time:   rgba(232, 237, 245, 0.65);
+  --cal-center-glow:   rgba(229, 62, 62, 0.22);
+  --ring-track:        rgba(232, 237, 245, 0.14);
 }
 
 /* Reset the old .calendar-grid base so it no longer imposes a
@@ -18291,13 +18329,16 @@ body.ob-v2-lock { overflow: hidden; }
   stroke-width: 3;
 }
 
-/* Center card (selected day) */
+/* Center card (selected day) — theme-aware via --cal-center-*
+   tokens so each theme picks the color that best pops against its
+   own background. Light → dark-navy card; blackout → surface-2 with
+   red accent border; iron → elevated navy with red accent border. */
 .dc.c {
   width: 150px;
-  background: var(--cal-dark);
-  border: 1.5px solid var(--cal-dark);
+  background: var(--cal-center-bg);
+  border: 1.5px solid var(--cal-center-border);
   padding: 14px 12px;
-  color: #fff;
+  color: var(--cal-center-text);
   opacity: 1;
 }
 @media (min-width: 640px) {
@@ -18311,7 +18352,7 @@ body.ob-v2-lock { overflow: hidden; }
   right: -30px;
   width: 80px;
   height: 80px;
-  background: rgba(230, 57, 70, 0.1);
+  background: var(--cal-center-glow);
   border-radius: 50%;
   pointer-events: none;
 }
@@ -18324,7 +18365,7 @@ body.ob-v2-lock { overflow: hidden; }
 .c-dl {
   font-size: 9px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--cal-center-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -18334,7 +18375,7 @@ body.ob-v2-lock { overflow: hidden; }
   text-transform: uppercase;
   letter-spacing: 0.8px;
   color: var(--cal-red);
-  background: rgba(230, 57, 70, 0.12);
+  background: rgba(230, 57, 70, 0.18);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -18346,13 +18387,13 @@ body.ob-v2-lock { overflow: hidden; }
 }
 .c-time {
   font-size: 9px;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--cal-center-time);
   font-weight: 500;
   margin-top: 6px;
 }
 .c-rest {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--cal-center-muted);
   font-weight: 600;
   letter-spacing: 0.5px;
   text-transform: uppercase;

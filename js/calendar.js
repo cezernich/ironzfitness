@@ -2922,10 +2922,15 @@ function renderDailyRings() {
     const center = done
       ? `<text x="50%" y="52%" text-anchor="middle" dominant-baseline="central" fill="var(--color-success, #22c55e)" font-size="22" font-weight="700">✓</text>`
       : `<text x="50%" y="48%" text-anchor="middle" dominant-baseline="central" fill="var(--color-text)" font-size="14" font-weight="700">${label}</text>`;
+    // Track uses its own CSS variable (--ring-track, defined per
+    // theme) so the dim-but-visible track doesn't disappear on
+    // pure-black or iron-navy backgrounds. The old version used
+    // --color-border @ 0.3 opacity which evaluated to ~0.027 alpha
+    // on blackout — effectively invisible.
     return `
       <div class="dr-ring-wrap">
         <svg width="${ringSize}" height="${ringSize}" viewBox="0 0 ${ringSize} ${ringSize}">
-          <circle cx="${ringSize/2}" cy="${ringSize/2}" r="${r}" fill="none" stroke="var(--color-border)" stroke-width="${stroke}" opacity="0.3" />
+          <circle cx="${ringSize/2}" cy="${ringSize/2}" r="${r}" fill="none" stroke="var(--ring-track)" stroke-width="${stroke}" />
           <circle cx="${ringSize/2}" cy="${ringSize/2}" r="${r}" fill="none" stroke="${ringColor}" stroke-width="${stroke}"
             stroke-dasharray="${circ}" stroke-dashoffset="${offset}" stroke-linecap="round"
             transform="rotate(-90 ${ringSize/2} ${ringSize/2})" style="transition:stroke-dashoffset 0.4s ease" />
