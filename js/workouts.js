@@ -1155,7 +1155,7 @@ function buildLiftingDay(title, exercises) {
       <td>${escHtml(e.name)}</td>
       <td>${escHtml(String(e.sets))}</td>
       <td>${escHtml(String(e.reps))}</td>
-      <td>${escHtml(_normalizeWeightDisplay(e.weight))}</td>
+      <td>${escHtml(_normalizeWeightDisplay(e.weight, e.name))}</td>
     </tr>`
   ).join("");
 
@@ -2259,22 +2259,43 @@ function _roundWeight(val) {
   return Math.round(val / 5) * 5 + " lbs";
 }
 
-function _normalizeWeightDisplay(raw) {
+function _normalizeWeightDisplay(raw, exerciseName) {
   const w = String(raw || "").trim();
   if (!w || w === "—") return w;
   if (/bodyweight/i.test(w)) return "BW";
   if (/bar\s*\+\s*([\d.]+)/i.test(w)) {
     const m = w.match(/bar\s*\+\s*([\d.]+)/i);
-    return _roundWeight(45 + parseFloat(m[1]));
+    return _formatWeightWithDbSuffix(_roundWeight(45 + parseFloat(m[1])), exerciseName);
   }
   if (/^([\d.]+)\s*[x×]\s*([\d.]+)/i.test(w)) {
     const m = w.match(/^([\d.]+)\s*[x×]\s*([\d.]+)/i);
-    return _roundWeight(parseFloat(m[2]));
+    return _formatWeightWithDbSuffix(_roundWeight(parseFloat(m[2])), exerciseName);
   }
   // Try to extract a bare number with lbs/lb suffix
   const bareLbs = w.match(/^([\d.]+)\s*(?:lbs?)?$/i);
-  if (bareLbs) return _roundWeight(parseFloat(bareLbs[1]));
-  return w;
+  if (bareLbs) return _formatWeightWithDbSuffix(_roundWeight(parseFloat(bareLbs[1])), exerciseName);
+  return _isDumbbellExercise(exerciseName) ? w + " /hand" : w;
+}
+
+// Dumbbell weights are always per-hand (industry convention: you buy
+// a pair of 50lb dumbbells, each one weighs 50lb). Display "50 lbs
+// /hand" on any exercise whose name implies dumbbells so users are
+// never guessing whether "150 lbs" on a Dumbbell Bench Press is
+// total (heavy) or per-hand (very heavy). Barbell / KB / cable / BW
+// exercises render unchanged.
+function _isDumbbellExercise(name) {
+  if (!name) return false;
+  const n = String(name).toLowerCase();
+  if (/\bdumb(?:b?ell)?s?\b/.test(n)) return true;
+  if (/\bdb\b/.test(n)) return true;
+  return false;
+}
+function _formatWeightWithDbSuffix(weightStr, exerciseName) {
+  if (!weightStr) return weightStr;
+  if (!_isDumbbellExercise(exerciseName)) return weightStr;
+  // Weight already has "BW"? Leave it.
+  if (/^(bw|bodyweight)$/i.test(weightStr)) return weightStr;
+  return weightStr + " /hand";
 }
 
 function buildExerciseTableHTML(exercises, opts) {
@@ -2328,10 +2349,10 @@ function buildExerciseTableHTML(exercises, opts) {
       const ssSets = seg.items[0]?.sets || "—";
       rows += `<tr class="superset-label-row"><td colspan="${cols}">Superset &mdash; ${ssSets} sets</td></tr>`;
       seg.items.forEach(e => {
-        rows += `<tr class="superset-ex-row"><td>${escHtml(e.name)}</td><td></td><td>${escHtml(String(e.reps||"—"))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight)||"—")}</td></tr>`;
+        rows += `<tr class="superset-ex-row"><td>${escHtml(e.name)}</td><td></td><td>${escHtml(String(e.reps||"—"))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name)||"—")}</td></tr>`;
         if (e.setDetails && e.setDetails.length) {
           e.setDetails.forEach((sd, si) => {
-            rows += `<tr class="superset-ex-row set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${escHtml(String(sd.reps||"—"))}</td><td>${escHtml(_normalizeWeightDisplay(sd.weight)||"—")}</td></tr>`;
+            rows += `<tr class="superset-ex-row set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${escHtml(String(sd.reps||"—"))}</td><td>${escHtml(_normalizeWeightDisplay(sd.weight, e.name)||"—")}</td></tr>`;
           });
         }
       });
@@ -2363,13 +2384,13 @@ function buildExerciseTableHTML(exercises, opts) {
         } else {
           repsDisplay = repsVal + " reps";
         }
-        rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(repsDisplay)}</td><td>${escHtml(_normalizeWeightDisplay(e.weight)||"—")}</td></tr>`;
+        rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(repsDisplay)}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name)||"—")}</td></tr>`;
       } else {
-        rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(String(e.sets||"—"))}</td><td>${escHtml(String(e.reps||"—"))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight)||"—")}</td></tr>`;
+        rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(String(e.sets||"—"))}</td><td>${escHtml(String(e.reps||"—"))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name)||"—")}</td></tr>`;
       }
       if (e.setDetails && e.setDetails.length) {
         e.setDetails.forEach((sd, si) => {
-          rows += `<tr class="set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${escHtml(String(sd.reps||"—"))}</td><td>${escHtml(_normalizeWeightDisplay(sd.weight)||"—")}</td></tr>`;
+          rows += `<tr class="set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${escHtml(String(sd.reps||"—"))}</td><td>${escHtml(_normalizeWeightDisplay(sd.weight, e.name)||"—")}</td></tr>`;
         });
       }
     }
