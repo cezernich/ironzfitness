@@ -1279,13 +1279,12 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
     const _hyroxSplit = _compRec?.hyroxData ? _buildHyroxSplitSummary(_compRec.hyroxData) : "";
     let _displayEx = _logCompEx || w.exercises;
     // Equipment restriction also applies to logged-workout / plan-
-    // created weightlifting cards — previously only the scheduled-
-    // workout render branch filtered, which is why users with a
-    // "Dumbbells up to 50lb" restriction still saw Barbell Bench
-    // Press at 205 and 75/hand dumbbell entries. Same derive logic
-    // used by the scheduled branch: read strengthFocus / focus /
-    // legacy id pattern / session-name parse.
-    if (!_logCompEx && data.equipmentRestriction && w.type === "weightlifting" && typeof getEquipmentAdjustedExercises === "function") {
+    // created weightlifting cards. buildLoggedWorkoutCard doesn't
+    // receive the full `data` object, so we read equipmentRestrictions
+    // directly from localStorage (same pattern as getDataForDate).
+    let _logEqRestriction = null;
+    try { const _er = JSON.parse(localStorage.getItem("equipmentRestrictions") || "{}"); _logEqRestriction = _er[dateStr] || _er["permanent"] || null; } catch {}
+    if (!_logCompEx && _logEqRestriction && w.type === "weightlifting" && typeof getEquipmentAdjustedExercises === "function") {
       const _nameLc = String(w.notes || w.name || "").toLowerCase();
       const _nameFocus =
         /push/.test(_nameLc) ? "push" :
@@ -1299,7 +1298,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
       const _focus = w.strengthFocus || w.focus ||
         (String(w.id).match(/weightlifting-(\w+)-b/)?.[1]) ||
         _nameFocus;
-      _displayEx = getEquipmentAdjustedExercises(_displayEx, _focus, w.level || "intermediate", data.equipmentRestriction);
+      _displayEx = getEquipmentAdjustedExercises(_displayEx, _focus, w.level || "intermediate", _logEqRestriction);
     }
     const exTable    = hiitHeader + _hyroxSplit + buildExerciseTableHTML(_displayEx, { hiit: w.type === "hiit" || !!w.hiitMeta, hyrox: _isHyroxEx });
     const _completion = buildCompletionSection(cardId, w.type, _logCompEx || w.exercises, dateStr, w.duration || null);
