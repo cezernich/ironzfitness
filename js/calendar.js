@@ -5673,7 +5673,22 @@ function _estimateWeight(exercise, repRange, profile) {
   }
 
   const weight = Math.round((est1RM * pct) / 5) * 5;
-  return weight > 0 ? weight + " lbs" : "Bodyweight";
+  if (weight <= 0) return "Bodyweight";
+
+  // Dumbbell exercises display per-dumbbell load, not the summed total —
+  // a "Dumbbell Bench Press @ 150 lbs" reads as "grab 150 lb dumbbells"
+  // and is dangerously misleading. Halve the total and append "ea".
+  // Single-side variants (one-arm row, suitcase carry) keep the full
+  // load on the working hand, so they skip the halving.
+  const isDumbbell = (Array.isArray(exercise.equipment_required)
+                      && exercise.equipment_required.includes("dumbbell"))
+                  || /\bdumbbell\b|\bdb\b/i.test(exName);
+  const isSingleSide = /single.?arm|one.?arm|single.?dumbbell|suitcase/i.test(exName);
+  if (isDumbbell && !isSingleSide) {
+    const perDb = Math.round((weight / 2) / 5) * 5;
+    return perDb > 0 ? perDb + " lbs ea" : "Bodyweight";
+  }
+  return weight + " lbs";
 }
 
 /**
