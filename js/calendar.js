@@ -1268,7 +1268,11 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
             <div class="session-phase">${_logComplete ? "Completed" : "Logged"} · ${_wTypeLabel(w.type)}</div>
           </div>
           <div class="session-header-right">
-            ${displayDur ? `<span class="session-duration-badge">${isReduced ? "⬇ " : ""}${displayDur} min</span>` : ""}
+            ${(() => {
+              const actual = _getCompletionDuration(cardId);
+              if (actual) return `<span class="session-duration-badge">${actual} min</span>`;
+              return displayDur ? `<span class="session-duration-badge">${isReduced ? "⬇ " : ""}${displayDur} min</span>` : "";
+            })()}
             ${_buildUndoHeaderBtn(cardId, dateStr)}${_aiOverflow}
             <span class="card-chevron">▾</span>
           </div>
