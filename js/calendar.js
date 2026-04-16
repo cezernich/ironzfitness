@@ -279,7 +279,14 @@ function renderWeekOverview() {
     const data = getDataForDate(dateStr);
     const sessionRemoved = data.restriction && data.restriction.action === "remove";
     if (!sessionRemoved) {
-      const addType = (type) => { const k = type || "general"; byType[k] = (byType[k] || 0) + 1; };
+      const canonType = (t) => {
+        const s = String(t || "").toLowerCase();
+        if (s === "swimming") return "swim";
+        if (s === "cycling") return "bike";
+        if (s === "running") return "run";
+        return s || "general";
+      };
+      const addType = (type) => { const k = canonType(type); byType[k] = (byType[k] || 0) + 1; };
       if (data.planEntry) addType(data.planEntry.discipline || "run");
       data.scheduledWorkouts.forEach(w => addType(w.discipline || w.type));
       data.loggedWorkouts.forEach(w => addType(w.type));
@@ -2760,13 +2767,22 @@ function getDayTotals(dateStr) {
 
   if (data.planEntry) {
     const p = data.planEntry;
-    const effectLoad    = getEffectiveLoad(p.load, restriction);
-    const targetDur     = getRestrictedDuration(p.duration, p.load, restriction);
-    const rawSession    = (SESSION_DESCRIPTIONS[p.discipline] || {})[effectLoad]
-                       || (SESSION_DESCRIPTIONS[p.discipline] || {})[p.load];
-    const scaledSession = rawSession ? scaleSessionDuration(rawSession, targetDur) : rawSession;
-    if (scaledSession?.duration) totalMin += _parseDurMin(scaledSession.duration);
-    else if (targetDur)          totalMin += _parseDurMin(targetDur);
+    // If the user marked this plan session complete with an actual
+    // duration, that wins over the original estimate — same rule as
+    // scheduledWorkouts below.
+    const planCardId = `session-plan-${dateStr}-${p.raceId}`;
+    const actual = _parseDurMin(String(_getCompletionDuration(planCardId) || ""));
+    if (actual > 0) {
+      totalMin += actual;
+    } else {
+      const effectLoad    = getEffectiveLoad(p.load, restriction);
+      const targetDur     = getRestrictedDuration(p.duration, p.load, restriction);
+      const rawSession    = (SESSION_DESCRIPTIONS[p.discipline] || {})[effectLoad]
+                         || (SESSION_DESCRIPTIONS[p.discipline] || {})[p.load];
+      const scaledSession = rawSession ? scaleSessionDuration(rawSession, targetDur) : rawSession;
+      if (scaledSession?.duration) totalMin += _parseDurMin(scaledSession.duration);
+      else if (targetDur)          totalMin += _parseDurMin(targetDur);
+    }
   }
 
   data.scheduledWorkouts.forEach(w => {
