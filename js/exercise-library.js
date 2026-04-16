@@ -423,6 +423,11 @@ function getStretchRoutine(workout) {
 
 function renderStretchSuggestion(workout, containerEl) {
   if (!containerEl) return;
+  // Recovery / passive activities don't need a post-workout stretch —
+  // sauna, steam room, yoga, and mobility sessions are already stretch-
+  // adjacent or purely passive.
+  const type = String(workout?.type || workout?.discipline || "").toLowerCase();
+  if (workout?.isSauna || type === "wellness" || type === "yoga" || type === "mobility") return;
   const stretches = getStretchRoutine(workout);
   if (stretches.length === 0) return;
 
