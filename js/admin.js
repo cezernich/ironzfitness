@@ -413,7 +413,45 @@ async function adminToggleModuleActive(moduleId, currentActive) {
 
 let _adminExercises = [];
 
+// Admin table expects Supabase `exercise_library` shape (name, movement_pattern,
+// muscle_groups[], difficulty, tier, equipment_required[]). window.EXERCISE_DB
+// uses a different schema — map it here so the admin view doesn't need to
+// know the difference. Derives difficulty from tier for rows that don't
+// carry one explicitly.
+function _tierToDifficulty(tier) {
+  switch (tier) {
+    case 'primary':   return 'intermediate';
+    case 'secondary': return 'intermediate';
+    case 'tertiary':  return 'beginner';
+    default:          return '—';
+  }
+}
+
+function _adminShapeFromExerciseDB(ex) {
+  return {
+    id: ex.id,
+    name: ex.name,
+    movement_pattern: ex.pattern || ex.sheet || '—',
+    muscle_groups: Array.isArray(ex.muscleCategory) ? ex.muscleCategory : [],
+    difficulty: _tierToDifficulty(ex.tier),
+    tier: ex.tier || '—',
+    equipment_required: Array.isArray(ex.equipmentNeeded) ? ex.equipmentNeeded : [],
+  };
+}
+
 async function loadAdminExercises() {
+  // Primary source: window.EXERCISE_DB (generated from the spreadsheet +
+  // supplement — 307 exercises). Keeps the admin view in lockstep with
+  // what the planner + builders actually see.
+  if (Array.isArray(window.EXERCISE_DB) && window.EXERCISE_DB.length > 0) {
+    _adminExercises = window.EXERCISE_DB.map(_adminShapeFromExerciseDB);
+    _adminExercises.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    renderAdminExerciseStats();
+    renderAdminExercises();
+    return;
+  }
+  // Fallback: legacy Supabase exercise_library table. Only runs if
+  // exercise-data.js failed to load (script error, offline first boot).
   const client = window.supabaseClient;
   try {
     const { data, error } = await client.from('exercise_library').select('*').order('name');
