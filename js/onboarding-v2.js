@@ -2683,11 +2683,109 @@
     if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("workoutSchedule");
   }
 
+  // ── Slot templates (cowork-handoff/EXERCISE_DB_SPEC.md §Slot templates) ──
+  //
+  // Each focus maps to an ordered list of "slots". The planner fills slots
+  // one at a time via ExerciseDB.pick(), passing previously-picked
+  // exercises as diverseFrom so the next pick uses a different
+  // specificGoal. This is what spreads a chest day across general /
+  // upper-chest / chest-isolation instead of three incline variants.
+  //
+  // Sets/reps per slot role match the conservative defaults the legacy
+  // _STRENGTH_TEMPLATES used. Weight is left blank ("") for the user
+  // (or the per-exercise weight estimator) to fill.
+  const _SLOT_TEMPLATES = {
+    push: [
+      { role: "main-horizontal", pattern: "horizontal-push", tier: ["primary"],            sets: 4, reps: "6-8" },
+      { role: "main-vertical",   pattern: "vertical-push",   tier: ["primary"],            sets: 3, reps: "8-10" },
+      { role: "secondary-push",  pattern: "horizontal-push", tier: ["secondary"],          sets: 3, reps: "10",   diverseFrom: ["main-horizontal"] },
+      { role: "accessory-shldr", pattern: "vertical-push",   tier: ["secondary","tertiary"], sets: 3, reps: "12",   diverseFrom: ["main-vertical"] },
+      { role: "tri-isolation",   pattern: "isolation-arms",  specificGoal: "triceps",      sets: 3, reps: "12" },
+    ],
+    pull: [
+      { role: "main-hinge",      pattern: "hinge",           tier: ["primary"],            sets: 4, reps: "5" },
+      { role: "main-h-pull",     pattern: "horizontal-pull", tier: ["primary"],            sets: 4, reps: "8" },
+      { role: "main-v-pull",     pattern: "vertical-pull",   tier: ["primary","secondary"],sets: 4, reps: "AMRAP" },
+      { role: "secondary-pull",  pattern: "horizontal-pull", tier: ["secondary","tertiary"], sets: 3, reps: "12",  diverseFrom: ["main-h-pull"] },
+      { role: "bi-isolation",    pattern: "isolation-arms",  specificGoal: "biceps",       sets: 3, reps: "10" },
+    ],
+    legs: [
+      { role: "main-squat",      pattern: "squat",           tier: ["primary"],            sets: 4, reps: "5-8" },
+      { role: "main-hinge",      pattern: "hinge",           tier: ["primary"],            sets: 3, reps: "8" },
+      { role: "secondary-squat", pattern: "squat",           tier: ["secondary"],          sets: 3, reps: "10",   diverseFrom: ["main-squat"] },
+      { role: "leg-isolation",   pattern: "isolation-legs",                                sets: 3, reps: "12" },
+      { role: "calves",          pattern: "isolation-legs",  specificGoal: "calves",       sets: 4, reps: "15" },
+    ],
+    upper: [
+      { role: "main-h-push",     pattern: "horizontal-push", tier: ["primary"],            sets: 4, reps: "6-8" },
+      { role: "main-h-pull",     pattern: "horizontal-pull", tier: ["primary"],            sets: 4, reps: "8" },
+      { role: "main-v-push",     pattern: "vertical-push",   tier: ["primary"],            sets: 3, reps: "8-10" },
+      { role: "main-v-pull",     pattern: "vertical-pull",   tier: ["primary","secondary"],sets: 3, reps: "AMRAP" },
+      { role: "shldr-isolation", pattern: "vertical-push",   tier: ["tertiary"],           sets: 3, reps: "12" },
+    ],
+    lower: [
+      { role: "main-squat",      pattern: "squat",           tier: ["primary"],            sets: 4, reps: "5-8" },
+      { role: "main-hinge",      pattern: "hinge",           tier: ["primary"],            sets: 3, reps: "8" },
+      { role: "secondary-squat", pattern: "squat",           tier: ["secondary"],          sets: 3, reps: "10",   diverseFrom: ["main-squat"] },
+      { role: "ham-isolation",   pattern: "isolation-legs",  specificGoal: "hamstrings-knee-flexion", sets: 3, reps: "12" },
+      { role: "calves",          pattern: "isolation-legs",  specificGoal: "calves",       sets: 4, reps: "15" },
+    ],
+    full: [
+      { role: "main-squat",      pattern: "squat",           tier: ["primary"],            sets: 3, reps: "6-8" },
+      { role: "main-h-push",     pattern: "horizontal-push", tier: ["primary"],            sets: 3, reps: "6-8" },
+      { role: "main-h-pull",     pattern: "horizontal-pull", tier: ["primary"],            sets: 3, reps: "8" },
+      { role: "main-v-push",     pattern: "vertical-push",   tier: ["primary"],            sets: 3, reps: "8" },
+      { role: "core",            pattern: "core",            tier: ["primary","secondary"],sets: 3, reps: "45s" },
+    ],
+  };
+
+  // Fill a slot template via ExerciseDB.pick with diverseFrom chaining.
+  // Returns an array shaped like _STRENGTH_TEMPLATES entries:
+  //   [{ name, sets, reps, weight }, ...]
+  // Returns null when ExerciseDB isn't loaded OR when no slot can find a
+  // matching exercise, so callers fall back to the legacy template.
+  function _fillSlotTemplate(focus, userEquip) {
+    const tpl = _SLOT_TEMPLATES[focus];
+    const E = (typeof window !== "undefined" && window.ExerciseDB) || null;
+    if (!tpl || !E) return null;
+    const pickedByRole = {};
+    const out = [];
+    for (const slot of tpl) {
+      const filters = {
+        ...(slot.pattern       ? { pattern: slot.pattern }             : {}),
+        ...(slot.tier          ? { tier: slot.tier }                   : {}),
+        ...(slot.specificGoal  ? { specificGoal: slot.specificGoal }   : {}),
+        ...(Array.isArray(userEquip) && userEquip.length ? { equipment: userEquip } : {}),
+      };
+      const diverseFrom = (slot.diverseFrom || [])
+        .map(role => pickedByRole[role])
+        .filter(Boolean);
+      let chosen = E.pick(filters, 1, { diverseFrom })[0];
+      // Relax tier on miss — better to ship A pick than skip the slot.
+      if (!chosen && slot.tier) {
+        const relaxed = { ...filters };
+        delete relaxed.tier;
+        chosen = E.pick(relaxed, 1, { diverseFrom })[0];
+      }
+      if (!chosen) continue;
+      pickedByRole[slot.role] = chosen;
+      out.push({
+        name: chosen.name,
+        sets: slot.sets,
+        reps: slot.reps,
+        weight: chosen.usesWeights ? "" : "Bodyweight",
+      });
+    }
+    return out.length ? out : null;
+  }
+
   // Canonical strength exercise templates keyed by focus. These are
   // hand-picked baseline splits — not prescriptive per-set loads, just
   // movement patterns so the materialized session has SOMETHING to do.
   // Users can edit from the calendar card like any other scheduled
   // workout. Rep targets are intentionally conservative defaults.
+  // Used as fallback when ExerciseDB isn't loaded or no slot can find
+  // a matching exercise (see _fillSlotTemplate).
   const _STRENGTH_TEMPLATES = {
     push: [
       { name: "Barbell Bench Press",   sets: 4, reps: "6-8",  weight: "" },
@@ -2802,11 +2900,20 @@
     if (!spec) return null;
     const { _strengthFocus, ...cleanSpec } = spec;
     const session = Object.assign({}, base, cleanSpec);
+    // Read user's equipment profile so the slot-template picks honor it.
+    // Falls back to no filtering when the profile is empty or the helper
+    // isn't loaded — full library, gym assumed.
+    const _userEquip = (typeof window !== "undefined" && window.ExerciseDB && window.ExerciseDB.getUserEquipment)
+      ? (window.ExerciseDB.getUserEquipment() || [])
+      : [];
     if (customDayIdx && _state.strengthSetup && _state.strengthSetup.customMuscles) {
       const muscles = _state.strengthSetup.customMuscles[customDayIdx] || [];
-      session.exercises = _strengthExercisesForMuscles(muscles);
-    } else if (_strengthFocus && _STRENGTH_TEMPLATES[_strengthFocus]) {
-      session.exercises = _STRENGTH_TEMPLATES[_strengthFocus].map(ex => ({ ...ex }));
+      session.exercises = _strengthExercisesForMuscles(muscles, _userEquip);
+    } else if (_strengthFocus) {
+      // Try ExerciseDB-backed slot template first; fall back to the
+      // hardcoded baseline if the DB isn't loaded or returns nothing.
+      session.exercises = _fillSlotTemplate(_strengthFocus, _userEquip)
+        || (_STRENGTH_TEMPLATES[_strengthFocus] || []).map(ex => ({ ...ex }));
     }
 
     // Walking / rowing / yoga / mobility get a matching aiSession
@@ -2838,10 +2945,53 @@
   // Produce a 4-6 exercise list targeting the given muscle groups.
   // Used by _buildSessionForSport for strength-dayN (custom split)
   // sessions. Caps at 6 exercises so the session stays ~45-60 min.
-  function _strengthExercisesForMuscles(muscles) {
+  //
+  // Phase 4: when ExerciseDB is loaded, query it for muscle-matched
+  // exercises (respecting userEquip) with sub-target diversity. Falls
+  // back to the hardcoded _EX_BY_MUSCLE lookup when the DB isn't
+  // available or returns nothing — keeps strength sessions populated
+  // even if exercise-data.js fails to load.
+  function _strengthExercisesForMuscles(muscles, userEquip) {
     if (!Array.isArray(muscles) || muscles.length === 0) {
-      return _STRENGTH_TEMPLATES.full.map(ex => ({ ...ex }));
+      return _fillSlotTemplate("full", userEquip || [])
+        || _STRENGTH_TEMPLATES.full.map(ex => ({ ...ex }));
     }
+    // ExerciseDB path — pick 1-2 exercises per muscle category, deduped
+    // by name, capped at 6 total.
+    const E = (typeof window !== "undefined" && window.ExerciseDB) || null;
+    if (E) {
+      const equip = (Array.isArray(userEquip) && userEquip.length) ? userEquip : null;
+      const out = [];
+      const seen = new Set();
+      // Map onboarding muscle keys → muscleCategory tokens used in EXERCISE_DB
+      const muscleMap = {
+        chest: "chest", back: "back", shoulders: "shoulders",
+        biceps: "biceps", triceps: "triceps",
+        quads: "quads", hamstrings: "hamstrings", glutes: "glutes",
+        calves: "calves", core: "core", fullbody: "full-body",
+      };
+      for (const m of muscles) {
+        const cat = muscleMap[m] || m;
+        const filters = { muscle: cat };
+        if (equip) filters.equipment = equip;
+        const picked = E.pick(filters, 2, { diverseFrom: out });
+        for (const ex of picked) {
+          if (seen.has(ex.name) || out.length >= 6) continue;
+          seen.add(ex.name);
+          // Heuristic sets/reps by tier so larger compounds get more sets.
+          const sets = ex.tier === "primary" ? 4 : 3;
+          const reps = ex.tier === "tertiary" ? "12-15" : ex.tier === "primary" ? "6-8" : "8-12";
+          out.push({
+            name: ex.name,
+            sets,
+            reps,
+            weight: ex.usesWeights ? "" : "Bodyweight",
+          });
+        }
+      }
+      if (out.length) return out;
+    }
+    // Legacy fallback — hardcoded muscle → exercise lookup.
     const _EX_BY_MUSCLE = {
       chest:      [{ name: "Barbell Bench Press",      sets: 4, reps: "6-8",  weight: "" }, { name: "Incline Dumbbell Press", sets: 3, reps: "10", weight: "" }],
       back:       [{ name: "Barbell Row",              sets: 4, reps: "8",    weight: "" }, { name: "Lat Pulldown",           sets: 3, reps: "10-12", weight: "" }],
