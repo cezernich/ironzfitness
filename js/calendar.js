@@ -7953,9 +7953,50 @@ function saveQuickActivity() {
     }
   }
 
+  // Collect any manually entered cardio intervals from the DOM rows
+  // (the interval/phase rows the user typed: Warm up, Interval Fast, etc.)
+  // Previously these were silently dropped at save time — only the
+  // generatedSession checkbox path preserved structured body data.
+  let manualIntervals = null;
+  const cardioRows = document.querySelectorAll("#qe-cardio-interval-rows [id^='qe-crow-']");
+  if (cardioRows.length) {
+    const ivs = [];
+    cardioRows.forEach(row => {
+      const rowId = row.id.replace("qe-crow-", "");
+      const name = document.getElementById("qe-cphase-" + rowId)?.value?.trim() || "";
+      if (!name) return;
+      const iv = {
+        name,
+        duration: typeof _qeCardioRowDuration === "function" ? _qeCardioRowDuration(rowId) : "",
+        effort: document.getElementById("qe-ceffort-" + rowId)?.value || "Z2",
+        details: document.getElementById("qe-cdetails-" + rowId)?.value || "",
+      };
+      const repsVal = parseInt(document.getElementById("qe-creps-" + rowId)?.value);
+      if (repsVal > 1) {
+        iv.reps = repsVal;
+        const restVal = document.getElementById("qe-crest-" + rowId)?.value;
+        if (restVal) iv.restDuration = restVal + " min";
+      }
+      if (row.dataset.repeatGroup) {
+        iv.repeatGroup = row.dataset.repeatGroup;
+        if (row.dataset.groupSets) iv.groupSets = parseInt(row.dataset.groupSets) || 3;
+      }
+      ivs.push(iv);
+    });
+    if (ivs.length) {
+      manualIntervals = {
+        title: notes || "Custom " + capitalize(type) + " Session",
+        intervals: ivs,
+      };
+    }
+  }
+
   let workouts = [];
   try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
-  workouts.unshift({ id: generateId(), date: dateStr, type, notes, exercises: [], ...(generatedSession ? { generatedSession } : {}) });
+  const entry = { id: generateId(), date: dateStr, type, notes, exercises: [] };
+  if (generatedSession)  entry.generatedSession = generatedSession;
+  if (manualIntervals)   entry.aiSession = manualIntervals;
+  workouts.unshift(entry);
   localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
   if (typeof trackWorkoutLogged === "function") trackWorkoutLogged({ type, date: dateStr, source: "quick_entry" });
 
