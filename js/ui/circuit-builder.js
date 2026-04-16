@@ -92,7 +92,7 @@
     ];
 
     const body = `
-      ${_modalHeader("Circuit Session", "window.CircuitBuilder.closeAll()")}
+      ${_modalHeader("Circuit Session", "window.CircuitBuilder.closeAll();if(typeof openQuickEntry==='function')openQuickEntry('" + _esc(_currentDateStr) + "')")}
       ${_modalDots(0, 3)}
       <div class="circuit-modal-body">
         <div class="builder-field">
