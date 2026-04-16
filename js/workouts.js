@@ -463,9 +463,24 @@ const BODYWEIGHT_LIBRARY = {
  * Returns: "bodyweight" | "dumbbells" | "barbell" | "cables"
  */
 function inferEquipment(exercise) {
+  // Check the exercise NAME first — it's the most reliable signal.
+  // "Barbell Bench Press" is a barbell exercise regardless of whether
+  // the weight field says "205" or "bar + 80". The old code only
+  // checked the weight string, so every exercise with a bare-number
+  // weight (no "barbell" / "cable" / "bodyweight" keyword) defaulted
+  // to "dumbbells" — which made the equipment restriction clamp
+  // barbell exercises instead of filtering them out.
+  const name = (exercise.name || "").toLowerCase();
+  if (/\bbodyweight\b|\bbw\b|\bpush[- ]?up\b|\bpull[- ]?up\b|\bdip\b|\bplank\b|\blunge\b|\bsquat jump\b|\bburpee/i.test(name)) return "bodyweight";
+  if (/\bbarbell\b|\bbar\b|\bbb\b|\bclose[- ]?grip\b|\bdeadlift\b|\bfront squat\b|\bback squat\b|\boverhead press\b|\bohp\b|\bclean\b|\bsnatch\b|\bjerk\b|\bthruster\b/i.test(name)) return "barbell";
+  if (/\bdumb(?:b?ell)?\b|\bdb\b/i.test(name)) return "dumbbells";
+  if (/\bcable\b|\bmachine\b|\blat pull\b|\bleg press\b|\bleg curl\b|\bleg ext\b|\bpec\s?fly\b|\bsmith\b/i.test(name)) return "cables";
+  if (/\bkettle\s?bell\b|\bkb\b/i.test(name)) return "kettlebell";
+
+  // Fall back to the weight string for exercises with generic names.
   const w = (exercise.weight || "").toLowerCase().trim();
   if (!w || w === "bodyweight" || w === "—" || w === "-" || w.startsWith("bodyweight")) return "bodyweight";
-  if (w.includes("bar ") || w.includes("barbell") || w.includes("belt")) return "barbell";
+  if (w.includes("bar") || w.includes("barbell") || w.includes("belt")) return "barbell";
   if (w.includes("cable") || w.includes("machine") || w.includes("assisted") ||
       w === "light" || w === "moderate" || w === "heavy") return "cables";
   return "dumbbells";
