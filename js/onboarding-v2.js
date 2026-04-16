@@ -402,6 +402,10 @@
     _state.longDays = { longRun: null, longRide: null };
     _state.schedule = { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] };
     _state._editingPlanId = null;
+    // Re-pre-fill strength setup from plan details on the next
+    // visit to bp-v2-6 (one-shot flag so the user's manual tweaks
+    // aren't clobbered mid-flow).
+    _state._strengthSyncedFromPlan = false;
   }
 
   // Default start = the Monday on or after today (ISO yyyy-mm-dd).
@@ -1655,7 +1659,34 @@
     if (_state.strengthSetup.split === "custom") _renderCustomDayList();
   }
   function _applyStrengthCountSideEffects() {
+    const sports = _state.selectedSports || [];
+    const strengthOnly = sports.length > 0 && sports.every(s => s === "strength");
+    // Mixed-sport users already answered days/week + session length
+    // on bp-v2-3-norace. Re-ask them here would be repetitive, so
+    // pre-fill the strength-days counter from planDetails.daysPerWeek
+    // (if the user hasn't already set it on a previous trip through
+    // this screen) and pre-select the matching session-length chip.
+    // The chip row is still shown so the user can override — it just
+    // lands on the value they already picked.
+    if (!strengthOnly && _state._strengthSyncedFromPlan !== true) {
+      const planDays = parseInt(_state.planDetails.daysPerWeek, 10);
+      if (planDays > 0) _state.strengthSetup.sessionsPerWeek = Math.max(0, Math.min(7, planDays));
+      const planLen = parseInt(_state.planDetails.sessionLength, 10);
+      if (planLen > 0) _state.strengthSetup.sessionLength = planLen;
+      _state._strengthSyncedFromPlan = true;
+    }
+
     const count = _state.strengthSetup.sessionsPerWeek;
+    const countEl = document.getElementById("bp-v2-strength-count");
+    if (countEl) countEl.textContent = String(count);
+
+    // Sync the session-length chip so the pre-populated value reads
+    // as selected instead of the static markup default.
+    const curLen = String(_state.strengthSetup.sessionLength || 45);
+    document.querySelectorAll("#bp-v2-strength-rest [data-str-length]").forEach(el => {
+      el.classList.toggle("is-selected", el.getAttribute("data-str-length") === curLen);
+    });
+
     const rest = document.getElementById("bp-v2-strength-rest");
     if (rest) rest.style.display = count === 0 ? "none" : "";
     const rec = document.getElementById("bp-v2-split-rec");
@@ -1669,8 +1700,6 @@
     // bp-v2-3-norace instead, so showing them twice would be redundant.
     const blockSection = document.getElementById("bp-v2-strength-block-section");
     if (blockSection) {
-      const sports = _state.selectedSports || [];
-      const strengthOnly = sports.length > 0 && sports.every(s => s === "strength");
       blockSection.style.display = strengthOnly ? "" : "none";
       // Seed the start-date input with the default (next Monday) so
       // it's never blank when the strength-only user lands here.
