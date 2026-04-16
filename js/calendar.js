@@ -1277,7 +1277,30 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
     const _isHyroxEx = w.type === "hyrox" || w.isHyrox;
     const _compRec = _isHyroxEx ? _getCompletionRecord(cardId) : null;
     const _hyroxSplit = _compRec?.hyroxData ? _buildHyroxSplitSummary(_compRec.hyroxData) : "";
-    const _displayEx = _logCompEx || w.exercises;
+    let _displayEx = _logCompEx || w.exercises;
+    // Equipment restriction also applies to logged-workout / plan-
+    // created weightlifting cards — previously only the scheduled-
+    // workout render branch filtered, which is why users with a
+    // "Dumbbells up to 50lb" restriction still saw Barbell Bench
+    // Press at 205 and 75/hand dumbbell entries. Same derive logic
+    // used by the scheduled branch: read strengthFocus / focus /
+    // legacy id pattern / session-name parse.
+    if (!_logCompEx && data.equipmentRestriction && w.type === "weightlifting" && typeof getEquipmentAdjustedExercises === "function") {
+      const _nameLc = String(w.notes || w.name || "").toLowerCase();
+      const _nameFocus =
+        /push/.test(_nameLc) ? "push" :
+        /pull/.test(_nameLc) ? "pull" :
+        /leg/.test(_nameLc)  ? "legs" :
+        /upper/.test(_nameLc) ? "upper" :
+        /lower/.test(_nameLc) ? "lower" :
+        /chest|bench|press/.test(_nameLc) ? "push" :
+        /back|row/.test(_nameLc) ? "pull" :
+        "full";
+      const _focus = w.strengthFocus || w.focus ||
+        (String(w.id).match(/weightlifting-(\w+)-b/)?.[1]) ||
+        _nameFocus;
+      _displayEx = getEquipmentAdjustedExercises(_displayEx, _focus, w.level || "intermediate", data.equipmentRestriction);
+    }
     const exTable    = hiitHeader + _hyroxSplit + buildExerciseTableHTML(_displayEx, { hiit: w.type === "hiit" || !!w.hiitMeta, hyrox: _isHyroxEx });
     const _completion = buildCompletionSection(cardId, w.type, _logCompEx || w.exercises, dateStr, w.duration || null);
     const movePanel = buildSessionMovePanel(cardId, "logged", w.id, dateStr);
