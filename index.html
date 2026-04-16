@@ -2933,6 +2933,12 @@
   <script src="js/deterministic-variant-rotation.js"></script>
   <!-- Shared per-session validator — used by Add Session flow + Workout Sharing import validator -->
   <script src="js/workout-validator.js"></script>
+  <!-- Exercise database (cowork-handoff/EXERCISE_DB_SPEC.md). exercise-data.js
+       must load before exercise-filters.js (which expects window.EXERCISE_DB),
+       and both must load before planner.js so plan generation can query
+       window.ExerciseDB. -->
+  <script src="exercise-data.js"></script>
+  <script src="exercise-filters.js"></script>
   <script src="js/planner.js"></script>
   <!-- Triathlon gear checklist (SPEC_triathlon_gear_checklist.md) — data + modal -->
   <script src="js/gear-checklist.js"></script>
@@ -3388,7 +3394,8 @@
             <div class="ob-v2-chips">
               <button type="button" class="ob-v2-chip is-selected" data-gym="full" onclick="OnboardingV2._selectGym(this)">Full Gym</button>
               <button type="button" class="ob-v2-chip" data-gym="home" onclick="OnboardingV2._selectGym(this)">Home Gym</button>
-              <button type="button" class="ob-v2-chip" data-gym="minimal" onclick="OnboardingV2._selectGym(this)">Minimal / BW</button>
+              <button type="button" class="ob-v2-chip" data-gym="minimal" onclick="OnboardingV2._selectGym(this)">Minimal</button>
+              <button type="button" class="ob-v2-chip" data-gym="bodyweight" onclick="OnboardingV2._selectGym(this)">Bodyweight Only</button>
             </div>
           </div>
           <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._saveSportsAndContinue()">Continue</button>
