@@ -1862,9 +1862,15 @@
     _BP_DAYS.forEach(d => {
       if (!Array.isArray(_state.schedule[d])) _state.schedule[d] = [];
     });
-    // Seed whenever the schedule is entirely empty (first entry to bp-5)
+    // Seed only on FIRST entry to bp-5 in a fresh build flow. Skip the
+    // seed entirely when editing an existing plan — even if the saved
+    // template was empty (older saves predate buildPlanTemplate), we
+    // shouldn't re-fill all 7 days with defaults; that overwrites the
+    // user's intent. Better to show an empty grid and let them build
+    // from scratch.
     const allEmpty = _BP_DAYS.every(d => _state.schedule[d].length === 0);
-    if (allEmpty) _seedSchedule();
+    const isEditing = !!_state._editingPlanId;
+    if (allEmpty && !isEditing) _seedSchedule();
     // Sync the start-date input with state, seeding the default if unset.
     const dateInput = document.getElementById("bp-v2-start-date");
     if (dateInput) {
@@ -1922,13 +1928,25 @@
       const d = _state.longDays.longRide;
       if (!_state.schedule[d].length) _state.schedule[d] = ["bike-long"];
     }
-    // Distribute remaining endurance sports round-robin across remaining days
+    // Distribute remaining endurance sports round-robin across remaining
+    // days, but cap at the user's requested daysPerWeek. Previously this
+    // filled ALL 7 days then carved rest from the leftovers, which meant
+    // a "Run only, 1 day/week" user got runs on 5 days because the
+    // post-fill carve respected daysPerWeek but the pre-fill didn't.
     if (endurance.length) {
+      const wantedTraining = Math.max(1, Math.min(7,
+        parseInt(_state.planDetails.daysPerWeek, 10) || 5
+      ));
+      const alreadyAnchored = _BP_DAYS.filter(d => _state.schedule[d].length > 0).length;
+      const remainingSlots = Math.max(0, wantedTraining - alreadyAnchored);
+      let placed = 0;
       let idx = 0;
       _BP_DAYS.forEach(d => {
         if (_state.schedule[d].length) return;
+        if (placed >= remainingSlots) return;
         _state.schedule[d].push(endurance[idx % endurance.length]);
         idx++;
+        placed++;
       });
     }
 
