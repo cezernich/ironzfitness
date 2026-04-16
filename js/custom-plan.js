@@ -1521,6 +1521,12 @@ function cpManualAddCardioRow(prefill) {
   const pName = prefill?.name || "";
   const pDetails = prefill?.details || "";
   const pEffort = prefill?.effort || "Z2";
+  // Phase 7 — per-interval discipline tag for brick sessions (bike / T / run).
+  // Only rendered + collected when the selected type is "brick"; mirrors
+  // Add Session's qe-cdisc-* select.
+  const isBrick = _cpManualSelectedType === "brick";
+  const pDisc = prefill?.discipline || "";
+  const _dsel = v => pDisc === v ? " selected" : "";
   let pMode = "time", pDist = "", pMin = "";
   const dur = prefill?.duration || "";
   if (dur) {
@@ -1539,7 +1545,12 @@ function cpManualAddCardioRow(prefill) {
   div.innerHTML = `
     <div class="eiv-header">
       <span class="drag-handle" title="Drag to reorder">⠿</span>
-      <input type="text" class="eiv-phase-input" id="cp-cphase-${id}" placeholder="e.g. Warm-up" value="${_cpEsc(pName)}" />
+      ${isBrick ? `<select id="cp-cdisc-${id}" class="seg-discipline" style="width:auto;padding:4px 24px 4px 6px;font-size:0.82rem">
+        <option value="bike"${_dsel("bike")}>Bike</option>
+        <option value="transition"${_dsel("transition")}>T</option>
+        <option value="run"${_dsel("run")}>Run</option>
+      </select>` : ""}
+      <input type="text" class="eiv-phase-input" id="cp-cphase-${id}" placeholder="${isBrick ? "e.g. Steady Ride" : "e.g. Warm-up"}" value="${_cpEsc(pName)}" />
       <button class="remove-exercise-btn" onclick="cpManualRemoveCardioRow(${id})">${_CP_TRASH_SVG}</button>
     </div>
     <div class="eiv-fields">
@@ -1766,6 +1777,12 @@ function customPlanSaveManual() {
         effort: document.getElementById(`cp-ceffort-${id}`)?.value || "Z2",
         details: document.getElementById(`cp-cdetails-${id}`)?.value.trim() || "",
       };
+      // Phase 7 — brick sessions tag each interval with a discipline so
+      // the calendar's brick-aware renderer can split bike/T/run segments.
+      if (type === "brick") {
+        const discEl = document.getElementById(`cp-cdisc-${id}`);
+        if (discEl) iv.discipline = discEl.value || "bike";
+      }
       if (row.dataset.repeatGroup) {
         iv.repeatGroup = row.dataset.repeatGroup;
         if (row.dataset.groupSets) iv.groupSets = parseInt(row.dataset.groupSets) || 3;
