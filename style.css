@@ -18234,18 +18234,22 @@ body.ob-v2-lock { overflow: hidden; }
   border-color: var(--cal-red);
 }
 /* Today ring on a side card — visible whenever today isn't the
-   center (selected) day, so users can always see where today is. */
+   center (selected) day, so users can always see where today is.
+   Red border + subtle red glow so "today" reads instantly on every
+   theme. The .selected state already uses red, so when today is
+   also the currently-selected day the ring just stays red. */
 .dc.s.is-today {
   opacity: 1;
-  border-color: var(--color-text);
+  border-color: var(--cal-red);
   border-width: 2px;
   background: var(--color-surface-2);
+  box-shadow: 0 0 0 3px rgba(230, 57, 70, 0.12);
 }
 .dc.s.is-today .s-lb {
   color: var(--cal-red);
 }
 .dc.s.is-today .s-nm {
-  color: var(--color-text);
+  color: var(--cal-red);
 }
 .dc.s.is-today.selected {
   border-color: var(--cal-red);
