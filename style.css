@@ -13207,6 +13207,23 @@ button:active {
   color: var(--color-text);
 }
 
+.ars-dismiss-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.ars-dismiss-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
 /* User-added workout badge */
 .session-card--user-added .session-name::before {
   content: "+";

@@ -343,6 +343,10 @@
           <p>${_esc(warning.message)}</p>
           ${itemsHtml ? `<p><b>Already this week:</b></p><ul class="ars-list">${itemsHtml}</ul>` : ""}
           <p>Are you sure you want to save?</p>
+          <label class="ars-dismiss-row">
+            <input type="checkbox" id="ars-stress-dismiss" />
+            <span>Don't show this warning again</span>
+          </label>
         </div>
         <div class="post-test-modal-actions">
           <button class="rating-skip-btn" id="ars-stress-cancel">Cancel</button>
@@ -353,9 +357,29 @@
     `;
     document.body.appendChild(overlay);
     requestAnimationFrame(() => overlay.classList.add("visible"));
+    const dismissIfChecked = () => {
+      if (overlay.querySelector("#ars-stress-dismiss")?.checked && warning.rule) {
+        _dismissStressRule(warning.rule);
+      }
+    };
     overlay.querySelector("#ars-stress-cancel").onclick = () => { _close(id); onResolve("cancel"); };
     overlay.querySelector("#ars-stress-other-day").onclick = () => { _close(id); onResolve("pick_different_day"); };
-    overlay.querySelector("#ars-stress-save").onclick = () => { _close(id); onResolve("save_anyway"); };
+    overlay.querySelector("#ars-stress-save").onclick = () => { dismissIfChecked(); _close(id); onResolve("save_anyway"); };
+  }
+
+  const _STRESS_DISMISS_KEY = "runStressDismissedRules";
+  function _getDismissedStressRules() {
+    try { return JSON.parse(localStorage.getItem(_STRESS_DISMISS_KEY)) || []; }
+    catch { return []; }
+  }
+  function _dismissStressRule(rule) {
+    const cur = new Set(_getDismissedStressRules());
+    cur.add(rule);
+    localStorage.setItem(_STRESS_DISMISS_KEY, JSON.stringify([...cur]));
+    if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey(_STRESS_DISMISS_KEY);
+  }
+  function _isStressRuleDismissed(rule) {
+    return _getDismissedStressRules().includes(rule);
   }
 
   function _showHardBlockModal(blocks) {
@@ -549,9 +573,10 @@
       const existing = plannedWorkoutForDate(date);
       const proceedAfterStressCheck = (mode) => {
         const c2 = evaluateConstraints(w, date);
-        if (c2.warnings.length) {
+        const activeWarnings = (c2.warnings || []).filter(w0 => !_isStressRuleDismissed(w0.rule));
+        if (activeWarnings.length) {
           // Surface the highest-priority warning (weekly_hard_count first if present).
-          const stress = c2.warnings.find(x => x.rule === "weekly_hard_count") || c2.warnings[0];
+          const stress = activeWarnings.find(x => x.rule === "weekly_hard_count") || activeWarnings[0];
           _showStressCheckModal(stress, decision => {
             if (decision === "save_anyway") {
               save(w, date, mode, notes);
