@@ -32,8 +32,8 @@
   }
 
   function _searchKey(s) {
-    if (window.IronZExerciseDB && window.IronZExerciseDB._searchKey) {
-      return window.IronZExerciseDB._searchKey(s);
+    if (window.ExerciseDB && typeof window.ExerciseDB.searchKey === "function") {
+      return window.ExerciseDB.searchKey(s);
     }
     return String(s == null ? "" : s).toLowerCase().replace(/[^a-z0-9]/g, "");
   }
@@ -143,6 +143,43 @@
     _positionDropdown(_activeInput);
   }
 
+  // Cached typeahead-shape array — { name, muscleGroup, _searchKey }.
+  // Built lazily from window.EXERCISE_DB on first lookup. Rebuilds if
+  // EXERCISE_DB ever changes length (defensive — the array is loaded
+  // once at script-eval and never mutated, but check anyway).
+  let _typeaheadCache = null;
+  let _typeaheadCacheLen = 0;
+
+  function _capitalize(s) {
+    if (!s) return null;
+    return String(s).charAt(0).toUpperCase() + String(s).slice(1);
+  }
+
+  function _buildTypeaheadIndex() {
+    const src = Array.isArray(window.EXERCISE_DB) ? window.EXERCISE_DB : [];
+    if (_typeaheadCache && _typeaheadCacheLen === src.length) return _typeaheadCache;
+    // Dedupe by lowercase name. EXERCISE_DB carries some legacy duplicates
+    // across sheets (e.g. "Pull-ups" in both strength and circuit); the
+    // typeahead should show each name once. First occurrence wins so
+    // strength-sheet rows (loaded first) take priority for muscleGroup.
+    const seen = new Set();
+    _typeaheadCache = [];
+    for (const ex of src) {
+      const lower = String(ex.name || "").toLowerCase();
+      if (!lower || seen.has(lower)) continue;
+      seen.add(lower);
+      _typeaheadCache.push({
+        name: ex.name,
+        // Display column. Prefer first muscleCategory token (capitalized);
+        // fall back to the raw primaryMuscles string for legacy rows.
+        muscleGroup: _capitalize((ex.muscleCategory || [])[0]) || ex.primaryMuscles || null,
+        _searchKey: _searchKey(ex.name),
+      });
+    }
+    _typeaheadCacheLen = src.length;
+    return _typeaheadCache;
+  }
+
   function _updateForInput(input) {
     const query = (input.value || "").trim();
     _currentQuery = query;
@@ -150,13 +187,10 @@
       if (_activeInput === input) _hideDropdown();
       return;
     }
-    const db = window.IronZExerciseDB && window.IronZExerciseDB.get();
-    if (!db) {
-      // Database isn't loaded yet — kick off the load and wait for the next
-      // keystroke. No suggestions on this stroke, but never an error.
-      if (window.IronZExerciseDB) window.IronZExerciseDB.load().then(() => {
-        if (_activeInput === input) _updateForInput(input);
-      });
+    const db = _buildTypeaheadIndex();
+    if (!db || db.length === 0) {
+      // EXERCISE_DB not loaded yet (script ordering issue) — bail
+      // silently. The user keeps typing; the next keystroke retries.
       return;
     }
     _activeInput    = input;
