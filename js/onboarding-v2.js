@@ -1376,7 +1376,12 @@
     if (sports.includes("swim"))     sections.push(_thresholdSection("swim", "Swimming", "swim", THRESHOLD_METHODS.swim));
     if (sports.includes("bike"))     sections.push(_thresholdSection("bike", "Cycling", "bike", THRESHOLD_METHODS.bike));
     if (sports.includes("run"))      sections.push(_thresholdSection("run", "Running", "run", THRESHOLD_METHODS.run));
-    if (sports.includes("strength")) sections.push(_strengthThresholdSection());
+    // Bodyweight-only users have no meaningful 1RMs to report —
+    // skip the Squat / Bench / Deadlift threshold section entirely.
+    // Their plan will render bodyweight-library exercises instead.
+    if (sports.includes("strength") && _state.gymAccess !== "bodyweight") {
+      sections.push(_strengthThresholdSection());
+    }
     if (sports.includes("hyrox"))    sections.push(_thresholdSection("hyrox", "Hyrox", "trophy", THRESHOLD_METHODS.hyrox));
     container.innerHTML = sections.join("");
     _hydrateIcons(container);
@@ -2596,6 +2601,23 @@
       _writeScheduleSessions();
     } catch (e) {
       console.warn("[OnboardingV2] writing schedule sessions failed", e);
+    }
+
+    // Bodyweight-only users: persist a permanent equipment restriction with
+    // empty `available` so the existing filterByEquipment path strips every
+    // barbell/dumbbell/cable/kettlebell exercise and falls through to the
+    // BODYWEIGHT_LIBRARY substitute when rendering strength sessions.
+    if (_state.gymAccess === "bodyweight") {
+      let eqR = {};
+      try { eqR = JSON.parse(localStorage.getItem("equipmentRestrictions")) || {}; } catch {}
+      eqR["permanent"] = {
+        available: [],
+        note: "Bodyweight only (from Build a Plan)",
+        permanent: true,
+        createdAt: new Date().toISOString()
+      };
+      localStorage.setItem("equipmentRestrictions", JSON.stringify(eqR));
+      if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("equipmentRestrictions");
     }
 
     _lsSet("surveyComplete", "1");

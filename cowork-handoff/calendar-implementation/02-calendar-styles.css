@@ -1,0 +1,602 @@
+/* ═══════════════════════════════════════════════════════
+   CALENDAR REDESIGN — Add these styles to style.css
+   (replace any existing .calendar-header, .calendar-grid,
+    .cal-nav-btn, .cal-zoom-btn, .cal-this-week-btn,
+    .cal-add-header-btn styles)
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Calendar card wrapper ── */
+.cal-card-wrap {
+  padding: 16px 0 12px !important;
+}
+
+/* ── Header ── */
+.cal-hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+  margin-bottom: 14px;
+}
+.cal-hdr-l {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cal-hdr-r {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cal-nb {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1.5px solid #e8e8ec;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s;
+}
+.cal-nb:hover {
+  background: #f0f0f4;
+}
+.cal-nb svg {
+  width: 12px;
+  height: 12px;
+  stroke: #999;
+}
+.cal-today-btn {
+  background: var(--dark, #1a1a2e);
+  border-color: var(--dark, #1a1a2e);
+}
+.cal-today-btn svg {
+  stroke: #fff;
+}
+.cal-mo {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dark, #1a1a2e);
+  white-space: nowrap;
+}
+.cal-toggle {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1.5px solid #e8e8ec;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s;
+}
+.cal-toggle svg {
+  width: 14px;
+  height: 14px;
+  stroke: #999;
+  fill: none;
+}
+.cal-toggle.active {
+  background: var(--dark, #1a1a2e);
+  border-color: var(--dark, #1a1a2e);
+}
+.cal-toggle.active svg {
+  stroke: #fff;
+}
+.qa-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--dark, #1a1a2e);
+  color: #fff;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+}
+.qa-btn svg {
+  width: 10px;
+  height: 10px;
+  stroke: #fff;
+}
+
+/* ── WEEK VIEW: Carousel ── */
+.car-w {
+  position: relative;
+  overflow: hidden;
+}
+.car {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 0 16px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  scroll-padding: 0 16px;
+}
+.car::-webkit-scrollbar {
+  display: none;
+}
+
+/* Day card base */
+.dc {
+  flex-shrink: 0;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  scroll-snap-align: center;
+  position: relative;
+}
+
+/* Side cards (non-selected days) */
+.dc.s {
+  width: 56px;
+  background: #f8f8fa;
+  border: 1.5px solid #eeeeef;
+  padding: 10px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  opacity: 0.65;
+}
+.dc.s:hover {
+  opacity: 0.85;
+  background: #f0f0f4;
+}
+.dc.s.selected {
+  opacity: 0.9;
+  border-color: var(--red, #e63946);
+}
+.s-lb {
+  font-size: 9px;
+  font-weight: 600;
+  color: #bbb;
+  text-transform: uppercase;
+}
+.s-nm {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--dark, #1a1a2e);
+  margin: 3px 0 8px;
+}
+.s-dots {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+}
+.s-dot {
+  width: 16px;
+  height: 3.5px;
+  border-radius: 2px;
+}
+.s-rest {
+  font-size: 7px;
+  font-weight: 600;
+  color: #d0d0d0;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+.s-check {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--green, #2ecc71);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+}
+.s-check svg {
+  width: 8px;
+  height: 8px;
+  stroke: #fff;
+  stroke-width: 3;
+}
+
+/* Center card (today) */
+.dc.c {
+  width: 120px;
+  background: var(--dark, #1a1a2e);
+  border: 1.5px solid var(--dark, #1a1a2e);
+  padding: 12px 10px;
+  color: #fff;
+  opacity: 1;
+}
+.dc.c::after {
+  content: '';
+  position: absolute;
+  top: -30px;
+  right: -30px;
+  width: 80px;
+  height: 80px;
+  background: rgba(230, 57, 70, 0.1);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.c-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+.c-dl {
+  font-size: 9px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.c-pill {
+  font-size: 7px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--red, #e63946);
+  background: rgba(230, 57, 70, 0.12);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.c-num {
+  font-size: 26px;
+  font-weight: 800;
+  margin: 0 0 8px;
+  line-height: 1;
+}
+.c-time {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.35);
+  font-weight: 500;
+  margin-top: 6px;
+}
+
+/* Workout icon circles (inside center card) */
+.wo-cir {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.wc {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+}
+.wc svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.wc.run { background: rgba(78, 205, 196, 0.18); }
+.wc.run svg { stroke: #4ecdc4; }
+.wc.str { background: rgba(230, 57, 70, 0.18); }
+.wc.str svg { stroke: #e63946; }
+.wc.swim { background: rgba(108, 92, 231, 0.18); }
+.wc.swim svg { stroke: #6c5ce7; }
+.wc.bike { background: rgba(244, 162, 97, 0.18); }
+.wc.bike svg { stroke: #f4a261; }
+/* Intensity ring on workout circles */
+.wc::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+}
+.wc.il::after { border-color: #4ecdc4; }  /* low */
+.wc.im::after { border-color: #f4a261; }  /* medium */
+.wc.ih::after { border-color: #e63946; }  /* high */
+.wc.ie::after { border-color: #6c5ce7; }  /* endurance */
+
+/* ── MONTH VIEW: Grid ── */
+.month-grid {
+  padding: 0 12px;
+}
+.month-dow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 6px;
+}
+.month-dow span {
+  text-align: center;
+  font-size: 9px;
+  font-weight: 600;
+  color: #bbb;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.month-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+.md {
+  border-radius: 10px;
+  padding: 6px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  min-height: 56px;
+}
+.md:hover {
+  background: #f0f0f4;
+}
+.md.today {
+  background: var(--dark, #1a1a2e);
+  border-radius: 10px;
+}
+.md.today .md-num {
+  color: #fff;
+}
+.md.today .md-rest {
+  color: rgba(255, 255, 255, 0.4);
+}
+.md.other-month {
+  opacity: 0.3;
+}
+.md.selected {
+  box-shadow: inset 0 0 0 2px var(--red, #e63946);
+  border-radius: 10px;
+}
+.md-num {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--dark, #1a1a2e);
+  margin-bottom: 4px;
+}
+.md-dots {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.md-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.md-rest {
+  font-size: 6px;
+  color: #d0d0d0;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  margin-top: 2px;
+}
+.md-check {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--green, #2ecc71);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+.md-check svg {
+  width: 6px;
+  height: 6px;
+  stroke: #fff;
+  stroke-width: 3;
+}
+
+/* ── Intensity color classes ── */
+.c-low  { background: #4ecdc4; }
+.c-med  { background: #f4a261; }
+.c-high { background: #e63946; }
+.c-end  { background: #6c5ce7; }
+
+/* ── Week overview bar ── */
+.wk-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px 0;
+  border-top: 1px solid #f0f0f0;
+  margin-top: 10px;
+}
+.wk-lb {
+  font-size: 10px;
+  font-weight: 600;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.wk-stats {
+  display: flex;
+  gap: 12px;
+}
+.wk-st {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #666;
+  font-weight: 600;
+}
+.wk-st svg {
+  width: 13px;
+  height: 13px;
+  stroke: #999;
+}
+
+/* ── Day detail card ── */
+.det-hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px 0;
+}
+.det-dt {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--dark, #1a1a2e);
+}
+.det-tm {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #999;
+  font-weight: 500;
+}
+.det-tm svg {
+  width: 13px;
+  height: 13px;
+  stroke: #bbb;
+}
+.det-item {
+  padding: 12px 16px;
+  border-top: 1px solid #f5f5f5;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.det-item:first-of-type {
+  border-top: none;
+  margin-top: 8px;
+}
+.det-item:hover {
+  background: #fafafa;
+}
+.det-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.det-ic {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.det-ic svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.det-ic.run { background: rgba(78, 205, 196, 0.1); }
+.det-ic.run svg { stroke: #4ecdc4; }
+.det-ic.swim { background: rgba(108, 92, 231, 0.1); }
+.det-ic.swim svg { stroke: #6c5ce7; }
+.det-ic.str { background: rgba(230, 57, 70, 0.1); }
+.det-ic.str svg { stroke: #e63946; }
+.det-ic.bike { background: rgba(244, 162, 97, 0.1); }
+.det-ic.bike svg { stroke: #f4a261; }
+.det-info {
+  flex: 1;
+}
+.det-nm {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dark, #1a1a2e);
+}
+.det-desc {
+  font-size: 11px;
+  color: #999;
+  margin-top: 2px;
+}
+.det-int {
+  width: 5px;
+  height: 28px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.det-chev {
+  width: 18px;
+  height: 18px;
+  stroke: #999;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+.det-item.open .det-chev {
+  transform: rotate(180deg);
+}
+.det-expand {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+.det-item.open .det-expand {
+  max-height: 300px;
+}
+.ex-list {
+  padding: 8px 0 4px 50px;
+}
+.ex-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid #f8f8f8;
+  font-size: 12px;
+}
+.ex-row:last-child {
+  border-bottom: none;
+}
+.ex-name {
+  color: var(--dark, #1a1a2e);
+  font-weight: 500;
+}
+.ex-sets {
+  color: #999;
+  font-weight: 500;
+  font-size: 11px;
+}
+.det-start {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 12px 16px 14px;
+  padding: 12px;
+  background: var(--red, #e63946);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 3px 12px rgba(230, 57, 70, 0.25);
+}
+.det-start svg {
+  width: 14px;
+  height: 14px;
+  fill: #fff;
+}
+
+/* Hide old calendar classes (if they still exist in style.css) */
+.calendar-header,
+.cal-nav-btn,
+.cal-this-week-btn,
+.cal-add-header-btn,
+.cal-zoom-btn,
+.calendar-month-label {
+  /* These are replaced by the new .cal-hdr system above.
+     Remove these old rules from style.css when you add the new ones. */
+}

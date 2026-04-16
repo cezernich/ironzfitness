@@ -1,80 +1,13 @@
 // exercise-library.js — Exercise demo info + Post-workout stretching recommendations
 // Tapping an exercise name in any workout view shows a brief demo card.
 // After completing a workout, a stretch routine is suggested based on muscles worked.
-
-/* =====================================================================
-   EXERCISE → MUSCLE GROUP MAPPING
-   ===================================================================== */
-
-const EXERCISE_MUSCLES = {
-  // Compound
-  "squat": ["quads", "glutes", "hamstrings", "core"],
-  "back squat": ["quads", "glutes", "hamstrings", "core"],
-  "front squat": ["quads", "core", "glutes"],
-  "deadlift": ["hamstrings", "glutes", "back", "core"],
-  "romanian deadlift": ["hamstrings", "glutes", "back"],
-  "bench press": ["chest", "triceps", "shoulders"],
-  "incline bench press": ["chest", "shoulders", "triceps"],
-  "overhead press": ["shoulders", "triceps", "core"],
-  "military press": ["shoulders", "triceps", "core"],
-  "barbell row": ["back", "biceps", "core"],
-  "bent over row": ["back", "biceps"],
-  "pull up": ["back", "biceps", "core"],
-  "pull-up": ["back", "biceps", "core"],
-  "chin up": ["back", "biceps"],
-  "chin-up": ["back", "biceps"],
-  "dip": ["chest", "triceps", "shoulders"],
-  "clean": ["hamstrings", "glutes", "back", "shoulders"],
-  "snatch": ["hamstrings", "glutes", "back", "shoulders"],
-  "thruster": ["quads", "glutes", "shoulders", "core"],
-  "lunge": ["quads", "glutes", "hamstrings"],
-  "walking lunge": ["quads", "glutes", "hamstrings"],
-  "bulgarian split squat": ["quads", "glutes", "hamstrings"],
-  "hip thrust": ["glutes", "hamstrings"],
-
-  // Upper push
-  "push up": ["chest", "triceps", "shoulders"],
-  "push-up": ["chest", "triceps", "shoulders"],
-  "dumbbell press": ["chest", "triceps", "shoulders"],
-  "dumbbell fly": ["chest", "shoulders"],
-  "cable fly": ["chest", "shoulders"],
-  "tricep extension": ["triceps"],
-  "tricep pushdown": ["triceps"],
-  "skull crusher": ["triceps"],
-  "lateral raise": ["shoulders"],
-  "front raise": ["shoulders"],
-  "face pull": ["shoulders", "back"],
-
-  // Upper pull
-  "lat pulldown": ["back", "biceps"],
-  "seated row": ["back", "biceps"],
-  "cable row": ["back", "biceps"],
-  "dumbbell row": ["back", "biceps"],
-  "bicep curl": ["biceps"],
-  "hammer curl": ["biceps"],
-  "preacher curl": ["biceps"],
-  "shrug": ["traps"],
-
-  // Legs
-  "leg press": ["quads", "glutes"],
-  "leg extension": ["quads"],
-  "leg curl": ["hamstrings"],
-  "calf raise": ["calves"],
-  "goblet squat": ["quads", "glutes", "core"],
-  "step up": ["quads", "glutes"],
-  "glute bridge": ["glutes", "hamstrings"],
-
-  // Core
-  "plank": ["core"],
-  "crunch": ["core"],
-  "sit up": ["core", "hip flexors"],
-  "russian twist": ["core", "obliques"],
-  "hanging leg raise": ["core", "hip flexors"],
-  "ab wheel": ["core"],
-  "dead bug": ["core"],
-  "bird dog": ["core", "back"],
-  "mountain climber": ["core", "shoulders"],
-};
+//
+// HISTORICAL NOTE: this file used to own the EXERCISE_MUSCLES mapping
+// (lowercase exercise name → muscle list). That data is now resolved via
+// window.ExerciseDB.getMuscles() — see docs/EXERCISE_DB_MERGE_REPORT.md.
+// The UI helpers below (table renderer, swap modal, demo modal, stretch
+// suggestions) are NOT exercise data — they live here because they own
+// orthogonal UX flows that haven't been split out into separate modules.
 
 const EXERCISE_CUES = {
   "squat": "Feet shoulder-width, chest up, push knees out, drive through heels.",
@@ -170,16 +103,23 @@ function getExerciseAlternatives(name) {
   for (const [k, v] of Object.entries(EXERCISE_SUBSTITUTIONS)) {
     if (k.includes(key) || key.includes(k)) return v;
   }
-  // Fallback: find exercises targeting the same muscles
+  // Fallback: find exercises targeting the same muscles via ExerciseDB.
+  // Returns up to 5 alternatives whose muscleCategory shares any token
+  // with the query exercise's muscle list.
   const muscles = _findMuscles(key);
   if (muscles.length === 0) return [];
-  const matches = [];
-  for (const [exName, exMuscles] of Object.entries(EXERCISE_MUSCLES)) {
-    if (exName === key) continue;
-    if (exMuscles.some(m => muscles.includes(m))) matches.push(exName);
-    if (matches.length >= 5) break;
+  if (typeof window !== "undefined" && window.ExerciseDB) {
+    const muscleSet = new Set(muscles.map(m => String(m).toLowerCase()));
+    const matches = [];
+    for (const ex of window.ExerciseDB.query({})) {
+      if (matches.length >= 5) break;
+      if (ex.name.toLowerCase() === key) continue;
+      const cats = (ex.muscleCategory || []).map(m => String(m).toLowerCase());
+      if (cats.some(m => muscleSet.has(m))) matches.push(ex.name);
+    }
+    return matches;
   }
-  return matches;
+  return [];
 }
 
 var _swapOnSelect = null;
@@ -280,10 +220,12 @@ function closeExerciseInfo() {
 }
 
 function _findMuscles(key) {
-  if (EXERCISE_MUSCLES[key]) return EXERCISE_MUSCLES[key];
-  // Fuzzy match: check if any key is contained in the exercise name
-  for (const [k, v] of Object.entries(EXERCISE_MUSCLES)) {
-    if (key.includes(k) || k.includes(key)) return v;
+  // Phase 3 of the exercise-DB merge — EXERCISE_MUSCLES is gone.
+  // ExerciseDB.getMuscles already implements the substring-fallback the
+  // legacy lookup did (matches "Bench Press" → "Barbell Bench Press"
+  // metadata). Returns [] for unknown queries.
+  if (typeof window !== "undefined" && window.ExerciseDB && typeof window.ExerciseDB.getMuscles === "function") {
+    return window.ExerciseDB.getMuscles(key) || [];
   }
   return [];
 }

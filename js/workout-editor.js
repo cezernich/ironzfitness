@@ -185,6 +185,7 @@ function _addEditRow(ex) {
   if (_editIsHiit) {
     div.innerHTML = `
       <div class="ex-row-header">
+        <span class="drag-handle" title="Drag to reorder · drop on a row to superset">⠿</span>
         <input type="text" id="edit-ex-${id}" class="ex-row-name" value="${escAttr(ex?.name)}" placeholder="e.g. Burpees, Row 500m" />
         <button type="button" class="ex-row-delete" onclick="removeEditRow(${id})" title="Remove">×</button>
       </div>
@@ -201,6 +202,7 @@ function _addEditRow(ex) {
   } else {
     div.innerHTML = `
       <div class="ex-row-header">
+        <span class="drag-handle" title="Drag to reorder · drop on a row to superset">⠿</span>
         <input type="text" id="edit-ex-${id}" class="ex-row-name" value="${escAttr(ex?.name)}" placeholder="e.g. Bench Press" />
         <button type="button" class="ex-row-delete" onclick="removeEditRow(${id})" title="Remove">×</button>
       </div>
