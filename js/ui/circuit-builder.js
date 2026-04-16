@@ -71,10 +71,36 @@
   // ── Session id for the wizard state ─────────────────────────────────────
   let _currentEntryDraft = null;   // live state for entry → preview flow
   let _currentDateStr = null;
+  // Unified Workout Builder (docs/BUILDER_INVENTORY.md, UNIFIED_BUILDER_SPEC.md).
+  // When set via openEntryFlow(dateStr, { onSave }), the save path calls
+  // this callback with the normalized workout object instead of writing
+  // directly to localStorage. Falls back to saveToCalendar for Add Session
+  // callers that still use the single-arg signature.
+  let _onSave = null;
+  let _context = "calendar"; // "calendar" | "plan-manual"
 
   // ── Entry screen (Screen 1e) ────────────────────────────────────────────
-  function openEntryFlow(dateStr) {
+  function openEntryFlow(dateStr, opts) {
+    opts = opts || {};
     _currentDateStr = dateStr || (new Date().toISOString().slice(0, 10));
+    _onSave  = typeof opts.onSave === "function" ? opts.onSave : null;
+    _context = opts.context || "calendar";
+
+    // Edit mode: skip the entry screen and open the manual builder
+    // pre-filled with the existing circuit (from cpWeekTemplate or the
+    // calendar's workouts row). Keeps the same save-emit path.
+    if (opts.existing) {
+      const e = opts.existing;
+      const src = (e.data && e.data.circuit) || e.circuit || e;
+      openManualBuilder({
+        name: src.name || (e.data && e.data.sessionName) || e.name || "",
+        goal: src.goal || "for_time",
+        goal_value: src.goal_value || null,
+        steps: Array.isArray(src.steps) ? JSON.parse(JSON.stringify(src.steps)) : [],
+      });
+      return;
+    }
+
     _currentEntryDraft = {
       intensity: "moderate",
       duration: 30,
@@ -92,7 +118,7 @@
     ];
 
     const body = `
-      ${_modalHeader("Circuit Session", "window.CircuitBuilder.closeAll();if(typeof openQuickEntry==='function')openQuickEntry('" + _esc(_currentDateStr) + "')")}
+      ${_modalHeader("Circuit Session", "window.CircuitBuilder._backFromEntry()")}
       ${_modalDots(0, 3)}
       <div class="circuit-modal-body">
         <div class="builder-field">
@@ -198,7 +224,7 @@
   let _currentPreviewCircuit = null;
   function saveGeneratedCircuit() {
     if (!_currentPreviewCircuit) return;
-    _saveCircuitToWorkouts(_currentPreviewCircuit, _currentDateStr);
+    _emitSave(_currentPreviewCircuit);
     _closeModal("circuit-preview-modal");
   }
 
@@ -301,42 +327,38 @@
     };
   }
 
-  // ── Save to localStorage.workouts ───────────────────────────────────────
-  function _saveCircuitToWorkouts(circuit, dateStr) {
-    if (!dateStr) dateStr = new Date().toISOString().slice(0, 10);
-    let workouts = [];
-    try { workouts = JSON.parse(localStorage.getItem("workouts") || "[]"); } catch {}
-
-    const id = Date.now();
-    const row = {
-      id,
-      date: dateStr,
+  // ── Save dispatch (UNIFIED_BUILDER_SPEC.md §Save handler contract) ──────
+  //
+  // Builds the normalized workout object from the internal circuit struct
+  // and hands it to the caller-provided _onSave. When no callback is wired
+  // (legacy single-arg openEntryFlow from Add Session), falls back to
+  // window.saveToCalendar which writes the same localStorage.workouts row
+  // _saveCircuitToWorkouts used to write directly.
+  function _emitSave(circuit) {
+    const dateStr = _currentDateStr || new Date().toISOString().slice(0, 10);
+    const workout = {
+      discipline: "circuit",
       type: "circuit",
-      name: circuit.name,
+      name: circuit.name || "",
       notes: circuit.notes || "",
-      circuit: {
-        name: circuit.name,
+      exercises: [],
+      structure: {
         goal: circuit.goal || "standard",
         goal_value: circuit.goal_value || null,
         benchmark_id: circuit.benchmark_id || null,
         steps: circuit.steps || [],
       },
-      source: "manual",
+      _source: "manual",
     };
-    workouts.unshift(row);
-    localStorage.setItem("workouts", JSON.stringify(workouts));
-    if (typeof DB !== "undefined" && DB.syncWorkouts) DB.syncWorkouts();
 
-    if (typeof trackWorkoutLogged === "function") {
-      trackWorkoutLogged({ type: "circuit", date: dateStr, source: "circuit_builder" });
+    if (_onSave) {
+      try { _onSave(workout); } catch (e) { console.error("[CircuitBuilder] onSave failed:", e); }
+    } else if (typeof window !== "undefined" && typeof window.saveToCalendar === "function") {
+      window.saveToCalendar(workout, dateStr);
+    } else {
+      console.warn("[CircuitBuilder] no save target; workout dropped", workout);
+      return;
     }
-
-    if (typeof renderCalendar === "function") renderCalendar();
-    if (typeof renderDayDetail === "function") {
-      const selected = (typeof selectedDate !== "undefined" && selectedDate) || dateStr;
-      renderDayDetail(selected);
-    }
-    if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
 
     if (typeof _showShareToast === "function") _showShareToast("Circuit saved!");
   }
@@ -768,7 +790,7 @@
       benchmark_id: null,
       steps: _manualDraft.steps,
     };
-    _saveCircuitToWorkouts(circuit, _currentDateStr);
+    _emitSave(circuit);
     _closeModal("circuit-manual-modal");
   }
 
@@ -1044,6 +1066,26 @@
      "circuit-library-modal", "circuit-completion-modal"].forEach(_closeModal);
   }
 
+  // Back-button handler on the entry screen. Picks the right caller to
+  // resume based on _context so Add Session and Build a Plan Manual
+  // both return to where the user came from.
+  function _backFromEntry() {
+    const dateStr = _currentDateStr;
+    closeAll();
+    if (_context === "plan-manual") {
+      // Re-open the CP Manual type picker. We don't have the dow in scope
+      // here, but the modal retained dataset.dow from customPlanAddManual —
+      // reopening the modal element is enough, it'll still be there.
+      const modal = document.getElementById("cp-manual-modal");
+      if (modal) {
+        modal.classList.add("is-open");
+        if (typeof cpManualShowStep === "function") cpManualShowStep(1);
+      }
+      return;
+    }
+    if (typeof openQuickEntry === "function") openQuickEntry(dateStr);
+  }
+
   // ── Public API ──────────────────────────────────────────────────────────
   const api = {
     openEntryFlow,
@@ -1070,6 +1112,7 @@
     saveForTime,
     saveAmrap,
     closeAll,
+    _backFromEntry,
     _updateDraftName,
     _updateDraftCap,
   };

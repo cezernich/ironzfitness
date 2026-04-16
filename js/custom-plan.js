@@ -182,8 +182,10 @@ function renderSessionCard(dow, idx, entry) {
 
   const exCount = entry.data?.exercises?.length || 0;
   const ivCount = entry.data?.intervals?.length || entry.data?.aiSession?.intervals?.length || 0;
+  const stepCount = entry.data?.circuit?.steps?.length || 0;
   if (exCount) detail = `<span class="cp-day-entry-detail">${exCount} exercise${exCount !== 1 ? "s" : ""}</span>`;
   else if (ivCount) detail = `<span class="cp-day-entry-detail">${ivCount} interval${ivCount !== 1 ? "s" : ""}</span>`;
+  else if (stepCount) detail = `<span class="cp-day-entry-detail">${stepCount} step${stepCount !== 1 ? "s" : ""}</span>`;
 
   return `
     <div class="cp-day-entry cp-day-entry--tappable" onclick="customPlanEditSession(${dow}, ${idx})" title="Tap to edit">
@@ -925,6 +927,29 @@ function customPlanAddManual(dow, editIdx) {
 function _cpManualPrefillFromEntry(entry) {
   const d = entry.data || {};
   const type = d.type || "general";
+
+  // Circuit sessions round-trip through the shared CircuitBuilder, not
+  // the generic exercise-row form — see cpManualSelectType's circuit
+  // intercept (Phase 2, UNIFIED_BUILDER_SPEC.md). Without this edits
+  // would fall into the generic form and drop circuit.steps.
+  if (type === "circuit" && typeof window !== "undefined"
+      && window.CircuitBuilder && typeof window.saveToPlanDay === "function") {
+    const modal = document.getElementById("cp-manual-modal");
+    const dow = parseInt(modal?.dataset.dow);
+    const editIdx = _cpManualEditIdx;
+    closeCustomPlanManualModal();
+    window.CircuitBuilder.openEntryFlow(null, {
+      context: "plan-manual",
+      existing: entry,
+      onSave: (workout) => {
+        window.saveToPlanDay(workout, null, dow, editIdx != null
+          ? { editIdx, existingId: entry.id, existingCreatedAt: entry.data?.createdAt }
+          : {});
+      },
+    });
+    return;
+  }
+
   // Jump straight to step 2 with the right type selected
   _cpManualSelectedType = type;
 
@@ -1003,6 +1028,31 @@ const CP_TYPE_LABELS = {
 
 function cpManualSelectType(type) {
   _cpManualSelectedType = type;
+
+  // Unified Workout Builder — Phase 2 (CircuitBuilder migration).
+  // When the user picks "circuit", close the generic CP Manual modal and
+  // open the shared CircuitBuilder from js/ui/circuit-builder.js, wired
+  // to saveToPlanDay so the resulting circuit lands on this day's template.
+  // Previously "circuit" fell through to the generic exercise-row editor
+  // and the per-step structure was silently lost (BUILDER_INVENTORY.md §5
+  // bug 4).
+  if (type === "circuit" && typeof window !== "undefined"
+      && window.CircuitBuilder && typeof window.saveToPlanDay === "function") {
+    const modal = document.getElementById("cp-manual-modal");
+    const dow = parseInt(modal?.dataset.dow);
+    const editIdx = _cpManualEditIdx;
+    closeCustomPlanManualModal();
+    // Pass dow directly as the "dayDate" — saveToPlanDay's _dowFromDate
+    // accepts a number and uses it as the DOW unchanged.
+    window.CircuitBuilder.openEntryFlow(null, {
+      context: "plan-manual",
+      onSave: (workout) => {
+        window.saveToPlanDay(workout, null, dow, editIdx != null ? { editIdx } : {});
+      },
+    });
+    return;
+  }
+
   // Cardio-style types get the interval-rows editor; everything else
   // uses exercise rows. Expanded to match the home-screen Add Session
   // modal so plan-builder users can add any session type.
@@ -1842,6 +1892,19 @@ function saveCustomPlan() {
         if (entry.data?.aiSession) scheduleEntry.aiSession = entry.data.aiSession;
         if (entry.data?.intervals) scheduleEntry.aiSession = { title: entry.data.sessionName || capitalize(entry.data.type) + " Session", intervals: entry.data.intervals };
         if (entry.data?.details) scheduleEntry.details = entry.data.details;
+        // Unified Workout Builder passthrough — discipline-specific payloads
+        // saved via saveToPlanDay (UNIFIED_BUILDER_SPEC.md). Without these,
+        // Build-a-Plan circuits would materialize onto the schedule with
+        // their step tree dropped. Phases 4/5 will add hiitMeta/isHyrox here.
+        if (entry.data?.circuit) {
+          scheduleEntry.circuit = {
+            name: scheduleEntry.sessionName,
+            goal: entry.data.circuit.goal || "standard",
+            goal_value: entry.data.circuit.goal_value || null,
+            benchmark_id: entry.data.circuit.benchmark_id || null,
+            steps: entry.data.circuit.steps || [],
+          };
+        }
 
         // For cardio types without intervals, add discipline/load for rich rendering
         const _discMap = { running: "run", cycling: "bike", swimming: "swim" };
