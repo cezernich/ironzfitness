@@ -4700,6 +4700,38 @@ button:active {
 }
 .week-overview-pill .icon { width: 12px; height: 12px; }
 
+/* Discipline chips on the Restriction modal — one chip per sport,
+   checkbox-based so users can block multiple disciplines at once. */
+.restriction-disc-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.restriction-disc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text);
+  transition: background 0.12s, border-color 0.12s;
+}
+.restriction-disc-chip:has(input:checked) {
+  background: rgba(230, 57, 70, 0.12);
+  border-color: #e63946;
+  color: #e63946;
+}
+.restriction-disc-chip input {
+  accent-color: #e63946;
+  margin: 0;
+}
+
 /* Restriction action radios in modal */
 .restriction-action-group {
   display: flex;

@@ -2398,15 +2398,29 @@
       <div class="qe-step" id="qe-step-1-restriction" style="display:none">
         <div class="form-row">
           <label for="qe-restriction-type">Restriction Type</label>
-          <select id="qe-restriction-type">
+          <select id="qe-restriction-type" onchange="onRestrictionTypeChange()">
             <option value="injury">Injury / Pain</option>
             <option value="sick">Sick / Low Energy</option>
             <option value="travel">Traveling</option>
             <option value="time">Time Limited</option>
+            <option value="discipline">Discipline Unavailable</option>
             <option value="rest">Full Rest Day</option>
           </select>
         </div>
-        <div class="form-row" style="margin-top:12px">
+        <!-- Discipline picker — only shown when type = discipline.
+             Sessions matching any selected discipline on this day are
+             skipped; other disciplines still train normally. -->
+        <div class="form-row" id="qe-restriction-disc-row" style="display:none;margin-top:12px">
+          <label>Which discipline(s) are unavailable?</label>
+          <div class="restriction-disc-group">
+            <label class="restriction-disc-chip"><input type="checkbox" value="swim" /> Swim</label>
+            <label class="restriction-disc-chip"><input type="checkbox" value="bike" /> Bike</label>
+            <label class="restriction-disc-chip"><input type="checkbox" value="run" /> Run</label>
+            <label class="restriction-disc-chip"><input type="checkbox" value="strength" /> Strength</label>
+          </div>
+          <p class="hint" style="margin:6px 0 0">Any session of the checked discipline(s) on this day will be skipped. Other disciplines still train.</p>
+        </div>
+        <div class="form-row" id="qe-restriction-action-row" style="margin-top:12px">
           <label>Session Action</label>
           <div class="restriction-action-group">
             <label class="restriction-action-option">
@@ -3562,6 +3576,18 @@
           <h2 class="ob-v2-h2 ob-v2-center">You're Ready</h2>
           <p class="ob-v2-subtitle ob-v2-center">Your plan is saved. Week 1 is already on your home calendar.</p>
           <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._goToHomeTab()">Go to Home</button>
+        </div>
+
+        <!-- bp-b-review: B-race review — shows the A-race week the B
+             race sits inside so the user can glance at what's already
+             scheduled and decide whether to tweak. -->
+        <div class="ob-v2-screen" id="bp-v2-b-review">
+          <h2 class="ob-v2-h2">B Race Added</h2>
+          <p class="ob-v2-subtitle" id="bp-v2-b-review-subtitle">Your A-race plan already covers this week. We recommend leaving it as-is — your plan's taper has been adjusted around the race — but here's what's scheduled if you want to make changes.</p>
+          <div class="ob-v2-section-label" id="bp-v2-b-review-week-label">Race week</div>
+          <div id="bp-v2-b-review-week" class="ob-v2-b-review-week"></div>
+          <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._goToHomeTab()">Looks good — keep it</button>
+          <button type="button" class="ob-v2-btn-skip" onclick="OnboardingV2._goToBRaceInCalendar()">Tweak this week in calendar</button>
         </div>
 
 

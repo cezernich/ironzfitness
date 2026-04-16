@@ -60,21 +60,23 @@ function _resolveDiscipline(w) {
 }
 
 const RESTRICTION_LABELS = {
-  injury:  "Injury / Pain",
-  sick:    "Sick / Low Energy",
-  fatigue: "Fatigue / Overtraining",
-  travel:  "Traveling",
-  time:    "Time Limited",
-  rest:    "Full Rest Day",
+  injury:     "Injury / Pain",
+  sick:       "Sick / Low Energy",
+  fatigue:    "Fatigue / Overtraining",
+  travel:     "Traveling",
+  time:       "Time Limited",
+  discipline: "Discipline Unavailable",
+  rest:       "Full Rest Day",
 };
 
 const RESTRICTION_ICONS = {
-  injury:  ICONS.alertCircle,
-  sick:    ICONS.thermometer,
-  fatigue: ICONS.warning,
-  travel:  ICONS.plane,
-  time:    ICONS.clock,
-  rest:    ICONS.moon,
+  injury:     ICONS.alertCircle,
+  sick:       ICONS.thermometer,
+  fatigue:    ICONS.warning,
+  travel:     ICONS.plane,
+  time:       ICONS.clock,
+  discipline: ICONS.ban,
+  rest:       ICONS.moon,
 };
 
 const RESTRICTION_SUGGESTIONS = {
@@ -403,6 +405,28 @@ const _CAL_V2_CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke-linecap="
 // Collect an array of normalized session descriptors for a date, each
 // with the visual tokens the new skin needs. This is the ONLY new data
 // wrangling — everything below it feeds off the existing getDataForDate.
+// "Discipline unavailable" restriction filter. A day restriction with
+// an explicit `disciplines` array means "skip any session of these
+// disciplines on this day" without killing the whole day. Used by
+// week-view collection + day-detail render so a "no swim today"
+// restriction leaves the bike and run sessions intact.
+function _calV2IsSessionDisciplineRestricted(session, restriction) {
+  if (!session || !restriction) return false;
+  if (!Array.isArray(restriction.disciplines) || restriction.disciplines.length === 0) return false;
+  const raw = String(session.discipline || session.type || "").toLowerCase();
+  return restriction.disciplines.some(d => {
+    const r = String(d).toLowerCase();
+    if (r === raw) return true;
+    if (r === "swim" && (raw === "swimming")) return true;
+    if (r === "bike" && (raw === "cycling" || raw === "brick")) return true;
+    if (r === "run"  && (raw === "running")) return true;
+    if (r === "strength" && (raw === "weightlifting" || raw === "hyrox")) return true;
+    // Add-Running-Session enriched types all resolve to run
+    if (r === "run" && /^(long_run|tempo_threshold|track_workout|speed_work|hills|easy_recovery|endurance|fun_social)$/.test(raw)) return true;
+    return false;
+  });
+}
+
 // Rest-flag detector: threshold-week plans (and some other flows)
 // emit plan entries with load:"rest" / discipline:"rest" / type:"rest"
 // as placeholders for a rest day. These aren't real sessions, so
@@ -419,7 +443,11 @@ function _calV2IsRestEntry(e) {
 }
 
 function _calV2CollectSessions(dateStr, data) {
-  const sessionRemoved = data.restriction && data.restriction.action === "remove";
+  const r = data.restriction;
+  // Full-day remove: action === "remove" AND no disciplines list.
+  // With a disciplines list present, the restriction is partial —
+  // we filter individual sessions instead of blanking the whole day.
+  const fullRemove = r && r.action === "remove" && !Array.isArray(r.disciplines);
   const p = data.planEntry;
   const sw = data.scheduledWorkouts || [];
   const out = [];
@@ -427,7 +455,7 @@ function _calV2CollectSessions(dateStr, data) {
   if (data.event && !p) {
     out.push({ discCls: "race", loadLabel: "race", name: data.event.name || "Race day" });
   }
-  if (p && !sessionRemoved && !_calV2IsRestEntry(p)) {
+  if (p && !fullRemove && !_calV2IsRestEntry(p) && !_calV2IsSessionDisciplineRestricted(p, r)) {
     const effectLoad = getEffectiveLoad(p.load, data.restriction);
     out.push({
       discCls: _calV2DiscClass(p.discipline),
@@ -435,9 +463,10 @@ function _calV2CollectSessions(dateStr, data) {
       name: capitalize(p.discipline),
     });
   }
-  if (!sessionRemoved) {
+  if (!fullRemove) {
     sw.forEach(w => {
       if (_calV2IsRestEntry(w)) return;
+      if (_calV2IsSessionDisciplineRestricted(w, r)) return;
       out.push({
         discCls: _calV2DiscClass(w.discipline || w.type),
         loadLabel: w.load || w.intensity || "moderate",
@@ -447,6 +476,7 @@ function _calV2CollectSessions(dateStr, data) {
   }
   (data.loggedWorkouts || []).forEach(w => {
     if (_calV2IsRestEntry(w)) return;
+    if (_calV2IsSessionDisciplineRestricted(w, r)) return;
     out.push({
       discCls: _calV2DiscClass(w.type),
       loadLabel: w.load || "moderate",
@@ -3091,15 +3121,22 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
   }
 
   // ── All sessions (race plan + generated plan + manually added) ───────────
-  const sessionRemoved = data.restriction && data.restriction.action === "remove";
+  // A full-day restriction has action === "remove" AND no explicit
+  // `disciplines` list. With disciplines present, the restriction is
+  // partial — we filter specific sessions out by discipline instead
+  // of blanking the entire day.
+  const sessionRemoved = data.restriction && data.restriction.action === "remove" && !Array.isArray(data.restriction.disciplines);
   // Threshold weeks (and a few other flows) emit rest-day plan
   // entries with load:"rest". Those are placeholders for "no training
   // today" — don't render a session card for them and don't count
   // them toward allSessionsCount, otherwise the day detail shows a
   // strength-icon card labeled "Rest" on every threshold rest day.
   const planEntryIsRest = data.planEntry && _calV2IsRestEntry(data.planEntry);
-  const effectivePlanEntry = planEntryIsRest ? null : data.planEntry;
-  const nonRestScheduled = data.scheduledWorkouts.filter(w => !_calV2IsRestEntry(w));
+  const planEntryIsDiscRestricted = data.planEntry && _calV2IsSessionDisciplineRestricted(data.planEntry, data.restriction);
+  const effectivePlanEntry = (planEntryIsRest || planEntryIsDiscRestricted) ? null : data.planEntry;
+  const nonRestScheduled = data.scheduledWorkouts.filter(w =>
+    !_calV2IsRestEntry(w) && !_calV2IsSessionDisciplineRestricted(w, data.restriction)
+  );
   const allSessionsCount = (effectivePlanEntry ? 1 : 0) + nonRestScheduled.length + data.loggedWorkouts.length;
 
   if (sessionRemoved && allSessionsCount > 0) {
@@ -7876,9 +7913,33 @@ function saveQuickRestriction() {
   const action = document.querySelector('input[name="qe-session-action"]:checked')?.value || "reduce";
   const msg    = document.getElementById("qe-restriction-msg");
 
+  // Discipline-restriction path: "I can't swim today" etc. Stores the
+  // selected disciplines so the session filter can skip only those
+  // workouts, not the whole day. Always uses action=remove — the
+  // session is gone for that discipline, not "reduced".
+  let disciplines = null;
+  if (type === "discipline") {
+    const picked = Array.from(document.querySelectorAll("#qe-restriction-disc-row input[type=checkbox]:checked"))
+      .map(el => el.value);
+    if (picked.length === 0) {
+      msg.style.color = "var(--color-danger)";
+      msg.textContent = "Pick at least one discipline.";
+      return;
+    }
+    disciplines = picked;
+  }
+
   let restrictions = {};
   try { restrictions = JSON.parse(localStorage.getItem("dayRestrictions")) || {}; } catch {}
-  restrictions[dateStr] = { type, note, action, createdAt: new Date().toISOString() };
+  const entry = { type, note, action, createdAt: new Date().toISOString() };
+  if (disciplines) {
+    entry.disciplines = disciplines;
+    // Discipline restrictions always remove (can't do a partial-day
+    // skip on a single workout), and the calendar renderer uses
+    // `disciplines` + `action === "remove"` as the skip signal.
+    entry.action = "remove";
+  }
+  restrictions[dateStr] = entry;
   localStorage.setItem("dayRestrictions", JSON.stringify(restrictions)); if (typeof DB !== 'undefined') DB.syncKey('dayRestrictions');
 
   renderCalendar();
@@ -7887,6 +7948,24 @@ function saveQuickRestriction() {
   msg.style.color = "var(--color-success)";
   msg.textContent = "Restriction saved!";
   setTimeout(() => closeQuickEntry(), 700);
+}
+
+// Show/hide the discipline picker when the user switches restriction
+// type. Called from the <select>'s onchange.
+function onRestrictionTypeChange() {
+  const type = document.getElementById("qe-restriction-type")?.value;
+  const row  = document.getElementById("qe-restriction-disc-row");
+  const actionRow = document.getElementById("qe-restriction-action-row");
+  if (!row) return;
+  if (type === "discipline") {
+    row.style.display = "";
+    // Discipline restriction always means "skip this discipline", so
+    // hide the Reduce/Remove action selector — it's always Remove.
+    if (actionRow) actionRow.style.display = "none";
+  } else {
+    row.style.display = "none";
+    if (actionRow) actionRow.style.display = "";
+  }
 }
 
 function toggleQEGenerate() {}
