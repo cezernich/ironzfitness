@@ -1579,6 +1579,25 @@
         </div>
       </section>
 
+      <!-- Equipment Profile (cowork-handoff/EXERCISE_DB_SPEC.md). Drives
+           which exercises the planner + workout builders can suggest. -->
+      <section class="card collapsible is-collapsed" id="section-equipment-profile">
+        <div class="card-toggle" onclick="toggleSection('section-equipment-profile')">
+          <h2>Equipment Profile</h2>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body">
+          <p class="hint">
+            Check what you have access to. The planner and Add Session
+            will only suggest exercises you can actually do.
+            Leave everything unchecked to see the full library
+            (assumes a fully-equipped gym).
+          </p>
+          <div id="equipment-profile-grid" class="equipment-grid"></div>
+          <p id="equipment-profile-msg" class="save-msg" style="margin-top:8px"></p>
+        </div>
+      </section>
+
       <!-- Connected Apps -->
       <section class="card collapsible is-collapsed" id="section-connected-apps">
         <div class="card-toggle" onclick="toggleSection('section-connected-apps')">
@@ -2939,6 +2958,7 @@
        window.ExerciseDB. -->
   <script src="exercise-data.js"></script>
   <script src="exercise-filters.js"></script>
+  <script src="js/equipment-profile.js"></script>
   <script src="js/planner.js"></script>
   <!-- Triathlon gear checklist (SPEC_triathlon_gear_checklist.md) — data + modal -->
   <script src="js/gear-checklist.js"></script>

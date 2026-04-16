@@ -2679,6 +2679,43 @@ button:active {
   text-align: center;
 }
 
+.completion-dur-minsec {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.completion-dur-minsec .completion-dur-input {
+  width: 60px;
+}
+
+.completion-dur-sep {
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+/* Equipment profile checklist (Profile tab → Equipment Profile card).
+   Renders the canonical equipment tokens grouped by category. */
+.equipment-grid { display: flex; flex-direction: column; gap: 14px; }
+.equipment-group { display: flex; flex-direction: column; gap: 6px; }
+.equipment-group-label {
+  font-size: 0.78rem; font-weight: 700;
+  color: var(--color-text-muted, #666);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.equipment-group-items {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 6px 12px;
+}
+.equipment-checkbox {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 6px;
+  font-size: 0.88rem; cursor: pointer;
+  transition: background-color 0.1s;
+}
+.equipment-checkbox:hover { background: var(--color-surface-hover, #f4f4f4); }
+.equipment-checkbox input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+
 /* Swim distance unit dropdown (m / yd). Explicit chevron + padding so
    the native browser arrow doesn't awkwardly overlap the text. */
 .completion-unit-select {

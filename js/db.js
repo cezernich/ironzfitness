@@ -367,6 +367,10 @@ const DB = (() => {
     // pre-fill on subsequent use.
     'selectedSports', 'trainingGoals', 'raceEvents', 'thresholds',
     'strengthSetup', 'injuries', 'connectedApps',
+    // Exercise Database equipment profile (EXERCISE_DB_SPEC.md). Drives
+    // which exercises ExerciseDB.query({ equipment }) returns for the
+    // planner + workout builders.
+    'equipmentProfile',
   ];
 
   const _keyTimers = {};
