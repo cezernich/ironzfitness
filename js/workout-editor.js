@@ -889,13 +889,22 @@ function saveEditedWorkout() {
       }
       intervals.push(iv);
     });
+    // If the user didn't enter any interval rows (e.g. they only
+    // changed notes), preserve the original aiSession.intervals
+    // instead of wiping it to an empty array. An empty intervals
+    // array makes _bodySourceForWorkout return null, which erases
+    // the structured body from the Strava share preview and from
+    // the day-detail render.
+    const prior = workouts[idx].aiSession || {};
+    const priorIntervals = Array.isArray(prior.intervals) ? prior.intervals : [];
+    const finalIntervals = intervals.length > 0 ? intervals : priorIntervals;
     workouts[idx] = {
       ...workouts[idx],
       notes,
       aiSession: {
-        ...(workouts[idx].aiSession || {}),
-        title: notes || workouts[idx].aiSession?.title || "",
-        intervals,
+        ...prior,
+        title: notes || prior.title || "",
+        intervals: finalIntervals,
       },
     };
   } else {
@@ -922,7 +931,11 @@ function saveEditedWorkout() {
       if (row?.dataset.ssId) ex.supersetId = row.dataset.ssId;
       exercises.push(ex);
     });
-    workouts[idx] = { ...workouts[idx], notes, exercises };
+    // Preserve original exercises if the user didn't enter any in
+    // the edit modal — same reasoning as the cardio branch above.
+    const priorEx = Array.isArray(workouts[idx].exercises) ? workouts[idx].exercises : [];
+    const finalEx = exercises.length > 0 ? exercises : priorEx;
+    workouts[idx] = { ...workouts[idx], notes, exercises: finalEx };
   }
 
   localStorage.setItem(_editSource, JSON.stringify(workouts));
