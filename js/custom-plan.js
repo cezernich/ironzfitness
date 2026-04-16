@@ -1100,6 +1100,10 @@ function cpManualSelectType(type) {
   document.getElementById("cp-manual-cardio").style.display = isCardio ? "" : "none";
   const hiitMeta = document.getElementById("cp-manual-hiit-meta");
   if (hiitMeta) hiitMeta.style.display = type === "hiit" ? "" : "none";
+  const bikeRow = document.getElementById("cp-manual-bike-session-row");
+  if (bikeRow) bikeRow.style.display = type === "cycling" ? "" : "none";
+  const runRow = document.getElementById("cp-manual-run-session-row");
+  if (runRow) runRow.style.display = type === "running" ? "" : "none";
   if (isCardio) {
     _cpManualCardioRowCount = 0;
     document.getElementById("cp-manual-cardio-rows").innerHTML = "";
@@ -1744,6 +1748,11 @@ function customPlanSaveManual() {
   const now = new Date().toISOString();
 
   let session;
+  // Phase 6 — capture run/bike session-type for downstream renderers
+  let cardioSessionType = null;
+  if (type === "cycling") cardioSessionType = document.getElementById("cp-manual-bike-session-type")?.value || null;
+  else if (type === "running") cardioSessionType = document.getElementById("cp-manual-run-session-type")?.value || null;
+
   if (isCardio) {
     // Collect intervals from cardio rows
     const intervals = [];
@@ -1770,6 +1779,7 @@ function customPlanSaveManual() {
         sessionName: name,
         details: notes || undefined,
         intervals: intervals.length ? intervals : undefined,
+        ...(cardioSessionType ? { sessionType: cardioSessionType } : {}),
       }
     };
   } else {
@@ -1977,6 +1987,7 @@ function saveCustomPlan() {
         }
         if (entry.data?.hiitMeta) scheduleEntry.hiitMeta = entry.data.hiitMeta;
         if (entry.data?.isHyrox)  scheduleEntry.isHyrox  = true;
+        if (entry.data?.sessionType) scheduleEntry.sessionType = entry.data.sessionType;
 
         // For cardio types without intervals, add discipline/load for rich rendering
         const _discMap = { running: "run", cycling: "bike", swimming: "swim" };

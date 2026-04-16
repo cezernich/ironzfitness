@@ -2770,6 +2770,34 @@
           <div id="cp-manual-exercise-rows"></div>
           <button class="btn-secondary" style="width:100%;margin-top:8px" onclick="cpManualAddExRow()">+ Add Exercise</button>
         </div>
+        <!-- Cardio session-type selectors (Phase 6, UNIFIED_BUILDER_SPEC.md).
+             Mirrors Add Session's qe-bike-session-type / qe-swim-session-type
+             so plan-side cardio sessions can carry the same intent label. -->
+        <div id="cp-manual-bike-session-row" class="form-row" style="display:none">
+          <label for="cp-manual-bike-session-type">Session Type</label>
+          <select id="cp-manual-bike-session-type">
+            <option value="z2_endurance" selected>Zone 2 Endurance — aerobic base ride</option>
+            <option value="tempo">Tempo — Z3 sustained pace</option>
+            <option value="threshold">Threshold — FTP intervals</option>
+            <option value="vo2_intervals">VO2 Intervals — short hard repeats</option>
+            <option value="sweet_spot">Sweet Spot — 88–94% FTP blocks</option>
+            <option value="recovery_spin">Recovery Spin — easy flush ride</option>
+            <option value="long_ride">Long Ride — longest ride of the week</option>
+          </select>
+        </div>
+        <div id="cp-manual-run-session-row" class="form-row" style="display:none">
+          <label for="cp-manual-run-session-type">Session Type</label>
+          <select id="cp-manual-run-session-type">
+            <option value="easy" selected>Easy — conversational pace</option>
+            <option value="long">Long — extended aerobic effort</option>
+            <option value="tempo">Tempo — comfortably hard sustained</option>
+            <option value="threshold">Threshold — lactate-threshold repeats</option>
+            <option value="intervals">Intervals — VO2-paced repeats</option>
+            <option value="fartlek">Fartlek — varied pace play</option>
+            <option value="hills">Hill Repeats</option>
+            <option value="progression">Progression — finish faster</option>
+          </select>
+        </div>
         <!-- HIIT meta fields (Phase 4, UNIFIED_BUILDER_SPEC.md). Only shown
              when the selected type is "hiit"; keeps the format / rounds /
              rest metadata in sync with what Add Session captures so the
