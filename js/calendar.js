@@ -1270,7 +1270,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
           <div class="session-header-right">
             ${(() => {
               const actual = _getCompletionDuration(cardId);
-              if (actual) return `<span class="session-duration-badge">${actual} min</span>`;
+              if (actual) return `<span class="session-duration-badge">${_fmtBadgeMin(actual)} min</span>`;
               return displayDur ? `<span class="session-duration-badge">${isReduced ? "⬇ " : ""}${displayDur} min</span>` : "";
             })()}
             ${_buildUndoHeaderBtn(cardId, dateStr)}${_aiOverflow}
@@ -1308,7 +1308,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
             <div class="session-phase">${_logComplete ? "Completed · " : "Planned · "}${_wTypeLabel(w.type)}</div>
           </div>
           <div class="session-header-right">
-            <span class="session-duration-badge">${_getCompletionDuration(cardId) || s.duration} min</span>
+            <span class="session-duration-badge">${_fmtBadgeMin(_getCompletionDuration(cardId) || s.duration)} min</span>
             ${_buildUndoHeaderBtn(cardId, dateStr)}${_genOverflow}
             <span class="card-chevron">▾</span>
           </div>
@@ -1364,7 +1364,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
       _ovflShareItem(w) +
       _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
     const _exDurationBadge = w.duration
-      ? `<span class="session-duration-badge">${_getCompletionDuration(cardId) || w.duration} min</span>`
+      ? `<span class="session-duration-badge">${_fmtBadgeMin(_getCompletionDuration(cardId) || w.duration)} min</span>`
       : "";
     return `
       <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
@@ -2030,6 +2030,15 @@ function _getCompletionDuration(sessionId) {
     }
   } catch {}
   return null;
+}
+
+// Duration badges show whole minutes. mm:ss completion input can land at
+// values like 26.2333 (= 26 min 14 sec) which looks broken in the badge.
+function _fmtBadgeMin(v) {
+  if (v == null || v === "") return "";
+  const n = typeof v === "number" ? v : parseFloat(v);
+  if (!isFinite(n)) return String(v);
+  return String(Math.round(n));
 }
 
 const _ENDURANCE_TYPES = new Set(["running", "cycling", "swimming", "triathlon", "stairstepper"]);
@@ -3345,7 +3354,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
                 <div class="session-phase">${p.phase} · Week ${p.weekNumber}</div>
               </div>
               <div class="session-header-right">
-                <span class="session-duration-badge">${_getCompletionDuration(cardId) || session.duration} min</span>
+                <span class="session-duration-badge">${_fmtBadgeMin(_getCompletionDuration(cardId) || session.duration)} min</span>
                 <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
                 ${_planUndoBtn}${_planOverflow}
                 <span class="card-chevron">▾</span>
@@ -3414,7 +3423,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
                   <div class="session-phase">${({ run: "Running", bike: "Cycling", swim: "Swimming", brick: "Brick" })[w.discipline] || capitalize(w.discipline || "")}</div>
                 </div>
                 <div class="session-header-right">
-                  <span class="session-duration-badge">${_getCompletionDuration(cardId) || targetDuration} min</span>
+                  <span class="session-duration-badge">${_fmtBadgeMin(_getCompletionDuration(cardId) || targetDuration)} min</span>
                   <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
                   ${_swUndoBtn}${_swOverflow}
                   <span class="card-chevron">▾</span>
@@ -3619,7 +3628,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
               <div class="session-name">${w.sessionName}${_swGenDoneInd}</div>
               <div class="session-phase">${_wTypeLabel(w.type)}</div>
             </div>
-            <div class="session-header-right">${(_getCompletionDuration(cardId) || _swGenDurMin) ? `<span class="session-duration-badge">${_getCompletionDuration(cardId) || _swGenDurMin} min</span>` : ""}${_swGenUndoBtn}${_swGenOverflow}<span class="card-chevron">▾</span></div>
+            <div class="session-header-right">${(_getCompletionDuration(cardId) || _swGenDurMin) ? `<span class="session-duration-badge">${_fmtBadgeMin(_getCompletionDuration(cardId) || _swGenDurMin)} min</span>` : ""}${_swGenUndoBtn}${_swGenOverflow}<span class="card-chevron">▾</span></div>
           </div>
           ${_swGenStrip}
           <div class="card-body">${body}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(w.duration || _swGenDurMin, w.sessionName, { load: w.load || "moderate", discipline: w.discipline || w.type }) : ""}${buildWorkoutExplanation(null, dateStr, w.discipline || w.type, w.load || "moderate", w.sessionName, w)}${_swGenEditPanel}${_swGenMovePanel}${_swGenCompletion}</div>
