@@ -3832,6 +3832,16 @@ function _generateWorkoutRationale(dateStr, discipline, load, sessionName, entry
   if (source === "shared")    return "";
   if (source === "saved" && !isAiGenerated) return "";
 
+  // Defensive: if the entry doesn't carry any plan-generated signal
+  // (phase / weekNumber / raceId) AND isn't an AI session, treat it
+  // as a user-built custom session regardless of how its source flag
+  // is tagged. The custom-plan and quick-entry flows have written
+  // various combinations of source values over time; this catch-all
+  // keeps "Why this workout?" from showing up on a session the user
+  // literally typed into the app themselves.
+  const hasPlanSignal = !!(entry && (entry.phase || entry.weekNumber || entry.raceId || entry.planId));
+  if (!isAiGenerated && !hasPlanSignal) return "";
+
   // AI-generated / plan-scheduled — build contextual rationale
   const parts = [];
 
