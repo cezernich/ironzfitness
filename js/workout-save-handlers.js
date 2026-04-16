@@ -101,14 +101,18 @@
       row.source = workout._source || "manual";
     }
 
-    // Swim step tree / interval list → aiSession
+    // Swim step tree / interval list → aiSession. Shape must match what
+    // SwimCardRenderer expects (pool_size_m / pool_unit flat, not nested).
     if (workout.discipline === "swim" || type === "swimming") {
       if (s.steps || s.intervals) {
         row.aiSession = {
           title: workout.name || "Pool Workout",
+          type: "swim",
           ...(s.steps ? { steps: s.steps } : {}),
           ...(s.intervals ? { intervals: s.intervals } : {}),
-          ...(s.pool ? { pool: s.pool } : {}),
+          ...(s.pool && s.pool.size_m ? { pool_size_m: s.pool.size_m } : {}),
+          ...(s.pool && s.pool.unit ? { pool_unit: s.pool.unit } : {}),
+          ...(s.total_distance_m ? { total_distance_m: s.total_distance_m } : {}),
         };
       }
     }
@@ -160,14 +164,18 @@
     // looks for data.intervals first, then data.aiSession.intervals.
     if (s.intervals && s.intervals.length) data.intervals = s.intervals;
 
-    // Swim step tree / generic aiSession payload
+    // Swim step tree / generic aiSession payload. Mirror the calendar-row
+    // shape so plan materialization → calendar rendering works unchanged.
     if (workout.discipline === "swim" || type === "swimming") {
       if (s.steps || s.intervals) {
         data.aiSession = {
           title: workout.name || "Pool Workout",
+          type: "swim",
           ...(s.steps ? { steps: s.steps } : {}),
           ...(s.intervals ? { intervals: s.intervals } : {}),
-          ...(s.pool ? { pool: s.pool } : {}),
+          ...(s.pool && s.pool.size_m ? { pool_size_m: s.pool.size_m } : {}),
+          ...(s.pool && s.pool.unit ? { pool_unit: s.pool.unit } : {}),
+          ...(s.total_distance_m ? { total_distance_m: s.total_distance_m } : {}),
         };
       }
     }

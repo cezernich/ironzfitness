@@ -928,26 +928,36 @@ function _cpManualPrefillFromEntry(entry) {
   const d = entry.data || {};
   const type = d.type || "general";
 
-  // Circuit sessions round-trip through the shared CircuitBuilder, not
-  // the generic exercise-row form — see cpManualSelectType's circuit
-  // intercept (Phase 2, UNIFIED_BUILDER_SPEC.md). Without this edits
-  // would fall into the generic form and drop circuit.steps.
-  if (type === "circuit" && typeof window !== "undefined"
-      && window.CircuitBuilder && typeof window.saveToPlanDay === "function") {
+  // Migrated disciplines round-trip through their shared builder, not
+  // the generic CP Manual form — see cpManualSelectType's dispatch
+  // (UNIFIED_BUILDER_SPEC.md, phases 2+). Without this, edits would fall
+  // into the generic form and drop per-discipline structure.
+  if (typeof window !== "undefined" && typeof window.saveToPlanDay === "function") {
     const modal = document.getElementById("cp-manual-modal");
     const dow = parseInt(modal?.dataset.dow);
     const editIdx = _cpManualEditIdx;
-    closeCustomPlanManualModal();
-    window.CircuitBuilder.openEntryFlow(null, {
-      context: "plan-manual",
-      existing: entry,
-      onSave: (workout) => {
-        window.saveToPlanDay(workout, null, dow, editIdx != null
-          ? { editIdx, existingId: entry.id, existingCreatedAt: entry.data?.createdAt }
-          : {});
-      },
-    });
-    return;
+
+    const reopenWithExisting = (openFn) => {
+      closeCustomPlanManualModal();
+      openFn({
+        context: "plan-manual",
+        existing: entry,
+        onSave: (workout) => {
+          window.saveToPlanDay(workout, null, dow, editIdx != null
+            ? { editIdx, existingId: entry.id, existingCreatedAt: entry.data?.createdAt }
+            : {});
+        },
+      });
+    };
+
+    if (type === "circuit" && window.CircuitBuilder) {
+      reopenWithExisting((opts) => window.CircuitBuilder.openEntryFlow(null, opts));
+      return;
+    }
+    if (type === "swimming" && window.SwimBuilderModal) {
+      reopenWithExisting((opts) => window.SwimBuilderModal.open(null, opts));
+      return;
+    }
   }
 
   // Jump straight to step 2 with the right type selected
@@ -1029,28 +1039,35 @@ const CP_TYPE_LABELS = {
 function cpManualSelectType(type) {
   _cpManualSelectedType = type;
 
-  // Unified Workout Builder — Phase 2 (CircuitBuilder migration).
-  // When the user picks "circuit", close the generic CP Manual modal and
-  // open the shared CircuitBuilder from js/ui/circuit-builder.js, wired
-  // to saveToPlanDay so the resulting circuit lands on this day's template.
-  // Previously "circuit" fell through to the generic exercise-row editor
-  // and the per-step structure was silently lost (BUILDER_INVENTORY.md §5
-  // bug 4).
-  if (type === "circuit" && typeof window !== "undefined"
-      && window.CircuitBuilder && typeof window.saveToPlanDay === "function") {
+  // Unified Workout Builder dispatch (UNIFIED_BUILDER_SPEC.md, phases 2+).
+  // Each migrated discipline closes the generic CP Manual modal and opens
+  // its shared builder, wired to saveToPlanDay so the full per-discipline
+  // structure round-trips instead of collapsing into the generic form.
+  if (typeof window !== "undefined" && typeof window.saveToPlanDay === "function") {
     const modal = document.getElementById("cp-manual-modal");
     const dow = parseInt(modal?.dataset.dow);
     const editIdx = _cpManualEditIdx;
-    closeCustomPlanManualModal();
-    // Pass dow directly as the "dayDate" — saveToPlanDay's _dowFromDate
-    // accepts a number and uses it as the DOW unchanged.
-    window.CircuitBuilder.openEntryFlow(null, {
-      context: "plan-manual",
-      onSave: (workout) => {
-        window.saveToPlanDay(workout, null, dow, editIdx != null ? { editIdx } : {});
-      },
-    });
-    return;
+
+    const launchBuilder = (openFn) => {
+      closeCustomPlanManualModal();
+      openFn({
+        context: "plan-manual",
+        onSave: (workout) => {
+          window.saveToPlanDay(workout, null, dow, editIdx != null ? { editIdx } : {});
+        },
+      });
+    };
+
+    // Phase 2 — Circuit
+    if (type === "circuit" && window.CircuitBuilder) {
+      launchBuilder((opts) => window.CircuitBuilder.openEntryFlow(null, opts));
+      return;
+    }
+    // Phase 3 — Swim (replaces miles-based cardio rows, adds pool-aware step tree)
+    if (type === "swimming" && window.SwimBuilderModal) {
+      launchBuilder((opts) => window.SwimBuilderModal.open(null, opts));
+      return;
+    }
   }
 
   // Cardio-style types get the interval-rows editor; everything else

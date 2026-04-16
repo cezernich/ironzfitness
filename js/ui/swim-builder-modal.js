@@ -91,26 +91,42 @@
     if (!M) { console.warn("[SwimBuilderModal] SwimWorkout model not loaded"); return; }
     const pool = M.getUserPoolSize();
 
-    // Existing workout edit
+    // Unified Workout Builder hooks (UNIFIED_BUILDER_SPEC.md §Save handler
+    // contract). When opts.onSave is provided, _save() dispatches the
+    // normalized workout to the caller instead of writing localStorage.
+    // opts.existing may be a CP session entry ({ data: { aiSession } })
+    // OR a workouts row, so we probe both shapes.
+    const onSave = typeof opts.onSave === "function" ? opts.onSave : null;
+    const context = opts.context || "calendar";
+
     let existing = null;
-    if (opts.existingWorkoutId) {
+    if (opts.existing) {
+      existing = opts.existing;
+    } else if (opts.existingWorkoutId) {
       try {
         const list = JSON.parse(localStorage.getItem("workouts")) || [];
         existing = list.find(w => w.id === opts.existingWorkoutId);
       } catch {}
     }
 
+    // Resolve aiSession from either shape
+    const aiSession = existing && (existing.aiSession || (existing.data && existing.data.aiSession));
+    const existingNotes = existing && (existing.notes || (existing.data && existing.data.details) || "");
+    const existingId = existing && (existing.id || (existing.data && existing.data.id));
+
     _state = {
       mode: existing ? "edit" : "create",
-      workoutId: existing ? existing.id : null,
+      workoutId: existingId || null,
       dateStr: dateStr || (existing && existing.date) || _todayStr(),
-      title: (existing && existing.aiSession && existing.aiSession.title) || "Pool Workout",
-      notes: (existing && existing.notes) || "",
+      title: (aiSession && aiSession.title) || "Pool Workout",
+      notes: existingNotes || "",
       pool,
-      steps: _tagSteps((existing && existing.aiSession && existing.aiSession.steps) || []),
+      steps: _tagSteps((aiSession && aiSession.steps) || []),
       editing: null, // { uid, kind } when inline editor is open
       adding: null,  // "interval" | "rest" | "repeat" — when appending a new step
       addParentUid: null, // if adding inside a repeat block
+      onSave,
+      context,
     };
 
     _renderOverlay();
@@ -545,6 +561,31 @@
       intervals: _legacyIntervalsFromSteps(cleanSteps),
     };
 
+    // Unified Workout Builder path — hand a normalized workout to the
+    // caller's onSave instead of touching localStorage directly.
+    if (_state.onSave) {
+      const workout = {
+        discipline: "swim",
+        type: "swimming",
+        name: _state.title || "Pool Workout",
+        notes: _state.notes || "",
+        exercises: [],
+        durationMin: 0,
+        structure: {
+          steps: cleanSteps,
+          intervals: aiSession.intervals,
+          pool: { size_m: _state.pool.length_m, unit: _state.pool.unit },
+          total_distance_m: totalM,
+        },
+      };
+      try { _state.onSave(workout); } catch (e) { console.error("[SwimBuilderModal] onSave failed:", e); }
+      close();
+      return;
+    }
+
+    // Legacy path — direct write to localStorage.workouts. Kept for any
+    // surface that still calls open(dateStr) without onSave (edit from
+    // workouts row via existingWorkoutId).
     let workouts = [];
     try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
     if (_state.mode === "edit" && _state.workoutId) {
