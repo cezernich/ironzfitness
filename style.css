@@ -16175,10 +16175,16 @@ body.auth-visible #bottom-nav { display: none !important; }
 .circuit-preview-wrap .goal-badge.goal-standard { background: #8e8e9333; color: #8e8e93; }
 
 /* ── Modal shell (entry/preview/builder/library/completion) ─────────────── */
+/* Circuit builder modals — relight to match the rest of the app.
+   Previously used a dark iOS-style sheet (#1c1c1e / #3a3a3c / white
+   text) which looked transplanted compared to the light cream modals
+   every other flow in IronZ uses (Add Running Session, race forms,
+   settings dialogs). Swapped to the app's standard surface / border /
+   text tokens so Circuit Session sits in the same visual language. */
 .circuit-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(0, 0, 0, 0.45);
   z-index: 10070;
   display: flex;
   align-items: flex-end;
@@ -16188,8 +16194,8 @@ body.auth-visible #bottom-nav { display: none !important; }
 }
 .circuit-modal-overlay.is-open { opacity: 1; }
 .circuit-modal {
-  background: #1c1c1e;
-  color: #fff;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #1a1a1a);
   width: 100%;
   max-width: 460px;
   max-height: 92vh;
@@ -16197,15 +16203,19 @@ body.auth-visible #bottom-nav { display: none !important; }
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  font-family: inherit;
   transform: translateY(20px);
   transition: transform 0.2s ease;
+  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.15);
 }
 .circuit-modal-overlay.is-open .circuit-modal { transform: translateY(0); }
 
 @media (min-width: 560px) {
   .circuit-modal-overlay { align-items: center; }
-  .circuit-modal { border-radius: 20px; }
+  .circuit-modal {
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  }
 }
 
 .circuit-modal-header {
@@ -16218,8 +16228,8 @@ body.auth-visible #bottom-nav { display: none !important; }
 }
 .circuit-modal-title {
   font-size: 16px;
-  font-weight: 700;
-  color: #fff;
+  font-weight: 800;
+  color: var(--color-text, #1a1a1a);
   flex: 1;
   text-align: center;
 }
@@ -16228,14 +16238,19 @@ body.auth-visible #bottom-nav { display: none !important; }
 .circuit-modal-back-spacer {
   background: none;
   border: none;
-  color: #8e8e93;
+  color: var(--color-text-muted, #6b7280);
   font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   padding: 4px 8px;
   min-width: 52px;
 }
+.circuit-modal-back:hover,
+.circuit-modal-close:hover {
+  color: var(--color-text, #1a1a1a);
+}
 .circuit-modal-back { text-align: left; }
-.circuit-modal-close { text-align: right; font-size: 18px; }
+.circuit-modal-close { text-align: right; font-size: 20px; }
 .circuit-modal-dots {
   display: flex;
   justify-content: center;
@@ -16247,9 +16262,9 @@ body.auth-visible #bottom-nav { display: none !important; }
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #48484a;
+  background: var(--color-border, #e5e7eb);
 }
-.circuit-modal-dot.is-active { background: #e74c3c; }
+.circuit-modal-dot.is-active { background: #E8530E; }
 .circuit-modal-body {
   padding: 12px 20px 20px;
   overflow-y: auto;
@@ -16257,7 +16272,7 @@ body.auth-visible #bottom-nav { display: none !important; }
 }
 .circuit-modal-footer {
   padding: 12px 20px calc(16px + env(safe-area-inset-bottom, 0));
-  border-top: 1px solid #2c2c2e;
+  border-top: 1px solid var(--color-border, #e5e7eb);
   flex-shrink: 0;
 }
 .circuit-modal-footer--dual {
@@ -16268,40 +16283,44 @@ body.auth-visible #bottom-nav { display: none !important; }
 /* ── Builder fields (entry + manual builder) ────────────────────────────── */
 .builder-field { margin-bottom: 16px; }
 .builder-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 1.5px;
+  letter-spacing: 0.8px;
   text-transform: uppercase;
-  color: #8e8e93;
+  color: var(--color-text-muted, #6b7280);
   margin-bottom: 6px;
 }
 .builder-input {
   width: 100%;
-  background: #3a3a3c;
-  border: none;
+  background: var(--color-surface, #fff);
+  border: 1.5px solid var(--color-border, #e5e7eb);
   border-radius: 10px;
   padding: 12px 14px;
   font-size: 15px;
-  color: #fff;
+  color: var(--color-text, #1a1a1a);
   outline: none;
   font-family: inherit;
+  transition: border-color 0.15s;
 }
-.builder-input::placeholder { color: #636366; }
+.builder-input:focus {
+  border-color: #E8530E;
+}
+.builder-input::placeholder { color: var(--color-text-muted, #9ca3af); }
 .builder-select {
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%238e8e93' d='M6 8L0 0h12z'/></svg>");
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%236b7280' d='M6 8L0 0h12z'/></svg>");
   background-repeat: no-repeat;
   background-position: right 14px center;
   padding-right: 36px;
 }
 .builder-empty {
-  color: #8e8e93;
+  color: var(--color-text-muted, #9ca3af);
   font-size: 13px;
   font-style: italic;
   padding: 12px;
   text-align: center;
-  border: 1px dashed #3a3a3c;
+  border: 1px dashed var(--color-border, #e5e7eb);
   border-radius: 10px;
 }
 
@@ -16314,20 +16333,24 @@ body.auth-visible #bottom-nav { display: none !important; }
 .focus-chip {
   flex: 1 1 auto;
   min-width: calc(50% - 4px);
-  padding: 10px 12px;
+  padding: 11px 12px;
   border-radius: 10px;
-  background: #3a3a3c;
-  color: #8e8e93;
-  border: 2px solid transparent;
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #1a1a1a);
+  border: 1.5px solid var(--color-border, #e5e7eb);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   font-family: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+.focus-chip:hover {
+  border-color: #E8530E;
 }
 .focus-chip.is-active {
-  border-color: #e74c3c;
-  color: #fff;
-  background: #e74c3c22;
+  border-color: #E8530E;
+  color: #E8530E;
+  background: rgba(232, 83, 14, 0.08);
 }
 
 /* ── Goal selector (manual builder) ─────────────────────────────────────── */
@@ -17994,22 +18017,22 @@ body.ob-v2-lock { overflow: hidden; }
   width: 28px;
   height: 28px;
   border-radius: 7px;
-  border: 1.5px solid #e8e8ec;
-  background: #fff;
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface-2);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   padding: 0;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
 .cal-nb:hover {
-  background: #f0f0f4;
+  border-color: var(--color-text-muted);
 }
 .cal-nb svg {
   width: 12px;
   height: 12px;
-  stroke: #999;
+  stroke: var(--color-text-muted);
 }
 .cal-today-btn {
   background: var(--cal-dark);
@@ -18051,15 +18074,15 @@ body.ob-v2-lock { overflow: hidden; }
 .cal-mo {
   font-size: 12px;
   font-weight: 700;
-  color: var(--cal-dark);
+  color: var(--color-text);
   white-space: nowrap;
 }
 .cal-toggle {
   width: 28px;
   height: 28px;
   border-radius: 7px;
-  border: 1.5px solid #e8e8ec;
-  background: #fff;
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface-2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -18070,12 +18093,12 @@ body.ob-v2-lock { overflow: hidden; }
 .cal-toggle svg {
   width: 14px;
   height: 14px;
-  stroke: #999;
+  stroke: var(--color-text-muted);
   fill: none;
 }
 .cal-toggle.active {
-  background: var(--cal-dark);
-  border-color: var(--cal-dark);
+  background: var(--color-accent, var(--cal-dark));
+  border-color: var(--color-accent, var(--cal-dark));
 }
 .cal-toggle.active svg {
   stroke: #fff;
@@ -18084,7 +18107,7 @@ body.ob-v2-lock { overflow: hidden; }
   display: flex;
   align-items: center;
   gap: 4px;
-  background: var(--cal-dark);
+  background: var(--color-accent, var(--cal-dark));
   color: #fff;
   border: none;
   padding: 5px 10px;
@@ -18150,20 +18173,23 @@ body.ob-v2-lock { overflow: hidden; }
   position: relative;
 }
 
-/* Side cards (non-selected days) */
+/* Side cards (non-selected days) — driven off the app's theme tokens
+   (--color-surface-2 / --color-border / --color-text / --color-text-muted)
+   so they adapt to the user's active theme instead of carrying a
+   hardcoded cream palette that clashes on dark themes. */
 .dc.s {
   width: 56px;
-  background: #f8f8fa;
-  border: 1.5px solid #eeeeef;
+  background: var(--color-surface-2);
+  border: 1.5px solid var(--color-border);
   padding: 10px 4px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  opacity: 0.65;
+  opacity: 0.72;
 }
 .dc.s:hover {
-  opacity: 0.85;
-  background: #f0f0f4;
+  opacity: 0.92;
+  border-color: var(--color-accent, var(--cal-red));
 }
 .dc.s.selected {
   opacity: 0.9;
@@ -18173,33 +18199,33 @@ body.ob-v2-lock { overflow: hidden; }
    center (selected) day, so users can always see where today is. */
 .dc.s.is-today {
   opacity: 1;
-  border-color: var(--cal-dark);
+  border-color: var(--color-text);
   border-width: 2px;
-  background: #fff;
+  background: var(--color-surface-2);
 }
 .dc.s.is-today .s-lb {
   color: var(--cal-red);
 }
 .dc.s.is-today .s-nm {
-  color: var(--cal-dark);
+  color: var(--color-text);
 }
 .dc.s.is-today.selected {
   border-color: var(--cal-red);
 }
 .dc.s.cal-removed {
   border-color: var(--cal-red);
-  background: rgba(230, 57, 70, 0.08);
+  background: rgba(230, 57, 70, 0.12);
 }
 .s-lb {
   font-size: 9px;
   font-weight: 600;
-  color: #bbb;
+  color: var(--color-text-muted);
   text-transform: uppercase;
 }
 .s-nm {
   font-size: 18px;
   font-weight: 800;
-  color: var(--cal-dark);
+  color: var(--color-text);
   margin: 3px 0 8px;
 }
 .s-dots {
@@ -18243,9 +18269,10 @@ body.ob-v2-lock { overflow: hidden; }
 .s-rest {
   font-size: 7px;
   font-weight: 600;
-  color: #d0d0d0;
+  color: var(--color-text-muted);
   letter-spacing: 0.5px;
   margin-top: 2px;
+  opacity: 0.65;
 }
 .s-check {
   width: 14px;
@@ -18393,7 +18420,7 @@ body.ob-v2-lock { overflow: hidden; }
   text-align: center;
   font-size: 9px;
   font-weight: 600;
-  color: #bbb;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -18413,27 +18440,27 @@ body.ob-v2-lock { overflow: hidden; }
   min-height: 56px;
 }
 .md:hover {
-  background: #f0f0f4;
+  background: var(--color-surface-2);
 }
 .md.today {
-  background: var(--cal-dark);
+  background: var(--color-accent, var(--cal-dark));
   border-radius: 10px;
 }
 .md.today .md-num { color: #fff; }
-.md.today .md-rest { color: rgba(255, 255, 255, 0.4); }
+.md.today .md-rest { color: rgba(255, 255, 255, 0.55); }
 .md.other-month { opacity: 0.3; }
 .md.selected {
   box-shadow: inset 0 0 0 2px var(--cal-red);
   border-radius: 10px;
 }
 .md.cal-removed {
-  background: rgba(230, 57, 70, 0.08);
+  background: rgba(230, 57, 70, 0.12);
   box-shadow: inset 0 0 0 1px rgba(230, 57, 70, 0.5);
 }
 .md-num {
   font-size: 13px;
   font-weight: 700;
-  color: var(--cal-dark);
+  color: var(--color-text);
   margin-bottom: 4px;
 }
 .md-dots {
@@ -18449,10 +18476,11 @@ body.ob-v2-lock { overflow: hidden; }
 }
 .md-rest {
   font-size: 6px;
-  color: #d0d0d0;
+  color: var(--color-text-muted);
   font-weight: 600;
   letter-spacing: 0.3px;
   margin-top: 2px;
+  opacity: 0.65;
 }
 .md-check {
   width: 10px;
