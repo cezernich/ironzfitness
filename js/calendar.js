@@ -8641,36 +8641,43 @@ function getRatingSmartAlert() {
 // ── Rest Day Intelligence ───────────────────────────────────────────────────
 
 function _getTrainingDaysAround(dateStr) {
-  const plan = [];
-  try { plan.push(...(JSON.parse(localStorage.getItem("trainingPlan")) || [])); } catch {}
   const schedule = [];
   try { schedule.push(...(JSON.parse(localStorage.getItem("workoutSchedule")) || [])); } catch {}
+  const plan = [];
+  try { plan.push(...(JSON.parse(localStorage.getItem("trainingPlan")) || [])); } catch {}
   const logged = [];
   try { logged.push(...(JSON.parse(localStorage.getItem("workouts")) || [])); } catch {}
+  const completionMeta = loadCompletionMeta();
 
-  // Build set of dates that have a workout (past 14 days, future 2 days)
-  const ref = new Date(dateStr + "T00:00:00");
   const trainingDates = new Set();
   const typesByDate = {};
 
   const addDate = (d, type) => {
+    if (!d) return;
     trainingDates.add(d);
     if (!typesByDate[d]) typesByDate[d] = [];
     if (type && !typesByDate[d].includes(type)) typesByDate[d].push(type);
   };
 
-  plan.forEach(p => addDate(p.date, p.discipline));
+  // Scheduled workouts — only count if the user actually completed the session
   schedule.forEach(w => {
-    if (!/^rest$/i.test((w.sessionName || "").trim())) {
-      addDate(w.date, w.discipline || w.type);
+    if (completionMeta[`session-sw-${w.id}`]) addDate(w.date, w.discipline || w.type);
+  });
+
+  // Race-plan entries — only count if completed
+  plan.forEach(p => {
+    if (completionMeta[`session-plan-${p.date}-${p.raceId}`]) addDate(p.date, p.discipline);
+  });
+
+  // Logged workouts: count completion receipts, Strava-imported activity, or
+  // template-based manual logs (fromSaved). A bare logged entry (Add Session
+  // without a completion receipt) is still a planned session, not a trained day.
+  logged.forEach(w => {
+    if (w.isCompletion || w.source === "strava" || w.fromSaved) {
+      addDate(w.date, w.type);
+    } else if (completionMeta[`session-log-${w.id}`]) {
+      addDate(w.date, w.type);
     }
-  });
-  logged.forEach(w => {
-    if (!w.isCompletion) addDate(w.date, w.type);
-  });
-  // Also count completion records as training
-  logged.forEach(w => {
-    if (w.isCompletion) addDate(w.date, w.type);
   });
 
   return { trainingDates, typesByDate };
