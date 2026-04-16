@@ -443,15 +443,37 @@ async function loadAdminExercises() {
   // Primary source: window.EXERCISE_DB (generated from the spreadsheet +
   // supplement — 307 exercises). Keeps the admin view in lockstep with
   // what the planner + builders actually see.
-  if (Array.isArray(window.EXERCISE_DB) && window.EXERCISE_DB.length > 0) {
+  //
+  // Retry once after a short wait if the script tag hasn't evaluated yet
+  // (browsers can defer parsing under load). Without this we'd silently
+  // fall through to the 158-row Supabase table whenever EXERCISE_DB is a
+  // hair late — the exact symptom that made this view look broken.
+  async function _waitForExerciseDB(maxMs) {
+    const start = Date.now();
+    while (!(Array.isArray(window.EXERCISE_DB) && window.EXERCISE_DB.length > 0)) {
+      if (Date.now() - start > maxMs) return false;
+      await new Promise(r => setTimeout(r, 50));
+    }
+    return true;
+  }
+
+  const ready = Array.isArray(window.EXERCISE_DB) && window.EXERCISE_DB.length > 0
+    ? true
+    : await _waitForExerciseDB(1500);
+
+  if (ready) {
     _adminExercises = window.EXERCISE_DB.map(_adminShapeFromExerciseDB);
     _adminExercises.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    console.log(`[admin] Exercises loaded from window.EXERCISE_DB: ${_adminExercises.length} rows`);
     renderAdminExerciseStats();
     renderAdminExercises();
     return;
   }
   // Fallback: legacy Supabase exercise_library table. Only runs if
-  // exercise-data.js failed to load (script error, offline first boot).
+  // exercise-data.js failed to load entirely (script error, offline
+  // first boot). Emits a visible warning so the mismatched count isn't
+  // silent.
+  console.warn('[admin] window.EXERCISE_DB not available — falling back to Supabase exercise_library (legacy, 158 rows)');
   const client = window.supabaseClient;
   try {
     const { data, error } = await client.from('exercise_library').select('*').order('name');
