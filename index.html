@@ -2948,6 +2948,11 @@
   <script src="js/nutrition-v2.js"></script>
   <script src="js/meal-planner.js"></script>
   <script src="js/custom-plan.js"></script>
+  <!-- Unified workout builder save handlers (cowork-handoff/UNIFIED_BUILDER_SPEC.md,
+       docs/BUILDER_INVENTORY.md). Must load AFTER custom-plan.js and
+       calendar.js so it can reference their function-declaration globals
+       (_cpAddSession, _cpRerenderDay, renderCalendar, renderDayDetail). -->
+  <script src="js/workout-save-handlers.js"></script>
   <script src="js/leveling.js"></script>
   <script src="js/challenges.js"></script>
   <script src="js/ux-level.js"></script>
