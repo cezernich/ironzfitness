@@ -359,6 +359,7 @@ const DB = (() => {
     'currentRecoveryState', 'latestCheckIn',
     // Preferences
     'notifSettings', 'theme', 'userLevel', 'coachingDismissed',
+    'coachingInsightsEnabled', 'fuelingEnabled',
     // Onboarding v2 / Build Plan inputs (spec §5.1)
     // These capture the user's answers from the onboarding survey and
     // the standalone Build Plan flow. They feed generateTrainingPlan()

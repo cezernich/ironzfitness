@@ -2,6 +2,34 @@
 // Phase 4.1: Adjusts plans based on user behavior, feedback, and patterns.
 
 /* =====================================================================
+   FEATURE TOGGLE
+   ===================================================================== */
+
+// IronZ Insights preference — when disabled, buildCoachingInsights()
+// returns empty string and no banner/card is rendered. Defaults to on.
+// Stored in localStorage.coachingInsightsEnabled as "1" or "0".
+function isCoachingInsightsEnabled() {
+  return localStorage.getItem("coachingInsightsEnabled") !== "0";
+}
+
+function setCoachingInsightsEnabled(enabled) {
+  localStorage.setItem("coachingInsightsEnabled", enabled ? "1" : "0");
+  if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("coachingInsightsEnabled");
+  const toggle = document.getElementById("pref-insights-toggle");
+  if (toggle) toggle.checked = enabled;
+  if (typeof trackEvent === "function") trackEvent("feature_toggled", { feature: "insights", enabled });
+  if (typeof renderCalendar === "function") renderCalendar();
+  if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
+    renderDayDetail(selectedDate);
+  }
+}
+
+function applyCoachingInsightsToggle() {
+  const toggle = document.getElementById("pref-insights-toggle");
+  if (toggle) toggle.checked = isCoachingInsightsEnabled();
+}
+
+/* =====================================================================
    BEHAVIOR ANALYSIS
    ===================================================================== */
 
@@ -244,6 +272,7 @@ function getCoachingInsights() {
  * Renders coaching insights card for the home tab.
  */
 function buildCoachingInsights() {
+  if (!isCoachingInsightsEnabled()) return "";
   const insights = getCoachingInsights();
   if (insights.length === 0) return "";
 

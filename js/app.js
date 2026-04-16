@@ -198,6 +198,7 @@ function showTab(name) {
     if (typeof renderThemePicker === "function") renderThemePicker();
     applyNutritionToggle();
     if (typeof applyFuelingToggle === "function") applyFuelingToggle();
+    if (typeof applyCoachingInsightsToggle === "function") applyCoachingInsightsToggle();
     applyMeasurementToggle();
     applyPoolSizeToggle();
     if (typeof renderNotifSettings === "function") renderNotifSettings();
