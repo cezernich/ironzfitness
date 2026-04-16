@@ -461,6 +461,58 @@ def main() -> int:
                 supp_added += 1
         print(f"  supplement: {supp_added} exercises", file=sys.stderr)
 
+    # Dedupe by normalized name. The spreadsheet + supplement carry the
+    # same exercise across multiple sheets (e.g. Pull-Up in Strength +
+    # Circuit + Sport-Specific). Keep the richest row — sheet_order
+    # ranks Strength first so its pattern/tier/muscles win — and merge
+    # cross-sheet tags (modality, commonIn, sport, isHyroxStation) onto
+    # the survivor so we don't lose the information that Pull-Up appears
+    # in benchmark WODs + swim-specific strength work.
+    sheet_rank = {"strength": 0, "sport-specific": 1, "circuit": 2, "hyrox": 3, "cardio-session": 4}
+
+    def _name_key(s: str) -> str:
+        """Case + punctuation + trailing-s insensitive dedupe key."""
+        k = re.sub(r"[^a-z0-9]", "", (s or "").lower())
+        return k[:-1] if k.endswith("s") else k
+
+    clusters: dict[str, list[dict]] = {}
+    for row in out:
+        clusters.setdefault(_name_key(row["name"]), []).append(row)
+
+    deduped: list[dict] = []
+    merged_clusters = 0
+    for group in clusters.values():
+        if len(group) == 1:
+            deduped.append(group[0])
+            continue
+        group.sort(key=lambda r: sheet_rank.get(r["sheet"], 99))
+        survivor = dict(group[0])
+        for sibling in group[1:]:
+            # Absorb cross-sheet tags the survivor might be missing
+            for field in ("modality", "sport", "purpose", "hyroxOrder",
+                          "defaultDistance", "defaultWeight"):
+                if not survivor.get(field) and sibling.get(field):
+                    survivor[field] = sibling[field]
+            if sibling.get("isHyroxStation"):
+                survivor["isHyroxStation"] = True
+            # Union list fields so we keep commonIn tags across rows
+            sib_common = sibling.get("commonIn") or []
+            if sib_common:
+                merged = survivor.get("commonIn") or []
+                for t in sib_common:
+                    if t not in merged:
+                        merged.append(t)
+                survivor["commonIn"] = merged
+            # Preserve muscleCategory from the richer sibling if ours is empty
+            if not survivor.get("muscleCategory") and sibling.get("muscleCategory"):
+                survivor["muscleCategory"] = sibling["muscleCategory"]
+        deduped.append(survivor)
+        merged_clusters += 1
+
+    print(f"  deduped: merged {merged_clusters} cross-sheet clusters "
+          f"({len(out) - len(deduped)} rows removed)", file=sys.stderr)
+    out = deduped
+
     # Sort by sheet then id for deterministic output
     sheet_order = {"strength": 0, "circuit": 1, "hyrox": 2, "sport-specific": 3, "cardio-session": 4}
     out.sort(key=lambda x: (sheet_order.get(x["sheet"], 99), x["id"]))
