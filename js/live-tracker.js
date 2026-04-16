@@ -779,9 +779,25 @@ function _toggleLivePause() {
 }
 
 function _toggleLiveExercise(idx) {
+  _captureLiveSetInputs();
   _liveTracker.currentExercise = idx;
   const body = document.getElementById("live-tracker-body");
   if (body) body.innerHTML = _buildStrengthView();
+}
+
+function _captureLiveSetInputs() {
+  if (!_liveTracker?.sets) return;
+  for (let ei = 0; ei < _liveTracker.sets.length; ei++) {
+    const arr = _liveTracker.sets[ei] || [];
+    for (let si = 0; si < arr.length; si++) {
+      const s = arr[si];
+      if (!s || s.done) continue;
+      const repsEl = document.getElementById(`live-reps-${ei}-${si}`);
+      const wtEl = document.getElementById(`live-wt-${ei}-${si}`);
+      if (repsEl && repsEl.value !== "") s.reps = repsEl.value;
+      if (wtEl && wtEl.value !== "") s.weight = wtEl.value;
+    }
+  }
 }
 
 function _logLiveSet(exIdx, setIdx) {
@@ -789,18 +805,15 @@ function _logLiveSet(exIdx, setIdx) {
   const set = _liveTracker.sets[exIdx]?.[setIdx];
   if (!set) return;
 
+  _captureLiveSetInputs();
+
   if (set.done) {
     // Undo
     set.done = false;
-    set.reps = document.getElementById(`live-reps-${exIdx}-${setIdx}`)?.value || set.reps;
-    set.weight = document.getElementById(`live-wt-${exIdx}-${setIdx}`)?.value || set.weight;
     // Cancel rest timer
     _liveTracker.inRest = false;
     _liveTracker.restCountdown = 0;
   } else {
-    // Log the set
-    set.reps = document.getElementById(`live-reps-${exIdx}-${setIdx}`)?.value || set.reps;
-    set.weight = document.getElementById(`live-wt-${exIdx}-${setIdx}`)?.value || set.weight;
     set.done = true;
 
     // Start rest timer unless disabled. Supersets rest only after the full round
@@ -857,6 +870,8 @@ function _liveGoToStep(idx) {
 function _finishLiveWorkout() {
   if (!_liveTracker) return;
   const t = _liveTracker;
+
+  if (t.isStrength) _captureLiveSetInputs();
 
   // Check if there are unlogged sets
   let hasUnlogged = false;

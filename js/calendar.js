@@ -1257,8 +1257,8 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
         <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
           <span class="session-icon" style="color:${color}">${icon}</span>
           <div class="session-meta">
-            <div class="session-name">${s.title || _wTypeLabel(w.type)}</div>
-            <div class="session-phase">Logged · ${_wTypeLabel(w.type)}</div>
+            <div class="session-name">${s.title || _wTypeLabel(w.type)}${_logComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : ""}</div>
+            <div class="session-phase">${_logComplete ? "Completed" : "Logged"} · ${_wTypeLabel(w.type)}</div>
           </div>
           <div class="session-header-right">
             ${displayDur ? `<span class="session-duration-badge">${isReduced ? "⬇ " : ""}${displayDur} min</span>` : ""}
@@ -1293,8 +1293,8 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
         <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
           <span class="session-icon" style="color:${color}">${icon}</span>
           <div class="session-meta">
-            <div class="session-name">${s.name || _wTypeLabel(w.type)}</div>
-            <div class="session-phase">Planned · ${_wTypeLabel(w.type)}</div>
+            <div class="session-name">${s.name || _wTypeLabel(w.type)}${_logComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : ""}</div>
+            <div class="session-phase">${_logComplete ? "Completed · " : "Planned · "}${_wTypeLabel(w.type)}</div>
           </div>
           <div class="session-header-right">
             <span class="session-duration-badge">${_getCompletionDuration(cardId) || s.duration} min</span>
@@ -1360,8 +1360,8 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
         <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
           <span class="session-icon" style="color:${color}">${icon}</span>
           <div class="session-meta">
-            <div class="session-name">${w.fromSaved || _wTypeLabel(w.type)}</div>
-            <div class="session-phase">${w.fromSaved ? "Logged · " + _wTypeLabel(w.type) : "Planned"}${(!w.fromSaved && w.notes) ? " · " + w.notes : ""}</div>
+            <div class="session-name">${w.fromSaved || _wTypeLabel(w.type)}${_logComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : ""}</div>
+            <div class="session-phase">${_logComplete ? "Completed" : (w.fromSaved ? "Logged · " + _wTypeLabel(w.type) : "Planned")}${(!w.fromSaved && w.notes) ? " · " + w.notes : ""}</div>
           </div>
           <div class="session-header-right">
             ${_exDurationBadge}${_buildUndoHeaderBtn(cardId, dateStr)}${_exOverflow}
@@ -2181,7 +2181,6 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
         <div class="completion-set-details" id="cex-details-${sessionId}-${i}" style="display:none"></div>
       </div>`;
     }).join("");
-    const exDurVal = suggestedDuration ? ` value="${suggestedDuration}"` : "";
     const _unit = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
     const _resolvedType = _resolveEnduranceType(type);
     const _distBlock = _ENDURANCE_TYPES.has(_resolvedType) ? _buildDistanceField(sessionId, _resolvedType, _unit) : "";
@@ -2192,8 +2191,7 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
       ${rows}
       <div class="completion-dur-row" style="margin-top:10px">
         <label class="completion-field-label">Duration</label>
-        <input type="text" id="cdur-${sessionId}" class="completion-dur-input"
-          placeholder="e.g. 45 or 19:42" inputmode="decimal"${exDurVal} />
+        ${_buildDurationMinSecField(sessionId, suggestedDuration)}
       </div>
       ${_distBlock}
       ${type === "cycling" ? `<div class="completion-dur-row">
@@ -2204,7 +2202,6 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
       <textarea id="cnotes-${sessionId}" class="completion-notes"
         placeholder="Notes (optional)"></textarea>`;
   } else {
-    const durVal = suggestedDuration ? ` value="${suggestedDuration}"` : "";
     const _cUnit = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
     const _cResolvedType = _resolveEnduranceType(type);
     const _cDistBlock = _ENDURANCE_TYPES.has(_cResolvedType) ? _buildDistanceField(sessionId, _cResolvedType, _cUnit) : "";
@@ -2212,8 +2209,7 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
       <div class="completion-cardio-fields">
         <div class="completion-dur-row">
           <label class="completion-field-label">Duration</label>
-          <input type="text" id="cdur-${sessionId}" class="completion-dur-input"
-            placeholder="e.g. 45 or 19:42" inputmode="decimal"${durVal} />
+          ${_buildDurationMinSecField(sessionId, suggestedDuration)}
         </div>
         ${_cDistBlock}
         ${type === "cycling" ? `<div class="completion-dur-row">
@@ -2350,6 +2346,36 @@ function _parseDurationInput(val) {
   return parseFloat(s);
 }
 
+function _buildDurationMinSecField(sessionId, suggestedDuration) {
+  const total = suggestedDuration != null && suggestedDuration !== ""
+    ? _parseDurationInput(suggestedDuration) : NaN;
+  let minVal = "", secVal = "";
+  if (!isNaN(total) && total > 0) {
+    const m = Math.floor(total);
+    const s = Math.round((total - m) * 60);
+    if (s === 60) { minVal = String(m + 1); secVal = ""; }
+    else { minVal = String(m); secVal = s > 0 ? String(s) : ""; }
+  }
+  return `<div class="completion-dur-minsec">
+      <input type="number" id="cdur-min-${sessionId}" class="completion-dur-input"
+        placeholder="min" min="0" step="1" inputmode="numeric" value="${minVal}" />
+      <span class="completion-dur-sep">:</span>
+      <input type="number" id="cdur-sec-${sessionId}" class="completion-dur-input"
+        placeholder="sec" min="0" max="59" step="1" inputmode="numeric" value="${secVal}" />
+    </div>`;
+}
+
+function _readDurationMinSec(sessionId) {
+  const minRaw = document.getElementById(`cdur-min-${sessionId}`)?.value || "";
+  const secRaw = document.getElementById(`cdur-sec-${sessionId}`)?.value || "";
+  const m = parseInt(minRaw, 10);
+  const s = parseInt(secRaw, 10);
+  const mins = isNaN(m) ? 0 : m;
+  const secs = isNaN(s) ? 0 : s;
+  const total = mins + secs / 60;
+  return total > 0 ? total : NaN;
+}
+
 /**
  * Format minutes as mm:ss for display (e.g. 19.7 → "19:42")
  */
@@ -2369,8 +2395,7 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   // Don't save again if already completed
   if (isSessionComplete(sessionId)) return;
   const notes    = (document.getElementById(`cnotes-${sessionId}`)?.value || "").trim();
-  const rawDuration = document.getElementById(`cdur-${sessionId}`)?.value || "";
-  const _parsedDur = rawDuration ? _parseDurationInput(rawDuration) : NaN;
+  const _parsedDur = _readDurationMinSec(sessionId);
   let duration = (!isNaN(_parsedDur) && _parsedDur > 0) ? String(_parsedDur) : "";
   const distance = document.getElementById(`cdist-${sessionId}`)?.value || "";
   // Swim uses its own unit toggle (m / yd); other endurance types use the
