@@ -496,14 +496,15 @@ function renderWeekView() {
   const weekDates = getWeekDates(currentWeekStart);
 
   // Center card = selectedDate if it falls within this week, else today
-  // if today is in this week, else the first day. This matches the
-  // "today sits center, tap a side card to promote it" UX from the
-  // mockup while still honoring the user's last selection.
+  // if today is in this week, else NO center. When browsing a week
+  // that doesn't contain today or the user's last-selected date, all
+  // 7 days render as equal side cards — the user hasn't expressed
+  // intent about any of them yet, so auto-centering Mon was misleading
+  // (looked like Mon was "selected" when it wasn't).
   const weekDateStrs = weekDates.map(d => d.toISOString().slice(0, 10));
   let centerStr = null;
   if (selectedDate && weekDateStrs.includes(selectedDate)) centerStr = selectedDate;
   else if (weekDateStrs.includes(todayStr)) centerStr = todayStr;
-  else centerStr = weekDateStrs[0];
 
   const cards = weekDates.map(d => {
     const dateStr = d.toISOString().slice(0, 10);
