@@ -3026,9 +3026,9 @@
   <script src="js/calendar-sync.js"></script>
   <script src="js/app.js"></script>
   <script src="js/workout-editor.js"></script>
-  <!-- Exercise name typeahead — loads the shared exercise database and
-       wires up document-level delegation for any .ex-row-name input. -->
-  <script src="js/data/exercises.js"></script>
+  <!-- Exercise name typeahead — wires document-level delegation for any
+       .ex-row-name input. Reads suggestions directly from window.EXERCISE_DB
+       (loaded earlier as exercise-data.js) — no separate database needed. -->
   <script src="js/ui/exercise-autocomplete.js"></script>
   <script src="js/nutrition-v2.js"></script>
   <script src="js/meal-planner.js"></script>
