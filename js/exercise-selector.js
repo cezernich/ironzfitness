@@ -4,8 +4,50 @@
 
 var exerciseLibrary = [];
 
+// window.EXERCISE_DB uses kebab-case pattern + muscleCategory + equipmentNeeded
+// and string tiers; this module expects the legacy snake_case shape from the
+// old exercise_library.json (movement_pattern / muscle_groups / equipment_required
+// + numeric tier). Translate in one place so everything downstream stays unchanged.
+function _shapeFromExerciseDB(e) {
+  var patternKebab = e.pattern || e.sheet || '';
+  var pattern = String(patternKebab).replace(/-/g, '_');
+  var tierNum = { primary: 1, secondary: 2, tertiary: 3 }[e.tier] || null;
+  var difficulty = e.tier === 'tertiary' ? 'beginner'
+                 : e.tier === 'primary'  ? 'advanced'
+                 : e.tier === 'secondary' ? 'intermediate' : null;
+  // Translate equipment tokens back to the snake_case set
+  // hasRequiredEquipment() knows ('dumbbell', 'kettlebell', 'pull_up_bar',
+  // 'bench', 'resistance_band'). Everything else stays in its current form.
+  var equipMap = {
+    'dumbbells':     'dumbbell',
+    'kettlebell':    'kettlebell',
+    'pull-up-bar':   'pull_up_bar',
+    'bench':         'bench',
+    'band':          'resistance_band',
+  };
+  var equip = (e.equipmentNeeded || []).map(function (t) {
+    return equipMap[t] || t.replace(/-/g, '_');
+  });
+  return {
+    id: e.id,
+    name: e.name,
+    movement_pattern: pattern,
+    muscle_groups: (e.muscleCategory || []).map(function (m) { return String(m).replace(/-/g, '_'); }),
+    equipment_required: equip,
+    difficulty: difficulty,
+    tier: tierNum,
+    sport_relevance: e.sport ? [e.sport] : [],
+    contraindications: [],
+    substitutions: [],
+    default_rep_range: '8-12',
+    default_rest_seconds: 90,
+    instructions: null,
+    is_active: true,
+  };
+}
+
 /**
- * Load exercise library from Supabase, falling back to localStorage cache, then static JSON.
+ * Load exercise library from Supabase, falling back to localStorage cache, then window.EXERCISE_DB.
  */
 async function loadExerciseLibrary() {
   // 1. Try Supabase
@@ -39,19 +81,21 @@ async function loadExerciseLibrary() {
     console.warn('exercise-selector: localStorage cache read failed.', e);
   }
 
-  // 3. Fall back to static JSON file
+  // 3. Fall back to window.EXERCISE_DB (the canonical exercise database,
+  // generated from sources-of-truth/exercises/*). exercise_library.json
+  // used to be the static fallback but was deleted when EXERCISE_DB became
+  // the single source of truth — shape it into the snake_case schema this
+  // module's downstream functions (hasRequiredEquipment, filterAvailableExercises,
+  // getSubstitution, _getCandidatesForPattern) already consume.
   try {
-    var resp = await fetch('philosophy/exercise_library.json');
-    if (resp.ok) {
-      var json = await resp.json();
-      if (Array.isArray(json) && json.length > 0) {
-        exerciseLibrary = json;
-        try { localStorage.setItem('exerciseLibrary_cache', JSON.stringify(json)); } catch (e) { /* quota */ }
-        return exerciseLibrary;
-      }
+    if (Array.isArray(window.EXERCISE_DB) && window.EXERCISE_DB.length > 0) {
+      var shaped = window.EXERCISE_DB.map(_shapeFromExerciseDB);
+      exerciseLibrary = shaped;
+      try { localStorage.setItem('exerciseLibrary_cache', JSON.stringify(shaped)); } catch (e) { /* quota */ }
+      return exerciseLibrary;
     }
   } catch (e) {
-    console.warn('exercise-selector: Static JSON fetch failed.', e);
+    console.warn('exercise-selector: EXERCISE_DB shim failed.', e);
   }
 
   console.error('exercise-selector: Could not load exercise library from any source.');

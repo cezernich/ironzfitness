@@ -203,7 +203,7 @@
 
   // Bike selection advice varies sharply by race distance — a TT bike is
   // overkill for sprint but the single biggest equipment decision for full
-  // Ironman. Source: philosophy/IRONZ_KNOWLEDGE_BASE.md §2 "Bike Selection
+  // Ironman. Source: sources-of-truth/philosophy/IRONZ_KNOWLEDGE_BASE.md §2 "Bike Selection
   // by Race Distance". Applied in defaultItemsForDistance() to override the
   // generic bike-bike catalog entry with per-distance guidance.
   const BIKE_ADVICE_BY_DISTANCE = {

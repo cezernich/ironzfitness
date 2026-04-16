@@ -44,7 +44,7 @@ async function loadPhilosophyModules() {
 
   // Fall back to static JSON file
   try {
-    const response = await fetch('philosophy/modules_static.json');
+    const response = await fetch('sources-of-truth/philosophy/modules_static.json');
     if (response.ok) {
       philosophyModules = await response.json();
       philosophyModulesLoadedAt = new Date().toISOString();

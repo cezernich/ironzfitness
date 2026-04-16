@@ -31,13 +31,40 @@ for (const f of files) {
 }
 
 // Load data
-const modules = JSON.parse(fs.readFileSync('philosophy/modules_static.json', 'utf-8'));
-const exercises = JSON.parse(fs.readFileSync('philosophy/exercise_library.json', 'utf-8'));
+const modules = JSON.parse(fs.readFileSync('sources-of-truth/philosophy/modules_static.json', 'utf-8'));
+// Build the legacy snake_case exercise library shape from window.EXERCISE_DB
+// (the former philosophy/exercise_library.json was deleted when EXERCISE_DB
+// became the single source of truth). _shapeFromExerciseDB in
+// exercise-selector.js does the same translation at runtime; mirror it here
+// so the golden tests see identical data.
+const exerciseData = fs.readFileSync('exercise-data.js', 'utf-8');
+const edbMatch = exerciseData.match(/window\.EXERCISE_DB = (\[[\s\S]+?\]);/);
+const EXERCISE_DB = edbMatch ? JSON.parse(edbMatch[1]) : [];
+const exercises = EXERCISE_DB.map(e => {
+  const tierNum = { primary: 1, secondary: 2, tertiary: 3 }[e.tier] || null;
+  const difficulty = e.tier === 'tertiary' ? 'beginner'
+                   : e.tier === 'primary'  ? 'advanced'
+                   : e.tier === 'secondary' ? 'intermediate' : null;
+  const equipMap = { 'dumbbells': 'dumbbell', 'kettlebell': 'kettlebell',
+                     'pull-up-bar': 'pull_up_bar', 'bench': 'bench',
+                     'band': 'resistance_band' };
+  return {
+    id: e.id, name: e.name,
+    movement_pattern: String(e.pattern || e.sheet || '').replace(/-/g, '_'),
+    muscle_groups: (e.muscleCategory || []).map(m => String(m).replace(/-/g, '_')),
+    equipment_required: (e.equipmentNeeded || []).map(t => equipMap[t] || t.replace(/-/g, '_')),
+    difficulty, tier: tierNum,
+    sport_relevance: e.sport ? [e.sport] : [],
+    contraindications: [], substitutions: [],
+    default_rep_range: '8-12', default_rest_seconds: 90,
+    instructions: null, is_active: true,
+  };
+});
 vm.runInContext(`philosophyModules = ${JSON.stringify(modules)};`, context);
 vm.runInContext(`exerciseLibrary = ${JSON.stringify(exercises)};`, context);
 
 // Load test cases
-const testCases = JSON.parse(fs.readFileSync('philosophy/golden_test_cases.json', 'utf-8')).test_cases;
+const testCases = JSON.parse(fs.readFileSync('sources-of-truth/philosophy/golden_test_cases.json', 'utf-8')).test_cases;
 
 // Test runner
 const testRunner = `

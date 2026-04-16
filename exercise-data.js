@@ -1,10 +1,12 @@
-// exercise-data.js — GENERATED FROM IronZ_Exercise_Library_Expanded.xlsx
+// exercise-data.js — GENERATED from sources-of-truth/exercises/
 //
-// DO NOT EDIT BY HAND. Edit the spreadsheet and run:
+// DO NOT EDIT BY HAND. Edit the spreadsheet / supplement and run:
 //   python3 scripts/generate-exercise-db.py
 //
 // Schema: cowork-handoff/EXERCISE_DB_SPEC.md
-// Source of truth: IronZ_Exercise_Library_Expanded.xlsx (4 sheets)
+// Sources:
+//   sources-of-truth/exercises/IronZ_Exercise_Library_Expanded.xlsx (4 sheets)
+//   sources-of-truth/exercises/exercise-supplement.json
 
 (function () {
   "use strict";

@@ -26,8 +26,10 @@ except ImportError:
     sys.exit(1)
 
 REPO_ROOT       = Path(__file__).resolve().parent.parent
-XLSX_PATH       = REPO_ROOT / "IronZ_Exercise_Library_Expanded.xlsx"
-SUPPLEMENT_PATH = REPO_ROOT / "data" / "exercise-supplement.json"
+# Data lives in sources-of-truth/ — the canonical editable copies.
+# Edit the xlsx / JSON there, run this script to regenerate exercise-data.js.
+XLSX_PATH       = REPO_ROOT / "sources-of-truth" / "exercises" / "IronZ_Exercise_Library_Expanded.xlsx"
+SUPPLEMENT_PATH = REPO_ROOT / "sources-of-truth" / "exercises" / "exercise-supplement.json"
 OUT_PATH        = REPO_ROOT / "exercise-data.js"
 
 
@@ -522,13 +524,15 @@ def main() -> int:
     # Emit as window.EXERCISE_DB. Pretty-printed for diffability.
     json_blob = json.dumps(out, indent=2, ensure_ascii=False)
     contents = (
-        "// exercise-data.js — GENERATED FROM IronZ_Exercise_Library_Expanded.xlsx\n"
+        "// exercise-data.js — GENERATED from sources-of-truth/exercises/\n"
         "//\n"
-        "// DO NOT EDIT BY HAND. Edit the spreadsheet and run:\n"
+        "// DO NOT EDIT BY HAND. Edit the spreadsheet / supplement and run:\n"
         "//   python3 scripts/generate-exercise-db.py\n"
         "//\n"
         "// Schema: cowork-handoff/EXERCISE_DB_SPEC.md\n"
-        "// Source of truth: IronZ_Exercise_Library_Expanded.xlsx (4 sheets)\n"
+        "// Sources:\n"
+        "//   sources-of-truth/exercises/IronZ_Exercise_Library_Expanded.xlsx (4 sheets)\n"
+        "//   sources-of-truth/exercises/exercise-supplement.json\n"
         "\n"
         "(function () {\n"
         '  "use strict";\n'

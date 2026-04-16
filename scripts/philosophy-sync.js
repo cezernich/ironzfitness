@@ -12,8 +12,8 @@ const readline = require('readline');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
-const STATIC_JSON_PATH = path.resolve(__dirname, '../philosophy/modules_static.json');
-const MODULES_JSON_PATH = path.resolve(__dirname, '../philosophy/philosophy_modules.json');
+const STATIC_JSON_PATH = path.resolve(__dirname, '../sources-of-truth/philosophy/modules_static.json');
+const MODULES_JSON_PATH = path.resolve(__dirname, '../sources-of-truth/philosophy/philosophy_modules.json');
 
 // ── Main Pipeline ───────────────────────────────────────────────────────────
 
