@@ -2265,24 +2265,23 @@ function _normalizeWeightDisplay(raw, exerciseName) {
   if (/bodyweight/i.test(w)) return "BW";
   if (/bar\s*\+\s*([\d.]+)/i.test(w)) {
     const m = w.match(/bar\s*\+\s*([\d.]+)/i);
-    return _formatWeightWithDbSuffix(_roundWeight(45 + parseFloat(m[1])), exerciseName);
+    return _formatWeightWithDbHint(_roundWeight(45 + parseFloat(m[1])), exerciseName);
   }
   if (/^([\d.]+)\s*[x×]\s*([\d.]+)/i.test(w)) {
     const m = w.match(/^([\d.]+)\s*[x×]\s*([\d.]+)/i);
-    return _formatWeightWithDbSuffix(_roundWeight(parseFloat(m[2])), exerciseName);
+    return _formatWeightWithDbHint(_roundWeight(parseFloat(m[2])), exerciseName);
   }
   // Try to extract a bare number with lbs/lb suffix
   const bareLbs = w.match(/^([\d.]+)\s*(?:lbs?)?$/i);
-  if (bareLbs) return _formatWeightWithDbSuffix(_roundWeight(parseFloat(bareLbs[1])), exerciseName);
-  return _isDumbbellExercise(exerciseName) ? w + " /hand" : w;
+  if (bareLbs) return _formatWeightWithDbHint(_roundWeight(parseFloat(bareLbs[1])), exerciseName);
+  return w;
 }
 
-// Dumbbell weights are always per-hand (industry convention: you buy
-// a pair of 50lb dumbbells, each one weighs 50lb). Display "50 lbs
-// /hand" on any exercise whose name implies dumbbells so users are
-// never guessing whether "150 lbs" on a Dumbbell Bench Press is
-// total (heavy) or per-hand (very heavy). Barbell / KB / cable / BW
-// exercises render unchanged.
+// Dumbbell exercises display as "N / hand" where N is the per-hand
+// weight. IronZ stores the TOTAL (pair weight) for dumbbell rows —
+// e.g. 150 lbs Dumbbell Bench Press is 75 per hand — so we divide
+// the stored number by 2 on display. Barbell / KB / cable / BW rows
+// render the raw weight unchanged.
 function _isDumbbellExercise(name) {
   if (!name) return false;
   const n = String(name).toLowerCase();
@@ -2290,12 +2289,17 @@ function _isDumbbellExercise(name) {
   if (/\bdb\b/.test(n)) return true;
   return false;
 }
-function _formatWeightWithDbSuffix(weightStr, exerciseName) {
+function _formatWeightWithDbHint(weightStr, exerciseName) {
   if (!weightStr) return weightStr;
   if (!_isDumbbellExercise(exerciseName)) return weightStr;
-  // Weight already has "BW"? Leave it.
-  if (/^(bw|bodyweight)$/i.test(weightStr)) return weightStr;
-  return weightStr + " /hand";
+  // "BW" / "Bodyweight" stays as-is — can't halve that.
+  if (/^(bw|bodyweight)$/i.test(String(weightStr))) return weightStr;
+  const m = String(weightStr).match(/^([\d.]+)/);
+  if (!m) return weightStr;
+  const total = parseFloat(m[1]);
+  if (!isFinite(total) || total <= 0) return weightStr;
+  const perHand = _roundWeight(total / 2);
+  return `${perHand} / hand`;
 }
 
 function buildExerciseTableHTML(exercises, opts) {
