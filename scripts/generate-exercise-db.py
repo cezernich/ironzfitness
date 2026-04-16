@@ -25,9 +25,10 @@ except ImportError:
     print("ERROR: openpyxl not installed. Run: pip3 install --user openpyxl", file=sys.stderr)
     sys.exit(1)
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-XLSX_PATH = REPO_ROOT / "IronZ_Exercise_Library_Expanded.xlsx"
-OUT_PATH  = REPO_ROOT / "exercise-data.js"
+REPO_ROOT       = Path(__file__).resolve().parent.parent
+XLSX_PATH       = REPO_ROOT / "IronZ_Exercise_Library_Expanded.xlsx"
+SUPPLEMENT_PATH = REPO_ROOT / "data" / "exercise-supplement.json"
+OUT_PATH        = REPO_ROOT / "exercise-data.js"
 
 
 # ── Normalization tables ──────────────────────────────────────────────────────
@@ -362,6 +363,45 @@ def row_sport_specific(row: list, used_ids: set[str]) -> dict | None:
     }
 
 
+# ── Supplement merge ──────────────────────────────────────────────────────────
+#
+# Each supplement entry is already in the canonical schema — we just normalize
+# missing fields to null/false/[] and assign a deterministic id. The shape
+# matches what the row_strength / row_circuit handlers produce, so downstream
+# code (filter API + planner) treats supplement rows identically to xlsx rows.
+
+def _merge_supplement_entry(entry: dict, used_ids: set[str]) -> dict | None:
+    name = entry.get("name")
+    if not name:
+        return None
+    sheet = entry.get("sheet", "strength")
+    return {
+        "id": make_id(str(name), used_ids),
+        "name": str(name).strip(),
+        "sheet": sheet,
+        "pattern": entry.get("pattern"),
+        "tier": entry.get("tier"),
+        "equipmentTags": list(entry.get("equipmentTags") or []),
+        "primaryMuscles": entry.get("primaryMuscles"),
+        "muscleCategory": list(entry.get("muscleCategory") or []),
+        "specificGoal": entry.get("specificGoal"),
+        "usesWeights": bool(entry.get("usesWeights", False)),
+        "canBeBodyweight": bool(entry.get("canBeBodyweight", False)),
+        "equipmentNeeded": list(entry.get("equipmentNeeded") or []),
+        "modality": entry.get("modality"),
+        "commonIn": entry.get("commonIn"),
+        "sport": entry.get("sport"),
+        "purpose": entry.get("purpose"),
+        "isHyroxStation": bool(entry.get("isHyroxStation", False)),
+        "hyroxOrder": entry.get("hyroxOrder"),
+        "defaultDistance": entry.get("defaultDistance"),
+        "defaultWeight": entry.get("defaultWeight"),
+        # Cardio-session entries carry a discipline tag for downstream
+        # planner integrations (run/bike/swim/brick).
+        **({"discipline": entry["discipline"]} if entry.get("discipline") else {}),
+    }
+
+
 # ── Driver ────────────────────────────────────────────────────────────────────
 
 def main() -> int:
@@ -394,8 +434,35 @@ def main() -> int:
                 added += 1
         print(f"  {sheet_name}: {added} exercises", file=sys.stderr)
 
+    # Merge in the JSON supplement for entries that exist in IronZExerciseDB
+    # (the legacy autocomplete DB) but aren't in the spreadsheet. These are
+    # pre-classified by hand so the merge stays in the generator pipeline —
+    # re-running this script re-emits them. See docs/EXERCISE_DB_MERGE_REPORT.md.
+    supp_added = 0
+    if SUPPLEMENT_PATH.exists():
+        try:
+            supp_data = json.loads(SUPPLEMENT_PATH.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"WARN: failed to read supplement {SUPPLEMENT_PATH}: {e}", file=sys.stderr)
+            supp_data = []
+        existing_lower = {e["name"].lower() for e in out}
+        for entry in supp_data:
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("_skip"):
+                continue
+            name = entry.get("name")
+            if not name or name.lower() in existing_lower:
+                continue
+            obj = _merge_supplement_entry(entry, used_ids)
+            if obj:
+                out.append(obj)
+                existing_lower.add(name.lower())
+                supp_added += 1
+        print(f"  supplement: {supp_added} exercises", file=sys.stderr)
+
     # Sort by sheet then id for deterministic output
-    sheet_order = {"strength": 0, "circuit": 1, "hyrox": 2, "sport-specific": 3}
+    sheet_order = {"strength": 0, "circuit": 1, "hyrox": 2, "sport-specific": 3, "cardio-session": 4}
     out.sort(key=lambda x: (sheet_order.get(x["sheet"], 99), x["id"]))
 
     print(f"\nTotal: {len(out)} exercises", file=sys.stderr)

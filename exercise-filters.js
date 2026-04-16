@@ -234,14 +234,75 @@
     return _db().find(e => e.id === id) || null;
   }
 
+  // Normalize a name for fuzzy lookup — strip everything but lowercase
+  // alphanumerics so "Push-Up" / "Push Up" / "Pushups" all collapse to
+  // "pushup". Used by getByName to absorb the 8 plural/punctuation
+  // near-duplicates between IronZExerciseDB and EXERCISE_DB
+  // (Burpee/Burpees, Diamond Push-Up/Push-ups, etc) — see
+  // docs/EXERCISE_DB_MERGE_REPORT.md §A.
+  function _nameKey(s) {
+    return String(s == null ? "" : s).toLowerCase().replace(/[^a-z0-9]/g, "");
+  }
+  function _depluralize(k) {
+    return k.endsWith("s") ? k.slice(0, -1) : k;
+  }
+
   function getByName(name) {
     if (!name) return null;
     const lower = String(name).trim().toLowerCase();
-    return _db().find(e => e.name.toLowerCase() === lower) || null;
+    const exact = _db().find(e => e.name.toLowerCase() === lower);
+    if (exact) return exact;
+    const k = _nameKey(name);
+    if (!k) return null;
+    // Punctuation-insensitive match
+    const punct = _db().find(e => _nameKey(e.name) === k);
+    if (punct) return punct;
+    // Plural-insensitive match
+    const dk = _depluralize(k);
+    const plural = _db().find(e => {
+      const ek = _nameKey(e.name);
+      return _depluralize(ek) === dk;
+    });
+    return plural || null;
   }
 
   function getAvailable(userEquipment) {
     return query({ equipment: userEquipment });
+  }
+
+  // Lookup the muscle list for a given exercise name. Replaces the legacy
+  // EXERCISE_MUSCLES constant in js/exercise-library.js so consumers
+  // (seed-reference-data, the demo modal's _findMuscles fallback) have a
+  // single source. Returns lowercase muscle tokens to match the legacy
+  // shape; falls back to substring search for queries like "Bench Press"
+  // that the EXERCISE_DB carries only as variants ("Barbell Bench Press",
+  // "Dumbbell Bench Press"). Empty array on no match.
+  function getMuscles(name) {
+    const direct = getByName(name);
+    if (direct && direct.muscleCategory && direct.muscleCategory.length) {
+      return direct.muscleCategory.map(m => String(m).toLowerCase());
+    }
+    // Substring fallback — find any exercise whose name contains, or is
+    // contained in, the query (matching the legacy _findMuscles behavior
+    // in exercise-library.js).
+    const k = _nameKey(name);
+    if (!k) return [];
+    for (const ex of _db()) {
+      const ek = _nameKey(ex.name);
+      if (!ek) continue;
+      if (ek.includes(k) || k.includes(ek)) {
+        const cats = Array.isArray(ex.muscleCategory) ? ex.muscleCategory : [];
+        if (cats.length) return cats.map(m => String(m).toLowerCase());
+      }
+    }
+    return [];
+  }
+
+  // Strip everything but lowercase alphanumerics — matches the legacy
+  // IronZExerciseDB._searchKey contract so the typeahead can swap data
+  // sources without changing its index logic.
+  function searchKey(s) {
+    return _nameKey(s);
   }
 
   // ── Equipment profile helper ─────────────────────────────────────────────
@@ -268,7 +329,9 @@
     getCircuitExercises,
     getById,
     getByName,
+    getMuscles,
     getAvailable,
     getUserEquipment,
+    searchKey,
   };
 })();

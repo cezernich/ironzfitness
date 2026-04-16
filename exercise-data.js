@@ -39,6 +39,33 @@
     "defaultWeight": null
   },
   {
+    "id": "adductor-machine",
+    "name": "Adductor Machine",
+    "sheet": "strength",
+    "pattern": "isolation-legs",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "glutes"
+    ],
+    "specificGoal": "adductors",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "hip-abductor-adductor",
+      "cable-machine"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "arnold-press",
     "name": "Arnold Press",
     "sheet": "strength",
@@ -160,6 +187,33 @@
     "defaultWeight": null
   },
   {
+    "id": "band-face-pull",
+    "name": "Band Face Pull",
+    "sheet": "strength",
+    "pattern": "vertical-push",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "shoulders",
+      "back"
+    ],
+    "specificGoal": "rear-delts-scapular",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "band"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "band-pull-apart",
     "name": "Band Pull-Apart",
     "sheet": "strength",
@@ -239,6 +293,33 @@
     "equipmentNeeded": [
       "barbell-rack",
       "bench"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "barbell-bent-over-row",
+    "name": "Barbell Bent-Over Row",
+    "sheet": "strength",
+    "pattern": "horizontal-pull",
+    "tier": "primary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "back",
+      "biceps"
+    ],
+    "specificGoal": "mid-back-lats",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "barbell-rack"
     ],
     "modality": null,
     "commonIn": null,
@@ -338,6 +419,59 @@
     "defaultWeight": null
   },
   {
+    "id": "barbell-upright-row",
+    "name": "Barbell Upright Row",
+    "sheet": "strength",
+    "pattern": "vertical-push",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "shoulders"
+    ],
+    "specificGoal": "side-delts",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "barbell-rack"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "behind-the-neck-pulldown",
+    "name": "Behind-the-Neck Pulldown",
+    "sheet": "strength",
+    "pattern": "vertical-pull",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "back"
+    ],
+    "specificGoal": "lats-vertical",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "lat-pulldown",
+      "cable-machine"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "belt-squat",
     "name": "Belt Squat",
     "sheet": "strength",
@@ -357,6 +491,32 @@
     "canBeBodyweight": true,
     "equipmentNeeded": [
       "cable-machine"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "bench-dip",
+    "name": "Bench Dip",
+    "sheet": "strength",
+    "pattern": "isolation-arms",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "triceps"
+    ],
+    "specificGoal": "triceps",
+    "usesWeights": false,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [
+      "bench"
     ],
     "modality": null,
     "commonIn": null,
@@ -404,6 +564,55 @@
       "core"
     ],
     "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "bodyweight-calf-raise",
+    "name": "Bodyweight Calf Raise",
+    "sheet": "strength",
+    "pattern": "isolation-legs",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "calves"
+    ],
+    "specificGoal": "calves",
+    "usesWeights": false,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "bodyweight-squat",
+    "name": "Bodyweight Squat",
+    "sheet": "strength",
+    "pattern": "squat",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "quads",
+      "glutes"
+    ],
+    "specificGoal": "quads-glutes",
     "usesWeights": false,
     "canBeBodyweight": true,
     "equipmentNeeded": [],
@@ -971,6 +1180,34 @@
     "defaultWeight": null
   },
   {
+    "id": "close-grip-lat-pulldown",
+    "name": "Close-Grip Lat Pulldown",
+    "sheet": "strength",
+    "pattern": "vertical-pull",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "back",
+      "biceps"
+    ],
+    "specificGoal": "lats-vertical",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "lat-pulldown",
+      "cable-machine"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "concentration-curl",
     "name": "Concentration Curl",
     "sheet": "strength",
@@ -1114,6 +1351,60 @@
     "defaultWeight": null
   },
   {
+    "id": "decline-dumbbell-press",
+    "name": "Decline Dumbbell Press",
+    "sheet": "strength",
+    "pattern": "horizontal-push",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "chest"
+    ],
+    "specificGoal": "lower-chest",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "dumbbells",
+      "bench"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "decline-push-up",
+    "name": "Decline Push-Up",
+    "sheet": "strength",
+    "pattern": "horizontal-push",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "chest",
+      "triceps"
+    ],
+    "specificGoal": "upper-chest",
+    "usesWeights": false,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [
+      "bench"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "deficit-deadlift",
     "name": "Deficit Deadlift",
     "sheet": "strength",
@@ -1170,6 +1461,33 @@
     "defaultWeight": null
   },
   {
+    "id": "donkey-calf-raise",
+    "name": "Donkey Calf Raise",
+    "sheet": "strength",
+    "pattern": "isolation-legs",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "calves"
+    ],
+    "specificGoal": "calves",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "bench",
+      "cable-machine"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "dumbbell-bench-press",
     "name": "Dumbbell Bench Press",
     "sheet": "strength",
@@ -1190,6 +1508,33 @@
     "equipmentNeeded": [
       "dumbbells",
       "bench"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "dumbbell-clean-and-press",
+    "name": "Dumbbell Clean and Press",
+    "sheet": "strength",
+    "pattern": "vertical-push",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "shoulders",
+      "full-body"
+    ],
+    "specificGoal": "overhead-strength",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "dumbbells"
     ],
     "modality": null,
     "commonIn": null,
@@ -1259,6 +1604,34 @@
     "defaultWeight": null
   },
   {
+    "id": "dumbbell-romanian-deadlift",
+    "name": "Dumbbell Romanian Deadlift",
+    "sheet": "strength",
+    "pattern": "hinge",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "hamstrings",
+      "glutes",
+      "back"
+    ],
+    "specificGoal": "hamstrings-knee-flexion",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "dumbbells"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "dumbbell-row",
     "name": "Dumbbell Row",
     "sheet": "strength",
@@ -1306,6 +1679,86 @@
     "canBeBodyweight": false,
     "equipmentNeeded": [
       "dumbbells"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "dumbbell-shrug",
+    "name": "Dumbbell Shrug",
+    "sheet": "strength",
+    "pattern": "horizontal-pull",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "back"
+    ],
+    "specificGoal": null,
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "dumbbells"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "dumbbell-step-up",
+    "name": "Dumbbell Step-Up",
+    "sheet": "strength",
+    "pattern": "squat",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "quads",
+      "glutes"
+    ],
+    "specificGoal": "quads-glutes",
+    "usesWeights": true,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [
+      "dumbbells",
+      "bench"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "ez-bar-curl",
+    "name": "EZ Bar Curl",
+    "sheet": "strength",
+    "pattern": "isolation-arms",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "biceps"
+    ],
+    "specificGoal": "biceps",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "barbell-rack"
     ],
     "modality": null,
     "commonIn": null,
@@ -1621,6 +2074,32 @@
     "defaultWeight": null
   },
   {
+    "id": "hack-squat",
+    "name": "Hack Squat",
+    "sheet": "strength",
+    "pattern": "squat",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "quads"
+    ],
+    "specificGoal": "quads-emphasis",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "cable-machine"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "hack-squat-machine",
     "name": "Hack Squat (Machine)",
     "sheet": "strength",
@@ -1906,6 +2385,34 @@
     "defaultWeight": null
   },
   {
+    "id": "incline-barbell-bench-press",
+    "name": "Incline Barbell Bench Press",
+    "sheet": "strength",
+    "pattern": "horizontal-push",
+    "tier": "primary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "chest",
+      "triceps"
+    ],
+    "specificGoal": "upper-chest",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "barbell-rack",
+      "bench"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "incline-dumbbell-bench-press",
     "name": "Incline Dumbbell Bench Press",
     "sheet": "strength",
@@ -1968,6 +2475,34 @@
     "defaultWeight": null
   },
   {
+    "id": "incline-dumbbell-press",
+    "name": "Incline Dumbbell Press",
+    "sheet": "strength",
+    "pattern": "horizontal-push",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "chest",
+      "triceps"
+    ],
+    "specificGoal": "upper-chest",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "dumbbells",
+      "bench"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "incline-press",
     "name": "Incline Press",
     "sheet": "strength",
@@ -1989,6 +2524,33 @@
     "equipmentNeeded": [
       "dumbbells",
       "barbell-rack",
+      "bench"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "incline-push-up",
+    "name": "Incline Push-Up",
+    "sheet": "strength",
+    "pattern": "horizontal-push",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "chest",
+      "triceps"
+    ],
+    "specificGoal": "lower-chest",
+    "usesWeights": false,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [
       "bench"
     ],
     "modality": null,
@@ -2058,6 +2620,33 @@
     "defaultWeight": null
   },
   {
+    "id": "kettlebell-snatch",
+    "name": "Kettlebell Snatch",
+    "sheet": "strength",
+    "pattern": "vertical-push",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body",
+      "shoulders"
+    ],
+    "specificGoal": "overhead-strength",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "kettlebell"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "kettlebell-swing",
     "name": "Kettlebell Swing",
     "sheet": "strength",
@@ -2078,6 +2667,31 @@
     "equipmentNeeded": [
       "kettlebell"
     ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "knee-push-up",
+    "name": "Knee Push-Up",
+    "sheet": "strength",
+    "pattern": "horizontal-push",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "chest",
+      "triceps"
+    ],
+    "specificGoal": "chest-isolation",
+    "usesWeights": false,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [],
     "modality": null,
     "commonIn": null,
     "sport": null,
@@ -2408,6 +3022,30 @@
     "defaultWeight": null
   },
   {
+    "id": "lying-leg-raise",
+    "name": "Lying Leg Raise",
+    "sheet": "strength",
+    "pattern": "core",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "core"
+    ],
+    "specificGoal": "lower-abs-hip-flexors",
+    "usesWeights": false,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "machine-lat-pulldown",
     "name": "Machine Lat Pulldown",
     "sheet": "strength",
@@ -2497,6 +3135,34 @@
     "defaultWeight": null
   },
   {
+    "id": "muscle-up",
+    "name": "Muscle-Up",
+    "sheet": "strength",
+    "pattern": "vertical-pull",
+    "tier": "primary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "back",
+      "biceps",
+      "triceps"
+    ],
+    "specificGoal": "lats-vertical",
+    "usesWeights": false,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [
+      "pull-up-bar"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "neutral-grip-lat-pulldown",
     "name": "Neutral-Grip Lat Pulldown",
     "sheet": "strength",
@@ -2527,6 +3193,33 @@
     "defaultWeight": null
   },
   {
+    "id": "neutral-grip-pull-up",
+    "name": "Neutral-Grip Pull-Up",
+    "sheet": "strength",
+    "pattern": "vertical-pull",
+    "tier": "primary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "back",
+      "biceps"
+    ],
+    "specificGoal": "lats-vertical",
+    "usesWeights": false,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [
+      "pull-up-bar"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "nordic-ham-curl",
     "name": "Nordic Ham Curl",
     "sheet": "strength",
@@ -2536,6 +3229,30 @@
     "primaryMuscles": "Hamstrings",
     "muscleCategory": [
       "biceps",
+      "hamstrings"
+    ],
+    "specificGoal": "hamstrings-knee-flexion",
+    "usesWeights": false,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "nordic-hamstring-curl",
+    "name": "Nordic Hamstring Curl",
+    "sheet": "strength",
+    "pattern": "isolation-legs",
+    "tier": "primary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
       "hamstrings"
     ],
     "specificGoal": "hamstrings-knee-flexion",
@@ -2703,6 +3420,32 @@
     "defaultWeight": null
   },
   {
+    "id": "overhead-tricep-extension",
+    "name": "Overhead Tricep Extension",
+    "sheet": "strength",
+    "pattern": "isolation-arms",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "triceps"
+    ],
+    "specificGoal": "triceps",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "dumbbells"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "pallof-press",
     "name": "Pallof Press",
     "sheet": "strength",
@@ -2781,6 +3524,59 @@
     "canBeBodyweight": false,
     "equipmentNeeded": [
       "chest-fly-machine"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "pec-deck-fly",
+    "name": "Pec Deck Fly",
+    "sheet": "strength",
+    "pattern": "horizontal-push",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "chest"
+    ],
+    "specificGoal": "chest-isolation",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "chest-fly-machine"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "pendlay-row",
+    "name": "Pendlay Row",
+    "sheet": "strength",
+    "pattern": "horizontal-pull",
+    "tier": "primary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "back",
+      "biceps"
+    ],
+    "specificGoal": "mid-back-lats",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "barbell-rack"
     ],
     "modality": null,
     "commonIn": null,
@@ -2887,6 +3683,34 @@
     "canBeBodyweight": false,
     "equipmentNeeded": [
       "weight-plate"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "power-clean",
+    "name": "Power Clean",
+    "sheet": "strength",
+    "pattern": "hinge",
+    "tier": "primary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body",
+      "hamstrings",
+      "glutes"
+    ],
+    "specificGoal": "posterior-chain",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "barbell-rack"
     ],
     "modality": null,
     "commonIn": null,
@@ -3104,6 +3928,164 @@
     "defaultWeight": null
   },
   {
+    "id": "renegade-rows",
+    "name": "Renegade Rows",
+    "sheet": "strength",
+    "pattern": "horizontal-pull",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "back",
+      "core"
+    ],
+    "specificGoal": "mid-back-lats",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "dumbbells"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "resistance-band-curl",
+    "name": "Resistance Band Curl",
+    "sheet": "strength",
+    "pattern": "isolation-arms",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "biceps"
+    ],
+    "specificGoal": "biceps",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "band"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "resistance-band-overhead-press",
+    "name": "Resistance Band Overhead Press",
+    "sheet": "strength",
+    "pattern": "vertical-push",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "shoulders"
+    ],
+    "specificGoal": "overhead-strength",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "band"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "resistance-band-row",
+    "name": "Resistance Band Row",
+    "sheet": "strength",
+    "pattern": "horizontal-pull",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "back"
+    ],
+    "specificGoal": "mid-back-lats",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "band"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "resistance-band-squat",
+    "name": "Resistance Band Squat",
+    "sheet": "strength",
+    "pattern": "squat",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "quads",
+      "glutes"
+    ],
+    "specificGoal": "quads-glutes",
+    "usesWeights": true,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [
+      "band"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "resistance-band-tricep-pushdown",
+    "name": "Resistance Band Tricep Pushdown",
+    "sheet": "strength",
+    "pattern": "isolation-arms",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "triceps"
+    ],
+    "specificGoal": "triceps",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "band"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "reverse-crunch",
     "name": "Reverse Crunch",
     "sheet": "strength",
@@ -3118,6 +4100,59 @@
     "usesWeights": false,
     "canBeBodyweight": true,
     "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "reverse-curl",
+    "name": "Reverse Curl",
+    "sheet": "strength",
+    "pattern": "isolation-arms",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "biceps"
+    ],
+    "specificGoal": "biceps-brachialis",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "dumbbells"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "reverse-grip-barbell-row",
+    "name": "Reverse-Grip Barbell Row",
+    "sheet": "strength",
+    "pattern": "horizontal-pull",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "back",
+      "biceps"
+    ],
+    "specificGoal": "mid-back-lats",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "barbell-rack"
+    ],
     "modality": null,
     "commonIn": null,
     "sport": null,
@@ -3275,6 +4310,33 @@
     "defaultWeight": null
   },
   {
+    "id": "safety-bar-squat",
+    "name": "Safety Bar Squat",
+    "sheet": "strength",
+    "pattern": "squat",
+    "tier": "primary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "quads",
+      "glutes"
+    ],
+    "specificGoal": "quads-glutes",
+    "usesWeights": true,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [
+      "barbell-rack"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "sandbag-carry",
     "name": "Sandbag Carry",
     "sheet": "strength",
@@ -3304,6 +4366,35 @@
     "defaultWeight": null
   },
   {
+    "id": "seated-cable-row",
+    "name": "Seated Cable Row",
+    "sheet": "strength",
+    "pattern": "horizontal-pull",
+    "tier": "primary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "back",
+      "biceps"
+    ],
+    "specificGoal": "mid-back-lats",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "seated-row",
+      "bench",
+      "cable-machine"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "seated-calf-raise",
     "name": "Seated Calf Raise",
     "sheet": "strength",
@@ -3322,6 +4413,34 @@
     "canBeBodyweight": false,
     "equipmentNeeded": [
       "cable-machine"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "seated-dumbbell-shoulder-press",
+    "name": "Seated Dumbbell Shoulder Press",
+    "sheet": "strength",
+    "pattern": "vertical-push",
+    "tier": "primary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "shoulders",
+      "triceps"
+    ],
+    "specificGoal": "overhead-strength",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "dumbbells",
+      "bench"
     ],
     "modality": null,
     "commonIn": null,
@@ -3474,6 +4593,58 @@
     "defaultWeight": null
   },
   {
+    "id": "single-leg-glute-bridge",
+    "name": "Single-Leg Glute Bridge",
+    "sheet": "strength",
+    "pattern": "isolation-legs",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "glutes",
+      "hamstrings"
+    ],
+    "specificGoal": "glutes-hip-extension",
+    "usesWeights": false,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "single-leg-rdl",
+    "name": "Single-leg RDL",
+    "sheet": "strength",
+    "pattern": "hinge",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "hamstrings",
+      "glutes"
+    ],
+    "specificGoal": "hamstrings-knee-flexion",
+    "usesWeights": true,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [
+      "dumbbells"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "single-leg-romanian-deadlift",
     "name": "Single-Leg Romanian Deadlift",
     "sheet": "strength",
@@ -3592,6 +4763,61 @@
     "defaultWeight": null
   },
   {
+    "id": "snatch-grip-deadlift",
+    "name": "Snatch-Grip Deadlift",
+    "sheet": "strength",
+    "pattern": "hinge",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "hamstrings",
+      "glutes",
+      "back"
+    ],
+    "specificGoal": "posterior-chain",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "barbell-rack"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "spider-curl",
+    "name": "Spider Curl",
+    "sheet": "strength",
+    "pattern": "isolation-arms",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "biceps"
+    ],
+    "specificGoal": "biceps",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "dumbbells",
+      "bench"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "standing-calf-raise",
     "name": "Standing Calf Raise",
     "sheet": "strength",
@@ -3640,6 +4866,33 @@
     "canBeBodyweight": true,
     "equipmentNeeded": [
       "dumbbells"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "stiff-leg-deadlift",
+    "name": "Stiff-Leg Deadlift",
+    "sheet": "strength",
+    "pattern": "hinge",
+    "tier": "secondary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "hamstrings",
+      "glutes"
+    ],
+    "specificGoal": "hamstrings-knee-flexion",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "barbell-rack"
     ],
     "modality": null,
     "commonIn": null,
@@ -3741,6 +4994,31 @@
     "defaultWeight": null
   },
   {
+    "id": "superman",
+    "name": "Superman",
+    "sheet": "strength",
+    "pattern": "core",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "back",
+      "core"
+    ],
+    "specificGoal": "erectors-lower-back",
+    "usesWeights": false,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "t-bar-row",
     "name": "T-Bar Row",
     "sheet": "strength",
@@ -3821,6 +5099,57 @@
     "canBeBodyweight": false,
     "equipmentNeeded": [
       "trap-bar"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "tricep-dip",
+    "name": "Tricep Dip",
+    "sheet": "strength",
+    "pattern": "isolation-arms",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "triceps",
+      "chest"
+    ],
+    "specificGoal": "triceps",
+    "usesWeights": false,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "tricep-kickback",
+    "name": "Tricep Kickback",
+    "sheet": "strength",
+    "pattern": "isolation-arms",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "triceps"
+    ],
+    "specificGoal": "triceps",
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "dumbbells"
     ],
     "modality": null,
     "commonIn": null,
@@ -3974,6 +5303,33 @@
     "defaultWeight": null
   },
   {
+    "id": "weighted-dip",
+    "name": "Weighted Dip",
+    "sheet": "strength",
+    "pattern": "isolation-arms",
+    "tier": "primary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "triceps",
+      "chest"
+    ],
+    "specificGoal": "triceps",
+    "usesWeights": true,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [
+      "dumbbells"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
     "id": "weighted-plank",
     "name": "Weighted Plank",
     "sheet": "strength",
@@ -3991,6 +5347,87 @@
     "canBeBodyweight": true,
     "equipmentNeeded": [
       "weight-plate"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "weighted-pull-up",
+    "name": "Weighted Pull-Up",
+    "sheet": "strength",
+    "pattern": "vertical-pull",
+    "tier": "primary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "back",
+      "biceps"
+    ],
+    "specificGoal": "lats-vertical",
+    "usesWeights": true,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [
+      "pull-up-bar",
+      "dumbbells"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "wide-grip-pull-up",
+    "name": "Wide-Grip Pull-Up",
+    "sheet": "strength",
+    "pattern": "vertical-pull",
+    "tier": "primary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "back",
+      "biceps"
+    ],
+    "specificGoal": "lats-vertical",
+    "usesWeights": false,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [
+      "pull-up-bar"
+    ],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
+  },
+  {
+    "id": "wrist-curl",
+    "name": "Wrist Curl",
+    "sheet": "strength",
+    "pattern": "isolation-arms",
+    "tier": "tertiary",
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "biceps"
+    ],
+    "specificGoal": null,
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "dumbbells"
     ],
     "modality": null,
     "commonIn": null,
@@ -4113,6 +5550,31 @@
     "defaultDistance": null,
     "defaultWeight": null,
     "circuitCategory": "Weighted"
+  },
+  {
+    "id": "battle-ropes",
+    "name": "Battle Ropes",
+    "sheet": "circuit",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "shoulders",
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [],
+    "modality": "cardio",
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
   },
   {
     "id": "bear-crawl",
@@ -4383,6 +5845,32 @@
     "defaultDistance": null,
     "defaultWeight": null,
     "circuitCategory": "Weighted"
+  },
+  {
+    "id": "devil-press",
+    "name": "Devil Press",
+    "sheet": "circuit",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "dumbbells"
+    ],
+    "modality": "dumbbell-kettlebell",
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
   },
   {
     "id": "diamond-push-ups",
@@ -4673,6 +6161,33 @@
     "defaultDistance": null,
     "defaultWeight": null,
     "circuitCategory": "Upper Body BW"
+  },
+  {
+    "id": "jump-rope",
+    "name": "Jump Rope",
+    "sheet": "circuit",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "calves",
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": true,
+    "equipmentNeeded": [
+      "jump-rope"
+    ],
+    "modality": "jump-rope",
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
   },
   {
     "id": "jump-squats",
@@ -5329,6 +6844,33 @@
     "defaultDistance": null,
     "defaultWeight": null,
     "circuitCategory": "Weighted"
+  },
+  {
+    "id": "turkish-get-up",
+    "name": "Turkish Get-Up",
+    "sheet": "circuit",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body",
+      "core"
+    ],
+    "specificGoal": null,
+    "usesWeights": true,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [
+      "kettlebell"
+    ],
+    "modality": "kettlebell",
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null
   },
   {
     "id": "v-ups",
@@ -6360,6 +7902,581 @@
     "hyroxOrder": null,
     "defaultDistance": null,
     "defaultWeight": null
+  },
+  {
+    "id": "brick-run-bike-to-run",
+    "name": "Brick Run (Bike-to-Run)",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "brick"
+  },
+  {
+    "id": "css-repeats",
+    "name": "CSS Repeats",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "swim"
+  },
+  {
+    "id": "easy-run",
+    "name": "Easy Run",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "run"
+  },
+  {
+    "id": "endurance-ride",
+    "name": "Endurance Ride",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "bike"
+  },
+  {
+    "id": "endurance-swim",
+    "name": "Endurance Swim",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "swim"
+  },
+  {
+    "id": "fartlek-run",
+    "name": "Fartlek Run",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "run"
+  },
+  {
+    "id": "hill-climb-intervals",
+    "name": "Hill Climb Intervals",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "bike"
+  },
+  {
+    "id": "hill-repeats",
+    "name": "Hill Repeats",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "run"
+  },
+  {
+    "id": "interval-run",
+    "name": "Interval Run",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "run"
+  },
+  {
+    "id": "long-run",
+    "name": "Long Run",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "run"
+  },
+  {
+    "id": "open-water-swim",
+    "name": "Open Water Swim",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "swim"
+  },
+  {
+    "id": "recovery-ride",
+    "name": "Recovery Ride",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "bike"
+  },
+  {
+    "id": "recovery-run",
+    "name": "Recovery Run",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "run"
+  },
+  {
+    "id": "sprint-intervals",
+    "name": "Sprint Intervals",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "run"
+  },
+  {
+    "id": "sweet-spot-intervals",
+    "name": "Sweet Spot Intervals",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "bike"
+  },
+  {
+    "id": "swim-drill-session",
+    "name": "Swim Drill Session",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "swim"
+  },
+  {
+    "id": "swim-intervals",
+    "name": "Swim Intervals",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "swim"
+  },
+  {
+    "id": "tempo-ride",
+    "name": "Tempo Ride",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "bike"
+  },
+  {
+    "id": "tempo-run",
+    "name": "Tempo Run",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "run"
+  },
+  {
+    "id": "threshold-intervals",
+    "name": "Threshold Intervals",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "run"
+  },
+  {
+    "id": "threshold-ride",
+    "name": "Threshold Ride",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "bike"
+  },
+  {
+    "id": "vo2max-intervals-bike",
+    "name": "VO2max Intervals (Bike)",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "bike"
+  },
+  {
+    "id": "walk-run-intervals",
+    "name": "Walk/Run Intervals",
+    "sheet": "cardio-session",
+    "pattern": null,
+    "tier": null,
+    "equipmentTags": [],
+    "primaryMuscles": null,
+    "muscleCategory": [
+      "full-body"
+    ],
+    "specificGoal": null,
+    "usesWeights": false,
+    "canBeBodyweight": false,
+    "equipmentNeeded": [],
+    "modality": null,
+    "commonIn": null,
+    "sport": null,
+    "purpose": null,
+    "isHyroxStation": false,
+    "hyroxOrder": null,
+    "defaultDistance": null,
+    "defaultWeight": null,
+    "discipline": "run"
   }
 ];
 })();
