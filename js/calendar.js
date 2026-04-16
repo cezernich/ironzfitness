@@ -654,8 +654,11 @@ function _calV2BuildDayCard(dateStr, dateObj, todayStr, isCenter) {
       </div>`;
   }
 
-  // Compact side card: weekday label, day number, stack of intensity
-  // dots (one per session), optional Rest label, optional check mark.
+  // Compact side card: weekday label, day number, stack of (intensity
+  // color bar + discipline icon) rows — one per session — with an
+  // optional Rest label and completion checkmark. The discipline
+  // icon under the bar makes what's actually scheduled discoverable
+  // without having to tap each day.
   let sidebody = "";
   if (sessionRemoved) {
     sidebody = `<div class="s-rest">OFF</div>`;
@@ -663,9 +666,15 @@ function _calV2BuildDayCard(dateStr, dateObj, todayStr, isCenter) {
     sidebody = `<div class="s-rest">REST</div>`;
   } else {
     const show = sessions.slice(0, 3);
-    sidebody = `<div class="s-dots">` + show.map(s =>
-      `<span class="s-dot ${_calV2LoadToDot(s.loadLabel)}"></span>`
-    ).join("") + `</div>`;
+    sidebody = `<div class="s-dots">` + show.map(s => {
+      const icon = _calV2IconFor(s.discCls);
+      const title = `${s.name || s.discCls} · ${s.loadLabel || ""}`.trim();
+      return `
+        <div class="s-sess s-sess--${s.discCls}" title="${_escapeHtml(title)}">
+          <span class="s-dot ${_calV2LoadToDot(s.loadLabel)}"></span>
+          <span class="s-ico">${icon}</span>
+        </div>`;
+    }).join("") + `</div>`;
   }
 
   const check = completed ? `<div class="s-check">${_CAL_V2_CHECK_SVG}</div>` : "";
