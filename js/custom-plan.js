@@ -169,7 +169,8 @@ function renderSessionCard(dow, idx, entry) {
   }
 
   let title = "Session";
-  let type = entry.data?.type || "general";
+  const rawType = entry.data?.type || "general";
+  const type = CP_TYPE_LABELS[rawType] || rawType;
   let detail = "";
 
   if (entry.mode === "ai") {
@@ -1041,7 +1042,8 @@ function customPlanDeleteFromModal() {
 }
 
 const CP_TYPE_LABELS = {
-  strength: "Strength", running: "Running", cycling: "Cycling",
+  strength: "Strength", weightlifting: "Strength",
+  running: "Running", cycling: "Cycling",
   swimming: "Swimming", hiit: "HIIT", yoga: "Yoga / Mobility",
   bodyweight: "Bodyweight", general: "General",
   brick: "Brick", mobility: "Mobility", walking: "Walking",
@@ -1752,7 +1754,13 @@ function customPlanSaveManual() {
   if (isNaN(dow)) return;
 
   const name = document.getElementById("cp-manual-name")?.value.trim() || "Custom Session";
-  const type = _cpManualSelectedType || "general";
+  // Canonicalize "strength" → "weightlifting" to match Add Session's
+  // _qeSaveStrengthWorkout (Phase 8, UNIFIED_BUILDER_SPEC.md). Without
+  // this, CP-saved strength sessions used type="strength" and were
+  // excluded from the calendar's week-strength filter
+  // (calendar.js:3929 — w.type === "weightlifting" | "bodyweight" | "hiit").
+  const _picked = _cpManualSelectedType || "general";
+  const type = _picked === "strength" ? "weightlifting" : _picked;
   const notes = document.getElementById("cp-manual-notes")?.value.trim() || "";
 
   const isCardio = ["running", "cycling", "swimming"].includes(type);
