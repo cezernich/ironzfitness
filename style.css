@@ -3946,7 +3946,12 @@ button:active {
   padding: 8px 6px;
   font-size: 0.85rem;
   width: 100%;
+  color: #1A1A1A;
 }
+/* Typed text in Add Session / manual exercise rows reads as solid black
+   instead of the default muted body color, so user-entered values stand
+   out from the gray placeholder hints. */
+.qe-manual-row input::placeholder { color: #9ca3af; }
 .qe-manual-row.hiit-row > div:not(:first-of-type):not(.ex-pyramid-detail) {
   flex: 1 1 0;
   min-width: 0;
@@ -4035,8 +4040,8 @@ button:active {
   gap: 6px;
   padding: 0 10px 4px;
   font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
+  font-weight: 700;
+  color: #1A1A1A;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
