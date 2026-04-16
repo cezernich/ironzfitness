@@ -317,19 +317,25 @@ async function seedReferenceData() {
     }
   }
 
-  // Also seed from EXERCISE_MUSCLES if available (enriches muscle_groups)
-  if (typeof EXERCISE_MUSCLES !== 'undefined') {
+  // Enrich muscle_groups from window.ExerciseDB (Phase 3 of the
+  // exercise-DB merge — replaces the legacy EXERCISE_MUSCLES lookup).
+  // ExerciseDB.getMuscles already does substring-matching so short names
+  // like "Bench Press" resolve to the metadata of the canonical variant.
+  if (typeof window !== 'undefined' && window.ExerciseDB && typeof window.ExerciseDB.getMuscles === 'function') {
     for (const ex of exercises) {
-      const muscles = EXERCISE_MUSCLES[ex.name];
-      if (muscles) ex.muscle_groups = muscles;
+      const muscles = window.ExerciseDB.getMuscles(ex.name);
+      if (muscles && muscles.length) ex.muscle_groups = muscles;
     }
   }
 
-  // Also seed from EXERCISE_SUBSTITUTIONS if available
-  if (typeof EXERCISE_SUBSTITUTIONS !== 'undefined') {
+  // EXERCISE_SUBSTITUTIONS is still owned by exercise-library.js (UX
+  // module, not exercise data — see EXERCISE_DB_MERGE_REPORT.md). Read
+  // it via getExerciseAlternatives() so we don't depend on the constant
+  // being globally exposed.
+  if (typeof getExerciseAlternatives === 'function') {
     for (const ex of exercises) {
-      const subs = EXERCISE_SUBSTITUTIONS[ex.name];
-      if (subs) ex.substitutions = subs;
+      const subs = getExerciseAlternatives(String(ex.name || '').toLowerCase());
+      if (subs && subs.length) ex.substitutions = subs;
     }
   }
 
