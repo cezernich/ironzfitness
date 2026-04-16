@@ -2679,6 +2679,30 @@ button:active {
   text-align: center;
 }
 
+/* Swim distance unit dropdown (m / yd). Explicit chevron + padding so
+   the native browser arrow doesn't awkwardly overlap the text. */
+.completion-unit-select {
+  width: 62px;
+  font-size: 0.82rem;
+  padding: 5px 24px 5px 10px;
+  border: 1px solid var(--color-border, #d0d0d0);
+  border-radius: 6px;
+  background-color: var(--color-surface, #fff);
+  color: var(--color-text, #111);
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23666' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  cursor: pointer;
+}
+.completion-unit-select:focus {
+  outline: none;
+  border-color: var(--color-primary, #2a9d8f);
+  box-shadow: 0 0 0 2px rgba(42, 157, 143, 0.2);
+}
+
 .btn-complete-save {
   align-self: flex-start;
   background: var(--color-success);
@@ -14341,6 +14365,14 @@ body.auth-visible #bottom-nav { display: none !important; }
 .ex-row .remove-exercise-btn { position: static; }
 /* Drag handle (if any leaked through) is no longer shown */
 .ex-row .drag-handle { display: none !important; }
+/* …except in the workout editor, where rows are reorderable */
+.ex-row.edit-exercise-row .drag-handle {
+  display: flex !important;
+  position: static;
+  width: 28px;
+  min-width: 28px;
+  transform: none;
+}
 
 .ex-row-header {
   display: flex;

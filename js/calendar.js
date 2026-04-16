@@ -523,6 +523,20 @@ function renderWeekView() {
   // arrow buttons since overflow-x scroll isn't mouse-draggable by
   // default. Mobile touch gestures still use the native scroll-snap.
   _calV2WireCarouselSwipe();
+  _calV2CenterCurrentCard();
+}
+
+function _calV2CenterCurrentCard() {
+  const car = document.querySelector("#calendar-grid .car");
+  if (!car) return;
+  const center = car.querySelector(".dc.c") || car.querySelector(".dc.s.selected") || car.querySelector(".dc.s.is-today");
+  if (!center) return;
+  // Defer to next frame so layout has settled before we read offsets.
+  requestAnimationFrame(() => {
+    const target = center.offsetLeft + center.offsetWidth / 2 - car.clientWidth / 2;
+    const max = car.scrollWidth - car.clientWidth;
+    car.scrollLeft = Math.max(0, Math.min(max, target));
+  });
 }
 
 function _calV2WireCarouselSwipe() {
@@ -2051,7 +2065,7 @@ function _buildDistanceField(sessionId, type, globalUnit) {
         <div style="display:flex;gap:8px;align-items:center">
           <input type="number" id="cdist-${sessionId}" class="completion-dur-input"
             placeholder="${placeholder}" min="0" step="10" style="flex:1" />
-          <select id="cdistunit-${sessionId}" class="completion-dur-input" style="width:auto">
+          <select id="cdistunit-${sessionId}" class="completion-unit-select">
             <option value="m"${mSel}>m</option>
             <option value="yd"${ydSel}>yd</option>
           </select>

@@ -372,7 +372,14 @@ const DB = (() => {
   const _keyTimers = {};
 
   // Critical keys sync immediately (no debounce) so cross-device sync is fast.
-  const _IMMEDIATE_SYNC_KEYS = new Set(['workoutSchedule', 'workouts', 'trainingPlan', 'events', 'meals']);
+  // completedSessions is in this set because a user who completes a session
+  // and refreshes within the 2s debounce window gets their completion wiped
+  // by refreshAllKeys() pulling the stale (uncompleted) row from Supabase.
+  // workoutRatings hits the same race whenever the user rates and reloads.
+  const _IMMEDIATE_SYNC_KEYS = new Set([
+    'workoutSchedule', 'workouts', 'trainingPlan', 'events', 'meals',
+    'completedSessions', 'workoutRatings',
+  ]);
 
   async function _doSyncKey(lsKey) {
     const uid = await _userId();
