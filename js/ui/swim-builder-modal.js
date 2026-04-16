@@ -628,6 +628,18 @@
 
   // Derive a legacy intervals array from a step tree so old display surfaces
   // still get *something* to show even without SwimCardRenderer.
+  // Effort is inferred from pace_target so the intensity strip can paint
+  // distinct zones (build/sprint reads as Z4-Z5, drills/easy as Z2,
+  // cooldown as Z1). Rest carries the rep count too — without it,
+  // multi-round sets compute duration with one rest instead of N.
+  function _paceTargetToZone(paceTarget, name) {
+    const c = (String(paceTarget || "") + " " + String(name || "")).toLowerCase();
+    if (/cool ?down|very easy|long and loose/.test(c)) return "Z1";
+    if (/sprint|all.?out|max|race ?pace|css.?-|build to fast/.test(c)) return "Z5";
+    if (/threshold|@ ?css\b/.test(c)) return "Z4";
+    if (/tempo|css.?\+ ?[1-5]\b/.test(c)) return "Z3";
+    return "Z2";
+  }
   function _legacyIntervalsFromSteps(steps) {
     const out = [];
     function walk(arr, reps) {
@@ -637,7 +649,7 @@
           out.push({
             name: s.name || "Swim",
             duration: `${s.distance_m}m`,
-            effort: "Z2",
+            effort: _paceTargetToZone(s.pace_target, s.name),
             details: (s.pace_target ? `@ ${s.pace_target}` : ""),
             reps: reps > 1 ? reps : undefined,
           });
@@ -647,6 +659,7 @@
             duration: `${s.duration_sec}s`,
             effort: "RW",
             details: "",
+            reps: reps > 1 ? reps : undefined,
           });
         } else if (s.kind === "repeat") {
           walk(s.children || [], (reps || 1) * (s.count || 1));

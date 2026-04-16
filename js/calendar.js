@@ -1128,8 +1128,21 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
       Easy: "z2", Moderate: "z3", Hard: "z4", Max: "z5", T1: "z-transition",
     };
     const intervals = _expandRepeatGroups(s.intervals || []);
-    const parseDur = str => { const s = String(str || "").toLowerCase(); const m = s.match(/([\d.]+)/); if (!m) return 1; const v = parseFloat(m[1]); return /sec/.test(s) ? v / 60 : v; };
+    // Parse a duration string like "5 min", "15s", "30 sec", "2 minutes".
+    // Defaults to minutes when the unit is missing. Bare "Ns" / "N s"
+    // counts as seconds — without this, "15s" rest reads as 15 minutes
+    // and a swim with 8 inter-rep rests inflates by ~100 min.
+    const parseDur = str => {
+      const t = String(str || "").toLowerCase().trim();
+      const m = t.match(/([\d.]+)\s*([a-z]*)/);
+      if (!m) return 1;
+      const v = parseFloat(m[1]);
+      const unit = m[2] || "";
+      if (/sec/.test(unit) || unit === "s") return v / 60;
+      return v;
+    };
     // Estimate minutes from a distance string + zone, using user pace if available.
+    const _isSwimWorkout = (w.type === "swim" || w.type === "swimming");
     const _distToMin = (str, zone) => {
       const s = String(str || "").toLowerCase();
       if (!/mi|km|m\b|yd/i.test(s) || /min/.test(s)) return null; // not a distance
@@ -1138,18 +1151,34 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
       const isMi = /mi/i.test(s);
       const isKm = /km/i.test(s);
       const distKm = isMi ? v * 1.60934 : isKm ? v : v / 1000;
-      // Rough pace per km by zone (min/km): Z1=7, Z2=6.2, Z3=5.5, Z4=5, Z5=4.5, Z6=4
-      const paceMap = { RW: 8, Z1: 7, Z2: 6.2, Z3: 5.5, Z4: 5, Z5: 4.5, Z6: 4 };
+      // Swim is ~3× slower per km than running; use swim-specific paces
+      // so a 75m drill reads as ~1.5 min, not ~28 sec.
+      const paceMap = _isSwimWorkout
+        ? { RW: 32, Z1: 28, Z2: 22, Z3: 19, Z4: 17, Z5: 15, Z6: 13 }
+        : { RW: 8,  Z1: 7,  Z2: 6.2, Z3: 5.5, Z4: 5, Z5: 4.5, Z6: 4 };
       // Try user zones for more accurate pace
       try {
         const tz = JSON.parse(localStorage.getItem("trainingZones") || "{}");
-        const rz = tz.running || {};
-        if (rz.easyPaceMin && zone === "Z2") {
-          const userPace = parseFloat(rz.easyPaceMin) + (parseFloat(rz.easyPaceSec || 0) / 60);
-          if (userPace > 0) return distKm * userPace / 1.60934 * (isMi ? 1 : 1); // pace is min/mi
+        if (_isSwimWorkout) {
+          const cssRaw = tz.swimming?.css;
+          const cssMatch = String(cssRaw || "").match(/(\d+):(\d+)/);
+          if (cssMatch) {
+            const cssSec = parseInt(cssMatch[1]) * 60 + parseInt(cssMatch[2]);
+            // Per-100m pace by zone, anchored to user's CSS.
+            const cssOffset = { RW: 25, Z1: 18, Z2: 12, Z3: 5, Z4: 0, Z5: -3, Z6: -6 };
+            const offset = cssOffset[zone] != null ? cssOffset[zone] : 12;
+            const sec_per_100m = cssSec + offset;
+            return (v / 100) * (sec_per_100m / 60); // v = meters
+          }
+        } else {
+          const rz = tz.running || {};
+          if (rz.easyPaceMin && zone === "Z2") {
+            const userPace = parseFloat(rz.easyPaceMin) + (parseFloat(rz.easyPaceSec || 0) / 60);
+            if (userPace > 0) return distKm * userPace / 1.60934 * (isMi ? 1 : 1); // pace is min/mi
+          }
         }
       } catch {}
-      const pace = paceMap[zone] || 5.5;
+      const pace = paceMap[zone] || (_isSwimWorkout ? 22 : 5.5);
       return distKm * pace;
     };
 
@@ -6418,6 +6447,59 @@ function _swimSetDetails(reps, distM, cssSec, paceOffsetSec, restStr, label) {
   return `${reps} × ${distM}m ${paceLabel} w/ ${restStr} rest`;
 }
 
+// Map a swim pace_target free-text label to a training zone so the
+// intensity strip and duration estimator can paint distinct zones
+// across a workout. The canonical swim step tree carries pace_target
+// strings like "easy", "build to fast", "@ CSS", "race pace", etc;
+// without this mapping every step rendered as Z2 regardless.
+function _swimPaceTargetToZone(paceTarget, name) {
+  const t = String(paceTarget || "").toLowerCase();
+  const n = String(name || "").toLowerCase();
+  const combined = t + " " + n;
+  if (/cool ?down|very easy|long and loose/.test(combined)) return "Z1";
+  if (/sprint|all.?out|max|race ?pace|css.?-|build to fast/.test(combined)) return "Z5";
+  if (/threshold|@ ?css\b/.test(combined)) return "Z4";
+  if (/tempo|css.?\+ ?[1-5]\b/.test(combined)) return "Z3";
+  if (/easy|warm ?up|aerobic|recovery|drill|technique|kick|side ?kick/.test(combined)) return "Z2";
+  return "Z2";
+}
+
+// Convert a canonical swim step tree to the flat intervals shape the
+// day-card renderer + duration estimator already consume. Repeat blocks
+// emit one record per child with a `reps` count (matching the existing
+// expansion loop). Distances stay in meters so _distToMin can apply
+// swim pace; rests stay in seconds.
+function _swimStepsToIntervals(steps) {
+  const out = [];
+  function walk(arr, reps) {
+    if (!Array.isArray(arr)) return;
+    for (const s of arr) {
+      if (!s || typeof s !== "object") continue;
+      if (s.kind === "interval") {
+        out.push({
+          name: s.name || "Swim",
+          duration: `${Math.round(s.distance_m || 0)}m`,
+          effort: _swimPaceTargetToZone(s.pace_target, s.name),
+          details: s.pace_target ? `@ ${s.pace_target}` : "",
+          reps: reps > 1 ? reps : undefined,
+        });
+      } else if (s.kind === "rest") {
+        out.push({
+          name: "Rest",
+          duration: `${Math.round(s.duration_sec || 0)}s`,
+          effort: "RW",
+          details: "",
+          reps: reps > 1 ? reps : undefined,
+        });
+      } else if (s.kind === "repeat") {
+        walk(s.children || [], (reps || 1) * (s.count || 1));
+      }
+    }
+  }
+  walk(steps, 1);
+  return out;
+}
+
 function _generateStructuredSwimMain(mainMin, intensity, cssSec, iz) {
   // Randomly pick a variant per intensity. On Regenerate, this runs
   // again and Math.random yields a different pick → user sees a
@@ -6915,6 +6997,14 @@ function _qeBuildCardioWorkout(opts) {
         workout.total_distance_m = w.total_distance_m;
         workout.why_text = w.why_text;
         workout.title = w.title;
+        // Replace the random minute-based intervals (built upstream as
+        // generic Z2 placeholders) with intervals derived from the
+        // canonical step tree, with effort inferred from pace_target.
+        // This drives the day-card duration badge AND the intensity
+        // strip from the same source the visible step list uses, so
+        // "build to fast" segments actually paint as a higher zone
+        // and the duration matches the requested length.
+        workout.intervals = _swimStepsToIntervals(w.steps);
       }
     } catch (e) {
       console.warn("[_qeBuildCardioWorkout swim] canonical shape failed:", e);
