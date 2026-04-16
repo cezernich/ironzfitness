@@ -1526,6 +1526,8 @@ button:active {
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--color-text);
+  min-width: 200px;
+  text-align: center;
 }
 
 .cal-controls {
