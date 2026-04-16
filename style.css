@@ -2694,6 +2694,39 @@ button:active {
   color: var(--color-text-muted);
 }
 
+/* Exercise row Weighted / Bodyweight toggle + bodyweight badge.
+   Driven by js/exercise-row-weight-toggle.js after the user picks
+   an exercise from the typeahead. Inserted next to the row's weight
+   input — see EXERCISE_DB_SPEC.md §UI enforcement rules. */
+.ex-row-bw-badge {
+  display: inline-block;
+  font-size: 0.78rem; font-weight: 600;
+  color: var(--color-text-muted, #666);
+  background: var(--color-surface-muted, #f0f0f0);
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin: 0 6px 0 0;
+}
+.ex-row-bw-toggle {
+  display: inline-flex;
+  border: 1px solid var(--color-border, #d0d0d0);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-right: 6px;
+  font-size: 0.74rem;
+}
+.ex-row-bw-mode {
+  border: none; background: transparent;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--color-text-muted, #666);
+  font-weight: 600;
+}
+.ex-row-bw-mode.is-active {
+  background: var(--color-primary, #2a9d8f);
+  color: #fff;
+}
+
 /* Equipment profile checklist (Profile tab → Equipment Profile card).
    Renders the canonical equipment tokens grouped by category. */
 .equipment-grid { display: flex; flex-direction: column; gap: 14px; }
