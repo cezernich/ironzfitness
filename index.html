@@ -2398,18 +2398,41 @@
       <div class="qe-step" id="qe-step-1-restriction" style="display:none">
         <div class="form-row">
           <label for="qe-restriction-type">Restriction Type</label>
-          <select id="qe-restriction-type" onchange="onRestrictionTypeChange()">
+          <select id="qe-restriction-type">
             <option value="injury">Injury / Pain</option>
             <option value="sick">Sick / Low Energy</option>
             <option value="travel">Traveling</option>
             <option value="time">Time Limited</option>
-            <option value="discipline">Discipline Unavailable</option>
             <option value="rest">Full Rest Day</option>
           </select>
         </div>
-        <!-- Discipline picker — only shown when type = discipline.
-             Sessions matching any selected discipline on this day are
-             skipped; other disciplines still train normally. -->
+        <div class="form-row" id="qe-restriction-action-row" style="margin-top:12px">
+          <label>Session Action</label>
+          <div class="restriction-action-group">
+            <label class="restriction-action-option">
+              <input type="radio" name="qe-session-action" value="reduce" checked onchange="onRestrictionActionChange()" />
+              <div>
+                <div class="restriction-action-label">Reduce intensity</div>
+                <div class="restriction-action-desc">Keep session but modify based on restriction</div>
+              </div>
+            </label>
+            <label class="restriction-action-option">
+              <input type="radio" name="qe-session-action" value="swap" onchange="onRestrictionActionChange()" />
+              <div>
+                <div class="restriction-action-label">Discipline unavailable</div>
+                <div class="restriction-action-desc">Swap the blocked sport for a substitute session</div>
+              </div>
+            </label>
+            <label class="restriction-action-option">
+              <input type="radio" name="qe-session-action" value="remove" onchange="onRestrictionActionChange()" />
+              <div>
+                <div class="restriction-action-label">Remove session</div>
+                <div class="restriction-action-desc">Skip this day's workout entirely</div>
+              </div>
+            </label>
+          </div>
+        </div>
+        <!-- Discipline picker — only shown when action = swap. -->
         <div class="form-row" id="qe-restriction-disc-row" style="display:none;margin-top:12px">
           <label>Which discipline(s) are unavailable?</label>
           <div class="restriction-disc-group">
@@ -2418,26 +2441,7 @@
             <label class="restriction-disc-chip"><input type="checkbox" value="run" /> Run</label>
             <label class="restriction-disc-chip"><input type="checkbox" value="strength" /> Strength</label>
           </div>
-          <p class="hint" style="margin:6px 0 0">Any session of the checked discipline(s) on this day will be skipped. Other disciplines still train.</p>
-        </div>
-        <div class="form-row" id="qe-restriction-action-row" style="margin-top:12px">
-          <label>Session Action</label>
-          <div class="restriction-action-group">
-            <label class="restriction-action-option">
-              <input type="radio" name="qe-session-action" value="reduce" checked />
-              <div>
-                <div class="restriction-action-label">Reduce intensity</div>
-                <div class="restriction-action-desc">Keep session but modify based on restriction</div>
-              </div>
-            </label>
-            <label class="restriction-action-option">
-              <input type="radio" name="qe-session-action" value="remove" />
-              <div>
-                <div class="restriction-action-label">Remove session</div>
-                <div class="restriction-action-desc">Skip this day's workout entirely</div>
-              </div>
-            </label>
-          </div>
+          <p class="hint" style="margin:6px 0 0">We'll hide those sessions on this day and recommend a substitute you can do instead.</p>
         </div>
         <div class="form-row" style="margin-top:12px">
           <label for="qe-restriction-note">Note (optional)</label>

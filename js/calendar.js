@@ -3318,9 +3318,27 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         const _compExercises = isSessionComplete(cardId) ? _getCompletionExercises(cardId) : null;
         let displayExercises = _compExercises || w.exercises;
         if (!_compExercises && data.equipmentRestriction && w.type === "weightlifting" && typeof getEquipmentAdjustedExercises === "function") {
-          const focusMatch = String(w.id).match(/weightlifting-(\w+)-b/);
-          const focus = focusMatch ? focusMatch[1] : null;
-          if (focus) displayExercises = getEquipmentAdjustedExercises(w.exercises, focus, w.level || "intermediate", data.equipmentRestriction);
+          // Derive the strength focus (push/pull/legs/upper/lower/full)
+          // from whatever the session exposes. Legacy cards used the
+          // `weightlifting-<focus>-b` id pattern; onboarding-v2 builds
+          // ids like `ob-v2-<ts>-<idx>` with no focus in them, so the
+          // old id-regex fell through to null and the filter never
+          // ran — equipment restriction silently ignored. Now we pull
+          // focus from w.strengthFocus, w.focus, or parse the session
+          // name as a last resort, then always run the equipment
+          // filter regardless.
+          const _nameLc = String(w.sessionName || "").toLowerCase();
+          const _nameFocus =
+            /push/.test(_nameLc) ? "push" :
+            /pull/.test(_nameLc) ? "pull" :
+            /leg/.test(_nameLc)  ? "legs" :
+            /upper/.test(_nameLc) ? "upper" :
+            /lower/.test(_nameLc) ? "lower" :
+            "full";
+          const focus = w.strengthFocus || w.focus ||
+            (String(w.id).match(/weightlifting-(\w+)-b/)?.[1]) ||
+            _nameFocus;
+          displayExercises = getEquipmentAdjustedExercises(w.exercises, focus, w.level || "intermediate", data.equipmentRestriction);
         }
         if (!_compExercises && data.restriction && data.restriction.action === "reduce" && displayExercises) {
           displayExercises = getRestrictedExercises(displayExercises, data.restriction);
@@ -7936,17 +7954,19 @@ function saveQuickRestriction() {
   const action = document.querySelector('input[name="qe-session-action"]:checked')?.value || "reduce";
   const msg    = document.getElementById("qe-restriction-msg");
 
-  // Discipline-restriction path: "I can't swim today" etc. Stores the
-  // selected disciplines so the session filter can skip only those
-  // workouts, not the whole day. Always uses action=remove — the
-  // session is gone for that discipline, not "reduced".
+  // Swap-discipline action: "I can't swim today, swap it for
+  // something I can do". We store the blocked disciplines alongside
+  // the restriction so the session filter hides those workouts and
+  // the day detail renders a substitute-suggestion card. Multiple
+  // disciplines can be blocked in one pass for travel days where
+  // several sports are unavailable at once.
   let disciplines = null;
-  if (type === "discipline") {
+  if (action === "swap") {
     const picked = Array.from(document.querySelectorAll("#qe-restriction-disc-row input[type=checkbox]:checked"))
       .map(el => el.value);
     if (picked.length === 0) {
       msg.style.color = "var(--color-danger)";
-      msg.textContent = "Pick at least one discipline.";
+      msg.textContent = "Pick at least one discipline to swap.";
       return;
     }
     disciplines = picked;
@@ -7955,13 +7975,7 @@ function saveQuickRestriction() {
   let restrictions = {};
   try { restrictions = JSON.parse(localStorage.getItem("dayRestrictions")) || {}; } catch {}
   const entry = { type, note, action, createdAt: new Date().toISOString() };
-  if (disciplines) {
-    entry.disciplines = disciplines;
-    // Discipline restrictions always remove (can't do a partial-day
-    // skip on a single workout), and the calendar renderer uses
-    // `disciplines` + `action === "remove"` as the skip signal.
-    entry.action = "remove";
-  }
+  if (disciplines) entry.disciplines = disciplines;
   restrictions[dateStr] = entry;
   localStorage.setItem("dayRestrictions", JSON.stringify(restrictions)); if (typeof DB !== 'undefined') DB.syncKey('dayRestrictions');
 
@@ -7973,23 +7987,17 @@ function saveQuickRestriction() {
   setTimeout(() => closeQuickEntry(), 700);
 }
 
-// Show/hide the discipline picker when the user switches restriction
-// type. Called from the <select>'s onchange.
-function onRestrictionTypeChange() {
-  const type = document.getElementById("qe-restriction-type")?.value;
-  const row  = document.getElementById("qe-restriction-disc-row");
-  const actionRow = document.getElementById("qe-restriction-action-row");
+// Show/hide the discipline picker based on the Session Action radio.
+// "Swap" surfaces the picker so the user can mark which sports are
+// blocked; Reduce / Remove hide the picker.
+function onRestrictionActionChange() {
+  const action = document.querySelector('input[name="qe-session-action"]:checked')?.value || "reduce";
+  const row = document.getElementById("qe-restriction-disc-row");
   if (!row) return;
-  if (type === "discipline") {
-    row.style.display = "";
-    // Discipline restriction always means "skip this discipline", so
-    // hide the Reduce/Remove action selector — it's always Remove.
-    if (actionRow) actionRow.style.display = "none";
-  } else {
-    row.style.display = "none";
-    if (actionRow) actionRow.style.display = "";
-  }
+  row.style.display = action === "swap" ? "" : "none";
 }
+// Back-compat shim — older inline HTML may still reference this name.
+function onRestrictionTypeChange() { onRestrictionActionChange(); }
 
 function toggleQEGenerate() {}
 function switchQETab() {}

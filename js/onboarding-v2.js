@@ -1114,19 +1114,113 @@
     // race's plan — there's no new threshold test, no new schedule,
     // no new strength split. Save the race as a calendar event,
     // apply its taper window to the A-race plan via insertBRaceWindow,
-    // and jump straight to the done screen.
+    // and show a compact review of the A-race week the B race sits
+    // in so the user can glance at what's already scheduled and
+    // decide whether to tweak.
     if (priority === "B") {
       try {
         _persistBRaceAndReshape(race);
       } catch (e) {
         console.warn("[OnboardingV2] B race short-circuit save failed", e);
       }
-      goTo("bp-v2-done");
+      _state._bRaceReviewDate = race.date || null;
+      goTo("bp-v2-b-review");
+      _renderBRaceReview(race);
       return;
     }
 
     goTo("bp-v2-4");
     _renderThresholdSections();
+  }
+
+  // Render the B-race review screen: a mini day-by-day strip of the
+  // A-race plan's week that the B race sits inside, with the B race
+  // day highlighted. Pulls live data from workoutSchedule (after
+  // insertBRaceWindow has already reshaped it) so the preview
+  // reflects the tapered schedule the user will actually train.
+  function _renderBRaceReview(race) {
+    const container = document.getElementById("bp-v2-b-review-week");
+    const label = document.getElementById("bp-v2-b-review-week-label");
+    const subtitle = document.getElementById("bp-v2-b-review-subtitle");
+    if (!container) return;
+    if (subtitle && race && race.name) {
+      subtitle.textContent = `Your A-race plan already covers the week of ${race.name}. We recommend leaving it as-is — the taper has been adjusted around race day — but here's what's scheduled if you want to tweak anything.`;
+    }
+    const raceDate = (race && race.date) ? new Date(race.date + "T12:00:00") : new Date();
+    if (isNaN(raceDate.getTime())) return;
+    // Monday-anchored week containing the race date.
+    const monday = new Date(raceDate);
+    const dow = monday.getDay();
+    monday.setDate(monday.getDate() + (dow === 0 ? -6 : 1 - dow));
+    monday.setHours(0, 0, 0, 0);
+    const weekStartIso = monday.toISOString().slice(0, 10);
+    const weekEnd = new Date(monday); weekEnd.setDate(weekEnd.getDate() + 6);
+    if (label) {
+      const fmt = d => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      label.textContent = `Race week · ${fmt(monday)} – ${fmt(weekEnd)}`;
+    }
+    let schedule = [];
+    try { schedule = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday); d.setDate(d.getDate() + i);
+      const iso = d.toISOString().slice(0, 10);
+      const daySessions = schedule.filter(s => s && s.date === iso && !_isRestSession(s));
+      const isRaceDay = iso === (race && race.date);
+      const dow = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][d.getDay() === 0 ? 6 : d.getDay() - 1];
+      days.push({ iso, dow, dayNum: d.getDate(), sessions: daySessions, isRaceDay });
+    }
+    container.innerHTML = days.map(day => {
+      const chips = day.isRaceDay
+        ? `<span class="ob-v2-b-review-race-chip">${_escape(race.name || "Race day")}</span>`
+        : (day.sessions.length === 0
+            ? `<span class="ob-v2-b-review-rest">Rest</span>`
+            : day.sessions.map(s => `<span class="ob-v2-b-review-chip">${_escape(s.sessionName || s.type || "Session")}</span>`).join(""));
+      return `
+        <div class="ob-v2-b-review-row ${day.isRaceDay ? "is-race-day" : ""}">
+          <div class="ob-v2-b-review-dow">${day.dow} <span class="ob-v2-b-review-num">${day.dayNum}</span></div>
+          <div class="ob-v2-b-review-chips">${chips}</div>
+        </div>`;
+    }).join("");
+  }
+
+  // Helper: treat anything that looks like a rest placeholder as
+  // rest so the review strip shows "Rest" instead of a phantom chip.
+  function _isRestSession(s) {
+    if (!s) return false;
+    const load = String(s.load || "").toLowerCase();
+    const type = String(s.type || "").toLowerCase();
+    const disc = String(s.discipline || "").toLowerCase();
+    const name = String(s.sessionName || "").toLowerCase();
+    return load === "rest" || type === "rest" || disc === "rest" || /^\s*rest\s*$/.test(name);
+  }
+
+  // "Tweak this week in calendar" — close the overlay, jump to home,
+  // and snap the calendar to the B-race week so the user can tap
+  // into any day to edit without hunting for it.
+  function _goToBRaceInCalendar() {
+    const dateStr = _state._bRaceReviewDate;
+    _closeBuildPlanOverlay();
+    _closeOverlay();
+    try {
+      if (typeof renderRaceEvents === "function") renderRaceEvents();
+      if (typeof renderTrainingInputs === "function") renderTrainingInputs();
+    } catch {}
+    if (typeof showTab === "function") showTab("home");
+    // Snap the home calendar to the B race week and select the race day
+    // so it's the center card the user lands on.
+    try {
+      if (dateStr && typeof selectDay === "function") {
+        if (typeof getWeekStart === "function" && typeof currentWeekStart !== "undefined") {
+          // currentWeekStart is a global let in js/calendar.js — mutate via window.
+          window.currentWeekStart = getWeekStart(new Date(dateStr + "T00:00:00"));
+        }
+        if (typeof calendarMode !== "undefined") window.calendarMode = "week";
+        selectDay(dateStr);
+      } else if (typeof renderCalendar === "function") {
+        renderCalendar();
+      }
+    } catch (e) { console.warn("[OnboardingV2] jump to B race week failed", e); }
   }
 
   // Save a B race as a calendar event and let the existing multi-race
@@ -2659,6 +2753,12 @@
     } else if (_strengthFocus && _STRENGTH_TEMPLATES[_strengthFocus]) {
       session.exercises = _STRENGTH_TEMPLATES[_strengthFocus].map(ex => ({ ...ex }));
     }
+    // Persist strengthFocus on the saved session so the calendar
+    // equipment-restriction filter can look it up by field instead
+    // of parsing the id. Legacy cards used a `weightlifting-<focus>`
+    // id pattern; ob-v2 ids are planId-based, so without this the
+    // focus would be null and the filter silently skipped.
+    if (_strengthFocus) session.strengthFocus = _strengthFocus;
     return session;
   }
 
@@ -2752,7 +2852,7 @@
       _openSlotSubtypePicker, _pickSlotSubtype,
       _slotDragStart, _slotDragEnd, _slotDragOver, _slotDragLeave, _slotDrop,
       _saveScheduleAndContinue,
-      _renderPlanPreview, _confirmAndSavePlan, _mapRacesToLegacyEvents, _goToTrainingTab, _goToHomeTab,
+      _renderPlanPreview, _confirmAndSavePlan, _mapRacesToLegacyEvents, _goToTrainingTab, _goToHomeTab, _renderBRaceReview, _goToBRaceInCalendar,
     });
   }
 
