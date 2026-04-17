@@ -18470,6 +18470,7 @@ body.ob-v2-lock { overflow: hidden; }
   font-family: inherit;
   font-size: 10px;
   font-weight: 600;
+  white-space: nowrap;
 }
 .qa-btn svg {
   width: 10px;
@@ -18479,6 +18480,24 @@ body.ob-v2-lock { overflow: hidden; }
 .qa-btn-label {
   font-weight: 700;
   letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+/* Mobile: compress the calendar header so prev/label/next/Today/toggle/QuickAdd
+   all fit on one row without wrapping or clipping the trailing controls. */
+@media (max-width: 480px) {
+  .cal-hdr { padding: 0 8px; }
+  .cal-hdr-l, .cal-hdr-r { gap: 4px; }
+  .cal-mo { min-width: 0; font-size: 11px; }
+  .cal-nb { width: 26px; height: 26px; }
+  .cal-toggle { width: 26px; height: 26px; }
+  .cal-today-pill {
+    height: 26px;
+    padding: 0 9px 0 8px;
+    font-size: 10px;
+    gap: 4px;
+  }
+  .qa-btn { padding: 5px 8px; font-size: 10px; }
 }
 
 /* ── WEEK VIEW: Carousel ── */
