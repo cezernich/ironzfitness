@@ -1661,8 +1661,31 @@ function checkARacePromotion() {
 // Regenerates the training plan for a race and persists it. Used after
 // B→A promotion (either auto or user-chosen) so the newly-primary race
 // gets a full build-out instead of only its original B-race taper window.
+//
+// If the user has an active onboarding-v2 workout schedule that already
+// covers the race arc, we skip the trainingPlan write entirely — the
+// onboarding schedule is the source of truth and double-writing creates
+// duplicate sessions on the calendar.
 function _regeneratePlanForRace(race) {
   if (!race || typeof generateTrainingPlan !== "function") return;
+
+  // Check if onboarding-v2 has already seeded a schedule. If yes, don't
+  // double up — let the user edit their schedule via the Training tab.
+  let schedule = [];
+  try { schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]"); } catch {}
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const hasOnboardingSchedule = schedule.some(e =>
+    e && e.date >= todayStr &&
+    (e.source === "onboarding_v2" || e.source === "custom")
+  );
+  if (hasOnboardingSchedule) {
+    // Still clear any stale trainingPlan entries for this race so deletes
+    // stay clean — just don't regenerate on top.
+    const existingPlan = loadTrainingPlan().filter(e => e.raceId !== race.id);
+    saveTrainingPlanData(existingPlan);
+    return;
+  }
+
   const newEntries = generateTrainingPlan(race) || [];
   if (!newEntries.length) {
     // generateTrainingPlan returned nothing — usually because the race

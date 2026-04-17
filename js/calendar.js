@@ -818,10 +818,21 @@ function buildDayCell(dateStr, dayNum, todayStr) {
 
 function getDataForDate(dateStr) {
   const plan      = loadTrainingPlan();
-  const planEntry = plan.find(e => e.date === dateStr) || null;
+  let planEntry = plan.find(e => e.date === dateStr) || null;
 
   let scheduledWorkouts = [];
   try { scheduledWorkouts = (JSON.parse(localStorage.getItem("workoutSchedule")) || []).filter(w => w.date === dateStr && !/^rest$/i.test((w.sessionName || "").trim())); } catch {}
+
+  // Legacy `trainingPlan` (from saveRace / _regeneratePlanForRace) and new
+  // `workoutSchedule` (from onboarding-v2) can both hold sessions for the
+  // same date — the user's build plan was seeded from the race, then the
+  // race form regenerated trainingPlan on top. The calendar reads both,
+  // so we'd double-render. Prefer the user's explicit onboarding schedule
+  // when it already covers this date — it IS the source of truth. Only
+  // surface planEntry when workoutSchedule has nothing for the day.
+  if (planEntry && scheduledWorkouts.some(w => (w.source === "onboarding_v2" || w.source === "custom"))) {
+    planEntry = null;
+  }
 
   let loggedWorkouts = [];
   try { loggedWorkouts = (JSON.parse(localStorage.getItem("workouts")) || []).filter(w => w.date === dateStr && !w.isCompletion); } catch {}
