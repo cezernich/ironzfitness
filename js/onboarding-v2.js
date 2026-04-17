@@ -897,6 +897,7 @@
       _saveNotifsAndContinue,
       _selectFork,
       _finishManual,
+      _selectPreviewPhase,
       // Internals for subsequent phases and tests
       _state,
       _lsSet,
@@ -3025,6 +3026,14 @@
     return _prettySport(code);
   }
 
+  // Switch the plan preview's sample week to the clicked phase. Persists
+  // the choice on _state so any re-render keeps the user's selection.
+  function _selectPreviewPhase(phase) {
+    if (!phase || typeof phase !== "string") return;
+    _state._previewPhase = phase.toLowerCase();
+    _renderPlanPreview();
+  }
+
   function _renderPlanPreview() {
     const body = document.getElementById("bp-v2-preview-body");
     if (!body) return;
@@ -3057,25 +3066,46 @@
         '<div class="ob-v2-timeline-marker-label">You are here · ' + _escape(currentPhaseLabel) + '</div>' +
       '</div>';
 
+    // Phase the user is previewing. Clicking a timeline segment swaps
+    // the preview week to that phase's labels so they can see what
+    // Base / Build / Peak / Taper / Race each look like before
+    // committing. Defaults to the user's current position in the arc.
+    const phases = ["base", "build", "peak", "taper", "race"];
+    const currentPhaseKey = currentPhaseLabel.toLowerCase();
+    const previewPhase = _state._previewPhase && phases.includes(_state._previewPhase)
+      ? _state._previewPhase
+      : currentPhaseKey;
+    const phaseSeg = p => '<span class="ob-v2-timeline-seg ob-v2-timeline-' + p +
+      (previewPhase === p ? ' is-selected' : '') +
+      '" onclick="OnboardingV2._selectPreviewPhase(\'' + p + '\')"></span>';
+    const phaseLabel = p => '<span class="ob-v2-timeline-label' +
+      (previewPhase === p ? ' is-selected' : '') +
+      '" onclick="OnboardingV2._selectPreviewPhase(\'' + p + '\')">' +
+      p.charAt(0).toUpperCase() + p.slice(1) + '</span>';
+
     const timelineHtml = hasRace
-      ? '<div class="ob-v2-timeline-labels"><span>Base</span><span>Build</span><span>Peak</span><span>Taper</span><span>Race</span></div>' +
-        '<div class="ob-v2-timeline-bar">' +
-          '<span class="ob-v2-timeline-seg ob-v2-timeline-base"></span><span class="ob-v2-timeline-seg ob-v2-timeline-build"></span><span class="ob-v2-timeline-seg ob-v2-timeline-peak"></span><span class="ob-v2-timeline-seg ob-v2-timeline-taper"></span><span class="ob-v2-timeline-seg ob-v2-timeline-race"></span>' +
-          markerHtml +
-        '</div>'
+      ? '<div class="ob-v2-timeline-labels">' + phases.map(phaseLabel).join("") + '</div>' +
+        '<div class="ob-v2-timeline-bar">' + phases.map(phaseSeg).join("") + markerHtml + '</div>'
       : '<div class="ob-v2-timeline-labels"><span>Week 1</span><span>Week 2</span><span>Week 3</span><span>Week 4</span></div>' +
         '<div class="ob-v2-timeline-bar">' +
           '<span class="ob-v2-timeline-seg ob-v2-timeline-base"></span><span class="ob-v2-timeline-seg ob-v2-timeline-build"></span><span class="ob-v2-timeline-seg ob-v2-timeline-peak"></span><span class="ob-v2-timeline-seg ob-v2-timeline-taper"></span>' +
           markerHtml +
         '</div>';
     const enriched = _enrichWeekTemplate();
+    // Phase-adjusted labels only apply when we're showing the timeline
+    // (race athletes with a live arc). Strength-only / no-race athletes
+    // just see the raw session labels.
+    const activePhase = hasRace && !strengthOnly ? previewPhase : null;
     const weekHtml = _BP_DAYS.map(d => {
       const slots = enriched[d] || [];
-      const mini = slots.length
-        ? slots.map(s => {
-            const bucket = _sportBucketFromEnriched(s);
+      const phaseSlots = slots
+        .map(code => ({ code, label: _enrichedLabel(code, activePhase) }))
+        .filter(s => s.label !== null);
+      const mini = phaseSlots.length
+        ? phaseSlots.map(s => {
+            const bucket = _sportBucketFromEnriched(s.code);
             return '<div class="ob-v2-mini-wk ob-v2-mini-' + bucket.replace(/[^a-z0-9]/gi, "") + '">' +
-              _escape(_enrichedLabel(s)) + '</div>';
+              _escape(s.label) + '</div>';
           }).join("")
         : '<div class="ob-v2-mini-wk ob-v2-mini-rest">Rest</div>';
       return '<div class="ob-v2-week-day-row"><div class="ob-v2-week-day-label">' + _BP_DAY_LABELS[d] + '</div><div class="ob-v2-week-day-workouts">' + mini + '</div></div>';
@@ -3084,9 +3114,12 @@
     // the Base/Build/Peak/Taper arc. Strength-only users and no-race
     // endurance users just see the week preview — phases don't apply.
     const showTimeline = hasRace && !strengthOnly;
+    const weekLabel = activePhase
+      ? activePhase.charAt(0).toUpperCase() + activePhase.slice(1) + ' Phase — Sample Week'
+      : 'Plan Week 1';
     body.innerHTML =
       (showTimeline ? '<div class="ob-v2-preview-timeline">' + timelineHtml + '</div>' : "") +
-      '<div class="ob-v2-section-label">Plan Week 1</div>' +
+      '<div class="ob-v2-section-label">' + _escape(weekLabel) + '</div>' +
       '<div class="ob-v2-week-preview">' + weekHtml + '</div>' +
       _renderPlanPhilosophyBlock(enriched);
     const anyTest = Object.values(_state.thresholds || {}).some(t => t && t.mode === "test");
