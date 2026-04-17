@@ -2692,7 +2692,7 @@
     run:  [["run-easy","Easy Run"], ["run-interval","Interval Run"], ["run-long","Long Run"], ["run-recovery","Recovery Run"]],
     bike: [["bike-easy","Easy Ride"], ["bike-interval","Interval Ride"], ["bike-long","Long Ride"]],
     swim: [["swim-endurance","Endurance Swim"], ["swim-css","CSS Swim"]],
-    strength: [["strength-push","Push Day"], ["strength-pull","Pull Day"], ["strength-legs","Leg Day"], ["strength-upper","Upper Body"], ["strength-lower","Lower Body"], ["strength-full","Full Body"]],
+    strength: [["strength-push","Push Day"], ["strength-pull","Pull Day"], ["strength-legs","Leg Day"], ["strength-upper","Upper Body"], ["strength-lower","Lower Body"], ["strength-full","Full Body"], ["strength-custom","Custom"]],
   };
 
   function _openSlotSubtypePicker(day, slotIdx, triggerChip) {
