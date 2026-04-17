@@ -17210,6 +17210,8 @@ body.ob-v2-lock { overflow: hidden; }
 .ob-v2-toggle {
   width: 48px;
   height: 28px;
+  min-height: 0;
+  box-sizing: border-box;
   border-radius: 14px;
   background: #DDD;
   position: relative;
