@@ -3466,6 +3466,54 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         }
       }
 
+      // Circuit — mirrors the logged-workout circuit card so scheduled
+      // circuits (from Build a Plan → AI Generate) render the step tree
+      // instead of falling through to an empty body. See buildLoggedWorkoutCard
+      // for the source-of-truth shape.
+      if (w.type === "circuit" && w.circuit && typeof window !== "undefined" && window.CircuitCard && window.CircuitCard.renderBody) {
+        const _swcForRender = { ...w.circuit, id: w.id, circuit_result: w.circuit_result };
+        const _swcBodyHtml = window.CircuitCard.renderBody(_swcForRender);
+        const _swcGoal = w.circuit.goal || "standard";
+        const _swcGoalValue = w.circuit.goal_value;
+        const _swcGoalLabel = _swcGoal === "for_time" ? "For Time"
+                            : _swcGoal === "amrap"    ? (_swcGoalValue ? `AMRAP · ${_swcGoalValue} min` : "AMRAP")
+                            : "";
+        const _swcSubtitle = _swcGoalLabel ? `Circuit · ${_swcGoalLabel}` : "Circuit";
+        let _swcBadge = "";
+        if (w.duration) _swcBadge = `<span class="session-duration-badge">${w.duration} min</span>`;
+        const _swcCompletion = buildCompletionSection(cardId, "circuit", null, dateStr, w.duration || null);
+        const _swcMovePanel  = buildSessionMovePanel(cardId, "scheduled", w.id, dateStr);
+        const _swcIsComplete = isSessionComplete(cardId);
+        const _swcDoneInd    = _swcIsComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
+        const _swcUndoBtn    = _buildUndoHeaderBtn(cardId, dateStr);
+        const _swcSessionName = w.sessionName || w.circuit.name || "Circuit";
+        const _swcEditItem = `<button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();openEditScheduledWorkout('${w.id}')">Edit</button>`;
+        const _swcOverflow = _buildOverflowMenu(cardId,
+          _swcEditItem +
+          _ovflMoveItem(cardId, "scheduled", w.id, dateStr) +
+          _ovflShareItem(w) +
+          _ovflDeleteItem(`deleteScheduledWorkout('${w.id}','${dateStr}')`));
+        html += `
+          <div class="session-card collapsible${_swcIsComplete ? " session-card--completed is-collapsed" : ""}" id="${cardId}">
+            <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
+              <span class="session-icon" style="color:${color}">${icon}</span>
+              <div class="session-meta">
+                <div class="session-name">${escHtml(_swcSessionName)}${_swcDoneInd}</div>
+                <div class="session-phase">${escHtml(_swcSubtitle)}</div>
+              </div>
+              <div class="session-header-right">
+                ${_swcBadge}${_swcUndoBtn}${_swcOverflow}<span class="card-chevron">▾</span>
+              </div>
+            </div>
+            <div class="card-body">
+              ${_swcBodyHtml}
+              ${_swcMovePanel}
+              ${_swcCompletion}
+            </div>
+          </div>`;
+        return;
+      }
+
       // Generic rendering for weightlifting, cycling, yoga, etc.
       let body = "";
       if (w.exercises && w.exercises.length > 0) {
