@@ -2932,11 +2932,15 @@
       "brick":         "Brick",
     },
     peak: {
-      "run-long":      "Long Run (short)",
+      // Philosophy §6.1 keeps the long run/ride in Peak but at slightly
+      // reduced volume so recovery capacity stays intact. The preview
+      // label is the session TYPE — duration metadata conveys the
+      // shorter length. "Long Run (short)" read as a contradiction.
+      "run-long":      "Long Run",
       "run-interval":  "Race-Pace Run",
       "run-recovery":  "Recovery Run",
       "run-easy":      "Easy Run",
-      "bike-long":     "Long Ride (short)",
+      "bike-long":     "Long Ride",
       "bike-interval": "Race-Pace Bike",
       "bike-easy":     "Z2 Endurance",
       "swim-css":      "Race-Pace Swim",
@@ -2944,7 +2948,7 @@
       "brick":         "Brick (Race Sim)",
     },
     taper: {
-      "run-long":      "Short Long Run",
+      "run-long":      "Taper Long Run",
       "run-interval":  "Short Race-Pace",
       "run-recovery":  "Easy Run",
       "run-easy":      "Easy Run",
