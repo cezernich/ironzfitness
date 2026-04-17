@@ -2361,6 +2361,12 @@
       const today = new Date(); today.setHours(0,0,0,0);
       dateInput.min = today.toISOString().slice(0, 10);
     }
+    // CTA label: "Save Changes" when revising an existing plan,
+    // "Continue" when building a new one. Edits to _state.schedule
+    // are buffered in memory until this button is pressed — nothing
+    // is written to localStorage during chip clicks.
+    const cta = document.getElementById("bp-v2-schedule-cta");
+    if (cta) cta.textContent = isEditing ? "Save Changes" : "Continue";
     grid.innerHTML = _BP_DAYS.map(day => {
       const slots = _state.schedule[day] || [];
       const chipsHtml = slots.map((s, i) => {
@@ -2827,7 +2833,18 @@
     _renderSchedule();
   }
   function _saveScheduleAndContinue() {
-    _lsSet("workoutSchedule", _state.schedule);
+    // Editing an existing plan → commit straight to disk and exit.
+    // Skipping the preview is the whole point of the edit flow: the
+    // user already has a plan, they're tweaking the weekly pattern.
+    if (_state._editingPlanId) {
+      _confirmAndSavePlan();
+      return;
+    }
+    // New build → preview before final commit. Note: we do NOT write
+    // _state.schedule into "workoutSchedule" here. That key holds the
+    // materialized dated sessions (an array), not the weekly template
+    // (an object) — _writeScheduleSessions in _confirmAndSavePlan is
+    // what actually populates it.
     goTo("bp-v2-7");
     _renderPlanPreview();
   }
