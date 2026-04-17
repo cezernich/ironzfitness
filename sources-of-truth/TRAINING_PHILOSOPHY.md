@@ -1,6 +1,6 @@
 # IronZ Training Philosophy — Single Source of Truth
 
-> **Version:** 1.6  
+> **Version:** 1.7  
 > **Last updated:** 2026-04-16  
 > **Role:** This document is the editable source of truth for all training, nutrition, and hydration philosophy in IronZ. The app's plan generation, workout builders, and coaching logic derive their rules from this document. Edit this file to change how IronZ trains athletes.
 
@@ -17,6 +17,7 @@
 | 2026-04-16 | 1.4 | Added: Goal-based plan system mapping all 5 UI goals (§2.5). Added: Rolling mesocycle periodization for non-race athletes (§4.9). Added: Goal-based session distribution templates (§6.5) for Get Faster, Build Endurance, Lose Weight, General Fitness. Added: Goal-based hour ceilings (§4.8). Added: Fat loss strength floor rule. Updated RULE_ENGINE_SPEC with raceless arc builder, fat_loss validator rule. Updated PLAN_SCHEMA with new goal enum, planMode field, mesocycle phase type. |
 | 2026-04-16 | 1.5 | Added: Half + Full Ironman minimum training frequency of 5 days/week regardless of level (§4.8). Safety valve is shorter/easier sessions within those 5+ days, not dropping below the floor. Enforced in onboarding and defensively in AthleteClassifier. |
 | 2026-04-16 | 1.6 | Added §6.1.1 Weekly Placement Rules: anchors (long run / long ride / brick / intensity), hard constraints (no consecutive hard days, no same-discipline adjacent, brick is self-contained — no run/bike stacking), fill order, §8.6 pairing, and reference layouts for 7-day Base/Build/Peak. Both session-assembler and onboarding seeder now conform. |
+| 2026-04-16 | 1.7 | Expanded §6.1 Race Week from 3 sessions + 4 rest to 4–5 short openers/shakeouts + 2–3 rest days. Modern race-week practice keeps neuromuscular readiness with short race-pace primers 4–5 days before the race rather than going fully dark — especially for long-course athletes. Renamed preview timeline label to "Race Week". |
 
 ---
 
@@ -673,12 +674,16 @@ Session templates define how many sessions of each type per week, by training ph
 
 **Race Week:**
 
-| Discipline | Sessions/Week |
-|------------|---------------|
-| Swim | 1 short technique/openers |
-| Bike | 1 short easy with strides |
-| Run | 1 short easy with strides |
-| **Total** | **3** |
+| Discipline | Sessions/Week | Session Character |
+|------------|---------------|-------------------|
+| Swim | 1–2 | Short race-pace openers (400–800m, 4–6 race-pace strokes) |
+| Bike | 1–2 | Shakeout (20–30 min easy) + short opener w/ 3×2 min at race pace (30–45 min) |
+| Run | 1–2 | Shakeout w/ 4×20s strides (15–25 min) |
+| Strength | 0 | Drop entirely |
+| Brick | 0 | Drop entirely |
+| **Total** | **4–5** | Plus 2–3 full rest days; race day itself is separate |
+
+Race week preserves neuromuscular readiness without adding fatigue. The full rest pattern (3 sessions + 4 rest) is outdated for long-course athletes — short openers 4 and 5 days before the race, and a brief shakeout the day before, keep the body primed. The 1–2 days immediately before the race are typically rest or a very short (10–15 min) shakeout only. Never introduce a new movement pattern in race week.
 
 ### 6.1.1 Weekly Placement Rules
 

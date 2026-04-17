@@ -2959,17 +2959,26 @@
       "swim-endurance":"Technique",
       "brick":         null,              // no brick in Taper
     },
+    // Race Week — §6.1 updated (v1.7) from 3 sessions to 4–5. Coaches
+    // typically prescribe short openers / shakeouts across most training
+    // days in race week (race-pace strokes, strides, very short rides)
+    // to keep neuromuscular readiness up without adding fatigue. Long
+    // sessions (long_run, long_ride) and brick are dropped; intervals
+    // and race-pace sessions become short openers; easy sessions become
+    // shakeouts. The user's 1–2 days closest to the race should stay
+    // rest — this is handled downstream when the schedule is written
+    // out for the race week itself.
     race: {
-      "run-long":      null,
-      "run-interval":  null,
-      "run-recovery":  null,
+      "run-long":      null,                            // no long run in race week
+      "run-interval":  "Short Race-Pace Opener",        // 10-min race-pace primer
+      "run-recovery":  "Shakeout Run",
       "run-easy":      "Shakeout Run",
-      "bike-long":     null,
-      "bike-interval": null,
+      "bike-long":     null,                            // no long ride in race week
+      "bike-interval": "Short Opener w/ Strides",       // 30 min w/ 3x2min at race pace
       "bike-easy":     "Shakeout Bike",
-      "swim-css":      null,
-      "swim-endurance":"Openers",
-      "brick":         null,
+      "swim-css":      "Race-Pace Openers",             // 400-600m w/ 4-6 race-pace strokes
+      "swim-endurance":"Short Openers",
+      "brick":         null,                            // no brick in race week
     },
   };
 
@@ -3064,20 +3073,29 @@
       const totalMs = Math.max(1, raceMs - startMs);
       const elapsed = Math.max(0, Date.now() - startMs);
       markerPct = Math.min(100, Math.max(0, (elapsed / totalMs) * 100));
-      // Base 0-35%, Build 35-70%, Peak 70-90%, Taper 90-100%.
-      currentPhaseLabel = markerPct < 35 ? "Base" : markerPct < 70 ? "Build" : markerPct < 90 ? "Peak" : "Taper";
+      // Base 0-35%, Build 35-70%, Peak 70-90%, Taper 90-98%, Race 98-100%.
+      // `currentPhaseLabel` stays canonical (matches phase keys); we swap
+      // the display string to "Race Week" at render time.
+      currentPhaseLabel = markerPct < 35 ? "Base"
+        : markerPct < 70 ? "Build"
+        : markerPct < 90 ? "Peak"
+        : markerPct < 98 ? "Taper"
+        : "Race";
     }
+    const markerDisplayPhase = currentPhaseLabel === "Race" ? "Race Week" : currentPhaseLabel;
     const markerHtml =
       '<div class="ob-v2-timeline-marker" style="left:' + markerPct.toFixed(1) + '%">' +
         '<div class="ob-v2-timeline-marker-dot"></div>' +
-        '<div class="ob-v2-timeline-marker-label">You are here · ' + _escape(currentPhaseLabel) + '</div>' +
+        '<div class="ob-v2-timeline-marker-label">You are here · ' + _escape(markerDisplayPhase) + '</div>' +
       '</div>';
 
     // Phase the user is previewing. Clicking a timeline segment swaps
     // the preview week to that phase's labels so they can see what
-    // Base / Build / Peak / Taper / Race each look like before
+    // Base / Build / Peak / Taper / Race Week each look like before
     // committing. Defaults to the user's current position in the arc.
     const phases = ["base", "build", "peak", "taper", "race"];
+    const phaseDisplayName = p => p === "race" ? "Race Week"
+      : p.charAt(0).toUpperCase() + p.slice(1);
     const currentPhaseKey = currentPhaseLabel.toLowerCase();
     const previewPhase = _state._previewPhase && phases.includes(_state._previewPhase)
       ? _state._previewPhase
@@ -3088,7 +3106,7 @@
     const phaseLabel = p => '<span class="ob-v2-timeline-label' +
       (previewPhase === p ? ' is-selected' : '') +
       '" onclick="OnboardingV2._selectPreviewPhase(\'' + p + '\')">' +
-      p.charAt(0).toUpperCase() + p.slice(1) + '</span>';
+      phaseDisplayName(p) + '</span>';
 
     const timelineHtml = hasRace
       ? '<div class="ob-v2-timeline-labels">' + phases.map(phaseLabel).join("") + '</div>' +
@@ -3122,7 +3140,9 @@
     // endurance users just see the week preview — phases don't apply.
     const showTimeline = hasRace && !strengthOnly;
     const weekLabel = activePhase
-      ? activePhase.charAt(0).toUpperCase() + activePhase.slice(1) + ' Phase — Sample Week'
+      ? (activePhase === 'race'
+          ? 'Race Week — Sample Schedule'
+          : phaseDisplayName(activePhase) + ' Phase — Sample Week')
       : 'Plan Week 1';
     body.innerHTML =
       (showTimeline ? '<div class="ob-v2-preview-timeline">' + timelineHtml + '</div>' : "") +
