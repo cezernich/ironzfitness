@@ -4248,16 +4248,20 @@ function renderMealPlan(dateStr) {
   const container = document.getElementById(`meal-plan-${dateStr}`);
   if (!container) return;
 
-  // If Week Meal Planner has a plan, use it — scale if sliders have been adjusted since generation
+  // If Week Meal Planner has a plan, use it — scale to today's effective
+  // calorie target so the plan matches the user's NUTRITION TARGETS TODAY
+  // numbers, whether they come from slider overrides or from the base
+  // (profile + training load) calculation. Previously only slider overrides
+  // triggered scaling, so a plan generated at 2500 stayed at 2500 even when
+  // today's profile-derived target was 3000.
   const weekMealDay = _getWeekMealPlanForDate(dateStr);
   if (weekMealDay && weekMealDay.meals.length > 0) {
     const slotLabels = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snack" };
 
-    // Check if sliders override the targets for this date
-    let sliderAdj = null;
-    try { sliderAdj = (JSON.parse(localStorage.getItem("nutritionAdjustments")) || {})[dateStr]; } catch {}
     const planCals = weekMealDay.meals.reduce((s, m) => s + m.calories, 0);
-    const ratio = (sliderAdj && sliderAdj.calories && planCals > 0) ? sliderAdj.calories / planCals : 1;
+    const effectiveTarget = (typeof getDailyNutritionTarget === "function" ? getDailyNutritionTarget(dateStr) : null) || {};
+    const targetCals = effectiveTarget.calories || 0;
+    const ratio = (targetCals > 0 && planCals > 0) ? targetCals / planCals : 1;
     const meals = ratio === 1 ? weekMealDay.meals : weekMealDay.meals.map(m => ({
       ...m,
       calories: Math.round(m.calories * ratio),
