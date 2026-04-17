@@ -271,7 +271,9 @@
       return;
     }
     if (/hyrox/.test(cat)) {
-      _state.selectedSports = Array.from(new Set([..._state.selectedSports, "run", "strength"]));
+      // Mirror _toggleSport: Hyrox races need run + strength + hyrox in
+      // the schedule so downstream plan gen actually mixes session types.
+      _state.selectedSports = Array.from(new Set([..._state.selectedSports, "run", "strength", "hyrox"]));
       return;
     }
   }
@@ -931,6 +933,18 @@
       });
       const triNote = document.getElementById("bp-v2-tri-note");
       if (triNote) triNote.style.display = on ? "" : "none";
+    } else if (sport === "hyrox") {
+      // Hyrox is 50/50 running + functional strength (Philosophy §9.5).
+      // Selecting Hyrox auto-selects run + strength so the Build Plan
+      // downstream (thresholds, schedule, plan generation) actually
+      // mixes the three training types — otherwise every day seeds as
+      // "hyrox" and the plan renders identical sessions all week.
+      const on = !btn.classList.contains("is-selected");
+      btn.classList.toggle("is-selected", on);
+      ["run", "strength"].forEach(s => {
+        const el = document.querySelector(`#bp-v2-sport-grid [data-sport="${s}"]`);
+        if (el) el.classList.toggle("is-selected", on);
+      });
     } else {
       btn.classList.toggle("is-selected");
     }
