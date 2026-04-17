@@ -1472,26 +1472,48 @@ function checkARacePromotion() {
   const todayStr = new Date().toISOString().slice(0, 10);
   const events = loadEvents();
   const upcoming = events.filter(e => e.date >= todayStr);
-  const hasActiveA = upcoming.some(e => (e.priority || "A").toUpperCase() === "A");
+  if (upcoming.length === 0) return; // no races at all
 
-  if (hasActiveA) return; // A race still active, nothing to do
+  const plan = loadTrainingPlan();
+  const hasPlanFor = id => plan.some(p => p && p.raceId === id);
+  const priority = e => (e.priority || "A").toUpperCase();
+  const aRaces = upcoming.filter(e => priority(e) === "A");
 
-  const bRaces = upcoming.filter(e => (e.priority || "A").toUpperCase() === "B");
-  if (bRaces.length === 0) return; // no races at all
+  if (aRaces.length > 0) {
+    // A race(s) still exist. The calendar can go empty when the deleted
+    // race was the one that actually drove plan generation, even though a
+    // sibling A race survives (legacy data could have two A races, or the
+    // original plan was attributed only to the now-deleted race's id).
+    // Regenerate for any A race with no surviving plan entries.
+    let regenerated = false;
+    for (const a of aRaces) {
+      if (!hasPlanFor(a.id)) {
+        _regeneratePlanForRace(a);
+        regenerated = true;
+      }
+    }
+    if (regenerated && typeof renderCalendar === "function") renderCalendar();
+    return;
+  }
 
-  if (bRaces.length === 1) {
-    // Auto-promote the only remaining race and rebuild its plan as an A-race
-    // plan — otherwise the calendar goes empty after the user deletes their
-    // former A race and only B-race taper entries survive.
-    const race = events.find(e => e.id === bRaces[0].id);
+  // No A race left. Promote the best remaining candidate.
+  const bRaces = upcoming.filter(e => priority(e) === "B");
+  // Prefer B-races; fall back to anything upcoming (C or missing priority)
+  // so deletion never leaves the user with races on the calendar but no
+  // plan driving any of them.
+  const candidates = bRaces.length > 0 ? bRaces : upcoming.slice();
+  if (candidates.length === 0) return;
+
+  if (candidates.length === 1) {
+    const race = events.find(e => e.id === candidates[0].id);
     if (race) {
       race.priority = "A";
       saveEvents(events);
       _regeneratePlanForRace(race);
+      if (typeof renderCalendar === "function") renderCalendar();
     }
   } else {
-    // Multiple B races — prompt user to choose
-    _showARacePromotionModal(bRaces, events);
+    _showARacePromotionModal(candidates, events);
   }
 }
 
@@ -1500,7 +1522,14 @@ function checkARacePromotion() {
 // gets a full build-out instead of only its original B-race taper window.
 function _regeneratePlanForRace(race) {
   if (!race || typeof generateTrainingPlan !== "function") return;
-  const newEntries = generateTrainingPlan(race);
+  const newEntries = generateTrainingPlan(race) || [];
+  if (!newEntries.length) {
+    // generateTrainingPlan returned nothing — usually because the race
+    // object is missing a required field (type, date, longDay). Warn so
+    // the empty calendar isn't silent, but still persist the filter so
+    // stale entries for this race don't linger.
+    console.warn("[IronZ] _regeneratePlanForRace produced no entries for race", race && race.id, race && race.type);
+  }
   const existingPlan = loadTrainingPlan().filter(e => e.raceId !== race.id);
   saveTrainingPlanData([...existingPlan, ...newEntries]);
 }
@@ -3823,12 +3852,13 @@ function deleteEvent(id) {
   const plan = loadTrainingPlan().filter(e => e.raceId !== id);
   saveTrainingPlanData(plan);
 
-  // If the deleted race was the A race, promote a remaining B race and
-  // rebuild its plan. Without this, deleting the driver race leaves the
-  // calendar empty even though a B race still exists.
-  if (deleted && (deleted.priority || "A").toUpperCase() === "A") {
-    checkARacePromotion();
-  }
+  // Run the promotion + plan-integrity check after every deletion, not
+  // just A-race deletions. Legacy data can have two A races; if the user
+  // deletes the one whose id the plan entries were attributed to, the
+  // surviving A race has no training entries and the calendar goes
+  // empty. checkARacePromotion now regenerates for any A race that's
+  // missing a plan, and promotes from B/C when no A survives.
+  checkARacePromotion();
 
   renderRaceEvents();
   renderTrainingConflicts();
