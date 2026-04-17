@@ -1399,15 +1399,16 @@
       if (typeof renderTrainingInputs === "function") renderTrainingInputs();
     } catch {}
     if (typeof showTab === "function") showTab("home");
-    // Snap the home calendar to the B race week and select the race day
-    // so it's the center card the user lands on.
+    // Snap the home calendar to the B race week and select the race day.
+    // Previously this did `window.currentWeekStart = …`, but calendar.js
+    // declares currentWeekStart with `let` — assigning to window creates
+    // a new window property without touching the let binding, so the
+    // calendar stayed on its current week. jumpCalendarToWeek (exposed
+    // from calendar.js) mutates the real binding in its own scope.
     try {
-      if (dateStr && typeof selectDay === "function") {
-        if (typeof getWeekStart === "function" && typeof currentWeekStart !== "undefined") {
-          // currentWeekStart is a global let in js/calendar.js — mutate via window.
-          window.currentWeekStart = getWeekStart(new Date(dateStr + "T00:00:00"));
-        }
-        if (typeof calendarMode !== "undefined") window.calendarMode = "week";
+      if (dateStr && typeof jumpCalendarToWeek === "function") {
+        jumpCalendarToWeek(dateStr);
+      } else if (dateStr && typeof selectDay === "function") {
         selectDay(dateStr);
       } else if (typeof renderCalendar === "function") {
         renderCalendar();
@@ -2895,7 +2896,86 @@
   }
 
   // Pretty label for enriched slot codes. Falls back to _prettySport().
-  function _enrichedLabel(code) {
+  // Per-phase label overrides for the plan preview. Session placement
+  // stays the same across phases (day layout is the user's choice); what
+  // changes is the SESSION CHARACTER (easy vs tempo vs race-pace) and
+  // whether certain sessions exist at all (no brick in Base; no long run
+  // in Race week). Returns null for a code that doesn't apply in the
+  // phase — the caller drops those from the preview.
+  const _PHASE_LABELS = {
+    base: {
+      "run-long":      "Long Run",
+      "run-interval":  "Easy Run",        // no intensity in Base
+      "run-recovery":  "Recovery Run",
+      "run-easy":      "Easy Run",
+      "bike-long":     "Long Ride",
+      "bike-interval": "Z2 Endurance",    // no intensity in Base
+      "bike-easy":     "Z2 Endurance",
+      "swim-css":      "Technique",       // no intensity in Base
+      "swim-endurance":"Endurance Swim",
+      "brick":         null,              // no brick in Base per §6.3
+    },
+    build: {
+      "run-long":      "Long Run",
+      "run-interval":  "Interval Run",
+      "run-recovery":  "Recovery Run",
+      "run-easy":      "Easy Run",
+      "bike-long":     "Long Ride",
+      "bike-interval": "Sweet Spot",
+      "bike-easy":     "Z2 Endurance",
+      "swim-css":      "CSS Intervals",
+      "swim-endurance":"Endurance Swim",
+      "brick":         "Brick",
+    },
+    peak: {
+      "run-long":      "Long Run (short)",
+      "run-interval":  "Race-Pace Run",
+      "run-recovery":  "Recovery Run",
+      "run-easy":      "Easy Run",
+      "bike-long":     "Long Ride (short)",
+      "bike-interval": "Race-Pace Bike",
+      "bike-easy":     "Z2 Endurance",
+      "swim-css":      "Race-Pace Swim",
+      "swim-endurance":"Endurance Swim",
+      "brick":         "Brick (Race Sim)",
+    },
+    taper: {
+      "run-long":      "Short Long Run",
+      "run-interval":  "Short Race-Pace",
+      "run-recovery":  "Easy Run",
+      "run-easy":      "Easy Run",
+      "bike-long":     "Short Opener",
+      "bike-interval": "Short Opener",
+      "bike-easy":     "Easy Ride",
+      "swim-css":      "Short Race-Pace",
+      "swim-endurance":"Technique",
+      "brick":         null,              // no brick in Taper
+    },
+    race: {
+      "run-long":      null,
+      "run-interval":  null,
+      "run-recovery":  null,
+      "run-easy":      "Shakeout Run",
+      "bike-long":     null,
+      "bike-interval": null,
+      "bike-easy":     "Shakeout Bike",
+      "swim-css":      null,
+      "swim-endurance":"Openers",
+      "brick":         null,
+    },
+  };
+
+  function _enrichedLabel(code, phase) {
+    if (phase && _PHASE_LABELS[phase] && Object.prototype.hasOwnProperty.call(_PHASE_LABELS[phase], code)) {
+      const override = _PHASE_LABELS[phase][code];
+      if (override === null) return null;       // session dropped in this phase
+      if (override) return override;
+    }
+    // Strength sessions become "Maintenance" in Build/Peak, drop in Taper/Race.
+    if (code.indexOf("strength-") === 0) {
+      if (phase === "taper" || phase === "race") return null;
+      if (phase === "build" || phase === "peak") return "Strength (Maint)";
+    }
     const map = {
       "run-long":     "Long Run",
       "run-interval": "Interval Run",

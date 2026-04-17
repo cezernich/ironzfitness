@@ -220,6 +220,24 @@ function toggleCalendarMode() {
 
 // ─── Navigation (mode-aware) ──────────────────────────────────────────────────
 
+// Public helper for cross-script jump-to-a-specific-week navigation.
+// External callers (e.g. OnboardingV2's "Tweak this week in calendar"
+// path) can't reassign calendar.js's `let currentWeekStart` via
+// `window.currentWeekStart = ...` — that only creates a window property
+// and doesn't touch the module-scoped `let` binding the calendar reads
+// from. This setter mutates the real binding, switches to week mode,
+// centers the target date, and triggers a re-render.
+function jumpCalendarToWeek(dateStr) {
+  if (!dateStr) return;
+  const target = new Date(dateStr + "T00:00:00");
+  if (isNaN(target.getTime())) return;
+  currentWeekStart = getWeekStart(target);
+  calendarMode = "week";
+  selectedDate = dateStr;
+  renderCalendar();
+  if (typeof renderDayDetail === "function") renderDayDetail(dateStr);
+}
+
 function calPrev() {
   if (calendarMode === "week") {
     currentWeekStart = new Date(currentWeekStart);
