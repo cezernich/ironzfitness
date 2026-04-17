@@ -736,7 +736,7 @@ For a **6-day** week, drop the Sunday session and mark it active recovery. For a
 
 - If `LR` and `LB` are only 2 days apart (minimum allowed gap), the strict reference layout may compress. Prefer spreading the brick and intensity to the far side of `LR` in that case.
 - If the user picks `LR` or `LB` outside their training-day set, `selectTrainingDays` adds the picked day and drops a non-anchor weekday to stay within the user's `daysAvailable` count.
-- If no non-adjacent weekday exists for the brick (e.g., long_run Wed + long_ride Sat leaves every weekday adjacent to one or the other), the brick placement falls through to the lightest non-long day that does not already hold a run or bike — it's better to skip the brick entirely than to create a run + brick or bike + brick double.
+- If no non-adjacent weekday exists for the brick (e.g., long_run Wed + long_ride Sat leaves every weekday adjacent to one or the other), the brick is still scheduled — §6.3 requires 1 brick/week in Build and Peak, and a missed brick costs more adaptation than a spacing violation on one week. The placer allows adjacency in this fallback but never stacks on a standalone run or bike (the redundancy rule is absolute). Coaches should keep the brick short/easy in these tight weeks. When anchor spacing leaves every day constrained, prefer re-picking anchors in onboarding over training through the compromise repeatedly.
 
 ### 6.2 Running Session Distribution
 

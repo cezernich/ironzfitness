@@ -2453,17 +2453,15 @@
         if (target) _state.schedule[target].push("swim");
       }
     }
-    // Brick seed — TRAINING_PHILOSOPHY §6.1.1 placement rules:
-    //   - Brick is a bike+run combo; never coexist on the same day with
-    //     a standalone run OR bike (creates redundant run+brick / bike+brick
-    //     stacks).
-    //   - Brick is a hard session — cannot be adjacent to a long day (§4.3,
-    //     no consecutive hard days for non-advanced).
-    //   - Preference order: non-adjacent always beats "replace a bare
-    //     session" with adjacency. Stacking onto a swim day (non-adjacent)
-    //     is better than replacing a bike day (adjacent).
-    //   - If every weekday is adjacent to a long day, skip seeding rather
-    //     than violating either rule. User can add the brick manually.
+    // Brick seed — TRAINING_PHILOSOPHY §6.1.1 placement rules + §6.3
+    // (brick is required 1×/week in Build/Peak). Two hard constraints
+    // compete: "no consecutive hard days" (§4.3) vs "brick must be
+    // scheduled" (§6.3). When the user's long-day picks leave every
+    // weekday adjacent to one of the long days, brick-required wins
+    // — we accept the adjacency and place a (typically short) brick
+    // rather than skipping it. The redundancy rule (no standalone
+    // run or bike stacked with brick) is never relaxed — that would
+    // just double-count volume.
     if (sports.includes("bike") && sports.includes("run")) {
       const hasBrick = _BP_DAYS.some(d => _state.schedule[d].includes("brick"));
       if (!hasBrick) {
@@ -2475,31 +2473,54 @@
         const hasRunOrBike = d => _state.schedule[d].some(c => c === "run" || c === "bike" || c === "run-long" || c === "bike-long");
         const isRest = d => _state.schedule[d].includes("rest");
 
-        // Priority ladder — non-adjacent placements only:
+        // Non-adjacent placements (ideal, preserves spacing):
         //   1. Replace a plain bike on a non-adjacent day.
         //   2. Replace a plain run on a non-adjacent day.
         //   3. Fresh on a fully empty non-adjacent day.
-        //   4. Stack onto a non-adjacent day that has only non-conflicting
-        //      sessions (swim / strength / yoga / etc.).
+        //   4. Stack onto a non-adjacent day with only non-conflict sessions.
         let target =
           _BP_DAYS.find(d => !isLongDay(d) && !adjacentToLong(d) && hasBareBike(d)) ||
           _BP_DAYS.find(d => !isLongDay(d) && !adjacentToLong(d) && hasBareRun(d)) ||
           _BP_DAYS.find(d => !isLongDay(d) && !adjacentToLong(d) && _state.schedule[d].length === 0);
-        if (target) {
-          _state.schedule[target] = ["brick"];
-        } else {
-          const safe = _BP_DAYS
+        if (!target) {
+          const safeNonAdj = _BP_DAYS
             .filter(d => !isLongDay(d) && !adjacentToLong(d) && !isRest(d) && !hasRunOrBike(d))
             .sort((a, b) => _state.schedule[a].length - _state.schedule[b].length);
-          if (safe[0]) {
-            _state.schedule[safe[0]].push("brick");
-          }
-          // No acceptable non-adjacent slot — skip the brick entirely.
-          // Seeding a brick adjacent to a long day or stacked on a run/
-          // bike day violates §6.1.1; the user can add one manually if
-          // they want it. This case only arises when the user pins long
-          // days so close together that every weekday is adjacent to one.
+          if (safeNonAdj[0]) target = safeNonAdj[0];
         }
+
+        // Adjacency fallback — user's anchors don't leave a non-adjacent
+        // weekday. Brick still needs a home per §6.3. Walks the same
+        // ladder with adjacency allowed:
+        //   5. Adjacent empty day (prefer earliest).
+        //   6. Adjacent bare bike → replace.
+        //   7. Adjacent bare run → replace.
+        //   8. Adjacent stack on non-conflict session.
+        if (!target) {
+          target =
+            _BP_DAYS.find(d => !isLongDay(d) && _state.schedule[d].length === 0) ||
+            _BP_DAYS.find(d => !isLongDay(d) && hasBareBike(d)) ||
+            _BP_DAYS.find(d => !isLongDay(d) && hasBareRun(d));
+          if (!target) {
+            const safeAdj = _BP_DAYS
+              .filter(d => !isLongDay(d) && !isRest(d) && !hasRunOrBike(d))
+              .sort((a, b) => _state.schedule[a].length - _state.schedule[b].length);
+            if (safeAdj[0]) target = safeAdj[0];
+          }
+        }
+
+        if (target) {
+          // When placing fresh on an empty day or replacing a bare
+          // bike/run, overwrite. When stacking onto a non-conflict
+          // day (e.g. swim), push.
+          if (_state.schedule[target].length === 0 || hasBareBike(target) || hasBareRun(target)) {
+            _state.schedule[target] = ["brick"];
+          } else {
+            _state.schedule[target].push("brick");
+          }
+        }
+        // If no target at all (e.g. every day is long OR rest OR run/
+        // bike-only), skip the brick. Pathological config only.
       }
     }
 
