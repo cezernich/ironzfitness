@@ -268,6 +268,103 @@ async function handleLogout() {
   // onAuthStateChange fires SIGNED_OUT and calls showAuthScreen()
 }
 
+// ── Delete Account ────────────────────────────────────────────────────────────
+//
+// App Store Guideline 5.1.1(v) requires an in-app path to permanently delete
+// the user's account. We invoke the delete-account Edge Function (service
+// role), which purges user-owned rows and calls auth.admin.deleteUser. On
+// success we sign out — onAuthStateChange handles showing the auth screen.
+
+function openDeleteAccountDialog() {
+  let overlay = document.getElementById('delete-account-modal-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'delete-account-modal-overlay';
+    overlay.className = 'move-session-modal-overlay';
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeDeleteAccountDialog();
+    });
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div class="move-session-modal" role="dialog" aria-modal="true" aria-label="Delete account">
+      <div class="move-session-modal-title">Delete account</div>
+      <p class="hint" style="margin:0 0 12px">
+        This permanently deletes your IronZ account and every workout, meal, race,
+        plan, and setting tied to it. This cannot be undone.
+      </p>
+      <div class="form-row">
+        <label for="delete-account-confirm">Type <b>DELETE</b> to confirm</label>
+        <input type="text" id="delete-account-confirm" autocomplete="off" placeholder="DELETE" />
+      </div>
+      <p id="delete-account-msg" class="save-msg" style="margin:8px 0 0;min-height:1.2em"></p>
+      <div class="move-session-modal-actions">
+        <button type="button" class="btn-secondary" onclick="closeDeleteAccountDialog()">Cancel</button>
+        <button type="button" class="btn-danger"   onclick="handleDeleteAccount()">Delete my account</button>
+      </div>
+    </div>
+  `;
+  void overlay.offsetWidth;
+  overlay.classList.add('visible');
+  setTimeout(() => { document.getElementById('delete-account-confirm')?.focus(); }, 0);
+}
+
+function closeDeleteAccountDialog() {
+  const overlay = document.getElementById('delete-account-modal-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('visible');
+  setTimeout(() => {
+    const el = document.getElementById('delete-account-modal-overlay');
+    if (el) el.remove();
+  }, 220);
+}
+
+async function handleDeleteAccount() {
+  const confirmEl = document.getElementById('delete-account-confirm');
+  const confirmText = (confirmEl?.value || '').trim();
+  const msgId = 'delete-account-msg';
+  if (confirmText !== 'DELETE') {
+    setAuthMsg(msgId, 'Type DELETE (in capitals) to confirm.', true);
+    return;
+  }
+
+  const btn = document.querySelector('#delete-account-modal-overlay .btn-danger');
+  if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
+
+  try {
+    const { data: sessionData, error: sessionErr } = await window.supabaseClient.auth.getSession();
+    if (sessionErr || !sessionData?.session?.access_token) {
+      setAuthMsg(msgId, 'Could not read your session. Try signing out and back in.', true);
+      return;
+    }
+    const accessToken = sessionData.session.access_token;
+
+    // Invoke the Edge Function. supabase-js auto-forwards the user's JWT
+    // when we pass it via invoke options, so the function can verify the
+    // caller and delete only their own account.
+    const { error: fnErr } = await window.supabaseClient.functions.invoke('delete-account', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (fnErr) {
+      setAuthMsg(msgId, fnErr.message || 'Account deletion failed. Contact support.', true);
+      return;
+    }
+
+    setAuthMsg(msgId, 'Account deleted.', false);
+    // Clear every per-user key so the goodbye screen doesn't briefly
+    // flash the previous session's data, then sign out. onAuthStateChange
+    // SIGNED_OUT will also call clearLocalUserData defensively.
+    try { DB.clearLocalUserData(); } catch (e) { console.warn('Auth: clearLocalUserData error', e); }
+    try { await window.supabaseClient.auth.signOut(); } catch (e) { console.warn('Auth: signOut after delete error', e); }
+    setTimeout(() => closeDeleteAccountDialog(), 600);
+  } catch (e) {
+    setAuthMsg(msgId, 'Something went wrong. Try again.', true);
+    if (typeof reportCaughtError === 'function') reportCaughtError(e, { context: 'auth', action: 'delete_account' });
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Delete my account'; }
+  }
+}
+
 // ── Change password (signed-in user) ──────────────────────────────────────────
 //
 // Used by the in-app "Change Password" button in Settings → Account.

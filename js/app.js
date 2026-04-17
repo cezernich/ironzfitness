@@ -5,6 +5,30 @@
 const IRONZ_VERSION = "1.0.0";
 if (typeof window !== "undefined") window.IRONZ_VERSION = IRONZ_VERSION;
 
+// Health-disclaimer gate. Required on first launch per App Store
+// Guideline 5.1.1(ix). Shown before onboarding so the user sees it first.
+// Idempotent via localStorage.healthDisclaimerAck — once acknowledged,
+// subsequent launches skip it (the text lives permanently in Settings →
+// About so it's still reachable).
+function maybeShowHealthDisclaimer(onDone) {
+  const cb = typeof onDone === "function" ? onDone : () => {};
+  if (localStorage.getItem("healthDisclaimerAck") === "1") { cb(); return; }
+  const overlay = document.getElementById("health-disclaimer-overlay");
+  if (!overlay) { cb(); return; }
+  overlay._onAck = cb;
+  overlay.style.display = "flex";
+}
+
+function ackHealthDisclaimer() {
+  localStorage.setItem("healthDisclaimerAck", "1");
+  const overlay = document.getElementById("health-disclaimer-overlay");
+  if (!overlay) return;
+  overlay.style.display = "none";
+  const cb = overlay._onAck;
+  overlay._onAck = null;
+  if (typeof cb === "function") cb();
+}
+
 // Global helper: compute age from birthday string (YYYY-MM-DD)
 function _calcAgeFromBirthday(dateStr) {
   if (!dateStr) return 0;
@@ -562,15 +586,18 @@ function init() {
   // Check for level-up on app start
   if (typeof checkLevelUp === "function") checkLevelUp();
 
-  // Show onboarding wizard on first visit. Post-onboarding, no auto-open —
-  // users trigger Build Plan manually from the Training tab or header CTA.
-  if (!localStorage.getItem("hasOnboarded")) {
-    if (typeof OnboardingV2 !== "undefined" && OnboardingV2.maybeStart) {
-      setTimeout(() => OnboardingV2.maybeStart(), 400);
-    } else if (typeof showOnboarding === "function") {
-      setTimeout(showOnboarding, 400);
+  // First-launch health disclaimer (App Store 5.1.1(ix)). Shown before any
+  // onboarding wizard so the acknowledgment isn't buried behind survey
+  // questions. maybeShowHealthDisclaimer chains into onboarding on dismiss.
+  maybeShowHealthDisclaimer(() => {
+    if (!localStorage.getItem("hasOnboarded")) {
+      if (typeof OnboardingV2 !== "undefined" && OnboardingV2.maybeStart) {
+        setTimeout(() => OnboardingV2.maybeStart(), 200);
+      } else if (typeof showOnboarding === "function") {
+        setTimeout(showOnboarding, 200);
+      }
     }
-  }
+  });
 
   // Weekly check-in prompt (Sunday)
   if (typeof shouldShowWeeklyCheckin === "function" && shouldShowWeeklyCheckin()) {

@@ -1777,12 +1777,22 @@
             <div class="about-row"><span class="about-label">Version</span><span class="about-value">1.0.0</span></div>
             <div class="about-row"><span class="about-label">Storage</span><span class="about-value" id="storage-size">—</span></div>
           </div>
+          <p class="health-disclaimer" style="margin-top:12px">
+            <b>Health disclaimer.</b> IronZ is a training and nutrition planner, not a
+            medical device or source of medical advice. Training plans and AI suggestions
+            are for informational purposes only. Consult a qualified physician before
+            starting any exercise program, especially if you have a medical condition,
+            are pregnant, or are recovering from injury.
+          </p>
         </div>
       </section>
 
-      <div style="margin-top:1rem;display:flex;gap:12px;justify-content:center">
+      <div style="margin-top:1rem;display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
         <button class="btn-secondary" onclick="openChangePasswordDialog()">Change Password</button>
         <button class="btn-danger" onclick="handleLogout()">Log Out</button>
+      </div>
+      <div style="margin-top:12px;display:flex;justify-content:center">
+        <button class="btn-danger" onclick="openDeleteAccountDialog()" style="font-size:0.85rem">Delete Account</button>
       </div>
 
     </div><!-- end #tab-settings -->
@@ -2170,6 +2180,7 @@
             <span id="qe-ask-ironz-count" style="font-size:0.75rem;color:var(--color-text-muted)">150 left</span>
             <button class="btn-primary" style="padding:8px 20px" onclick="qeSubmitAskIronZ()">Generate →</button>
           </div>
+          <p class="ai-disclosure">AI-generated suggestion — review before using. Not a substitute for a coach or medical advice.</p>
         </div>
         <div style="border-top:1px solid var(--color-border);margin:14px 0"></div>
         <div style="display:flex;gap:8px">
@@ -2672,6 +2683,33 @@
     </div>
   </div>
 
+  <!-- Health Disclaimer Modal — shown once on first launch. Required per
+       App Store Guideline 5.1.1(ix) for health/fitness apps. Dismiss is
+       explicit (button), not a background tap, so the user actually
+       acknowledges. Acknowledgment is stamped in localStorage.healthDisclaimerAck. -->
+  <div id="health-disclaimer-overlay" class="quick-entry-overlay" style="display:none">
+    <div class="quick-entry-modal" style="max-width:380px">
+      <div class="quick-entry-header">
+        <span class="qe-date-label">Before you start</span>
+      </div>
+      <div style="padding:8px 20px 20px">
+        <p style="margin:0 0 10px">
+          IronZ is a <b>training and nutrition planner</b>, not a medical device or source
+          of medical advice.
+        </p>
+        <p style="margin:0 0 10px">
+          Training plans, zones, and AI suggestions are informational only. Consult a
+          qualified physician before starting any exercise program — especially if you
+          have a medical condition, are pregnant, or are recovering from injury.
+        </p>
+        <p style="margin:0 0 16px;color:var(--color-text-muted);font-size:0.85rem">
+          By continuing you acknowledge these terms.
+        </p>
+        <button class="btn-primary" style="width:100%" onclick="ackHealthDisclaimer()">I understand</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Custom Plan — AI Type Picker Modal -->
   <div id="cp-ai-modal" class="quick-entry-overlay" onclick="if(event.target===this) closeCustomPlanAIModal()">
     <div class="quick-entry-modal" style="max-width:340px">
@@ -2688,6 +2726,7 @@
           <textarea id="cp-ask-ironz-input" rows="2" placeholder="e.g. Upper body push day, 45 min, intermediate" style="width:100%;box-sizing:border-box;resize:vertical;margin-bottom:8px"></textarea>
           <button class="btn-primary" style="width:100%" onclick="cpSubmitAskIronZ()">Generate</button>
           <p id="cp-ask-ironz-msg" class="save-msg"></p>
+          <p class="ai-disclosure">AI-generated suggestion — review before using. Not a substitute for a coach or medical advice.</p>
         </div>
       </div>
       <div style="border-top:1px solid var(--color-border);margin:0 16px"></div>

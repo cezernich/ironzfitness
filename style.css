@@ -1426,6 +1426,23 @@ button:active {
   margin-top: 2px;
 }
 
+.ai-disclosure {
+  margin: 8px 0 0;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  line-height: 1.35;
+  font-style: italic;
+}
+.health-disclaimer {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-2);
+}
+
 .meal-history-filters {
   display: flex;
   flex-direction: column;
