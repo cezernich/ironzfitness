@@ -745,6 +745,11 @@
             <span>Photo Log</span>
             <span class="nutri-log-desc">Snap &amp; auto-detect</span>
           </button>
+          <button class="nutri-log-btn" onclick="openAskIronZMeal()">
+            <span class="nutri-log-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg></span>
+            <span>Ask IronZ</span>
+            <span class="nutri-log-desc">Describe it, AI estimates</span>
+          </button>
           <button class="nutri-log-btn" onclick="openManualMealLog()">
             <span class="nutri-log-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>
             <span>Manual Entry</span>
@@ -2939,6 +2944,8 @@
 
   <!-- Scripts — order matters -->
   <script src="js/config.js"></script>
+  <script src="js/athlete-classifier.js"></script>
+  <script src="js/arc-builder.js"></script>
   <script src="js/icons.js"></script>
   <script src="js/themes.js"></script>
   <script src="js/stats.js"></script>
