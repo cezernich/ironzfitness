@@ -1044,8 +1044,14 @@
     typeSel.innerHTML = list.map(([v, l]) => `<option value="${v}">${_escape(l)}</option>`).join("");
     _updateWeeksCallout();
   }
+  // Plans further out than this are almost certainly a typo (e.g.
+  // "09/05/20205" → 948555 weeks). 104 weeks = 2 years, which already
+  // covers even the longest Ironman or ultra arc with comfortable runway.
+  const MAX_PLAN_WEEKS = 104;
+
   function _updateWeeksCallout() {
-    const date = document.getElementById("bp-v2-race-date")?.value;
+    const input = document.getElementById("bp-v2-race-date");
+    const date = input && input.value;
     const text = document.getElementById("bp-v2-weeks-text");
     if (!text) return;
     const gap = document.getElementById("bp-v2-gap-fill-section");
@@ -1062,8 +1068,22 @@
       if (gap && currentPriority !== "B") gap.style.display = "none";
       return;
     }
-    const diffDays = Math.max(0, Math.ceil((new Date(date) - new Date()) / 86400000));
+    // Guard against typos like year "20205" that produce nonsense week
+    // counts. Show a friendly warning instead of echoing the raw number.
+    const parsed = new Date(date);
+    const now = new Date();
+    if (isNaN(parsed.getTime())) {
+      text.textContent = "That doesn't look like a valid race date — please re-enter.";
+      if (gap && currentPriority !== "B") gap.style.display = "none";
+      return;
+    }
+    const diffDays = Math.max(0, Math.ceil((parsed - now) / 86400000));
     const weeks = Math.ceil(diffDays / 7);
+    if (weeks > MAX_PLAN_WEEKS) {
+      text.textContent = "That date is more than 2 years out — double-check the year.";
+      if (gap && currentPriority !== "B") gap.style.display = "none";
+      return;
+    }
     const raceType = document.getElementById("bp-v2-race-type")?.value || "ironman";
     const planMax = _planWeeksForType(raceType);
     text.textContent = weeks + " weeks until your race. Recommended plan length: " + planMax[0] + "-" + planMax[1] + " weeks.";
@@ -1157,6 +1177,24 @@
     const leadInPhase = document.querySelector("#bp-v2-gap-fill-section [data-leadin-phase].is-selected")?.getAttribute("data-leadin-phase") || null;
     const gapVisible = document.getElementById("bp-v2-gap-fill-section")?.style.display !== "none";
     const leadIn = gapVisible && leadInPhase ? { phase: leadInPhase, daysPerWeek: _state.leadInCount } : null;
+
+    // Reject obviously-bad dates (e.g. year "20205") before they can
+    // propagate through plan generation.
+    if (date) {
+      const parsed = new Date(date);
+      const weeksOut = isNaN(parsed.getTime())
+        ? NaN
+        : Math.ceil(Math.max(0, (parsed - new Date()) / 86400000) / 7);
+      if (isNaN(weeksOut) || weeksOut > MAX_PLAN_WEEKS) {
+        const text = document.getElementById("bp-v2-weeks-text");
+        if (text) text.textContent = isNaN(weeksOut)
+          ? "That doesn't look like a valid race date — please re-enter."
+          : "That date is more than 2 years out — double-check the year.";
+        const input = document.getElementById("bp-v2-race-date");
+        if (input) { input.focus(); input.select?.(); }
+        return;
+      }
+    }
 
     // If the user picks A and there's already an existing A race in
     // localStorage.events, demote the existing one to B in-place.
