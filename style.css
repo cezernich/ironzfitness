@@ -7724,7 +7724,7 @@ button:active {
   -webkit-overflow-scrolling: touch;
 }
 .mp-day-tab {
-  flex: 1; min-width: 40px; padding: 8px 4px; border: 1px solid var(--color-border);
+  flex: 1 1 0; min-width: 0; padding: 8px 2px; border: 1px solid var(--color-border);
   border-radius: 8px; background: var(--color-surface); color: var(--color-text);
   font-size: 0.82rem; font-weight: 600; text-align: center; cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
@@ -7759,7 +7759,7 @@ button:active {
 .mp-meal-macros { font-size: 0.82rem; color: var(--color-text-muted); margin-bottom: 4px; }
 .mp-meal-ingredients { font-size: 0.78rem; color: var(--color-text-muted); line-height: 1.4; }
 
-.mp-day-tab--grocery { font-size: 1.1rem; padding: 6px 10px; }
+.mp-day-tab--grocery { flex: 0 0 auto; font-size: 1.05rem; padding: 6px 9px; }
 
 .mp-load-tag {
   display: inline-block;

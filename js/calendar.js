@@ -5761,7 +5761,19 @@ function qeToggleMuscle(btn) {
 }
 
 // ── Manual strength entry ─────────────────────────────────────────────────────
-function qeGoManual() { qeShowStep(2, "manual"); }
+function qeGoManual() {
+  if (_qeSelectedMuscles.size === 0) {
+    alert("Please select at least one muscle group.");
+    return;
+  }
+  const duration = document.getElementById("qe-strength-duration")?.value;
+  if (!duration) {
+    alert("Please choose a session length.");
+    document.getElementById("qe-strength-duration")?.focus();
+    return;
+  }
+  qeShowStep(2, "manual");
+}
 
 // ── Local muscle-to-movement-pattern mapping for deterministic generation ─────
 const _MUSCLE_TO_PATTERNS = {
@@ -8186,7 +8198,9 @@ function qeSaveManual() {
       restBetweenRounds: (document.getElementById("qe-manual-hiit-rest-rnd")?.value || "").trim() || undefined,
     };
   }
-  _qeSaveStrengthWorkout(dateStr, manualName, notes, exercises, hiitMeta);
+  const durEl = document.getElementById("qe-strength-duration");
+  const duration = durEl && durEl.value ? parseInt(durEl.value, 10) || null : null;
+  _qeSaveStrengthWorkout(dateStr, manualName, notes, exercises, hiitMeta, duration);
 }
 
 function _qeSaveStrengthWorkout(dateStr, label, notes, exercises, hiitMeta, duration) {
