@@ -27,8 +27,11 @@ function computeStreaks(workouts) {
   const today   = getTodayString();
 
   // ── Daily streak ──────────────────────────────────────────────────────
+  // Anchor on today if it has a workout; otherwise on yesterday — today
+  // isn't over, so an empty today shouldn't zero out a live streak.
   let currentDay = 0;
   const cur = new Date(today + "T00:00:00");
+  if (!daySet.has(localDateStr(cur))) cur.setDate(cur.getDate() - 1);
   while (daySet.has(localDateStr(cur))) { currentDay++; cur.setDate(cur.getDate() - 1); }
 
   let bestDay = currentDay, run = 1;
