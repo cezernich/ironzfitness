@@ -17988,6 +17988,7 @@ body.ob-v2-lock { overflow: hidden; }
 .ob-v2-mini-wk.ob-v2-mini-strength { border-left-color: #E65100; }
 .ob-v2-mini-wk.ob-v2-mini-hyrox    { border-left-color: #C62828; }
 .ob-v2-mini-wk.ob-v2-mini-rest     { border-left-color: #DDD; color: #AAA; font-style: italic; }
+.ob-v2-mini-wk.ob-v2-mini-race     { border-left-color: #C62828; background: #FFF5F0; color: #C62828; letter-spacing: 0.5px; }
 
 /* Build My Plan + Create Your Own Plan entry cards (Training tab) */
 .bp-cta-stack {

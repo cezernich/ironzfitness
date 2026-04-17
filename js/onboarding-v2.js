@@ -3225,7 +3225,19 @@
     // (race athletes with a live arc). Strength-only / no-race athletes
     // just see the raw session labels.
     const activePhase = hasRace && !strengthOnly ? previewPhase : null;
+    // When previewing Race Week, substitute the day that falls on race
+    // day with a RACE marker instead of a training session — having any
+    // workout on race day is wrong and the user has flagged this.
+    let raceDowKey = null;
+    if (activePhase === "race" && hasRace && race && race.date) {
+      const _DOW_TO_KEY = ["sun","mon","tue","wed","thu","fri","sat"];
+      const raceDow = new Date(race.date + "T00:00:00").getDay();
+      raceDowKey = _DOW_TO_KEY[raceDow];
+    }
     const weekHtml = _BP_DAYS.map(d => {
+      if (d === raceDowKey) {
+        return '<div class="ob-v2-week-day-row"><div class="ob-v2-week-day-label">' + _BP_DAY_LABELS[d] + '</div><div class="ob-v2-week-day-workouts"><div class="ob-v2-mini-wk ob-v2-mini-race">RACE DAY</div></div></div>';
+      }
       const slots = enriched[d] || [];
       const phaseSlots = slots
         .map(code => ({ code, label: _enrichedLabel(code, activePhase) }))
@@ -3464,6 +3476,13 @@
     const weekMonday = new Date(start);
     weekMonday.setDate(start.getDate() - daysBackToMon);
 
+    // Any session that lands on a race date gets dropped — race day is
+    // the race itself, not a training day. Covers the A race the plan
+    // is built for plus any B races the user added in the Build Plan flow.
+    const raceDateSet = new Set();
+    (Array.isArray(_state.raceEvents) ? _state.raceEvents : [])
+      .forEach(r => { if (r && r.date) raceDateSet.add(r.date); });
+
     const sessions = [];
     let counter = 0;
     for (let w = 0; w < weeks; w++) {
@@ -3474,6 +3493,7 @@
           d.setDate(weekMonday.getDate() + w * 7 + idx);
           if (d < start) return; // first week is partial when start is mid-week
           const dateStr = d.toISOString().slice(0, 10);
+          if (raceDateSet.has(dateStr)) return; // race day — skip training session
           const session = _buildSessionForSport(enrichedCode, dateStr, sessionLen, w + 1, planId, counter++);
           if (session) {
             if (raceIdForPlan) session.raceId = raceIdForPlan;
