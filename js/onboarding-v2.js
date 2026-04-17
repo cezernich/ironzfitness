@@ -1461,12 +1461,44 @@
       _state.planDetails.duration = String(n);
     }
   }
+  // Half/Full Ironman plans require a 5-day/week floor regardless of level.
+  // Athletes below that floor simply don't accumulate enough stimulus to
+  // finish safely. The safety valve is short/easy sessions on those 5+
+  // days (see TRAINING_PHILOSOPHY §4.7), not fewer days.
+  const _LONG_COURSE_MIN_DAYS = 5;
+  function _minDaysForCurrentRaces() {
+    const races = Array.isArray(_state.raceEvents) ? _state.raceEvents : [];
+    const hasLongCourse = races.some(r => r && (r.type === 'ironman' || r.type === 'halfIronman'));
+    return hasLongCourse ? _LONG_COURSE_MIN_DAYS : 1;
+  }
   function _adjustDaysPerWeek(delta) {
+    const floor = _minDaysForCurrentRaces();
     const cur = parseInt(_state.planDetails.daysPerWeek, 10) || 5;
-    const next = Math.max(1, Math.min(7, cur + delta));
+    const next = Math.max(floor, Math.min(7, cur + delta));
     _state.planDetails.daysPerWeek = String(next);
     const el = document.getElementById("bp-v2-days-count");
     if (el) el.textContent = String(next);
+    _updateDaysHint();
+  }
+  function _updateDaysHint() {
+    const hint = document.getElementById("bp-v2-days-hint");
+    if (!hint) return;
+    const floor = _minDaysForCurrentRaces();
+    if (floor > 1) {
+      hint.textContent = `Half and Full Ironman need a minimum of ${floor} days/week. Sessions can be short or easy where needed — trim individual days later.`;
+    } else {
+      hint.textContent = 'days per week';
+    }
+  }
+  function _enforceLongCourseDaysFloor() {
+    const floor = _minDaysForCurrentRaces();
+    const cur = parseInt(_state.planDetails.daysPerWeek, 10) || 5;
+    if (cur < floor) {
+      _state.planDetails.daysPerWeek = String(floor);
+      const el = document.getElementById("bp-v2-days-count");
+      if (el) el.textContent = String(floor);
+    }
+    _updateDaysHint();
   }
   function _saveNoraceAndContinue() {
     _state.raceEvents = [];
@@ -2946,6 +2978,24 @@
   // We also no longer delegate to generateTrainingPlan for multi-sport
   // users — the user's explicit schedule is the source of truth.
   function _confirmAndSavePlan() {
+    // TRAINING_PHILOSOPHY §4.7 — Half/Full Ironman requires ≥5 training
+    // days/week regardless of level. If the user's schedule has fewer
+    // active days, warn them and give them a chance to back out. If they
+    // insist, the classifier will bump the count defensively downstream.
+    const longCourseFloor = _minDaysForCurrentRaces();
+    if (longCourseFloor > 1) {
+      const activeDays = _BP_DAYS.filter(d => Array.isArray(_state.schedule[d]) && _state.schedule[d].length > 0).length;
+      if (activeDays < longCourseFloor) {
+        const proceed = confirm(
+          `Half and Full Ironman need at least ${longCourseFloor} training days per week to reach the start line safely. ` +
+          `You currently have ${activeDays} active day(s). ` +
+          `\n\nWe can keep some of those sessions short or easy to match your readiness, but we don't recommend fewer than ${longCourseFloor} days. ` +
+          `\n\nContinue anyway? (We'll still bump your plan to ${longCourseFloor} days — you can trim individual sessions later.)`
+        );
+        if (!proceed) return;
+      }
+    }
+
     _lsSet("selectedSports", _state.selectedSports);
     _lsSet("trainingGoals", _state.trainingGoals);
     _lsSet("raceEvents", _state.raceEvents);

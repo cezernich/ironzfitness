@@ -1,6 +1,6 @@
 # IronZ Training Philosophy — Single Source of Truth
 
-> **Version:** 1.4  
+> **Version:** 1.5  
 > **Last updated:** 2026-04-16  
 > **Role:** This document is the editable source of truth for all training, nutrition, and hydration philosophy in IronZ. The app's plan generation, workout builders, and coaching logic derive their rules from this document. Edit this file to change how IronZ trains athletes.
 
@@ -15,6 +15,7 @@
 | 2026-04-16 | 1.2 | Added: Plateau prevention philosophy (§12.4), strength-for-race-performance rationale (§8.5) |
 | 2026-04-16 | 1.3 | Added: Running distance-specific periodization, taper rules, key workouts, and philosophy for 5K/10K/HM/Marathon (§4.5, §6.2, §9.1). Added: Hyrox full philosophy — periodization (§4.6), session types (§5.5), session distribution (§6.3), station training, strength programming, key workouts, equipment substitutions (§9.5). Added: Hyrox hour ceilings (§4.8). Updated RULE_ENGINE_SPEC and PLAN_SCHEMA for running + Hyrox support. |
 | 2026-04-16 | 1.4 | Added: Goal-based plan system mapping all 5 UI goals (§2.5). Added: Rolling mesocycle periodization for non-race athletes (§4.9). Added: Goal-based session distribution templates (§6.5) for Get Faster, Build Endurance, Lose Weight, General Fitness. Added: Goal-based hour ceilings (§4.8). Added: Fat loss strength floor rule. Updated RULE_ENGINE_SPEC with raceless arc builder, fat_loss validator rule. Updated PLAN_SCHEMA with new goal enum, planMode field, mesocycle phase type. |
+| 2026-04-16 | 1.5 | Added: Half + Full Ironman minimum training frequency of 5 days/week regardless of level (§4.8). Safety valve is shorter/easier sessions within those 5+ days, not dropping below the floor. Enforced in onboarding and defensively in AthleteClassifier. |
 
 ---
 
@@ -422,6 +423,8 @@ When an athlete has multiple races, each race gets a priority that determines ho
 ### 4.8 Training Hours by Level and Distance
 
 These ranges act as **weekly hour ceilings**. Session templates define the workout structure, but total weekly hours should not exceed these ranges. If session counts push hours above the ceiling, reduce duration per session.
+
+**Minimum training frequency — Half and Full Ironman:** regardless of level, long-course triathlon plans require a floor of **5 training days/week**. Four or fewer days doesn't accumulate enough aerobic stimulus to reach a 70.3 or 140.6 start line safely. Athletes who aren't ready for a given day's prescribed volume should reduce *duration* or *intensity* on that day (short easy swim, Z2 spin, mobility session) rather than skipping the day entirely. 6 and 7 days/week remain options; the hour ceilings below cap total load. Enforced in onboarding (counter floor + save-time warning) and defensively at classification.
 
 **Triathlon:**
 

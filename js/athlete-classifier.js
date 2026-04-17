@@ -256,7 +256,21 @@
     const ageGroup = classifyAgeGroup(age);
     const goal = mapGoal(p.goal);
 
-    const daysAvailable = pickNumber(p.availableDaysPerWeek, p.daysAvailable) ?? 3;
+    let daysAvailable = pickNumber(p.availableDaysPerWeek, p.daysAvailable) ?? 3;
+    // TRAINING_PHILOSOPHY §4.7: Half IM and Full IM require a 5-day/week
+    // floor regardless of level. 4 days doesn't accumulate enough stimulus
+    // for the distance; the safety valve is shorter / easier sessions on
+    // those 5+ days, not fewer days. This floor is also enforced in
+    // onboarding — classifier enforces it defensively so a profile built
+    // through other paths (custom plan import, legacy data) still honors it.
+    const hasLongCourseRace = Array.isArray(p.races) && p.races.some(r =>
+      r && (r.raceType === 'ironman' || r.raceType === 'half-ironman')
+    );
+    let daysFloorReason = null;
+    if (hasLongCourseRace && daysAvailable < 5) {
+      daysFloorReason = 'long-course triathlon (Half/Full IM) needs ≥5 days/week';
+      daysAvailable = 5;
+    }
     const sessionDurationMin = pickNumber(p.sessionLength, p.sessionDurationMin) ?? 60;
 
     const equipmentProfile = Array.isArray(p.equipmentProfile) ? p.equipmentProfile.slice() : [];
@@ -294,6 +308,7 @@
       recoveryState,
       longRunDay,
       longRideDay,
+      daysFloorReason,
       weight: weight,
       height: height,
       gender,
