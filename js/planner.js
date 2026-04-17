@@ -1332,16 +1332,29 @@ function checkARacePromotion() {
   if (bRaces.length === 0) return; // no races at all
 
   if (bRaces.length === 1) {
-    // Auto-promote the only remaining race
+    // Auto-promote the only remaining race and rebuild its plan as an A-race
+    // plan — otherwise the calendar goes empty after the user deletes their
+    // former A race and only B-race taper entries survive.
     const race = events.find(e => e.id === bRaces[0].id);
     if (race) {
       race.priority = "A";
       saveEvents(events);
+      _regeneratePlanForRace(race);
     }
   } else {
     // Multiple B races — prompt user to choose
     _showARacePromotionModal(bRaces, events);
   }
+}
+
+// Regenerates the training plan for a race and persists it. Used after
+// B→A promotion (either auto or user-chosen) so the newly-primary race
+// gets a full build-out instead of only its original B-race taper window.
+function _regeneratePlanForRace(race) {
+  if (!race || typeof generateTrainingPlan !== "function") return;
+  const newEntries = generateTrainingPlan(race);
+  const existingPlan = loadTrainingPlan().filter(e => e.raceId !== race.id);
+  saveTrainingPlanData([...existingPlan, ...newEntries]);
 }
 
 function _showARacePromotionModal(bRaces, allEvents) {
@@ -1380,11 +1393,13 @@ function _promoteToARace(raceId) {
   if (race) {
     race.priority = "A";
     saveEvents(events);
+    _regeneratePlanForRace(race);
   }
   document.getElementById("a-race-promotion-overlay")?.remove();
   if (typeof renderTrainingInputs === "function") renderTrainingInputs();
   if (typeof renderRaceEvents === "function") renderRaceEvents();
   if (typeof renderTrainingBlocksSection === "function") renderTrainingBlocksSection();
+  if (typeof renderCalendar === "function") renderCalendar();
 }
 
 // Open the triathlon gear checklist modal for a given race id. Resolves the
@@ -3653,14 +3668,24 @@ function _cancelEditRace() {
  * @param {string} id - race id
  */
 function deleteEvent(id) {
+  const deleted = loadEvents().find(e => e.id === id);
   const events = loadEvents().filter(e => e.id !== id);
   saveEvents(events);
 
   const plan = loadTrainingPlan().filter(e => e.raceId !== id);
   saveTrainingPlanData(plan);
 
+  // If the deleted race was the A race, promote a remaining B race and
+  // rebuild its plan. Without this, deleting the driver race leaves the
+  // calendar empty even though a B race still exists.
+  if (deleted && (deleted.priority || "A").toUpperCase() === "A") {
+    checkARacePromotion();
+  }
+
   renderRaceEvents();
   renderTrainingConflicts();
+  if (typeof renderTrainingInputs === "function") renderTrainingInputs();
+  if (typeof renderTrainingBlocksSection === "function") renderTrainingBlocksSection();
   if (typeof renderCalendar === "function") renderCalendar();
 }
 

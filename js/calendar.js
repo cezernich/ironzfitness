@@ -337,7 +337,11 @@ function renderWeekOverview() {
 
   el.innerHTML = `
     <div class="week-overview-bar">
-      <span class="week-overview-label">This week</span>
+      <div class="week-overview-left">
+        <span class="week-overview-label">This week</span>
+        <button class="cal-help-btn" id="cal-help-btn" onclick="toggleCalHelp()" title="Help">?</button>
+        <div class="cal-help-tooltip" id="cal-help-tooltip">To edit or remove training plans, go to <strong>Training</strong> tab &rarr; <strong>Active Training Inputs</strong>.</div>
+      </div>
       <div class="week-overview-right">
         ${timeStr ? `<span class="week-overview-time">${ICONS.clock} ${timeStr} est.</span>` : ""}
         ${distItems.join("")}

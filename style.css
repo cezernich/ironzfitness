@@ -1601,31 +1601,34 @@ button:active {
   color: var(--color-accent);
 }
 
+.week-overview-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  flex-shrink: 0;
+}
 .cal-help-btn {
-  position: absolute;
-  top: -1px;
-  right: 0px;
-  width: 26px;
-  height: 26px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  border: none;
+  border: 1px solid var(--color-border);
   background: transparent;
   color: var(--color-text-muted);
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 600;
   cursor: pointer;
   padding: 0;
-  line-height: 26px;
-  opacity: 0.5;
-  z-index: 10;
+  line-height: 16px;
+  opacity: 0.6;
 }
-.cal-help-btn:hover { opacity: 0.8; }
+.cal-help-btn:hover { opacity: 1; }
 
 .cal-help-tooltip {
   display: none;
   position: absolute;
-  right: 8px;
-  top: 34px;
+  left: 0;
+  top: 28px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 10px;
@@ -1636,6 +1639,7 @@ button:active {
   box-shadow: var(--shadow);
   z-index: 100;
   max-width: 260px;
+  white-space: normal;
 }
 .cal-help-tooltip.is-visible { display: block; }
 

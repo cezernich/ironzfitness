@@ -898,7 +898,7 @@
     { id: "stronger",  icon: "trophy",   text: "Get Stronger",           buckets: ["strength"] },
     { id: "bulk",      icon: "weights",  text: "Bulk",                   buckets: ["strength"] },
     { id: "cut",       icon: "flame",    text: "Cut",                    buckets: ["strength"] },
-    { id: "weight",    icon: "flame",    text: "Lose Weight",            buckets: ["*"] },
+    { id: "weight",    icon: "scale",    text: "Lose Weight",            buckets: ["*"] },
     { id: "general",   icon: "target",   text: "General Fitness",        buckets: ["*"] },
   ];
 
