@@ -378,6 +378,7 @@ function _calV2DiscClass(discOrType) {
   if (s === "brick") return "bike";
   if (s === "race") return "race";
   if (s === "wellness" || s === "sauna") return "wellness";
+  if (s === "yoga" || s === "mobility" || s === "stretching") return "yoga";
   return "str";
 }
 
@@ -414,6 +415,7 @@ function _calV2IconFor(discCls) {
     case "bike": return I.bike || "";
     case "race": return I.flag || "";
     case "wellness": return I.droplet || I.activity || "";
+    case "yoga": return I.yoga || I.activity || "";
     case "str":
     default:     return I.weights || I.zap || "";
   }

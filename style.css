@@ -18544,6 +18544,7 @@ body.ob-v2-lock { overflow: hidden; }
 .s-sess--str  .s-ico { color: #e63946; }
 .s-sess--race .s-ico { color: #e63946; }
 .s-sess--wellness .s-ico { color: #10b981; }
+.s-sess--yoga .s-ico { color: #8b5cf6; }
 .s-sess--run  .s-ico svg { width: 13px; height: 13px; }
 .s-dot {
   width: 16px;
@@ -18677,6 +18678,7 @@ body.ob-v2-lock { overflow: hidden; }
 .wc.bike { background: rgba(244, 162, 97, 0.22); color: #f4a261; }
 .wc.race { background: rgba(230, 57, 70, 0.22);  color: #e63946; }
 .wc.wellness { background: rgba(16, 185, 129, 0.22); color: #10b981; }
+.wc.yoga { background: rgba(139, 92, 246, 0.22); color: #8b5cf6; }
 .wc.rest { background: rgba(255, 255, 255, 0.1); color: rgba(255,255,255,0.4); }
 /* ICONS.run is a filled silhouette — leave its own fill alone so the
    runner shape actually renders instead of disappearing. */
