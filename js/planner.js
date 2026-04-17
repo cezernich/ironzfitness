@@ -2242,6 +2242,25 @@ function removeTrainingInput(kind, id) {
       }
       return false;                            // future — remove
     }));
+    // Onboarding v2 plans live in workoutSchedule (not trainingPlan) and
+    // tag every session with raceId. Mirror the same past-keep/future-drop
+    // cascade there so deleting the race actually removes its plan.
+    try {
+      const existingSched = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
+      const filteredSched = existingSched.filter(e => {
+        if (!e || e.raceId !== id) return true;
+        if (e.date < todayStr) return true;
+        if (e.date === todayStr) {
+          const sessionId = `session-sw-${e.id}`;
+          return !!meta[sessionId];
+        }
+        return false;
+      });
+      if (filteredSched.length !== existingSched.length) {
+        localStorage.setItem("workoutSchedule", JSON.stringify(filteredSched));
+        if (typeof DB !== "undefined" && DB.syncSchedule) DB.syncSchedule();
+      }
+    } catch (e) { console.warn("[removeTrainingInput:race] workoutSchedule scrub failed", e && e.message); }
     // Scrub the Build Plan flow's raceEvents store so the deleted race
     // can't leak back through openBuildPlan's state-restore path (which
     // reads raceEvents[0] into _state.currentRace and could re-append
@@ -4153,6 +4172,28 @@ function deleteEvent(id) {
 
   const plan = loadTrainingPlan().filter(e => e.raceId !== id);
   saveTrainingPlanData(plan);
+
+  // Same cascade into workoutSchedule that removeTrainingInput runs — keeps
+  // past sessions (completion history) and drops today/future entries that
+  // were generated for this race. Today is kept only if already completed.
+  try {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const meta = typeof loadCompletionMeta === "function" ? loadCompletionMeta() : {};
+    const existingSched = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
+    const filteredSched = existingSched.filter(e => {
+      if (!e || e.raceId !== id) return true;
+      if (e.date < todayStr) return true;
+      if (e.date === todayStr) {
+        const sessionId = `session-sw-${e.id}`;
+        return !!meta[sessionId];
+      }
+      return false;
+    });
+    if (filteredSched.length !== existingSched.length) {
+      localStorage.setItem("workoutSchedule", JSON.stringify(filteredSched));
+      if (typeof DB !== "undefined" && DB.syncSchedule) DB.syncSchedule();
+    }
+  } catch (e) { console.warn("[deleteEvent] workoutSchedule scrub failed", e && e.message); }
 
   // Also scrub the Build Plan flow's own race store (localStorage.raceEvents)
   // so the deleted race can't leak back through state restore the next time
