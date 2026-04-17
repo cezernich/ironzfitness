@@ -640,87 +640,115 @@ const WEEKLY_PATTERNS = {
     },
   },
   hyrox: {
+    // Philosophy §6.3 phase distributions. Every day in a week is a
+    // distinct session type (no repeats). Day keys are 0=Sun … 6=Sat.
+    // Phase-specific strength shifts per §9.5: heavy compounds (Base)
+    // → muscular endurance (Build) → station simulation (Peak) →
+    // light maintenance (Taper).
     beginner: {
+      // 4-5 sessions/week: 3 easy runs + 1-2 strength + 1 station practice
       Base: {
-        1: { discipline: "run", load: "easy" },
-        3: { discipline: "hyroxStrength", load: "easy" },
-        5: { discipline: "hyrox", load: "easy" },
-        6: { discipline: "run", load: "easy" },
+        1: { discipline: "hyroxStrength", load: "base_heavy" },
+        2: { discipline: "hyrox", load: "easy_run" },
+        4: { discipline: "hyrox", load: "station_practice" },
+        6: { discipline: "hyrox", load: "easy_run" },
       },
+      // 5 sessions/week: 2 easy + 1 interval + 1 combo + 1 strength
       Build: {
-        1: { discipline: "run", load: "moderate" },
-        3: { discipline: "hyroxStrength", load: "moderate" },
-        5: { discipline: "hyrox", load: "moderate" },
-        6: { discipline: "run", load: "easy" },
+        1: { discipline: "hyroxStrength", load: "build_endurance" },
+        2: { discipline: "hyrox", load: "easy_run" },
+        3: { discipline: "hyrox", load: "interval_run" },
+        5: { discipline: "hyrox", load: "easy_run" },
+        6: { discipline: "hyrox", load: "run_station_combo" },
       },
+      // 5 sessions/week: 2 easy + 1 combo + 1 circuit + 1 strength
       Peak: {
-        1: { discipline: "run", load: "moderate" },
-        3: { discipline: "hyroxStrength", load: "moderate" },
-        5: { discipline: "hyrox", load: "hard" },
-        6: { discipline: "run", load: "easy" },
+        1: { discipline: "hyroxStrength", load: "peak_simulation" },
+        2: { discipline: "hyrox", load: "easy_run" },
+        4: { discipline: "hyrox", load: "station_circuit" },
+        5: { discipline: "hyrox", load: "easy_run" },
+        6: { discipline: "hyrox", load: "run_station_combo" },
       },
+      // 3 sessions/week: 2 easy + 1 short opener combo
       Taper: {
-        1: { discipline: "run", load: "easy" },
-        4: { discipline: "hyrox", load: "easy" },
+        2: { discipline: "hyrox", load: "easy_run" },
+        4: { discipline: "hyrox", load: "short_opener_combo" },
+        5: { discipline: "hyrox", load: "recovery_run" },
       },
     },
     intermediate: {
+      // 6 sessions/week: 3 easy runs + 2 heavy strength + 1 station practice
       Base: {
-        1: { discipline: "run", load: "easy" },
-        2: { discipline: "hyroxStrength", load: "easy" },
-        3: { discipline: "run", load: "moderate" },
-        5: { discipline: "hyrox", load: "moderate" },
-        6: { discipline: "run", load: "long" },
+        1: { discipline: "hyroxStrength", load: "base_heavy" },
+        2: { discipline: "hyrox", load: "easy_run" },
+        3: { discipline: "hyrox", load: "easy_run" },
+        4: { discipline: "hyroxStrength", load: "base_heavy" },
+        5: { discipline: "hyrox", load: "station_practice" },
+        6: { discipline: "hyrox", load: "easy_run" },
       },
+      // 6 sessions/week: 2 easy + 1 interval + 1 circuit + 1 combo + 1 endurance-strength
       Build: {
-        1: { discipline: "run", load: "moderate" },
-        2: { discipline: "hyroxStrength", load: "moderate" },
-        3: { discipline: "run", load: "hard" },
-        5: { discipline: "hyrox", load: "hard" },
-        6: { discipline: "run", load: "long" },
+        1: { discipline: "hyroxStrength", load: "build_endurance" },
+        2: { discipline: "hyrox", load: "easy_run" },
+        3: { discipline: "hyrox", load: "interval_run" },
+        4: { discipline: "hyrox", load: "station_circuit" },
+        5: { discipline: "hyrox", load: "easy_run" },
+        6: { discipline: "hyrox", load: "run_station_combo" },
       },
+      // 6 sessions/week: 2 easy + 1 race-pace combo + 1 interval + 1 circuit + 1 peak strength
       Peak: {
-        1: { discipline: "run", load: "hard" },
-        2: { discipline: "hyroxStrength", load: "hard" },
-        3: { discipline: "run", load: "moderate" },
-        5: { discipline: "hyrox", load: "hard" },
-        6: { discipline: "run", load: "long" },
+        1: { discipline: "hyroxStrength", load: "peak_simulation" },
+        2: { discipline: "hyrox", load: "easy_run" },
+        3: { discipline: "hyrox", load: "interval_run" },
+        4: { discipline: "hyrox", load: "station_circuit" },
+        5: { discipline: "hyrox", load: "recovery_run" },
+        6: { discipline: "hyrox", load: "race_simulation" },
       },
+      // 3-4 sessions/week: 2 easy + 1 short opener combo + 1 light strength
       Taper: {
-        1: { discipline: "run", load: "easy" },
-        3: { discipline: "hyroxStrength", load: "easy" },
-        5: { discipline: "run", load: "easy" },
+        1: { discipline: "hyroxStrength", load: "taper_maintenance" },
+        2: { discipline: "hyrox", load: "easy_run" },
+        4: { discipline: "hyrox", load: "short_opener_combo" },
+        6: { discipline: "hyrox", load: "recovery_run" },
       },
     },
     advanced: {
+      // 7 sessions/week: 3 easy runs + 2 heavy strength + 1 station practice + 1 combo
       Base: {
-        0: { discipline: "run", load: "easy" },
-        1: { discipline: "hyroxStrength", load: "moderate" },
-        2: { discipline: "run", load: "moderate" },
-        3: { discipline: "hyrox", load: "easy" },
-        5: { discipline: "hyroxStrength", load: "easy" },
-        6: { discipline: "hyrox", load: "moderate" },
+        0: { discipline: "hyrox", load: "easy_run" },
+        1: { discipline: "hyroxStrength", load: "base_heavy" },
+        2: { discipline: "hyrox", load: "easy_run" },
+        3: { discipline: "hyrox", load: "station_practice" },
+        4: { discipline: "hyroxStrength", load: "base_heavy" },
+        5: { discipline: "hyrox", load: "recovery_run" },
+        6: { discipline: "hyrox", load: "run_station_combo" },
       },
+      // 7 sessions/week: 2 easy + 1 interval + 2 station days + 2 strength
       Build: {
-        0: { discipline: "run", load: "moderate" },
-        1: { discipline: "hyroxStrength", load: "hard" },
-        2: { discipline: "run", load: "hard" },
-        3: { discipline: "hyrox", load: "moderate" },
-        5: { discipline: "hyroxStrength", load: "moderate" },
-        6: { discipline: "hyrox", load: "hard" },
+        0: { discipline: "hyrox", load: "easy_run" },
+        1: { discipline: "hyroxStrength", load: "build_endurance" },
+        2: { discipline: "hyrox", load: "interval_run" },
+        3: { discipline: "hyrox", load: "station_circuit" },
+        4: { discipline: "hyroxStrength", load: "build_endurance" },
+        5: { discipline: "hyrox", load: "recovery_run" },
+        6: { discipline: "hyrox", load: "run_station_combo" },
       },
+      // 7 sessions/week: 2 easy + 1 interval + 1 circuit + 1 combo + 1 race sim + 1 strength
       Peak: {
-        0: { discipline: "run", load: "hard" },
-        1: { discipline: "hyroxStrength", load: "hard" },
-        2: { discipline: "run", load: "hard" },
-        3: { discipline: "hyrox", load: "hard" },
-        5: { discipline: "hyroxStrength", load: "moderate" },
-        6: { discipline: "hyrox", load: "hard" },
+        0: { discipline: "hyrox", load: "easy_run" },
+        1: { discipline: "hyroxStrength", load: "peak_simulation" },
+        2: { discipline: "hyrox", load: "interval_run" },
+        3: { discipline: "hyrox", load: "station_circuit" },
+        4: { discipline: "hyrox", load: "easy_run" },
+        5: { discipline: "hyrox", load: "recovery_run" },
+        6: { discipline: "hyrox", load: "race_simulation" },
       },
+      // 4 sessions/week: 2 easy + 1 short opener + 1 light strength
       Taper: {
-        1: { discipline: "run", load: "easy" },
-        3: { discipline: "hyrox", load: "easy" },
-        5: { discipline: "run", load: "easy" },
+        1: { discipline: "hyroxStrength", load: "taper_maintenance" },
+        2: { discipline: "hyrox", load: "easy_run" },
+        4: { discipline: "hyrox", load: "short_opener_combo" },
+        5: { discipline: "hyrox", load: "recovery_run" },
       },
     },
   },
@@ -960,6 +988,10 @@ const SESSION_DESCRIPTIONS = {
   },
 
   hyrox: {
+    // ── Legacy 3-load bucket (retained for back-compat with any saved
+    // plan that still references them). New Hyrox slot templates below
+    // use the named session types from Philosophy §5.5 so two days in
+    // the same week are never identical. ──────────────────────────────
     easy: {
       duration: 40,
       steps: [
@@ -987,9 +1019,87 @@ const SESSION_DESCRIPTIONS = {
         { type: "cooldown", duration: 10, zone: 1, label: "Easy walk + full mobility — flush legs, open shoulders" },
       ],
     },
+
+    // ── Philosophy §5.5 — 7 distinct Hyrox session types ───────────────
+    // Slot templates (SLOTS.hyrox.*) route each day to one of these loads
+    // per Philosophy §6.3 phase distribution so two Hyrox days in the
+    // same week are fundamentally different workouts.
+    easy_run: {
+      duration: 40,
+      name: "Easy Run",
+      steps: [
+        { type: "warmup",   duration: 5,  zone: 1, label: "Dynamic drills — leg swings, A-skips, high knees" },
+        { type: "main",     duration: 30, zone: 2, label: "Easy run — Z1-Z2 conversational pace. Builds the aerobic base for the 8 × 1K of running you'll face on race day." },
+        { type: "cooldown", duration: 5,  zone: 1, label: "Walk + stretch — calves, hip flexors, hamstrings" },
+      ],
+    },
+    recovery_run: {
+      duration: 25,
+      name: "Recovery Run",
+      steps: [
+        { type: "warmup",   duration: 5,  zone: 1, label: "Walk to jog — start very easy" },
+        { type: "main",     duration: 15, zone: 1, label: "Easy jog — Z1 only, ~60% max HR. Flush the legs after a hard session." },
+        { type: "cooldown", duration: 5,  zone: 1, label: "Walk + foam roll — quads, calves, glutes" },
+      ],
+    },
+    interval_run: {
+      duration: 55,
+      name: "Interval Run (1K repeats)",
+      steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "Easy jog + 4×20s strides — prime the nervous system" },
+        { type: "main",     duration: 4,  zone: 4, label: "1 km repeat at race pace — simulates the 1K runs between Hyrox stations; hold steady form under fatigue", reps: 6, rest: 1.5 },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy jog 5 min + stretch — hamstrings, calves, hip flexors" },
+      ],
+    },
+    station_practice: {
+      duration: 45,
+      name: "Station Practice",
+      steps: [
+        { type: "warmup",   duration: 5,  zone: 1, label: "Mobility + band activation — shoulders, hips, t-spine" },
+        { type: "main",     duration: 35, zone: 2, label: "Technique work — low intensity, pick 3-4 stations and drill movement quality: Wall Balls 3×15 (depth + trajectory), Farmer Carry 4×40m (posture + grip), Sled Push 4×25m (drive angle), Burpee Broad Jumps 3×20m (hip extension). Rest as needed.", exercise: true },
+        { type: "cooldown", duration: 5,  zone: 1, label: "Walk + stretch shoulders and hips" },
+      ],
+    },
+    station_circuit: {
+      duration: 50,
+      name: "Station Circuit",
+      steps: [
+        { type: "warmup",   duration: 8,  zone: 2, label: "2-min row + 2-min SkiErg + dynamic drills — prime all movement patterns" },
+        { type: "main",     duration: 35, zone: 4, label: "Station circuit — all 8 Hyrox movements back-to-back, NO running between: SkiErg 500m → Sled Push 25m → Sled Pull 25m → Burpee Broad Jumps 40m → Row 500m → Farmer Carry 100m → Sandbag Lunges 50m → Wall Balls 30 reps. Moderate-hard pace, minimal rest. Substitute any missing station per §9.5.", exercise: true },
+        { type: "cooldown", duration: 7,  zone: 1, label: "Easy walk + mobility — forearms, hips, thoracic spine" },
+      ],
+    },
+    run_station_combo: {
+      duration: 55,
+      name: "Run + Station Combo (The 1K Sandwich)",
+      steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "Easy jog 5 min + 4×20s strides — build to working effort" },
+        { type: "main",     duration: 35, zone: 4, label: "The 1K Sandwich: 1K run → 1 station → repeat across 3-4 stations. Sequence: 1K run @ race pace → Sled Push 25m → 1K run → Wall Balls 25 → 1K run → Burpee Broad Jumps 30m → 1K run → Farmer Carry 100m. This is THE defining Hyrox workout: training the hand-off between running fatigue and station fatigue.", exercise: true },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy jog 5 min + full-body stretch" },
+      ],
+    },
+    race_simulation: {
+      duration: 75,
+      name: "Race Simulation (Half-Sim)",
+      steps: [
+        { type: "warmup",   duration: 10, zone: 2, label: "Easy jog + drills + 2×1min openers at race pace" },
+        { type: "main",     duration: 55, zone: 4, label: "Half race simulation — 4 × (1K run at race pace + 1 station at race weight). Pick 4 stations in order: Wall Balls 25 → Sandbag Lunges 50m → Farmer Carry 100m → Sled Pull 25m. Race-effort pacing, practice transitions and grip management. This is your dress rehearsal — treat it like the race.", exercise: true },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy walk + mobility — full-body flush, attention to shoulders and grip" },
+      ],
+    },
+    short_opener_combo: {
+      duration: 30,
+      name: "Short Opener Combo (Taper)",
+      steps: [
+        { type: "warmup",   duration: 5,  zone: 1, label: "Easy jog 3 min + dynamic drills" },
+        { type: "main",     duration: 20, zone: 3, label: "Short taper opener — 2 × (500m run at race pace + 1 light station: pick Wall Balls 15 or Farmer Carry 50m or Burpee Broad Jumps 20m). Stay sharp without emptying the tank.", exercise: true },
+        { type: "cooldown", duration: 5,  zone: 1, label: "Walk + stretch — keep it loose" },
+      ],
+    },
   },
 
   hyroxStrength: {
+    // Legacy 3-bucket loads — retained for back-compat.
     easy: {
       duration: 40,
       steps: [
@@ -1014,6 +1124,44 @@ const SESSION_DESCRIPTIONS = {
         { type: "main",     duration: 20, zone: 4, label: "Heavy lifting: 5×5 deadlift, 4×6 weighted pull-ups, 4×8 front squat — race-weight or heavier; full recovery between sets", exercise: true },
         { type: "main",     duration: 25, zone: 4, label: "Race-simulation circuit under fatigue: 1 km row → 20 wall balls → sled push 25m → 20 burpee broad jumps → farmers carry 50m → 25 sandbag lunges; minimal rest, race intensity", reps: 2, rest: 3, exercise: true },
         { type: "cooldown", duration: 10, zone: 1, label: "Easy jog 5 min + mobility — hips, shoulders, grip stretches" },
+      ],
+    },
+
+    // ── Philosophy §9.5 — phase-specific Hyrox strength programming ────
+    base_heavy: {
+      duration: 55,
+      name: "Hyrox Base Strength (Heavy Compound)",
+      steps: [
+        { type: "warmup",   duration: 8,  zone: 1, label: "Foam roll + band pull-aparts + goblet squat ×8 + inchworms ×5 — primer reps on empty bar" },
+        { type: "main",     duration: 40, zone: 3, label: "Heavy compounds (3-4×6-8, 120-180s rest): Back Squat 4×6 @ 80-85% 1RM → Deadlift 3×6 @ 75-80% → Bench Press or Overhead Press 4×8 → Bent-Over Row 4×8 → Walking Lunges 3×10/side (loaded). Grit-it-out work that builds the force ceiling Hyrox stations will tap.", exercise: true },
+        { type: "cooldown", duration: 7,  zone: 1, label: "Couch stretch + thoracic opener + calf stretch" },
+      ],
+    },
+    build_endurance: {
+      duration: 50,
+      name: "Hyrox Build Strength (Muscular Endurance)",
+      steps: [
+        { type: "warmup",   duration: 6,  zone: 2, label: "3 min row + dynamic mobility — primes stations-mode movement" },
+        { type: "main",     duration: 38, zone: 3, label: "Muscular endurance (3-4×12-16, 60-90s rest): Goblet Squat 4×15 → Kettlebell Swing 4×20 → Push-up 4×12 → Bent-Over Row 4×12 → Walking Lunge 3×20 steps → Farmer Carry 4×40m. Moderate weight, strict form, short rest — the station-specific rep range you'll actually race in.", exercise: true },
+        { type: "cooldown", duration: 6,  zone: 1, label: "Hip flexor + lat + forearm stretches — grip will be smoked" },
+      ],
+    },
+    peak_simulation: {
+      duration: 50,
+      name: "Hyrox Peak Strength (Station Simulation)",
+      steps: [
+        { type: "warmup",   duration: 8,  zone: 2, label: "500m row + SkiErg 30s + burpee ×5 + band pull-apart ×10 — full-body primer at race intensity" },
+        { type: "main",     duration: 32, zone: 4, label: "Station simulation circuits (2-3 rounds, minimal rest): SkiErg 500m → Sled Push 25m → Wall Balls 25 → Burpee Broad Jumps 30m → Farmer Carry 100m. Race-effort pacing, treat every round like race day. If you miss a station, sub from §9.5 (battle ropes for SkiErg, wall sits for sled push, thrusters for wall balls).", reps: 2, rest: 3, exercise: true },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy jog 3 min + shoulder + grip mobility" },
+      ],
+    },
+    taper_maintenance: {
+      duration: 30,
+      name: "Hyrox Taper Strength (Light Maintenance)",
+      steps: [
+        { type: "warmup",   duration: 5,  zone: 1, label: "Mobility flow + empty-bar primer sets" },
+        { type: "main",     duration: 20, zone: 2, label: "Light maintenance (2×8-10, 90s rest): Back Squat 2×8 @ 60-65% 1RM → Deadlift 2×8 @ 60% → Pull-up or Bent-Over Row 2×10. Clean reps, nothing near failure — stay sharp without fatiguing into race day.", exercise: true },
+        { type: "cooldown", duration: 5,  zone: 1, label: "Stretch hips + lats — leave the gym fresher than you arrived" },
       ],
     },
   },
