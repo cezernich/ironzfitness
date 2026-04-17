@@ -1,6 +1,6 @@
 # IronZ Training Philosophy — Single Source of Truth
 
-> **Version:** 1.5  
+> **Version:** 1.6  
 > **Last updated:** 2026-04-16  
 > **Role:** This document is the editable source of truth for all training, nutrition, and hydration philosophy in IronZ. The app's plan generation, workout builders, and coaching logic derive their rules from this document. Edit this file to change how IronZ trains athletes.
 
@@ -16,6 +16,7 @@
 | 2026-04-16 | 1.3 | Added: Running distance-specific periodization, taper rules, key workouts, and philosophy for 5K/10K/HM/Marathon (§4.5, §6.2, §9.1). Added: Hyrox full philosophy — periodization (§4.6), session types (§5.5), session distribution (§6.3), station training, strength programming, key workouts, equipment substitutions (§9.5). Added: Hyrox hour ceilings (§4.8). Updated RULE_ENGINE_SPEC and PLAN_SCHEMA for running + Hyrox support. |
 | 2026-04-16 | 1.4 | Added: Goal-based plan system mapping all 5 UI goals (§2.5). Added: Rolling mesocycle periodization for non-race athletes (§4.9). Added: Goal-based session distribution templates (§6.5) for Get Faster, Build Endurance, Lose Weight, General Fitness. Added: Goal-based hour ceilings (§4.8). Added: Fat loss strength floor rule. Updated RULE_ENGINE_SPEC with raceless arc builder, fat_loss validator rule. Updated PLAN_SCHEMA with new goal enum, planMode field, mesocycle phase type. |
 | 2026-04-16 | 1.5 | Added: Half + Full Ironman minimum training frequency of 5 days/week regardless of level (§4.8). Safety valve is shorter/easier sessions within those 5+ days, not dropping below the floor. Enforced in onboarding and defensively in AthleteClassifier. |
+| 2026-04-16 | 1.6 | Added §6.1.1 Weekly Placement Rules: anchors (long run / long ride / brick / intensity), hard constraints (no consecutive hard days, no same-discipline adjacent, brick is self-contained — no run/bike stacking), fill order, §8.6 pairing, and reference layouts for 7-day Base/Build/Peak. Both session-assembler and onboarding seeder now conform. |
 
 ---
 
@@ -678,6 +679,64 @@ Session templates define how many sessions of each type per week, by training ph
 | Bike | 1 short easy with strides |
 | Run | 1 short easy with strides |
 | **Total** | **3** |
+
+### 6.1.1 Weekly Placement Rules
+
+The tables above say *how many* sessions of each type per week. This section says *which day* each session lands on. Both the session assembler (for rule-engine plans) and the onboarding schedule seeder (for the Weekly Schedule screen) must follow these rules.
+
+**Anchors (set before any other placement):**
+
+1. **Long Run day** — user-selected in onboarding, or defaults to the latest available training day. Call this `LR`.
+2. **Long Ride day** — user-selected, or derived as the latest training day that sits at least 2 days away from `LR`. Call this `LB`.
+3. **Brick day** (Build/Peak only) — placed on a day that is ≥2 away from both `LR` and `LB` (non-advanced). Prefers to *replace* an existing plain bike or run day; never stacks on top of one.
+4. **Intensity days** (up to 2 for intermediate, up to 3 for advanced) — placed on middle training days with ≥2 days between intensity sessions (non-advanced).
+
+**Hard constraints (enforced in every placement path):**
+
+1. **No consecutive hard days** for beginner/intermediate. "Hard" = long run, long ride, brick, or any Z4+ intensity session. (§4.3)
+2. **No same-discipline on adjacent days** unless the session count exceeds what 7 days can fit with spacing (then doubling up on a single day is preferred over adjacency).
+3. **Brick is self-contained.** A brick session *is* a bike + run combo. Never place a standalone run or standalone bike on the same day as a brick — it creates redundant volume. The brick replaces whichever of bike/run would otherwise land on that day.
+4. **Minimum 1 recovery day per week.** Beginners get full rest; intermediate/advanced get active-recovery (Z1 easy spin / yoga / mobility) per Core Principle #4.
+5. **Long run ≤ 30% of weekly running volume.** Enforced in validator; placement should not produce a schedule that forces a violation.
+
+**Same-day pairing (§8.6 applies):**
+
+When a strength session lands on the same day as a cardio session, its focus is dictated by the cardio discipline:
+
+- Swim day → Pull + Core
+- Bike day → Legs + Posterior chain
+- Run day → Core + Hip stability
+- Recovery/easy day → Upper body + Arms
+
+**Fill order (apply in sequence):**
+
+1. Place `LR`, `LB`, and `BR` (brick) on their anchor days.
+2. Place intensity sessions on non-anchor middle days with required spacing.
+3. Place remaining cardio sessions, spreading disciplines so no two same-discipline days are adjacent (when avoidable).
+4. Place strength sessions on a cardio day per §8.6 pairing. Prefer diverse pair types across multiple strength sessions (e.g., one swim-pair + one bike-pair rather than two run-pairs).
+5. Empty days become rest (beginner) or active recovery (intermediate/advanced).
+
+**Reference layouts (7-day triathlon, long_run = Wed, long_ride = Sat):**
+
+These are the canonical weekly shapes the placement engine should produce for standard anchor choices. They validate that the rules above yield sensible plans.
+
+| Day | Base (9 sessions) | Build (10 sessions) | Peak (11 sessions) |
+|-----|-------------------|---------------------|--------------------|
+| Mon | Swim + Strength (pair_swim) | Swim + Strength (pair_swim) | Swim + Strength (pair_swim) |
+| Tue | Bike Z2 + Strength (pair_bike) | CSS Intervals (swim) | Race-pace swim |
+| Wed | **LONG RUN** | **LONG RUN** | **LONG RUN** |
+| Thu | Swim endurance | Sweet Spot (bike) | Race-pace bike |
+| Fri | Easy Run | Easy Run | Easy Run |
+| Sat | **LONG RIDE** | **LONG RIDE** | **LONG RIDE** |
+| Sun | Easy Run | Easy Run | **BRICK** (bike → run) |
+
+For a **6-day** week, drop the Sunday session and mark it active recovery. For a **5-day** week, also merge Mon and Tue into a single double-day (swim + bike Z2 + strength). Use the same anchor offsets (LR, LB) regardless of day count — the shape shifts with the user's picks.
+
+**Edge cases:**
+
+- If `LR` and `LB` are only 2 days apart (minimum allowed gap), the strict reference layout may compress. Prefer spreading the brick and intensity to the far side of `LR` in that case.
+- If the user picks `LR` or `LB` outside their training-day set, `selectTrainingDays` adds the picked day and drops a non-anchor weekday to stay within the user's `daysAvailable` count.
+- If no non-adjacent weekday exists for the brick (e.g., long_run Wed + long_ride Sat leaves every weekday adjacent to one or the other), the brick placement falls through to the lightest non-long day that does not already hold a run or bike — it's better to skip the brick entirely than to create a run + brick or bike + brick double.
 
 ### 6.2 Running Session Distribution
 
