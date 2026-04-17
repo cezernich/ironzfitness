@@ -1098,10 +1098,25 @@ function _onPastRaceTypeChange() {
 
 // Render either the full segment grid (Swim/T1/Bike/T2/Run) or a single
 // total-time input for triathlon races, and wire the mode toggle.
+//
+// Preserves any values the user has already typed across toggles so
+// Total → Segments → Total doesn't wipe the finish time.
 function _setTriMode(mode) {
   const timeSection = document.getElementById("past-race-time-section");
   if (!timeSection) return;
 
+  const cache = (_setTriMode._cache ||= { time: "", swim: "", t1: "", bike: "", t2: "", run: "" });
+  const pick = id => document.getElementById(id)?.value ?? "";
+  if (document.getElementById("past-race-time")) cache.time = pick("past-race-time");
+  if (document.getElementById("past-race-swim")) {
+    cache.swim = pick("past-race-swim");
+    cache.t1   = pick("past-race-t1");
+    cache.bike = pick("past-race-bike");
+    cache.t2   = pick("past-race-t2");
+    cache.run  = pick("past-race-run");
+  }
+
+  const esc = s => String(s).replace(/"/g, "&quot;");
   const toggleRow = `
     <div class="tri-mode-toggle" style="display:flex;gap:6px;margin-bottom:8px">
       <button type="button" class="btn-secondary" style="flex:1;font-size:0.78rem;padding:5px 10px${mode === 'segments' ? ';background:var(--color-accent,#f59e0b);color:#fff;border-color:transparent' : ''}" onclick="_setTriMode('segments')">By segment</button>
@@ -1110,11 +1125,22 @@ function _setTriMode(mode) {
   `;
 
   if (mode === "total") {
+    // If switching from segments with values but no prior total, compute one
+    // so the finish-time field isn't unexpectedly blank.
+    let totalVal = cache.time;
+    if (!totalVal) {
+      const segTotal = ["swim","t1","bike","t2","run"]
+        .reduce((sum, k) => {
+          const s = _parseTimeToSeconds(cache[k]);
+          return s == null ? sum : sum + s;
+        }, 0);
+      if (segTotal > 0) totalVal = _formatSecondsToTime(segTotal);
+    }
     timeSection.innerHTML = `
       ${toggleRow}
       <div class="form-row">
         <label>Finish Time</label>
-        <input type="text" id="past-race-time" placeholder="e.g. 9:45:12" />
+        <input type="text" id="past-race-time" placeholder="e.g. 9:45:12" value="${esc(totalVal)}" />
       </div>
     `;
     return;
@@ -1126,25 +1152,25 @@ function _setTriMode(mode) {
     <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px">
       <div class="form-row">
         <label style="font-size:0.72rem">Swim</label>
-        <input type="text" id="past-race-swim" placeholder="mm:ss" />
+        <input type="text" id="past-race-swim" placeholder="mm:ss" value="${esc(cache.swim)}" />
       </div>
       <div class="form-row">
         <label style="font-size:0.72rem">T1</label>
-        <input type="text" id="past-race-t1" placeholder="mm:ss" />
+        <input type="text" id="past-race-t1" placeholder="mm:ss" value="${esc(cache.t1)}" />
       </div>
       <div class="form-row">
         <label style="font-size:0.72rem">Bike</label>
-        <input type="text" id="past-race-bike" placeholder="h:mm:ss" />
+        <input type="text" id="past-race-bike" placeholder="h:mm:ss" value="${esc(cache.bike)}" />
       </div>
     </div>
     <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:8px">
       <div class="form-row">
         <label style="font-size:0.72rem">T2</label>
-        <input type="text" id="past-race-t2" placeholder="mm:ss" />
+        <input type="text" id="past-race-t2" placeholder="mm:ss" value="${esc(cache.t2)}" />
       </div>
       <div class="form-row">
         <label style="font-size:0.72rem">Run</label>
-        <input type="text" id="past-race-run" placeholder="h:mm:ss" />
+        <input type="text" id="past-race-run" placeholder="h:mm:ss" value="${esc(cache.run)}" />
       </div>
     </div>
     <p style="font-size:0.72rem;color:var(--color-text-muted);margin:6px 0 0">Total time includes transitions and is computed automatically.</p>
