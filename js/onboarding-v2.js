@@ -67,7 +67,7 @@
     leadInCount: 4,
     planDetails: { duration: "12", sessionLength: "60", daysPerWeek: "5" },
     thresholds: {},
-    strengthSetup: { sessionsPerWeek: 3, split: "ppl", customMuscles: [], sessionLength: 45 },
+    strengthSetup: { sessionsPerWeek: 3, split: "ppl", customMuscles: [], sessionLength: 45, refreshWeeks: 4, customRefreshWeeks: null },
     // longRun / longRide start unset so _renderLongDayBlocks can pick
     // the right default based on the user's sport mix (triathletes get
     // Wed long run + Sat long ride; run-only athletes get Sat long run).
@@ -470,7 +470,7 @@
     _state.leadInCount = 4;
     _state.planDetails = { duration: "12", sessionLength: "60", daysPerWeek: "5", startDate: _nextMondayISO() };
     _state.thresholds = {};
-    _state.strengthSetup = { sessionsPerWeek: 3, split: "ppl", customMuscles: [], sessionLength: 45 };
+    _state.strengthSetup = { sessionsPerWeek: 3, split: "ppl", customMuscles: [], sessionLength: 45, refreshWeeks: 4, customRefreshWeeks: null };
     _state.longDays = { longRun: null, longRide: null };
     _state.schedule = { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] };
     _state._editingPlanId = null;
@@ -2056,8 +2056,8 @@
     const rec = document.getElementById("bp-v2-split-rec");
     if (rec) {
       if (count <= 2) rec.textContent = "Full Body recommended for your frequency.";
-      else if (count === 3) rec.textContent = "Push / Pull / Legs is the sweet spot for 3 days.";
-      else rec.textContent = "PPL recommended. Upper / Lower also works for 4+ days.";
+      else if (count === 3) rec.textContent = "Push / Pull / Legs recommended for 3 days.";
+      else rec.textContent = "PPL recommended. Upper / Lower also a solid pick for 4+ days.";
     }
     // Block-length + start-date section only appears when the user is
     // strength-only. Endurance / mixed users answer those questions on
@@ -2079,6 +2079,17 @@
       document.querySelectorAll("#bp-v2-strength-block-section [data-str-duration]").forEach(el => {
         el.classList.toggle("is-selected", el.getAttribute("data-str-duration") === String(_state.planDetails.duration));
       });
+      const refreshRaw = _state.strengthSetup.refreshWeeks;
+      const refreshVal = refreshRaw === "custom" ? "custom" : String(refreshRaw || 4);
+      document.querySelectorAll("#bp-v2-strength-block-section [data-str-refresh]").forEach(el => {
+        el.classList.toggle("is-selected", el.getAttribute("data-str-refresh") === refreshVal);
+      });
+      const refreshCustom = document.getElementById("bp-v2-str-refresh-custom");
+      if (refreshCustom) refreshCustom.style.display = refreshVal === "custom" ? "" : "none";
+      const refreshInp = document.getElementById("bp-v2-str-refresh-weeks");
+      if (refreshInp && _state.strengthSetup.customRefreshWeeks) {
+        refreshInp.value = String(_state.strengthSetup.customRefreshWeeks);
+      }
     }
   }
   function _selectStrDuration(btn) {
@@ -2099,6 +2110,32 @@
         setTimeout(() => inp.focus(), 0);
       }
     }
+  }
+  function _selectStrRefresh(btn) {
+    if (!btn) return;
+    const group = btn.parentElement;
+    if (!group) return;
+    group.querySelectorAll(".ob-v2-chip").forEach(el => el.classList.remove("is-selected"));
+    btn.classList.add("is-selected");
+    const val = btn.getAttribute("data-str-refresh");
+    const customBlock = document.getElementById("bp-v2-str-refresh-custom");
+    if (val === "custom") {
+      _state.strengthSetup.refreshWeeks = "custom";
+      if (customBlock) customBlock.style.display = "";
+      const inp = document.getElementById("bp-v2-str-refresh-weeks");
+      if (inp) {
+        const stored = _state.strengthSetup.customRefreshWeeks;
+        inp.value = stored ? String(stored) : "";
+        setTimeout(() => inp.focus(), 0);
+      }
+    } else {
+      _state.strengthSetup.refreshWeeks = parseInt(val, 10) || 4;
+      if (customBlock) customBlock.style.display = "none";
+    }
+  }
+  function _setCustomRefresh(val) {
+    const n = parseInt(val, 10);
+    _state.strengthSetup.customRefreshWeeks = (n > 0 && n <= 52) ? n : null;
   }
   function _selectSplit(btn) {
     if (!btn) return;
@@ -3742,7 +3779,7 @@
       _renderThresholdSections, _toggleTestMe, _changeThresholdMethod, _saveThresholdsAndContinue, _testMeForEverythingAndContinue, _editThreshold,
       _adjustStrengthCount, _applyStrengthCountSideEffects, _selectSplit, _toggleMuscle,
       _renderCustomDayList, _toggleMuscleForDay,
-      _selectStrLength, _selectStrDuration, _saveStrengthAndContinue,
+      _selectStrLength, _selectStrDuration, _selectStrRefresh, _setCustomRefresh, _saveStrengthAndContinue,
       _shouldShowLongDays, _renderLongDayBlocks, _selectLongDay, _saveLongDaysAndContinue,
       _renderSchedule, _removeSlot, _removeSlotAt,
       _openAddSlotPicker, _pickAddSlot, _closeAddSlotPicker,

@@ -2210,9 +2210,10 @@
         <div class="form-row" style="margin-top:12px">
           <label for="qe-strength-duration">Session Length</label>
           <select id="qe-strength-duration">
+            <option value="" disabled selected>Choose duration…</option>
             <option value="15">15 min</option>
             <option value="30">30 min</option>
-            <option value="45" selected>45 min</option>
+            <option value="45">45 min</option>
             <option value="60">60 min</option>
             <option value="75">75+ min</option>
           </select>
@@ -3625,6 +3626,18 @@
               <div class="ob-v2-form-group" id="bp-v2-str-duration-custom" style="display:none;margin-top:8px">
                 <label for="bp-v2-str-duration-weeks">How many weeks?</label>
                 <input type="number" id="bp-v2-str-duration-weeks" min="1" max="52" placeholder="10" inputmode="numeric" oninput="OnboardingV2._setCustomDuration(this.value)" />
+              </div>
+              <div class="ob-v2-section-label" style="margin-top:16px">Refresh workouts</div>
+              <div class="ob-v2-chips">
+                <button type="button" class="ob-v2-chip" data-str-refresh="1"  onclick="OnboardingV2._selectStrRefresh(this)">Every week</button>
+                <button type="button" class="ob-v2-chip" data-str-refresh="2"  onclick="OnboardingV2._selectStrRefresh(this)">Every 2 weeks</button>
+                <button type="button" class="ob-v2-chip is-selected" data-str-refresh="4"  onclick="OnboardingV2._selectStrRefresh(this)">Every 4 weeks</button>
+                <button type="button" class="ob-v2-chip" data-str-refresh="custom" onclick="OnboardingV2._selectStrRefresh(this)">Custom</button>
+              </div>
+              <p class="ob-v2-notif-hint ob-v2-notif-hint--sub">4 weeks recommended — long enough to progress, short enough to avoid staleness.</p>
+              <div class="ob-v2-form-group" id="bp-v2-str-refresh-custom" style="display:none;margin-top:8px">
+                <label for="bp-v2-str-refresh-weeks">How many weeks between refreshes?</label>
+                <input type="number" id="bp-v2-str-refresh-weeks" min="1" max="52" placeholder="3" inputmode="numeric" oninput="OnboardingV2._setCustomRefresh(this.value)" />
               </div>
               <div class="ob-v2-form-group" style="margin-top:12px">
                 <label for="bp-v2-str-start-date">Start date</label>
