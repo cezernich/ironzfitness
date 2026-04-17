@@ -4394,7 +4394,7 @@ button:active {
 
 .qe-exercise-header {
   display: grid;
-  grid-template-columns: 1fr auto 90px 72px;
+  grid-template-columns: auto 1fr 70px 90px auto;
   gap: 8px;
   font-size: 0.68rem;
   font-weight: 700;
@@ -4408,7 +4408,7 @@ button:active {
 
 .qe-exercise-item {
   display: grid;
-  grid-template-columns: 1fr auto 90px 72px;
+  grid-template-columns: auto 1fr 70px 90px auto;
   align-items: center;
   gap: 8px;
 }
@@ -4436,7 +4436,7 @@ button:active {
 .qe-edit-row {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 1fr 100px 90px auto;
+  grid-template-columns: auto 1fr auto 90px auto;
   gap: 6px;
   align-items: center;
   padding: 4px 0;
@@ -4445,6 +4445,9 @@ button:active {
 .qe-edit-name {
   font-size: 0.82rem;
   padding: 5px 8px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .qe-edit-detail {

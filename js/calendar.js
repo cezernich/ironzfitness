@@ -5230,7 +5230,7 @@ Use "Bodyweight" for bodyweight exercises. Strength exercises must have specific
           <label for="qe-workout-name">Workout Name (optional)</label>
           <input type="text" id="qe-workout-name" value="${(workout.title || "").replace(/"/g,"&quot;")}" placeholder="e.g. Leg Day" />
         </div>
-        <div class="qe-exercise-header"><span></span><span>Sets × Reps</span><span>Weight</span><span></span></div>
+        <div class="qe-exercise-header"><span></span><span></span><span>Sets × Reps</span><span>Weight</span><span></span></div>
         <div id="qe-exercise-list"></div>
       </div>`;
       _qeRenderExerciseList();
@@ -5865,8 +5865,21 @@ function _localSelectForMuscles(muscleSet, level, duration, equipmentAccess) {
   const durMin = parseInt(duration) || 45;
   let maxEx = durMin <= 30 ? 4 : durMin <= 45 ? 6 : durMin <= 60 ? 7 : 8;
 
-  // Pick exercises using tier-based selection
-  const preferredTiers = level === 'beginner' ? [2, 3] : [1, 2];
+  // Cross-session rotation memory: the last ~30 exercise IDs we've
+  // generated, most-recent-first. Passed to selectByTier as
+  // `previousExercises` so the random pick rotates through fresh options
+  // before repeating, and tier-3 exercises (e.g. Pec Deck) eventually
+  // surface once tier-1/2 candidates have all been used recently.
+  let recentIds = [];
+  try { recentIds = JSON.parse(localStorage.getItem("qeRecentExerciseIds")) || []; } catch {}
+  if (!Array.isArray(recentIds)) recentIds = [];
+
+  // Pick exercises using tier-based selection. The first pass only
+  // weakly prefers compound tiers (1,2 for intermediate); the second
+  // pass opens the pool to all tiers so accessory/machine work
+  // (pec deck, cable fly, leg extension) can be selected.
+  const compoundTiers = level === 'beginner' ? [2, 3] : [1, 2];
+  const allTiers      = [1, 2, 3];
   const selected = [];
   const usedPatterns = new Set();
 
@@ -5883,7 +5896,7 @@ function _localSelectForMuscles(muscleSet, level, duration, equipmentAccess) {
         if (armFilter && ex.muscle_groups && ex.muscle_groups.indexOf(armFilter) === -1) return false;
         return !selected.some(s => s.id === ex.id);
       });
-      const pick = selectByTier(candidates, preferredTiers, []);
+      const pick = selectByTier(candidates, compoundTiers, recentIds);
       if (pick) {
         selected.push(pick);
         usedPatterns.add(pattern);
@@ -5892,7 +5905,8 @@ function _localSelectForMuscles(muscleSet, level, duration, equipmentAccess) {
     }
   }
 
-  // Second pass: keep filling with more exercises per muscle until maxEx
+  // Second pass: keep filling with more exercises per muscle until maxEx.
+  // Open up to all tiers so machine/isolation accessories show up too.
   let fillRound = 0;
   while (selected.length < maxEx && fillRound < 5) {
     fillRound++;
@@ -5908,12 +5922,19 @@ function _localSelectForMuscles(muscleSet, level, duration, equipmentAccess) {
           if (armFilter && ex.muscle_groups && ex.muscle_groups.indexOf(armFilter) === -1) return false;
           return !selected.some(s => s.id === ex.id);
         });
-        const pick = selectByTier(candidates, preferredTiers, selected.map(s => s.id));
+        const avoidList = [...selected.map(s => s.id), ...recentIds];
+        const pick = selectByTier(candidates, allTiers, avoidList);
         if (pick) { selected.push(pick); addedAny = true; break; }
       }
     }
     if (!addedAny) break;
   }
+
+  // Persist freshly-picked IDs to the front of the recent list (cap ~30).
+  try {
+    const newRecent = [...selected.map(s => s.id), ...recentIds.filter(id => !selected.some(s => s.id === id))].slice(0, 30);
+    localStorage.setItem("qeRecentExerciseIds", JSON.stringify(newRecent));
+  } catch {}
 
   // Build exercise prescriptions with weight estimates
   const modules = _getActiveModules(classification);
@@ -6107,7 +6128,7 @@ async function qeGenerateHIIT() {
         <input type="text" id="qe-workout-name" value="${hiitTitle.replace(/"/g,"&quot;")}" placeholder="e.g. Full Body HIIT" />
       </div>
       <div class="qe-exercise-header">
-        <span></span><span>Sets × Reps</span><span>Weight</span><span></span>
+        <span></span><span></span><span>Sets × Reps</span><span>Weight</span><span></span>
       </div>
       <div id="qe-exercise-list"></div>
     </div>`;
@@ -6133,6 +6154,13 @@ async function qeGenerateStrength() {
     return;
   }
 
+  const duration = document.getElementById("qe-strength-duration").value;
+  if (!duration) {
+    alert("Please choose a session length.");
+    document.getElementById("qe-strength-duration")?.focus();
+    return;
+  }
+
   // Strength level dropdown was removed per SPEC_strength_level_v1 §2.
   // Derive from 1RM data (squat/bench/deadlift relative to bodyweight)
   // via SportLevels.getSportLevel("strength"); falls back to "intermediate"
@@ -6140,7 +6168,6 @@ async function qeGenerateStrength() {
   const level = (typeof SportLevels !== "undefined" && SportLevels.getSportLevel)
     ? SportLevels.getSportLevel("strength")
     : "intermediate";
-  const duration = document.getElementById("qe-strength-duration").value;
   const muscles  = [..._qeSelectedMuscles].join(", ");
 
   qeShowStep(2, "generated");
@@ -6175,7 +6202,7 @@ async function qeGenerateStrength() {
         <input type="text" id="qe-workout-name" value="${title.replace(/"/g,"&quot;")}" placeholder="e.g. Push Day A" />
       </div>
       <div class="qe-exercise-header">
-        <span></span><span>Sets × Reps</span><span>Weight</span><span></span>
+        <span></span><span></span><span>Sets × Reps</span><span>Weight</span><span></span>
       </div>
       <div id="qe-exercise-list"></div>
     </div>`;
@@ -6310,11 +6337,13 @@ function _renderExerciseRow(i, inSuperset) {
         <input class="qe-edit-reps" id="qe-edit-reps-${i}" value="${escHtml(ex.reps)}" placeholder="reps" />
       </div>
       <input class="qe-weight-input" id="qe-weight-${i}" type="text" value="${escHtml(_roundExWeight(ex.weight) || '')}" placeholder="lbs / BW" />
-      <div class="qe-exercise-actions">
-        <button class="qe-edit-confirm" onclick="qeCommitEditExercise(${i})">Done</button>
-      </div>
+      <button class="qe-edit-confirm" onclick="qeCommitEditExercise(${i})">Done</button>
     </div>`;
   }
+  const menuItems = `
+    <button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();qeRegenExercise(${i})">Regenerate</button>
+    <button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();qeEditExercise(${i})">Edit</button>
+    <button class="ovflow-item ovflow-item--danger" onclick="event.stopPropagation();closeOverflowMenu();qeRemoveExercise(${i})">Delete</button>`;
   return `<div class="qe-exercise-item" draggable="true"
     ondragstart="qeDragStart(event,${i})"
     ondragover="qeDragOver(event,${i})"
@@ -6324,11 +6353,7 @@ function _renderExerciseRow(i, inSuperset) {
     <div class="qe-exercise-name">${escHtml(ex.name)}<div class="qe-exercise-sub">${escHtml(ex.rest)} rest</div></div>
     <div class="qe-exercise-detail">${inSuperset ? "" : escHtml(ex.sets) + "×"}${escHtml(ex.reps)}</div>
     <input class="qe-weight-input" id="qe-weight-${i}" type="text" value="${escHtml(_roundExWeight(ex.weight) || '')}" placeholder="lbs / BW" />
-    <div class="qe-exercise-actions">
-      <button class="qe-ex-btn regen" title="Regenerate" onclick="qeRegenExercise(${i})">${ICONS.refreshCw}</button>
-      <button class="qe-ex-btn" title="Edit" onclick="qeEditExercise(${i})">${ICONS.pencil}</button>
-      <button class="qe-ex-btn remove" title="Remove" onclick="qeRemoveExercise(${i})">${ICONS.trash}</button>
-    </div>
+    ${_buildOverflowMenu(`qe-ex-${i}`, menuItems)}
   </div>`;
 }
 
