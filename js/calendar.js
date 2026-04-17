@@ -7117,6 +7117,7 @@ function _qeBuildCardioWorkout(opts) {
           userZones: { css }, experienceLevel: level,
           poolSize,
           variantOffset: Math.floor(Math.random() * 12),
+          targetDurationMin: durMin,
         });
         const w = result.workout;
         workout.steps = w.steps;

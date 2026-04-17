@@ -60,6 +60,23 @@
     return total;
   }
 
+  // Estimate total time for a step subtree (in minutes) at the given
+  // sec/100m pace. Used to scale the main set so the whole workout
+  // lands close to the user's requested duration.
+  function _stepsTimeMin(steps, paceSecPer100m) {
+    let totalSec = 0;
+    (function walk(arr, mult) {
+      if (!Array.isArray(arr)) return;
+      for (const s of arr) {
+        if (!s) continue;
+        if (s.kind === "interval") totalSec += mult * (s.distance_m / 100) * paceSecPer100m;
+        else if (s.kind === "rest") totalSec += mult * (s.duration_sec || 0);
+        else if (s.kind === "repeat") walk(s.children || [], mult * (s.count || 1));
+      }
+    })(steps || [], 1);
+    return totalSec / 60;
+  }
+
   // ─── Step builders ───────────────────────────────────────────────────────
 
   function _iv(name, distance_m, stroke, pace_target) {
@@ -242,15 +259,64 @@
     }
   }
 
+  // Build a main set scaled to fit a target time budget (minutes), at a
+  // given sec/100m pace. Returns null for variant types we don't know how
+  // to scale safely (ladder/broken/descending) so the caller falls back
+  // to the unscaled builder.
+  function _buildScaledMain(ms, css, pool, paceSecPer100m, budgetMin) {
+    if (budgetMin <= 0) return null;
+    const pace = _resolveCssPace(ms.pace_source, css);
+    const paceLabel = ms.effort === "maximal" ? "max" : _paceLabel(pace);
+    if (ms.type === "continuous") {
+      const distM = _snap((budgetMin * 60 / paceSecPer100m) * 100, pool);
+      return [_iv("Continuous", distM, "freestyle", paceLabel)];
+    }
+    if (ms.type === "continuous_with_tool") {
+      const totalM = (budgetMin * 60 / paceSecPer100m) * 100;
+      const half = _snap(totalM / 2, pool);
+      return [
+        _iv("With pull buoy", half, "freestyle", paceLabel),
+        _rest(20),
+        _iv("No tools", half, "freestyle", paceLabel),
+      ];
+    }
+    if (ms.reps && ms.distance_m && !ms.type) {
+      const dist = _snap(ms.distance_m, pool);
+      const rest = ms.rest_sec || 15;
+      const repTimeSec = (dist / 100) * paceSecPer100m + rest;
+      const fitReps = Math.max(1, Math.floor((budgetMin * 60) / repTimeSec));
+      return [_repeat(fitReps, [
+        _iv("Main", dist, "freestyle", paceLabel),
+        _rest(rest),
+      ])];
+    }
+    if (ms.drills && ms.reps && ms.distance_m) {
+      const dist = _snap(ms.distance_m, pool);
+      const rest = 15;
+      const repTimeSec = (dist / 100) * paceSecPer100m + rest;
+      const fitReps = Math.max(1, Math.floor((budgetMin * 60) / repTimeSec));
+      const drillText = (ms.drills || []).join(" / ");
+      return [_repeat(fitReps, [
+        _iv("Drill", dist, "freestyle", drillText || "drill"),
+        _rest(rest),
+      ])];
+    }
+    return null;
+  }
+
   // ─── Public entry point ──────────────────────────────────────────────────
 
   /**
-   * generateSwimWorkout({ sessionTypeId, variantId, userZones, experienceLevel, poolSize? })
+   * generateSwimWorkout({ sessionTypeId, variantId, userZones, experienceLevel,
+   *                       poolSize?, targetDurationMin? })
    * userZones may be { css: <sec/100m> } or { swim: { css } }.
    * poolSize is optional — falls back to the user's profile setting.
+   * targetDurationMin (optional) — when supplied, the main set is scaled
+   * so the whole workout lands close to this many minutes. Without it,
+   * the variant's built-in distances are used unchanged.
    */
   function generateSwimWorkout(opts) {
-    const { sessionTypeId, variantId, userZones, experienceLevel } = opts || {};
+    const { sessionTypeId, variantId, userZones, experienceLevel, targetDurationMin } = opts || {};
     if (!sessionTypeId || !variantId) {
       throw new Error("generateSwimWorkout: missing sessionTypeId or variantId");
     }
@@ -292,6 +358,20 @@
 
     const beforeCd = _rest(30);
     const cooldownSteps = _buildCooldown(cooldownIdx, pool);
+
+    // If the caller specified a target duration, rebuild the main set to
+    // fit the remaining time budget after warmup + cooldown. Without this
+    // a 30-min request lands a 50-min workout because the canonical
+    // variants ship with fixed distances (e.g. continuous defaults to
+    // 1500m regardless of how long the user asked for).
+    if (targetDurationMin && targetDurationMin > 0) {
+      const paceSecPer100m = css || 132; // fallback: ~2:12/100m
+      const wuTimeMin = _stepsTimeMin(warmupSteps, paceSecPer100m) + (beforeMain.duration_sec / 60);
+      const cdTimeMin = (beforeCd.duration_sec / 60) + _stepsTimeMin(cooldownSteps, paceSecPer100m);
+      const mainBudgetMin = targetDurationMin - wuTimeMin - cdTimeMin;
+      const scaled = _buildScaledMain(ms, css, pool, paceSecPer100m, mainBudgetMin);
+      if (scaled) mainSteps = scaled;
+    }
 
     const steps = [
       ...warmupSteps,
