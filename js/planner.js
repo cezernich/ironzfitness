@@ -887,6 +887,20 @@ const SESSION_DESCRIPTIONS = {
         { type: "cooldown", duration: 10, zone: 1, label: "Easy 200m backstroke — stretch and breathe" },
       ],
     },
+    race_week_openers: {
+      duration: 25, name: "Race-Week Swim Openers",
+      steps: [
+        { type: "warmup",   duration: 5,  zone: 1, label: "300m easy free — loosen shoulders, breathe deep" },
+        { type: "main",     duration: 15, zone: 2, label: "Technique + feel: 8×50m smooth freestyle w/ 10s rest, crisp catch and rotation. Finish with 4×50m at race effort (not all-out)." },
+        { type: "cooldown", duration: 5,  zone: 1, label: "200m easy backstroke — reset breathing" },
+      ],
+    },
+    race_week_shakeout: {
+      duration: 15, name: "Race-Week Swim Shakeout",
+      steps: [
+        { type: "main", duration: 15, zone: 1, label: "500-600m easy continuous — all technique-focused. No hard sets. Feel the water." },
+      ],
+    },
   },
 
   bike: {
@@ -929,6 +943,20 @@ const SESSION_DESCRIPTIONS = {
         { type: "warmup",   duration: 15, zone: 1, label: "Easy spin — settle into aero, hydrate, get comfortable" },
         { type: "main",     duration: 150, zone: 2, label: "Long aerobic ride — Z2 effort, fuel every 45 min, hydrate every 20 min" },
         { type: "cooldown", duration: 15, zone: 1, label: "Spin-down — flush the legs before dismounting" },
+      ],
+    },
+    race_week_openers: {
+      duration: 30, name: "Race-Week Bike Openers",
+      steps: [
+        { type: "warmup",   duration: 8,  zone: 1, label: "Easy spin — build cadence to 90 RPM" },
+        { type: "main",     duration: 17, zone: 2, label: "Z2 aerobic riding + 3×15s pickups at race effort with full easy recovery between — short, crisp, race-sharp" },
+        { type: "cooldown", duration: 5,  zone: 1, label: "Easy spin-down" },
+      ],
+    },
+    race_week_shakeout: {
+      duration: 20, name: "Race-Week Bike Shakeout",
+      steps: [
+        { type: "main", duration: 20, zone: 1, label: "Very short easy spin — keep legs turning, 85-95 RPM, nothing more. No power intervals, no climbs." },
       ],
     },
   },
@@ -983,6 +1011,29 @@ const SESSION_DESCRIPTIONS = {
         { type: "warmup",   duration: 10, zone: 1, label: "Easy walk/jog — keep heart rate low, let the body wake up gradually" },
         { type: "main",     duration: 80, zone: 2, label: "Long easy run — Z2 throughout, RPE 4–5; fuel every 30–45 min for runs over 60 min; walk 1 min every 30 min if needed — finishing strong matters more than pace" },
         { type: "cooldown", duration: 10, zone: 1, label: "Walk + full mobility circuit — hips, hamstrings, calves" },
+      ],
+    },
+    race_week_easy: {
+      duration: 25, name: "Race-Week Easy Run",
+      steps: [
+        { type: "warmup",   duration: 5,  zone: 1, label: "Walk + dynamic drills" },
+        { type: "main",     duration: 15, zone: 2, label: "Z2 conversational — short and relaxed, nothing spicy" },
+        { type: "cooldown", duration: 5,  zone: 1, label: "Walk + stretch" },
+      ],
+    },
+    race_week_openers: {
+      duration: 20, name: "Race-Week Run Openers",
+      steps: [
+        { type: "warmup",   duration: 5,  zone: 1, label: "Walk to jog — wake the legs up" },
+        { type: "main",     duration: 10, zone: 2, label: "Easy Z1-Z2 running — comfortable" },
+        { type: "main",     duration: 3,  zone: 3, label: "4×15s strides at race pace with 45s easy jog between — crisp form, no strain" },
+        { type: "cooldown", duration: 2,  zone: 1, label: "Walk + stretch" },
+      ],
+    },
+    race_week_shakeout: {
+      duration: 15, name: "Race-Week Run Shakeout",
+      steps: [
+        { type: "main", duration: 15, zone: 1, label: "Very easy jog — Z1 only, legs awake, nothing more. This is NOT training; it's a race-morning nervous-system warm-up the day before." },
       ],
     },
   },
@@ -1204,8 +1255,82 @@ const SESSION_DESCRIPTIONS = {
         { type: "main",     duration: 57, zone: 2, label: "Aerobic run off bike — Z2 throughout, simulate race fatigue" },
       ],
     },
+    // Race-week brick opener (Philosophy §6.1). Short bike + run to rehearse
+    // transition feel without depleting freshness for race day.
+    race_week_opener: {
+      duration: 25, name: "Race-Week Brick Opener",
+      steps: [
+        { type: "warmup",   duration: 5,  zone: 1, label: "Easy spin — wake the legs up" },
+        { type: "main",     duration: 12, zone: 2, label: "Z2 ride + 2×30s race-effort pickups, full recovery between — rehearse the feel of race pace without settling in" },
+        { type: "main",     duration: 8,  zone: 2, label: "Run off the bike — 8 min easy + 2×20s pickups. Practice the transition only; nothing to prove." },
+      ],
+    },
+  },
+
+  // Race-week light activation / mobility (Philosophy §6.1 race-week + §4.5
+  // taper rules: keep the athlete moving but NEVER fatigue on race-week
+  // "rest" days). Discipline "mobility" is a walk + activation flow.
+  mobility: {
+    race_week_activation: {
+      duration: 20, name: "Race-Week Mobility + Activation",
+      steps: [
+        { type: "warmup", duration: 8,  zone: 1, label: "Easy walk 8 min — get blood moving, loosen hips" },
+        { type: "main",   duration: 10, zone: 1, label: "Activation flow: clamshells 2×12/side · glute bridges 2×15 · dead bugs 2×10/side · bird dogs 2×10/side · thoracic rotations 2×8/side. Bodyweight, controlled." },
+        { type: "cooldown", duration: 2, zone: 1, label: "Couch stretch + calf stretch — 30s each side" },
+      ],
+    },
   },
 };
+
+// ─── Race-week patterns (Philosophy §6.1 triathlon, §4.5 running, §4.6 hyrox) ─
+// Race week never leaves a day as pure rest — every day gets something
+// VERY light. Keyed by days-to-race (0=race, 1..6=days before). Discipline
+// values must exist in SESSION_DESCRIPTIONS; loads must exist for that
+// discipline. The generator intercepts the final 6 days before the race
+// and uses these instead of the generic Taper pattern.
+const RACE_WEEK_PATTERNS = {
+  triathlon: {
+    6: { discipline: "mobility", load: "race_week_activation" },
+    5: { discipline: "swim",     load: "race_week_openers" },
+    4: { discipline: "bike",     load: "race_week_openers" },
+    3: { discipline: "run",      load: "race_week_openers" },
+    2: { discipline: "swim",     load: "race_week_shakeout" },
+    1: { discipline: "brick",    load: "race_week_opener" },
+  },
+  running: {
+    6: { discipline: "mobility", load: "race_week_activation" },
+    5: { discipline: "run",      load: "race_week_easy" },
+    4: { discipline: "run",      load: "race_week_openers" },
+    3: { discipline: "mobility", load: "race_week_activation" },
+    2: { discipline: "run",      load: "race_week_shakeout" },
+    1: { discipline: "run",      load: "race_week_shakeout" },
+  },
+  hyrox: {
+    6: { discipline: "run",      load: "race_week_easy" },
+    5: { discipline: "hyrox",    load: "short_opener_combo" },
+    4: { discipline: "run",      load: "race_week_openers" },
+    3: { discipline: "mobility", load: "race_week_activation" },
+    2: { discipline: "run",      load: "race_week_shakeout" },
+    1: { discipline: "hyrox",    load: "short_opener_combo" },
+  },
+  cycling: {
+    6: { discipline: "mobility", load: "race_week_activation" },
+    5: { discipline: "bike",     load: "race_week_openers" },
+    4: { discipline: "bike",     load: "race_week_openers" },
+    3: { discipline: "mobility", load: "race_week_activation" },
+    2: { discipline: "bike",     load: "race_week_openers" },
+    1: { discipline: "bike",     load: "race_week_shakeout" },
+  },
+};
+
+function _raceWeekSportFamily(raceType) {
+  const tri = new Set(["ironman", "halfIronman", "olympic", "sprint"]);
+  if (tri.has(raceType)) return "triathlon";
+  if (raceType === "hyrox" || raceType === "hyroxDoubles") return "hyrox";
+  if (["centuryRide", "granFondo"].includes(raceType)) return "cycling";
+  // marathon, halfMarathon, tenK, fiveK, etc.
+  return "running";
+}
 
 // Nutrition targets per training load level
 const NUTRITION_TARGETS = {
@@ -2886,9 +3011,21 @@ function _generateSingleRacePlan(race) {
     const phasePattern = patterns[phaseName] || {};
     const session = phasePattern[dow];
 
+    // ── Race-week override (Philosophy §6.1 / §4.5 / §4.6) ───────────────────
+    // The last 6 days before the race get a dedicated pattern so every
+    // day has a short, very light session instead of pure rest. Race day
+    // itself is appended after the loop as a dedicated entry.
+    const _daysToRace = Math.floor((raceDate - cursor) / 86400000);
+    let _rwSession = null;
+    if (_daysToRace >= 1 && _daysToRace <= 6) {
+      const sportFam = _raceWeekSportFamily(race.type);
+      const rwPattern = RACE_WEEK_PATTERNS[sportFam] || RACE_WEEK_PATTERNS.running;
+      _rwSession = rwPattern[_daysToRace] || null;
+    }
+
     // ── Threshold-week override ──────────────────────────────────────────────
     let _twOverride = null;
-    if (_scheduledThresholdWeeks.length && typeof window !== "undefined" && window.ThresholdWeekScheduler) {
+    if (!_rwSession && _scheduledThresholdWeeks.length && typeof window !== "undefined" && window.ThresholdWeekScheduler) {
       const TW = window.ThresholdWeekScheduler;
       const monday = TW.mondayOf(cursor);
       if (TW.shouldThisBeAThresholdWeek(monday, _scheduledThresholdWeeks)) {
@@ -2897,7 +3034,21 @@ function _generateSingleRacePlan(race) {
       }
     }
 
-    if (_twOverride && dateStr >= todayStr) {
+    if (_rwSession && dateStr >= todayStr) {
+      const sessionDef = (SESSION_DESCRIPTIONS[_rwSession.discipline] || {})[_rwSession.load];
+      const duration = sessionDef ? sessionDef.duration : undefined;
+      const name = (sessionDef && sessionDef.name) || `Race-Week ${capitalize(_rwSession.discipline)}`;
+      plan.push({
+        date: dateStr,
+        raceId: race.id,
+        phase: "Race Week",
+        weekNumber: _weekNumberFor(cursor),
+        discipline: _rwSession.discipline,
+        load: _rwSession.load,
+        sessionName: name,
+        ...(duration != null ? { duration } : {}),
+      });
+    } else if (_twOverride && dateStr >= todayStr) {
       const TW = window.ThresholdWeekScheduler;
       const isTri = _twSportProfile === "triathlon";
       const t = _twOverride.type;
