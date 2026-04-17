@@ -385,6 +385,37 @@
       { role: 'core-stability', pattern: 'core', tier: ['secondary', 'tertiary'] },
       { role: 'accessory', pattern: ['isolation-legs', 'isolation-arms'], tier: ['secondary', 'tertiary'] },
     ],
+    // TRAINING_PHILOSOPHY §8.6 — same-day cardio + strength pairings.
+    // Subtype is assigned by placeStrengthWithPairing based on which
+    // cardio type the strength session ends up paired with.
+    pair_run_core_hip: [
+      { role: 'hip-hinge', pattern: 'hinge', tier: ['primary', 'secondary'] },
+      { role: 'single-leg-squat', pattern: 'squat', tier: ['secondary', 'tertiary'] },
+      { role: 'calf-raise', pattern: 'isolation-legs', specificGoal: 'calves' },
+      { role: 'glute-med', pattern: 'isolation-legs', specificGoal: 'glute-medius' },
+      { role: 'core-anti-rot', pattern: 'core', specificGoal: 'anti-rotation' },
+    ],
+    pair_swim_pull_core: [
+      { role: 'vertical-pull', pattern: 'vertical-pull', tier: ['primary'] },
+      { role: 'horizontal-pull', pattern: 'horizontal-pull', tier: ['primary'] },
+      { role: 'rear-delt-scap', pattern: 'horizontal-pull', tier: ['secondary', 'tertiary'], specificGoal: 'rear-delts-scapular', diverseFromSlot: 1 },
+      { role: 'tricep-isolation', pattern: 'isolation-arms', specificGoal: 'triceps' },
+      { role: 'core-anti-rot', pattern: 'core', specificGoal: 'anti-rotation' },
+    ],
+    pair_bike_legs_posterior: [
+      { role: 'main-squat', pattern: 'squat', tier: ['primary'] },
+      { role: 'main-hinge', pattern: 'hinge', tier: ['primary'] },
+      { role: 'calf-raise', pattern: 'isolation-legs', specificGoal: 'calves' },
+      { role: 'glute-hinge', pattern: 'isolation-legs', specificGoal: 'glutes-hip-extension' },
+      { role: 'core-stability', pattern: 'core', specificGoal: 'core-stability' },
+    ],
+    pair_rest_upper: [
+      { role: 'horizontal-push', pattern: 'horizontal-push', tier: ['primary'] },
+      { role: 'vertical-push', pattern: 'vertical-push', tier: ['primary'] },
+      { role: 'horizontal-pull', pattern: 'horizontal-pull', tier: ['primary'] },
+      { role: 'vertical-pull', pattern: 'vertical-pull', tier: ['primary'] },
+      { role: 'arms-isolation', pattern: 'isolation-arms', tier: ['secondary', 'tertiary'] },
+    ],
     // Philosophy §9.5 — Hyrox strength shifts across phases.
     // Base: heavy compounds (3-4×6-8).
     hyrox_heavy: [
@@ -607,93 +638,258 @@
     return base;
   }
 
-  // Select training sessions from the template so that with +1 rest entry
-  // (added later) the week totals `daysAvailable`. Ensures high-priority
-  // (long, brick, intensity) work is kept first, then one session per
-  // sport for coverage, then fill by priority.
-  function trimTemplate(template, classification) {
-    const days = classification.daysAvailable || 3;
-    const trainingSlots = Math.max(1, days - 1);  // reserve 1 slot for rest
-
-    const scored = template.map((s, idx) => ({ s, idx, weight: priorityWeight(s, classification) }));
-    scored.sort((a, b) => b.weight - a.weight);
-
-    const selected = [];
-    const used = new Set();
-    const goal = classification && classification.goal;
-
-    // Pass 0 — fat_loss floor: guarantee at least 2 strength sessions if the
-    // template has them (Philosophy §2.5 critical rule).
-    if (goal === 'fat_loss') {
-      let strengthTaken = 0;
-      for (const { s, idx } of scored) {
-        if (strengthTaken >= 2 || selected.length >= trainingSlots) break;
-        if (s.type === 'strength' && !used.has(idx)) {
-          selected.push(s); used.add(idx); strengthTaken++;
-        }
-      }
-    }
-
-    // Pass 1 — protected sessions (long runs/rides, brick, intensity, fat_loss strength boost).
-    for (const { s, idx, weight } of scored) {
-      if (selected.length >= trainingSlots) break;
-      if (used.has(idx)) continue;
-      if (weight >= 80) { selected.push(s); used.add(idx); }
-    }
-
-    // Pass 2 — sport coverage: one of each type present in the template.
-    const sportsInTemplate = [...new Set(template.map(t => t.type))];
-    const sportPriority = ['strength', 'run', 'bike', 'swim', 'hyrox', 'cross-training', 'brick', 'circuit'];
-    const orderedSports = sportPriority.filter(p => sportsInTemplate.includes(p));
-    const haveTypes = new Set(selected.map(s => s.type));
-    for (const sport of orderedSports) {
-      if (selected.length >= trainingSlots) break;
-      if (haveTypes.has(sport)) continue;
-      for (const { s, idx } of scored) {
-        if (used.has(idx)) continue;
-        if (s.type === sport) {
-          selected.push(s); used.add(idx); haveTypes.add(sport);
+  // Cap strength frequency per phase (Philosophy §8.4). Session count
+  // otherwise matches §6.1/§6.2 exactly — we do NOT trim by daysAvailable
+  // because triathlon weeks legitimately have 9–11 sessions that pack into
+  // fewer days via doubles.
+  function capStrengthFrequency(template, phase, classification) {
+    const sessions = template.map(s => ({ ...s }));
+    const strengthFreq = (classification && classification.goal === 'fat_loss')
+      ? Math.max(2, STRENGTH_FREQUENCY[phase] ?? 2)
+      : (STRENGTH_FREQUENCY[phase] ?? 2);
+    let count = sessions.filter(s => s.type === 'strength').length;
+    while (count > strengthFreq) {
+      let removed = false;
+      for (let i = sessions.length - 1; i >= 0; i--) {
+        if (sessions[i].type === 'strength') {
+          sessions.splice(i, 1);
+          count--;
+          removed = true;
           break;
         }
       }
+      if (!removed) break;
     }
-
-    // Pass 3 — fill by priority.
-    for (const { s, idx } of scored) {
-      if (selected.length >= trainingSlots) break;
-      if (used.has(idx)) continue;
-      selected.push(s); used.add(idx);
-    }
-
-    return selected;
+    return sessions;
   }
 
+  // Pick the weekdays on which the athlete actually trains. Returns days
+  // (1=Mon…7=Sun) ordered ascending. The weekend days are always included
+  // first because long sessions need them.
+  function selectTrainingDays(daysAvailable) {
+    const d = Math.max(2, Math.min(7, daysAvailable || 3));
+    if (d >= 7) return [1, 2, 3, 4, 5, 6, 7];
+    if (d === 6) return [1, 2, 3, 4, 6, 7];
+    if (d === 5) return [1, 2, 4, 6, 7];
+    if (d === 4) return [1, 4, 6, 7];
+    if (d === 3) return [2, 4, 7];
+    return [4, 7];
+  }
+
+  // §8.6 — strength + cardio pairing subtype lookup. The placer assigns
+  // these subtypes based on which cardio type ends up on the same day.
+  const PAIR_SUBTYPE_BY_CARDIO = {
+    swim: 'pair_swim_pull_core',
+    bike: 'pair_bike_legs_posterior',
+    run: 'pair_run_core_hip',
+  };
+  const PAIR_SUBTYPE_REST = 'pair_rest_upper';
+
+  // Place sessions onto the 7-day week, satisfying §6.1 session counts,
+  // §4.3 intensity caps, §8.6 strength pairing, and non-consecutive same-
+  // discipline spacing. Returns a layout map { day: [sessions...] }.
   function assignDays(sessions, classification) {
-    const occupied = new Map(); // day → session
+    const layout = {};
+    for (let d = 1; d <= 7; d++) layout[d] = [];
+
+    const level = classification.level || 'intermediate';
+    const trainingDays = selectTrainingDays(classification.daysAvailable);
+    // Use training days for all non-strength placement; strength later.
+
+    // Categorize sessions
+    const longSessions = sessions.filter(s => s.priority === 'long');
+    const brickSessions = sessions.filter(s => s.priority === 'brick');
+    const intensitySessions = sessions.filter(s => s.priority === 'intensity');
+    const strengthSessions = sessions.filter(s => s.type === 'strength');
+    const aerobicSessions = sessions.filter(s =>
+      s.priority !== 'long' && s.priority !== 'brick' &&
+      s.priority !== 'intensity' && s.type !== 'strength'
+    );
+
+    // 1. Long sessions on the last two training days (long run last, long ride second-last)
+    const lastDay = trainingDays[trainingDays.length - 1];
+    const secondLast = trainingDays.length >= 2 ? trainingDays[trainingDays.length - 2] : null;
+    const longRun = longSessions.find(s => s.type === 'run');
+    const longRide = longSessions.find(s => s.type === 'bike');
+    const otherLongs = longSessions.filter(s => s !== longRun && s !== longRide);
+    if (longRun) layout[lastDay].push(longRun);
+    if (brickSessions.length > 0) {
+      if (secondLast != null) layout[secondLast].push(brickSessions[0]);
+      else layout[lastDay].push(brickSessions[0]);
+    } else if (longRide && secondLast != null) {
+      layout[secondLast].push(longRide);
+    } else if (longRide) {
+      layout[lastDay].push(longRide);
+    }
+    // Any additional long sessions (uncommon) — place on first middle day
+    for (const s of otherLongs) {
+      const d = trainingDays.find(d => layout[d].length === 0) || trainingDays[0];
+      layout[d].push(s);
+    }
+
+    // 2. Intensity sessions on middle training days (non-last-two). Non-advanced
+    //    enforces non-consecutive spacing; advanced may have adjacent if needed.
+    const middleDays = trainingDays.slice(0, -2);
+    const intensityDayOrder = pickIntensityDays(middleDays, intensitySessions.length, level);
+    intensitySessions.forEach((s, i) => {
+      const d = intensityDayOrder[i] != null ? intensityDayOrder[i] : middleDays[i] || trainingDays[0];
+      layout[d].push(s);
+    });
+
+    // 3. Aerobic sessions — spread disciplines, prefer empty training days first
+    placeAerobicSpread(layout, aerobicSessions, trainingDays);
+
+    // 4. Strength — pair with cardio per §8.6, prefer diverse pair types
+    placeStrengthWithPairing(layout, strengthSessions, trainingDays);
+
+    // 5. Write day numbers onto the session objects and collect
     const placed = [];
-    // Sort by priority so long runs and intensity get their preferred day first.
-    const ordered = sessions.slice().sort((a, b) => priorityWeight(b) - priorityWeight(a));
-    for (const s of ordered) {
-      const prefs = prefFor(s);
-      let assigned = null;
-      for (const d of prefs) {
-        if (!occupied.has(d)) { assigned = d; break; }
+    for (let d = 1; d <= 7; d++) {
+      for (const s of layout[d]) {
+        s.day = d;
+        placed.push(s);
       }
-      if (assigned == null) {
-        // fallback: first empty day 1-7
-        for (let d = 1; d <= 7; d++) {
-          if (!occupied.has(d)) { assigned = d; break; }
-        }
-      }
-      if (assigned == null) {
-        // all 7 days full — double up on the least-loaded sport-compatible day
-        assigned = prefs[0];
-      }
-      s.day = assigned;
-      occupied.set(assigned, s);
-      placed.push(s);
     }
     return placed;
+  }
+
+  function pickIntensityDays(middleDays, count, level) {
+    if (count === 0) return [];
+    const days = [];
+    // Non-advanced: enforce gap ≥ 2 between intensity days when possible
+    const minGap = level === 'advanced' ? 1 : 2;
+    for (const d of middleDays) {
+      if (days.every(dd => Math.abs(dd - d) >= minGap)) {
+        days.push(d);
+        if (days.length >= count) break;
+      }
+    }
+    // If we couldn't fit with gap, relax
+    if (days.length < count) {
+      for (const d of middleDays) {
+        if (!days.includes(d)) {
+          days.push(d);
+          if (days.length >= count) break;
+        }
+      }
+    }
+    return days;
+  }
+
+  function placeAerobicSpread(layout, aerobicSessions, trainingDays) {
+    // Group by discipline to track spacing
+    const byDiscipline = {};
+    aerobicSessions.forEach(s => {
+      (byDiscipline[s.type] = byDiscipline[s.type] || []).push(s);
+    });
+
+    // First pass: one session per discipline onto an empty training day
+    for (const [discipline, list] of Object.entries(byDiscipline)) {
+      for (const session of list) {
+        const target = findBestAerobicDay(layout, trainingDays, discipline);
+        layout[target].push(session);
+      }
+    }
+  }
+
+  function findBestAerobicDay(layout, trainingDays, discipline) {
+    const scored = trainingDays.map(d => {
+      const content = layout[d];
+      const load = content.length;
+      const hasLongOrBrick = content.some(s => s.priority === 'long' || s.priority === 'brick');
+      const hasIntensity = content.some(s => s.priority === 'intensity');
+      const hasSameDiscipline = content.some(s => s.type === discipline);
+      const existingDaysOfDiscipline = trainingDays.filter(dd =>
+        layout[dd].some(s => s.type === discipline)
+      );
+      const adjacent = existingDaysOfDiscipline.some(ed => Math.abs(ed - d) === 1);
+
+      let score = 0;
+      if (load === 0) score += 100;
+      else if (load === 1) score += 30;
+      else if (load === 2) score -= 40;
+      else score -= 120;
+      if (hasSameDiscipline) score -= 120; // avoid two of same discipline same day
+      if (adjacent) score -= 40;            // discourage adjacent same-discipline
+      if (hasLongOrBrick) score -= 20;      // don't load up long/brick days
+      if (hasIntensity) score -= 15;
+      // Slight preference for earlier training days (reserve 6/7 for long)
+      score -= d * 0.3;
+      return { day: d, score };
+    });
+    scored.sort((a, b) => b.score - a.score);
+    return scored[0].day;
+  }
+
+  // Strength subtypes that represent a pre-set split (PPL or Upper/Lower)
+  // chosen upstream by buildGeneralTemplate for strength-focused athletes.
+  // These are preserved — the placer does not overwrite them with §8.6
+  // pairing subtypes, since the athlete's plan is split-driven, not
+  // cardio-pair-driven.
+  const PRESET_SPLIT_SUBTYPES = new Set([
+    'push_day', 'pull_day', 'leg_day', 'upper_body', 'lower_body',
+    'hyrox_heavy', 'hyrox_endurance', 'hyrox_maintenance',
+  ]);
+
+  function placeStrengthWithPairing(layout, strengthSessions, trainingDays) {
+    const usedPairTypes = [];
+    for (const strength of strengthSessions) {
+      const hasPresetSplit = PRESET_SPLIT_SUBTYPES.has(strength.subtype);
+
+      if (hasPresetSplit) {
+        // Preserve the split subtype; place on the lightest day without
+        // another strength session.
+        const target = pickLightestDayWithoutStrength(layout, trainingDays);
+        layout[target].push(strength);
+        continue;
+      }
+
+      // Endurance athletes: find a day with cardio to pair with per §8.6
+      const candidates = [];
+      for (const d of trainingDays) {
+        const content = layout[d];
+        if (content.some(s => s.type === 'strength')) continue;
+        if (content.length >= 3) continue;
+        const cardio = content.find(s => ['run', 'bike', 'swim'].includes(s.type));
+        if (!cardio) continue;
+        const hasLongOrIntensity = content.some(s => s.priority === 'long' || s.priority === 'intensity' || s.priority === 'brick');
+        const load = content.length;
+        let score = 0;
+        if (load === 1) score += 50;
+        else if (load === 2) score += 30;
+        if (hasLongOrIntensity) score -= 45;
+        const pairType = PAIR_SUBTYPE_BY_CARDIO[cardio.type];
+        if (pairType && !usedPairTypes.includes(pairType)) score += 50;
+        candidates.push({ day: d, cardioType: cardio.type, score, pairType });
+      }
+      candidates.sort((a, b) => b.score - a.score);
+
+      if (candidates.length > 0) {
+        const chosen = candidates[0];
+        strength.subtype = chosen.pairType;
+        strength.sessionSubtype = chosen.pairType;
+        layout[chosen.day].push(strength);
+        usedPairTypes.push(chosen.pairType);
+      } else {
+        // No paired day available — place on an empty training day with "rest-day upper" pair
+        const emptyDay = trainingDays.find(d => layout[d].length === 0);
+        const target = emptyDay != null ? emptyDay : pickLightestDayWithoutStrength(layout, trainingDays);
+        strength.subtype = PAIR_SUBTYPE_REST;
+        strength.sessionSubtype = PAIR_SUBTYPE_REST;
+        layout[target].push(strength);
+        usedPairTypes.push(PAIR_SUBTYPE_REST);
+      }
+    }
+  }
+
+  function pickLightestDayWithoutStrength(layout, trainingDays) {
+    let best = trainingDays[0];
+    let bestLoad = Infinity;
+    for (const d of trainingDays) {
+      if (layout[d].some(s => s.type === 'strength')) continue;
+      if (layout[d].length < bestLoad) { bestLoad = layout[d].length; best = d; }
+    }
+    return best;
   }
 
   // TRAINING_PHILOSOPHY §4.3 — cap Z4+ intensity sessions per week
@@ -742,33 +938,10 @@
     else if (session.type === 'swim') session.subtype = 'endurance';
   }
 
-  function enforceNoConsecutiveIntensity(sessions) {
-    // Find adjacent pairs and move the second one to a non-adjacent empty day.
-    const byDay = new Map();
-    sessions.forEach(s => byDay.set(s.day, s));
-    const intensityDays = sessions
-      .filter(s => s.priority === 'intensity')
-      .map(s => s.day)
-      .sort((a, b) => a - b);
-    for (let i = 1; i < intensityDays.length; i++) {
-      if (intensityDays[i] === intensityDays[i - 1] + 1) {
-        // Move session on day intensityDays[i] to first available non-adjacent day
-        const moving = byDay.get(intensityDays[i]);
-        const otherIntensityDays = new Set(intensityDays.filter(d => d !== moving.day));
-        for (let d = 1; d <= 7; d++) {
-          if (byDay.has(d)) continue;
-          const adjacent = [...otherIntensityDays].some(iD => Math.abs(iD - d) <= 1);
-          if (!adjacent) {
-            byDay.delete(moving.day);
-            moving.day = d;
-            byDay.set(d, moving);
-            intensityDays[i] = d;
-            intensityDays.sort((a, b) => a - b);
-            break;
-          }
-        }
-      }
-    }
+  function enforceNoConsecutiveIntensity(_sessions) {
+    // New placer (assignDays) already places intensity with a 2-day gap
+    // for non-advanced athletes via pickIntensityDays(). This remains as
+    // a no-op for API compatibility with older callers.
   }
 
   // ── Duration + zones + pace ──────────────────────────────────────────────
@@ -874,6 +1047,14 @@
     hyrox_maintenance:      { zones: [],           keySession: false, label: 'Hyrox Strength Maintenance' },
     // v1.4 — circuit/hiit
     hiit:                   { zones: ['Z4'],       keySession: true,  label: 'HIIT Circuit' },
+    // §8.6 same-day pairing strength subtypes (assigned by placer)
+    pair_run_core_hip:       { zones: [], keySession: false, label: 'Core + Hip Stability (run-day pair)' },
+    pair_swim_pull_core:     { zones: [], keySession: false, label: 'Pull + Core (swim-day pair)' },
+    pair_bike_legs_posterior:{ zones: [], keySession: false, label: 'Legs + Posterior Chain (bike-day pair)' },
+    pair_rest_upper:         { zones: [], keySession: false, label: 'Upper Body + Arms (rest-day pair)' },
+    // Active recovery for intermediate/advanced athletes (Core Principle #4)
+    active_recovery:         { zones: ['Z1'], keySession: false, label: 'Active Recovery' },
+    rest:                    { zones: [], keySession: false, label: 'Rest Day' },
   };
 
   function paceToStr(minPerMile) {
@@ -1157,7 +1338,7 @@
   function applyDeloadModifier(sessions) {
     // Reduce volume 40–60%, maintain intensity (TRAINING_PHILOSOPHY §12.3).
     for (const s of sessions) {
-      if (s.type === 'rest') continue;
+      if (s.type === 'rest' || s.subtype === 'active_recovery') continue;
       s.durationMin = Math.max(15, Math.round((s.durationMin || 30) * 0.55));
       if (s.type === 'strength' && Array.isArray(s.exercises)) {
         s.exercises = s.exercises.map(e => ({ ...e, sets: Math.max(1, e.sets - 1) }));
@@ -1266,8 +1447,10 @@
   function insertKeySessions(week, phase, classification, arc) {
     const template = getSessionTemplate(classification.sportProfile, phase, arc, classification)
       || buildGeneralTemplate(classification, phase);
-    const trimmed = trimTemplate(template, classification);
-    return trimmed;
+    // Cap strength frequency per phase (§8.4) but keep full template otherwise
+    // so §6.1 / §6.2 counts are preserved. Packing into fewer days happens
+    // later in assignDays via 2-a-days.
+    return capStrengthFrequency(template, phase, classification);
   }
 
   function fillAerobicVolume(week, sessions, classification, arc) {
@@ -1278,38 +1461,46 @@
     return sessions;
   }
 
-  function addRestDays(sessions) {
+  // Fill unused days with rest or active recovery. Per Core Principle #4
+  // (v1.4): beginner athletes get full-rest days; intermediate and advanced
+  // athletes get active-recovery days (Z1 only — easy spin, light yoga,
+  // mobility work) instead of full rest.
+  function addRestDays(sessions, classification) {
+    const level = (classification && classification.level) || 'intermediate';
+    const useActiveRecovery = level !== 'beginner';
     const occupied = new Set(sessions.map(s => s.day));
-    // At least one explicit rest entry (TRAINING_PHILOSOPHY §13 — min 1 rest day)
-    for (let d = 5; d <= 7; d++) {
-      if (!occupied.has(d)) {
+    for (let d = 1; d <= 7; d++) {
+      if (occupied.has(d)) continue;
+      if (useActiveRecovery) {
+        sessions.push({
+          day: d,
+          type: 'cross-training',
+          subtype: 'active_recovery',
+          sessionSubtype: 'active_recovery',
+          priority: 'recovery',
+          durationMin: 20,
+          keySession: false,
+          targetZones: ['Z1'],
+          description: 'Active recovery: 20 min easy spin, yoga, or mobility work (Z1 only).',
+          warmUp: '',
+          coolDown: '',
+          rationale: 'Active recovery aids blood flow and adaptation without adding training stress. Advanced/intermediate athletes benefit more from light movement than full rest.',
+        });
+      } else {
         sessions.push({
           day: d,
           type: 'rest',
+          subtype: 'rest',
           sessionSubtype: 'rest',
+          priority: 'rest',
           durationMin: 0,
           keySession: false,
           targetZones: [],
           description: 'Full rest day — recovery is productive, not lazy.',
+          warmUp: '',
+          coolDown: '',
           rationale: 'Rest day enables adaptation and protects against overtraining.',
         });
-        return sessions;
-      }
-    }
-    // No empty slot in 5–7; check 1–4
-    for (let d = 1; d <= 4; d++) {
-      if (!occupied.has(d)) {
-        sessions.push({
-          day: d,
-          type: 'rest',
-          sessionSubtype: 'rest',
-          durationMin: 0,
-          keySession: false,
-          targetZones: [],
-          description: 'Full rest day — recovery is productive, not lazy.',
-          rationale: 'Rest day enables adaptation and protects against overtraining.',
-        });
-        return sessions;
       }
     }
     return sessions;
@@ -1338,7 +1529,7 @@
     sessions = sessions.map(s => selectExercisesForSession(s, classification));
     if (isDeload) sessions = applyDeloadModifier(sessions);
     sessions = applyBRaceMicroTaper(sessions, weekNumber, arc);
-    sessions = addRestDays(sessions);
+    sessions = addRestDays(sessions, classification);
     sessions.sort((a, b) => a.day - b.day);
 
     week.sessions = sessions;
