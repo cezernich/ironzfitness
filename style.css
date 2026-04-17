@@ -4992,6 +4992,16 @@ button:active {
   opacity: 0.7;
   cursor: progress;
 }
+.btn-estimate-ai.is-pulsing {
+  animation: btn-estimate-pulse 0.9s ease-out 2;
+  border-style: solid;
+  border-color: var(--color-accent, var(--color-text));
+}
+@keyframes btn-estimate-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(22,163,74,0.45); }
+  70%  { box-shadow: 0 0 0 10px rgba(22,163,74,0); }
+  100% { box-shadow: 0 0 0 0 rgba(22,163,74,0); }
+}
 .btn-estimate-ai-icon { font-size: 15px; }
 .estimate-status {
   font-size: 0.85rem;

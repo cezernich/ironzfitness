@@ -237,6 +237,19 @@ function closeManualMealLog() {
   if (modal) modal.classList.remove("is-open");
 }
 
+// Entry point for the Ask IronZ tile on the Log a Meal screen.
+// Opens the manual-entry modal (which already hosts the free-text → macro
+// estimator) and pulses the Estimate button so the intended flow is clear.
+function openAskIronZMeal() {
+  openManualMealLog();
+  setTimeout(() => {
+    const btn = document.getElementById("btn-estimate-meal");
+    if (!btn) return;
+    btn.classList.add("is-pulsing");
+    setTimeout(() => btn.classList.remove("is-pulsing"), 1800);
+  }, 250);
+}
+
 function saveMealAndClose() {
   const nameBefore = document.getElementById("meal-name")?.value?.trim();
   saveMeal();
