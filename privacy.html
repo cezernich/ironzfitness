@@ -15,38 +15,42 @@
 </head>
 <body>
   <h1>Privacy Policy</h1>
-  <p class="date">Effective date: April 7, 2026</p>
+  <p class="date">Effective date: April 16, 2026</p>
 
   <h2>1. Information We Collect</h2>
   <p>When you use IronZ, we collect:</p>
   <ul>
-    <li><strong>Account information:</strong> Email address, name, and password (encrypted).</li>
-    <li><strong>Profile data:</strong> Age, weight, height, gender, fitness level, and training goals you provide.</li>
-    <li><strong>Training data:</strong> Workouts, training plans, race events, nutrition logs, and schedule information you enter.</li>
-    <li><strong>Usage data:</strong> AI feature usage counts for rate limiting.</li>
+    <li><strong>Account information:</strong> Email address, name, and password (encrypted via Supabase Auth — we never store plaintext passwords).</li>
+    <li><strong>Profile data:</strong> Age, weight, height, gender, fitness thresholds (swim CSS, bike FTP, run pace), and training goals you provide.</li>
+    <li><strong>Training data:</strong> Workouts, training plans, race events, and schedule information you enter.</li>
+    <li><strong>Nutrition data:</strong> Meals you log (calorie, protein, carb, and fat values), food preferences, and allergies.</li>
+    <li><strong>Usage data:</strong> AI feature usage counts for rate limiting. We do not track analytics, page views, or behavioral data.</li>
   </ul>
 
   <h2>2. How We Use Your Information</h2>
   <ul>
     <li>To provide and personalize the training and nutrition features of the App.</li>
     <li>To generate AI-powered coaching responses tailored to your profile.</li>
+    <li>To analyze meal photos for nutritional estimates (see Section 4).</li>
     <li>To sync your data across devices.</li>
     <li>To enforce rate limits on AI features.</li>
     <li>To improve the App's training philosophy and exercise library (aggregated, anonymized data only).</li>
   </ul>
 
   <h2>3. Data Storage</h2>
-  <p>Your data is stored in Supabase (hosted on AWS). Data is encrypted in transit (TLS) and at rest. A local copy is cached on your device for offline access.</p>
+  <p>Your data is stored in Supabase (hosted on AWS). Data is encrypted in transit (TLS) and at rest. A local copy of your data is cached in your browser's local storage for faster access. This local cache is cleared when you sign out or when a different user signs in on the same device.</p>
 
-  <h2>4. AI Features &amp; Third Parties</h2>
-  <p>When you use AI coaching features, your question and relevant profile context are sent to Anthropic's Claude API to generate a response. We do not send your full training history — only the minimum context needed for the specific question. Anthropic's data usage policy applies to these interactions.</p>
+  <h2>4. AI Features, Meal Photos &amp; Third Parties</h2>
+  <p>When you use AI coaching features, your question and relevant profile context are sent to Anthropic's Claude API to generate a response. We send only the minimum context needed for the specific question — not your full training history.</p>
+  <p><strong>Meal photo analysis:</strong> When you use the photo meal logging feature, your photo is sent directly to Anthropic's API for nutritional analysis. IronZ does not store, save, or retain your meal photos — the image is transmitted for analysis and discarded immediately after the nutritional estimate is returned. Only the resulting calorie, protein, carb, and fat values are saved to your account. However, the image does transit through our Supabase Edge Function infrastructure and is received by Anthropic's API.</p>
+  <p><strong>Anthropic data retention:</strong> Anthropic may temporarily retain API inputs (including meal photos and coaching queries) for up to 30 days for abuse and safety monitoring, in accordance with their <a href="https://www.anthropic.com/privacy" target="_blank">privacy policy</a> and <a href="https://www.anthropic.com/api-data-usage" target="_blank">API data usage policy</a>. IronZ does not control Anthropic's retention practices.</p>
 
   <h2>5. Data Sharing</h2>
   <p>We do not sell your personal data. We share data only with:</p>
   <ul>
-    <li><strong>Supabase:</strong> Database and authentication provider.</li>
-    <li><strong>Anthropic:</strong> AI response generation (question context only).</li>
-    <li><strong>Law enforcement:</strong> If required by law.</li>
+    <li><strong>Supabase:</strong> Database hosting, authentication, and Edge Function infrastructure.</li>
+    <li><strong>Anthropic:</strong> AI coaching responses and meal photo nutritional analysis.</li>
+    <li><strong>Law enforcement:</strong> Only if required by applicable law.</li>
   </ul>
 
   <h2>6. Your Rights</h2>
@@ -54,20 +58,24 @@
   <ul>
     <li><strong>Access</strong> your data through the App's settings and export features.</li>
     <li><strong>Correct</strong> your profile information at any time.</li>
-    <li><strong>Delete</strong> your account and all associated data by contacting us.</li>
+    <li><strong>Delete</strong> your account and all associated data by contacting us at <a href="mailto:ironzsupport@gmail.com">ironzsupport@gmail.com</a>. We will process deletion requests within 30 days.</li>
     <li><strong>Withdraw consent</strong> for data processing by deleting your account.</li>
+    <li><strong>Opt out of AI features</strong> by choosing not to use AI coaching or photo meal logging. Core training and nutrition tracking features work without AI.</li>
   </ul>
 
   <h2>7. Data Retention</h2>
-  <p>We retain your data for as long as your account is active. If you delete your account, we delete your data within 30 days. Anonymized, aggregated data used for improving the App may be retained indefinitely.</p>
+  <p>We retain your data for as long as your account is active. If you delete your account, we delete your personal data within 30 days. Anonymized, aggregated data used for improving the App may be retained indefinitely. Note that data already transmitted to Anthropic's API is subject to Anthropic's own retention schedule.</p>
 
   <h2>8. Children's Privacy</h2>
-  <p>IronZ is not intended for users under 16. We do not knowingly collect data from children under 16.</p>
+  <p>IronZ is not intended for users under 16. We do not knowingly collect data from children under 16. If you are a parent or guardian and believe your child has provided us with personal data, please contact us and we will delete it promptly.</p>
 
-  <h2>9. Changes to This Policy</h2>
-  <p>We may update this policy from time to time. We will notify users of material changes via the App or email.</p>
+  <h2>9. Security</h2>
+  <p>We implement reasonable security measures including encrypted data transmission (TLS), encrypted storage at rest, secure authentication via Supabase Auth, and per-user data isolation. However, no method of electronic transmission or storage is 100% secure, and we cannot guarantee absolute security.</p>
 
-  <h2>10. Contact</h2>
+  <h2>10. Changes to This Policy</h2>
+  <p>We may update this policy from time to time. We will notify users of material changes via email to the address associated with your account at least 14 days before the changes take effect.</p>
+
+  <h2>11. Contact</h2>
   <p>Questions about privacy? Contact us at <a href="mailto:ironzsupport@gmail.com">ironzsupport@gmail.com</a>.</p>
 </body>
 </html>
