@@ -225,6 +225,9 @@ function closePhotoMealLog() {
 function openManualMealLog() {
   const modal = document.getElementById("manual-meal-modal");
   if (modal) modal.classList.add("is-open");
+  // Clear any leftover estimate status from a prior session
+  const status = document.getElementById("meal-estimate-status");
+  if (status) { status.textContent = ""; status.style.display = "none"; }
   // Focus the name field for quick entry
   setTimeout(() => document.getElementById("meal-name")?.focus(), 200);
 }
@@ -241,6 +244,94 @@ function saveMealAndClose() {
   const nameAfter = document.getElementById("meal-name")?.value?.trim();
   if (nameBefore && !nameAfter) {
     setTimeout(closeManualMealLog, 800);
+  }
+}
+
+// Free-text → macro estimate via Claude (routed through the ask-ironz
+// Edge Function, which handles auth + per-user daily rate limiting).
+// Populates the four macro inputs so the user reviews/adjusts before
+// hitting Log Meal — values are not saved until they confirm.
+async function estimateMealWithAI() {
+  const nameEl   = document.getElementById("meal-name");
+  const btn      = document.getElementById("btn-estimate-meal");
+  const status   = document.getElementById("meal-estimate-status");
+  const description = nameEl?.value?.trim();
+
+  if (!description) {
+    if (status) {
+      status.style.display = "";
+      status.style.color = "#ef4444";
+      status.textContent = "Type what you ate first, then tap Estimate.";
+    }
+    nameEl?.focus();
+    return;
+  }
+
+  if (typeof callAI !== "function") {
+    if (status) {
+      status.style.display = "";
+      status.style.color = "#ef4444";
+      status.textContent = "AI is not available right now.";
+    }
+    return;
+  }
+
+  btn.disabled = true;
+  const origLabel = btn.querySelector(".btn-estimate-ai-label")?.textContent;
+  const labelEl = btn.querySelector(".btn-estimate-ai-label");
+  if (labelEl) labelEl.textContent = "Estimating…";
+  btn.classList.add("is-loading");
+  if (status) {
+    status.style.display = "";
+    status.style.color = "var(--color-text-muted)";
+    status.textContent = "Asking IronZ…";
+  }
+
+  try {
+    const res = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 300,
+      system:
+        "You are a nutrition coach estimating typical macros for a meal from a short text description. Respond with ONLY a valid JSON object matching this shape: {\"calories\": number, \"protein_g\": number, \"carbs_g\": number, \"fat_g\": number}. Use whole numbers. Assume one standard serving unless the user specifies a quantity. Do not include any other text, comments, units, or formatting — just the JSON.",
+      messages: [
+        { role: "user", content: `Meal: ${description}` },
+      ],
+    });
+
+    const text = res?.content?.[0]?.text || "";
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("Couldn't parse estimate.");
+    const parsed = JSON.parse(match[0]);
+
+    const cal = Math.round(Number(parsed.calories) || 0);
+    const p   = Math.round(Number(parsed.protein_g) || 0);
+    const c   = Math.round(Number(parsed.carbs_g)   || 0);
+    const f   = Math.round(Number(parsed.fat_g)     || 0);
+
+    document.getElementById("meal-calories").value = cal;
+    document.getElementById("meal-protein").value  = p;
+    document.getElementById("meal-carbs").value    = c;
+    document.getElementById("meal-fat").value      = f;
+
+    if (status) {
+      status.style.display = "";
+      status.style.color = "var(--color-accent, #16a34a)";
+      const remaining = typeof res._remaining === "number" ? ` · ${res._remaining} left today` : "";
+      status.textContent = `Estimated — review and adjust if needed, then Log Meal.${remaining}`;
+    }
+
+    if (typeof trackEvent === "function") trackEvent("meal_estimate_ai", { ok: true });
+  } catch (err) {
+    if (status) {
+      status.style.display = "";
+      status.style.color = "#ef4444";
+      status.textContent = err.message || "Couldn't estimate. Try again or enter values manually.";
+    }
+    if (typeof trackEvent === "function") trackEvent("meal_estimate_ai", { ok: false, error: String(err.message || err) });
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove("is-loading");
+    if (labelEl) labelEl.textContent = origLabel || "Estimate with IronZ";
   }
 }
 

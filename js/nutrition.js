@@ -71,6 +71,8 @@ function saveMeal() {
   // Re-render the summary and history
   renderTodaysSummary();
   renderNutritionHistory();
+  if (typeof updateNutritionDashboard === "function") updateNutritionDashboard();
+  if (typeof renderNutritionProgressBars === "function") renderNutritionProgressBars(date);
 
   // Refresh the home screen day detail panel if this meal's date is currently selected
   if (typeof selectedDate !== "undefined" && selectedDate === date && typeof renderDayDetail === "function") {

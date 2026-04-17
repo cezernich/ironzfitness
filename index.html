@@ -840,8 +840,14 @@
 
             <div class="form-row">
               <label for="meal-name">Food / Meal Name</label>
-              <input type="text" id="meal-name" placeholder="e.g. Chicken breast + rice" />
+              <input type="text" id="meal-name" placeholder="e.g. Chipotle bowl with chicken, rice, beans, cheese" />
             </div>
+
+            <button type="button" class="btn-estimate-ai" id="btn-estimate-meal" onclick="estimateMealWithAI()">
+              <span class="btn-estimate-ai-icon">✨</span>
+              <span class="btn-estimate-ai-label">Estimate with IronZ</span>
+            </button>
+            <p id="meal-estimate-status" class="estimate-status" style="display:none"></p>
 
             <div class="form-grid">
               <div class="form-row">
