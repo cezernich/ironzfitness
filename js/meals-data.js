@@ -104,7 +104,22 @@ function mealContainsTerm(meal, terms) {
 }
 
 /**
- * pickMeal(options, targetCalories, macroPrefs, exclude, recentNames)
+ * _dateSeed(dateStr) — hash a YYYY-MM-DD into a stable non-negative int.
+ * Used as rotation offset so day-to-day meal picks vary even when no meals
+ * have been logged yet (which keeps recentNames empty and otherwise collapses
+ * every day to the same top-ranked pick).
+ */
+function _dateSeed(dateStr) {
+  if (!dateStr) return 0;
+  let h = 0;
+  for (let i = 0; i < dateStr.length; i++) {
+    h = (h * 31 + dateStr.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+/**
+ * pickMeal(options, targetCalories, macroPrefs, exclude, recentNames, preferLowFat, dateSeed)
  * Selects the best-fit meal from a category given a calorie target.
  *
  * Selection logic (in order):
@@ -115,8 +130,10 @@ function mealContainsTerm(meal, terms) {
  * 5. Prefer meals matching macro needs (high-protein, high-carb, low-fat)
  * 6. Boost liked foods — but rotate among them, don't always pick the same one
  * 7. Final tiebreak by calorie proximity to slot target
+ * 8. Rotate among the top candidates using (dateSeed + slot index) so the
+ *    same day is reproducible but different days surface different meals.
  */
-function pickMeal(options, targetCalories, preferHighCarb, preferHighProtein, exclude = [], recentNames = [], preferLowFat = false) {
+function pickMeal(options, targetCalories, preferHighCarb, preferHighProtein, exclude = [], recentNames = [], preferLowFat = false, dateSeed = 0) {
   const prefs = loadFoodPreferences();
   const dietary = loadDietaryRestrictions();
 
@@ -196,12 +213,14 @@ function pickMeal(options, targetCalories, preferHighCarb, preferHighProtein, ex
     return Math.abs(a.calories - targetCalories) - Math.abs(b.calories - targetCalories);
   });
 
-  // Among top candidates (not recently eaten, matching preferences), pick with some variety
-  // Use the date-derived seed so the same day always shows the same plan but different days vary
+  // Among top candidates (not recently eaten, matching preferences), pick with some variety.
+  // Without the date seed every day collapses to the same top-ranked pick because
+  // recentNames is empty for users who don't log meals, and exclude.length is the
+  // same at each slot across days. Mixing in the date makes the rotation day-
+  // specific while keeping a given date reproducible.
   const topTier = pool.filter(m => (recentCounts[m.name] || 0) === (recentCounts[pool[0]?.name] || 0));
   if (topTier.length > 1) {
-    // Rotate among top candidates using exclude list length as a simple offset
-    const offset = exclude.length % topTier.length;
+    const offset = (dateSeed + exclude.length) % topTier.length;
     return topTier[offset];
   }
 
@@ -243,6 +262,7 @@ function generateDayMeals(nutrition, trainingLoad, dateStr, workoutType) {
 
   // Get recently eaten meal names (last 3 days) to avoid repetition
   const recentNames = dateStr ? getRecentMealNames(dateStr, 3) : [];
+  const dateSeed = _dateSeed(dateStr);
 
   const slots = [
     { label: "Breakfast",        key: "breakfast", fraction: 0.25 },
@@ -289,7 +309,7 @@ function generateDayMeals(nutrition, trainingLoad, dateStr, workoutType) {
 
   for (const slot of slots) {
     const slotTarget = Math.round(calorieTarget * slot.fraction);
-    const meal = pickMeal(MEAL_LIBRARY[slot.key], slotTarget, preferHighCarb, preferHighProtein, usedNames, recentNames, preferLowFat);
+    const meal = pickMeal(MEAL_LIBRARY[slot.key], slotTarget, preferHighCarb, preferHighProtein, usedNames, recentNames, preferLowFat, dateSeed);
     usedNames.push(meal.name);
     chosen.push({ ..._scaleMeal(meal, slotTarget, slot.fraction), slot: slot.label });
   }
@@ -307,7 +327,7 @@ function generateDayMeals(nutrition, trainingLoad, dateStr, workoutType) {
   while (totalCals < calorieTarget - 100 && extraIdx < extraSlots.length) {
     const gap     = calorieTarget - totalCals;
     const mealKey = gap >= 400 ? extraSlots[extraIdx].key : "snack";
-    const meal    = pickMeal(MEAL_LIBRARY[mealKey], gap, preferHighCarb, preferHighProtein, usedNames, recentNames, preferLowFat);
+    const meal    = pickMeal(MEAL_LIBRARY[mealKey], gap, preferHighCarb, preferHighProtein, usedNames, recentNames, preferLowFat, dateSeed);
     usedNames.push(meal.name);
     const scaled = _scaleMeal(meal, gap, null);
     chosen.push({ ...scaled, slot: extraSlots[extraIdx].label });
