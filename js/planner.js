@@ -1645,8 +1645,10 @@ function renderTrainingInputs() {
     const weeks    = Math.floor(daysLeft / 7);
     const label    = daysLeft <= 0 ? "Race day!" : weeks > 0 ? `${weeks} week${weeks !== 1 ? "s" : ""} away` : `${daysLeft} day${daysLeft !== 1 ? "s" : ""} away`;
 
+    // Level tag (Beginner/Intermediate/Advanced) was dropped from the race
+    // card — it surfaced internal classification as a label on the
+    // athlete's race, which read as judgmental rather than informative.
     const tags = [
-      capitalize(race.level),
       race.daysPerWeek ? `${race.daysPerWeek}× / week` : null,
       race.runGoal ? _goalLabels[race.runGoal] : null,
     ].filter(Boolean).map(t => `<span class="race-tag">${t}</span>`).join("");
