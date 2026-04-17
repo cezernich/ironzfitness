@@ -3746,6 +3746,25 @@ function saveRace() {
   if (typeof renderTrainingBlocksSection === "function") renderTrainingBlocksSection();
 }
 
+/**
+ * Opens the Build-a-Plan flow (bp-v2-5 Weekly Schedule) pre-loaded with
+ * the user's current schedule and race context. This is the preferred
+ * race edit surface — it lets users actually modify the weekly layout
+ * instead of just race metadata (name/date/etc., which editEvent still
+ * handles via the banner + A-race promotion flow).
+ */
+function editRaceSchedule(id) {
+  if (!window.OnboardingV2 || typeof window.OnboardingV2.openBuildPlanEdit !== "function") {
+    // Fallback to the metadata editor if onboarding module isn't loaded.
+    return editEvent(id);
+  }
+  // openBuildPlanEdit pulls raceEvents, selectedSports, thresholds, etc.
+  // from localStorage — the race we're editing is already there, so we
+  // don't need to pass its id through. The flow lands on bp-v2-5 with
+  // the user's saved buildPlanTemplate pre-filled.
+  window.OnboardingV2.openBuildPlanEdit(null);
+}
+
 /** Opens a clean edit modal for an existing race */
 function editEvent(id) {
   const race = loadEvents().find(e => e.id === id);
@@ -4072,7 +4091,7 @@ function renderRaceEvents() {
         <div class="race-card-top">
           <span class="race-priority-badge priority-${priority.toLowerCase()}">${priority} Race</span>
           <div class="ti-card-actions">
-            <button class="ti-edit-btn" onclick="editEvent('${race.id}')" title="Edit race">Edit</button>
+            <button class="ti-edit-btn" onclick="editRaceSchedule('${race.id}')" title="Edit race schedule">Edit</button>
             <button class="delete-btn" onclick="deleteEvent('${race.id}')" title="Delete race"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
           </div>
         </div>
