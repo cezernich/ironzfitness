@@ -1340,35 +1340,51 @@ function renderTrainingConflicts() {
   }).join("");
 }
 
-/** Removes all workoutSchedule entries for a given type (resolves schedule side of conflict) */
+/** Removes all workoutSchedule entries whose type falls in the conflicting
+ *  training category. Previously this filtered on a single schedType, which
+ *  only matched one of the 4 types a multi-sport Build Plan block uses
+ *  (triathlon + running + swimming + cycling) — leaving the block visible
+ *  with partial sessions stripped out. Now it removes every future entry
+ *  whose TRAINING_CATEGORY matches the conflict's raceCat, so the Active
+ *  Training Inputs card goes away too. Past-completed sessions are kept. */
 function removeConflictingSchedule(schedType, raceCat) {
   const catLabel = CATEGORY_LABELS[raceCat] || raceCat;
-  if (!confirm(`Remove the ${catLabel} workout schedule? This will delete all scheduled sessions of that type from your calendar.`)) return;
+  if (!confirm(`Remove the ${catLabel} workout schedule? This will delete every future scheduled session in this training category from your calendar. Past completed sessions are kept.`)) return;
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const meta = typeof loadCompletionMeta === "function" ? loadCompletionMeta() : {};
   const existing = (() => {
     try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; }
     catch { return []; }
   })();
-  const filtered = existing.filter(s => s.type !== schedType);
-  localStorage.setItem("workoutSchedule", JSON.stringify(filtered)); if (typeof DB !== 'undefined') DB.syncSchedule();
+
+  const filtered = existing.filter(s => {
+    const cat = TRAINING_CATEGORY[s.type];
+    if (cat !== raceCat) return true;      // different category — keep
+    if (s.date < todayStr) return true;     // past — keep
+    if (s.date === todayStr) {              // today — keep if completed
+      const sessionId = `session-sw-${s.id}`;
+      return !!meta[sessionId];
+    }
+    return false;                            // future, conflicting — remove
+  });
+  localStorage.setItem("workoutSchedule", JSON.stringify(filtered));
+  if (typeof DB !== 'undefined') DB.syncSchedule();
 
   renderTrainingConflicts();
+  if (typeof renderTrainingInputs === "function") renderTrainingInputs();
+  if (typeof renderTrainingBlocksSection === "function") renderTrainingBlocksSection();
   if (typeof renderCalendar === "function") renderCalendar();
 }
 
-/** Removes a race event and its training plan (resolves race side of conflict) */
+/** Removes a race event and its training plan (resolves race side of conflict)
+ *  by delegating to deleteEvent() so the full cascade runs: plan filtering,
+ *  A-race promotion for surviving races, and every relevant re-render. */
 function removeConflictingRace(raceId, raceCat) {
-  const catLabel = CATEGORY_LABELS[raceCat] || raceCat;
   const race = loadEvents().find(e => e.id === raceId);
   if (!race) return;
   if (!confirm(`Remove the race "${race.name}" and its generated training plan?`)) return;
-
-  saveEvents(loadEvents().filter(e => e.id !== raceId));
-  saveTrainingPlanData(loadTrainingPlan().filter(e => e.raceId !== raceId));
-
-  renderTrainingConflicts();
-  renderRaceEvents();
-  if (typeof renderCalendar === "function") renderCalendar();
+  deleteEvent(raceId);
 }
 
 // ─── Training Inputs section ──────────────────────────────────────────────────
