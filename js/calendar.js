@@ -545,7 +545,15 @@ function _calV2CenterCurrentCard() {
   requestAnimationFrame(() => {
     const target = center.offsetLeft + center.offsetWidth / 2 - car.clientWidth / 2;
     const max = car.scrollWidth - car.clientWidth;
+    // iOS Safari snaps the initial scrollLeft write back to 0 when
+    // scroll-snap-type is `mandatory`. Disable snap, write, restore.
+    const prev = car.style.scrollSnapType;
+    car.style.scrollSnapType = "none";
     car.scrollLeft = Math.max(0, Math.min(max, target));
+    // Force a reflow so the non-snapping scroll position is committed
+    // before we re-enable snap on the next frame.
+    void car.offsetWidth;
+    requestAnimationFrame(() => { car.style.scrollSnapType = prev; });
   });
 }
 

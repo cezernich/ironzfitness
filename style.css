@@ -4777,18 +4777,30 @@ button:active {
   letter-spacing: 0.05em;
   font-size: 0.68rem;
   color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
+/* Keep all stats on a single row; overflow scrolls horizontally
+   instead of the time string wrapping across 3 lines. */
 .week-overview-right {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  min-width: 0;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
+.week-overview-right::-webkit-scrollbar { display: none; }
 .week-overview-time {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-weight: 600;
   color: var(--color-text);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .week-overview-time .icon {
   width: 13px; height: 13px;
@@ -4800,6 +4812,8 @@ button:active {
   gap: 3px;
   font-weight: 600;
   opacity: 0.85;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .week-overview-pill .icon { width: 12px; height: 12px; }
 
