@@ -2386,15 +2386,32 @@
       ));
       const alreadyAnchored = _BP_DAYS.filter(d => _state.schedule[d].length > 0).length;
       const remainingSlots = Math.max(0, wantedTraining - alreadyAnchored);
+
+      // Try to place each sport round-robin while avoiding same-discipline
+      // on consecutive days. For each session we want to place, pick the
+      // earliest empty day that (a) satisfies the slot budget and (b) is
+      // not adjacent to another day already carrying the same sport
+      // (including long variants like run-long / bike-long). Falls back
+      // to any empty day if no spaced option exists.
+      const sameSport = (code, sport) => code === sport || code === `${sport}-long` || code === `${sport}-interval` || code === `${sport}-tempo`;
+      const dayHasSport = (d, sport) => (_state.schedule[d] || []).some(c => sameSport(c, sport));
+      const adjacentHasSport = (d, sport) => _BP_DAYS.some(dd => _areAdjacentDow(d, dd) && dayHasSport(dd, sport));
+
       let placed = 0;
       let idx = 0;
-      _BP_DAYS.forEach(d => {
-        if (_state.schedule[d].length) return;
-        if (placed >= remainingSlots) return;
-        _state.schedule[d].push(endurance[idx % endurance.length]);
+      let safety = 0;
+      while (placed < remainingSlots && safety < endurance.length * 14) {
+        safety++;
+        const sport = endurance[idx % endurance.length];
+        // First preference: empty day not adjacent to another day with this sport.
+        let target = _BP_DAYS.find(d => _state.schedule[d].length === 0 && !adjacentHasSport(d, sport));
+        // Fallback: any empty day (we've run out of non-adjacent slots).
+        if (!target) target = _BP_DAYS.find(d => _state.schedule[d].length === 0);
+        if (!target) break;
+        _state.schedule[target].push(sport);
         idx++;
         placed++;
-      });
+      }
     }
 
     // Swim minimum: triathletes need at least 2 swim days per week —
@@ -2409,41 +2426,73 @@
       const swimCount = () => _BP_DAYS.reduce((n, d) => n + (_state.schedule[d].includes("swim") ? 1 : 0), 0);
       if (swimCount() < 2) {
         const isLongDay = d => _state.schedule[d].includes("run-long") || _state.schedule[d].includes("bike-long");
-        const candidates = _BP_DAYS.filter(d =>
+        const existingSwimDays = _BP_DAYS.filter(d => _state.schedule[d].includes("swim"));
+        const adjacentToSwim = d => existingSwimDays.some(sd => _areAdjacentDow(d, sd));
+
+        // Preferred: a non-swim, non-rest, non-long day that isn't adjacent
+        // to an existing swim day (§4.3 — spread disciplines).
+        let candidates = _BP_DAYS.filter(d =>
           !_state.schedule[d].includes("swim") &&
           !_state.schedule[d].includes("rest") &&
-          !isLongDay(d)
+          !isLongDay(d) &&
+          !adjacentToSwim(d)
         );
-        // Prefer candidates that only have a single session so we don't
-        // cram swim on top of strength + something else.
         candidates.sort((a, b) => _state.schedule[a].length - _state.schedule[b].length);
-        const target = candidates[0]
-          || _BP_DAYS.filter(d => !_state.schedule[d].includes("swim") && !isLongDay(d))
-               .sort((a, b) => _state.schedule[a].length - _state.schedule[b].length)[0];
+        let target = candidates[0];
+        if (!target) {
+          // Fallback: allow adjacency if no other option exists.
+          const fb = _BP_DAYS.filter(d =>
+            !_state.schedule[d].includes("swim") &&
+            !_state.schedule[d].includes("rest") &&
+            !isLongDay(d)
+          ).sort((a, b) => _state.schedule[a].length - _state.schedule[b].length);
+          target = fb[0]
+            || _BP_DAYS.filter(d => !_state.schedule[d].includes("swim") && !isLongDay(d))
+                 .sort((a, b) => _state.schedule[a].length - _state.schedule[b].length)[0];
+        }
         if (target) _state.schedule[target].push("swim");
       }
     }
     // Brick seed: triathletes / duathletes (bike + run both selected)
-    // should get at least one brick session per week. Preference order:
-    // the day with a standalone bike that isn't the long ride, so we
-    // convert it to a brick. If none, stack a brick onto the lightest
-    // non-long, non-rest day.
+    // should get at least one brick session per week. Brick is a hard
+    // session — it cannot land adjacent to either long day (§4.3,
+    // no consecutive hard days for non-advanced). Preference order:
+    //   1. A plain bike on a non-adjacent-to-long, non-long day → upgrade to brick.
+    //   2. Lightest non-long, non-rest, non-adjacent day → add brick.
+    //   3. Fallback: lightest non-long, non-rest day (only if every other
+    //      day is adjacent to a long day, e.g. long days on Wed + Sat).
     if (sports.includes("bike") && sports.includes("run")) {
       const hasBrick = _BP_DAYS.some(d => _state.schedule[d].includes("brick"));
       if (!hasBrick) {
         const isLongDay = d => _state.schedule[d].includes("run-long") || _state.schedule[d].includes("bike-long");
-        // Prefer a day that currently has a plain bike — upgrade it to a brick.
+        const longDays = _BP_DAYS.filter(isLongDay);
+        const adjacentToLong = d => longDays.some(ld => _areAdjacentDow(d, ld));
+
+        // Prefer a plain bike day that's not adjacent to a long day.
         let target = _BP_DAYS.find(d =>
-          !isLongDay(d) && _state.schedule[d].length === 1 && _state.schedule[d][0] === "bike"
+          !isLongDay(d) && !adjacentToLong(d) &&
+          _state.schedule[d].length === 1 && _state.schedule[d][0] === "bike"
         );
         if (target) {
           _state.schedule[target] = ["brick"];
         } else {
-          // Otherwise pick the lightest non-long, non-rest day and add brick there.
-          const candidates = _BP_DAYS
-            .filter(d => !isLongDay(d) && !_state.schedule[d].includes("rest"))
+          // Prefer non-adjacent, non-long, non-rest days.
+          const safe = _BP_DAYS
+            .filter(d => !isLongDay(d) && !adjacentToLong(d) && !_state.schedule[d].includes("rest"))
             .sort((a, b) => _state.schedule[a].length - _state.schedule[b].length);
-          if (candidates[0]) _state.schedule[candidates[0]].push("brick");
+          if (safe[0]) {
+            _state.schedule[safe[0]].push("brick");
+          } else {
+            // Last resort — no non-adjacent day available. Fall back to
+            // the original lightest-non-long selection so the seed still
+            // produces a brick for users with very constrained long-day
+            // placements (e.g., long run Wed + long ride Sat leaves no
+            // fully non-adjacent weekday).
+            const candidates = _BP_DAYS
+              .filter(d => !isLongDay(d) && !_state.schedule[d].includes("rest"))
+              .sort((a, b) => _state.schedule[a].length - _state.schedule[b].length);
+            if (candidates[0]) _state.schedule[candidates[0]].push("brick");
+          }
         }
       }
     }
