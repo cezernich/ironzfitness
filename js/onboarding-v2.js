@@ -1111,6 +1111,13 @@
 
   function _updateWeeksCallout() {
     const input = document.getElementById("bp-v2-race-date");
+    // Pin the native picker's floor to today so users can't scroll back
+    // into past dates. Also updates after DST / midnight rollovers.
+    if (input && !input.min) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      input.min = today.toISOString().slice(0, 10);
+    }
     const date = input && input.value;
     const text = document.getElementById("bp-v2-weeks-text");
     if (!text) return;
@@ -1134,6 +1141,14 @@
     const now = new Date();
     if (isNaN(parsed.getTime())) {
       text.textContent = "That doesn't look like a valid race date — please re-enter.";
+      if (gap && currentPriority !== "B") gap.style.display = "none";
+      return;
+    }
+    // Reject past dates — training plans are built backwards from a
+    // future race. A race that already happened can't drive periodization.
+    const todayMid = new Date(); todayMid.setHours(0, 0, 0, 0);
+    if (parsed < todayMid) {
+      text.textContent = "That date is in the past — pick a date in the future.";
       if (gap && currentPriority !== "B") gap.style.display = "none";
       return;
     }
@@ -1238,18 +1253,23 @@
     const gapVisible = document.getElementById("bp-v2-gap-fill-section")?.style.display !== "none";
     const leadIn = gapVisible && leadInPhase ? { phase: leadInPhase, daysPerWeek: _state.leadInCount } : null;
 
-    // Reject obviously-bad dates (e.g. year "20205") before they can
-    // propagate through plan generation.
+    // Reject obviously-bad dates (past, or year "20205" typos) before
+    // they can propagate through plan generation.
     if (date) {
       const parsed = new Date(date);
+      const todayMid = new Date(); todayMid.setHours(0, 0, 0, 0);
+      const isPast = !isNaN(parsed.getTime()) && parsed < todayMid;
       const weeksOut = isNaN(parsed.getTime())
         ? NaN
         : Math.ceil(Math.max(0, (parsed - new Date()) / 86400000) / 7);
-      if (isNaN(weeksOut) || weeksOut > MAX_PLAN_WEEKS) {
+      const badDate = isNaN(parsed.getTime()) || isPast || weeksOut > MAX_PLAN_WEEKS;
+      if (badDate) {
         const text = document.getElementById("bp-v2-weeks-text");
-        if (text) text.textContent = isNaN(weeksOut)
-          ? "That doesn't look like a valid race date — please re-enter."
-          : "That date is more than 2 years out — double-check the year.";
+        if (text) {
+          if (isNaN(parsed.getTime())) text.textContent = "That doesn't look like a valid race date — please re-enter.";
+          else if (isPast)              text.textContent = "That date is in the past — pick a date in the future.";
+          else                          text.textContent = "That date is more than 2 years out — double-check the year.";
+        }
         const input = document.getElementById("bp-v2-race-date");
         if (input) { input.focus(); input.select?.(); }
         return;
