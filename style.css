@@ -16377,7 +16377,6 @@ body.auth-visible #bottom-nav { display: none !important; }
   border-radius: 10px;
   background: rgba(139, 92, 246, 0.15);
   color: #8b5cf6;
-  margin-left: 8px;
   white-space: nowrap;
 }
 
@@ -16629,6 +16628,7 @@ body.auth-visible #bottom-nav { display: none !important; }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   color: #f39c12;
   font-weight: 700;
   font-size: 13px;
@@ -16638,20 +16638,23 @@ body.auth-visible #bottom-nav { display: none !important; }
 .builder-repeat-header .left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
-.builder-repeat-label { color: #f39c12; }
+.builder-repeat-label { color: #f39c12; white-space: nowrap; }
 .repeat-count-btn {
   background: none;
   border: 1px solid #f39c1266;
   color: #f39c12;
   font-size: 11px;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border-radius: 6px;
   cursor: pointer;
   font-family: inherit;
   font-weight: 600;
-  margin-left: 6px;
+  white-space: nowrap;
 }
 .builder-repeat-header .delete-btn {
   color: var(--color-danger, #e74c3c);
