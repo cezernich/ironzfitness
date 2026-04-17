@@ -206,7 +206,8 @@ function updateTrainingContext() {
 let photoMealVisible = false;
 
 function openPhotoMealLog() {
-  document.getElementById("photo-meal-modal").style.display = "";
+  const modal = document.getElementById("photo-meal-modal");
+  modal.style.display = "";
   document.getElementById("section-nutrition-dashboard").style.display = "none";
   photoMealVisible = true;
   // Reset state
@@ -214,6 +215,12 @@ function openPhotoMealLog() {
   document.getElementById("photo-ai-result").style.display = "none";
   document.getElementById("photo-ai-loading").style.display = "none";
   document.getElementById("photo-meal-msg").textContent = "";
+  // The photo-meal-modal is an inline card further down the page, not an
+  // overlay. Without scrolling to it, hiding the dashboard just makes the
+  // tab look empty and clicking Photo Log appears to do nothing.
+  requestAnimationFrame(() => {
+    try { modal.scrollIntoView({ behavior: "smooth", block: "start" }); } catch {}
+  });
 }
 
 function closePhotoMealLog() {

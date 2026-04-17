@@ -14,7 +14,12 @@ async function openBarcodeScanner() {
   }
   const modal = document.getElementById("barcode-scanner-modal");
   if (!modal) return;
+  // survey-overlay is opacity:0 + pointer-events:none by default; .is-open
+  // flips it to visible and interactive. Setting display:flex alone wasn't
+  // enough — the camera would start (permission prompt and all) behind an
+  // invisible overlay and the user would see nothing.
   modal.style.display = "flex";
+  requestAnimationFrame(() => modal.classList.add("is-open"));
   document.getElementById("barcode-result-panel").style.display = "none";
   document.getElementById("barcode-camera-panel").style.display = "block";
   document.getElementById("barcode-recent-panel").style.display = "none";
@@ -29,7 +34,12 @@ async function openBarcodeScanner() {
 
 function closeBarcodeScanner() {
   const modal = document.getElementById("barcode-scanner-modal");
-  if (modal) modal.style.display = "none";
+  if (modal) {
+    modal.classList.remove("is-open");
+    // Wait for the fade-out transition to complete before hiding the
+    // element, matching the 0.25s opacity transition on .survey-overlay.
+    setTimeout(() => { modal.style.display = "none"; }, 250);
+  }
   _stopCameraStream();
 }
 
