@@ -1,7 +1,7 @@
 # IronZ Training Philosophy — Single Source of Truth
 
-> **Version:** 1.7  
-> **Last updated:** 2026-04-16  
+> **Version:** 1.8  
+> **Last updated:** 2026-04-17  
 > **Role:** This document is the editable source of truth for all training, nutrition, and hydration philosophy in IronZ. The app's plan generation, workout builders, and coaching logic derive their rules from this document. Edit this file to change how IronZ trains athletes.
 
 ---
@@ -18,6 +18,7 @@
 | 2026-04-16 | 1.5 | Added: Half + Full Ironman minimum training frequency of 5 days/week regardless of level (§4.8). Safety valve is shorter/easier sessions within those 5+ days, not dropping below the floor. Enforced in onboarding and defensively in AthleteClassifier. |
 | 2026-04-16 | 1.6 | Added §6.1.1 Weekly Placement Rules: anchors (long run / long ride / brick / intensity), hard constraints (no consecutive hard days, no same-discipline adjacent, brick is self-contained — no run/bike stacking), fill order, §8.6 pairing, and reference layouts for 7-day Base/Build/Peak. Both session-assembler and onboarding seeder now conform. |
 | 2026-04-16 | 1.7 | Expanded §6.1 Race Week from 3 sessions + 4 rest to 4–5 short openers/shakeouts + 2–3 rest days. Modern race-week practice keeps neuromuscular readiness with short race-pace primers 4–5 days before the race rather than going fully dark — especially for long-course athletes. Renamed preview timeline label to "Race Week". |
+| 2026-04-17 | 1.8 | Rebuilt §2.5 as athlete type + goal system. Added: standalone strength vs hybrid vs standalone endurance classification. Added: standalone strength goals — strength_performance, bulk, cut (§2.5.1). Added: strength role dimension for hybrid athletes — injury_prevention, race_performance, hypertrophy, minimal (§2.5.3) — which determines frequency, focus, rep ranges, and placement. Added: §7.6 Goal-Specific Exercise Selection covering exercise preference by goal (§7.6.1), session size by goal (§7.6.2), technique modifiers by goal (§7.6.3) — drop sets for bulk, straight sets for cut, supersets for fat_loss, equipment bias by goal (§7.6.4), and ExerciseDB query modifiers (§7.6.5) including the pull-up exclusion for bulkers. Updated: Core Principle #4 and §13.4 — advanced athletes may take active recovery (Z1 only) instead of full rest; beginner/intermediate still require a full rest day. |
 
 ---
 
@@ -47,7 +48,7 @@ These principles govern every plan IronZ generates. They are non-negotiable.
 1. **Consistency beats optimization.** A slightly underdosed plan that gets completed beats an optimal plan that gets abandoned.
 2. **80/20 intensity distribution.** Roughly 80% of training volume should be at easy/aerobic intensity (Z1–Z2). The remaining 20% is moderate-to-hard (Z3–Z5). This applies to running, cycling, swimming, and any endurance discipline.
 3. **Progressive overload.** Training stress must increase gradually over time. For endurance: max 10% weekly volume increase. For strength: add load or reps week-over-week within a mesocycle.
-4. **Recovery is training.** Rest days are mandatory. Every plan includes at least 1 full rest day per week. Deload weeks are required for plans longer than 4 weeks.
+4. **Recovery is training.** Recovery days are mandatory. Every plan includes at least 1 recovery day per week. For beginners and intermediates, this is a full rest day (no training). For advanced athletes, this can be an active recovery day — a light Z1 session (easy swim, recovery spin, yoga/mobility) that promotes blood flow without adding training stress. Deload weeks are required for plans longer than 4 weeks.
 5. **Specificity.** Train for what you're racing. A marathon plan prioritizes running volume. A triathlon plan balances swim/bike/run. Strength supports the primary sport, never replaces it.
 6. **Individualization.** Plans adapt to the athlete's level, age, goal, equipment, and threshold data. Two different athletes should get materially different plans.
 7. **No medical claims.** IronZ provides general wellness guidance. It does not diagnose, prescribe, cure, or treat. Every plan includes a wellness disclaimer.
@@ -131,11 +132,32 @@ This bias applies to: intensity session frequency, volume progression rate, delo
 | 50–59 | Rest periods +25%, Z5 work reduced by 40%, max session duration capped at 75% of baseline, warm-up/cool-down mandatory and extended |
 | 60+ | Rest periods +40%, no Z5 work unless explicitly advanced level, volume reduced 20%, joint-friendly exercise substitutions |
 
-### 2.5 Goal Mapping and Modifiers
+### 2.5 Athlete Type and Goal System
 
-The app presents 5 goals to the user. Each maps to a training archetype that determines plan structure, periodization model, session priority, and nutrition strategy.
+The app classifies athletes into two types based on what sports/activities they select during onboarding. This determines which goal options they see and how the plan is structured.
 
-**UI Goal → Internal Goal Mapping:**
+**Athlete Type Classification:**
+
+| Activities Selected | Athlete Type | Goal Flow |
+|--------------------|-------------|-----------|
+| Strength only (no endurance sports) | Standalone strength | Show strength goals |
+| Endurance only (running, cycling, swimming, triathlon — no strength) | Standalone endurance | Show endurance goals, auto-assign strength role = injury_prevention at minimal frequency |
+| Endurance + Strength | Hybrid | Show endurance goals, then ask strength role |
+
+#### 2.5.1 Standalone Strength Goals
+
+Shown when the athlete selects strength training as their only activity (no running, cycling, swimming, triathlon).
+
+| UI Goal | Internal Goal | Plan Structure | Nutrition |
+|---------|--------------|---------------|-----------|
+| Get Stronger | strength_performance | Rolling mesocycles, progressive overload, strength-focused rep ranges (3–6 reps primary) | Maintenance, 0.8–1.0 g/lb protein |
+| Bulk | bulk | Rolling mesocycles, hypertrophy focus (8–12 reps), volume progression | +10–20% surplus, 0.8–1.0 g/lb protein |
+| Cut | cut | Rolling mesocycles, maintain intensity, reduce volume slightly, preserve strength | –15–25% deficit, 0.8–1.2 g/lb protein (high to preserve muscle) |
+| General Fitness | general_fitness | Rolling mesocycles, balanced, moderate volume, variety | Maintenance, 0.6–0.8 g/lb protein |
+
+#### 2.5.2 Endurance Goals (Standalone Endurance + Hybrid Athletes)
+
+Shown when the athlete selects any endurance sport (running, cycling, swimming, triathlon), regardless of whether they also selected strength.
 
 | UI Goal | Internal Goal | Has Race? | Primary Training Driver | Plan Structure |
 |---------|--------------|-----------|------------------------|---------------|
@@ -147,17 +169,40 @@ The app presents 5 goals to the user. Each maps to a training archetype that det
 
 **Note:** "Train for a Race" is the ONLY goal that uses the race-based arc builder. All other goals use the rolling mesocycle model (§4.9). A user who selects "Get Faster" may still add races later — at that point, the plan switches to race-based periodization.
 
-**Goal Modifiers — Training Emphasis:**
+#### 2.5.3 Strength Role (Hybrid Athletes Only)
+
+When an athlete selects both endurance and strength, the app asks a second question: "What role does strength play for you?" This determines how strength sessions are programmed alongside endurance training.
+
+| UI Option | Internal Strength Role | Strength Frequency | Strength Focus | Rep Ranges |
+|-----------|----------------------|-------------------|---------------|-----------|
+| Injury Prevention | injury_prevention | 1–2×/week | Core stability, hip/ankle mobility, single-leg balance, joint-friendly movements | 12–15 reps, controlled tempo |
+| Race Performance | race_performance | 2×/week (Base), 1×/week (Build+) | Sport-specific power per §8.5 (squats for bike, single-leg for run, pulling for swim) | 3–6 reps heavy in Base, 6–10 in Build |
+| Build Muscle | hypertrophy | 2–3×/week | Hypertrophy alongside endurance, traditional splits, progressive overload | 8–12 reps, moderate-heavy |
+| Minimal | minimal | 0–1×/week | Very light maintenance or none — athlete prefers to focus entirely on cardio | Bodyweight circuits or skipped |
+
+**How strength role modifies the plan:**
+
+- **injury_prevention:** Strength sessions are shorter (30–40 min), focus on movement quality over load, prioritize muscles that endurance training underworks (glutes, core, upper back). These sessions never interfere with key endurance workouts. Place on easy cardio days.
+- **race_performance:** Strength follows the phase-specific programming from §8.4 and the sport-specific exercises from §8.5. Heavy in Base, sport-specific in Build, maintenance in Peak. These sessions are KEY sessions — place them strategically.
+- **hypertrophy:** Athlete wants visible muscle alongside endurance. Higher volume strength (more sets, 8–12 rep range), may need slight caloric surplus even with endurance goals. Recovery demand is high — monitor for overtraining. Cap endurance intensity on strength days.
+- **minimal:** Athlete doesn't want to lift. Include 1 bodyweight circuit per week for injury prevention (non-negotiable for runners), or skip strength entirely for cyclists/swimmers if athlete insists. Flag that skipping strength entirely increases injury risk.
+
+**If no strength was selected (standalone endurance):** Auto-assign `strength_role: "injury_prevention"` with 1 session per week. The athlete didn't ask for strength, but injury prevention is important enough to include by default. Make it short (20–30 min), bodyweight-friendly, and place it on an easy day.
+
+#### 2.5.4 Goal Modifiers — Training Emphasis
 
 | Internal Goal | Strength Priority | Cardio Priority | Key Sessions | Intensity Distribution |
 |--------------|-------------------|-----------------|-------------|----------------------|
-| race_performance | Supports race sport (§8.4) | Sport-specific, race-driven | Race-pace, long run/ride, intervals | 80/20 |
-| speed_performance | Moderate — supports power development | High — intervals and threshold are primary | Tempo, intervals, threshold work | 70/30 (more quality) |
-| endurance | Low-moderate — maintenance | High — volume is king | Long run/ride, Z2 accumulation | 85/15 (more easy) |
-| fat_loss | High — preserves muscle, burns calories | Moderate — frequency matters more than intensity | Strength sessions are key, cardio supports deficit | 80/20 |
-| general_fitness | Equal priority with cardio | Equal priority with strength | Balanced mix, variety | 80/20 |
+| race_performance | Per strength_role | Sport-specific, race-driven | Race-pace, long run/ride, intervals | 80/20 |
+| speed_performance | Per strength_role | High — intervals and threshold are primary | Tempo, intervals, threshold work | 70/30 (more quality) |
+| endurance | Per strength_role | High — volume is king | Long run/ride, Z2 accumulation | 85/15 (more easy) |
+| fat_loss | High — preserves muscle (min 2×/week) | Moderate — frequency over intensity | Strength is key, cardio supports deficit | 80/20 |
+| general_fitness | Equal with cardio | Equal with strength | Balanced mix, variety | 80/20 |
+| strength_performance | Strength IS the focus | Optional cardio warm-ups | Compound lifts, progressive overload | N/A |
+| bulk | Strength IS the focus | Minimal cardio (conditioning only) | Hypertrophy, volume progression | N/A |
+| cut | High — preserve muscle | Moderate — supports deficit | Maintain strength, moderate cardio | 80/20 |
 
-**Goal Modifiers — Nutrition Emphasis:**
+#### 2.5.5 Goal Modifiers — Nutrition Emphasis
 
 | Internal Goal | Calorie Adjustment | Protein Target | Key Nutrition Rule |
 |--------------|-------------------|----------------|-------------------|
@@ -166,8 +211,11 @@ The app presents 5 goals to the user. Each maps to a training archetype that det
 | endurance | Maintenance or slight surplus | 0.6–0.8 g/lb | Carbs are fuel, don't undereat on long days |
 | fat_loss | –15% to –25% deficit | 0.8–1.2 g/lb | High protein preserves muscle during deficit |
 | general_fitness | Maintenance | 0.6–0.8 g/lb | Balanced macros, no extreme targets |
+| strength_performance | Maintenance | 0.8–1.0 g/lb | Protein timing around workouts |
+| bulk | +10% to +20% surplus | 0.8–1.0 g/lb | Caloric surplus drives muscle growth |
+| cut | –15% to –25% deficit | 0.8–1.2 g/lb | High protein preserves muscle, slow deficit |
 
-**Critical rule for fat_loss:** Strength sessions are NOT optional for fat loss athletes. Losing weight without strength training means losing muscle. The plan must include at least 2 strength sessions per week regardless of what cardio activities the athlete selected. Cardio supports the caloric deficit, but strength protects the muscle.
+**Critical rule for fat_loss and cut:** Strength sessions are NOT optional. Losing weight without strength training means losing muscle. The plan must include at least 2 strength sessions per week regardless of what other activities the athlete selected.
 
 ### 2.6 Training Frequency Classification
 
@@ -1050,6 +1098,76 @@ Strength sessions use slot templates that define the shape of the workout, not j
 | 4 | Pull | horizontal-pull or vertical-pull | Primary/Secondary |
 | 5 | Core or carry | core or carry | Any |
 
+### 7.6 Goal-Specific Exercise Selection
+
+The slot templates in §7.5 define the shape of a workout. This section modifies **which exercises fill those slots** based on the athlete's goal. The goal changes exercise preferences, session size, technique modifiers, and equipment bias.
+
+#### 7.6.1 Exercise Preference by Goal
+
+| Goal | Prefer | Avoid / Deprioritize | Rationale |
+|------|--------|---------------------|-----------|
+| bulk | Machines, cables, isolation movements. Lat pulldown over pull-ups. Leg press alongside squats. Chest fly machines for volume. Cable rows over barbell rows for isolation. | Bodyweight pulling movements (pull-ups, chin-ups) become harder as weight increases. Deprioritize canBeBodyweight exercises for vertical-pull and horizontal-pull patterns. | Hypertrophy requires controlled loading and progressive overload. Machines allow precise load increments. Bodyweight movements penalize weight gain. |
+| cut | Compound barbell movements. Keep the big lifts (squat, bench, deadlift, OHP). Minimal isolation. | High-volume isolation work, machine circuits. Drop tertiary-tier exercises first when reducing session size. | Goal is strength preservation, not muscle building. Compounds recruit the most muscle per movement. Shorter sessions respect recovery limits in a deficit. |
+| strength_performance | Heavy barbell compounds dominate. Squat, deadlift, bench, OHP are non-negotiable. Accessories support the main lifts (pause squats, deficit deadlifts, close-grip bench). | Machines for primary slots. Isolation work limited to 1–2 exercises max per session. | Maximal strength requires maximal recruitment. Free weights with heavy loads. Specificity to the lift matters. |
+| fat_loss | Compound movements that recruit large muscle groups (squats, deadlifts, rows, lunges). Supersets permitted for intermediates+. Full body preferred over isolation splits. | Pure isolation sessions. Single-muscle-group days waste caloric burn potential. | Large compound movements burn more calories per set. Full-body sessions elevate EPOC. Supersets maintain heart rate. |
+| general_fitness | High variety. Rotate exercises across mesocycles. Mix machines, free weights, bodyweight. Include "fun" movements (kettlebell swings, med ball slams, farmer walks). | Repetitive programming. Don't repeat the same exercises every week for more than 2 mesocycles. | Adherence is the #1 priority. Variety prevents boredom. Exposure to different movement types builds general physical preparedness. |
+| race_performance | Per §8.5 — sport-specific strength exercises. Single-leg for runners, pull-dominant for swimmers, squat/hip for cyclists. | Exercises that create unnecessary soreness in race-specific muscles. Avoid heavy eccentric leg work before key run days. | Strength serves the sport. Exercise selection follows the sport-specific tables in §8.5. |
+| speed_performance | Power-oriented: plyometrics (advanced), explosive lifts, medicine ball throws. Sport-specific per §8.5. | Slow, high-volume hypertrophy work. Avoid 8–12 rep grinding sets — keep it fast and explosive. | Speed requires rate of force development. Train fast to be fast. |
+| endurance | Muscular endurance focus: higher reps (12–15), shorter rest, circuit-style optional. Bodyweight exercises are fine here. | Heavy low-rep work that creates excessive DOMS. Avoid movements that interfere with the next day's long session. | Strength supports endurance durability, not max output. Keep it light enough to not impair key cardio sessions. |
+
+#### 7.6.2 Session Size by Goal
+
+The number of exercises per session changes by goal. This overrides §8.3 when there is a conflict.
+
+| Goal | Exercises per Session | Sets per Exercise | Notes |
+|------|----------------------|-------------------|-------|
+| bulk | 6–8 | 3–4 | High volume drives hypertrophy. More exercises, more sets. |
+| cut | 4–5 | 3 | Shorter sessions. Preserve intensity, reduce volume. Drop accessories first. |
+| strength_performance | 4–5 | 4–5 | Fewer exercises but more sets per exercise. Quality over quantity. |
+| fat_loss | 5–6 | 3 | Moderate count. Supersets keep sessions time-efficient. |
+| general_fitness | 5–6 | 3 | Standard. Variety across sessions matters more than per-session volume. |
+| race_performance | 4–6 | 3 | Depends on phase. Fewer in Build/Peak. Per §8.4. |
+| speed_performance | 4–5 | 3–4 | Explosive work needs full recovery between sets. Fewer exercises, more rest. |
+| endurance | 5–6 | 2–3 | Higher reps, lower sets. Keep it quick — the real work is cardio. |
+
+#### 7.6.3 Technique Modifiers by Goal
+
+Advanced and intermediate athletes get technique modifiers applied to their exercises based on goal. Beginners always use straight sets.
+
+| Goal | Permitted Techniques | When to Apply |
+|------|---------------------|---------------|
+| bulk | Drop sets, supersets (antagonist pairs), rest-pause sets, slow eccentrics (3–4s) | Intermediate+. Apply to 1–2 accessory exercises per session. Never on main compound. |
+| cut | None — straight sets only | Preserve strength. Don't add metabolic stress on top of caloric deficit. |
+| strength_performance | Pause reps, tempo work, cluster sets (for advanced) | Apply to main lifts. Pause squats, pause bench, deficit deadlifts as variation. |
+| fat_loss | Supersets (non-competing muscle groups), EMOM finishers | Intermediate+. Keeps heart rate elevated. Add a 5-min EMOM finisher to end of session. |
+| general_fitness | Occasional AMRAP finisher, circuit-style accessories | Keep it fun. Rotate techniques across mesocycles. |
+| speed_performance | Explosive concentric emphasis, plyometric pairing (contrast sets) | Advanced only. Pair heavy squat with box jump. Heavy bench with med ball throw. |
+| endurance | Circuit-style accessories (3–4 exercises, minimal rest) | Optional for intermediate+. Mimics sustained effort. |
+
+#### 7.6.4 Equipment Bias by Goal
+
+When multiple exercises match a slot's filters, the goal biases which equipment type is preferred. This is a tiebreaker, not a hard filter — if the athlete only has dumbbells, they get dumbbell exercises regardless of goal.
+
+| Goal | Equipment Preference Order |
+|------|--------------------------|
+| bulk | Machine → Cable → Dumbbell → Barbell → Bodyweight |
+| cut | Barbell → Dumbbell → Cable → Machine → Bodyweight |
+| strength_performance | Barbell → Trap bar → Dumbbell → Cable → Machine |
+| fat_loss | Barbell → Dumbbell → Kettlebell → Bodyweight → Machine |
+| general_fitness | Rotate across mesocycles. No fixed preference. |
+| race_performance | Per sport (§8.5). Bodyweight and dumbbell for runners. Barbell for cyclists. Cable/band for swimmers. |
+| speed_performance | Barbell → Bodyweight (plyo) → Dumbbell → Medicine ball |
+| endurance | Bodyweight → Dumbbell → Kettlebell → Cable → Machine |
+
+#### 7.6.5 ExerciseDB Query Modifier
+
+When the session assembler calls `ExerciseDB.pick()` or `ExerciseDB.query()` to fill a slot, it must apply these goal-based modifiers:
+
+1. **canBeBodyweight filter:** If goal is `bulk`, set `preferWeighted: true` — when an exercise has both weighted and bodyweight variants, always pick the weighted version. Specifically: for vertical-pull pattern, prefer `lat-pulldown` over `pull-up`; for horizontal-push, prefer `bench-press` variants over `push-up`.
+2. **Tier bias:** If goal is `cut` or `strength_performance`, increase primary tier probability to 3× (instead of 2×) over secondary. If goal is `bulk`, keep standard 2× weighting but add tertiary exercises (isolation) to fill extra slots.
+3. **Exclusion list by goal:** If goal is `bulk` and the athlete is beginner or intermediate, exclude exercises where `canBeBodyweight === true` AND `pattern === "vertical-pull"` (i.e., no pull-ups for bulkers — use lat pulldown instead). If the athlete has no lat pulldown equipment, fall back to bodyweight.
+4. **Variety rotation:** If goal is `general_fitness`, track exercises used in the previous mesocycle and deprioritize them in the next cycle. Aim for <50% exercise overlap between consecutive mesocycles.
+
 ---
 
 ## 8. Strength Training
@@ -1454,7 +1572,7 @@ These are hard constraints that the validator enforces on every generated plan. 
 1. **Calorie floor:** Minimum 1,200 cal/day (women), 1,500 cal/day (men)
 2. **Protein floor:** Never below 0.6 g/lb bodyweight
 3. **Volume increase cap:** Max 15% weekly increase for endurance, max 4 sets/muscle/week increase for strength
-4. **Rest day minimum:** At least 1 full rest day per week
+4. **Recovery day minimum:** At least 1 recovery day per week. Beginner/Intermediate = full rest (no training). Advanced = full rest OR active recovery (Z1 only: easy swim, recovery spin, yoga/mobility).
 5. **Deload requirement:** Plans longer than 4 weeks must include deload weeks
 6. **Beginner guardrails:** Max 4 training days/week (unless explicitly requested), max 5 exercises per session, no VO2max work in first 4 weeks for endurance
 7. **Prohibited language:** Never use "guaranteed results," "lose X lbs in Y days," "burn off that meal," "cure," "treat," "diagnose"
