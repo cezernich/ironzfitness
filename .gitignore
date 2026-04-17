@@ -2,5 +2,12 @@ config.example.js
 .DS_Store
 node_modules/
 www/
-ios/
 *.docx
+
+# iOS — commit the project + config, but not per-user Xcode state or
+# build artifacts. Pods is excluded too in case we ever migrate off SPM.
+ios/**/xcuserdata/
+ios/**/DerivedData/
+ios/**/build/
+ios/App/Pods/
+ios/App/Podfile.lock
