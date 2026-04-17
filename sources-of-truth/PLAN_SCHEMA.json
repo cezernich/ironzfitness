@@ -1,0 +1,514 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ironz-plan-schema-v1",
+  "title": "IronZ Generated Plan Schema",
+  "description": "Output schema for all IronZ-generated training plans. Every plan — rules-engine, AI-assisted, or gap-fallback — must conform to this structure.",
+
+  "type": "object",
+  "required": ["planMetadata", "athleteProfile", "arc", "weeklyPlan", "constraints", "nutritionStrategy", "hydrationStrategy", "rationale"],
+
+  "properties": {
+
+    "planMetadata": {
+      "type": "object",
+      "description": "Generation metadata for traceability and versioning.",
+      "required": ["generatedAt", "generationSource", "planVersion"],
+      "properties": {
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of plan generation"
+        },
+        "generationSource": {
+          "type": "string",
+          "enum": ["rules_engine", "ai_assisted", "gap_fallback"],
+          "description": "How this plan was generated"
+        },
+        "planVersion": {
+          "type": "string",
+          "description": "Semver of the plan schema used"
+        },
+        "philosophyVersion": {
+          "type": "string",
+          "description": "Version of TRAINING_PHILOSOPHY.md this plan was generated from"
+        },
+        "gapsDetected": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Philosophy dimensions with no matching module (gap_fallback only)"
+        },
+        "freeformRequest": {
+          "type": "string",
+          "description": "User's original text (ai_assisted only)"
+        }
+      }
+    },
+
+    "athleteProfile": {
+      "type": "object",
+      "description": "Snapshot of athlete classification at generation time.",
+      "required": ["age", "level", "goal", "daysAvailable"],
+      "properties": {
+        "age": { "type": "integer" },
+        "ageGroup": {
+          "type": "string",
+          "enum": ["18-29", "30-39", "40-49", "50-59", "60+"]
+        },
+        "level": {
+          "type": "string",
+          "enum": ["beginner", "intermediate", "advanced"],
+          "description": "Overall level (highest sport-specific level)"
+        },
+        "sportLevels": {
+          "type": "object",
+          "description": "Per-sport levels derived from threshold data",
+          "properties": {
+            "swim": { "type": "string", "enum": ["novice", "intermediate", "competitive"] },
+            "cycling": { "type": "string", "enum": ["beginner", "intermediate", "advanced"] },
+            "running": { "type": "string", "enum": ["beginner", "intermediate", "advanced"] }
+          }
+        },
+        "riskBias": {
+          "type": "string",
+          "enum": ["safety-first", "balanced", "performance-first"],
+          "description": "From Section 2.3 of TRAINING_PHILOSOPHY"
+        },
+        "goal": {
+          "type": "string",
+          "enum": ["race_performance", "speed_performance", "endurance", "fat_loss", "general_fitness"],
+          "description": "Maps from UI goals: Train for a Race → race_performance, Get Faster → speed_performance, Build Endurance → endurance, Lose Weight → fat_loss, General Fitness → general_fitness"
+        },
+        "sportProfile": {
+          "type": "string",
+          "enum": ["strength", "endurance", "triathlon", "running", "hyrox", "cycling", "hybrid", "general_fitness"],
+          "description": "Primary training focus — determines which session templates and periodization ratios are used"
+        },
+        "daysAvailable": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 7
+        },
+        "sessionDurationMin": {
+          "type": "integer",
+          "description": "Preferred session length in minutes"
+        },
+        "thresholds": {
+          "type": "object",
+          "properties": {
+            "runVDOT": { "type": "number", "description": "Jack Daniels VDOT score" },
+            "runThresholdPace": { "type": "number", "description": "Minutes per mile at threshold" },
+            "ftp": { "type": "number", "description": "Functional Threshold Power in watts" },
+            "ftpWPerKg": { "type": "number", "description": "FTP in watts per kg" },
+            "css": { "type": "number", "description": "Critical Swim Speed in seconds per 100m" }
+          }
+        },
+        "equipmentProfile": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Canonical equipment tokens from TRAINING_PHILOSOPHY Section 7.4"
+        },
+        "weaknessProfile": {
+          "type": "object",
+          "description": "Identified weakest discipline for multi-sport athletes",
+          "properties": {
+            "weakestDiscipline": {
+              "type": "string",
+              "enum": ["swim", "bike", "run", "strength", "none"]
+            },
+            "biasApplied": {
+              "type": "string",
+              "enum": ["extra_session", "upgraded_session", "technical_focus", "none"]
+            }
+          }
+        },
+        "injuries": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Active injury flags (e.g., 'shoulder', 'knee', 'lower-back')"
+        },
+        "recoveryState": {
+          "type": "string",
+          "enum": ["good", "moderate", "low"],
+          "description": "Current recovery state from most recent check-in"
+        },
+        "weight": { "type": "number", "description": "Body weight in lbs" },
+        "height": { "type": "number", "description": "Height in inches" },
+        "gender": { "type": "string", "enum": ["male", "female", "other", "not_specified"] }
+      }
+    },
+
+    "arc": {
+      "type": "object",
+      "description": "The macro training arc: phase boundaries, race targets, multi-race handling.",
+      "required": ["startDate", "totalWeeks", "phases", "planMode"],
+      "properties": {
+        "planMode": {
+          "type": "string",
+          "enum": ["race_based", "rolling_mesocycle"],
+          "description": "race_based = backwards from A race date; rolling_mesocycle = 4-week repeating blocks for non-race goals"
+        },
+        "startDate": {
+          "type": "string",
+          "format": "date",
+          "description": "Plan start date (ISO 8601 date)"
+        },
+        "totalWeeks": {
+          "type": "integer",
+          "description": "Total plan duration in weeks"
+        },
+        "races": {
+          "type": "array",
+          "description": "All target races, ordered by date",
+          "items": {
+            "type": "object",
+            "required": ["name", "date", "priority", "raceType"],
+            "properties": {
+              "name": { "type": "string", "description": "Race name (e.g., 'Chicago Marathon')" },
+              "date": { "type": "string", "format": "date" },
+              "priority": {
+                "type": "string",
+                "enum": ["A", "B", "C"],
+                "description": "A = drives plan, B = micro-taper, C = train through"
+              },
+              "raceType": {
+                "type": "string",
+                "enum": ["sprint-tri", "olympic-tri", "half-ironman", "ironman", "5k", "10k", "half-marathon", "marathon", "ultra", "hyrox", "cycling", "swim", "other"]
+              },
+              "raceDistance": { "type": "string", "description": "Human-readable distance" }
+            }
+          }
+        },
+        "phases": {
+          "type": "array",
+          "description": "Ordered list of training phases with week ranges",
+          "items": {
+            "type": "object",
+            "required": ["phase", "startWeek", "endWeek"],
+            "properties": {
+              "phase": {
+                "type": "string",
+                "enum": ["pre-base", "base", "build", "peak", "taper", "race-week", "mesocycle"]
+              },
+              "startWeek": { "type": "integer" },
+              "endWeek": { "type": "integer" },
+              "focus": { "type": "string", "description": "Phase purpose summary" },
+              "compressed": {
+                "type": "boolean",
+                "description": "True if this phase was compressed due to limited time"
+              }
+            }
+          }
+        },
+        "bRaceWindows": {
+          "type": "array",
+          "description": "Micro-taper windows around B races",
+          "items": {
+            "type": "object",
+            "properties": {
+              "raceName": { "type": "string" },
+              "raceDate": { "type": "string", "format": "date" },
+              "taperStartDate": { "type": "string", "format": "date" },
+              "recoveryEndDate": { "type": "string", "format": "date" },
+              "adjustments": {
+                "type": "string",
+                "description": "What changes in the 3 days pre and 3 days post"
+              }
+            }
+          }
+        },
+        "weeklyHoursCeiling": {
+          "type": "number",
+          "description": "Max weekly training hours from TRAINING_PHILOSOPHY Section 4.7"
+        }
+      }
+    },
+
+    "weeklyPlan": {
+      "type": "array",
+      "description": "The actual training plan, week by week.",
+      "items": {
+        "type": "object",
+        "required": ["weekNumber", "phase", "sessions"],
+        "properties": {
+          "weekNumber": { "type": "integer" },
+          "phase": {
+            "type": "string",
+            "enum": ["pre-base", "base", "build", "peak", "taper", "race-week", "mesocycle"]
+          },
+          "isDeload": {
+            "type": "boolean",
+            "description": "True if this is a deload/recovery week"
+          },
+          "targetHours": {
+            "type": "number",
+            "description": "Target total training hours for this week"
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["day", "type", "durationMin"],
+              "properties": {
+                "day": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 7,
+                  "description": "Day of week (1=Monday, 7=Sunday)"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": ["run", "bike", "swim", "strength", "brick", "circuit", "hiit", "hyrox", "yoga", "cross-training", "rest"]
+                },
+                "sessionSubtype": {
+                  "type": "string",
+                  "description": "Sport-specific session type from TRAINING_PHILOSOPHY Section 5 (e.g., 'tempo', 'css_intervals', 'sweet_spot', 'push_day')"
+                },
+                "durationMin": {
+                  "type": "integer",
+                  "description": "Session duration in minutes"
+                },
+                "keySession": {
+                  "type": "boolean",
+                  "description": "True if this is a quality/key session (counts toward intensity cap)"
+                },
+                "targetZones": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Target training zones (e.g., ['Z2'], ['Z4', 'Z5'])"
+                },
+                "targetPace": {
+                  "type": "string",
+                  "description": "Target pace/power if applicable (e.g., '7:35/mile', '250W')"
+                },
+                "description": {
+                  "type": "string",
+                  "description": "Human-readable workout description (e.g., '4x1K at Z5 w/ 3min jog recovery')"
+                },
+                "warmUp": {
+                  "type": "string",
+                  "description": "Warm-up instructions"
+                },
+                "coolDown": {
+                  "type": "string",
+                  "description": "Cool-down instructions"
+                },
+                "exercises": {
+                  "type": "array",
+                  "description": "For strength/circuit/HIIT sessions: the exercise list",
+                  "items": {
+                    "type": "object",
+                    "required": ["exerciseId", "exerciseName"],
+                    "properties": {
+                      "exerciseId": {
+                        "type": "string",
+                        "description": "Kebab-case ID from EXERCISE_DB"
+                      },
+                      "exerciseName": {
+                        "type": "string",
+                        "description": "Display name"
+                      },
+                      "slotRole": {
+                        "type": "string",
+                        "description": "Slot template role (e.g., 'main-compound', 'isolation')"
+                      },
+                      "sets": { "type": "integer" },
+                      "reps": {
+                        "type": "string",
+                        "description": "Rep count or range (e.g., '8-12', '10', 'AMRAP')"
+                      },
+                      "weight": {
+                        "type": "string",
+                        "description": "Weight target if applicable (e.g., '135 lbs', 'bodyweight')"
+                      },
+                      "restSeconds": {
+                        "type": "integer",
+                        "description": "Rest between sets in seconds"
+                      },
+                      "usesWeights": {
+                        "type": "boolean",
+                        "description": "From EXERCISE_DB — drives UI weight input visibility"
+                      },
+                      "notes": {
+                        "type": "string",
+                        "description": "Form cues or coaching notes"
+                      }
+                    }
+                  }
+                },
+                "swimDetails": {
+                  "type": "object",
+                  "description": "Swim-specific details (only for swim sessions)",
+                  "properties": {
+                    "poolSize": { "type": "string", "enum": ["25m", "50m", "25yd"] },
+                    "totalDistance": { "type": "integer", "description": "Meters" },
+                    "intensity": { "type": "string", "enum": ["easy", "moderate", "hard"] }
+                  }
+                },
+                "brickDetails": {
+                  "type": "object",
+                  "description": "Brick-specific details (only for brick sessions)",
+                  "properties": {
+                    "leg1Type": { "type": "string", "enum": ["bike", "swim"] },
+                    "leg1DurationMin": { "type": "integer" },
+                    "leg2Type": { "type": "string", "enum": ["run", "bike"] },
+                    "leg2DurationMin": { "type": "integer" }
+                  }
+                },
+                "rationale": {
+                  "type": "string",
+                  "description": "Why this session exists in the plan — the coaching 'why'"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "constraints": {
+      "type": "object",
+      "description": "Active safety constraints applied to this plan.",
+      "properties": {
+        "maxIntensitySessionsPerWeek": {
+          "type": "integer",
+          "description": "From TRAINING_PHILOSOPHY Section 4.3"
+        },
+        "noConsecutiveHardDays": {
+          "type": "boolean",
+          "description": "True unless athlete is advanced"
+        },
+        "minRestDaysPerWeek": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxWeeklyVolumeIncreasePct": {
+          "type": "number",
+          "description": "Max % increase in volume week-over-week (10-15%)"
+        },
+        "maxLongRunPctOfWeekly": {
+          "type": "number",
+          "description": "Long run as max % of weekly mileage (30%)"
+        },
+        "strengthVolumeCapSetsPerMuscle": {
+          "type": "integer",
+          "description": "Max additional sets per muscle group per week increase"
+        },
+        "deloadEveryNWeeks": {
+          "type": "integer",
+          "description": "Deload frequency (3 or 4)"
+        }
+      }
+    },
+
+    "nutritionStrategy": {
+      "type": "object",
+      "description": "Nutrition targets from TRAINING_PHILOSOPHY Section 10.",
+      "properties": {
+        "dailyTargets": {
+          "type": "object",
+          "properties": {
+            "calories": { "type": "integer" },
+            "proteinG": { "type": "integer" },
+            "carbsG": { "type": "integer" },
+            "fatG": { "type": "integer" }
+          }
+        },
+        "calorieAdjustment": {
+          "type": "string",
+          "description": "e.g., '+15% surplus' or '-20% deficit'"
+        },
+        "trainingDayAdjustment": {
+          "type": "string",
+          "description": "How training days differ from rest days"
+        },
+        "preWorkout": { "type": "string" },
+        "postWorkout": { "type": "string" },
+        "raceDayFueling": {
+          "type": "string",
+          "description": "Race-day nutrition plan (endurance athletes)"
+        }
+      }
+    },
+
+    "hydrationStrategy": {
+      "type": "object",
+      "description": "Hydration targets from TRAINING_PHILOSOPHY Section 11.",
+      "properties": {
+        "dailyBaselineOz": { "type": "integer" },
+        "preSessionOz": { "type": "integer" },
+        "duringSessionOzPerHour": { "type": "integer" },
+        "postSessionNotes": { "type": "string" },
+        "raceDayNotes": { "type": "string" }
+      }
+    },
+
+    "progressionLogic": {
+      "type": "object",
+      "description": "How the plan progresses week to week.",
+      "properties": {
+        "volumeProgressionPct": {
+          "type": "number",
+          "description": "Target weekly volume increase (typically 5-10%)"
+        },
+        "strengthProgression": {
+          "type": "string",
+          "description": "e.g., 'double progression: add reps until top of range, then add weight'"
+        },
+        "deloadProtocol": {
+          "type": "string",
+          "description": "e.g., 'reduce volume 40-60%, maintain intensity'"
+        }
+      }
+    },
+
+    "adaptationRules": {
+      "type": "object",
+      "description": "How the plan adapts to user feedback.",
+      "properties": {
+        "tooHardResponse": { "type": "string" },
+        "tooEasyResponse": { "type": "string" },
+        "lowAdherenceResponse": { "type": "string" },
+        "injuryReturnProtocol": { "type": "string" }
+      }
+    },
+
+    "rationale": {
+      "type": "object",
+      "description": "The 'Why this plan?' explanation shown to the athlete.",
+      "required": ["summary", "disclaimer"],
+      "properties": {
+        "summary": {
+          "type": "string",
+          "description": "2-3 sentence explanation of why this plan structure was chosen"
+        },
+        "keyDecisions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of key planning decisions and their reasoning"
+        },
+        "assumptions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Assumptions made during plan generation"
+        },
+        "disclaimer": {
+          "type": "string",
+          "description": "Mandatory wellness disclaimer"
+        }
+      }
+    },
+
+    "validationFlags": {
+      "type": "array",
+      "description": "Any safety rules that were auto-fixed during validation.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "rule": { "type": "string" },
+          "action": { "type": "string" },
+          "details": { "type": "string" }
+        }
+      }
+    }
+  }
+}
