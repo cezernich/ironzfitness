@@ -1084,13 +1084,16 @@ function buildSurveyStrengthSplit() {
   // Initialize per-day data if not custom or not yet set
   if (!surveyData.strengthSplitDays || surveyData.strengthSplitDays.length !== numDays || surveyData.strengthSplit !== "custom") {
     if (surveyData.strengthSplit !== "custom") {
-      const splitNames = (typeof SPLIT_PRESETS !== "undefined" && SPLIT_PRESETS[surveyData.strengthSplit])
-        ? SPLIT_PRESETS[surveyData.strengthSplit] : ["Push", "Pull", "Legs"];
-      surveyData.strengthSplitDays = [];
-      for (let i = 0; i < numDays; i++) {
-        const name = splitNames[i % splitNames.length];
-        surveyData.strengthSplitDays.push({ label: name, muscles: [...(splitMuscles[name] || ["full body"])] });
-      }
+      const labels = (typeof balancedSplitLabels === "function")
+        ? balancedSplitLabels(numDays, surveyData.strengthSplit)
+        : (() => {
+            const preset = (typeof SPLIT_PRESETS !== "undefined" && SPLIT_PRESETS[surveyData.strengthSplit])
+              ? SPLIT_PRESETS[surveyData.strengthSplit] : ["Push", "Pull", "Legs"];
+            return Array.from({ length: numDays }, (_, i) => preset[i % preset.length]);
+          })();
+      surveyData.strengthSplitDays = labels.map(name => ({
+        label: name, muscles: [...(splitMuscles[name] || ["full body"])],
+      }));
     } else if (!surveyData.strengthSplitDays || surveyData.strengthSplitDays.length !== numDays) {
       surveyData.strengthSplitDays = [];
       for (let i = 0; i < numDays; i++) {
@@ -2008,10 +2011,15 @@ const SURVEY_DOW_MAP = {
 
 function submitSurveyPlan() {
   const finish = (count, label) => {
-    // Save days/week to profile
+    // Save days/week + preferred DOWs to profile so downstream plan
+    // generators (classifier, race planner) can honor the user's
+    // specific day picks, not just the count.
     try {
       const profile = JSON.parse(localStorage.getItem("profile")) || {};
       profile.daysPerWeek = surveyData.daysPerWeek;
+      if (Array.isArray(surveyData.preferredDays) && surveyData.preferredDays.length > 0) {
+        profile.preferredDays = surveyData.preferredDays.slice();
+      }
       localStorage.setItem("profile", JSON.stringify(profile));
       if (typeof DB !== 'undefined') DB.profile.save(profile).catch(() => {});
     } catch { /* ignore */ }
@@ -2100,16 +2108,19 @@ function submitSurveyPlan() {
           ...d, dow: selectedDows[i],
         }));
       } else {
-        // Fallback: build from preset
+        // Fallback: build from preset using balanced rotation
         const splitPreset = surveyData.strengthSplit || "ppl";
-        const splitNames = (typeof SPLIT_PRESETS !== "undefined" && SPLIT_PRESETS[splitPreset])
-          ? SPLIT_PRESETS[splitPreset] : ["Push", "Pull", "Legs"];
         const splitMuscles = typeof SPLIT_MUSCLES !== "undefined" ? SPLIT_MUSCLES : {};
-        _planSplitDays = [];
-        for (let i = 0; i < numDays; i++) {
-          const splitName = splitNames[i % splitNames.length];
-          _planSplitDays.push({ label: splitName, muscles: [...(splitMuscles[splitName] || ["full body"])], dow: selectedDows[i] });
-        }
+        const labels = (typeof balancedSplitLabels === "function")
+          ? balancedSplitLabels(numDays, splitPreset)
+          : (() => {
+              const preset = (typeof SPLIT_PRESETS !== "undefined" && SPLIT_PRESETS[splitPreset])
+                ? SPLIT_PRESETS[splitPreset] : ["Push", "Pull", "Legs"];
+              return Array.from({ length: numDays }, (_, i) => preset[i % preset.length]);
+            })();
+        _planSplitDays = labels.map((label, i) => ({
+          label, muscles: [...(SPLIT_MUSCLES[label] || ["full body"])], dow: selectedDows[i],
+        }));
       }
     }
   }
@@ -2158,6 +2169,12 @@ function submitSurveyPlan() {
 
   // Race-based plan
   const raceOption = SURVEY_RACE_OPTIONS.find(r => r.value === surveyData.raceType);
+  // If the user picked specific training days, invert to unavailableDays so
+  // adjustPatternToDays keeps sessions on the user's chosen DOWs.
+  const _prefDows = Array.isArray(surveyData.preferredDays) ? surveyData.preferredDays : null;
+  const _unavailFromPref = _prefDows && _prefDows.length > 0
+    ? [0, 1, 2, 3, 4, 5, 6].filter(d => !_prefDows.includes(d))
+    : undefined;
   const race = {
     id:                  generateId("race"),
     name:                surveyData.raceName || (raceOption ? raceOption.label : "My Race"),
@@ -2169,6 +2186,8 @@ function submitSurveyPlan() {
     runGoal:             surveyData.runGoal,
     returningFromInjury: surveyData.returningFromInjury,
     daysPerWeek:         surveyData.daysPerWeek,
+    preferredDays:       _prefDows || undefined,
+    unavailableDays:     _unavailFromPref,
     createdAt:           new Date().toISOString(),
   };
 

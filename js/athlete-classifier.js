@@ -256,7 +256,13 @@
     const ageGroup = classifyAgeGroup(age);
     const goal = mapGoal(p.goal);
 
-    const daysAvailable = pickNumber(p.availableDaysPerWeek, p.daysAvailable) ?? 3;
+    const daysAvailable = pickNumber(p.availableDaysPerWeek, p.daysAvailable, p.daysPerWeek) ?? 3;
+    // Specific DOWs (0=Sun…6=Sat) the athlete picked in onboarding/survey.
+    // Session assembler uses these when placing weekly sessions so the
+    // calendar reflects the user's chosen days, not a hardcoded fallback.
+    const preferredDays = (Array.isArray(p.preferredDays) && p.preferredDays.length > 0)
+      ? p.preferredDays.slice().sort((a, b) => a - b)
+      : null;
     // TRAINING_PHILOSOPHY §4.8: Half IM and Full IM recommend ≥5 days/week.
     // The floor is enforced by the onboarding counter + save-time warning
     // (where the user can see the reason and choose); the classifier does
@@ -297,6 +303,7 @@
       goal,
       sportProfile,
       daysAvailable,
+      preferredDays,
       sessionDurationMin,
       thresholds,
       equipmentProfile,

@@ -901,21 +901,44 @@ function selectPlanGoal(btn) {
 function updateSplitPreview() {
   const preset = document.getElementById("plan-split-preset")?.value || "ppl";
   const numDays = getSelectedPlanDays().length || 3;
-  const splitNames = SPLIT_PRESETS[preset] || SPLIT_PRESETS.ppl;
-  const DOW_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const selectedDows = getSelectedPlanDays();
+  const labels = balancedSplitLabels(numDays, preset);
 
-  _planSplitDays = [];
-  for (let i = 0; i < numDays; i++) {
-    const splitName = splitNames[i % splitNames.length];
-    _planSplitDays.push({
-      label: splitName,
-      muscles: [...(SPLIT_MUSCLES[splitName] || ["full body"])],
-      dow: selectedDows[i],
-    });
-  }
+  _planSplitDays = labels.map((label, i) => ({
+    label,
+    muscles: [...(SPLIT_MUSCLES[label] || ["full body"])],
+    dow: selectedDows[i],
+  }));
 
   _renderSplitPreview();
+}
+
+// Balanced rotation so legs/lower-body hit at least ≥2x/week when day count
+// isn't a clean multiple of the cycle length. Classic PPLUL for 5-day PPL.
+function balancedSplitLabels(numDays, preset) {
+  if (preset === "ppl") {
+    const patterns = {
+      2: ["Upper Body", "Lower Body"],
+      3: ["Push", "Pull", "Legs"],
+      4: ["Push", "Pull", "Legs", "Upper Body"],
+      5: ["Push", "Pull", "Legs", "Upper Body", "Lower Body"],
+      6: ["Push", "Pull", "Legs", "Push", "Pull", "Legs"],
+      7: ["Push", "Pull", "Legs", "Push", "Pull", "Legs", "Full Body"],
+    };
+    return patterns[numDays] || patterns[3];
+  }
+  if (preset === "upper-lower") {
+    const patterns = {
+      2: ["Upper Body", "Lower Body"],
+      3: ["Upper Body", "Lower Body", "Full Body"],
+      4: ["Upper Body", "Lower Body", "Upper Body", "Lower Body"],
+      5: ["Upper Body", "Lower Body", "Upper Body", "Lower Body", "Full Body"],
+      6: ["Upper Body", "Lower Body", "Upper Body", "Lower Body", "Upper Body", "Lower Body"],
+      7: ["Upper Body", "Lower Body", "Upper Body", "Lower Body", "Upper Body", "Lower Body", "Full Body"],
+    };
+    return patterns[numDays] || patterns[2];
+  }
+  return Array(numDays).fill("Full Body");
 }
 
 function _renderSplitPreview() {

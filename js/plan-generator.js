@@ -111,6 +111,7 @@
       goal: classification.goal,
       sportProfile: classification.sportProfile,
       daysAvailable: classification.daysAvailable,
+      preferredDays: classification.preferredDays,
       sessionDurationMin: classification.sessionDurationMin,
       thresholds: classification.thresholds,
       equipmentProfile: classification.equipmentProfile,

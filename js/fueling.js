@@ -161,7 +161,11 @@ function renderFuelingPlanHTML(durationMinutes, sessionName, sessionCtx) {
   if (!isFuelingEnabled()) return "";
   const _disc = String(sessionCtx?.discipline || "").toLowerCase();
   const _name = String(sessionName || "").toLowerCase();
-  if (_disc === "yoga" || _disc === "mobility" || /\byoga\b|\bmobility\b|\bstretch/.test(_name)) return "";
+  // Fueling plans are only meaningful for sustained aerobic work (running,
+  // cycling, swimming, brick). Strength, HIIT, circuit, yoga, mobility etc.
+  // don't warrant a mid-session carb plan — skip rendering entirely.
+  const AEROBIC_DISCIPLINES = new Set(["run", "running", "bike", "cycling", "cycle", "swim", "swimming", "brick", "triathlon"]);
+  if (!AEROBIC_DISCIPLINES.has(_disc)) return "";
   const plan = generateFuelingPlan(durationMinutes, sessionCtx);
   if (!plan) return "";
 

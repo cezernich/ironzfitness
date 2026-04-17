@@ -298,6 +298,33 @@
     ],
   };
 
+  // Distributes strength subtypes evenly across N days so every major
+  // movement pattern hits ≥ twice/week (research-backed hypertrophy
+  // minimum). Standard PPLUL / ULUL-F patterns when count ≠ cycle length.
+  function balancedStrengthRotation(numDays, split) {
+    if (split === 'ppl') {
+      const patterns = {
+        2: ['upper_body', 'lower_body'],
+        3: ['push_day', 'pull_day', 'leg_day'],
+        4: ['push_day', 'pull_day', 'leg_day', 'upper_body'],
+        5: ['push_day', 'pull_day', 'leg_day', 'upper_body', 'lower_body'],
+        6: ['push_day', 'pull_day', 'leg_day', 'push_day', 'pull_day', 'leg_day'],
+      };
+      return patterns[numDays] || patterns[3];
+    }
+    if (split === 'upper_lower') {
+      const patterns = {
+        2: ['upper_body', 'lower_body'],
+        3: ['upper_body', 'lower_body', 'full_body'],
+        4: ['upper_body', 'lower_body', 'upper_body', 'lower_body'],
+        5: ['upper_body', 'lower_body', 'upper_body', 'lower_body', 'full_body'],
+        6: ['upper_body', 'lower_body', 'upper_body', 'lower_body', 'upper_body', 'lower_body'],
+      };
+      return patterns[numDays] || patterns[2];
+    }
+    return Array(numDays).fill('full_body');
+  }
+
   // Fallback templates for sport profiles that aren't pure endurance.
   // Strength-dominant and general-fitness users get strength frequency
   // from days available rather than phase.
@@ -308,20 +335,9 @@
     const split = freqMap[Math.max(2, Math.min(6, days))] || 'full_body';
     const strengthCount = Math.max(2, Math.min(days - 1, 5));
     const sessions = [];
-    if (split === 'ppl') {
-      const rotation = ['push_day', 'pull_day', 'leg_day'];
-      for (let i = 0; i < strengthCount; i++) {
-        sessions.push({ type: 'strength', subtype: rotation[i % 3], priority: 'strength' });
-      }
-    } else if (split === 'upper_lower') {
-      const rotation = ['upper_body', 'lower_body'];
-      for (let i = 0; i < strengthCount; i++) {
-        sessions.push({ type: 'strength', subtype: rotation[i % 2], priority: 'strength' });
-      }
-    } else {
-      for (let i = 0; i < strengthCount; i++) {
-        sessions.push({ type: 'strength', subtype: 'full_body', priority: 'strength' });
-      }
+    const subtypes = balancedStrengthRotation(strengthCount, split);
+    for (const subtype of subtypes) {
+      sessions.push({ type: 'strength', subtype, priority: 'strength' });
     }
     // Add light cardio for general fitness
     if (classification.sportProfile !== 'strength') {
@@ -666,10 +682,20 @@
   // Pick the weekdays on which the athlete actually trains. Returns days
   // (1=Mon…7=Sun) ordered ascending. If the athlete chose specific long
   // days in onboarding, those days are guaranteed to be in the set.
-  function selectTrainingDays(daysAvailable, longRunDay, longRideDay) {
+  // If `preferredDays` (0=Sun…6=Sat) is provided, those take priority over
+  // the hardcoded fallback — we honor the user's actual day selections.
+  function selectTrainingDays(daysAvailable, longRunDay, longRideDay, preferredDays) {
     const d = Math.max(2, Math.min(7, daysAvailable || 3));
     let base;
-    if (d >= 7) base = [1, 2, 3, 4, 5, 6, 7];
+    if (Array.isArray(preferredDays) && preferredDays.length > 0) {
+      // Convert 0=Sun…6=Sat → 1=Mon…7=Sun (Sunday goes to the end).
+      base = preferredDays
+        .map(x => (x === 0 ? 7 : x))
+        .filter(x => x >= 1 && x <= 7)
+        .sort((a, b) => a - b);
+      // Dedupe
+      base = [...new Set(base)];
+    } else if (d >= 7) base = [1, 2, 3, 4, 5, 6, 7];
     else if (d === 6) base = [1, 2, 3, 4, 6, 7];
     else if (d === 5) base = [1, 2, 4, 6, 7];
     else if (d === 4) base = [1, 4, 6, 7];
@@ -716,7 +742,8 @@
     const trainingDays = selectTrainingDays(
       classification.daysAvailable,
       classification.longRunDay,
-      classification.longRideDay
+      classification.longRideDay,
+      classification.preferredDays
     );
     // Use training days for all non-strength placement; strength later.
 

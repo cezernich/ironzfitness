@@ -2879,11 +2879,33 @@
     const split = _state.strengthSetup && _state.strengthSetup.split || "ppl";
     const customMuscles = _state.strengthSetup && _state.strengthSetup.customMuscles || {};
 
-    // Strength rotation templates keyed by split type.
+    // Count strength days this week to pick a balanced rotation — straight
+    // push/pull/legs cycling leaves legs at 1x/week when day count isn't a
+    // multiple of 3. Uses PPLUL for odd counts so every pattern hits ≥2x.
+    const strCount = _BP_DAYS.reduce((n, d) =>
+      n + ((_state.schedule[d] || []).filter(s => s === "strength").length), 0);
+    const PPL_PATTERNS = {
+      1: ["full"],
+      2: ["upper", "lower"],
+      3: ["push", "pull", "legs"],
+      4: ["push", "pull", "legs", "upper"],
+      5: ["push", "pull", "legs", "upper", "lower"],
+      6: ["push", "pull", "legs", "push", "pull", "legs"],
+      7: ["push", "pull", "legs", "push", "pull", "legs", "full"],
+    };
+    const UL_PATTERNS = {
+      1: ["full"],
+      2: ["upper", "lower"],
+      3: ["upper", "lower", "full"],
+      4: ["upper", "lower", "upper", "lower"],
+      5: ["upper", "lower", "upper", "lower", "full"],
+      6: ["upper", "lower", "upper", "lower", "upper", "lower"],
+      7: ["upper", "lower", "upper", "lower", "upper", "lower", "full"],
+    };
     const STRENGTH_ROTATION = {
-      ppl:      ["push", "pull", "legs", "push", "pull", "legs", "push"],
-      ul:       ["upper", "lower", "upper", "lower", "upper", "lower", "upper"],
-      fullBody: ["full", "full", "full", "full", "full", "full", "full"],
+      ppl:      PPL_PATTERNS[strCount] || PPL_PATTERNS[3],
+      ul:       UL_PATTERNS[strCount] || UL_PATTERNS[2],
+      fullBody: Array(Math.max(1, strCount)).fill("full"),
     };
 
     // For custom split, map selected muscle groups to a pretty label.
@@ -3294,6 +3316,26 @@
     // Template (weekly pattern) lives in its own key; do NOT write to workoutSchedule here.
     _lsSet("buildPlanTemplate", _state.schedule);
 
+    // Persist which weekdays the athlete picked to the profile so the
+    // classifier + downstream plan generators honor the user's day
+    // selection instead of falling back to hardcoded defaults. DOW index
+    // matches surveyData.preferredDays: 0=Sun…6=Sat.
+    try {
+      const _BP_DOW_TO_IDX = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+      const activeDows = _BP_DAYS
+        .filter(d => Array.isArray(_state.schedule[d]) && _state.schedule[d].length > 0)
+        .map(d => _BP_DOW_TO_IDX[d])
+        .filter(n => n != null)
+        .sort((a, b) => a - b);
+      const profile = _lsGet("profile", {}) || {};
+      profile.daysPerWeek = activeDows.length || profile.daysPerWeek;
+      if (activeDows.length > 0) profile.preferredDays = activeDows;
+      _lsSet("profile", profile);
+      if (typeof DB !== "undefined" && DB.profile && DB.profile.save) {
+        DB.profile.save(profile).catch(() => {});
+      }
+    } catch (e) { console.warn("[OnboardingV2] failed to persist preferredDays", e); }
+
     // Map onboarding raceEvents into the legacy events shape so the
     // calendar / renderRaceEvents keep working unchanged.
     const legacyEvents = _mapRacesToLegacyEvents(_state.raceEvents);
@@ -3376,14 +3418,26 @@
     // days by split and labels runs/bikes by position.
     const enrichedTemplate = _enrichWeekTemplate();
 
+    // Anchor the weekly template to an actual Monday so template Mon → real
+    // Mon, Tue → real Tue, etc. — previously idx=0 (Mon template) was placed
+    // on the start date regardless of what day the user picked, which threw
+    // off the whole week when start was mid-week (e.g. Thu start → Mon's
+    // circuit landed on Thu). Skip template days that fall before the start
+    // date so week 1 is correctly partial instead of back-dated.
+    const startDow = start.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    const daysBackToMon = startDow === 0 ? 6 : startDow - 1;
+    const weekMonday = new Date(start);
+    weekMonday.setDate(start.getDate() - daysBackToMon);
+
     const sessions = [];
     let counter = 0;
     for (let w = 0; w < weeks; w++) {
       _BP_DAYS.forEach((day, idx) => {
         const slots = (enrichedTemplate[day] || []).filter(s => s && s !== "rest");
         slots.forEach(enrichedCode => {
-          const d = new Date(start);
-          d.setDate(start.getDate() + w * 7 + idx);
+          const d = new Date(weekMonday);
+          d.setDate(weekMonday.getDate() + w * 7 + idx);
+          if (d < start) return; // first week is partial when start is mid-week
           const dateStr = d.toISOString().slice(0, 10);
           const session = _buildSessionForSport(enrichedCode, dateStr, sessionLen, w + 1, planId, counter++);
           if (session) sessions.push(session);
@@ -3467,6 +3521,69 @@
     ],
   };
 
+  // Convert an N-rep-max entry to an estimated 1RM using Epley's formula:
+  // 1RM ≈ w × (1 + reps/30). Accepts {weight, type:"1rm"|"5rm"|"10rm"}.
+  function _oneRMFromEntry(entry) {
+    if (!entry || !entry.weight) return null;
+    const w = parseFloat(entry.weight);
+    if (!(w > 0)) return null;
+    const t = (entry.type || "1rm").toLowerCase();
+    const reps = t === "5rm" ? 5 : t === "10rm" ? 10 : 1;
+    return reps === 1 ? w : w * (1 + reps / 30);
+  }
+
+  // Working-set weight as a % of 1RM tuned to the rep target (Brzycki-style).
+  // Uses the upper end of a range so the suggested weight matches what the
+  // user can actually hit for every rep — conservative > aspirational.
+  function _workingPctForReps(repsStr) {
+    if (!repsStr) return 0.70;
+    const m = String(repsStr).match(/(\d+)(?:\s*[-–]\s*(\d+))?/);
+    if (!m) return 0.70;
+    const hi = parseInt(m[2] || m[1], 10);
+    if (hi <= 3) return 0.90;
+    if (hi <= 5) return 0.85;
+    if (hi <= 6) return 0.82;
+    if (hi <= 8) return 0.78;
+    if (hi <= 10) return 0.72;
+    if (hi <= 12) return 0.67;
+    return 0.60;
+  }
+
+  // Map an ExerciseDB name → strength-benchmark key. Only matches movements
+  // the user actually logged a 1RM/5RM/10RM for; unmatched movements return
+  // "" so the Weight column stays blank (better than a guessed number).
+  function _benchmarkKeyForExercise(name) {
+    if (!name) return null;
+    const n = String(name).toLowerCase();
+    // Row must be checked before "deadlift" since "Pendlay Row" shouldn't
+    // match on a word boundary that isn't there.
+    if (/\brow\b/.test(n) && !/upright/.test(n)) return "row";
+    if (/\bbench\s*press\b/.test(n) && !/close[- ]?grip|incline|decline/.test(n)) return "bench";
+    if (/\b(?:back\s*)?squat\b/.test(n) && !/front|goblet|split|pistol|box|hack|bulgarian/.test(n)) return "squat";
+    if (/\bdeadlift\b/.test(n) && !/romanian|rdl|stiff|sumo|trap/.test(n)) return "deadlift";
+    if (/\b(?:overhead|shoulder|military)\s*press\b|\bohp\b/.test(n) && !/dumbbell|landmine|seated/.test(n)) return "ohp";
+    return null;
+  }
+
+  // Derive a per-exercise working weight from the user's strength benchmarks
+  // in trainingZones.strength. Returns a pretty string like "135 lbs" or ""
+  // when the user has no benchmark for this lift (we'd rather show blank
+  // than mislead with an imaginary number).
+  function _suggestWeightForExercise(name, repsStr) {
+    const key = _benchmarkKeyForExercise(name);
+    if (!key) return "";
+    let zones = {};
+    try { zones = JSON.parse(localStorage.getItem("trainingZones") || "{}") || {}; } catch {}
+    const entry = zones.strength && zones.strength[key];
+    const oneRM = _oneRMFromEntry(entry);
+    if (!oneRM) return "";
+    const pct = _workingPctForReps(repsStr);
+    // Round to nearest 5 lbs — gym plates come in 2.5/5 increments and 5 is
+    // the sensible default for big lifts; 2.5 would imply fractional plates.
+    const lbs = Math.round((oneRM * pct) / 5) * 5;
+    return lbs > 0 ? `${lbs} lbs` : "";
+  }
+
   // Fill a slot template via ExerciseDB.pick with diverseFrom chaining.
   // Returns an array shaped like _STRENGTH_TEMPLATES entries:
   //   [{ name, sets, reps, weight }, ...]
@@ -3501,7 +3618,9 @@
         name: chosen.name,
         sets: slot.sets,
         reps: slot.reps,
-        weight: chosen.usesWeights ? "" : "Bodyweight",
+        weight: chosen.usesWeights
+          ? _suggestWeightForExercise(chosen.name, slot.reps)
+          : "Bodyweight",
       });
     }
     return out.length ? out : null;
@@ -3640,8 +3759,12 @@
     } else if (_strengthFocus) {
       // Try ExerciseDB-backed slot template first; fall back to the
       // hardcoded baseline if the DB isn't loaded or returns nothing.
-      session.exercises = _fillSlotTemplate(_strengthFocus, _userEquip)
-        || (_STRENGTH_TEMPLATES[_strengthFocus] || []).map(ex => ({ ...ex }));
+      const fallback = (_STRENGTH_TEMPLATES[_strengthFocus] || []).map(ex => ({
+        ...ex,
+        // Only override empty weights — bodyweight entries already set "Bodyweight".
+        weight: ex.weight || _suggestWeightForExercise(ex.name, ex.reps),
+      }));
+      session.exercises = _fillSlotTemplate(_strengthFocus, _userEquip) || fallback;
     }
 
     // Walking / rowing / yoga / mobility get a matching aiSession
@@ -3682,7 +3805,10 @@
   function _strengthExercisesForMuscles(muscles, userEquip) {
     if (!Array.isArray(muscles) || muscles.length === 0) {
       return _fillSlotTemplate("full", userEquip || [])
-        || _STRENGTH_TEMPLATES.full.map(ex => ({ ...ex }));
+        || _STRENGTH_TEMPLATES.full.map(ex => ({
+          ...ex,
+          weight: ex.weight || _suggestWeightForExercise(ex.name, ex.reps),
+        }));
     }
     // ExerciseDB path — pick 1-2 exercises per muscle category, deduped
     // by name, capped at 6 total.
@@ -3713,7 +3839,9 @@
             name: ex.name,
             sets,
             reps,
-            weight: ex.usesWeights ? "" : "Bodyweight",
+            weight: ex.usesWeights
+              ? _suggestWeightForExercise(ex.name, reps)
+              : "Bodyweight",
           });
         }
       }
@@ -3739,10 +3867,16 @@
       (_EX_BY_MUSCLE[m] || []).forEach(e => {
         if (seen.has(e.name) || out.length >= 6) return;
         seen.add(e.name);
-        out.push({ ...e });
+        out.push({
+          ...e,
+          weight: e.weight || _suggestWeightForExercise(e.name, e.reps),
+        });
       });
     });
-    return out.length ? out : _STRENGTH_TEMPLATES.full.map(ex => ({ ...ex }));
+    return out.length ? out : _STRENGTH_TEMPLATES.full.map(ex => ({
+      ...ex,
+      weight: ex.weight || _suggestWeightForExercise(ex.name, ex.reps),
+    }));
   }
   function _mapRacesToLegacyEvents(races) {
     const typeMap = {

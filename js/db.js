@@ -659,9 +659,16 @@ const DB = (() => {
     for (var k in s) {
       if (s.hasOwnProperty(k) && !skipKeys[k]) extraData[k] = s[k];
     }
+    // Build Plan v2 / Custom Plan use string planIds like "ob-v2-<ts>" or
+    // "custom-<ts>" which aren't UUIDs, so Supabase rejects them against
+    // the uuid-typed plan_id column. Stash the raw string in data.planId
+    // and null out the typed column so the insert succeeds either way.
+    var rawPlanId = s.planId || s.plan_id || null;
+    var planIdTyped = _isUUID(rawPlanId) ? rawPlanId : null;
+    if (rawPlanId && !planIdTyped) extraData.planId = rawPlanId;
     var row = {
       id: (_isUUID(s.id) ? s.id : null) || crypto.randomUUID(),
-      plan_id: s.planId || s.plan_id || null,
+      plan_id: planIdTyped,
       user_id: uid,
       scheduled_date: s.date || s.scheduled_date || null,
       week_number: s.week || s.week_number || null,

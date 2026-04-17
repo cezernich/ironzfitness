@@ -1979,6 +1979,16 @@ function saveCustomPlan() {
   // type to render as its own Schedule card.
   const planId = `custom-${Date.now()}`;
 
+  // Anchor the weekly template to the actual Monday of the start week so
+  // template Mon → real Mon, template Sun → real Sun regardless of which
+  // day the user picked for the start date. If start is mid-week, the
+  // template days that fall before start are skipped so week 1 is a
+  // correctly partial week rather than getting shifted into week 2.
+  const startDow = start.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const daysBackToMon = startDow === 0 ? 6 : startDow - 1;
+  const weekMonday = new Date(start);
+  weekMonday.setDate(start.getDate() - daysBackToMon);
+
   // Expand the week template across the requested number of weeks
   const newEntries = [];
   for (let w = 0; w < weeks; w++) {
@@ -1988,11 +1998,11 @@ function saveCustomPlan() {
         const entry = sessions[si];
         if (!entry || entry.mode === "rest") continue;
 
-        const dow = parseInt(dowStr);
-        const startDow = start.getDay(); // 0=Sun
-        let dayOffset = (dow - startDow + 7) % 7 + w * 7;
-        const date = new Date(start);
-        date.setDate(date.getDate() + dayOffset);
+        const dow = parseInt(dowStr);                   // 0=Sun…6=Sat
+        const idx = dow === 0 ? 6 : dow - 1;            // 0=Mon…6=Sun
+        const date = new Date(weekMonday);
+        date.setDate(weekMonday.getDate() + w * 7 + idx);
+        if (date < start) continue;                     // skip past dates in week 1
         const dateStr = date.toISOString().slice(0, 10);
 
         const scheduleEntry = {
@@ -2076,10 +2086,11 @@ function saveCustomPlan() {
   if (typeof renderTrainingInputs === "function") renderTrainingInputs();
   if (typeof renderTrainingConflicts === "function") renderTrainingConflicts();
 
-  // Close the Build Plan overlay (if that's how the user got here) and
-  // collapse the Training-tab card so they're not staring at the same
-  // form they just submitted.
+  // Close the Build Plan overlay (if that's how the user got here), close
+  // the Custom Plan Builder modal itself, and collapse the Training-tab
+  // card so they're not staring at the same form they just submitted.
   try { if (window.OnboardingV2?.closeBuildPlan) window.OnboardingV2.closeBuildPlan(); } catch {}
+  try { if (typeof closeCustomPlanBuilder === "function") closeCustomPlanBuilder(); } catch {}
   const section = document.getElementById("section-build-plan");
   if (section) section.classList.add("is-collapsed");
 }
@@ -2098,6 +2109,78 @@ function _cpExerciseToScheduleShape(ex) {
   const out = { ...ex };
   if (ex && ex.supersetGroup && !out.supersetId) out.supersetId = ex.supersetGroup;
   return out;
+}
+
+// ── Edit existing custom plan ─────────────────────────────────────────────────
+// Reconstruct cpWeekTemplate from workoutSchedule entries that belong to
+// the given planId, then open the builder. Without this, clicking Edit on
+// a Custom Plan card opened an empty builder (the template lives in memory
+// only) — or worse, routed to OnboardingV2 which loaded a stale strength
+// template from a different flow. Now edits round-trip the actual data.
+function openCustomPlanEdit(planId) {
+  if (!planId) return;
+  let schedule = [];
+  try { schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]"); } catch {}
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const planSessions = schedule.filter(e =>
+    e && e.planId === planId && e.source === "custom" && e.date >= todayStr
+  );
+  if (!planSessions.length) {
+    if (typeof openCustomPlanBuilder === "function") openCustomPlanBuilder();
+    return;
+  }
+
+  // Group by DOW using only the first week of the plan — the template
+  // repeats weekly, so later weeks are duplicates of the first.
+  const minDate = planSessions.reduce((m, s) => (s.date < m ? s.date : m), planSessions[0].date);
+  const minDateMs = new Date(minDate + "T00:00:00").getTime();
+  const byDow = {};
+  planSessions.forEach(e => {
+    const d = new Date(e.date + "T00:00:00");
+    const daysFromStart = Math.round((d.getTime() - minDateMs) / 864e5);
+    if (daysFromStart >= 7) return; // only first week
+    const dow = d.getDay();
+    if (!byDow[dow]) byDow[dow] = [];
+    byDow[dow].push(e);
+  });
+
+  // Reset and rebuild the in-memory template.
+  for (const k of Object.keys(cpWeekTemplate)) delete cpWeekTemplate[k];
+  Object.entries(byDow).forEach(([dow, entries]) => {
+    cpWeekTemplate[dow] = entries.map(e => ({
+      id: _cpGenId(),
+      mode: e.circuit ? "manual" : (e.aiSession ? "ai" : "manual"),
+      data: {
+        type: e.type,
+        sessionName: e.sessionName,
+        exercises: e.exercises,
+        aiSession: e.aiSession,
+        circuit: e.circuit,
+        details: e.details,
+        hiitMeta: e.hiitMeta,
+        isHyrox: e.isHyrox,
+        sessionType: e.sessionType,
+      },
+    }));
+  });
+
+  if (typeof openCustomPlanBuilder === "function") openCustomPlanBuilder();
+
+  // Pre-fill start date + weeks AFTER the builder opens so initCustomPlan's
+  // default-date logic (skipped when value exists) doesn't clobber us. Uses
+  // setTimeout to run after initCustomPlan's synchronous work finishes.
+  setTimeout(() => {
+    try {
+      const startInput = document.getElementById("custom-plan-start");
+      if (startInput) startInput.value = minDate;
+      const weeksEl = document.getElementById("custom-plan-weeks");
+      if (weeksEl) {
+        const maxDate = planSessions.reduce((m, s) => (s.date > m ? s.date : m), planSessions[0].date);
+        const spanDays = Math.round((new Date(maxDate + "T00:00:00") - new Date(minDate + "T00:00:00")) / 864e5);
+        weeksEl.value = String(Math.max(1, Math.round(spanDays / 7) + 1));
+      }
+    } catch {}
+  }, 0);
 }
 
 // ── Module export (for Node test harness) ─────────────────────────────────────

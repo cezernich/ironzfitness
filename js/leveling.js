@@ -287,7 +287,6 @@ function _hasCompletedPlan(stats) {
 function renderLevelProgress() {
   const progress = getLevelProgress();
   const earned = getEarnedAchievements();
-  const score = calculateProgressScore();
   const criteria = LEVEL_CRITERIA[progress.current];
 
   // Level badge
@@ -303,10 +302,6 @@ function renderLevelProgress() {
   if (progressText) progressText.textContent = progress.text;
   if (progressPct) progressPct.textContent = progress.pct + "%";
   if (progressFill) progressFill.style.width = progress.pct + "%";
-
-  // Progress score
-  const scoreEl = document.getElementById("progress-score-value");
-  if (scoreEl) scoreEl.textContent = score;
 
   // Achievements
   const grid = document.getElementById("achievements-grid");

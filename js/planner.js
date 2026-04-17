@@ -1578,7 +1578,7 @@ function _getBuildPlanInputs() {
   const byPlan = {};
   future.forEach(e => {
     if (!byPlan[e.planId]) {
-      byPlan[e.planId] = { planId: e.planId, sessions: [], startDate: e.date, endDate: e.date, types: new Set() };
+      byPlan[e.planId] = { planId: e.planId, sessions: [], startDate: e.date, endDate: e.date, types: new Set(), source: e.source };
     }
     const b = byPlan[e.planId];
     b.sessions.push(e);
@@ -1595,6 +1595,7 @@ function _getBuildPlanInputs() {
       startDate:b.startDate,
       endDate:  b.endDate,
       types:    Array.from(b.types),
+      source:   b.source,
     };
   });
 }
@@ -1867,12 +1868,21 @@ function renderTrainingInputs() {
       const label = SCHEDULE_TYPE_LABEL[t] || capitalize(t);
       return `<span class="race-tag">${_escapeHtml(label)}</span>`;
     }).join("");
+    // Edit routing is source-specific: onboarding_v2 plans live in the
+    // Build Plan overlay (weekly template in localStorage.buildPlanTemplate);
+    // custom plans live in the Custom Plan Builder (in-memory template,
+    // reconstructed from workoutSchedule on open). Using the wrong handler
+    // was loading a stale template and showing unrelated days.
+    const editHandler = bp.source === "custom"
+      ? `openCustomPlanEdit('${bp.planId}')`
+      : `window.OnboardingV2 && window.OnboardingV2.openBuildPlanEdit('${bp.planId}')`;
+    const badgeLabel = bp.source === "custom" ? "Custom Plan" : "Build Plan";
     html += `
       <div class="ti-card ti-card--schedule">
         <div class="race-card-top">
-          <span class="ti-card-badge ti-card-badge--schedule">Build Plan</span>
+          <span class="ti-card-badge ti-card-badge--schedule">${badgeLabel}</span>
           <div class="ti-card-actions">
-            <button class="ti-edit-btn" onclick="window.OnboardingV2 && window.OnboardingV2.openBuildPlanEdit('${bp.planId}')" title="Edit schedule">Edit</button>
+            <button class="ti-edit-btn" onclick="${editHandler}" title="Edit schedule">Edit</button>
             <button class="delete-btn" onclick="removeTrainingInput('buildplan','${bp.planId}')" title="Remove plan"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
           </div>
         </div>
