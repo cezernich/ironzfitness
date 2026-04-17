@@ -1012,7 +1012,7 @@
       .map(el => el.getAttribute("data-goal"));
     _state.trainingGoals = goals;
     _lsSet("trainingGoals", goals);
-    if (goals.includes("race")) { goTo("bp-v2-3-race"); _applyRacePrioritySection(); return; }
+    if (goals.includes("race")) { goTo("bp-v2-3-race"); _applyRaceCategoryDefault(); _applyRacePrioritySection(); return; }
     // Strength-only users skip the generic Plan Details screen — the
     // same fields (block length, session length, days per week) live
     // on bp-v2-6 Strength Setup to avoid asking twice.
@@ -1026,6 +1026,38 @@
       return;
     }
     goTo("bp-v2-3-norace");
+  }
+
+  // Pre-select the Race Category dropdown based on the user's
+  // selectedSports. Hyrox-only → hyrox; single run/bike/swim → matching
+  // category; swim+bike+run → triathlon; etc. Only applied on first entry
+  // to the race step (when currentRace hasn't been saved yet) so coming
+  // back via Back doesn't clobber a manual change.
+  function _applyRaceCategoryDefault() {
+    const sel = document.getElementById("bp-v2-race-category");
+    if (!sel) return;
+    if (_state.currentRace && _state.currentRace.date) return; // already saved — keep it
+    const cat = _defaultRaceCategoryForSports(_state.selectedSports || []);
+    if (!cat || cat === sel.value) return;
+    sel.value = cat;
+    _updateRaceTypes();
+  }
+
+  function _defaultRaceCategoryForSports(sports) {
+    if (!Array.isArray(sports) || !sports.length) return null;
+    const has = s => sports.includes(s);
+    if (has("triathlon")) return "triathlon";
+    if (has("swim") && has("bike") && has("run")) return "triathlon";
+    if (sports.length === 1) {
+      if (sports[0] === "hyrox") return "hyrox";
+      if (sports[0] === "run")   return "running";
+      if (sports[0] === "bike")  return "cycling";
+      if (sports[0] === "swim")  return "swimming";
+    }
+    // Hyrox is distinctive enough that any selection containing it leans
+    // Hyrox, except when the three triathlon sports are also picked.
+    if (has("hyrox")) return "hyrox";
+    return null;
   }
 
   function _updateRaceTypes() {
@@ -3327,7 +3359,7 @@
       _bpBack,
       _toggleSport, _applySportSideEffects, _selectGym, _saveSportsAndContinue,
       _toggleGoal, _saveGoalsAndContinue, _renderGoalCards,
-      _updateRaceTypes, _updateWeeksCallout, _selectRaceGoal, _selectRacePriority, _applyRacePrioritySection, _selectLeadInPhase, _adjustLeadIn, _saveRaceAndContinue,
+      _updateRaceTypes, _updateWeeksCallout, _selectRaceGoal, _selectRacePriority, _applyRacePrioritySection, _applyRaceCategoryDefault, _selectLeadInPhase, _adjustLeadIn, _saveRaceAndContinue,
       _selectPlanOption, _setCustomDuration, _adjustDaysPerWeek, _setStartDate, _saveNoraceAndContinue,
       _renderThresholdSections, _toggleTestMe, _changeThresholdMethod, _saveThresholdsAndContinue, _testMeForEverythingAndContinue, _editThreshold,
       _adjustStrengthCount, _applyStrengthCountSideEffects, _selectSplit, _toggleMuscle,
