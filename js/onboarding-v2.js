@@ -505,6 +505,15 @@
     ov.querySelectorAll(".is-selected").forEach(el => el.classList.remove("is-selected"));
     ov.querySelectorAll("input[type=text], input[type=number], input[type=date], input[type=time]").forEach(el => { el.value = ""; });
     ov.querySelectorAll("textarea").forEach(el => { el.value = ""; });
+    // Reset <select>s to their first `selected` option (or first option)
+    // so a stale value from a previous Build Plan run doesn't leak into
+    // the new flow. Previously only text/number inputs were cleared,
+    // which meant the race-category dropdown could still show "Hyrox"
+    // after the user switched to a Triathlon build.
+    ov.querySelectorAll("select").forEach(sel => {
+      const defaultOpt = sel.querySelector("option[selected]") || sel.querySelector("option");
+      if (defaultOpt) sel.value = defaultOpt.value;
+    });
     // Reset default long-day picks (Sun run / Sat ride)
     const defRun  = ov.querySelector('[data-longrun="sun"]');
     const defRide = ov.querySelector('[data-longride="sat"]');
@@ -1050,7 +1059,12 @@
   function _applyRaceCategoryDefault() {
     const sel = document.getElementById("bp-v2-race-category");
     if (!sel) return;
-    if (_state.currentRace && _state.currentRace.date) return; // already saved — keep it
+    // Always derive from selectedSports when entering the race step —
+    // previously this short-circuited on _state.currentRace.date, but
+    // openBuildPlan() restores currentRace from raceEvents[0] (the
+    // existing A race on the calendar), so the date was populated from
+    // a DIFFERENT prior race and the guard prevented the new race's
+    // category from reflecting the current selection.
     const cat = _defaultRaceCategoryForSports(_state.selectedSports || []);
     if (!cat || cat === sel.value) return;
     sel.value = cat;
@@ -2574,10 +2588,24 @@
     _activePicker = tray;
   }
   function _pickAddSlot(day, sport) {
-    if (!Array.isArray(_state.schedule[day])) _state.schedule[day] = [];
-    _state.schedule[day].push(sport);
+    _addSlotToDay(day, sport);
     _closeAddSlotPicker();
     _renderSchedule();
+  }
+
+  // Add a session to a day with rest/workout mutual exclusion:
+  //   - adding "rest"    → drops every other session on that day
+  //   - adding a workout → drops any "rest" marker already present
+  // No day can be both resting and training at the same time.
+  function _addSlotToDay(day, sport) {
+    if (!Array.isArray(_state.schedule[day])) _state.schedule[day] = [];
+    if (sport === "rest") {
+      _state.schedule[day] = ["rest"];
+      return;
+    }
+    _state.schedule[day] = _state.schedule[day].filter(s => s !== "rest");
+    // Avoid duplicate-same-sport spam (e.g., two Rests via drag).
+    if (!_state.schedule[day].includes(sport)) _state.schedule[day].push(sport);
   }
   function _closeAddSlotPicker() {
     if (_activePicker && _activePicker.parentElement) _activePicker.parentElement.removeChild(_activePicker);
@@ -2625,8 +2653,7 @@
     const from = _state.schedule[payload.day];
     if (from[payload.idx] !== payload.sport) return;
     from.splice(payload.idx, 1);
-    if (!Array.isArray(_state.schedule[targetDay])) _state.schedule[targetDay] = [];
-    _state.schedule[targetDay].push(payload.sport);
+    _addSlotToDay(targetDay, payload.sport);
     _renderSchedule();
   }
   function _saveScheduleAndContinue() {
