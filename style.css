@@ -1608,41 +1608,6 @@ button:active {
   position: relative;
   flex-shrink: 0;
 }
-.cal-help-btn {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 1px solid var(--color-border);
-  background: transparent;
-  color: var(--color-text-muted);
-  font-size: 0.65rem;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-  line-height: 16px;
-  opacity: 0.6;
-}
-.cal-help-btn:hover { opacity: 1; }
-
-.cal-help-tooltip {
-  display: none;
-  position: absolute;
-  left: 0;
-  top: 28px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  padding: 12px 16px;
-  font-size: 0.82rem;
-  color: var(--color-text);
-  line-height: 1.4;
-  box-shadow: var(--shadow);
-  z-index: 100;
-  max-width: 260px;
-  white-space: normal;
-}
-.cal-help-tooltip.is-visible { display: block; }
-
 .cal-add-header-btn {
   background: var(--color-accent);
   border: none;
@@ -17686,6 +17651,75 @@ body.ob-v2-lock { overflow: hidden; }
   border-color: #4FC3F7;
   color: #1565C0;
   background: #E3F2FD;
+}
+
+/* "Looks good?" collapsed threshold row — shown when the athlete's
+   threshold was last updated within 90 days. The full form stays in the
+   DOM (hidden) so Edit just flips visibility. */
+.ob-v2-threshold-section.is-confirmed .ob-v2-threshold-header {
+  margin-bottom: 0;
+}
+.ob-v2-threshold-collapsed {
+  margin-top: 10px;
+}
+.ob-v2-threshold-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #F6FBF6;
+  border: 1px solid #DCEFD9;
+  border-radius: 10px;
+}
+.ob-v2-threshold-summary-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #3E9C4A;
+  color: #FFF;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.ob-v2-threshold-summary-text {
+  flex: 1;
+  min-width: 0;
+}
+.ob-v2-threshold-summary-primary {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1A1A1A;
+}
+.ob-v2-threshold-summary-secondary {
+  font-size: 12px;
+  color: #666;
+  margin-top: 2px;
+}
+.ob-v2-threshold-updated {
+  font-size: 12px;
+  color: #3E9C4A;
+  margin-top: 2px;
+  font-weight: 600;
+}
+.ob-v2-threshold-edit {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1.5px solid #D3E5D1;
+  background: #FFF;
+  font-size: 12px;
+  font-weight: 700;
+  color: #3E9C4A;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.ob-v2-threshold-edit:hover {
+  border-color: #3E9C4A;
+  background: #F1F8F0;
 }
 
 /* bp-5: weekly schedule grid */

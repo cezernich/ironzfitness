@@ -156,18 +156,6 @@ function formatWeekLabel(weekStart) {
   return `${sStr} – ${eStr}, ${weekEnd.getFullYear()}`;
 }
 
-function toggleCalHelp() {
-  const tip = document.getElementById("cal-help-tooltip");
-  if (tip) tip.classList.toggle("is-visible");
-}
-// Close on outside click
-document.addEventListener("click", (e) => {
-  if (!e.target.closest("#cal-help-btn") && !e.target.closest("#cal-help-tooltip")) {
-    const tip = document.getElementById("cal-help-tooltip");
-    if (tip) tip.classList.remove("is-visible");
-  }
-});
-
 // ─── Main dispatch ────────────────────────────────────────────────────────────
 
 function renderCalendar() {
@@ -339,8 +327,6 @@ function renderWeekOverview() {
     <div class="week-overview-bar">
       <div class="week-overview-left">
         <span class="week-overview-label">This week</span>
-        <button class="cal-help-btn" id="cal-help-btn" onclick="toggleCalHelp()" title="Help">?</button>
-        <div class="cal-help-tooltip" id="cal-help-tooltip">To edit or remove training plans, go to <strong>Training</strong> tab &rarr; <strong>Active Training Inputs</strong>.</div>
       </div>
       <div class="week-overview-right">
         ${timeStr ? `<span class="week-overview-time">${ICONS.clock} ${timeStr} est.</span>` : ""}

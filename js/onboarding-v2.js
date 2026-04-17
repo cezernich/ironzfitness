@@ -345,6 +345,7 @@
   function _loadExistingThresholds() {
     let zones = {};
     let prior = {};
+    let profile = {};
     try { zones = JSON.parse(localStorage.getItem("trainingZones") || "{}") || {}; }
     catch { zones = {}; }
     // Also read the user's last saved Build Plan thresholds — the
@@ -353,36 +354,105 @@
     // Those should come back pre-filled the next time Build Plan opens.
     try { prior = JSON.parse(localStorage.getItem("thresholds") || "{}") || {}; }
     catch { prior = {}; }
+    try { profile = JSON.parse(localStorage.getItem("profile") || "{}") || {}; }
+    catch { profile = {}; }
+
+    // profile.*Updated stamps are written by saveTrainingZonesData — use
+    // them as the freshness signal for the collapsed "Looks good?" UX.
+    const profileStamp = {
+      run: profile.thresholdPaceUpdated,
+      bike: profile.ftpUpdated,
+      swim: profile.cssTimeUpdated,
+      strength: profile.strengthThresholdUpdatedAt,
+    };
+
     const result = {};
+
+    // ── Running ──────────────────────────────────────────────────────────
+    // The Training Zones tab saves {referenceDist, referenceTime, vdot} on
+    // race-based entry. The Build Plan flow can additionally write
+    // thresholdPace directly. Either form should pre-fill the right method.
     if (zones.running) {
-      const tp = zones.running.thresholdPace || zones.running.threshold_pace;
-      if (tp) result.run = { mode: "known", method: "pace", threshPace: String(tp) };
+      const r = zones.running;
+      const tp = r.thresholdPace || r.threshold_pace;
+      if (tp) {
+        result.run = { mode: "known", method: "pace", threshPace: String(tp) };
+      } else if (r.referenceDist && r.referenceTime) {
+        result.run = {
+          mode: "known",
+          method: "race",
+          raceDist: _normalizeRunDistance(r.referenceDist),
+          raceTime: String(r.referenceTime),
+        };
+      }
+      const ts = profileStamp.run || r.lastUpdated || r.calculatedAt;
+      if (result.run && ts) result.run._updatedAt = ts;
     }
+
+    // ── Cycling ──────────────────────────────────────────────────────────
     if (zones.biking && zones.biking.ftp) {
       result.bike = { mode: "known", method: "ftp", ftp: String(zones.biking.ftp) };
+      const ts = profileStamp.bike || zones.biking.lastUpdated || zones.biking.calculatedAt;
+      if (ts) result.bike._updatedAt = ts;
     }
-    if (zones.swimming && (zones.swimming.css || zones.swimming.cssPace)) {
-      const css = zones.swimming.cssPace || zones.swimming.css;
-      result.swim = { mode: "known", method: "pace", cssPace: String(css) };
+
+    // ── Swimming ─────────────────────────────────────────────────────────
+    // Training Zones tab saves {referenceDist:"400m", referenceTime,
+    // tPaceSec, tPaceStr}. Build Plan flow writes {css, cssPace}. Read
+    // either. Pre-fill the pace input (common path) AND the css-test
+    // fields when we have the 400m reference time — that way if the user
+    // clicks Edit and switches methods, both are already populated.
+    if (zones.swimming) {
+      const sw = zones.swimming;
+      const cssSec = Number(sw.tPaceSec) || parseInt(sw.cssPace, 10) || parseInt(sw.css, 10) || null;
+      if (cssSec && cssSec > 0) {
+        const base = { mode: "known", method: "pace", cssPace: String(Math.round(cssSec)) };
+        // If we also have the reference 400m time, back-fill the
+        // css-test inputs so switching methods preserves the user's
+        // original source numbers.
+        if (sw.referenceDist === "400m" && sw.referenceTime) {
+          const parts = String(sw.referenceTime).split(":").map(x => parseInt(x, 10));
+          const m = Number.isFinite(parts[0]) ? parts[0] : 0;
+          const s = Number.isFinite(parts[1]) ? parts[1] : 0;
+          if (m || s) {
+            base.css400min = String(m);
+            base.css400sec = String(s);
+          }
+        }
+        result.swim = base;
+      }
+      const ts = profileStamp.swim || sw.lastUpdated || sw.calculatedAt;
+      if (result.swim && ts) result.swim._updatedAt = ts;
     }
+
+    // ── Strength ─────────────────────────────────────────────────────────
     if (zones.strength) {
       const s = zones.strength;
       const out = { mode: "known" };
       if (s.squat && s.squat.weight)    out.squat = String(s.squat.weight);
       if (s.bench && s.bench.weight)    out.bench = String(s.bench.weight);
       if (s.deadlift && s.deadlift.weight) out.dead = String(s.deadlift.weight);
-      if (out.squat || out.bench || out.dead) result.strength = out;
+      if (out.squat || out.bench || out.dead) {
+        const ts = profileStamp.strength || s.updatedAt || s.lastUpdated || s.calculatedAt;
+        if (ts) out._updatedAt = ts;
+        result.strength = out;
+      }
     }
+
     // Layer the prior Build Plan thresholds over the trainingZones-derived
     // defaults. The prior run wins because it captures method-specific
     // inputs (CSS Test times, 20-min bike test watts, race results) that
-    // trainingZones only records in collapsed form.
+    // trainingZones only records in collapsed form. Preserve the
+    // trainingZones-derived _updatedAt unless the prior entry has its own.
     Object.keys(prior || {}).forEach(key => {
       const p = prior[key];
       if (!p || typeof p !== "object") return;
-      // If the prior entry has any actual values beyond mode, prefer it.
-      const hasValues = Object.keys(p).some(k => k !== "mode" && p[k] != null && p[k] !== "");
-      if (hasValues) result[key] = { ...(result[key] || {}), ...p };
+      const hasValues = Object.keys(p).some(k => k !== "mode" && k !== "_updatedAt" && p[k] != null && p[k] !== "");
+      if (hasValues) {
+        const prevTs = result[key] && result[key]._updatedAt;
+        result[key] = { ...(result[key] || {}), ...p };
+        if (prevTs && !result[key]._updatedAt) result[key]._updatedAt = prevTs;
+      }
     });
     return result;
   }
@@ -1400,6 +1470,7 @@
             }
           });
         }
+        _applyCollapsedState(section, key, saved);
         return;
       }
       // Pre-select saved method (fall back to first option)
@@ -1413,7 +1484,128 @@
           if (saved[id] != null) input.value = saved[id];
         });
       }
+      _applyCollapsedState(section, key, saved);
     });
+  }
+
+  // If a sport's threshold was updated in the last 90 days, collapse the
+  // card by default to a summary line + Edit button — no need to re-type.
+  // The underlying form stays in the DOM (hidden), so _saveThresholds-
+  // AndContinue can still read its pre-filled values on submit.
+  function _applyCollapsedState(section, key, saved) {
+    if (!section || !saved || !_isRecent(saved._updatedAt)) return;
+    const body = section.querySelector('[data-threshold-body="' + key + '"]');
+    if (!body) return;
+    const summaryHtml = _thresholdSummaryHtml(key, saved);
+    if (!summaryHtml) return;
+    const collapsed = document.createElement("div");
+    collapsed.className = "ob-v2-threshold-collapsed";
+    collapsed.setAttribute("data-threshold-collapsed", key);
+    collapsed.innerHTML = summaryHtml;
+    body.style.display = "none";
+    body.parentNode.insertBefore(collapsed, body);
+    section.classList.add("is-confirmed");
+  }
+
+  function _editThreshold(key) {
+    const section = document.querySelector('[data-threshold="' + key + '"]');
+    if (!section) return;
+    const body = section.querySelector('[data-threshold-body="' + key + '"]');
+    const collapsed = section.querySelector('[data-threshold-collapsed="' + key + '"]');
+    if (collapsed && collapsed.parentNode) collapsed.parentNode.removeChild(collapsed);
+    if (body) body.style.display = "";
+    section.classList.remove("is-confirmed");
+  }
+
+  // The Training Zones tab stores running distances as "Mile" / "5K" /
+  // "10K" / "Half Marathon" / "Marathon". The Build Plan race-method
+  // <select> uses lowercase camelCase values. Normalize so the pre-fill
+  // actually matches an <option> value.
+  function _normalizeRunDistance(raw) {
+    if (!raw) return "";
+    const s = String(raw).toLowerCase().replace(/\s+/g, "");
+    const map = { mile: "mile", "5k": "5k", "10k": "10k", halfmarathon: "halfMarathon", marathon: "marathon" };
+    return map[s] || String(raw);
+  }
+
+  function _isRecent(iso, days) {
+    if (!iso) return false;
+    const then = new Date(iso).getTime();
+    if (!then || isNaN(then)) return false;
+    const windowDays = typeof days === "number" ? days : 90;
+    return (Date.now() - then) <= windowDays * 24 * 60 * 60 * 1000;
+  }
+
+  function _formatUpdatedDate(iso) {
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return "";
+      return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    } catch { return ""; }
+  }
+
+  function _formatSeconds(sec) {
+    if (sec == null || !isFinite(sec)) return "";
+    const n = Math.max(0, Math.round(sec));
+    const m = Math.floor(n / 60);
+    const s = n % 60;
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  // Human summary line for a pre-filled threshold. Returns the full
+  // <div>…</div> HTML for the collapsed block (summary + updated date
+  // + Edit button), or "" if we don't have enough data to summarise.
+  function _thresholdSummaryHtml(key, saved) {
+    if (!saved) return "";
+    let primary = "";
+    let secondary = "";
+    if (key === "swim") {
+      const css = parseInt(saved.cssPace, 10);
+      if (!css) return "";
+      primary = "CSS " + _formatSeconds(css) + " /100m";
+      if (saved.css400min || saved.css400sec) {
+        const m = parseInt(saved.css400min, 10) || 0;
+        const s = parseInt(saved.css400sec, 10) || 0;
+        secondary = "from 400m in " + m + ":" + (s < 10 ? "0" : "") + s;
+      }
+    } else if (key === "bike") {
+      if (saved.ftp) primary = "FTP " + saved.ftp + " W";
+      else if (saved.twentyMinWatts) primary = "20-min test " + saved.twentyMinWatts + " W";
+      else return "";
+    } else if (key === "run") {
+      if (saved.threshPace) {
+        primary = "Threshold " + saved.threshPace + " /mi";
+      } else if (saved.raceDist && saved.raceTime) {
+        primary = String(saved.raceDist).toUpperCase() + " in " + saved.raceTime;
+      } else {
+        return "";
+      }
+    } else if (key === "strength") {
+      const parts = [];
+      if (saved.squat) parts.push("Squat " + saved.squat);
+      if (saved.bench) parts.push("Bench " + saved.bench);
+      if (saved.dead)  parts.push("Deadlift " + saved.dead);
+      if (!parts.length) return "";
+      primary = parts.join(" · ") + " lbs";
+    } else if (key === "hyrox") {
+      if (saved.finishMin) primary = "Finish " + saved.finishMin + " min";
+      else if (saved.fiveKTime) primary = "5K " + saved.fiveKTime;
+      else return "";
+    } else {
+      return "";
+    }
+    const updated = saved._updatedAt ? _formatUpdatedDate(saved._updatedAt) : "";
+    return (
+      '<div class="ob-v2-threshold-summary">' +
+        '<span class="ob-v2-threshold-summary-check" aria-hidden="true">✓</span>' +
+        '<div class="ob-v2-threshold-summary-text">' +
+          '<div class="ob-v2-threshold-summary-primary">' + _escape(primary) + '</div>' +
+          (secondary ? '<div class="ob-v2-threshold-summary-secondary">' + _escape(secondary) + '</div>' : '') +
+          (updated ? '<div class="ob-v2-threshold-updated">Looks good? Updated ' + _escape(updated) + '.</div>' : '<div class="ob-v2-threshold-updated">Looks good?</div>') +
+        '</div>' +
+        '<button type="button" class="ob-v2-threshold-edit" onclick="OnboardingV2._editThreshold(\'' + key + '\')">Edit</button>' +
+      '</div>'
+    );
   }
 
   function _thresholdSection(key, label, iconKey, methods) {
@@ -1504,11 +1696,23 @@
 
   function _changeThresholdMethod(key) {
     _renderMethodFields(key);
+    // Re-hydrate any fields the user had values for — switching methods
+    // shouldn't wipe a 400m time that's already on record.
+    const saved = _state.thresholds && _state.thresholds[key];
+    if (!saved) return;
+    document.querySelectorAll('[data-threshold="' + key + '"] [data-threshold-input]').forEach(input => {
+      const id = input.getAttribute("data-threshold-input");
+      if (saved[id] != null && saved[id] !== "") input.value = saved[id];
+    });
   }
 
   function _toggleTestMe(btn) {
     if (!btn) return;
     const key = btn.getAttribute("data-threshold-key");
+    // If the section is currently in "Looks good?" collapsed state, drop
+    // that first — Test me means the user wants to re-do this threshold.
+    const section = document.querySelector('[data-threshold="' + key + '"]');
+    if (section && section.classList.contains("is-confirmed")) _editThreshold(key);
     const isOn = btn.classList.toggle("is-active");
     const body = document.querySelector('[data-threshold-body="' + key + '"]');
     if (body) body.style.display = isOn ? "none" : "";
@@ -3087,7 +3291,7 @@
       _toggleGoal, _saveGoalsAndContinue, _renderGoalCards,
       _updateRaceTypes, _updateWeeksCallout, _selectRaceGoal, _selectRacePriority, _applyRacePrioritySection, _selectLeadInPhase, _adjustLeadIn, _saveRaceAndContinue,
       _selectPlanOption, _setCustomDuration, _adjustDaysPerWeek, _setStartDate, _saveNoraceAndContinue,
-      _renderThresholdSections, _toggleTestMe, _changeThresholdMethod, _saveThresholdsAndContinue, _testMeForEverythingAndContinue,
+      _renderThresholdSections, _toggleTestMe, _changeThresholdMethod, _saveThresholdsAndContinue, _testMeForEverythingAndContinue, _editThreshold,
       _adjustStrengthCount, _applyStrengthCountSideEffects, _selectSplit, _toggleMuscle,
       _renderCustomDayList, _toggleMuscleForDay,
       _selectStrLength, _selectStrDuration, _saveStrengthAndContinue,
