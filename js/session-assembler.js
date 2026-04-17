@@ -136,6 +136,168 @@
     ],
   };
 
+  // Philosophy §4.5 + §6.2 — Running distance-specific session overrides
+  // applied to Build/Peak templates. Keyed by race distance; replaces or
+  // augments the generic run template.
+  const RUNNING_DISTANCE_OVERRIDES = {
+    '5k': {
+      build: [
+        { type: 'run', subtype: 'easy', priority: 'aerobic' },
+        { type: 'run', subtype: 'easy_with_strides', priority: 'aerobic' },
+        { type: 'run', subtype: 'vo2max_intervals', priority: 'intensity' },
+        { type: 'run', subtype: 'tempo', priority: 'intensity' },
+        { type: 'run', subtype: 'long_run', priority: 'long' },
+        { type: 'strength', subtype: 'full_body', priority: 'strength' },
+      ],
+      peak: [
+        { type: 'run', subtype: 'easy', priority: 'aerobic' },
+        { type: 'run', subtype: 'easy_with_strides', priority: 'aerobic' },
+        { type: 'run', subtype: 'vo2max_intervals', priority: 'intensity' },
+        { type: 'run', subtype: 'race_pace_5k', priority: 'intensity' },
+        { type: 'run', subtype: 'long_run', priority: 'long' },
+        { type: 'strength', subtype: 'full_body', priority: 'strength' },
+      ],
+    },
+    '10k': {
+      build: [
+        { type: 'run', subtype: 'easy', priority: 'aerobic' },
+        { type: 'run', subtype: 'easy', priority: 'aerobic' },
+        { type: 'run', subtype: 'cruise_intervals', priority: 'intensity' },
+        { type: 'run', subtype: 'long_intervals', priority: 'intensity' },
+        { type: 'run', subtype: 'long_run_progressive', priority: 'long' },
+        { type: 'strength', subtype: 'full_body', priority: 'strength' },
+      ],
+      peak: [
+        { type: 'run', subtype: 'easy', priority: 'aerobic' },
+        { type: 'run', subtype: 'easy', priority: 'aerobic' },
+        { type: 'run', subtype: 'cruise_intervals', priority: 'intensity' },
+        { type: 'run', subtype: 'race_pace_10k', priority: 'intensity' },
+        { type: 'run', subtype: 'long_run_progressive', priority: 'long' },
+        { type: 'strength', subtype: 'full_body', priority: 'strength' },
+      ],
+    },
+    'half-marathon': {
+      build: [
+        { type: 'run', subtype: 'easy', priority: 'aerobic' },
+        { type: 'run', subtype: 'easy', priority: 'aerobic' },
+        { type: 'run', subtype: 'tempo', priority: 'intensity' },
+        { type: 'run', subtype: 'mp_progression', priority: 'intensity' },
+        { type: 'run', subtype: 'mp_long_run', priority: 'long' },
+        { type: 'strength', subtype: 'full_body', priority: 'strength' },
+      ],
+      peak: [
+        { type: 'run', subtype: 'easy', priority: 'aerobic' },
+        { type: 'run', subtype: 'easy', priority: 'aerobic' },
+        { type: 'run', subtype: 'tempo', priority: 'intensity' },
+        { type: 'run', subtype: 'race_pace_half', priority: 'intensity' },
+        { type: 'run', subtype: 'mp_long_run', priority: 'long' },
+        { type: 'strength', subtype: 'full_body', priority: 'strength' },
+      ],
+    },
+    'marathon': {
+      build: [
+        { type: 'run', subtype: 'easy', priority: 'aerobic' },
+        { type: 'run', subtype: 'medium_long_run', priority: 'aerobic' },
+        { type: 'run', subtype: 'progressive_tempo', priority: 'intensity' },
+        { type: 'run', subtype: 'easy', priority: 'aerobic' },
+        { type: 'run', subtype: 'mp_long_run', priority: 'long' },
+        { type: 'strength', subtype: 'full_body', priority: 'strength' },
+      ],
+      peak: [
+        { type: 'run', subtype: 'easy', priority: 'aerobic' },
+        { type: 'run', subtype: 'medium_long_run', priority: 'aerobic' },
+        { type: 'run', subtype: 'progressive_tempo', priority: 'intensity' },
+        { type: 'run', subtype: 'race_pace_marathon', priority: 'intensity' },
+        { type: 'run', subtype: 'mp_long_run', priority: 'long' },
+        { type: 'strength', subtype: 'full_body', priority: 'strength' },
+      ],
+    },
+  };
+
+  // Philosophy §6.3 — Hyrox session distribution by phase
+  const HYROX_TEMPLATES = {
+    'pre-base': [
+      { type: 'run', subtype: 'easy', priority: 'aerobic' },
+      { type: 'run', subtype: 'easy', priority: 'aerobic' },
+      { type: 'strength', subtype: 'hyrox_heavy', priority: 'strength' },
+      { type: 'strength', subtype: 'hyrox_heavy', priority: 'strength' },
+    ],
+    base: [
+      { type: 'run', subtype: 'easy', priority: 'aerobic' },
+      { type: 'run', subtype: 'easy', priority: 'aerobic' },
+      { type: 'run', subtype: 'easy', priority: 'aerobic' },
+      { type: 'strength', subtype: 'hyrox_heavy', priority: 'strength' },
+      { type: 'strength', subtype: 'hyrox_heavy', priority: 'strength' },
+      { type: 'hyrox', subtype: 'station_practice', priority: 'strength' },
+      { type: 'cross-training', subtype: 'cardio', priority: 'aerobic' },
+    ],
+    build: [
+      { type: 'run', subtype: 'easy', priority: 'aerobic' },
+      { type: 'run', subtype: 'easy', priority: 'aerobic' },
+      { type: 'run', subtype: 'hyrox_intervals', priority: 'intensity' },
+      { type: 'hyrox', subtype: 'run_station_combo', priority: 'intensity' },
+      { type: 'hyrox', subtype: 'station_circuit', priority: 'intensity' },
+      { type: 'strength', subtype: 'hyrox_endurance', priority: 'strength' },
+      { type: 'strength', subtype: 'hyrox_endurance', priority: 'strength' },
+    ],
+    peak: [
+      { type: 'run', subtype: 'easy', priority: 'aerobic' },
+      { type: 'run', subtype: 'easy', priority: 'aerobic' },
+      { type: 'hyrox', subtype: 'race_pace_combo', priority: 'intensity' },
+      { type: 'run', subtype: 'hyrox_intervals', priority: 'intensity' },
+      { type: 'hyrox', subtype: 'station_circuit', priority: 'intensity' },
+      { type: 'strength', subtype: 'hyrox_maintenance', priority: 'strength' },
+    ],
+    taper: [
+      { type: 'run', subtype: 'easy', priority: 'aerobic' },
+      { type: 'run', subtype: 'easy', priority: 'aerobic' },
+      { type: 'hyrox', subtype: 'short_opener_combo', priority: 'intensity' },
+    ],
+    'race-week': [
+      { type: 'run', subtype: 'short_with_strides', priority: 'aerobic' },
+      { type: 'hyrox', subtype: 'short_opener_combo', priority: 'aerobic' },
+    ],
+  };
+
+  // Philosophy §6.5 — Goal-based session distribution templates for
+  // rolling mesocycle plans. These ignore phase; "mesocycle" reads them.
+  const GOAL_MESOCYCLE_TEMPLATES = {
+    speed_performance: [
+      { type: 'run', subtype: 'easy', priority: 'aerobic' },
+      { type: 'run', subtype: 'easy', priority: 'aerobic' },
+      { type: 'run', subtype: 'tempo', priority: 'intensity' },
+      { type: 'run', subtype: 'intervals', priority: 'intensity' },
+      { type: 'run', subtype: 'long_run', priority: 'long' },
+      { type: 'strength', subtype: 'full_body', priority: 'strength' },
+      { type: 'strength', subtype: 'full_body', priority: 'strength' },
+    ],
+    endurance: [
+      { type: 'run', subtype: 'easy', priority: 'aerobic' },
+      { type: 'run', subtype: 'easy', priority: 'aerobic' },
+      { type: 'run', subtype: 'long_run', priority: 'long' },
+      { type: 'bike', subtype: 'long_ride', priority: 'long' },
+      { type: 'run', subtype: 'tempo', priority: 'intensity' },
+      { type: 'strength', subtype: 'full_body', priority: 'strength' },
+    ],
+    fat_loss: [
+      // Strength fills first — §2.5 critical rule.
+      { type: 'strength', subtype: 'full_body', priority: 'strength' },
+      { type: 'strength', subtype: 'full_body', priority: 'strength' },
+      { type: 'strength', subtype: 'full_body', priority: 'strength' },
+      { type: 'run', subtype: 'easy', priority: 'aerobic' },
+      { type: 'run', subtype: 'easy', priority: 'aerobic' },
+      { type: 'run', subtype: 'long_run', priority: 'long' },
+      { type: 'circuit', subtype: 'hiit', priority: 'intensity' },
+    ],
+    general_fitness: [
+      { type: 'strength', subtype: 'full_body', priority: 'strength' },
+      { type: 'strength', subtype: 'full_body', priority: 'strength' },
+      { type: 'run', subtype: 'easy', priority: 'aerobic' },
+      { type: 'bike', subtype: 'z2_endurance', priority: 'aerobic' },
+      { type: 'cross-training', subtype: 'cardio', priority: 'aerobic' },
+    ],
+  };
+
   // Fallback templates for sport profiles that aren't pure endurance.
   // Strength-dominant and general-fitness users get strength frequency
   // from days available rather than phase.
@@ -223,6 +385,29 @@
       { role: 'core-stability', pattern: 'core', tier: ['secondary', 'tertiary'] },
       { role: 'accessory', pattern: ['isolation-legs', 'isolation-arms'], tier: ['secondary', 'tertiary'] },
     ],
+    // Philosophy §9.5 — Hyrox strength shifts across phases.
+    // Base: heavy compounds (3-4×6-8).
+    hyrox_heavy: [
+      { role: 'squat-heavy', pattern: 'squat', tier: ['primary'] },
+      { role: 'hinge-heavy', pattern: 'hinge', tier: ['primary'] },
+      { role: 'pull-heavy', pattern: 'horizontal-pull', tier: ['primary'] },
+      { role: 'press-heavy', pattern: ['vertical-push', 'horizontal-push'], tier: ['primary'] },
+      { role: 'carry-lunge', pattern: ['carry', 'isolation-legs'], tier: ['secondary', 'tertiary'] },
+    ],
+    // Build: muscular endurance (3-4×12-16), station-specific biased.
+    hyrox_endurance: [
+      { role: 'lunge-loaded', pattern: 'isolation-legs', tier: ['primary', 'secondary'] },
+      { role: 'squat-endurance', pattern: 'squat', tier: ['secondary'] },
+      { role: 'pull-endurance', pattern: 'horizontal-pull', tier: ['secondary'] },
+      { role: 'carry', pattern: 'carry', tier: ['primary', 'secondary', 'tertiary'] },
+      { role: 'core-hip-flexor', pattern: 'core', tier: ['secondary', 'tertiary'] },
+    ],
+    // Peak/Taper: light maintenance.
+    hyrox_maintenance: [
+      { role: 'squat-light', pattern: 'squat', tier: ['primary', 'secondary'] },
+      { role: 'hinge-light', pattern: 'hinge', tier: ['primary', 'secondary'] },
+      { role: 'pull-light', pattern: 'horizontal-pull', tier: ['secondary'] },
+    ],
   };
 
   // TRAINING_PHILOSOPHY §8.2 — sets/reps/rest by tier and level
@@ -261,18 +446,56 @@
     other: [1, 3, 5, 2, 4, 6, 7],
   };
 
-  function getSessionTemplate(sportProfile, phase) {
-    const map = sportProfile === 'triathlon' ? TRIATHLON_TEMPLATES
-      : (sportProfile === 'endurance' || sportProfile === 'hybrid') ? RUNNING_TEMPLATES
-      : null;
-    if (map && map[phase]) return map[phase].map(s => ({ ...s }));
+  function getSessionTemplate(sportProfile, phase, arc, classification) {
+    // Rolling mesocycle: template is driven by goal, not phase.
+    if (phase === 'mesocycle') {
+      const goal = (arc && arc.goal) || (classification && classification.goal) || 'general_fitness';
+      const map = GOAL_MESOCYCLE_TEMPLATES[goal] || GOAL_MESOCYCLE_TEMPLATES.general_fitness;
+      return map.map(s => ({ ...s }));
+    }
+
+    if (sportProfile === 'triathlon') {
+      const t = TRIATHLON_TEMPLATES[phase];
+      return t ? t.map(s => ({ ...s })) : null;
+    }
+
+    if (sportProfile === 'hyrox') {
+      const t = HYROX_TEMPLATES[phase];
+      return t ? t.map(s => ({ ...s })) : null;
+    }
+
+    if (sportProfile === 'running' || sportProfile === 'endurance' || sportProfile === 'hybrid') {
+      // Apply distance-specific override if available (Philosophy §6.2).
+      const aRace = arc && Array.isArray(arc.races)
+        ? (arc.races.find(r => r.priority === 'A') || arc.races[arc.races.length - 1])
+        : null;
+      const raceType = aRace && aRace.raceType;
+      const override = raceType && RUNNING_DISTANCE_OVERRIDES[raceType];
+      if (override && override[phase]) return override[phase].map(s => ({ ...s }));
+      const t = RUNNING_TEMPLATES[phase];
+      return t ? t.map(s => ({ ...s })) : null;
+    }
+
+    if (sportProfile === 'cycling') {
+      // Cycling-only race plans reuse running templates with bike sessions.
+      // (No dedicated cycling templates yet — conservative fallback.)
+      return null;
+    }
+
     return null;
   }
 
   function getWeeklyTimeBudget(weekNumber, arc, classification) {
     const ceiling = arc && arc.weeklyHoursCeiling ? arc.weeklyHoursCeiling : 10;
     const phase = getPhaseForWeek(weekNumber, arc);
-    // Phase-relative scaling — base has moderate volume, taper/race-week drop
+    if (phase === 'mesocycle') {
+      // Philosophy §4.9 — 3 progression weeks + 1 deload
+      const mesocycleFactor = weekNumber === 1 ? 0.85
+        : weekNumber === 2 ? 0.92
+        : weekNumber === 3 ? 1.0
+        : 0.50; // week 4 deload
+      return Math.round(ceiling * mesocycleFactor * 60);
+    }
     const phaseFactor = {
       'pre-base': 0.75,
       base: 1.0,
@@ -281,7 +504,7 @@
       taper: 0.55,
       'race-week': 0.35,
     }[phase] || 1.0;
-    return Math.round(ceiling * phaseFactor * 60); // minutes
+    return Math.round(ceiling * phaseFactor * 60);
   }
 
   function getPhaseForWeek(weekNumber, arc) {
@@ -293,6 +516,8 @@
   }
 
   function isDeloadWeek(weekNumber, level, phase, totalWeeks) {
+    // Rolling mesocycle: week 4 is always the deload (Philosophy §4.9).
+    if (phase === 'mesocycle') return weekNumber === 4;
     if (totalWeeks <= 4) return false;
     if (phase === 'taper' || phase === 'race-week') return false;
     // Advanced: every 3rd week; beginner/intermediate: every 4th week.
@@ -340,6 +565,14 @@
       if (type === 'bike') return DAY_PREFS.long_ride;
     }
     if (priority === 'brick') return DAY_PREFS.brick;
+    // Hyrox combo sessions belong on the weekend — they're the Hyrox
+    // equivalent of a brick (long, high-stress, needs space around it).
+    if (type === 'hyrox') {
+      if (subtype === 'run_station_combo' || subtype === 'race_pace_combo') return DAY_PREFS.brick;
+      if (subtype === 'station_circuit') return DAY_PREFS.intensity_run;
+      if (subtype === 'short_opener_combo') return DAY_PREFS.intensity_run;
+      return DAY_PREFS.other;
+    }
     if (priority === 'intensity') {
       if (type === 'run') return DAY_PREFS.intensity_run;
       if (type === 'bike') return DAY_PREFS.intensity_bike;
@@ -354,15 +587,24 @@
     return DAY_PREFS.other;
   }
 
-  function priorityWeight(session) {
-    switch (session.priority) {
-      case 'long': return 100;
-      case 'brick': return 90;
-      case 'intensity': return 80;
-      case 'strength': return 55;
-      case 'aerobic': return 45;
-      default: return 30;
-    }
+  function priorityWeight(session, classification) {
+    const base = (() => {
+      switch (session.priority) {
+        case 'long': return 100;
+        case 'brick': return 90;
+        case 'intensity': return 80;
+        case 'strength': return 55;
+        case 'aerobic': return 45;
+        default: return 30;
+      }
+    })();
+    // Goal-based priority bumps for rolling mesocycle templates (Philosophy §6.5).
+    const goal = classification && classification.goal;
+    if (goal === 'fat_loss' && session.type === 'strength') return 110;  // above long, per §2.5 critical rule
+    if (goal === 'speed_performance' && session.priority === 'intensity') return 95;
+    if (goal === 'endurance' && session.priority === 'long') return 105;
+    if (goal === 'general_fitness' && session.type === 'strength') return 70; // equal-ish priority
+    return base;
   }
 
   // Select training sessions from the template so that with +1 rest entry
@@ -373,21 +615,35 @@
     const days = classification.daysAvailable || 3;
     const trainingSlots = Math.max(1, days - 1);  // reserve 1 slot for rest
 
-    const scored = template.map((s, idx) => ({ s, idx, weight: priorityWeight(s) }));
+    const scored = template.map((s, idx) => ({ s, idx, weight: priorityWeight(s, classification) }));
     scored.sort((a, b) => b.weight - a.weight);
 
     const selected = [];
     const used = new Set();
+    const goal = classification && classification.goal;
 
-    // Pass 1 — protected sessions (long runs/rides, brick, intensity).
+    // Pass 0 — fat_loss floor: guarantee at least 2 strength sessions if the
+    // template has them (Philosophy §2.5 critical rule).
+    if (goal === 'fat_loss') {
+      let strengthTaken = 0;
+      for (const { s, idx } of scored) {
+        if (strengthTaken >= 2 || selected.length >= trainingSlots) break;
+        if (s.type === 'strength' && !used.has(idx)) {
+          selected.push(s); used.add(idx); strengthTaken++;
+        }
+      }
+    }
+
+    // Pass 1 — protected sessions (long runs/rides, brick, intensity, fat_loss strength boost).
     for (const { s, idx, weight } of scored) {
       if (selected.length >= trainingSlots) break;
+      if (used.has(idx)) continue;
       if (weight >= 80) { selected.push(s); used.add(idx); }
     }
 
     // Pass 2 — sport coverage: one of each type present in the template.
     const sportsInTemplate = [...new Set(template.map(t => t.type))];
-    const sportPriority = ['strength', 'run', 'bike', 'swim', 'cross-training', 'brick'];
+    const sportPriority = ['strength', 'run', 'bike', 'swim', 'hyrox', 'cross-training', 'brick', 'circuit'];
     const orderedSports = sportPriority.filter(p => sportsInTemplate.includes(p));
     const haveTypes = new Set(selected.map(s => s.type));
     for (const sport of orderedSports) {
@@ -547,6 +803,22 @@
     return sessions;
   }
 
+  // Two-way scale: adjust session durations up or down to hit targetMin.
+  // Used for mesocycle progression so weeks actually differ (Philosophy §4.9).
+  function scaleSessionsToBudget(sessions, targetMin) {
+    if (!targetMin || targetMin <= 0) return sessions;
+    const active = sessions.filter(s => s && s.type !== 'rest');
+    const total = active.reduce((a, s) => a + (s.durationMin || 0), 0);
+    if (total <= 0) return sessions;
+    const scale = targetMin / total;
+    // Don't scale extremely aggressively on a single session.
+    const clamped = Math.max(0.4, Math.min(1.6, scale));
+    for (const s of active) {
+      s.durationMin = Math.max(15, Math.round((s.durationMin || 0) * clamped));
+    }
+    return sessions;
+  }
+
   // ── Zones, pace, description, rationale ──────────────────────────────────
 
   const SUBTYPE_METADATA = {
@@ -576,6 +848,32 @@
     sport_specific:      { zones: [], keySession: false, label: 'Sport-Specific Strength' },
     optional:            { zones: ['Z2'], keySession: false, label: 'Optional Cross-Training' },
     cardio:              { zones: ['Z2'], keySession: false, label: 'Cardio Cross-Training' },
+    // v1.4 — Running distance-specific
+    easy_with_strides:      { zones: ['Z1', 'Z2'], keySession: false, label: 'Easy Run w/ Strides' },
+    vo2max_intervals:       { zones: ['Z5'],       keySession: true,  label: 'VO2max Intervals (1K repeats)' },
+    cruise_intervals:       { zones: ['Z4'],       keySession: true,  label: 'Cruise Intervals (mile repeats)' },
+    long_intervals:         { zones: ['Z5'],       keySession: true,  label: 'Long Intervals (1200-2000m)' },
+    mp_progression:         { zones: ['Z3', 'Z4'], keySession: true,  label: 'Marathon-Pace Progression' },
+    progressive_tempo:      { zones: ['Z3', 'Z4'], keySession: true,  label: 'Progressive Tempo (easy → threshold)' },
+    mp_long_run:            { zones: ['Z2', 'Z3'], keySession: false, label: 'MP Long Run' },
+    long_run_progressive:   { zones: ['Z2', 'Z3'], keySession: false, label: 'Progressive Long Run' },
+    medium_long_run:        { zones: ['Z2'],       keySession: false, label: 'Medium-Long Run' },
+    race_pace_5k:           { zones: ['Z4', 'Z5'], keySession: true,  label: '5K Race-Pace Repeats' },
+    race_pace_10k:          { zones: ['Z4'],       keySession: true,  label: '10K Race-Pace Efforts' },
+    race_pace_half:         { zones: ['Z3', 'Z4'], keySession: true,  label: 'Half Marathon Race-Pace Segments' },
+    race_pace_marathon:     { zones: ['Z3'],       keySession: true,  label: 'Marathon-Pace Segments' },
+    // v1.4 — Hyrox
+    hyrox_intervals:        { zones: ['Z4', 'Z5'], keySession: true,  label: 'Hyrox 1K Interval Runs' },
+    run_station_combo:      { zones: ['Z3', 'Z4'], keySession: true,  label: 'Run + Station Combo (1K Sandwich)' },
+    station_circuit:        { zones: ['Z4'],       keySession: true,  label: 'Hyrox Station Circuit' },
+    race_pace_combo:        { zones: ['Z4'],       keySession: true,  label: 'Hyrox Race-Simulation Combo' },
+    short_opener_combo:     { zones: ['Z3'],       keySession: true,  label: 'Short Hyrox Opener Combo' },
+    station_practice:       { zones: ['Z2'],       keySession: false, label: 'Hyrox Station Practice' },
+    hyrox_heavy:            { zones: [],           keySession: false, label: 'Hyrox Heavy Compound Strength' },
+    hyrox_endurance:        { zones: [],           keySession: false, label: 'Hyrox Muscular Endurance Strength' },
+    hyrox_maintenance:      { zones: [],           keySession: false, label: 'Hyrox Strength Maintenance' },
+    // v1.4 — circuit/hiit
+    hiit:                   { zones: ['Z4'],       keySession: true,  label: 'HIIT Circuit' },
   };
 
   function paceToStr(minPerMile) {
@@ -660,7 +958,43 @@
     const dur = s.durationMin;
     const meta = SUBTYPE_METADATA[s.subtype] || {};
     const label = meta.label || s.subtype || s.type;
-    if (s.type === 'strength') return `${label} — see exercise list`;
+
+    // Hyrox-specific descriptions (Philosophy §9.5)
+    if (s.type === 'hyrox') {
+      if (s.subtype === 'run_station_combo') return '1K run → 1 station → 1K run → 1 station → repeat across 3–4 stations at moderate-hard effort (the "1K sandwich").';
+      if (s.subtype === 'station_circuit') return 'All 8 Hyrox stations back-to-back, no running between, timed. Moderate-high intensity.';
+      if (s.subtype === 'race_pace_combo') return 'Race-simulation combo: 4 × (1K run @ race pace + 1 station). Practice transitions + pacing.';
+      if (s.subtype === 'short_opener_combo') return 'Abbreviated run + 3–4 stations at race pace — short, sharp, stay race-ready.';
+      if (s.subtype === 'station_practice') return 'Low-intensity station technique practice — focus on form and movement quality.';
+      return `${label}, ${dur} min`;
+    }
+
+    // Running distance-specific descriptions (Philosophy §6.2)
+    if (s.type === 'run') {
+      if (s.subtype === 'vo2max_intervals') return '15 min warm-up + 6–8 × 1000m @ Z5 with 2–3 min jog recovery + 10 min cool-down.';
+      if (s.subtype === 'cruise_intervals') return '15 min warm-up + 4–6 × 1 mile @ Z4 (threshold) with 90s jog recovery + 10 min cool-down.';
+      if (s.subtype === 'long_intervals') return '15 min warm-up + 4–5 × 1200–2000m @ Z5 with 3 min jog recovery + 10 min cool-down.';
+      if (s.subtype === 'mp_progression') return 'Warm-up + progressive build from easy → marathon pace over the main set + cool-down.';
+      if (s.subtype === 'progressive_tempo') return 'Warm-up, then progressive effort: easy → MP → threshold over ~30 min + cool-down.';
+      if (s.subtype === 'mp_long_run') return `${dur}-min long run with the final 8–12 miles at marathon pace (Z3).`;
+      if (s.subtype === 'long_run_progressive') return `${dur}-min long run with the final 2–3 miles at Z3.`;
+      if (s.subtype === 'medium_long_run') return `Midweek medium-long run (~${dur} min, steady Z2).`;
+      if (s.subtype === 'race_pace_5k' || s.subtype === 'race_pace_10k' || s.subtype === 'race_pace_half' || s.subtype === 'race_pace_marathon') {
+        return `Warm-up + race-pace repeats targeting goal ${s.subtype.replace('race_pace_', '').toUpperCase()} pace + cool-down.`;
+      }
+      if (s.subtype === 'easy_with_strides') return `${dur}-min easy run + 6–8 × 100m strides after the run.`;
+    }
+
+    if (s.type === 'strength') {
+      if (s.subtype === 'hyrox_heavy') return 'Heavy compound lifts (3–4 × 6–8): squat, deadlift, row, press, loaded lunges.';
+      if (s.subtype === 'hyrox_endurance') return 'Muscular-endurance strength (3–4 × 12–16): lunges, carries, rows at moderate weight, short rest.';
+      if (s.subtype === 'hyrox_maintenance') return 'Light maintenance: 2 × 8–10 on primary compounds, stay sharp without adding fatigue.';
+      return `${label} — see exercise list`;
+    }
+
+    if (s.type === 'circuit' && s.subtype === 'hiit') {
+      return 'Short HIIT circuit: 4–6 exercises, 40s work / 20s rest × 3–4 rounds.';
+    }
     if (s.type === 'brick') return `${Math.round(dur * 0.7)} min bike @ Z3 → ${Math.max(10, dur - Math.round(dur * 0.7))} min run @ race effort`;
     if (s.priority === 'intensity' && s.type === 'run') {
       if (s.subtype === 'intervals') return `15 min warm-up, 5×1K @ Z5 w/ 2–3 min jog recovery, 10 min cool-down (${dur} min total)`;
@@ -678,10 +1012,32 @@
   }
 
   function buildRationale(s, phase) {
+    // Hyrox-specific rationale (Philosophy §9.5)
+    if (s.type === 'hyrox') {
+      if (s.subtype === 'run_station_combo') return 'Run + station combos are the single most Hyrox-specific workout — they train your ability to run on station-fatigued legs and vice versa.';
+      if (s.subtype === 'station_circuit') return 'Back-to-back stations without rest train muscular endurance and mental toughness for the race\'s middle stations.';
+      if (s.subtype === 'race_pace_combo') return 'Race-simulation combos teach pacing and transitions — the skills that separate finishers from racers.';
+      if (s.subtype === 'short_opener_combo') return 'Short taper-phase opener keeps movement patterns sharp without adding fatigue.';
+      if (s.subtype === 'station_practice') return 'Low-intensity station practice grooves the movement patterns before adding race-level fatigue.';
+    }
     if (s.type === 'strength') {
+      if (s.subtype === 'hyrox_heavy') return 'Heavy compounds in Hyrox Base build the force ceiling that later translates to sled pushes and wall-ball thrusters.';
+      if (s.subtype === 'hyrox_endurance') return 'Higher reps + shorter rest simulate station demands (12–20 rep range) and build the muscular endurance Hyrox rewards.';
+      if (s.subtype === 'hyrox_maintenance') return 'Maintenance strength preserves force production into race week without adding fatigue.';
       if (phase === 'base') return 'Base-phase strength builds general strength that translates to race-day power and injury resilience.';
       if (phase === 'build') return 'Sport-specific strength maintains force production while cardio volume ramps.';
       return 'Maintenance strength: keep gains without adding fatigue.';
+    }
+    // Running distance-specific rationale (Philosophy §4.5, §9.1)
+    if (s.type === 'run') {
+      if (s.subtype === 'vo2max_intervals') return 'VO2max intervals are the #1 key workout for 5K — they raise the oxygen ceiling that ultimately caps 5K pace.';
+      if (s.subtype === 'cruise_intervals') return 'Cruise intervals at threshold are the 10K bread-and-butter: they teach you to hold race pace under controlled fatigue.';
+      if (s.subtype === 'mp_long_run') return 'Marathon-pace long runs train fat utilization and pacing discipline — the defining marathon adaptation.';
+      if (s.subtype === 'mp_progression') return 'Marathon-pace progression builds the ability to negative-split on race day, when pace discipline matters most.';
+      if (s.subtype === 'progressive_tempo') return 'Progressive tempo (easy → threshold) develops pacing control and extends your ability to hold marathon pace under fatigue.';
+      if (s.subtype === 'long_intervals') return 'Longer intervals (1200–2000m) bridge VO2max and threshold — essential for 10K and half-marathon-specific fitness.';
+      if (s.subtype === 'medium_long_run') return 'Midweek medium-long run accumulates time on feet without the recovery cost of a second long run.';
+      if (s.subtype === 'easy_with_strides') return 'Easy run + strides keeps neuromuscular speed while staying in the aerobic zone.';
     }
     if (s.priority === 'long') return `Long ${s.type === 'bike' ? 'ride' : s.type} builds aerobic capacity and mental endurance — the backbone of race-day performance.`;
     if (s.priority === 'intensity') return `Quality ${s.type} workout raises the ceiling of sustainable effort — essential for race-specific fitness.`;
@@ -736,6 +1092,24 @@
   }
 
   function selectExercisesForSession(session, classification) {
+    if (session.type === 'hyrox') {
+      // Use ExerciseDB.getHyroxStations() when available; otherwise leave
+      // exercises empty (description carries the station list).
+      if (typeof window !== 'undefined' && window.ExerciseDB && typeof window.ExerciseDB.getHyroxStations === 'function') {
+        const stations = window.ExerciseDB.getHyroxStations() || [];
+        session.exercises = stations.slice(0, 8).map(ex => ({
+          exerciseId: ex.id,
+          exerciseName: ex.name,
+          slotRole: 'hyrox-station',
+          sets: 1,
+          reps: ex.targetReps || 'station distance',
+          restSeconds: 0,
+          usesWeights: !!ex.usesWeights,
+          notes: null,
+        }));
+      }
+      return session;
+    }
     if (session.type !== 'strength' && session.type !== 'circuit' && session.type !== 'hiit') {
       return session;
     }
@@ -752,6 +1126,17 @@
       picked.push(ex);
       const tier = ex.tier || (Array.isArray(slot.tier) ? slot.tier[0] : slot.tier) || 'secondary';
       const volume = assignSetsRepsRest(ex, tier, classification.level || 'intermediate');
+      // Hyrox phase-specific volume shift (Philosophy §9.5): build/peak use
+      // higher reps / shorter rest even when the slot template is "primary".
+      if (subtype === 'hyrox_endurance') {
+        volume.sets = 3;
+        volume.reps = '12-16';
+        volume.restSeconds = 75;
+      } else if (subtype === 'hyrox_maintenance') {
+        volume.sets = 2;
+        volume.reps = '8-10';
+        volume.restSeconds = 90;
+      }
       exercises.push({
         exerciseId: ex.id,
         exerciseName: ex.name,
@@ -878,8 +1263,8 @@
 
   // ── Main entry point ─────────────────────────────────────────────────────
 
-  function insertKeySessions(week, phase, classification) {
-    const template = getSessionTemplate(classification.sportProfile, phase)
+  function insertKeySessions(week, phase, classification, arc) {
+    const template = getSessionTemplate(classification.sportProfile, phase, arc, classification)
       || buildGeneralTemplate(classification, phase);
     const trimmed = trimTemplate(template, classification);
     return trimmed;
@@ -935,11 +1320,20 @@
     const isDeload = isDeloadWeek(weekNumber, classification.level, phase, arc.totalWeeks);
     const week = { weekNumber, phase, isDeload };
 
-    let sessions = insertKeySessions(week, phase, classification);
+    let sessions = insertKeySessions(week, phase, classification, arc);
     sessions = assignDays(sessions, classification);
     sessions = applyIntensityConstraints(sessions, classification);
     sessions = assignDurations(sessions, classification, arc, phase);
-    sessions = enforceHourCeiling(sessions, arc.weeklyHoursCeiling);
+    if (phase === 'mesocycle') {
+      // For rolling mesocycles, scale sessions TO match the week's budget
+      // so weeks 1→2→3 progress +5-10% (Philosophy §4.9). Week 4 deload
+      // is handled by applyDeloadModifier separately — but we still honor
+      // the hour ceiling.
+      const weeklyMin = getWeeklyTimeBudget(weekNumber, arc, classification);
+      sessions = scaleSessionsToBudget(sessions, weeklyMin);
+    } else {
+      sessions = enforceHourCeiling(sessions, arc.weeklyHoursCeiling);
+    }
     sessions = sessions.map(s => enrichSession(s, classification, phase));
     sessions = sessions.map(s => selectExercisesForSession(s, classification));
     if (isDeload) sessions = applyDeloadModifier(sessions);
@@ -974,10 +1368,14 @@
     getSessionTemplate,
     areAdjacentDays,
     applyDeloadModifier,
+    scaleSessionsToBudget,
     // extras exposed for testing / introspection
     getPhaseForWeek,
     isDeloadWeek,
     applyBRaceMicroTaper,
     applyWeaknessBias,
+    _HYROX_TEMPLATES: HYROX_TEMPLATES,
+    _RUNNING_DISTANCE_OVERRIDES: RUNNING_DISTANCE_OVERRIDES,
+    _GOAL_MESOCYCLE_TEMPLATES: GOAL_MESOCYCLE_TEMPLATES,
   };
 })();

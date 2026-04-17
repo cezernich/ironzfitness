@@ -14,6 +14,8 @@
   const PHASE_RATIOS = {
     triathlon: { base: 0.25, build: 0.30, peak: 0.25, taper: 0.15, raceWeek: 0.05 },
     running:   { base: 0.25, build: 0.35, peak: 0.20, taper: 0.15, raceWeek: 0.05 },
+    // Philosophy §4.6 — Hyrox periodization
+    hyrox:     { base: 0.30, build: 0.35, peak: 0.20, taper: 0.10, raceWeek: 0.05 },
   };
 
   const PHASE_FOCUS = {
@@ -23,9 +25,10 @@
     'peak':      'Race-pace work, sharpening',
     'taper':     'Volume reduction, maintain intensity',
     'race-week': 'Openers and race execution',
+    'mesocycle': '4-week progression block: 3 weeks load + 1 week deload',
   };
 
-  // Max hours (upper end of range) per TRAINING_PHILOSOPHY §4.7
+  // Max hours (upper end of range) per TRAINING_PHILOSOPHY §4.8
   const HOUR_CEILINGS = {
     triathlon: {
       'sprint-tri':   { beginner: 6,  intermediate: 8,  advanced: 10 },
@@ -40,9 +43,34 @@
       'marathon':      { beginner: 10, intermediate: 12, advanced: 16 },
       'ultra':         { beginner: 10, intermediate: 15, advanced: 25 },
     },
+    // Philosophy §4.8 — Hyrox hour ceilings (level-based, not distance-based)
+    hyrox: {
+      'hyrox': { beginner: 7, intermediate: 10, advanced: 14 },
+    },
+  };
+
+  // Philosophy §4.8 — Goal-based hour ceilings for non-race (rolling mesocycle) plans
+  const GOAL_HOUR_CEILINGS = {
+    speed_performance: { beginner: 6, intermediate: 9,  advanced: 12 },
+    endurance:         { beginner: 7, intermediate: 10, advanced: 14 },
+    fat_loss:          { beginner: 6, intermediate: 8,  advanced: 10 },
+    general_fitness:   { beginner: 5, intermediate: 7,  advanced: 9  },
+  };
+
+  // Philosophy §4.5 — Running distance-specific taper overrides (in days).
+  // If the percentage-based taper is longer than this, cap it and give the
+  // freed weeks back to Build.
+  const RUNNING_TAPER_DAYS = {
+    '5k':            10,  // 7-10 days → cap at 10 days (~1.5 wk → 1 wk)
+    '10k':           14,  // 10-14 days → 2 wk
+    'half-marathon': 14,  // 2 weeks
+    'marathon':      21,  // 3 weeks (matches default 15% for most plans)
+    'ultra':         21,  // same as marathon
   };
 
   const TRI_RACE_TYPES = new Set(['sprint-tri', 'olympic-tri', 'half-ironman', 'ironman']);
+  const RUN_RACE_TYPES = new Set(['5k', '10k', 'half-marathon', 'marathon', 'ultra']);
+  const HYROX_RACE_TYPES = new Set(['hyrox']);
 
   function parseDate(iso) {
     if (iso instanceof Date) return new Date(iso.getTime());
@@ -72,7 +100,13 @@
   }
 
   function sportProfileForRaceType(raceType) {
-    return TRI_RACE_TYPES.has(raceType) ? 'triathlon' : 'running';
+    if (TRI_RACE_TYPES.has(raceType)) return 'triathlon';
+    if (HYROX_RACE_TYPES.has(raceType)) return 'hyrox';
+    return 'running';
+  }
+
+  function runningTaperDaysForRaceType(raceType) {
+    return RUNNING_TAPER_DAYS[raceType] || null;
   }
 
   function findARace(races) {
@@ -93,6 +127,14 @@
     return HOUR_CEILINGS.running.marathon.intermediate;
   }
 
+  // Philosophy §4.8 — Goal-Based Hour Ceilings (non-race plans)
+  function getGoalBasedHoursCeiling(level, goal) {
+    const row = GOAL_HOUR_CEILINGS[goal];
+    if (row && row[level] != null) return row[level];
+    const anyRow = GOAL_HOUR_CEILINGS.general_fitness;
+    return anyRow[level] || anyRow.intermediate;
+  }
+
   function needsPreBase(classification) {
     if (!classification) return false;
     if (classification.level === 'beginner') return true;
@@ -101,7 +143,7 @@
     return false;
   }
 
-  function allocatePhases(totalWeeks, sportProfile, includePreBase) {
+  function allocatePhases(totalWeeks, sportProfile, includePreBase, taperOverrideWeeks) {
     const ratios = PHASE_RATIOS[sportProfile] || PHASE_RATIOS.running;
 
     if (totalWeeks < 6) {
@@ -109,9 +151,17 @@
     }
 
     const raceWeek = Math.max(1, Math.round(totalWeeks * ratios.raceWeek));
-    const taper = Math.max(1, Math.round(totalWeeks * ratios.taper));
+    let taper = Math.max(1, Math.round(totalWeeks * ratios.taper));
+    // Running distance-specific taper cap (Philosophy §4.5): if the caller
+    // supplied a shorter taper override, use it and hand the freed weeks to
+    // Build.
+    let taperFreed = 0;
+    if (taperOverrideWeeks != null && taperOverrideWeeks >= 1 && taperOverrideWeeks < taper) {
+      taperFreed = taper - taperOverrideWeeks;
+      taper = taperOverrideWeeks;
+    }
     const peak = Math.max(1, Math.round(totalWeeks * ratios.peak));
-    const build = Math.max(1, Math.round(totalWeeks * ratios.build));
+    let build = Math.max(1, Math.round(totalWeeks * ratios.build)) + taperFreed;
     let base = totalWeeks - raceWeek - taper - peak - build;
     if (base < 1) {
       // Fall back to compression if rounding ate the Base phase
@@ -232,6 +282,45 @@
     };
   }
 
+  // Philosophy §4.9 — Rolling mesocycle arc. 4-week block, one mesocycle phase,
+  // no races. Used when goal is non-race_performance and there are no races.
+  function buildRollingMesocycleArc(classification, startDate, goal) {
+    const start = parseDate(startDate);
+    if (!start) {
+      throw new Error('ArcBuilder.buildArc: invalid startDate');
+    }
+    const level = (classification && classification.level) || 'intermediate';
+    const weeklyHoursCeiling = getGoalBasedHoursCeiling(level, goal);
+    return {
+      planMode: 'rolling_mesocycle',
+      startDate: toIsoDate(start),
+      totalWeeks: 4,
+      races: [],
+      phases: [
+        {
+          phase: 'mesocycle',
+          startWeek: 1,
+          endWeek: 4,
+          focus: PHASE_FOCUS.mesocycle,
+          compressed: false,
+        },
+      ],
+      bRaceWindows: [],
+      weeklyHoursCeiling,
+      goal,
+    };
+  }
+
+  function shouldUseRollingMesocycle(classification, races) {
+    const hasRaces = Array.isArray(races) && races.length > 0;
+    if (hasRaces) return false;
+    const goal = classification && classification.goal;
+    // race_performance must have a race; if it doesn't, still fall through
+    // to a race-based general fitness block (existing legacy behavior).
+    if (!goal || goal === 'race_performance') return false;
+    return ['speed_performance', 'endurance', 'fat_loss', 'general_fitness'].includes(goal);
+  }
+
   function buildArc(classification, races, startDate) {
     const start = parseDate(startDate);
     if (!start) {
@@ -242,11 +331,20 @@
       .filter(Boolean)
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 
+    // v1.4: route non-race_performance goals without races to rolling mesocycle.
+    if (shouldUseRollingMesocycle(classification, normalized)) {
+      return buildRollingMesocycleArc(classification, startDate, classification.goal);
+    }
+
     const aRace = findARace(normalized);
     if (!aRace) {
-      // No race: build a general 12-week fitness block
-      const phases = allocatePhases(12, (classification && classification.sportProfile) === 'triathlon' ? 'triathlon' : 'running', needsPreBase(classification));
+      // No race and goal is race_performance (or missing): build a general
+      // 12-week fitness block using the athlete's sport profile.
+      const fallbackSport = (classification && classification.sportProfile) || 'running';
+      const sportKey = PHASE_RATIOS[fallbackSport] ? fallbackSport : 'running';
+      const phases = allocatePhases(12, sportKey, needsPreBase(classification));
       return {
+        planMode: 'race_based',
         startDate: toIsoDate(start),
         totalWeeks: 12,
         races: [],
@@ -261,7 +359,13 @@
     const sportProfile = sportProfileForRaceType(aRace.raceType);
 
     const preBase = needsPreBase(classification) && totalWeeks >= 6;
-    const phases = allocatePhases(totalWeeks, sportProfile, preBase);
+    // Apply running distance-specific taper override when the A race is a run.
+    let taperOverrideWeeks = null;
+    if (sportProfile === 'running') {
+      const days = runningTaperDaysForRaceType(aRace.raceType);
+      if (days) taperOverrideWeeks = Math.max(1, Math.round(days / 7));
+    }
+    const phases = allocatePhases(totalWeeks, sportProfile, preBase, taperOverrideWeeks);
 
     const bRaces = normalized.filter(r => r.priority === 'B');
     const bRaceWindows = insertBRaceWindows(phases, bRaces);
@@ -270,6 +374,7 @@
     const weeklyHoursCeiling = getWeeklyHoursCeiling(level, aRace.raceType);
 
     return {
+      planMode: 'race_based',
       startDate: toIsoDate(start),
       totalWeeks,
       races: normalized,
@@ -285,6 +390,11 @@
     compressPhases,
     insertBRaceWindows,
     getWeeklyHoursCeiling,
+    getGoalBasedHoursCeiling,
+    buildRollingMesocycleArc,
+    shouldUseRollingMesocycle,
+    runningTaperDaysForRaceType,
+    sportProfileForRaceType,
     needsPreBase,
   };
 })();

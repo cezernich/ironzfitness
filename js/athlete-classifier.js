@@ -65,7 +65,16 @@
     return 'intermediate';
   }
 
-  function deriveOverallLevel(sportLevels) {
+  function deriveOverallLevel(sportLevels, sportProfile) {
+    // v1.4: pick level from the sports the athlete actually trains. For
+    // single-sport profiles (running/cycling/hyrox), defer to that sport's
+    // level alone. Otherwise take the MAX across trained sports.
+    if (sportProfile === 'running' && sportLevels.running) return sportLevels.running;
+    if (sportProfile === 'cycling' && sportLevels.cycling) return sportLevels.cycling;
+    if (sportProfile === 'hyrox') {
+      // Hyrox overall tracks running fitness (8K of running in the race).
+      return sportLevels.running || 'intermediate';
+    }
     const normalized = [];
     if (sportLevels.swim) normalized.push(SWIM_TO_OVERALL[sportLevels.swim] || sportLevels.swim);
     if (sportLevels.cycling) normalized.push(sportLevels.cycling);
@@ -141,36 +150,75 @@
 
   function deriveSportProfile(profile, sportLevels) {
     if (profile.sportProfile) return profile.sportProfile;
+
+    const races = Array.isArray(profile.races) ? profile.races : [];
     const selected = profile.selectedSports;
-    if (Array.isArray(selected) && selected.length > 0) {
-      const set = new Set(selected.map(s => String(s).toLowerCase()));
-      const hasSwim = set.has('swim') || set.has('swimming');
-      const hasBike = set.has('bike') || set.has('cycling');
-      const hasRun = set.has('run') || set.has('running');
-      const hasStrength = set.has('strength') || set.has('lifting');
+    const setSports = new Set(
+      Array.isArray(selected) ? selected.map(s => String(s).toLowerCase()) : []
+    );
+
+    // Hyrox: explicit selection or a hyrox raceType on calendar.
+    if (setSports.has('hyrox') || races.some(r => r && (r.raceType === 'hyrox' || /hyrox/i.test(r.name || '')))) {
+      return 'hyrox';
+    }
+
+    // Race-driven detection for race_performance athletes.
+    const runRaceTypes = new Set(['5k', '10k', 'half-marathon', 'marathon', 'ultra']);
+    const triRaceTypes = new Set(['sprint-tri', 'olympic-tri', 'half-ironman', 'ironman']);
+    const cyclingRaceTypes = new Set(['cycling']);
+    if (races.some(r => r && triRaceTypes.has(r.raceType))) return 'triathlon';
+    if (races.some(r => r && runRaceTypes.has(r.raceType))) return 'running';
+    if (races.some(r => r && cyclingRaceTypes.has(r.raceType))) return 'cycling';
+
+    if (setSports.size > 0) {
+      const hasSwim = setSports.has('swim') || setSports.has('swimming');
+      const hasBike = setSports.has('bike') || setSports.has('cycling');
+      const hasRun = setSports.has('run') || setSports.has('running');
+      const hasStrength = setSports.has('strength') || setSports.has('lifting');
       if (hasSwim && hasBike && hasRun) return 'triathlon';
+      if (hasRun && !hasBike && !hasSwim && !hasStrength) return 'running';
+      if (hasBike && !hasRun && !hasSwim && !hasStrength) return 'cycling';
       if ((hasSwim || hasBike || hasRun) && hasStrength) return 'hybrid';
-      if (hasRun || hasBike || hasSwim) return 'endurance';
+      if (hasRun) return 'running';
+      if (hasBike) return 'cycling';
+      if (hasSwim) return 'endurance';
       if (hasStrength) return 'strength';
     }
+
+    // Threshold-driven fallback.
     const hasCss = profile.cssTime != null;
     const hasFtp = profile.ftp != null;
     const hasRunThreshold = profile.thresholdPace != null;
     if (hasCss && hasFtp && hasRunThreshold) return 'triathlon';
+    if (hasRunThreshold && !hasCss && !hasFtp) return 'running';
+    if (hasFtp && !hasRunThreshold && !hasCss) return 'cycling';
     if ([hasCss, hasFtp, hasRunThreshold].filter(Boolean).length >= 2) return 'endurance';
-    if (hasRunThreshold || hasCss || hasFtp) return 'endurance';
+    if (hasRunThreshold) return 'running';
+    if (hasFtp) return 'cycling';
+    if (hasCss) return 'endurance';
     return 'general_fitness';
   }
 
+  // v1.4: map UI goals to new internal enum (Philosophy §2.5).
+  // Internal values: race_performance | speed_performance | endurance | fat_loss | general_fitness.
   function mapGoal(goalRaw) {
-    if (!goalRaw) return 'general_health';
+    if (!goalRaw) return 'general_fitness';
     const g = String(goalRaw).toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
-    if (g.includes('perform')) return 'performance';
-    if (g.includes('muscle') || g.includes('bulk') || g.includes('gain')) return 'muscle_gain';
-    if (g.includes('fat') || g.includes('weight') || g.includes('cut') || g.includes('loss')) return 'fat_loss';
-    if (g.includes('return')) return 'return_to_training';
-    if (g.includes('health') || g.includes('general')) return 'general_health';
-    return 'general_health';
+    // Exact internal values first (for callers passing the canonical value).
+    if (['race_performance', 'speed_performance', 'endurance', 'fat_loss', 'general_fitness'].includes(g)) return g;
+    // Legacy values (pre-v1.4) mapped forward.
+    if (g === 'performance') return 'race_performance';        // ambiguous legacy; race is the safer default
+    if (g === 'muscle_gain' || g === 'bulk') return 'general_fitness';
+    if (g === 'general_health' || g === 'health' || g === 'maintain' || g === 'maintenance') return 'general_fitness';
+    if (g === 'return_to_training' || g === 'return') return 'general_fitness';
+    // Free-text / UI labels.
+    if (g.includes('race') || g.includes('train_for')) return 'race_performance';
+    if (g.includes('faster') || g.includes('speed')) return 'speed_performance';
+    if (g.includes('endur') || g.includes('aerobic') || g.includes('long')) return 'endurance';
+    if (g.includes('fat') || g.includes('weight') || g.includes('cut') || g.includes('loss') || g.includes('lean')) return 'fat_loss';
+    if (g.includes('fit') || g.includes('general') || g.includes('overall')) return 'general_fitness';
+    if (g.includes('perform')) return 'race_performance';
+    return 'general_fitness';
   }
 
   function pickNumber(...values) {
@@ -199,7 +247,11 @@
       running: deriveRunLevel(thresholdPace),
     };
 
-    const overallLevel = deriveOverallLevel(sportLevels);
+    // sportProfile must be known before overallLevel (single-sport profiles
+    // ignore the defaults from sports the athlete isn't training).
+    const sportProfile = deriveSportProfile(p, sportLevels);
+
+    const overallLevel = deriveOverallLevel(sportLevels, sportProfile);
     const riskBias = getRiskBias(overallLevel);
     const ageGroup = classifyAgeGroup(age);
     const goal = mapGoal(p.goal);
@@ -211,7 +263,6 @@
     const injuries = Array.isArray(p.injuries) ? p.injuries.slice() : [];
 
     const recoveryState = deriveRecoveryState(p.latestCheckIn || p.recentCheckIn);
-    const sportProfile = deriveSportProfile(p, sportLevels);
     const weaknessProfile = detectWeakness(sportLevels);
 
     const thresholds = {};

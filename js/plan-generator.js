@@ -12,7 +12,7 @@
 (function () {
   'use strict';
 
-  const PHILOSOPHY_VERSION = '1.2';
+  const PHILOSOPHY_VERSION = '1.4';
   const PLAN_VERSION = '1.0';
   const GENERATION_SOURCE = 'rules_engine';
 
@@ -45,7 +45,7 @@
       weight: parseFloat(stored.weight) || 165,
       height: parseFloat(stored.height) || 70,
       gender: stored.gender || 'not_specified',
-      goal: stored.goal || 'general_health',
+      goal: stored.goal || 'general_fitness',  // v1.4 default
       availableDaysPerWeek: parseInt(stored.availableDaysPerWeek, 10) || 4,
       sessionLength: parseInt(stored.sessionLength, 10) || 60,
       cssTime: stored.cssTime != null && stored.cssTime !== '' ? parseFloat(stored.cssTime) : null,
@@ -131,8 +131,12 @@
     const validator = requireDep('PlanValidator', window.PlanValidator);
     const rationale = requireDep('RationaleBuilder', window.RationaleBuilder);
 
-    // 1 + 2. Classify + arc
-    const classification = classifier.classify(profile);
+    // 1 + 2. Classify + arc. Pass races through the profile so the
+    // classifier can detect Hyrox / running / cycling sport profiles from
+    // the race calendar when the athlete hasn't explicitly set
+    // selectedSports (Philosophy §2.5 + §9.5).
+    const profileForClassification = Object.assign({}, profile, { races });
+    const classification = classifier.classify(profileForClassification);
     const arc = arcBuilder.buildArc(classification, races, startDate);
 
     // 3. Weekly plan

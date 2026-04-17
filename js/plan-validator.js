@@ -24,6 +24,20 @@
 
   const INTENSITY_CAP = { beginner: 1, intermediate: 2, advanced: 3 };
 
+  // v1.4 — Hyrox hour ceilings (Philosophy §4.8). Upper bound per level.
+  const HYROX_HOUR_CEILING = { beginner: 7, intermediate: 10, advanced: 14 };
+  const HYROX_HOUR_FLOOR =   { beginner: 5, intermediate: 7,  advanced: 10 };
+
+  // v1.4 — running distance-specific taper caps (weeks). A 5K plan must
+  // not have a 3-week taper.
+  const RUN_TAPER_MAX_WEEKS = {
+    '5k': 1,            // 7-10 days → at most 1 full week
+    '10k': 2,           // 10-14 days
+    'half-marathon': 2,
+    'marathon': 3,
+    'ultra': 3,
+  };
+
   function flag(list, rule, action, details) {
     list.push({ rule, action, details });
   }
@@ -398,6 +412,139 @@
     walkAndStrip(plan, flags, 'plan');
   }
 
+  // ── v1.4 Rule 12: fat_loss → ≥ 2 strength sessions/week ──────────────────
+
+  function fullBodyStrengthTemplate(day) {
+    return {
+      day,
+      type: 'strength',
+      sessionSubtype: 'full_body',
+      subtype: 'full_body',
+      priority: 'strength',
+      durationMin: 45,
+      keySession: false,
+      targetZones: [],
+      description: 'Full-body strength (auto-inserted to protect muscle during caloric deficit).',
+      rationale: 'Fat-loss plans require ≥2 strength sessions/week — strength protects muscle mass while cardio supports the deficit.',
+    };
+  }
+
+  function checkFatLossStrengthFloor(plan, classification, flags) {
+    if (!classification || classification.goal !== 'fat_loss') return;
+    const weeks = plan.weeklyPlan;
+    if (!Array.isArray(weeks)) return;
+    for (const week of weeks) {
+      const sessions = Array.isArray(week.sessions) ? week.sessions : (week.sessions = []);
+      const strengthCount = sessions.filter(s => s && s.type === 'strength').length;
+      if (strengthCount >= 2) continue;
+      const needed = 2 - strengthCount;
+      let inserted = 0;
+      const occupied = new Map();
+      sessions.forEach(s => occupied.set(s.day, s));
+      // Prefer to replace the shortest easy session, else take an empty day.
+      for (let i = 0; i < needed; i++) {
+        // Find empty day first.
+        let placedDay = null;
+        for (let d = 1; d <= 7; d++) {
+          if (!occupied.has(d)) { placedDay = d; break; }
+        }
+        if (placedDay != null) {
+          const s = fullBodyStrengthTemplate(placedDay);
+          sessions.push(s);
+          occupied.set(placedDay, s);
+          inserted++;
+          continue;
+        }
+        // Replace lightest non-strength, non-key session.
+        const victims = sessions
+          .filter(s => s && s.type !== 'strength' && s.type !== 'rest' && !s.keySession)
+          .sort((a, b) => (a.durationMin || 0) - (b.durationMin || 0));
+        const victim = victims[0];
+        if (!victim) break;
+        const idx = sessions.indexOf(victim);
+        const replacement = fullBodyStrengthTemplate(victim.day);
+        sessions.splice(idx, 1, replacement);
+        occupied.set(victim.day, replacement);
+        inserted++;
+      }
+      if (inserted > 0) {
+        sessions.sort((a, b) => a.day - b.day);
+        flag(flags, 'fat_loss_strength_floor', 'auto-fixed',
+          `Week ${week.weekNumber}: inserted ${inserted} strength session(s) to meet the 2/week fat-loss minimum.`);
+      }
+    }
+  }
+
+  // ── v1.4 Rule 13: Hyrox weekly hour ceiling ──────────────────────────────
+
+  function checkHyroxHourCeiling(plan, classification, flags) {
+    if (!classification || classification.sportProfile !== 'hyrox') return;
+    const level = classification.level || 'intermediate';
+    const ceiling = HYROX_HOUR_CEILING[level];
+    if (!ceiling) return;
+    const weeks = plan.weeklyPlan;
+    if (!Array.isArray(weeks)) return;
+    const ceilingMin = ceiling * 60;
+    for (const week of weeks) {
+      if (week.isDeload || week.phase === 'taper' || week.phase === 'race-week') continue;
+      const total = (week.sessions || []).reduce((a, s) => a + (s.durationMin || 0), 0);
+      if (total <= ceilingMin) continue;
+      const scale = ceilingMin / total;
+      for (const s of (week.sessions || [])) {
+        if (s && s.type !== 'rest') s.durationMin = Math.max(15, Math.round((s.durationMin || 0) * scale));
+      }
+      week.targetHours = Math.round(((week.sessions || []).reduce((a, s) => a + (s.durationMin || 0), 0)) / 6) / 10;
+      flag(flags, 'hyrox_hour_ceiling', 'auto-fixed',
+        `Week ${week.weekNumber}: scaled Hyrox volume to ${level} ceiling of ${ceiling} hrs.`);
+    }
+  }
+
+  // ── v1.4 Rule 14: running distance-specific taper length ─────────────────
+
+  function checkRunningTaperLength(plan, classification, flags) {
+    const arc = plan.arc;
+    if (!arc || arc.planMode !== 'race_based') return;
+    const aRace = Array.isArray(arc.races)
+      ? (arc.races.find(r => r && r.priority === 'A') || arc.races[arc.races.length - 1])
+      : null;
+    if (!aRace) return;
+    const cap = RUN_TAPER_MAX_WEEKS[aRace.raceType];
+    if (cap == null) return;
+    const taperPhase = Array.isArray(arc.phases) && arc.phases.find(p => p.phase === 'taper');
+    if (!taperPhase) return;
+    const taperWeeks = taperPhase.endWeek - taperPhase.startWeek + 1;
+    if (taperWeeks <= cap) return;
+    const excess = taperWeeks - cap;
+    taperPhase.endWeek -= excess;
+    // The phases array is sequential; trim doesn't reassign other weeks.
+    // Instead, widen the preceding phase (Build/Peak) by the excess.
+    const taperIdx = arc.phases.indexOf(taperPhase);
+    if (taperIdx > 0) {
+      const prev = arc.phases[taperIdx - 1];
+      prev.endWeek += excess;
+      // Push the taper window forward.
+      taperPhase.startWeek += excess;
+      taperPhase.endWeek += excess;
+    }
+    flag(flags, 'running_taper_length', 'auto-fixed',
+      `${aRace.raceType.toUpperCase()} taper trimmed from ${taperWeeks}w → ${cap}w; ${excess}w redistributed to preceding phase.`);
+  }
+
+  // ── v1.4 Rule 15: rolling mesocycle must be exactly 4 weeks ──────────────
+
+  function checkMesocycleLength(plan, classification, flags) {
+    const arc = plan.arc;
+    if (!arc || arc.planMode !== 'rolling_mesocycle') return;
+    if (arc.totalWeeks === 4 && Array.isArray(plan.weeklyPlan) && plan.weeklyPlan.length === 4) return;
+    const before = arc.totalWeeks;
+    arc.totalWeeks = 4;
+    if (Array.isArray(plan.weeklyPlan)) {
+      if (plan.weeklyPlan.length > 4) plan.weeklyPlan.length = 4;
+    }
+    flag(flags, 'mesocycle_length', 'auto-fixed',
+      `Rolling mesocycle must be 4 weeks (was ${before}).`);
+  }
+
   // ── Rule 11: disclaimer must exist and contain the standard wording ──────
 
   function checkDisclaimer(plan, classification, flags) {
@@ -428,6 +575,11 @@
     checkBeginnerComplexity(plan, classification, flags);
     checkRestDayMinimum(plan, classification, flags);
     checkDeloadInclusion(plan, classification, flags);
+    // v1.4 rules
+    checkFatLossStrengthFloor(plan, classification, flags);
+    checkHyroxHourCeiling(plan, classification, flags);
+    checkRunningTaperLength(plan, classification, flags);
+    checkMesocycleLength(plan, classification, flags);
     checkProhibitedPhrases(plan, classification, flags);
     checkDisclaimer(plan, classification, flags);
 
@@ -449,6 +601,10 @@
     _checkVolumeIncreaseCap: checkVolumeIncreaseCap,
     _checkProhibitedPhrases: checkProhibitedPhrases,
     _checkDisclaimer: checkDisclaimer,
+    _checkFatLossStrengthFloor: checkFatLossStrengthFloor,
+    _checkHyroxHourCeiling: checkHyroxHourCeiling,
+    _checkRunningTaperLength: checkRunningTaperLength,
+    _checkMesocycleLength: checkMesocycleLength,
     _DISCLAIMER: DISCLAIMER,
   };
 })();

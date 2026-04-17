@@ -516,41 +516,62 @@ function calculateNutrition(classification, modules, profile) {
 
   const LBS_PER_KG = 2.20462;
 
+  // v1.4 — Philosophy §2.5 goal enum and nutrition targets.
   const GOAL_CALORIE_ADJUSTMENT = {
-    muscle_gain: 0.15,
-    performance: 0,
-    fat_loss: -0.20,
-    general_health: 0,
+    race_performance:   0.05,  // maintenance or slight surplus (midpoint)
+    speed_performance:  0,     // maintenance
+    endurance:          0.05,  // maintenance or slight surplus
+    fat_loss:          -0.20,  // -15% to -25% deficit
+    general_fitness:    0,     // maintenance
+    // Legacy keys retained for back-compat (pre-v1.4 callers).
+    muscle_gain:        0.15,
+    performance:        0,
+    general_health:     0,
     return_to_training: 0,
   };
 
   const GOAL_ADJUSTMENT_LABEL = {
-    muscle_gain: '+15% surplus for muscle gain',
-    performance: 'Maintenance calories for performance',
-    fat_loss: '-20% deficit for fat loss',
-    general_health: 'Maintenance calories',
+    race_performance:   'Maintenance or slight surplus for race performance',
+    speed_performance:  'Maintenance calories — support high-intensity recovery',
+    endurance:          'Maintenance or slight surplus — fuel the aerobic work',
+    fat_loss:           '-20% deficit for fat loss',
+    general_fitness:    'Maintenance calories',
+    muscle_gain:        '+15% surplus for muscle gain',
+    performance:        'Maintenance calories for performance',
+    general_health:     'Maintenance calories',
     return_to_training: 'Maintenance calories during return-to-training',
   };
 
+  // Philosophy §2.5 — g/lb bodyweight targets (midpoint of the stated range).
   const GOAL_PROTEIN_G_PER_LB = {
-    muscle_gain: 0.9,
-    fat_loss: 1.0,
-    performance: 0.7,
-    general_health: 0.7,
+    race_performance:   0.7,   // 0.6-0.8 range
+    speed_performance:  0.8,   // 0.7-0.9 range
+    endurance:          0.7,   // 0.6-0.8 range
+    fat_loss:           1.0,   // 0.8-1.2 range
+    general_fitness:    0.7,   // 0.6-0.8 range
+    // Legacy keys.
+    muscle_gain:        0.9,
+    performance:        0.7,
+    general_health:     0.7,
     return_to_training: 0.8,
   };
 
   const PROTEIN_FLOOR_G_PER_LB = 0.6;
 
   function normalizeGoal(goal) {
-    if (!goal) return 'general_health';
+    if (!goal) return 'general_fitness';
     const g = String(goal).toLowerCase();
     if (GOAL_CALORIE_ADJUSTMENT[g] != null) return g;
+    // Map legacy / UI labels to v1.4 internal enum.
+    if (g.includes('race') || g.includes('train_for')) return 'race_performance';
+    if (g.includes('faster') || g.includes('speed')) return 'speed_performance';
+    if (g.includes('endur') || g.includes('aerobic')) return 'endurance';
+    if (g.includes('fat') || g.includes('cut') || g.includes('weight') || g.includes('loss') || g.includes('lean')) return 'fat_loss';
     if (g.includes('muscle') || g.includes('bulk') || g.includes('gain')) return 'muscle_gain';
-    if (g.includes('fat') || g.includes('cut') || g.includes('weight') || g.includes('loss')) return 'fat_loss';
-    if (g.includes('perform')) return 'performance';
-    if (g.includes('return')) return 'return_to_training';
-    return 'general_health';
+    if (g.includes('fit') || g.includes('general') || g.includes('health') || g.includes('maintain')) return 'general_fitness';
+    if (g.includes('perform')) return 'race_performance';
+    if (g.includes('return')) return 'general_fitness';
+    return 'general_fitness';
   }
 
   function normalizeGender(gender) {
@@ -608,12 +629,16 @@ function calculateNutrition(classification, modules, profile) {
   }
 
   function isEnduranceSport(sportProfile) {
-    return sportProfile === 'endurance' || sportProfile === 'triathlon' || sportProfile === 'hybrid';
+    return sportProfile === 'endurance' || sportProfile === 'triathlon' || sportProfile === 'hybrid' || sportProfile === 'running';
   }
 
   function raceDayFueling(classification) {
     if (!classification) return null;
-    if (isEnduranceSport(classification.sportProfile)) {
+    const profile = classification.sportProfile;
+    if (profile === 'hyrox') {
+      return 'Hyrox race-day: familiar pre-race meal 2-3h before (low-fat/fiber). Small carb snack 30 min pre. Sip electrolytes, no gels mid-race (too fast to absorb).';
+    }
+    if (isEnduranceSport(profile)) {
       return '30-60g carbs/hour during events >60 min. Practice fueling in training — nothing new on race day.';
     }
     return null;
@@ -621,8 +646,14 @@ function calculateNutrition(classification, modules, profile) {
 
   function trainingDayAdjustmentText(classification) {
     const goal = normalizeGoal(classification && classification.goal);
-    if (isEnduranceSport(classification && classification.sportProfile)) {
+    if (isEnduranceSport(classification && classification.sportProfile) || goal === 'endurance') {
       return 'Add 200-300 cal on high-volume training days; 30-60g carbs/hour for sessions over 60 min.';
+    }
+    if (goal === 'race_performance') {
+      return 'Add 200-300 cal on long or key-quality days; practice race-day nutrition in training.';
+    }
+    if (goal === 'speed_performance') {
+      return 'Add 150-250 cal on interval/tempo days; prioritize carbs pre/post quality sessions.';
     }
     if (goal === 'muscle_gain') {
       return 'Add 200-300 cal on lifting days; keep protein consistent every day.';
@@ -668,6 +699,9 @@ function calculateNutrition(classification, modules, profile) {
         proteinG,
         carbsG,
         fatG,
+        // Numeric deficit/surplus (decimal form of adjustment) — exposed
+        // for UI / tests that want to check direction at a glance.
+        calorieAdjustment: adjustment,
       },
       calorieAdjustment: GOAL_ADJUSTMENT_LABEL[goal] || 'Maintenance calories',
       trainingDayAdjustment: trainingDayAdjustmentText(c),

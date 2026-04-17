@@ -17,9 +17,9 @@
     'ironman': 'Ironman',
     '5k': '5K',
     '10k': '10K',
-    'half-marathon': 'Half marathon',
-    'marathon': 'Marathon',
-    'ultra': 'Ultra',
+    'half-marathon': 'half marathon',
+    'marathon': 'marathon',
+    'ultra': 'ultra',
     'hyrox': 'Hyrox',
   };
 
@@ -57,7 +57,26 @@
   function buildSummary(classification, arc) {
     const level = (classification && classification.level) || 'intermediate';
     const weeks = arc && arc.totalWeeks;
+    const goal = classification && classification.goal;
+    const planMode = arc && arc.planMode;
+    const sportProfile = classification && classification.sportProfile;
     const aRace = findARace(arc);
+
+    // Rolling mesocycle (no race) summary (Philosophy §4.9).
+    if (planMode === 'rolling_mesocycle') {
+      return buildMesocycleSummary(level, goal, sportProfile);
+    }
+
+    // Hyrox-specific race summary (Philosophy §9.5).
+    if (sportProfile === 'hyrox' || (aRace && aRace.raceType === 'hyrox')) {
+      return buildHyroxSummary(level, weeks, aRace);
+    }
+
+    // Running distance-specific race summary (Philosophy §4.5, §9.1).
+    if (aRace && ['5k', '10k', 'half-marathon', 'marathon'].includes(aRace.raceType)) {
+      return buildRunningDistanceSummary(level, weeks, aRace);
+    }
+
     const weakness = classification && classification.weaknessProfile && classification.weaknessProfile.weakestDiscipline;
     const weaknessText = describeWeakness(weakness);
     const phaseCount = (arc && arc.phases && arc.phases.length) || 0;
@@ -87,6 +106,37 @@
     return `${opener} ${possessive}${race}${emphasis}${structure}${toneCloser(level)}`.replace(/\s+/g, ' ').trim();
   }
 
+  function buildHyroxSummary(level, weeks, aRace) {
+    const raceName = (aRace && aRace.name) || 'your Hyrox race';
+    const openerByLevel = level === 'beginner' ? 'You\'ve got' : level === 'advanced' ? 'This is' : 'Your';
+    return `${openerByLevel} ${weeks || 'n'}-week Hyrox build for ${raceName}. Hyrox is 50/50 running and station work, so the plan trains both independently in Base, then combines them into 1K-run + station workouts in Build and Peak — the single most race-specific session you can do. Strength shifts from heavy compounds early to muscular endurance and station simulation later.${toneCloser(level)}`.replace(/\s+/g, ' ').trim();
+  }
+
+  function buildRunningDistanceSummary(level, weeks, aRace) {
+    const dist = aRace.raceType;
+    const raceName = aRace.name || raceLabel(dist);
+    const openerByLevel = level === 'beginner' ? 'You\'ve got' : level === 'advanced' ? 'This is' : 'Your';
+    const emphasis = {
+      '5k': 'VO2max intervals (1K repeats) are the primary key workout — they raise the oxygen ceiling that determines 5K pace. Taper is short (~1 week) because training load is manageable.',
+      '10k': 'Threshold work — cruise intervals at mile pace + continuous tempo — drives 10K fitness. VO2max intervals are secondary. Taper is ~2 weeks.',
+      'half-marathon': 'Tempo runs + marathon-pace long runs build the threshold and pacing discipline the half rewards. Taper is 2 weeks.',
+      'marathon': 'The marathon-pace long run (final 8-12 miles at goal pace) is THE key workout. Midweek medium-long runs add time on feet without extra long-run stress. Taper is 3 weeks — the longest of any distance.',
+    }[dist] || '';
+    return `${openerByLevel} ${weeks || 'n'}-week ${raceLabel(dist)} plan for ${raceName}. ${emphasis}${toneCloser(level)}`.replace(/\s+/g, ' ').trim();
+  }
+
+  function buildMesocycleSummary(level, goal, sportProfile) {
+    const toneMap = {
+      speed_performance: 'focuses on threshold and VO2max — tempo runs and interval sessions drive lactate threshold improvement, which is what actually makes you faster at any distance. Strength supports power development on the side.',
+      endurance:         'accumulates aerobic volume at low intensity — the long run or long ride is the key session, and it grows in length each mesocycle. Quality work stays minimal so volume can climb safely.',
+      fat_loss:          'is strength-first: at least two strength sessions every week are non-negotiable, because losing weight without strength means losing muscle. Easy cardio fills the remaining days to support the deficit.',
+      general_fitness:   'balances strength and cardio evenly, with variety rotating between mesocycles. Consistency matters more than any single session.',
+    };
+    const body = toneMap[goal] || toneMap.general_fitness;
+    const opener = level === 'beginner' ? 'You\'ve got' : level === 'advanced' ? 'This is' : 'Your';
+    return `${opener} 4-week rolling mesocycle: 3 progression weeks + 1 deload. This block ${body} At the end of the 4 weeks, the next mesocycle adjusts based on how the first went.${toneCloser(level)}`.replace(/\s+/g, ' ').trim();
+  }
+
   function pickStrongest(classification) {
     const lvls = classification && classification.sportLevels;
     if (!lvls) return null;
@@ -105,6 +155,50 @@
     const decisions = [];
     const level = (classification && classification.level) || 'intermediate';
     const days = (classification && classification.daysAvailable) || 4;
+    const goal = classification && classification.goal;
+    const planMode = arc && arc.planMode;
+    const sportProfile = classification && classification.sportProfile;
+    const aRace = findARace(arc);
+
+    // v1.4 — rolling mesocycle decisions (Philosophy §4.9)
+    if (planMode === 'rolling_mesocycle') {
+      decisions.push('Rolling 4-week mesocycle: weeks 1-3 progress volume +5-10%, week 4 deloads -40-50%.');
+      if (goal === 'fat_loss') {
+        decisions.push('Fat-loss strength floor: ≥ 2 strength sessions/week (non-negotiable — protects muscle during deficit).');
+      } else if (goal === 'speed_performance') {
+        decisions.push('Speed emphasis: 1 tempo + 1 interval session/week drives threshold and VO2max.');
+      } else if (goal === 'endurance') {
+        decisions.push('Endurance emphasis: long run/ride is the key session, grows ~10-15 min each mesocycle.');
+      } else if (goal === 'general_fitness') {
+        decisions.push('General fitness: equal weight to strength and cardio, emphasis rotates across mesocycles.');
+      }
+    }
+
+    // v1.4 — Hyrox decisions (Philosophy §9.5)
+    if (sportProfile === 'hyrox') {
+      decisions.push('Hyrox periodization: Base 30% → Build 35% → Peak 20% → Taper 10% → Race Week 5%.');
+      decisions.push('Run + station combo workout is the defining Hyrox session — trained weekly in Build and Peak.');
+      decisions.push('Strength shifts across phases: heavy compounds (Base) → muscular endurance (Build) → station simulation (Peak) → light maintenance (Taper).');
+    }
+
+    // v1.4 — running distance-specific decisions (Philosophy §4.5)
+    if (aRace && sportProfile === 'running') {
+      const raceType = aRace.raceType;
+      const keyWorkouts = {
+        '5k': 'VO2max intervals (1K repeats at Z5) — primary key workout.',
+        '10k': 'Cruise intervals (mile repeats at threshold) — primary key workout.',
+        'half-marathon': 'Tempo runs + MP progression — primary key workouts.',
+        'marathon': 'Marathon-pace long run (14-18 mi with 8-12 at Z3) — primary key workout.',
+      }[raceType];
+      if (keyWorkouts) decisions.push(keyWorkouts);
+      const taperLen = {
+        '5k': '1 week (7-10 days)',
+        '10k': '2 weeks (10-14 days)',
+        'half-marathon': '2 weeks',
+        'marathon': '3 weeks',
+      }[raceType];
+      if (taperLen) decisions.push(`Taper: ${taperLen} — extra weeks redistributed to Build.`);
+    }
 
     // Strength split
     const strengthSubtypes = collectStrengthSubtypes(weeklyPlan);
@@ -137,12 +231,20 @@
     const cap = level === 'beginner' ? 1 : level === 'advanced' ? 3 : 2;
     decisions.push(`Max ${cap} key session${cap === 1 ? '' : 's'} per week (${level} intensity cap).`);
 
-    // Deload cadence
+    // Deload cadence (only meaningful for plans longer than a single mesocycle)
     if (weeklyPlan && weeklyPlan.length > 4) {
       decisions.push(`Deload every ${level === 'advanced' ? '3rd' : '4th'} week (reduce volume 40-60%, hold intensity).`);
     }
 
     return decisions;
+  }
+
+  function inferSplit(subtypes) {
+    if (subtypes.has('push_day') || subtypes.has('pull_day') || subtypes.has('leg_day')) return 'Push/Pull/Legs';
+    if (subtypes.has('upper_body') || subtypes.has('lower_body')) return 'Upper/Lower';
+    if (subtypes.has('sport_specific')) return 'Sport-specific';
+    if (subtypes.has('hyrox_heavy') || subtypes.has('hyrox_endurance') || subtypes.has('hyrox_maintenance')) return 'Hyrox-specific';
+    return 'Full-body';
   }
 
   function biasDescription(discipline, applied) {
@@ -167,13 +269,6 @@
       }
     }
     return set;
-  }
-
-  function inferSplit(subtypes) {
-    if (subtypes.has('push_day') || subtypes.has('pull_day') || subtypes.has('leg_day')) return 'Push/Pull/Legs';
-    if (subtypes.has('upper_body') || subtypes.has('lower_body')) return 'Upper/Lower';
-    if (subtypes.has('sport_specific')) return 'Sport-specific';
-    return 'Full-body';
   }
 
   function buildAssumptions(classification, arc) {
