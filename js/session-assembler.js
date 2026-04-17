@@ -664,16 +664,36 @@
   }
 
   // Pick the weekdays on which the athlete actually trains. Returns days
-  // (1=Mon…7=Sun) ordered ascending. The weekend days are always included
-  // first because long sessions need them.
-  function selectTrainingDays(daysAvailable) {
+  // (1=Mon…7=Sun) ordered ascending. If the athlete chose specific long
+  // days in onboarding, those days are guaranteed to be in the set.
+  function selectTrainingDays(daysAvailable, longRunDay, longRideDay) {
     const d = Math.max(2, Math.min(7, daysAvailable || 3));
-    if (d >= 7) return [1, 2, 3, 4, 5, 6, 7];
-    if (d === 6) return [1, 2, 3, 4, 6, 7];
-    if (d === 5) return [1, 2, 4, 6, 7];
-    if (d === 4) return [1, 4, 6, 7];
-    if (d === 3) return [2, 4, 7];
-    return [4, 7];
+    let base;
+    if (d >= 7) base = [1, 2, 3, 4, 5, 6, 7];
+    else if (d === 6) base = [1, 2, 3, 4, 6, 7];
+    else if (d === 5) base = [1, 2, 4, 6, 7];
+    else if (d === 4) base = [1, 4, 6, 7];
+    else if (d === 3) base = [2, 4, 7];
+    else base = [4, 7];
+
+    const required = [longRunDay, longRideDay].filter(x => x >= 1 && x <= 7);
+    if (required.length === 0) return base;
+
+    const set = new Set(base);
+    for (const r of required) set.add(r);
+    const days = [...set].sort((a, b) => a - b);
+
+    // If we added required days beyond `d`, trim non-required days from
+    // the list (prefer dropping weekdays farthest from the long-day cluster).
+    while (days.length > d) {
+      let dropIdx = -1;
+      for (let i = 0; i < days.length; i++) {
+        if (!required.includes(days[i])) { dropIdx = i; break; }
+      }
+      if (dropIdx === -1) break; // all are required; can't shrink further
+      days.splice(dropIdx, 1);
+    }
+    return days;
   }
 
   // §8.6 — strength + cardio pairing subtype lookup. The placer assigns
@@ -693,7 +713,11 @@
     for (let d = 1; d <= 7; d++) layout[d] = [];
 
     const level = classification.level || 'intermediate';
-    const trainingDays = selectTrainingDays(classification.daysAvailable);
+    const trainingDays = selectTrainingDays(
+      classification.daysAvailable,
+      classification.longRunDay,
+      classification.longRideDay
+    );
     // Use training days for all non-strength placement; strength later.
 
     // Categorize sessions
@@ -706,12 +730,14 @@
       s.priority !== 'intensity' && s.type !== 'strength'
     );
 
-    // 1. Long sessions: long run on last training day. Long ride / brick on
-    //    the latest training day ≥ 2 days earlier, so non-advanced athletes
-    //    don't stack a long ride and long run on consecutive days (§4.3).
-    const lastDay = trainingDays[trainingDays.length - 1];
+    // 1. Long sessions: honor the user's onboarding picks from
+    //    classification.longRunDay / longRideDay when set; otherwise fall
+    //    back to latest training day for long run, with long ride on the
+    //    latest training day ≥ 2 days earlier (§4.3 — no back-to-back long
+    //    days for non-advanced).
     const minGap = level === 'advanced' ? 1 : 2;
-    const rideDay = pickLongRideDay(trainingDays, lastDay, minGap);
+    const lastDay = pickLongRunDay(trainingDays, classification.longRunDay);
+    const rideDay = pickLongRideDayPreferred(trainingDays, lastDay, minGap, classification.longRideDay);
     const longRun = longSessions.find(s => s.type === 'run');
     const longRide = longSessions.find(s => s.type === 'bike');
     const otherLongs = longSessions.filter(s => s !== longRun && s !== longRide);
@@ -766,18 +792,40 @@
     return placed;
   }
 
-  // Pick the training day for the long ride / brick. Must be at least
-  // `minGap` days before the long-run day so non-advanced athletes avoid
-  // consecutive hard days (§4.3). Falls back to second-latest training
-  // day if nothing in range qualifies.
+  // Pick the long-run day, honoring the user's onboarding pick when it
+  // falls on one of their available training days. Otherwise default to
+  // the latest training day (weekend).
+  function pickLongRunDay(trainingDays, preferredDay) {
+    if (preferredDay && trainingDays.includes(preferredDay)) return preferredDay;
+    return trainingDays[trainingDays.length - 1];
+  }
+
+  // Pick the long-ride / brick day. Honors user preference when it's a
+  // training day AND is ≥ minGap away from the long-run day. Otherwise
+  // picks the latest training day that satisfies the gap. Falls back to
+  // the second-latest training day.
+  function pickLongRideDayPreferred(trainingDays, longRunDay, minGap, preferredDay) {
+    if (preferredDay && trainingDays.includes(preferredDay) && preferredDay !== longRunDay
+        && Math.abs(longRunDay - preferredDay) >= minGap) {
+      return preferredDay;
+    }
+    return pickLongRideDay(trainingDays, longRunDay, minGap);
+  }
+
+  // Falls back to latest training day that is at least minGap days before
+  // longRunDay. Used when the user didn't pick a preferred long ride day
+  // or their pick conflicts with their long-run pick.
   function pickLongRideDay(trainingDays, longRunDay, minGap) {
     for (let i = trainingDays.length - 1; i >= 0; i--) {
       const d = trainingDays[i];
       if (d === longRunDay) continue;
-      if (longRunDay - d >= minGap) return d;
+      if (Math.abs(longRunDay - d) >= minGap) return d;
     }
-    // Fallback — no suitable day; use whatever's available.
-    if (trainingDays.length >= 2) return trainingDays[trainingDays.length - 2];
+    if (trainingDays.length >= 2) {
+      return trainingDays[trainingDays.length - 2] === longRunDay
+        ? trainingDays[trainingDays.length - 3] || null
+        : trainingDays[trainingDays.length - 2];
+    }
     return null;
   }
 

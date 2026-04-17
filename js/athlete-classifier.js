@@ -264,6 +264,8 @@
 
     const recoveryState = deriveRecoveryState(p.latestCheckIn || p.recentCheckIn);
     const weaknessProfile = detectWeakness(sportLevels);
+    const longRunDay = parseLongDay(p.longDays, 'longRun');
+    const longRideDay = parseLongDay(p.longDays, 'longRide');
 
     const thresholds = {};
     if (runVDOT != null) thresholds.runVDOT = runVDOT;
@@ -290,10 +292,24 @@
       weaknessProfile,
       injuries,
       recoveryState,
+      longRunDay,
+      longRideDay,
       weight: weight,
       height: height,
       gender,
     };
+  }
+
+  // Translate the onboarding long-day selection (dow strings like "sat")
+  // into ISO-like day numbers (1=Mon…7=Sun). Returns null when not set so
+  // downstream placement can fall back to defaults.
+  const _DOW_TO_INT = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 7 };
+  function parseLongDay(longDays, key) {
+    if (!longDays || !longDays[key]) return null;
+    const v = longDays[key];
+    if (typeof v === 'number' && v >= 1 && v <= 7) return v;
+    const n = _DOW_TO_INT[String(v).toLowerCase()];
+    return n || null;
   }
 
   window.AthleteClassifier = {

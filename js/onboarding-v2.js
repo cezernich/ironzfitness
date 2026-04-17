@@ -2159,17 +2159,68 @@
         el.classList.toggle("is-selected", el.getAttribute("data-longride") === _state.longDays.longRide);
       });
     }
+    // Disable adjacent chips on the opposing group so users can't pick
+    // back-to-back long days (§4.3 — no consecutive hard days for non-advanced).
+    _refreshLongDayAvailability();
   }
+  // Day-of-week order (Monday-first) used for adjacency checks on the
+  // Long Days screen. Back-to-back long run + long ride violates §4.3
+  // (no consecutive hard days) for non-advanced athletes, so we block
+  // the user from picking adjacent days.
+  const _DOW_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+  function _dowIndex(dow) { return _DOW_ORDER.indexOf(dow); }
+  function _areAdjacentDow(a, b) {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    return Math.abs(_dowIndex(a) - _dowIndex(b)) === 1;
+  }
+
   function _selectLongDay(btn, which) {
     if (!btn) return;
+    if (btn.disabled || btn.classList.contains("is-disabled")) return;
     const attr = which === "longRun" ? "data-longrun" : "data-longride";
     const group = btn.parentElement;
     if (!group) return;
     group.querySelectorAll('[' + attr + ']').forEach(el => el.classList.remove("is-selected"));
     btn.classList.add("is-selected");
     _state.longDays[which] = btn.getAttribute(attr);
+    _refreshLongDayAvailability();
   }
+
+  // Grey out chips on the OTHER discipline that would create a back-to-back
+  // long-day pair with the current selection. Also clears a conflicting
+  // other-side selection if the user re-picks into its adjacency zone.
+  function _refreshLongDayAvailability() {
+    const runRoot = document.getElementById("bp-v2-longrun-block");
+    const rideRoot = document.getElementById("bp-v2-longride-block");
+    const runSel = _state.longDays.longRun;
+    const rideSel = _state.longDays.longRide;
+
+    const refreshGroup = (root, attr, otherSel, selfKey) => {
+      if (!root || !otherSel) return;
+      root.querySelectorAll('[' + attr + ']').forEach(el => {
+        const dow = el.getAttribute(attr);
+        const conflict = _areAdjacentDow(dow, otherSel);
+        el.classList.toggle("is-disabled", conflict);
+        el.toggleAttribute("disabled", conflict);
+        el.title = conflict ? "Adjacent to your other long day — pick a non-consecutive day." : "";
+        // If the currently-selected chip is now disabled, drop the selection.
+        if (conflict && _state.longDays[selfKey] === dow) {
+          _state.longDays[selfKey] = null;
+          el.classList.remove("is-selected");
+        }
+      });
+    };
+
+    refreshGroup(runRoot, "data-longrun", rideSel, "longRun");
+    refreshGroup(rideRoot, "data-longride", runSel, "longRide");
+  }
+
   function _saveLongDaysAndContinue() {
+    // Persist for the rule engine — classifier + session assembler read
+    // localStorage["longDays"] and anchor long run / long ride placement
+    // to these days.
+    _lsSet("longDays", _state.longDays);
     goTo("bp-v2-5");
     _renderSchedule();
   }

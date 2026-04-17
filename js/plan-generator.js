@@ -40,6 +40,12 @@
     } catch (e) {
       latestCheckIn = null;
     }
+    let longDays = null;
+    try {
+      longDays = JSON.parse(localStorage.getItem('longDays') || 'null');
+    } catch (e) {
+      longDays = null;
+    }
     return {
       age: parseInt(stored.age, 10) || 30,
       weight: parseFloat(stored.weight) || 165,
@@ -56,6 +62,7 @@
       selectedSports: Array.isArray(stored.selectedSports) ? stored.selectedSports : [],
       equipmentProfile: equipment,
       latestCheckIn,
+      longDays,
       weightUnit: stored.weightUnit || null,
     };
   }

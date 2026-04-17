@@ -17349,6 +17349,16 @@ body.ob-v2-lock { overflow: hidden; }
   color: #FFF;
   border-color: #E8530E;
 }
+.ob-v2-chip.is-disabled,
+.ob-v2-chip[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: #F3F3F3;
+  color: #999;
+  border-color: #DDD;
+}
+.ob-v2-chip.is-disabled:hover,
+.ob-v2-chip[disabled]:hover { border-color: #DDD; }
 
 /* Callouts */
 .ob-v2-callout {
