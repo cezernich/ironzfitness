@@ -562,6 +562,23 @@ function cpGenerateHIIT(dow) {
   customPlanGenerateAI(dow, "hiit", ctx);
 }
 
+// Circuit doesn't use the AI prompt form — it has its own multi-step
+// builder (UNIFIED_BUILDER_SPEC phase 2). Close the AI modal and hand
+// off to CircuitBuilder, wired so the resulting workout lands on the
+// same plan day that triggered this flow.
+function cpShowCircuitOptions(dow) {
+  if (!window.CircuitBuilder || typeof window.saveToPlanDay !== "function") {
+    const msg = document.getElementById("cp-ai-msg");
+    if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = "Circuit builder unavailable."; }
+    return;
+  }
+  closeCustomPlanAIModal();
+  window.CircuitBuilder.openEntryFlow(null, {
+    context: "plan-manual",
+    onSave: (workout) => { window.saveToPlanDay(workout, null, dow); },
+  });
+}
+
 function closeCustomPlanAIModal() {
   const modal = document.getElementById("cp-ai-modal");
   if (modal) modal.classList.remove("is-open");
@@ -2058,6 +2075,13 @@ function saveCustomPlan() {
   if (typeof selectDay === "function") selectDay(getTodayString());
   if (typeof renderTrainingInputs === "function") renderTrainingInputs();
   if (typeof renderTrainingConflicts === "function") renderTrainingConflicts();
+
+  // Close the Build Plan overlay (if that's how the user got here) and
+  // collapse the Training-tab card so they're not staring at the same
+  // form they just submitted.
+  try { if (window.OnboardingV2?.closeBuildPlan) window.OnboardingV2.closeBuildPlan(); } catch {}
+  const section = document.getElementById("section-build-plan");
+  if (section) section.classList.add("is-collapsed");
 }
 
 // ── Util ──────────────────────────────────────────────────────────────────────
