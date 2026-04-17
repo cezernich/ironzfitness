@@ -11,3 +11,6 @@ ios/**/DerivedData/
 ios/**/build/
 ios/App/Pods/
 ios/App/Podfile.lock
+
+# Supabase CLI scratch (not project data)
+supabase/.temp/
