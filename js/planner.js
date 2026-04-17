@@ -1773,10 +1773,49 @@ function renderTrainingInputs() {
   const todayStr  = new Date().toISOString().slice(0, 10);
   const races     = loadEvents().filter(e => e.date > todayStr);
   const schedules = _getScheduleInputs();
-  const buildPlans= _getBuildPlanInputs();
+  let buildPlans  = _getBuildPlanInputs();
   const notes     = loadTrainingNotes();
   const imported  = (() => { try { return JSON.parse(localStorage.getItem("importedPlans")) || []; } catch { return []; } })()
     .filter(p => p.sessions && p.sessions.some(s => s.date >= todayStr));
+
+  // Suppress a Build Plan card when it's clearly the plan that backs a
+  // rendered race. Without this the user sees both the Race card and a
+  // "Training Block" card for what is conceptually one thing. Match is
+  // by timing (plan ends within 60 days before the race, no later than
+  // race day) and discipline overlap (plan types include a sport the
+  // race uses). Each race claims at most one plan so we never hide
+  // legitimately separate plans.
+  if (races.length && buildPlans.length) {
+    const DISC_FOR_RACE = {
+      ironman: ["running","cycling","swimming"], halfIronman: ["running","cycling","swimming"],
+      olympic: ["running","cycling","swimming"], sprint: ["running","cycling","swimming"],
+      marathon: ["running"], halfMarathon: ["running"], tenK: ["running"], fiveK: ["running"],
+      centuryRide: ["cycling"], granFondo: ["cycling"],
+      hyrox: ["running","weightlifting"], hyroxDoubles: ["running","weightlifting"],
+    };
+    const hidden = new Set();
+    const dayMs = 864e5;
+    races.forEach(race => {
+      const discs = DISC_FOR_RACE[race.type] || [];
+      if (!discs.length) return;
+      const raceMs = new Date(race.date + "T00:00:00").getTime();
+      let best = null, bestGap = Infinity;
+      buildPlans.forEach(bp => {
+        if (hidden.has(bp.planId)) return;
+        // Only onboarding-generated plans are created FOR a race. Custom
+        // plans are freeform — user might happen to finish one near a
+        // race without it being that race's plan, so we never suppress them.
+        if (bp.source !== "onboarding_v2") return;
+        const endMs = new Date(bp.endDate + "T00:00:00").getTime();
+        const gap = Math.round((raceMs - endMs) / dayMs);
+        if (gap < -3 || gap > 60) return;             // plan must end ~at or before race day
+        if (!bp.types.some(t => discs.includes(t))) return;
+        if (gap < bestGap) { best = bp; bestGap = gap; }
+      });
+      if (best) hidden.add(best.planId);
+    });
+    if (hidden.size) buildPlans = buildPlans.filter(bp => !hidden.has(bp.planId));
+  }
 
   if (races.length === 0 && schedules.length === 0 && buildPlans.length === 0 && notes.length === 0 && imported.length === 0) {
     container.innerHTML = `<p class="empty-msg" style="margin-bottom:12px">No active training inputs yet. Add a race or generate a plan to see them here.</p>`;
