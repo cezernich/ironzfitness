@@ -36,12 +36,16 @@
     if (goal === "amrap") {
       return goalValue ? `AMRAP · ${goalValue} min` : "AMRAP";
     }
+    if (goal === "emom") {
+      return goalValue ? `EMOM · ${goalValue} min/round` : "EMOM";
+    }
     return "Standard";
   }
 
   function _goalBadgeClass(goal) {
     if (goal === "for_time") return "goal-badge goal-for-time";
     if (goal === "amrap") return "goal-badge goal-amrap";
+    if (goal === "emom") return "goal-badge goal-emom";
     return "goal-badge goal-standard";
   }
 
@@ -77,14 +81,20 @@
     if (step.weight != null) {
       parts.push(`${step.weight} ${step.weight_unit || "lbs"}`);
     }
-    if (!parts.length && step.notes) parts.push(step.notes);
+    const hasQuant = parts.length > 0;
+    if (!hasQuant && step.notes) parts.push(step.notes);
     const detail = parts.join(" · ") || "—";
     // Inside a repeat block, we hide the strength icon (tighter). Outside,
     // we show it so the top-level exercise rows have consistent alignment.
     const leadIcon = opts && opts.inRepeat ? "" : `<span class="step-icon">${_exerciseIcon(step.name)}</span>`;
+    // Render notes as a subtitle under the name when reps/weight are
+    // also present, so readers see both the quant and the cue.
+    const nameBlock = hasQuant && step.notes
+      ? `<span class="circuit-step-name-wrap"><span>${_esc(step.name || "Exercise")}</span><span class="circuit-step-note">${_esc(step.notes)}</span></span>`
+      : `<span>${_esc(step.name || "Exercise")}</span>`;
     return `
       <div class="circuit-step-row">
-        <div class="left">${leadIcon}<span>${_esc(step.name || "Exercise")}</span></div>
+        <div class="left">${leadIcon}${nameBlock}</div>
         <div class="right">${_esc(detail)}</div>
       </div>`;
   }

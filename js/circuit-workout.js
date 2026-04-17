@@ -111,6 +111,13 @@
     if (workout.estimated_min) return workout.estimated_min;
     // AMRAP: use the goal_value (cap in minutes)
     if (workout.goal === "amrap" && workout.goal_value) return workout.goal_value;
+    // EMOM: interval × number of planned rounds across top-level repeat blocks
+    if (workout.goal === "emom" && workout.goal_value) {
+      const rounds = (workout.steps || [])
+        .filter(s => s && s.kind === "repeat" && Array.isArray(s.children) && s.children.length)
+        .reduce((n, s) => n + (s.count || 1), 0);
+      if (rounds > 0) return Math.max(1, Math.round(rounds * workout.goal_value));
+    }
 
     let sec = 0;
     function walkSteps(steps, multiplier) {

@@ -392,11 +392,17 @@
           <div class="goal-selector">
             <button class="goal-option${_manualDraft.goal === "for_time" ? " is-active" : ""}" onclick="window.CircuitBuilder.setGoal('for_time')">For Time</button>
             <button class="goal-option${_manualDraft.goal === "amrap" ? " is-active" : ""}" onclick="window.CircuitBuilder.setGoal('amrap')">AMRAP</button>
+            <button class="goal-option${_manualDraft.goal === "emom" ? " is-active" : ""}" onclick="window.CircuitBuilder.setGoal('emom')">EMOM</button>
             <button class="goal-option${_manualDraft.goal === "standard" ? " is-active" : ""}" onclick="window.CircuitBuilder.setGoal('standard')">Standard</button>
           </div>
           ${_manualDraft.goal === "amrap" ? `
             <div style="margin-top:8px">
               <input class="builder-input" type="number" min="1" max="60" placeholder="Time cap (min)" id="cb-amrap-cap" value="${_esc(_manualDraft.goal_value || "")}" oninput="window.CircuitBuilder._updateDraftCap(this.value)">
+            </div>` : ""}
+          ${_manualDraft.goal === "emom" ? `
+            <div style="margin-top:8px">
+              <input class="builder-input" type="number" min="1" max="10" step="0.5" placeholder="Minutes per round (e.g. 2)" id="cb-emom-interval" value="${_esc(_manualDraft.goal_value || "")}" oninput="window.CircuitBuilder._updateDraftCap(this.value)">
+              <p class="builder-hint" style="margin:6px 0 0;font-size:0.78rem;color:var(--color-text-muted)">Each round starts on the interval. Finish the work, rest the balance.</p>
             </div>` : ""}
         </div>
 
@@ -496,7 +502,9 @@
 
   function _updateDraftName(val) { if (_manualDraft) _manualDraft.name = val; }
   function _updateDraftCap(val) {
-    if (_manualDraft) _manualDraft.goal_value = parseInt(val, 10) || null;
+    if (!_manualDraft) return;
+    const n = parseFloat(val);
+    _manualDraft.goal_value = isFinite(n) && n > 0 ? n : null;
   }
   function setGoal(goal) {
     if (!_manualDraft) return;
@@ -628,6 +636,10 @@
           <div class="builder-label">Weight (lbs)</div>
           <input class="builder-input" id="cb-inline-weight" type="number" min="0" max="1000" value="${existing?.weight || ""}" placeholder="Bodyweight if blank" inputmode="numeric" />
         </div>
+        <div class="builder-field">
+          <div class="builder-label">Notes (optional)</div>
+          <input class="builder-input" id="cb-inline-notes" type="text" value="${_esc(existing?.notes || "")}" placeholder="e.g. hands on kb handle" maxlength="120" />
+        </div>
       </div>
       <div class="circuit-modal-footer circuit-modal-footer--dual">
         <button class="circuit-btn circuit-btn-primary" id="cb-inline-ok">Save</button>
@@ -644,12 +656,14 @@
       const reps = parseInt(ov.querySelector("#cb-inline-reps").value, 10) || null;
       const wStr = ov.querySelector("#cb-inline-weight").value;
       const weight = wStr ? parseInt(wStr, 10) : null;
+      const notes = (ov.querySelector("#cb-inline-notes")?.value || "").trim();
       callback({
         kind: "exercise",
         name,
         reps,
         weight,
         weight_unit: weight ? "lbs" : null,
+        notes: notes || null,
       });
     }, () => callback(null));
   }
@@ -782,6 +796,10 @@
       alert("Add at least one step first.");
       return;
     }
+    if (_manualDraft.goal === "emom" && !_manualDraft.goal_value) {
+      alert("EMOM needs a round interval (minutes per round).");
+      return;
+    }
     const circuit = {
       type: "circuit",
       name: _manualDraft.name,
@@ -844,8 +862,8 @@
 
   function _libraryCardHtml(wod) {
     const goal = wod.goal || "standard";
-    const goalLabel = goal === "for_time" ? "For Time" : goal === "amrap" ? "AMRAP" : "Standard";
-    const goalClass = goal === "for_time" ? "goal-for-time" : goal === "amrap" ? "goal-amrap" : "goal-standard";
+    const goalLabel = goal === "for_time" ? "For Time" : goal === "amrap" ? "AMRAP" : goal === "emom" ? "EMOM" : "Standard";
+    const goalClass = goal === "for_time" ? "goal-for-time" : goal === "amrap" ? "goal-amrap" : goal === "emom" ? "goal-emom" : "goal-standard";
     const equip = (wod.equipment && wod.equipment.length) ? wod.equipment.join(" · ") : "No equipment";
     return `
       <div class="library-card" onclick="window.CircuitBuilder.openLibraryWod('${_esc(wod.id)}')">
@@ -917,9 +935,58 @@
 
     if (goal === "amrap") {
       _renderAmrapCompletion(workout);
+    } else if (goal === "emom") {
+      _renderEmomCompletion(workout);
     } else {
       _renderForTimeCompletion(workout);
     }
+  }
+
+  function _renderEmomCompletion(workout) {
+    const circuit = workout.circuit;
+    const interval = circuit.goal_value || null;
+    const plannedRounds = _countPlannedRounds(circuit);
+    const pr = window.CircuitWorkout?.getPR(circuit);
+    const prHtml = pr && pr.rounds != null
+      ? `<div class="completion-pr-card"><div class="pr-text">Current PR: ${_esc(pr.rounds)} rds completed</div></div>`
+      : "";
+    const sub = interval && plannedRounds
+      ? `How many of the ${plannedRounds} rounds did you finish on the ${interval}-min clock?`
+      : interval
+        ? `How many rounds did you finish on the ${interval}-min clock?`
+        : "How many rounds did you finish?";
+
+    const body = `
+      ${_modalHeader("", null)}
+      <div class="circuit-modal-body">
+        <div class="completion-modal-inner">
+          <h3 class="completion-title">⚡ ${_esc(circuit.name)} Complete!</h3>
+          <div class="completion-sub">${_esc(sub)}</div>
+          <div class="completion-amrap-row">
+            <div class="completion-amrap-field">
+              <div class="completion-amrap-label">Rounds Completed</div>
+              <input class="completion-time-input" id="cc-emom-rounds" type="number" min="0" max="999" placeholder="${plannedRounds || 0}" autofocus>
+            </div>
+          </div>
+          <div id="cc-pr-slot">${prHtml}</div>
+        </div>
+      </div>
+      <div class="circuit-modal-footer circuit-modal-footer--dual">
+        <button class="circuit-btn circuit-btn-secondary" onclick="window.CircuitBuilder.closeAll()">Skip</button>
+        <button class="circuit-btn circuit-btn-amrap" onclick="window.CircuitBuilder.saveEmom('${_esc(workout.id)}')">Save Score</button>
+      </div>`;
+    _mountModal("circuit-completion-modal", body);
+  }
+
+  function _countPlannedRounds(circuit) {
+    if (!circuit || !Array.isArray(circuit.steps)) return 0;
+    let total = 0;
+    for (const s of circuit.steps) {
+      if (s && s.kind === "repeat" && Array.isArray(s.children) && s.children.length) {
+        total += (s.count || 1);
+      }
+    }
+    return total;
   }
 
   function _renderForTimeCompletion(workout) {
@@ -1037,6 +1104,13 @@
     _closeModal("circuit-completion-modal");
   }
 
+  function saveEmom(workoutId) {
+    const rounds = parseInt(document.getElementById("cc-emom-rounds")?.value || "0", 10);
+    if (!rounds) { alert("Enter rounds completed."); return; }
+    _writeCompletion(workoutId, { rounds });
+    _closeModal("circuit-completion-modal");
+  }
+
   function _writeCompletion(workoutId, result) {
     let workouts = [];
     try { workouts = JSON.parse(localStorage.getItem("workouts") || "[]"); } catch {}
@@ -1111,6 +1185,7 @@
     backFromManual,
     saveForTime,
     saveAmrap,
+    saveEmom,
     closeAll,
     _backFromEntry,
     _updateDraftName,

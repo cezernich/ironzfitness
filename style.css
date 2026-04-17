@@ -16249,6 +16249,7 @@ body.auth-visible #bottom-nav { display: none !important; }
 }
 .goal-badge.goal-for-time { background: rgba(232, 83, 14, 0.2); color: #E8530E; }
 .goal-badge.goal-amrap    { background: #f39c1233; color: #f39c12; }
+.goal-badge.goal-emom     { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
 .goal-badge.goal-standard { background: rgba(107, 114, 128, 0.2); color: var(--color-text-muted); }
 
 /* ── Visual strip ───────────────────────────────────────────────────────── */
@@ -16350,7 +16351,19 @@ body.auth-visible #bottom-nav { display: none !important; }
 }
 .goal-badge.goal-for-time { background: rgba(232, 83, 14, 0.15); color: #E8530E; }
 .goal-badge.goal-amrap    { background: rgba(243, 156, 18, 0.15); color: #f39c12; }
+.goal-badge.goal-emom     { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
 .goal-badge.goal-standard { background: rgba(142, 142, 147, 0.15); color: var(--color-text-muted); }
+
+/* Exercise note subtitle (below the name in a circuit step row when
+   the right-hand detail is already showing reps/weight). */
+.circuit-step-name-wrap { display: inline-flex; flex-direction: column; min-width: 0; }
+.circuit-step-note {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  line-height: 1.2;
+  margin-top: 2px;
+  white-space: normal;
+}
 
 /* Preview pane inherits the light theme tokens from the base rules above.
    Override block intentionally empty — previously forced a dark card /

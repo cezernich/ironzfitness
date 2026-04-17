@@ -1173,10 +1173,14 @@ function _buildStravaDescription(w, prefs) {
       // "Goal: AMRAP · 20 min") so the reader knows how to interpret the
       // step list.
       const c = bodySource.circuit || {};
-      const goalMap = { for_time: "For Time", amrap: "AMRAP", standard: "Standard" };
+      const goalMap = { for_time: "For Time", amrap: "AMRAP", emom: "EMOM", standard: "Standard" };
       const goalLabel = goalMap[c.goal || "standard"];
       if (goalLabel) {
-        const v = c.goal === "amrap" && c.goal_value ? ` · ${c.goal_value} min` : "";
+        const v = c.goal === "amrap" && c.goal_value
+          ? ` · ${c.goal_value} min`
+          : c.goal === "emom" && c.goal_value
+            ? ` · ${c.goal_value} min/round`
+            : "";
         lines.push(`Goal: ${goalLabel}${v}`);
         lines.push("");
       }
