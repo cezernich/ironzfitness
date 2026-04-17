@@ -1061,6 +1061,13 @@
   // to the race step (when currentRace hasn't been saved yet) so coming
   // back via Back doesn't clobber a manual change.
   function _applyRaceCategoryDefault() {
+    // Default the race date to ~14 weeks out when the field is empty.
+    // Without this iOS Safari renders <input type="date"> as a tiny
+    // bubble (no value → no rendered placeholder text), AND the user
+    // could click Continue with no date set. 14w matches the
+    // "recommended plan" callout copy.
+    _applyRaceDateDefault();
+
     const sel = document.getElementById("bp-v2-race-category");
     if (!sel) return;
     // Always derive from selectedSports when entering the race step —
@@ -1073,6 +1080,16 @@
     if (!cat || cat === sel.value) return;
     sel.value = cat;
     _updateRaceTypes();
+  }
+
+  function _applyRaceDateDefault() {
+    const input = document.getElementById("bp-v2-race-date");
+    if (!input || input.value) return;
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 98); // 14 weeks from today
+    input.value = d.toISOString().slice(0, 10);
+    _updateWeeksCallout();
   }
 
   function _defaultRaceCategoryForSports(sports) {
@@ -1257,9 +1274,20 @@
     const gapVisible = document.getElementById("bp-v2-gap-fill-section")?.style.display !== "none";
     const leadIn = gapVisible && leadInPhase ? { phase: leadInPhase, daysPerWeek: _state.leadInCount } : null;
 
+    // Race date is required. Without it plan generation has no target
+    // week to work back from, and the UI already prompts the user via
+    // the weeks-callout strip.
+    if (!date) {
+      const text = document.getElementById("bp-v2-weeks-text");
+      if (text) text.textContent = "Pick a race date before continuing.";
+      const input = document.getElementById("bp-v2-race-date");
+      if (input) { input.focus(); input.showPicker?.(); }
+      return;
+    }
+
     // Reject obviously-bad dates (past, or year "20205" typos) before
     // they can propagate through plan generation.
-    if (date) {
+    {
       const parsed = new Date(date);
       const todayMid = new Date(); todayMid.setHours(0, 0, 0, 0);
       const isPast = !isNaN(parsed.getTime()) && parsed < todayMid;
