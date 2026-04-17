@@ -159,6 +159,9 @@ function generateFuelingPlan(durationMinutes, sessionCtx) {
  */
 function renderFuelingPlanHTML(durationMinutes, sessionName, sessionCtx) {
   if (!isFuelingEnabled()) return "";
+  const _disc = String(sessionCtx?.discipline || "").toLowerCase();
+  const _name = String(sessionName || "").toLowerCase();
+  if (_disc === "yoga" || _disc === "mobility" || /\byoga\b|\bmobility\b|\bstretch/.test(_name)) return "";
   const plan = generateFuelingPlan(durationMinutes, sessionCtx);
   if (!plan) return "";
 
