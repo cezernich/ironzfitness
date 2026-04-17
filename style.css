@@ -17856,12 +17856,31 @@ body.ob-v2-lock { overflow: hidden; }
   overflow: hidden;
   gap: 2px;
 }
-.ob-v2-timeline-seg { flex: 1; border-radius: 3px; }
+.ob-v2-timeline-seg {
+  flex: 1;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s, opacity 0.12s;
+  opacity: 0.75;
+}
+.ob-v2-timeline-seg:hover { opacity: 1; }
+.ob-v2-timeline-seg.is-selected {
+  opacity: 1;
+  transform: scaleY(1.5);
+  box-shadow: 0 0 0 2px rgba(0,0,0,0.08);
+}
 .ob-v2-timeline-base  { background: #4FC3F7; }
 .ob-v2-timeline-build { background: #FF9800; }
 .ob-v2-timeline-peak  { background: #E53935; }
 .ob-v2-timeline-taper { background: #66BB6A; }
 .ob-v2-timeline-race  { background: #1A1A1A; }
+.ob-v2-timeline-label {
+  cursor: pointer;
+  padding: 0 2px;
+  transition: color 0.12s;
+}
+.ob-v2-timeline-label:hover { color: #333; }
+.ob-v2-timeline-label.is-selected { color: #E8530E; }
 
 .ob-v2-week-preview {
   background: #FFF;
