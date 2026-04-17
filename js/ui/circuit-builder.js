@@ -429,6 +429,10 @@
     }
     return _manualDraft.steps.map((step, idx) => {
       if (step.kind === "repeat") {
+        const intervalChip = step.interval_min
+          ? `<span class="repeat-interval-chip">EMOM · ${_esc(step.interval_min)} min/round</span>`
+          : "";
+        const intervalBtnLabel = step.interval_min ? "Interval ✓" : "Interval";
         return `
           <div class="builder-repeat">
             <div class="builder-repeat-header">
@@ -437,6 +441,8 @@
                 <span class="repeat-badge">${_esc(step.count || 1)}×</span>
                 <span class="builder-repeat-label">Rounds</span>
                 <button class="repeat-count-btn" onclick="window.CircuitBuilder.editRepeatCount(${idx})">Edit count</button>
+                <button class="repeat-count-btn" onclick="window.CircuitBuilder.editRepeatInterval(${idx})">${intervalBtnLabel}</button>
+                ${intervalChip}
               </div>
               <button class="delete-btn" onclick="window.CircuitBuilder.deleteStep(${idx})">✕</button>
             </div>
@@ -576,6 +582,42 @@
       if (cnt && cnt >= 1) step.count = cnt;
       _renderManualBuilder();
     });
+  }
+
+  function editRepeatInterval(idx) {
+    const step = _manualDraft.steps[idx];
+    if (!step || step.kind !== "repeat") return;
+    _openRepeatIntervalModal(step.interval_min || null, (val) => {
+      // null = cleared (untimed); number = EMOM interval
+      if (val == null) delete step.interval_min;
+      else step.interval_min = val;
+      _renderManualBuilder();
+    });
+  }
+
+  function _openRepeatIntervalModal(existingMin, callback) {
+    const initial = existingMin != null ? String(existingMin) : "";
+    const body = `
+      ${_modalHeader("Round Interval (EMOM)", null)}
+      <div class="circuit-modal-body">
+        <div class="builder-field">
+          <div class="builder-label">Minutes per round</div>
+          <input class="builder-input" id="cb-inline-interval" type="number" min="0" max="10" step="0.5" value="${_esc(initial)}" placeholder="e.g. 2 (leave blank for untimed)" inputmode="decimal" autofocus />
+          <p class="builder-hint" style="margin:6px 0 0;font-size:0.78rem;color:var(--color-text-muted)">Each round starts on the interval. Finish the work, rest the balance. Leave blank for untimed rounds.</p>
+        </div>
+      </div>
+      <div class="circuit-modal-footer circuit-modal-footer--dual">
+        <button class="circuit-btn circuit-btn-primary" id="cb-inline-ok">Save</button>
+        <button class="circuit-btn circuit-btn-secondary" id="cb-inline-cancel">Cancel</button>
+      </div>
+    `;
+    _mountModal("cb-inline-modal", body);
+    _wireInlineOkCancel("cb-inline-modal", (ov) => {
+      const raw = ov.querySelector("#cb-inline-interval").value.trim();
+      if (!raw) { callback(null); return; } // cleared → untimed
+      const n = parseFloat(raw);
+      callback(isFinite(n) && n > 0 ? n : null);
+    }, () => {}); // cancel: no-op, leave as-is
   }
 
   function deleteStep(idx) {
@@ -1179,6 +1221,7 @@
     editStep,
     editChildStep,
     editRepeatCount,
+    editRepeatInterval,
     deleteStep,
     deleteChildStep,
     saveManualBuilder,

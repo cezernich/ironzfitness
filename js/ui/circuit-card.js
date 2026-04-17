@@ -103,9 +103,17 @@
   function _renderRepeat(step, workoutGoal, workoutGoalValue) {
     const children = (step.children || []).filter(c => c.kind !== "repeat");
     const isAmrap = workoutGoal === "amrap" && step.count == null;
+    // Effective EMOM interval for this block: block override, then session
+    // default when the session goal is EMOM. Null means untimed rounds.
+    const interval = step.interval_min != null
+      ? step.interval_min
+      : (workoutGoal === "emom" ? workoutGoalValue : null);
+    const intervalChip = interval
+      ? `<span class="repeat-interval-chip">EMOM · ${_esc(interval)} min/round</span>`
+      : "";
     const headerLeft = isAmrap
-      ? `<span class="repeat-badge">AMRAP</span><span>${workoutGoalValue ? `${workoutGoalValue} minutes` : "As many as possible"}</span>`
-      : `<span class="repeat-badge">${_esc(step.count || 1)}×</span><span>${(step.count || 1) === 1 ? "Round" : "Rounds"}</span>`;
+      ? `<span class="repeat-badge">AMRAP</span><span>${workoutGoalValue ? `${workoutGoalValue} minutes` : "As many as possible"}</span>${intervalChip}`
+      : `<span class="repeat-badge">${_esc(step.count || 1)}×</span><span>${(step.count || 1) === 1 ? "Round" : "Rounds"}</span>${intervalChip}`;
     const rows = children.map(c => _renderStepRow(c, { inRepeat: true })).join("");
     return `
       <div class="circuit-repeat-block">

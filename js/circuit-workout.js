@@ -109,16 +109,14 @@
   function estimateMinutes(workout) {
     if (!workout) return 0;
     if (workout.estimated_min) return workout.estimated_min;
-    // AMRAP: use the goal_value (cap in minutes)
+    // AMRAP: session cap in minutes wins
     if (workout.goal === "amrap" && workout.goal_value) return workout.goal_value;
-    // EMOM: interval × number of planned rounds across top-level repeat blocks
-    if (workout.goal === "emom" && workout.goal_value) {
-      const rounds = (workout.steps || [])
-        .filter(s => s && s.kind === "repeat" && Array.isArray(s.children) && s.children.length)
-        .reduce((n, s) => n + (s.count || 1), 0);
-      if (rounds > 0) return Math.max(1, Math.round(rounds * workout.goal_value));
-    }
 
+    // Per-step walker. Repeat blocks with an EMOM interval contribute
+    // count × interval regardless of inner work time; a session-level
+    // EMOM goal acts as the default interval for blocks that don't
+    // override it. Untimed blocks use the underlying work estimate.
+    const sessionInterval = workout.goal === "emom" ? (workout.goal_value || null) : null;
     let sec = 0;
     function walkSteps(steps, multiplier) {
       (steps || []).forEach(s => {
@@ -132,7 +130,12 @@
         } else if (s.kind === "rest") {
           sec += (s.duration_sec || 30) * multiplier;
         } else if (s.kind === "repeat") {
-          walkSteps(s.children, (s.count || 1) * multiplier);
+          const interval = s.interval_min != null ? s.interval_min : sessionInterval;
+          if (interval && Array.isArray(s.children) && s.children.length) {
+            sec += (s.count || 1) * interval * 60 * multiplier;
+          } else {
+            walkSteps(s.children, (s.count || 1) * multiplier);
+          }
         }
       });
     }

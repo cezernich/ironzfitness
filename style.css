@@ -16365,6 +16365,22 @@ body.auth-visible #bottom-nav { display: none !important; }
   white-space: normal;
 }
 
+/* Per-block EMOM interval chip (shown on a repeat block when
+   interval_min is set, or inherited from a session-level EMOM goal). */
+.repeat-interval-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: rgba(139, 92, 246, 0.15);
+  color: #8b5cf6;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
 /* Preview pane inherits the light theme tokens from the base rules above.
    Override block intentionally empty — previously forced a dark card /
    iOS color story that looked transplanted. */

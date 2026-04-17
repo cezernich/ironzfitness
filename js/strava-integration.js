@@ -874,7 +874,8 @@ function _formatCircuitSteps(steps, indent) {
     }
     if (step.kind === "repeat") {
       const count = step.count;
-      const header = count == null ? "AMRAP:" : `${count}×`;
+      const emom = step.interval_min ? ` (EMOM ${step.interval_min} min/round)` : "";
+      const header = count == null ? "AMRAP:" : `${count}×${emom}`;
       lines.push(`${indent}${header}`);
       _formatCircuitSteps(step.children || [], indent + "  ").forEach(l => lines.push(l));
       return;
