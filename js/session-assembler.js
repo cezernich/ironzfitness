@@ -706,18 +706,28 @@
       s.priority !== 'intensity' && s.type !== 'strength'
     );
 
-    // 1. Long sessions on the last two training days (long run last, long ride second-last)
+    // 1. Long sessions: long run on last training day. Long ride / brick on
+    //    the latest training day ≥ 2 days earlier, so non-advanced athletes
+    //    don't stack a long ride and long run on consecutive days (§4.3).
     const lastDay = trainingDays[trainingDays.length - 1];
-    const secondLast = trainingDays.length >= 2 ? trainingDays[trainingDays.length - 2] : null;
+    const minGap = level === 'advanced' ? 1 : 2;
+    const rideDay = pickLongRideDay(trainingDays, lastDay, minGap);
     const longRun = longSessions.find(s => s.type === 'run');
     const longRide = longSessions.find(s => s.type === 'bike');
     const otherLongs = longSessions.filter(s => s !== longRun && s !== longRide);
     if (longRun) layout[lastDay].push(longRun);
-    if (brickSessions.length > 0) {
-      if (secondLast != null) layout[secondLast].push(brickSessions[0]);
-      else layout[lastDay].push(brickSessions[0]);
-    } else if (longRide && secondLast != null) {
-      layout[secondLast].push(longRide);
+
+    // Brick claims rideDay. If long ride also exists (Peak phase has both),
+    // place it on the earliest training day that isn't the long-run day or
+    // the brick day, so it still gets a slot.
+    if (brickSessions.length > 0 && rideDay != null) {
+      layout[rideDay].push(brickSessions[0]);
+      if (longRide) {
+        const fallback = trainingDays.find(d => d !== lastDay && d !== rideDay);
+        layout[fallback != null ? fallback : rideDay].push(longRide);
+      }
+    } else if (longRide && rideDay != null) {
+      layout[rideDay].push(longRide);
     } else if (longRide) {
       layout[lastDay].push(longRide);
     }
@@ -727,9 +737,12 @@
       layout[d].push(s);
     }
 
-    // 2. Intensity sessions on middle training days (non-last-two). Non-advanced
-    //    enforces non-consecutive spacing; advanced may have adjacent if needed.
-    const middleDays = trainingDays.slice(0, -2);
+    // 2. Intensity sessions on non-long training days with spacing rules.
+    //    Exclude days already holding a long or brick session.
+    const longDaySet = new Set(Object.entries(layout)
+      .filter(([_, list]) => list.some(s => s.priority === 'long' || s.priority === 'brick'))
+      .map(([d]) => Number(d)));
+    const middleDays = trainingDays.filter(d => !longDaySet.has(d));
     const intensityDayOrder = pickIntensityDays(middleDays, intensitySessions.length, level);
     intensitySessions.forEach((s, i) => {
       const d = intensityDayOrder[i] != null ? intensityDayOrder[i] : middleDays[i] || trainingDays[0];
@@ -751,6 +764,21 @@
       }
     }
     return placed;
+  }
+
+  // Pick the training day for the long ride / brick. Must be at least
+  // `minGap` days before the long-run day so non-advanced athletes avoid
+  // consecutive hard days (§4.3). Falls back to second-latest training
+  // day if nothing in range qualifies.
+  function pickLongRideDay(trainingDays, longRunDay, minGap) {
+    for (let i = trainingDays.length - 1; i >= 0; i--) {
+      const d = trainingDays[i];
+      if (d === longRunDay) continue;
+      if (longRunDay - d >= minGap) return d;
+    }
+    // Fallback — no suitable day; use whatever's available.
+    if (trainingDays.length >= 2) return trainingDays[trainingDays.length - 2];
+    return null;
   }
 
   function pickIntensityDays(middleDays, count, level) {
@@ -806,13 +834,16 @@
 
       let score = 0;
       if (load === 0) score += 100;
-      else if (load === 1) score += 30;
-      else if (load === 2) score -= 40;
+      else if (load === 1) {
+        // Strongly avoid stacking a second aerobic session on a long/brick day
+        // (creates an unintended brick in Base phase).
+        score += hasLongOrBrick ? -50 : 40;
+      }
+      else if (load === 2) score += 5;
       else score -= 120;
-      if (hasSameDiscipline) score -= 120; // avoid two of same discipline same day
-      if (adjacent) score -= 40;            // discourage adjacent same-discipline
-      if (hasLongOrBrick) score -= 20;      // don't load up long/brick days
-      if (hasIntensity) score -= 15;
+      if (hasSameDiscipline) score -= 120;  // no two of same discipline on same day
+      if (adjacent) score -= 35;            // discourage adjacent same-discipline
+      if (hasIntensity) score -= 20;        // don't load up intensity days
       // Slight preference for earlier training days (reserve 6/7 for long)
       score -= d * 0.3;
       return { day: d, score };
