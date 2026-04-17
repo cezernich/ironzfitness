@@ -16124,16 +16124,17 @@ body.auth-visible #bottom-nav { display: none !important; }
 
 /* ──────────────────────────────────────────────────────────────────────────
    Circuit Workouts (mockup: mockups/circuit-mockup.html)
-   Tokens: bg #1c1c1e, card #2c2c2e, row #3a3a3c, deep #48484a,
+   Tokens: bg #1c1c1e, card var(--color-surface-2, #fff), row var(--color-bg), deep var(--color-surface),
            red #e74c3c, orange #f39c12, cyan #00b4d8, green #4cd964
    ────────────────────────────────────────────────────────────────────────── */
 
 /* ── Circuit card (Screen 1/1b/1c/1d) ───────────────────────────────────── */
 .circuit-card {
-  background: #2c2c2e;
+  background: var(--color-surface-2, #fff);
+  border: 1px solid var(--color-border);
   border-radius: 16px;
   padding: 20px;
-  color: #fff;
+  color: var(--color-text);
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
 }
 .circuit-card-header {
@@ -16152,7 +16153,7 @@ body.auth-visible #bottom-nav { display: none !important; }
 .circuit-icon {
   width: 40px;
   height: 40px;
-  background: #e74c3c22;
+  background: rgba(232, 83, 14, 0.12);
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -16164,11 +16165,11 @@ body.auth-visible #bottom-nav { display: none !important; }
 .circuit-title {
   font-size: 17px;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-text);
 }
 .circuit-subtitle {
   font-size: 13px;
-  color: #8e8e93;
+  color: var(--color-text-muted);
   margin-top: 2px;
 }
 .circuit-card-header-right {
@@ -16177,7 +16178,7 @@ body.auth-visible #bottom-nav { display: none !important; }
 }
 .circuit-time-badge {
   display: inline-block;
-  background: #e74c3c;
+  background: #E8530E;
   color: #fff;
   font-size: 14px;
   font-weight: 700;
@@ -16187,10 +16188,10 @@ body.auth-visible #bottom-nav { display: none !important; }
 .circuit-time-badge--amrap { background: #f39c12; color: #000; }
 .circuit-pr-line {
   font-size: 12px;
-  color: #8e8e93;
+  color: var(--color-text-muted);
   margin-top: 4px;
 }
-.circuit-pr-line .pr-val { color: #4cd964; font-weight: 600; }
+.circuit-pr-line .pr-val { color: #16a34a; font-weight: 600; }
 
 .goal-badge {
   display: inline-block;
@@ -16202,9 +16203,9 @@ body.auth-visible #bottom-nav { display: none !important; }
   border-radius: 6px;
   margin-top: 4px;
 }
-.goal-badge.goal-for-time { background: #e74c3c33; color: #e74c3c; }
+.goal-badge.goal-for-time { background: rgba(232, 83, 14, 0.2); color: #E8530E; }
 .goal-badge.goal-amrap    { background: #f39c1233; color: #f39c12; }
-.goal-badge.goal-standard { background: #8e8e9333; color: #8e8e93; }
+.goal-badge.goal-standard { background: rgba(107, 114, 128, 0.2); color: var(--color-text-muted); }
 
 /* ── Visual strip ───────────────────────────────────────────────────────── */
 .circuit-strip {
@@ -16303,38 +16304,17 @@ body.auth-visible #bottom-nav { display: none !important; }
   border-radius: 6px;
   margin-top: 4px;
 }
-.goal-badge.goal-for-time { background: rgba(231, 76, 60, 0.15); color: var(--color-accent, #e74c3c); }
+.goal-badge.goal-for-time { background: rgba(232, 83, 14, 0.15); color: #E8530E; }
 .goal-badge.goal-amrap    { background: rgba(243, 156, 18, 0.15); color: #f39c12; }
 .goal-badge.goal-standard { background: rgba(142, 142, 147, 0.15); color: var(--color-text-muted); }
 
-/* ── Dark preview overrides (used by the builder modal's preview pane) ──
-   Keep the existing dark look exactly where it already exists — the
-   theme-aware defaults above would otherwise bleed through. ───────────── */
-.circuit-preview-wrap .circuit-step-row {
-  color: #fff;
-  border-bottom-color: #3a3a3c;
-}
-.circuit-preview-wrap .circuit-step-row .right {
-  color: #8e8e93;
-}
-.circuit-preview-wrap .circuit-repeat-block {
-  background: #3a3a3c;
-  border: none;
-}
-.circuit-preview-wrap .circuit-repeat-header {
-  background: #f39c1215;
-  border-bottom: none;
-}
-.circuit-preview-wrap .circuit-repeat-children .circuit-step-row {
-  border-bottom-color: #48484a;
-}
-.circuit-preview-wrap .goal-badge.goal-for-time { background: #e74c3c33; color: #e74c3c; }
-.circuit-preview-wrap .goal-badge.goal-amrap    { background: #f39c1233; color: #f39c12; }
-.circuit-preview-wrap .goal-badge.goal-standard { background: #8e8e9333; color: #8e8e93; }
+/* Preview pane inherits the light theme tokens from the base rules above.
+   Override block intentionally empty — previously forced a dark card /
+   iOS color story that looked transplanted. */
 
 /* ── Modal shell (entry/preview/builder/library/completion) ─────────────── */
 /* Circuit builder modals — relight to match the rest of the app.
-   Previously used a dark iOS-style sheet (#1c1c1e / #3a3a3c / white
+   Previously used a dark iOS-style sheet (#1c1c1e / var(--color-bg) / white
    text) which looked transplanted compared to the light cream modals
    every other flow in IronZ uses (Add Running Session, race forms,
    settings dialogs). Swapped to the app's standard surface / border /
@@ -16524,20 +16504,20 @@ body.auth-visible #bottom-nav { display: none !important; }
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  background: #3a3a3c;
-  color: #8e8e93;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
   border: 2px solid transparent;
   font-family: inherit;
 }
 .goal-option.is-active {
-  border-color: #e74c3c;
-  color: #fff;
-  background: #e74c3c22;
+  border-color: #E8530E;
+  color: #E8530E;
+  background: rgba(232, 83, 14, 0.12);
 }
 
 /* ── Manual builder steps ───────────────────────────────────────────────── */
 .builder-step {
-  background: #3a3a3c;
+  background: var(--color-bg);
   border-radius: 12px;
   padding: 12px 14px;
   margin-bottom: 8px;
@@ -16546,15 +16526,15 @@ body.auth-visible #bottom-nav { display: none !important; }
   gap: 10px;
 }
 .builder-step .drag-handle {
-  color: #636366;
+  color: var(--color-text-muted);
   font-size: 18px;
   cursor: grab;
 }
 .builder-step .step-content { flex: 1; min-width: 0; cursor: pointer; }
-.builder-step .step-name { font-size: 15px; font-weight: 600; color: #fff; }
-.builder-step .step-detail { font-size: 13px; color: #8e8e93; margin-top: 2px; }
+.builder-step .step-name { font-size: 15px; font-weight: 600; color: var(--color-text); }
+.builder-step .step-detail { font-size: 13px; color: var(--color-text-muted); margin-top: 2px; }
 .builder-step .delete-btn {
-  color: #e74c3c;
+  color: var(--color-danger, #e74c3c);
   font-size: 18px;
   cursor: pointer;
   opacity: 0.7;
@@ -16601,14 +16581,14 @@ body.auth-visible #bottom-nav { display: none !important; }
   margin-left: 6px;
 }
 .builder-repeat-header .delete-btn {
-  color: #e74c3c;
+  color: var(--color-danger, #e74c3c);
   background: none;
   border: none;
   cursor: pointer;
   font-size: 16px;
 }
 .builder-repeat-body { padding: 8px; }
-.builder-repeat-body .builder-step { background: #48484a; }
+.builder-repeat-body .builder-step { background: var(--color-surface); }
 .add-inside-btn {
   display: block;
   width: 100%;
@@ -16640,9 +16620,9 @@ body.auth-visible #bottom-nav { display: none !important; }
   font-weight: 600;
   text-align: center;
   cursor: pointer;
-  border: 1px dashed #636366;
+  border: 1px dashed var(--color-text-muted);
   background: none;
-  color: #fff;
+  color: var(--color-text);
   font-family: inherit;
   display: flex;
   flex-direction: column;
@@ -16651,7 +16631,7 @@ body.auth-visible #bottom-nav { display: none !important; }
   gap: 6px;
   line-height: 1.1;
 }
-.action-btn:hover { background: #3a3a3c; }
+.action-btn:hover { background: var(--color-bg); }
 .action-btn > .icon {
   font-size: 20px;
   width: auto;
@@ -16674,15 +16654,16 @@ body.auth-visible #bottom-nav { display: none !important; }
   border: none;
   font-family: inherit;
 }
-.circuit-btn-primary   { background: #e74c3c; color: #fff; }
-.circuit-btn-secondary { background: #3a3a3c; color: #fff; }
+.circuit-btn-primary   { background: #E8530E; color: #fff; }
+.circuit-btn-secondary { background: var(--color-accent, #111); color: var(--color-accent-text, #fff); }
 .circuit-btn-amrap     { background: #f39c12; color: #000; }
 .circuit-modal-footer--dual .circuit-btn { flex: 1; }
 
 /* ── Library (Screen 2) ─────────────────────────────────────────────────── */
 .circuit-tab-row {
   display: flex;
-  background: #3a3a3c;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
   border-radius: 10px;
   padding: 3px;
   margin-bottom: 16px;
@@ -16694,26 +16675,28 @@ body.auth-visible #bottom-nav { display: none !important; }
   border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #8e8e93;
+  color: var(--color-text-muted);
   cursor: pointer;
   background: none;
   border: none;
   font-family: inherit;
 }
 .circuit-tab.is-active {
-  background: #2c2c2e;
-  color: #fff;
+  background: var(--color-surface-2, #fff);
+  color: var(--color-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 .library-section-header {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 1px;
   text-transform: uppercase;
-  color: #636366;
+  color: var(--color-text-muted);
   margin: 16px 0 8px;
 }
 .library-card {
-  background: #2c2c2e;
+  background: var(--color-surface-2, #fff);
+  border: 1px solid var(--color-border);
   border-radius: 14px;
   padding: 16px;
   margin-bottom: 10px;
@@ -16722,34 +16705,34 @@ body.auth-visible #bottom-nav { display: none !important; }
   justify-content: space-between;
   cursor: pointer;
 }
-.library-card:hover { background: #3a3a3c; }
+.library-card:hover { background: var(--color-bg); }
 .library-card-left { flex: 1; min-width: 0; }
-.library-card .wod-name { font-size: 16px; font-weight: 700; color: #fff; }
-.library-card .wod-desc { font-size: 13px; color: #8e8e93; margin-top: 3px; }
+.library-card .wod-name { font-size: 16px; font-weight: 700; color: var(--color-text); }
+.library-card .wod-desc { font-size: 13px; color: var(--color-text-muted); margin-top: 3px; }
 .library-card .wod-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
   font-size: 11px;
-  color: #636366;
+  color: var(--color-text-muted);
   align-items: center;
 }
 .library-card .wod-meta > span:not(.goal-badge) {
-  background: #3a3a3c;
+  background: var(--color-bg);
   padding: 3px 8px;
   border-radius: 4px;
 }
-.library-card-chevron { color: #636366; font-size: 20px; padding-left: 10px; }
+.library-card-chevron { color: var(--color-text-muted); font-size: 20px; padding-left: 10px; }
 .library-empty {
-  color: #8e8e93;
+  color: var(--color-text-muted);
   font-size: 13px;
   text-align: center;
   padding: 24px 16px;
   font-style: italic;
 }
 .wod-long-desc {
-  color: #8e8e93;
+  color: var(--color-text-muted);
   font-size: 13px;
   margin-top: 12px;
   line-height: 1.5;
@@ -16763,12 +16746,12 @@ body.auth-visible #bottom-nav { display: none !important; }
 .completion-title {
   font-size: 20px;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-text);
   margin-bottom: 4px;
 }
 .completion-sub {
   font-size: 14px;
-  color: #8e8e93;
+  color: var(--color-text-muted);
   margin-bottom: 20px;
 }
 .completion-time-row {
@@ -16779,13 +16762,13 @@ body.auth-visible #bottom-nav { display: none !important; }
   margin-bottom: 16px;
 }
 .completion-time-input {
-  background: #3a3a3c;
-  border: 2px solid #e74c3c;
+  background: var(--color-bg);
+  border: 2px solid #E8530E;
   border-radius: 12px;
   padding: 14px;
   font-size: 32px;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-text);
   width: 80px;
   text-align: center;
   outline: none;
@@ -16800,7 +16783,7 @@ body.auth-visible #bottom-nav { display: none !important; }
 .completion-time-sep {
   font-size: 32px;
   font-weight: 700;
-  color: #636366;
+  color: var(--color-text-muted);
 }
 .completion-amrap-row {
   display: flex;
@@ -16815,17 +16798,17 @@ body.auth-visible #bottom-nav { display: none !important; }
   font-weight: 700;
   letter-spacing: 1px;
   text-transform: uppercase;
-  color: #8e8e93;
+  color: var(--color-text-muted);
   margin-bottom: 6px;
 }
 .completion-amrap-plus {
   font-size: 28px;
   font-weight: 700;
-  color: #636366;
+  color: var(--color-text-muted);
   padding-bottom: 14px;
 }
 .completion-pr-card {
-  background: #3a3a3c;
+  background: var(--color-bg);
   border-radius: 10px;
   padding: 12px;
   margin-bottom: 4px;
@@ -16838,11 +16821,11 @@ body.auth-visible #bottom-nav { display: none !important; }
 }
 .completion-pr-card .pr-sub {
   font-size: 12px;
-  color: #8e8e93;
+  color: var(--color-text-muted);
   margin-top: 2px;
 }
 
-.circuit-preview-wrap .circuit-card { background: #2c2c2e; padding: 20px; }
+.circuit-preview-wrap .circuit-card { padding: 20px; }
 
 /* ─────────────────────────────────────────────────────────────────────────
    Threshold refresh reminder banner (SPEC_cardio_add_session_v1.md §3.4)
