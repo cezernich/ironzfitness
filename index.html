@@ -2987,6 +2987,14 @@
   <script src="js/philosophy-engine.js"></script>
   <script src="js/exercise-selector.js"></script>
   <script src="js/nutrition-calculator.js"></script>
+  <!-- Rule engine chunk 3 — hydration, validator, rationale, generator.
+       Depends on AthleteClassifier + ArcBuilder + SessionAssembler
+       (loaded earlier) and NutritionCalculator (appended to the file
+       above). Additive: not yet wired into planner.js. -->
+  <script src="js/hydration-calculator.js"></script>
+  <script src="js/plan-validator.js"></script>
+  <script src="js/rationale-builder.js"></script>
+  <script src="js/plan-generator.js"></script>
   <script src="js/zone-calculator.js"></script>
   <script src="js/sport-levels.js"></script>
   <script src="js/threshold-reminders.js"></script>

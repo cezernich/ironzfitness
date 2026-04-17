@@ -505,3 +505,187 @@ function calculateNutrition(classification, modules, profile) {
     supplements: getSupplementGuidance(modules)
   };
 }
+
+// ── Rule Engine (Chunk 3): window.NutritionCalculator ──────────────────────
+// PLAN_SCHEMA.json-conformant API. Additive — does not affect the bare
+// function exports above that rules-engine.js / philosophy-planner.js rely
+// on. See sources-of-truth/TRAINING_PHILOSOPHY.md §10, §13 and
+// sources-of-truth/RULE_ENGINE_SPEC.md Step 8.
+(function () {
+  'use strict';
+
+  const LBS_PER_KG = 2.20462;
+
+  const GOAL_CALORIE_ADJUSTMENT = {
+    muscle_gain: 0.15,
+    performance: 0,
+    fat_loss: -0.20,
+    general_health: 0,
+    return_to_training: 0,
+  };
+
+  const GOAL_ADJUSTMENT_LABEL = {
+    muscle_gain: '+15% surplus for muscle gain',
+    performance: 'Maintenance calories for performance',
+    fat_loss: '-20% deficit for fat loss',
+    general_health: 'Maintenance calories',
+    return_to_training: 'Maintenance calories during return-to-training',
+  };
+
+  const GOAL_PROTEIN_G_PER_LB = {
+    muscle_gain: 0.9,
+    fat_loss: 1.0,
+    performance: 0.7,
+    general_health: 0.7,
+    return_to_training: 0.8,
+  };
+
+  const PROTEIN_FLOOR_G_PER_LB = 0.6;
+
+  function normalizeGoal(goal) {
+    if (!goal) return 'general_health';
+    const g = String(goal).toLowerCase();
+    if (GOAL_CALORIE_ADJUSTMENT[g] != null) return g;
+    if (g.includes('muscle') || g.includes('bulk') || g.includes('gain')) return 'muscle_gain';
+    if (g.includes('fat') || g.includes('cut') || g.includes('weight') || g.includes('loss')) return 'fat_loss';
+    if (g.includes('perform')) return 'performance';
+    if (g.includes('return')) return 'return_to_training';
+    return 'general_health';
+  }
+
+  function normalizeGender(gender) {
+    const g = String(gender || '').toLowerCase();
+    if (g === 'male' || g === 'm') return 'male';
+    if (g === 'female' || g === 'f') return 'female';
+    if (g === 'other') return 'other';
+    return 'not_specified';
+  }
+
+  function daysToActivityMultiplier(daysAvailable) {
+    const d = Number(daysAvailable) || 4;
+    if (d <= 3) return 1.375;  // Sedentary / light
+    if (d <= 5) return 1.55;   // Moderate
+    if (d <= 6) return 1.725;  // Active
+    return 1.9;                // Very active
+  }
+
+  // Mifflin-St Jeor with an additional +166 term for males to match the
+  // signature requested in the Chunk 3 spec. Inputs are lbs/inches.
+  function calculateTDEE(weightLbs, heightIn, age, gender, activityMultiplier) {
+    const w = Number(weightLbs);
+    const h = Number(heightIn);
+    const a = Number(age);
+    if (!w || !h || !a) return null;
+    const weightKg = w / LBS_PER_KG;
+    const heightCm = h * 2.54;
+    const normGender = normalizeGender(gender);
+    // BMR = 10*kg + 6.25*cm - 5*age - 161, then +166 for male (spec equation)
+    let bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * a) - 161;
+    if (normGender === 'male') bmr += 166;
+    const mult = Number(activityMultiplier) || 1.55;
+    return Math.round(bmr * mult);
+  }
+
+  function getCalorieAdjustment(goal) {
+    return GOAL_CALORIE_ADJUSTMENT[normalizeGoal(goal)] ?? 0;
+  }
+
+  function getProteinTarget(goal) {
+    return GOAL_PROTEIN_G_PER_LB[normalizeGoal(goal)] ?? 0.7;
+  }
+
+  function calorieFloor(gender) {
+    return normalizeGender(gender) === 'female' ? 1200 : 1500;
+  }
+
+  function enforceFloors(calories, proteinG, gender, weightLbs) {
+    const floorCal = calorieFloor(gender);
+    const floorProt = weightLbs ? Math.ceil(PROTEIN_FLOOR_G_PER_LB * weightLbs) : 0;
+    return {
+      calories: Math.max(Math.round(calories || 0), floorCal),
+      proteinG: Math.max(Math.round(proteinG || 0), floorProt),
+    };
+  }
+
+  function isEnduranceSport(sportProfile) {
+    return sportProfile === 'endurance' || sportProfile === 'triathlon' || sportProfile === 'hybrid';
+  }
+
+  function raceDayFueling(classification) {
+    if (!classification) return null;
+    if (isEnduranceSport(classification.sportProfile)) {
+      return '30-60g carbs/hour during events >60 min. Practice fueling in training — nothing new on race day.';
+    }
+    return null;
+  }
+
+  function trainingDayAdjustmentText(classification) {
+    const goal = normalizeGoal(classification && classification.goal);
+    if (isEnduranceSport(classification && classification.sportProfile)) {
+      return 'Add 200-300 cal on high-volume training days; 30-60g carbs/hour for sessions over 60 min.';
+    }
+    if (goal === 'muscle_gain') {
+      return 'Add 200-300 cal on lifting days; keep protein consistent every day.';
+    }
+    if (goal === 'fat_loss') {
+      return 'Add 100-150 cal on training days; keep protein consistent every day.';
+    }
+    return 'Add 150-200 cal on training days; keep protein consistent every day.';
+  }
+
+  function calculate(classification, profile) {
+    const c = classification || {};
+    const p = profile || {};
+
+    const weightLbs = Number(c.weight != null ? c.weight : p.weight) || 165;
+    const heightIn = Number(c.height != null ? c.height : p.height) || 70;
+    const age = Number(c.age != null ? c.age : p.age) || 30;
+    const gender = normalizeGender(c.gender || p.gender);
+    const goal = normalizeGoal(c.goal || p.goal);
+
+    const activityMult = daysToActivityMultiplier(c.daysAvailable || p.availableDaysPerWeek);
+    const tdee = calculateTDEE(weightLbs, heightIn, age, gender, activityMult) || 2000;
+
+    const adjustment = getCalorieAdjustment(goal);
+    let calories = Math.round(tdee * (1 + adjustment));
+
+    const proteinPerLb = getProteinTarget(goal);
+    let proteinG = Math.round(proteinPerLb * weightLbs);
+
+    const floored = enforceFloors(calories, proteinG, gender, weightLbs);
+    calories = floored.calories;
+    proteinG = floored.proteinG;
+
+    // Fat: ~25% of calories (9 cal/g). Carbs fill remainder.
+    const fatG = Math.max(30, Math.round((calories * 0.25) / 9));
+    const proteinCals = proteinG * 4;
+    const fatCals = fatG * 9;
+    const carbsG = Math.max(0, Math.round((calories - proteinCals - fatCals) / 4));
+
+    return {
+      dailyTargets: {
+        calories,
+        proteinG,
+        carbsG,
+        fatG,
+      },
+      calorieAdjustment: GOAL_ADJUSTMENT_LABEL[goal] || 'Maintenance calories',
+      trainingDayAdjustment: trainingDayAdjustmentText(c),
+      preWorkout: 'Carb-rich meal 60-90 min before training; smaller snack 30 min before if training fasted feels low-energy.',
+      postWorkout: 'Protein + carbs within 2 hours of training to support recovery.',
+      raceDayFueling: raceDayFueling(c),
+    };
+  }
+
+  window.NutritionCalculator = {
+    calculate,
+    calculateTDEE,
+    getCalorieAdjustment,
+    getProteinTarget,
+    enforceFloors,
+    // exposed for validator + tests
+    _daysToActivityMultiplier: daysToActivityMultiplier,
+    _calorieFloor: calorieFloor,
+    _proteinFloorGPerLb: PROTEIN_FLOOR_G_PER_LB,
+  };
+})();
