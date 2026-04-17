@@ -774,11 +774,12 @@
       </section>
 
       <!-- Photo Meal Log Modal -->
-      <div id="photo-meal-modal" style="display:none">
-        <section class="card">
+      <div id="photo-meal-modal" class="survey-overlay" style="display:none" onclick="if(event.target===this) closePhotoMealLog()">
+        <div class="survey-modal" style="max-width:520px">
+        <section class="card" style="margin:0;border:none;box-shadow:none">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
             <h2 style="margin:0">Photo Log</h2>
-            <button class="btn-secondary" onclick="closePhotoMealLog()">Back</button>
+            <button class="btn-secondary" onclick="closePhotoMealLog()">Close</button>
           </div>
           <p class="hint">Take a photo of your meal and AI will estimate the nutritional content.</p>
           <div class="photo-upload-area" id="photo-upload-area">
@@ -820,6 +821,7 @@
           </div>
           <p id="photo-meal-msg" class="save-msg"></p>
         </section>
+        </div>
       </div>
 
       <!-- Quick Add Meal Modal -->

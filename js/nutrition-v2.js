@@ -207,25 +207,25 @@ let photoMealVisible = false;
 
 function openPhotoMealLog() {
   const modal = document.getElementById("photo-meal-modal");
-  modal.style.display = "";
-  document.getElementById("section-nutrition-dashboard").style.display = "none";
-  photoMealVisible = true;
-  // Reset state
+  // Reset state first so the modal opens in a clean state every time
   document.getElementById("photo-preview-area").style.display = "none";
   document.getElementById("photo-ai-result").style.display = "none";
   document.getElementById("photo-ai-loading").style.display = "none";
   document.getElementById("photo-meal-msg").textContent = "";
-  // The photo-meal-modal is an inline card further down the page, not an
-  // overlay. Without scrolling to it, hiding the dashboard just makes the
-  // tab look empty and clicking Photo Log appears to do nothing.
-  requestAnimationFrame(() => {
-    try { modal.scrollIntoView({ behavior: "smooth", block: "start" }); } catch {}
-  });
+  // survey-overlay needs both display:flex and .is-open to be visible —
+  // same pattern as the barcode scanner. Previously this was an inline
+  // div that hid the nutrition dashboard and tried to scroll the inline
+  // card into view, which left the modal off-screen on mobile.
+  modal.style.display = "flex";
+  requestAnimationFrame(() => modal.classList.add("is-open"));
+  photoMealVisible = true;
 }
 
 function closePhotoMealLog() {
-  document.getElementById("photo-meal-modal").style.display = "none";
-  document.getElementById("section-nutrition-dashboard").style.display = "";
+  const modal = document.getElementById("photo-meal-modal");
+  modal.classList.remove("is-open");
+  // Match the 250ms fade-out transition on .survey-overlay before hiding.
+  setTimeout(() => { modal.style.display = "none"; }, 250);
   photoMealVisible = false;
 }
 
