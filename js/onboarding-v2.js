@@ -481,14 +481,17 @@
   }
 
   // Default start = the Monday on or after today (ISO yyyy-mm-dd).
-  function _nextMondayISO() {
+  // Default plan start = tomorrow. Previously this returned next Monday,
+  // which could push the start up to 6 days out; the athlete expects to
+  // begin the next day after building a plan, not wait a full week.
+  function _tomorrowISO() {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
-    const dow = d.getDay();
-    const daysToMon = (dow === 0 ? 1 : (8 - dow) % 7);
-    d.setDate(d.getDate() + daysToMon);
+    d.setDate(d.getDate() + 1);
     return d.toISOString().slice(0, 10);
   }
+  // Kept for any stray callers referencing the old name.
+  const _nextMondayISO = _tomorrowISO;
 
   // Update the start date from the bp-v2-5 date input.
   function _setStartDate(val) {
