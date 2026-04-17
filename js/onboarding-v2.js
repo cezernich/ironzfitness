@@ -2978,19 +2978,19 @@
   // We also no longer delegate to generateTrainingPlan for multi-sport
   // users — the user's explicit schedule is the source of truth.
   function _confirmAndSavePlan() {
-    // TRAINING_PHILOSOPHY §4.7 — Half/Full Ironman requires ≥5 training
-    // days/week regardless of level. If the user's schedule has fewer
-    // active days, warn them and give them a chance to back out. If they
-    // insist, the classifier will bump the count defensively downstream.
+    // TRAINING_PHILOSOPHY §4.8 — Half/Full Ironman recommend ≥5 training
+    // days/week. If the schedule has fewer active days, explain why and
+    // let the user choose whether to go back or keep their selection.
+    // We respect the user's choice — no silent override downstream.
     const longCourseFloor = _minDaysForCurrentRaces();
     if (longCourseFloor > 1) {
       const activeDays = _BP_DAYS.filter(d => Array.isArray(_state.schedule[d]) && _state.schedule[d].length > 0).length;
       if (activeDays < longCourseFloor) {
         const proceed = confirm(
-          `Half and Full Ironman need at least ${longCourseFloor} training days per week to reach the start line safely. ` +
+          `Heads up: Half and Full Ironman training usually needs at least ${longCourseFloor} days/week to reach the start line safely. ` +
           `You currently have ${activeDays} active day(s). ` +
-          `\n\nWe can keep some of those sessions short or easy to match your readiness, but we don't recommend fewer than ${longCourseFloor} days. ` +
-          `\n\nContinue anyway? (We'll still bump your plan to ${longCourseFloor} days — you can trim individual sessions later.)`
+          `\n\nYou can keep sessions short or easy on the days you're less ready for, but fewer than ${longCourseFloor} days risks undertraining for the distance. ` +
+          `\n\nPress OK to keep your ${activeDays}-day plan as-is, or Cancel to go back and add days.`
         );
         if (!proceed) return;
       }

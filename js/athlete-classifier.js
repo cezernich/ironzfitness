@@ -256,21 +256,19 @@
     const ageGroup = classifyAgeGroup(age);
     const goal = mapGoal(p.goal);
 
-    let daysAvailable = pickNumber(p.availableDaysPerWeek, p.daysAvailable) ?? 3;
-    // TRAINING_PHILOSOPHY §4.7: Half IM and Full IM require a 5-day/week
-    // floor regardless of level. 4 days doesn't accumulate enough stimulus
-    // for the distance; the safety valve is shorter / easier sessions on
-    // those 5+ days, not fewer days. This floor is also enforced in
-    // onboarding — classifier enforces it defensively so a profile built
-    // through other paths (custom plan import, legacy data) still honors it.
+    const daysAvailable = pickNumber(p.availableDaysPerWeek, p.daysAvailable) ?? 3;
+    // TRAINING_PHILOSOPHY §4.8: Half IM and Full IM recommend ≥5 days/week.
+    // The floor is enforced by the onboarding counter + save-time warning
+    // (where the user can see the reason and choose); the classifier does
+    // NOT silently override the user's choice downstream — we flag it for
+    // callers who want to surface a "this is below the recommended floor"
+    // message but respect whatever the user committed to.
     const hasLongCourseRace = Array.isArray(p.races) && p.races.some(r =>
       r && (r.raceType === 'ironman' || r.raceType === 'half-ironman')
     );
-    let daysFloorReason = null;
-    if (hasLongCourseRace && daysAvailable < 5) {
-      daysFloorReason = 'long-course triathlon (Half/Full IM) needs ≥5 days/week';
-      daysAvailable = 5;
-    }
+    const daysFloorReason = (hasLongCourseRace && daysAvailable < 5)
+      ? 'Half/Full IM typically requires ≥5 days/week; user selected fewer.'
+      : null;
     const sessionDurationMin = pickNumber(p.sessionLength, p.sessionDurationMin) ?? 60;
 
     const equipmentProfile = Array.isArray(p.equipmentProfile) ? p.equipmentProfile.slice() : [];

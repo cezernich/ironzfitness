@@ -424,7 +424,9 @@ When an athlete has multiple races, each race gets a priority that determines ho
 
 These ranges act as **weekly hour ceilings**. Session templates define the workout structure, but total weekly hours should not exceed these ranges. If session counts push hours above the ceiling, reduce duration per session.
 
-**Minimum training frequency — Half and Full Ironman:** regardless of level, long-course triathlon plans require a floor of **5 training days/week**. Four or fewer days doesn't accumulate enough aerobic stimulus to reach a 70.3 or 140.6 start line safely. Athletes who aren't ready for a given day's prescribed volume should reduce *duration* or *intensity* on that day (short easy swim, Z2 spin, mobility session) rather than skipping the day entirely. 6 and 7 days/week remain options; the hour ceilings below cap total load. Enforced in onboarding (counter floor + save-time warning) and defensively at classification.
+**Minimum training frequency — Half and Full Ironman:** regardless of level, long-course triathlon plans recommend a floor of **5 training days/week**. Four or fewer days doesn't accumulate enough aerobic stimulus to reach a 70.3 or 140.6 start line safely. Athletes who aren't ready for a given day's prescribed volume should reduce *duration* or *intensity* on that day (short easy swim, Z2 spin, mobility session) rather than skipping the day entirely. 6 and 7 days/week remain options; the hour ceilings below cap total load.
+
+Enforcement is UI-driven: the onboarding counter floors at 5 for Half/Full IM, and a save-time confirm dialog warns the user if the weekly schedule has fewer than 5 active days — it explains the risk and gives the user the choice to proceed or go back. The classifier flags `daysFloorReason` for downstream surfaces but does **not** silently override the user's selection. User autonomy wins once they've been informed.
 
 **Triathlon:**
 
