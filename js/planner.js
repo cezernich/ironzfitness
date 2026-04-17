@@ -2014,6 +2014,7 @@ function removeTrainingInput(kind, id) {
 
   if (kind === "race") {
     if (!confirm("Remove this race and its training plan? Past completed sessions will be kept.")) return;
+    const deleted = loadEvents().find(e => e.id === id);
     saveEvents(loadEvents().filter(e => e.id !== id));
     saveTrainingPlanData(loadTrainingPlan().filter(e => {
       if (e.raceId !== id) return true;       // different race — keep
@@ -2024,6 +2025,29 @@ function removeTrainingInput(kind, id) {
       }
       return false;                            // future — remove
     }));
+    // Scrub the Build Plan flow's raceEvents store so the deleted race
+    // can't leak back through openBuildPlan's state-restore path (which
+    // reads raceEvents[0] into _state.currentRace and could re-append
+    // it to `events` on the next _confirmAndSavePlan).
+    try {
+      const raw = localStorage.getItem("raceEvents");
+      if (raw) {
+        const arr = JSON.parse(raw) || [];
+        const filtered = arr.filter(r => {
+          if (!r) return false;
+          if (r.id === id) return false;
+          if (deleted && r.name === deleted.name && r.date === deleted.date) return false;
+          return true;
+        });
+        if (filtered.length !== arr.length) {
+          localStorage.setItem("raceEvents", JSON.stringify(filtered));
+          if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("raceEvents");
+        }
+      }
+    } catch (e) { console.warn("[removeTrainingInput:race] raceEvents scrub failed", e && e.message); }
+    // Re-run the promotion/integrity check so a surviving B race gets a
+    // full rebuild (same cascade deleteEvent uses).
+    checkARacePromotion();
     renderRaceEvents();
     renderTrainingConflicts();
     if (typeof renderCalendar === "function") renderCalendar();
@@ -3867,6 +3891,29 @@ function deleteEvent(id) {
 
   const plan = loadTrainingPlan().filter(e => e.raceId !== id);
   saveTrainingPlanData(plan);
+
+  // Also scrub the Build Plan flow's own race store (localStorage.raceEvents)
+  // so the deleted race can't leak back through state restore the next time
+  // openBuildPlan() loads _state.currentRace from raceEvents[0]. Without
+  // this, deleting a race from the Active Training Inputs trash icon would
+  // re-surface it on the next Build Plan open and could be re-written into
+  // `events` on the next _confirmAndSavePlan.
+  try {
+    const raw = localStorage.getItem("raceEvents");
+    if (raw) {
+      const arr = JSON.parse(raw) || [];
+      const filtered = arr.filter(r => {
+        if (!r) return false;
+        if (r.id === id) return false;
+        if (deleted && r.name === deleted.name && r.date === deleted.date) return false;
+        return true;
+      });
+      if (filtered.length !== arr.length) {
+        localStorage.setItem("raceEvents", JSON.stringify(filtered));
+        if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("raceEvents");
+      }
+    }
+  } catch (e) { console.warn("[deleteEvent] raceEvents scrub failed", e && e.message); }
 
   // Run the promotion + plan-integrity check after every deletion, not
   // just A-race deletions. Legacy data can have two A races; if the user
