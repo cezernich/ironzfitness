@@ -408,7 +408,7 @@
 
   // ─── Top-level modal: pick type, preview, save ───────────────────────────────
 
-  function open(initialDateStr) {
+  function open(initialDateStr, opts) {
     const STL = window.SessionTypeLibrary;
     const RWG = window.RunningWorkoutGenerator;
     const ZC  = window.ZoneCalculator;
@@ -416,6 +416,14 @@
       console.error("[IronZ] Add Running Session: required modules not loaded.");
       return;
     }
+
+    opts = opts || {};
+    const onSave  = typeof opts.onSave === "function" ? opts.onSave : null;
+    const context = opts.context || "calendar";
+    // plan-manual context (Build Your Own Plan): template is per-day-of-week,
+    // so a calendar date is meaningless. Hide the date row and skip the
+    // hard-block / conflict / stress checks, which are all calendar-scoped.
+    const isPlanManual = context === "plan-manual";
 
     const id = "ars-overlay";
     const old = document.getElementById(id);
@@ -429,6 +437,15 @@
     const types = STL.SESSION_TYPES;
     const optionsHtml = types.map(t => `<option value="${_esc(t.id)}">${_esc(t.label)}</option>`).join("");
 
+    const dateFieldHtml = isPlanManual ? "" : `
+          <label class="post-test-field">
+            <span>Date</span>
+            <input type="date" id="ars-date" value="${_esc(initialDateStr || _todayStr())}">
+          </label>`;
+
+    const manualBtnHtml = isPlanManual ? "" : `
+          <button class="rating-skip-btn" id="ars-manual-toggle" type="button">Add Manually</button>`;
+
     overlay.innerHTML = `
       <div class="rating-modal post-test-modal ars-modal">
         <div class="ars-modal-header">
@@ -439,10 +456,7 @@
 
         <!-- Generator view (default) -->
         <div class="post-test-modal-body" id="ars-body-generator">
-          <label class="post-test-field">
-            <span>Date</span>
-            <input type="date" id="ars-date" value="${_esc(initialDateStr || _todayStr())}">
-          </label>
+          ${dateFieldHtml}
           <label class="post-test-field">
             <span>Session type</span>
             <select id="ars-type">${optionsHtml}</select>
@@ -459,7 +473,7 @@
         </div>
 
         <div class="post-test-modal-actions">
-          <button class="rating-skip-btn" id="ars-manual-toggle" type="button">Add Manually</button>
+          ${manualBtnHtml}
           <button class="rating-save-btn" id="ars-save" type="button">Save</button>
         </div>
       </div>
@@ -472,6 +486,9 @@
     const $dur  = overlay.querySelector("#ars-duration");
     const $durDisplay = overlay.querySelector("#ars-duration-display");
     const $preview = overlay.querySelector("#ars-preview");
+    // In plan-manual context the date field is omitted; use today as the
+    // fallback everywhere the existing code pulls from $date.value.
+    const _dateValue = () => ($date ? $date.value : (initialDateStr || _todayStr()));
 
     let _variantOffset = 0;
 
@@ -530,16 +547,22 @@
 
     $type.onchange = () => { _variantOffset = 0; delete $dur.dataset.touched; refreshPreview(); };
     $dur.oninput = () => { $dur.dataset.touched = "1"; refreshPreview(); };
-    $date.onchange = () => refreshPreview();
+    if ($date) $date.onchange = () => refreshPreview();
     refreshPreview();
 
     // Header: Back returns to Quick Entry type picker; X closes outright.
+    // In plan-manual context we reopen cp-ai-modal instead — that's where
+    // the user came from (CYOP AI type picker).
     overlay.querySelector("#ars-back").onclick = () => {
       _close(id);
+      if (isPlanManual) {
+        const cpModal = document.getElementById("cp-ai-modal");
+        if (cpModal) cpModal.classList.add("is-open");
+        return;
+      }
       try {
         if (typeof window.openQuickEntry === "function") {
-          const d = overlay.querySelector("#ars-date")?.value || initialDateStr || _todayStr();
-          window.openQuickEntry(d);
+          window.openQuickEntry(_dateValue());
         }
       } catch {}
     };
@@ -547,20 +570,33 @@
 
     // "Add Manually" closes this modal and opens the Quick Entry cardio
     // manual editor (interval rows with zone selectors, drag-and-drop,
-    // etc.) — the same editor used by other cardio types.
-    overlay.querySelector("#ars-manual-toggle").onclick = () => {
-      const d = overlay.querySelector("#ars-date")?.value || initialDateStr || _todayStr();
-      _close(id);
-      if (typeof window.openQuickEntryCardioManual === "function") {
-        window.openQuickEntryCardioManual(d, "running");
-      }
-    };
+    // etc.) — the same editor used by other cardio types. Omitted in
+    // plan-manual context (no QE cardio manual editor there yet).
+    const manualToggle = overlay.querySelector("#ars-manual-toggle");
+    if (manualToggle) {
+      manualToggle.onclick = () => {
+        const d = _dateValue();
+        _close(id);
+        if (typeof window.openQuickEntryCardioManual === "function") {
+          window.openQuickEntryCardioManual(d, "running");
+        }
+      };
+    }
 
     overlay.querySelector("#ars-save").onclick = () => {
       const w = overlay._currentWorkout;
-      const date = $date.value;
+      const date = _dateValue();
       const notes = (overlay.querySelector("#ars-notes")?.value || "").trim();
       if (!w || !date) return;
+
+      // Plan-manual (CYOP) context: hand the workout to the caller's
+      // onSave and close. No calendar date to conflict with, no per-week
+      // stress check applicable to a template day-of-week.
+      if (onSave) {
+        onSave(w, date, notes);
+        _close(id);
+        return;
+      }
 
       // 1. Hard-block evaluation (only Long Run cap today).
       const c1 = evaluateConstraints(w, date);

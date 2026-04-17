@@ -388,6 +388,10 @@
               <!-- Create on IronZ -->
               <div id="cp-create-body">
                 <p class="hint">Build your own weekly training schedule. Mix AI-generated sessions with your own workouts.</p>
+                <div class="form-row">
+                  <label for="custom-plan-name">Plan Name</label>
+                  <input type="text" id="custom-plan-name" maxlength="80" placeholder="e.g. Spring Base Building" />
+                </div>
                 <div class="form-grid">
                   <div class="form-row">
                     <label for="custom-plan-start">Start Date</label>
@@ -954,6 +958,16 @@
           <span class="card-chevron">&#9662;</span>
         </div>
         <div class="card-body">
+          <div class="meal-history-filters">
+            <input type="text" id="meal-history-search" class="meal-history-search"
+              placeholder="Search meals…" oninput="setMealHistoryQuery(this.value)" />
+            <div class="meal-history-range-row" role="tablist" aria-label="Meal history date range">
+              <button type="button" class="saved-filter-chip" data-range="1d"  onclick="setMealHistoryRange('1d')">Today</button>
+              <button type="button" class="saved-filter-chip is-active" data-range="7d"  onclick="setMealHistoryRange('7d')">7 days</button>
+              <button type="button" class="saved-filter-chip" data-range="30d" onclick="setMealHistoryRange('30d')">30 days</button>
+              <button type="button" class="saved-filter-chip" data-range="all" onclick="setMealHistoryRange('all')">All</button>
+            </div>
+          </div>
           <div id="nutrition-history">
             <p class="empty-msg">No meals logged yet. Add your first one above!</p>
           </div>

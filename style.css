@@ -1426,6 +1426,33 @@ button:active {
   margin-top: 2px;
 }
 
+.meal-history-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.meal-history-search {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-size: 0.9rem;
+  box-sizing: border-box;
+}
+.meal-history-range-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.meal-history-empty-filtered {
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: 16px 4px;
+}
+
 .meal-day-group { margin-bottom: 20px; }
 
 .meal-day-header {

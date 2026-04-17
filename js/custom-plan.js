@@ -378,6 +378,36 @@ function _cpShowCardioDetail(title, bodyHtml) {
 // The generator calls window.QEBuildCardioWorkout — the same pure builder
 // qeGenerateCardio uses, so output is byte-identical to Add Session.
 function cpShowCardioOptions(dow, type) {
+  // Running delegates to the Quick Add running flow (AddRunningSessionFlow)
+  // so plan-template running sessions match the structured 8-type generator
+  // used for calendar add-session. Same pattern as cpShowCircuitOptions.
+  if (type === "running" && typeof window !== "undefined" && window.AddRunningSessionFlow) {
+    closeCustomPlanAIModal();
+    window.AddRunningSessionFlow.open(null, {
+      context: "plan-manual",
+      onSave: (workout, _dateStr, notes) => {
+        const entry = window.AddRunningSessionFlow.planEntryFor(workout, "", notes);
+        _cpAddSession(dow, {
+          id: _cpGenId(),
+          mode: "ai",
+          data: {
+            type: "running",
+            title: workout.title,
+            sessionName: workout.title,
+            notes: notes || "",
+            duration: workout.estimated_duration_min,
+            is_hard: workout.is_hard,
+            aiSession: entry.aiSession,
+            phases: workout.phases,
+            why_text: workout.why_text,
+          },
+        });
+        _cpRerenderDay(dow);
+      },
+    });
+    return;
+  }
+
   const isBrick = type === "brick";
   const typeLabels = {
     running: "Running Session", cycling: "Cycling Session", swimming: "Swimming Session",
@@ -1967,6 +1997,10 @@ function saveCustomPlan() {
 
   const weeks = parseInt(document.getElementById("custom-plan-weeks")?.value || "4");
   const start = new Date(startDate + "T00:00:00");
+  // Optional user-supplied name. Surfaced on the Active Training Inputs
+  // card so users can tell multiple custom plans apart. Falls back to
+  // "Training Block" at render time when empty.
+  const planName = (document.getElementById("custom-plan-name")?.value || "").trim();
 
   // Load existing schedule
   let schedule = [];
@@ -2013,6 +2047,7 @@ function saveCustomPlan() {
           source: "custom",
           planId: planId,
           level: "intermediate",
+          ...(planName ? { planName } : {}),
         };
 
         // Carry over exercises or intervals. For exercises, copy supersetGroup
@@ -2178,6 +2213,11 @@ function openCustomPlanEdit(planId) {
         const maxDate = planSessions.reduce((m, s) => (s.date > m ? s.date : m), planSessions[0].date);
         const spanDays = Math.round((new Date(maxDate + "T00:00:00") - new Date(minDate + "T00:00:00")) / 864e5);
         weeksEl.value = String(Math.max(1, Math.round(spanDays / 7) + 1));
+      }
+      const nameEl = document.getElementById("custom-plan-name");
+      if (nameEl) {
+        const namedSession = planSessions.find(s => s.planName);
+        nameEl.value = namedSession ? namedSession.planName : "";
       }
     } catch {}
   }, 0);

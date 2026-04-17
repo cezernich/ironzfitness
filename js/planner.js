@@ -1578,13 +1578,14 @@ function _getBuildPlanInputs() {
   const byPlan = {};
   future.forEach(e => {
     if (!byPlan[e.planId]) {
-      byPlan[e.planId] = { planId: e.planId, sessions: [], startDate: e.date, endDate: e.date, types: new Set(), source: e.source };
+      byPlan[e.planId] = { planId: e.planId, sessions: [], startDate: e.date, endDate: e.date, types: new Set(), source: e.source, planName: null };
     }
     const b = byPlan[e.planId];
     b.sessions.push(e);
     if (e.date < b.startDate) b.startDate = e.date;
     if (e.date > b.endDate)   b.endDate = e.date;
     if (e.type) b.types.add(e.type);
+    if (!b.planName && e.planName) b.planName = e.planName;
   });
   return Object.values(byPlan).map(b => {
     const wk = Math.max(1, Math.round((new Date(b.endDate + "T00:00:00") - new Date(b.startDate + "T00:00:00")) / (7 * 864e5)) + 1);
@@ -1596,6 +1597,7 @@ function _getBuildPlanInputs() {
       endDate:  b.endDate,
       types:    Array.from(b.types),
       source:   b.source,
+      planName: b.planName,
     };
   });
 }
@@ -1877,6 +1879,7 @@ function renderTrainingInputs() {
       ? `openCustomPlanEdit('${bp.planId}')`
       : `window.OnboardingV2 && window.OnboardingV2.openBuildPlanEdit('${bp.planId}')`;
     const badgeLabel = bp.source === "custom" ? "Custom Plan" : "Build Plan";
+    const cardTitle = bp.planName ? _escapeHtml(bp.planName) : "Training Block";
     html += `
       <div class="ti-card ti-card--schedule">
         <div class="race-card-top">
@@ -1886,7 +1889,7 @@ function renderTrainingInputs() {
             <button class="delete-btn" onclick="removeTrainingInput('buildplan','${bp.planId}')" title="Remove plan"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
           </div>
         </div>
-        <div class="race-card-name">Training Block</div>
+        <div class="race-card-name">${cardTitle}</div>
         <div class="race-card-meta">${bp.sessions} session${bp.sessions !== 1 ? "s" : ""} · ${bp.weeks} week${bp.weeks !== 1 ? "s" : ""}</div>
         ${typeChips ? `<div class="race-tags">${typeChips}</div>` : ""}
         <div class="race-card-footer">

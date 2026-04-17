@@ -166,6 +166,37 @@ function renderTodaysSummary() {
    Displays all logged meals, grouped by date (most recent first).
    ===================================================================== */
 
+// Meal History filter state. Range defaults to 7 days (today + 6 previous)
+// because even a week of logs is a long scroll; 30 days / All are opt-in.
+// Search is a substring match against meal name, case-insensitive.
+let _mealHistoryRange = "7d";      // "1d" | "7d" | "30d" | "all"
+let _mealHistoryQuery = "";
+let _mealHistoryQueryTimer = null;
+
+function setMealHistoryRange(range) {
+  _mealHistoryRange = range;
+  document.querySelectorAll(".meal-history-range-row .saved-filter-chip").forEach(btn => {
+    btn.classList.toggle("is-active", btn.dataset.range === range);
+  });
+  renderNutritionHistory();
+}
+
+function setMealHistoryQuery(q) {
+  // Debounce to avoid re-rendering on every keystroke.
+  _mealHistoryQuery = String(q || "");
+  clearTimeout(_mealHistoryQueryTimer);
+  _mealHistoryQueryTimer = setTimeout(renderNutritionHistory, 120);
+}
+
+function _mealHistoryRangeStart(range) {
+  if (range === "all") return null;
+  const days = range === "1d" ? 0 : range === "30d" ? 29 : 6;
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
 function renderNutritionHistory() {
   const container = document.getElementById("nutrition-history");
   const meals     = loadMeals();
@@ -175,10 +206,28 @@ function renderNutritionHistory() {
     return;
   }
 
+  // Apply filters: date range first, then name search.
+  const minDate = _mealHistoryRangeStart(_mealHistoryRange);
+  const needle  = _mealHistoryQuery.trim().toLowerCase();
+  const filtered = meals.filter(m => {
+    if (minDate && m.date < minDate) return false;
+    if (needle && !String(m.name || "").toLowerCase().includes(needle)) return false;
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    const rangeLabel = { "1d": "today", "7d": "the last 7 days", "30d": "the last 30 days", "all": "your history" }[_mealHistoryRange] || "this range";
+    const msg = needle
+      ? `No meals matching "${escHtml(needle)}" in ${rangeLabel}.`
+      : `No meals logged in ${rangeLabel}.`;
+    container.innerHTML = `<p class="meal-history-empty-filtered">${msg}</p>`;
+    return;
+  }
+
   // Group meals by date using a "dictionary" (JavaScript object)
   // Result looks like: { "2025-06-15": [meal1, meal2], "2025-06-14": [meal3], ... }
   const grouped = {};
-  meals.forEach(m => {
+  filtered.forEach(m => {
     if (!grouped[m.date]) grouped[m.date] = [];
     grouped[m.date].push(m);
   });
