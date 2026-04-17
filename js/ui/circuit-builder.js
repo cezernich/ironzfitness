@@ -618,7 +618,7 @@
       <div class="circuit-modal-body">
         <div class="builder-field">
           <div class="builder-label">Exercise name</div>
-          <input class="builder-input" id="cb-inline-name" type="text" value="${_esc(existing?.name || "")}" placeholder="e.g. Push-up" />
+          <input class="builder-input ex-row-name" id="cb-inline-name" type="text" value="${_esc(existing?.name || "")}" placeholder="e.g. Push-up" autocomplete="off" />
         </div>
         <div class="builder-field">
           <div class="builder-label">Reps</div>
