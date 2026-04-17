@@ -258,6 +258,16 @@ function buildStatsTotals() {
   const today = getTodayString();
   allWorkouts = allWorkouts.filter(w => w.date <= today);
 
+  // Dedup: when both a hand-logged workout and an isCompletion record
+  // exist for the same (date, type), keep only the hand-log. Mirrors
+  // loadCompletedSessions so Totals don't double-count wellness etc.
+  const handLoggedKeys = new Set(
+    allWorkouts.filter(w => !w.isCompletion).map(w => `${w.date}|${w.type}`)
+  );
+  allWorkouts = allWorkouts.filter(w =>
+    !w.isCompletion || !handLoggedKeys.has(`${w.date}|${w.type}`)
+  );
+
   const yearStart  = today.slice(0, 4) + "-01-01";
   const monthStart = today.slice(0, 7) + "-01";
   const thisYear  = allWorkouts.filter(w => w.date >= yearStart);
