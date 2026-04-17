@@ -375,7 +375,7 @@ function _calV2DiscClass(discOrType) {
   if (/^(long_run|tempo_threshold|track_workout|speed_work|hills|easy_recovery|endurance|fun_social)$/.test(s)) return "run";
   if (s === "swim" || s === "swimming") return "swim";
   if (s === "bike" || s === "cycling") return "bike";
-  if (s === "brick") return "bike";
+  if (s === "brick") return "brick";
   if (s === "race") return "race";
   if (s === "wellness" || s === "sauna") return "wellness";
   if (s === "yoga" || s === "mobility" || s === "stretching") return "yoga";
@@ -413,6 +413,7 @@ function _calV2IconFor(discCls) {
     case "run":  return I.run  || "";
     case "swim": return I.swim || "";
     case "bike": return I.bike || "";
+    case "brick": return I.brick || I.bike || "";
     case "race": return I.flag || "";
     case "wellness": return I.droplet || I.activity || "";
     case "yoga": return I.yoga || I.activity || "";

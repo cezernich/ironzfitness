@@ -18540,6 +18540,7 @@ body.ob-v2-lock { overflow: hidden; }
    consistently. */
 .s-sess--run  .s-ico { color: #4ecdc4; }
 .s-sess--bike .s-ico { color: #f4a261; }
+.s-sess--brick .s-ico { color: #a855f7; }
 .s-sess--swim .s-ico { color: #6c5ce7; }
 .s-sess--str  .s-ico { color: #e63946; }
 .s-sess--race .s-ico { color: #e63946; }
@@ -18676,6 +18677,7 @@ body.ob-v2-lock { overflow: hidden; }
 .wc.str  { background: rgba(230, 57, 70, 0.22);  color: #e63946; }
 .wc.swim { background: rgba(108, 92, 231, 0.22); color: #6c5ce7; }
 .wc.bike { background: rgba(244, 162, 97, 0.22); color: #f4a261; }
+.wc.brick { background: rgba(168, 85, 247, 0.22); color: #a855f7; }
 .wc.race { background: rgba(230, 57, 70, 0.22);  color: #e63946; }
 .wc.wellness { background: rgba(16, 185, 129, 0.22); color: #10b981; }
 .wc.yoga { background: rgba(139, 92, 246, 0.22); color: #8b5cf6; }
