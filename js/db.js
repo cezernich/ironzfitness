@@ -19,6 +19,36 @@ const DB = (() => {
     } catch { return null; }
   }
 
+  // Cross-tab write guard.
+  //
+  // When two tabs in the same browser/profile are signed into different
+  // accounts, Supabase's auth token in localStorage is the *last* one
+  // written. That means a debounced sync scheduled under user A can fire
+  // AFTER tab 2 signs in as B — and _userId() (which reads the Supabase
+  // token) will return B. Without a guard, we'd upsert A's cached data
+  // under B's user_id and corrupt B's account.
+  //
+  // `ironz_last_user_id` is stamped synchronously by auth.js
+  // handleUserContext() on every sign-in. We treat it as the source of
+  // truth for "who this tab thinks it is." Any write where the live
+  // Supabase session uid disagrees with this value is unsafe and aborted.
+  //
+  // Callers that schedule deferred work (syncKey) capture the expected
+  // uid at schedule time and pass it to the fire-time check so we also
+  // catch the narrower race where the tab's own listener has already
+  // updated ironz_last_user_id by the time the timer fires.
+  function _expectedUid() {
+    try { return localStorage.getItem('ironz_last_user_id'); } catch { return null; }
+  }
+
+  function _userContextOk(currentUid, expectedAtSchedule) {
+    if (!currentUid) return true; // signed out / offline — no write will hit Supabase anyway
+    if (expectedAtSchedule && expectedAtSchedule !== currentUid) return false;
+    const expectedNow = _expectedUid();
+    if (expectedNow && expectedNow !== currentUid) return false;
+    return true;
+  }
+
   async function _isOnline() {
     if (!navigator.onLine) return false;
     try {
@@ -84,6 +114,10 @@ const DB = (() => {
       _lsSet('profile', merged);
 
       if (uid) {
+        if (!_userContextOk(uid)) {
+          console.warn("DB: aborting profile.save — session uid doesn't match expected");
+          return;
+        }
         try {
           // Map app field names to DB column names
           const row = {
@@ -177,6 +211,10 @@ const DB = (() => {
         _lsSet(lsKey, all);
 
         if (uid) {
+          if (!_userContextOk(uid)) {
+            console.warn(`DB: aborting ${table}.save — session uid doesn't match expected`);
+            return row;
+          }
           try {
             const { error } = await _client()
               .from(table).upsert(row, { onConflict: 'id' });
@@ -203,6 +241,10 @@ const DB = (() => {
         _lsSet(lsKey, all);
 
         if (uid) {
+          if (!_userContextOk(uid)) {
+            console.warn(`DB: aborting ${table}.saveBatch — session uid doesn't match expected`);
+            return rows;
+          }
           try {
             const { error } = await _client()
               .from(table).upsert(rows, { onConflict: 'id' });
@@ -219,6 +261,10 @@ const DB = (() => {
 
         const uid = await _userId();
         if (uid) {
+          if (!_userContextOk(uid)) {
+            console.warn(`DB: aborting ${table}.remove — session uid doesn't match expected`);
+            return;
+          }
           try {
             const { error } = await _client()
               .from(table).delete().eq('id', id).eq('user_id', uid);
@@ -231,6 +277,10 @@ const DB = (() => {
         _lsSet(lsKey, []);
         const uid = await _userId();
         if (uid) {
+          if (!_userContextOk(uid)) {
+            console.warn(`DB: aborting ${table}.removeAll — session uid doesn't match expected`);
+            return;
+          }
           try {
             const { error } = await _client()
               .from(table).delete().eq('user_id', uid);
@@ -385,9 +435,13 @@ const DB = (() => {
     'completedSessions', 'workoutRatings',
   ]);
 
-  async function _doSyncKey(lsKey) {
+  async function _doSyncKey(lsKey, expectedAtSchedule) {
     const uid = await _userId();
     if (!uid) return;
+    if (!_userContextOk(uid, expectedAtSchedule)) {
+      console.warn(`DB: aborting syncKey(${lsKey}) — user context changed (expected=${expectedAtSchedule}, current=${uid})`);
+      return;
+    }
     const raw = localStorage.getItem(lsKey);
     if (raw === null) return;
     let val;
@@ -407,9 +461,12 @@ const DB = (() => {
 
   function syncKey(lsKey) {
     clearTimeout(_keyTimers[lsKey]);
+    // Capture the user id at schedule time so a user switch during the
+    // debounce window can't silently upsert our data under the new user.
+    const expectedAtSchedule = _expectedUid();
     // Critical keys fire immediately; others debounce 2s to batch rapid writes
     const delay = _IMMEDIATE_SYNC_KEYS.has(lsKey) ? 200 : 2000;
-    _keyTimers[lsKey] = setTimeout(() => _doSyncKey(lsKey), delay);
+    _keyTimers[lsKey] = setTimeout(() => _doSyncKey(lsKey, expectedAtSchedule), delay);
   }
 
   // ── User isolation — wipe local cache on sign-out / user switch ──────────
@@ -747,9 +804,16 @@ const DB = (() => {
 
   function _debouncedSync(table, lsKey, shapeFn, delay = 2000) {
     clearTimeout(_syncTimers[lsKey]);
+    // Capture the user id at schedule time so the fire-time handler can
+    // detect a mid-debounce user switch and abort (see _userContextOk).
+    const expectedAtSchedule = _expectedUid();
     _syncTimers[lsKey] = setTimeout(async () => {
       const uid = await _userId();
       if (!uid) return;
+      if (!_userContextOk(uid, expectedAtSchedule)) {
+        console.warn(`DB: aborting debouncedSync(${lsKey}) — user context changed (expected=${expectedAtSchedule}, current=${uid})`);
+        return;
+      }
       const raw = _lsGet(lsKey);
       // Key never existed — nothing to sync. Distinct from "empty array"
       // which is a meaningful state (user deleted everything).
