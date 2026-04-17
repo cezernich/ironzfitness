@@ -3372,9 +3372,16 @@
       _lsSet("events", existing.concat(legacyEvents));
     }
 
+    // Tag the generated sessions with the primary race's id so Active
+    // Training Inputs can collapse "Race + Training Block" into one card
+    // instead of showing both for what the user experiences as one plan.
+    // Prefer A-priority race; fall back to the first race.
+    const planRace = legacyEvents.find(e => (e.priority || "A").toUpperCase() === "A") || legacyEvents[0] || null;
+    const raceIdForPlan = planRace ? planRace.id : null;
+
     // Materialize dated sessions from the weekly template.
     try {
-      _writeScheduleSessions();
+      _writeScheduleSessions(raceIdForPlan);
     } catch (e) {
       console.warn("[OnboardingV2] writing schedule sessions failed", e);
     }
@@ -3405,7 +3412,7 @@
   // the user's calendar for the next N weeks (planDetails.duration).
   // Appends to the existing `workoutSchedule` array without touching
   // past entries.
-  function _writeScheduleSessions() {
+  function _writeScheduleSessions(raceIdForPlan) {
     // "indefinite" → materialize 12 weeks as a rolling window; numeric
     // strings like "11" or "12" parse cleanly; "custom" falls back to
     // customWeeks (set by the custom-weeks input).
@@ -3468,7 +3475,10 @@
           if (d < start) return; // first week is partial when start is mid-week
           const dateStr = d.toISOString().slice(0, 10);
           const session = _buildSessionForSport(enrichedCode, dateStr, sessionLen, w + 1, planId, counter++);
-          if (session) sessions.push(session);
+          if (session) {
+            if (raceIdForPlan) session.raceId = raceIdForPlan;
+            sessions.push(session);
+          }
         });
       });
     }

@@ -1578,7 +1578,7 @@ function _getBuildPlanInputs() {
   const byPlan = {};
   future.forEach(e => {
     if (!byPlan[e.planId]) {
-      byPlan[e.planId] = { planId: e.planId, sessions: [], startDate: e.date, endDate: e.date, types: new Set(), source: e.source, planName: null };
+      byPlan[e.planId] = { planId: e.planId, sessions: [], startDate: e.date, endDate: e.date, types: new Set(), source: e.source, planName: null, raceId: e.raceId || null };
     }
     const b = byPlan[e.planId];
     b.sessions.push(e);
@@ -1586,6 +1586,7 @@ function _getBuildPlanInputs() {
     if (e.date > b.endDate)   b.endDate = e.date;
     if (e.type) b.types.add(e.type);
     if (!b.planName && e.planName) b.planName = e.planName;
+    if (!b.raceId && e.raceId)    b.raceId = e.raceId;
   });
   return Object.values(byPlan).map(b => {
     const wk = Math.max(1, Math.round((new Date(b.endDate + "T00:00:00") - new Date(b.startDate + "T00:00:00")) / (7 * 864e5)) + 1);
@@ -1598,6 +1599,7 @@ function _getBuildPlanInputs() {
       types:    Array.from(b.types),
       source:   b.source,
       planName: b.planName,
+      raceId:   b.raceId,
     };
   });
 }
@@ -1780,11 +1782,21 @@ function renderTrainingInputs() {
 
   // Suppress a Build Plan card when it's clearly the plan that backs a
   // rendered race. Without this the user sees both the Race card and a
-  // "Training Block" card for what is conceptually one thing. Match is
-  // by timing (plan ends within 60 days before the race, no later than
-  // race day) and discipline overlap (plan types include a sport the
-  // race uses). Each race claims at most one plan so we never hide
-  // legitimately separate plans.
+  // "Training Block" card for what is conceptually one thing.
+  //
+  // Matching has two tiers:
+  //   1) Explicit raceId stamped on plan sessions at generation time
+  //      (onboarding v2 does this for every plan it creates for a race).
+  //      This is the authoritative signal.
+  //   2) Heuristic fallback for plans that predate the raceId stamp:
+  //      timing (plan ends within 180 days before / 3 days after the race)
+  //      and discipline overlap (plan types include a sport the race uses).
+  //      180 days covers long-course base blocks that finish well before
+  //      race day (e.g. Ironman 12-week base 10 weeks before race).
+  //
+  // Each race claims at most one plan so we never hide legitimately
+  // separate plans. Custom plans are never suppressed because they're
+  // freeform and may not belong to a race even when timing lines up.
   if (races.length && buildPlans.length) {
     const DISC_FOR_RACE = {
       ironman: ["running","cycling","swimming"], halfIronman: ["running","cycling","swimming"],
@@ -1796,19 +1808,22 @@ function renderTrainingInputs() {
     const hidden = new Set();
     const dayMs = 864e5;
     races.forEach(race => {
+      // Tier 1: explicit raceId match. Highest confidence, no timing/type math.
+      const byId = buildPlans.find(bp => !hidden.has(bp.planId) && bp.raceId === race.id);
+      if (byId) { hidden.add(byId.planId); return; }
+
+      // Tier 2: heuristic for untagged legacy plans.
       const discs = DISC_FOR_RACE[race.type] || [];
       if (!discs.length) return;
       const raceMs = new Date(race.date + "T00:00:00").getTime();
       let best = null, bestGap = Infinity;
       buildPlans.forEach(bp => {
         if (hidden.has(bp.planId)) return;
-        // Only onboarding-generated plans are created FOR a race. Custom
-        // plans are freeform — user might happen to finish one near a
-        // race without it being that race's plan, so we never suppress them.
         if (bp.source !== "onboarding_v2") return;
+        if (bp.raceId) return; // tagged plans are handled in tier 1 only
         const endMs = new Date(bp.endDate + "T00:00:00").getTime();
         const gap = Math.round((raceMs - endMs) / dayMs);
-        if (gap < -3 || gap > 60) return;             // plan must end ~at or before race day
+        if (gap < -3 || gap > 180) return;            // plan must end ~at or before race day
         if (!bp.types.some(t => discs.includes(t))) return;
         if (gap < bestGap) { best = bp; bestGap = gap; }
       });
