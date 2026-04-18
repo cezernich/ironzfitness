@@ -3010,6 +3010,12 @@
   <script src="js/nutrition.js"></script>
   <script src="js/meals-data.js"></script>
   <script src="js/threshold-week-scheduler.js"></script>
+  <!-- Plan session distribution (Rule Engine Step 4 / TRAINING_PHILOSOPHY §6.1-§6.3)
+       + constraint validator (Step 5 / §4.3). Must load before planner.js +
+       onboarding-v2.js so both plan-generation paths can call them. Pure
+       functions, no side effects on load. -->
+  <script src="js/plan-session-distribution.js"></script>
+  <script src="js/plan-constraint-validator.js"></script>
   <script src="js/session-type-library.js"></script>
   <!-- Variant libraries (pure data) — must load before any code that consumes them -->
   <script src="js/variant-libraries/run.js"></script>

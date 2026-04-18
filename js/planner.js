@@ -2134,6 +2134,49 @@ function _regeneratePlanForRace(race) {
     // for this race don't linger.
     console.warn("[IronZ] _regeneratePlanForRace produced no entries for race", race && race.id, race && race.type);
   }
+
+  // Determine the athlete's level once so both the distribution
+  // aligner (Step 4) and the constraint validator (Step 5) see the
+  // same classification.
+  let _level = "intermediate";
+  try {
+    const profile = JSON.parse(localStorage.getItem("profile") || "{}");
+    const raw = profile.fitnessLevel || profile.fitness_level || profile.experience_level || profile.level;
+    if (raw) _level = String(raw).toLowerCase();
+  } catch {}
+  if (race && race.level) _level = String(race.level).toLowerCase();
+
+  // Rule Engine Step 4 — align session counts per week to the
+  // phase's TRAINING_PHILOSOPHY.md §6.1/§6.2/§6.3 distribution.
+  // Adds missing sessions on rest days; demotes Taper excess. Also
+  // applies progressive overload to long sessions (+10%/week,
+  // deload every 4th week).
+  if (newEntries.length && typeof window !== "undefined" && window.PlanSessionDistribution) {
+    try {
+      const summary = window.PlanSessionDistribution.applySessionDistribution(newEntries, race && race.type, _level);
+      if (summary.added || summary.demoted) {
+        console.log("[IronZ] distribution aligner — added", summary.added, "sessions, demoted", summary.demoted, "across", summary.weeksChecked, "weeks");
+      }
+    } catch (e) {
+      console.warn("[IronZ] distribution aligner failed:", e && e.message);
+    }
+  }
+
+  // Rule Engine Step 5 — apply global intensity constraints (§4.3):
+  // no consecutive hard days for non-advanced, cap intensity sessions
+  // per week, ensure ≥1 rest day/week. Runs AFTER the distribution
+  // aligner so any added sessions are included in constraint checks.
+  if (newEntries.length && typeof window !== "undefined" && window.PlanConstraintValidator) {
+    try {
+      const result = window.PlanConstraintValidator.validateAndFixPlan(newEntries, _level);
+      if (result.flags && result.flags.length) {
+        console.log("[IronZ] constraint validator adjusted", result.flags.length, "sessions across", result.weeksChecked, "weeks");
+      }
+    } catch (e) {
+      console.warn("[IronZ] constraint validator failed:", e && e.message);
+    }
+  }
+
   const existingPlan = loadTrainingPlan().filter(e => e.raceId !== race.id);
   saveTrainingPlanData([...existingPlan, ...newEntries]);
 }

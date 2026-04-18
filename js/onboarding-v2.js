@@ -3754,6 +3754,23 @@
       console.warn("[OnboardingV2] B race window pass failed", e);
     }
 
+    // Rule Engine Step 5 — constraint validator. Same as the race path.
+    // Applies §4.3 global intensity rules: no adjacent hard days for
+    // non-advanced, intensity cap per week, ≥1 rest day/week.
+    if (sessions.length && typeof window !== "undefined" && window.PlanConstraintValidator) {
+      try {
+        let level = "intermediate";
+        try {
+          const profile = _lsGet("profile", {}) || {};
+          const raw = profile.fitnessLevel || profile.fitness_level || profile.experience_level || profile.level;
+          if (raw) level = String(raw).toLowerCase();
+        } catch {}
+        window.PlanConstraintValidator.validateAndFixPlan(sessions, level);
+      } catch (e) {
+        console.warn("[OnboardingV2] constraint validator failed:", e && e.message);
+      }
+    }
+
     const merged = existingArr.concat(sessions);
     localStorage.setItem("workoutSchedule", JSON.stringify(merged));
     if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("workoutSchedule");
