@@ -236,8 +236,10 @@ function _buildWorkoutSummary(workouts) {
       desc += `: ${names.join(", ")}`;
       if (w.exercises.length > 3) desc += ` +${w.exercises.length - 3} more`;
     } else if (w.discipline && w.load) {
-      const session = (typeof SESSION_DESCRIPTIONS !== "undefined" && SESSION_DESCRIPTIONS[w.discipline])
-        ? SESSION_DESCRIPTIONS[w.discipline][w.load] : null;
+      const session = (typeof getSessionTemplate === "function")
+        ? getSessionTemplate(w.discipline, w.load, w.weekNumber)
+        : ((typeof SESSION_DESCRIPTIONS !== "undefined" && SESSION_DESCRIPTIONS[w.discipline])
+            ? SESSION_DESCRIPTIONS[w.discipline][w.load] : null);
       if (session) desc += ` (${session.duration} min)`;
     }
     return desc;

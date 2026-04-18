@@ -1517,9 +1517,11 @@ function _extractWorkoutMinutes(w) {
   if (w.duration) return parseInt(w.duration) || 0;
   // Generated session attached to a logged workout
   if (w.generatedSession?.duration) return parseInt(w.generatedSession.duration) || 0;
-  // Scheduled running session: look up SESSION_DESCRIPTIONS by discipline + load
-  if (w.discipline && w.load && typeof SESSION_DESCRIPTIONS !== "undefined") {
-    const s = (SESSION_DESCRIPTIONS[w.discipline] || {})[w.load];
+  // Scheduled running session: look up by discipline + load (rotates by weekNumber if variants exist)
+  if (w.discipline && w.load) {
+    const s = (typeof getSessionTemplate === "function")
+      ? getSessionTemplate(w.discipline, w.load, w.weekNumber)
+      : ((typeof SESSION_DESCRIPTIONS !== "undefined") ? (SESSION_DESCRIPTIONS[w.discipline] || {})[w.load] : null);
     if (s?.duration) return s.duration;
   }
   return 0;

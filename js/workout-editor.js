@@ -91,8 +91,10 @@ function openEditPlanSession(dateStr, raceId, discipline, load) {
 
   // If the entry doesn't have edited overrides yet, derive from SESSION_DESCRIPTIONS
   if (!entry.aiSession && !entry.exercises) {
-    const session = (typeof SESSION_DESCRIPTIONS !== 'undefined' && SESSION_DESCRIPTIONS[discipline])
-      ? SESSION_DESCRIPTIONS[discipline][load] : null;
+    const session = (typeof getSessionTemplate === "function")
+      ? getSessionTemplate(discipline, load, entry.weekNumber)
+      : ((typeof SESSION_DESCRIPTIONS !== 'undefined' && SESSION_DESCRIPTIONS[discipline])
+          ? SESSION_DESCRIPTIONS[discipline][load] : null);
     if (session && session.steps) {
       entry.aiSession = {
         title: session.name || discipline,
@@ -135,8 +137,10 @@ function openEditScheduledWorkout(id) {
 
   // If it has a discipline + load, convert steps to intervals
   if (w.discipline && w.load) {
-    const session = (typeof SESSION_DESCRIPTIONS !== 'undefined' && SESSION_DESCRIPTIONS[w.discipline])
-      ? SESSION_DESCRIPTIONS[w.discipline][w.load] : null;
+    const session = (typeof getSessionTemplate === "function")
+      ? getSessionTemplate(w.discipline, w.load, w.weekNumber)
+      : ((typeof SESSION_DESCRIPTIONS !== 'undefined' && SESSION_DESCRIPTIONS[w.discipline])
+          ? SESSION_DESCRIPTIONS[w.discipline][w.load] : null);
     if (session && session.steps && !w.aiSession) {
       w.aiSession = {
         title: session.name || w.discipline,

@@ -1,11 +1,30 @@
 // planner.js — Race event management + training plan generation
 
 // ─── Race configuration ─────────────────────────────────────────────────────
+//
+// Phase ratios come from TRAINING_PHILOSOPHY.md §4.4 (triathlon),
+// §4.5 (running), §4.6 (hyrox). Phases scale to weeksToRace — there
+// is no fixed "this race needs N weeks" rule.
+//   Triathlon: Base 25% / Build 30% / Peak 25% / Taper 15% / RaceWeek 5%
+//   Running:   Base 25% / Build 35% / Peak 20% / Taper 15% / RaceWeek 5%
+//   Hyrox:     Base 30% / Build 35% / Peak 20% / Taper 10% / RaceWeek 5%
+// Short races (5K/10K) collapse Peak into Build per distance emphasis table.
+// RaceWeek is carved off the last 5% but floors at 1 week (the taper+openers
+// week). The legacy hardcoded `phases` array below is retained as a fallback
+// for code that pre-dates phase ratios.
+const PHASE_RATIOS = {
+  triathlon: { base: 0.25, build: 0.30, peak: 0.25, taper: 0.15 },
+  running:   { base: 0.25, build: 0.35, peak: 0.20, taper: 0.15 },
+  running_short: { base: 0.25, build: 0.55, peak: 0.00, taper: 0.15 }, // 5K/10K collapse Peak into Build
+  hyrox:     { base: 0.30, build: 0.35, peak: 0.20, taper: 0.10 },
+  cycling:   { base: 0.30, build: 0.35, peak: 0.20, taper: 0.10 },
+};
 
 const RACE_CONFIGS = {
   ironman: {
     label: "Ironman Triathlon",
     totalWeeks: 24,
+    phaseRatios: PHASE_RATIOS.triathlon,
     phases: [
       { name: "Base", weeks: 8 },
       { name: "Build", weeks: 8 },
@@ -16,6 +35,7 @@ const RACE_CONFIGS = {
   halfIronman: {
     label: "Half-Ironman (70.3)",
     totalWeeks: 16,
+    phaseRatios: PHASE_RATIOS.triathlon,
     phases: [
       { name: "Base", weeks: 6 },
       { name: "Build", weeks: 6 },
@@ -26,6 +46,7 @@ const RACE_CONFIGS = {
   olympic: {
     label: "Olympic Triathlon",
     totalWeeks: 12,
+    phaseRatios: PHASE_RATIOS.triathlon,
     phases: [
       { name: "Base", weeks: 4 },
       { name: "Build", weeks: 6 },
@@ -35,6 +56,7 @@ const RACE_CONFIGS = {
   sprint: {
     label: "Sprint Triathlon",
     totalWeeks: 10,
+    phaseRatios: PHASE_RATIOS.triathlon,
     phases: [
       { name: "Base", weeks: 4 },
       { name: "Build", weeks: 4 },
@@ -44,6 +66,7 @@ const RACE_CONFIGS = {
   marathon: {
     label: "Marathon",
     totalWeeks: 18,
+    phaseRatios: PHASE_RATIOS.running,
     phases: [
       { name: "Base", weeks: 6 },
       { name: "Build", weeks: 8 },
@@ -54,6 +77,7 @@ const RACE_CONFIGS = {
   halfMarathon: {
     label: "Half Marathon",
     totalWeeks: 12,
+    phaseRatios: PHASE_RATIOS.running,
     phases: [
       { name: "Base", weeks: 4 },
       { name: "Build", weeks: 6 },
@@ -63,6 +87,7 @@ const RACE_CONFIGS = {
   tenK: {
     label: "10K",
     totalWeeks: 8,
+    phaseRatios: PHASE_RATIOS.running_short,
     phases: [
       { name: "Base", weeks: 3 },
       { name: "Build", weeks: 4 },
@@ -72,6 +97,7 @@ const RACE_CONFIGS = {
   fiveK: {
     label: "5K",
     totalWeeks: 6,
+    phaseRatios: PHASE_RATIOS.running_short,
     phases: [
       { name: "Base", weeks: 2 },
       { name: "Build", weeks: 3 },
@@ -81,6 +107,7 @@ const RACE_CONFIGS = {
   centuryRide: {
     label: "Century Ride (100mi)",
     totalWeeks: 16,
+    phaseRatios: PHASE_RATIOS.cycling,
     phases: [
       { name: "Base", weeks: 6 },
       { name: "Build", weeks: 7 },
@@ -91,6 +118,7 @@ const RACE_CONFIGS = {
   granFondo: {
     label: "Gran Fondo",
     totalWeeks: 12,
+    phaseRatios: PHASE_RATIOS.cycling,
     phases: [
       { name: "Base", weeks: 4 },
       { name: "Build", weeks: 6 },
@@ -101,6 +129,7 @@ const RACE_CONFIGS = {
   hyrox: {
     label: "Hyrox",
     totalWeeks: 14,
+    phaseRatios: PHASE_RATIOS.hyrox,
     phases: [
       { name: "Base", weeks: 4 },
       { name: "Build", weeks: 4 },
@@ -111,6 +140,7 @@ const RACE_CONFIGS = {
   hyroxDoubles: {
     label: "Hyrox Doubles",
     totalWeeks: 12,
+    phaseRatios: PHASE_RATIOS.hyrox,
     phases: [
       { name: "Base", weeks: 3 },
       { name: "Build", weeks: 4 },
@@ -119,6 +149,78 @@ const RACE_CONFIGS = {
     ],
   },
 };
+
+/**
+ * computePhasesFromRatios(raceType, weeksAvailable)
+ * Returns a phase array [{ name, weeks }, ...] computed from the race's
+ * philosophy-defined ratios. weeksAvailable = full weeks from plan start
+ * to race day (not including race day itself).
+ *
+ * Compression rules (§4.4 "Phase Compression Rules"):
+ *   1. Taper — never compress, always preserve (min 1 week, 2 for long races)
+ *   2. Peak — preserve for race readiness (drops to 0 only if <6 weeks total)
+ *   3. Base — compress or skip first
+ *   4. Build — shrinks last; always keeps ≥1 week
+ *   5. <6 weeks total: skip Base entirely, Build → Peak → Taper
+ *
+ * Rounding: start with Math.floor for Base/Build/Peak, put the remainder
+ * into the phase with the largest percentage (usually Build) so totals
+ * sum exactly to weeksAvailable.
+ */
+function computePhasesFromRatios(raceType, weeksAvailable) {
+  const cfg = RACE_CONFIGS[raceType];
+  if (!cfg || !cfg.phaseRatios || weeksAvailable < 1) return null;
+
+  const ratios = cfg.phaseRatios;
+  const longRaces = new Set(["ironman", "marathon", "centuryRide"]);
+  const midRaces  = new Set(["halfIronman", "halfMarathon", "olympic", "granFondo", "hyrox"]);
+  const minTaper = longRaces.has(raceType) ? 2 : 1;
+  // Taper cap — philosophy §4.5: "Marathon 3 weeks, Half 2 weeks, 10K 10-14 days,
+  // 5K 7-10 days". Long taper creates detraining, so we clamp regardless of ratio.
+  const maxTaper = longRaces.has(raceType) ? 3 : midRaces.has(raceType) ? 2 : 2;
+
+  // Very short plans — the short-race emergency path from §4.4:
+  //   <6 weeks → skip Base, compress Build → Peak → Taper.
+  if (weeksAvailable < 6) {
+    const taper = Math.min(minTaper, Math.max(1, Math.floor(weeksAvailable * 0.20)));
+    const peak  = (ratios.peak > 0 && weeksAvailable - taper >= 3) ? 1 : 0;
+    const build = Math.max(1, weeksAvailable - taper - peak);
+    const out = [{ name: "Build", weeks: build }];
+    if (peak > 0) out.push({ name: "Peak", weeks: peak });
+    out.push({ name: "Taper", weeks: taper });
+    return out;
+  }
+
+  // Normal path: allocate by ratio, then cap Taper both ways.
+  let taper = Math.max(minTaper, Math.round(weeksAvailable * ratios.taper));
+  taper = Math.min(taper, maxTaper);
+  const trainingWeeks = weeksAvailable - taper;
+
+  // Split training weeks across Base/Build/Peak proportional to their ratios.
+  const tRatioSum = ratios.base + ratios.build + (ratios.peak || 0);
+  const baseShare  = ratios.base / tRatioSum;
+  const buildShare = ratios.build / tRatioSum;
+  const peakShare  = (ratios.peak || 0) / tRatioSum;
+
+  let base  = Math.max(0, Math.floor(trainingWeeks * baseShare));
+  let peak  = ratios.peak > 0 ? Math.max(1, Math.floor(trainingWeeks * peakShare)) : 0;
+  let build = Math.max(1, trainingWeeks - base - peak);
+  // Preserve Build: if rounding ate it, pull from Base first.
+  if (build < 1 && base > 0) { base -= 1; build = 1; }
+  // Preserve Peak min 1 for races that have one, if weeks allow.
+  if (ratios.peak > 0 && peak === 0 && build >= 2) { build -= 1; peak = 1; }
+
+  const out = [];
+  if (base > 0)  out.push({ name: "Base",  weeks: base });
+  if (build > 0) out.push({ name: "Build", weeks: build });
+  if (peak > 0)  out.push({ name: "Peak",  weeks: peak });
+  out.push({ name: "Taper", weeks: taper });
+  return out;
+}
+
+if (typeof window !== "undefined") {
+  window.computePhasesFromRatios = computePhasesFromRatios;
+}
 
 /**
  * getAdaptivePhases(raceType, weeksAvailable, level, daysPerWeek)
@@ -1282,6 +1384,320 @@ const SESSION_DESCRIPTIONS = {
   },
 };
 
+// ─── Weekly variation of quality sessions ─────────────────────────────────────
+// Each entry is an array of variants that override the default SESSION_DESCRIPTIONS
+// template for a given {discipline, load}. getSessionTemplate() rotates through
+// the array by weekNumber so two adjacent weeks inside the same phase render
+// different workouts — faithful to the philosophy that a phase has a goal but
+// the weekly stimulus should vary (threshold vs VO2 vs hills, tempo vs
+// progression vs fartlek, steady vs surges vs tempo-finish, etc.).
+// Rotation rule: variants[(weekNumber - 1) mod N]. If no variants are defined
+// for a load, getSessionTemplate falls back to SESSION_DESCRIPTIONS unchanged.
+const SESSION_VARIANTS = {
+  run: {
+    hard: [
+      { name: "Threshold Repeats", steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "Easy jog + drills + 4×20s build strides — arrive at the first rep ready to work" },
+        { type: "main",     duration: 5,  zone: 4, label: "Threshold repeat — strong, controlled, even splits; RPE 8; quality over quantity", reps: 6, rest: 2 },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy jog + full-body stretch" },
+      ]},
+      { name: "Cruise Intervals", steps: [
+        { type: "warmup",   duration: 12, zone: 1, label: "Easy jog + 4×20s strides — open up the stride, prime threshold effort" },
+        { type: "main",     duration: 10, zone: 4, label: "Cruise interval at T-pace — longer, lower rest; lock in even splits", reps: 3, rest: 2 },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy jog + mobility — hips, calves" },
+      ]},
+      { name: "VO2 Short Repeats", steps: [
+        { type: "warmup",   duration: 12, zone: 1, label: "Easy jog + 6×20s strides — fully ready to run fast" },
+        { type: "main",     duration: 3,  zone: 5, label: "VO2 interval at 5K pace / I-pace — hard but controlled; full jog recovery", reps: 8, rest: 2 },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy jog + stretch" },
+      ]},
+      { name: "Hill Repeats", steps: [
+        { type: "warmup",   duration: 12, zone: 1, label: "Easy jog to a 6-8% hill + drills + 4×20s strides" },
+        { type: "main",     duration: 1.5, zone: 5, label: "90s hill repeat — strong drive, tall posture, RPE 9; easy jog down = recovery", reps: 8, rest: 2 },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy jog on flat + stretch calves/hips" },
+      ]},
+    ],
+    moderate: [
+      { name: "Tempo Run", steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "Easy jog + 4×20s strides — build gradually to tempo effort" },
+        { type: "main",     duration: 20, zone: 3, label: "Tempo run — comfortably hard, RPE 6–7; hold even effort; back off before form breaks" },
+        { type: "main",     duration: 10, zone: 2, label: "Recovery jog — bring heart rate back to Z2" },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy jog/walk + full-body stretch" },
+      ]},
+      { name: "Progression Run", steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "Easy jog — settle in, relaxed form" },
+        { type: "main",     duration: 10, zone: 2, label: "Steady Z2 — conversational pace, find rhythm" },
+        { type: "main",     duration: 15, zone: 3, label: "Progress to Z3 — tempo effort, controlled breathing" },
+        { type: "main",     duration: 5,  zone: 4, label: "Final squeeze — Z3/Z4 strong finish, hold form" },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy jog + stretch" },
+      ]},
+      { name: "Fartlek", steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "Easy jog + 4×20s strides" },
+        { type: "main",     duration: 2,  zone: 4, label: "Fartlek: 2 min Z3/Z4 on / 2 min Z2 float — alternate, stay relaxed on the floats", reps: 8, rest: 2 },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy jog + stretch" },
+      ]},
+    ],
+    long: [
+      { name: "Long Easy Run", steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "Easy walk/jog — keep HR low, wake the body gradually" },
+        { type: "main",     duration: 80, zone: 2, label: "Long easy run — Z2 throughout, RPE 4–5; fuel every 30–45 min; finishing strong matters more than pace" },
+        { type: "cooldown", duration: 10, zone: 1, label: "Walk + mobility: hips, hamstrings, calves" },
+      ]},
+      { name: "Long with Surges", steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "Easy walk/jog — wake up gradually" },
+        { type: "main",     duration: 50, zone: 2, label: "Steady Z2 aerobic running — build the engine" },
+        { type: "main",     duration: 1,  zone: 4, label: "60s surge at 10K pace — strong and controlled, then drop back to Z2", reps: 6, rest: 4 },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy jog + mobility" },
+      ]},
+      { name: "Long with Tempo Finish", steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "Easy walk/jog — keep HR low, settle in" },
+        { type: "main",     duration: 60, zone: 2, label: "Long Z2 aerobic — fuel every 30-45 min, conversational" },
+        { type: "main",     duration: 15, zone: 3, label: "Tempo finish — Z3 RPE 6-7, practice running strong on tired legs" },
+        { type: "cooldown", duration: 10, zone: 1, label: "Walk + full mobility — flush the legs" },
+      ]},
+    ],
+  },
+  bike: {
+    hard: [
+      { name: "Threshold 2×20", steps: [
+        { type: "warmup",   duration: 15, zone: 1, label: "Easy spin to Z2 + 3×30s high-cadence bursts at 110 RPM" },
+        { type: "main",     duration: 20, zone: 4, label: "Threshold interval — 95% FTP, hold steady power and form", reps: 2, rest: 5 },
+        { type: "cooldown", duration: 15, zone: 1, label: "Easy spin-down — shake out the legs" },
+      ]},
+      { name: "Over-Unders", steps: [
+        { type: "warmup",   duration: 15, zone: 1, label: "Easy spin + 3×1 min building to Z3 — prime the legs" },
+        { type: "main",     duration: 12, zone: 4, label: "Over-unders: 1 min at 105% FTP / 2 min at 95% FTP × 4 cycles — ride just above/below threshold, smooth cadence", reps: 3, rest: 4 },
+        { type: "cooldown", duration: 14, zone: 1, label: "Easy spin — flush legs" },
+      ]},
+      { name: "VO2 Short Intervals", steps: [
+        { type: "warmup",   duration: 15, zone: 1, label: "Easy spin + 4×20s high-cadence — ready for hard efforts" },
+        { type: "main",     duration: 3,  zone: 5, label: "VO2 interval at 115–120% FTP — strong, controlled, high cadence (95+ RPM); last minute should feel near-max", reps: 6, rest: 3 },
+        { type: "cooldown", duration: 14, zone: 1, label: "Easy spin — let heart rate settle" },
+      ]},
+      { name: "Sweet Spot 3×15", steps: [
+        { type: "warmup",   duration: 12, zone: 1, label: "Easy spin building to Z2 + a few openers" },
+        { type: "main",     duration: 15, zone: 3, label: "Sweet spot — 88–92% FTP, 85+ RPM, steady and powerful; aero position", reps: 3, rest: 3 },
+        { type: "cooldown", duration: 9,  zone: 1, label: "Easy spin-down" },
+      ]},
+    ],
+    moderate: [
+      { name: "Sweetspot 2×25", steps: [
+        { type: "warmup",   duration: 15, zone: 1, label: "Easy spin building to Z2 — include 3×20s high-cadence bursts" },
+        { type: "main",     duration: 25, zone: 3, label: "Sweetspot — 88% FTP, hold 85 RPM, controlled breathing", reps: 2, rest: 5 },
+        { type: "cooldown", duration: 20, zone: 2, label: "Z2 spin-down — aerobic flush, keep legs moving" },
+      ]},
+      { name: "Tempo Block", steps: [
+        { type: "warmup",   duration: 15, zone: 1, label: "Easy spin + 2×1min openers — ease into tempo" },
+        { type: "main",     duration: 45, zone: 3, label: "Continuous tempo — 80–85% FTP, 85+ RPM, aero position, even power" },
+        { type: "cooldown", duration: 30, zone: 2, label: "Z2 spin-down" },
+      ]},
+      { name: "Endurance with Pushes", steps: [
+        { type: "warmup",   duration: 15, zone: 1, label: "Easy spin building to Z2" },
+        { type: "main",     duration: 3,  zone: 3, label: "3 min Z3 push at 85% FTP — feel it, don't grind", reps: 6, rest: 4 },
+        { type: "cooldown", duration: 30, zone: 2, label: "Z2 endurance spin-down" },
+      ]},
+    ],
+    long: [
+      { name: "Long Aerobic", steps: [
+        { type: "warmup",   duration: 15, zone: 1, label: "Easy spin — settle into aero, hydrate" },
+        { type: "main",     duration: 150, zone: 2, label: "Long aerobic ride — Z2 effort, fuel every 45 min, hydrate every 20 min" },
+        { type: "cooldown", duration: 15, zone: 1, label: "Spin-down — flush the legs" },
+      ]},
+      { name: "Long with Tempo Blocks", steps: [
+        { type: "warmup",   duration: 15, zone: 1, label: "Easy spin — settle in" },
+        { type: "main",     duration: 60, zone: 2, label: "Z2 aerobic — conversational, in aero" },
+        { type: "main",     duration: 20, zone: 3, label: "Tempo block — 80% FTP, aero, steady power", reps: 2, rest: 15 },
+        { type: "main",     duration: 10, zone: 2, label: "Z2 to close — keep legs ticking" },
+        { type: "cooldown", duration: 15, zone: 1, label: "Easy spin-down" },
+      ]},
+      { name: "Long with Climbs", steps: [
+        { type: "warmup",   duration: 15, zone: 1, label: "Easy spin — get comfortable" },
+        { type: "main",     duration: 120, zone: 2, label: "Z2 aerobic ride — fuel every 45 min" },
+        { type: "main",     duration: 8,  zone: 3, label: "Low-cadence climb simulation — 60–70 RPM, Z3 power, seated, strong core; on any hill or resistance", reps: 4, rest: 4 },
+        { type: "cooldown", duration: 15, zone: 1, label: "Easy spin-down" },
+      ]},
+    ],
+  },
+  swim: {
+    hard: [
+      { name: "Race-Pace 100s", steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "400m easy + 4×25m build to race pace" },
+        { type: "main",     duration: 3,  zone: 4, label: "100m race pace — explosive turns, max effort; hold stroke length", reps: 10, rest: 1 },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy 400m — relax and breathe out the effort" },
+      ]},
+      { name: "CSS 200s", steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "300m easy + 6×50m build — find rhythm" },
+        { type: "main",     duration: 4,  zone: 4, label: "200m at CSS pace — smooth, strong, consistent splits; RPE 8", reps: 6, rest: 1 },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy 300m backstroke — relax shoulders" },
+      ]},
+      { name: "Threshold Ladder", steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "400m easy + drills" },
+        { type: "main",     duration: 15, zone: 4, label: "Ladder at threshold: 50/100/150/200/150/100/50 strong, 15s rest between — pacing discipline", reps: 2, rest: 2 },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy 200m — shake out" },
+      ]},
+    ],
+    moderate: [
+      { name: "Threshold 100s", steps: [
+        { type: "warmup",   duration: 8,  zone: 1, label: "200m easy free + drills: catch-up, fingertip drag" },
+        { type: "main",     duration: 4,  zone: 3, label: "100m threshold — strong pull, hold form under effort", reps: 6, rest: 1 },
+        { type: "cooldown", duration: 8,  zone: 1, label: "Easy 200m — long strokes, breathe every 3" },
+      ]},
+      { name: "Pull + Swim Set", steps: [
+        { type: "warmup",   duration: 8,  zone: 1, label: "200m easy + 4×50m drill (catch-up, 6-3-6)" },
+        { type: "main",     duration: 3,  zone: 3, label: "100m pull (buoy+paddles) at threshold — engage lats, rotate fully", reps: 4, rest: 1 },
+        { type: "main",     duration: 3,  zone: 3, label: "100m swim at threshold — transfer the feel from pull to full stroke", reps: 4, rest: 1 },
+        { type: "cooldown", duration: 8,  zone: 1, label: "Easy 200m backstroke" },
+      ]},
+      { name: "Aerobic Ladder", steps: [
+        { type: "warmup",   duration: 8,  zone: 1, label: "200m easy + 100m drill + 4×25m build" },
+        { type: "main",     duration: 25, zone: 3, label: "Aerobic ladder: 400m / 300m / 200m / 100m / 200m / 300m at threshold w/ 30s rest — even splits" },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy 200m" },
+      ]},
+    ],
+    long: [
+      { name: "Open Water Simulation", steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "400m easy + drills: fingertip drag, single-arm" },
+        { type: "main",     duration: 55, zone: 2, label: "Continuous aerobic swim at open-water pace — sight every 10 strokes" },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy 200m backstroke — stretch and breathe" },
+      ]},
+      { name: "Long Pull Set", steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "400m easy + 200m drill" },
+        { type: "main",     duration: 45, zone: 2, label: "Long aerobic pull set — 5×400m with paddles+buoy, 30s rest, steady aerobic effort" },
+        { type: "cooldown", duration: 15, zone: 1, label: "Easy 300m — long strokes" },
+      ]},
+      { name: "Descending 500s", steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "400m easy + drills" },
+        { type: "main",     duration: 50, zone: 2, label: "5×500m descending 1→5 (Z2 → Z3) with 30s rest — first two aerobic, middle tempo, last at threshold" },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy 300m — relax" },
+      ]},
+    ],
+  },
+  brick: {
+    moderate: [
+      { name: "Tempo Brick", steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "Easy spin — build to Z2" },
+        { type: "main",     duration: 70, zone: 3, label: "Tempo ride — Z2–3, even power, aerodynamic position" },
+        { type: "main",     duration: 3,  zone: 1, label: "T1 — smooth and fast transition", note: "T1" },
+        { type: "main",     duration: 30, zone: 3, label: "Tempo brick run — hold race effort despite accumulated fatigue" },
+        { type: "cooldown", duration: 7,  zone: 1, label: "Easy jog + stretch" },
+      ]},
+      { name: "Sweet Spot Brick", steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "Easy spin — settle in" },
+        { type: "main",     duration: 25, zone: 3, label: "Sweet spot on bike — 88% FTP, aero, steady", reps: 2, rest: 5 },
+        { type: "main",     duration: 3,  zone: 1, label: "T1 — practice transition", note: "T1" },
+        { type: "main",     duration: 25, zone: 2, label: "Brick run — Z2 off the bike, find run legs, cadence 85+" },
+        { type: "cooldown", duration: 7,  zone: 1, label: "Easy jog + stretch" },
+      ]},
+      { name: "Negative Split Brick", steps: [
+        { type: "warmup",   duration: 10, zone: 1, label: "Easy spin to Z2" },
+        { type: "main",     duration: 70, zone: 2, label: "Steady Z2 ride — aero, fuel practice, conserve" },
+        { type: "main",     duration: 3,  zone: 1, label: "T1", note: "T1" },
+        { type: "main",     duration: 15, zone: 2, label: "First 15 min off bike — Z2, find form" },
+        { type: "main",     duration: 15, zone: 3, label: "Final 15 min — negative split to Z3, finish strong" },
+        { type: "cooldown", duration: 7,  zone: 1, label: "Walk + stretch" },
+      ]},
+    ],
+    hard: [
+      { name: "Race-Pace Brick", steps: [
+        { type: "warmup",   duration: 15, zone: 1, label: "Easy spin building to Z2 + 3×30s high-cadence bursts" },
+        { type: "main",     duration: 105, zone: 4, label: "Race-intensity ride — hold goal race power or HR throughout" },
+        { type: "main",     duration: 3,  zone: 1, label: "T1 — practice race-day transition speed", note: "T1" },
+        { type: "main",     duration: 42, zone: 4, label: "Race-pace run — maintain goal pace under heavy fatigue" },
+      ]},
+      { name: "Threshold Bike → Tempo Run", steps: [
+        { type: "warmup",   duration: 15, zone: 1, label: "Easy spin + openers" },
+        { type: "main",     duration: 20, zone: 4, label: "Threshold bike — 95% FTP, steady power", reps: 3, rest: 5 },
+        { type: "main",     duration: 3,  zone: 1, label: "T1", note: "T1" },
+        { type: "main",     duration: 30, zone: 3, label: "Tempo brick run — Z3, practice running strong on taxed legs" },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy jog + stretch" },
+      ]},
+      { name: "Over-Under Brick", steps: [
+        { type: "warmup",   duration: 15, zone: 1, label: "Easy spin + openers" },
+        { type: "main",     duration: 12, zone: 4, label: "Over-unders on bike: 1 min @105%/2 min @95% × 4 per block", reps: 3, rest: 5 },
+        { type: "main",     duration: 3,  zone: 1, label: "T1 — fast transition", note: "T1" },
+        { type: "main",     duration: 40, zone: 4, label: "Race-pace run — accept discomfort, control breathing, finish" },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy jog + full stretch" },
+      ]},
+    ],
+    long: [
+      { name: "Long Aerobic Brick", steps: [
+        { type: "warmup",   duration: 15, zone: 1, label: "Easy spin — settle in, hydrate, get into aero position" },
+        { type: "main",     duration: 165, zone: 2, label: "Long aerobic ride — Z2 effort, fuel every 45 min, hydrate every 20 min" },
+        { type: "main",     duration: 3,  zone: 1, label: "T1", note: "T1" },
+        { type: "main",     duration: 57, zone: 2, label: "Aerobic run off bike — Z2 throughout, simulate race fatigue" },
+      ]},
+      { name: "Long Bike + Tempo Finish Run", steps: [
+        { type: "warmup",   duration: 15, zone: 1, label: "Easy spin — get aero" },
+        { type: "main",     duration: 165, zone: 2, label: "Long Z2 ride — fuel practice, pacing discipline" },
+        { type: "main",     duration: 3,  zone: 1, label: "T1", note: "T1" },
+        { type: "main",     duration: 30, zone: 2, label: "First 30 min off bike — Z2, find run legs" },
+        { type: "main",     duration: 20, zone: 3, label: "Final 20 min — Z3 tempo, race-rehearsal strong finish" },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy jog + stretch" },
+      ]},
+      { name: "Long Bike with Race-Pace Surges → Aerobic Run", steps: [
+        { type: "warmup",   duration: 15, zone: 1, label: "Easy spin + 3×30s openers" },
+        { type: "main",     duration: 140, zone: 2, label: "Z2 long ride — keep aero" },
+        { type: "main",     duration: 5,  zone: 4, label: "5 min at race power — inject quality, don't over-cook it", reps: 5, rest: 10 },
+        { type: "main",     duration: 3,  zone: 1, label: "T1", note: "T1" },
+        { type: "main",     duration: 45, zone: 2, label: "Aerobic run off bike — hold Z2, keep form, smooth cadence" },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy jog + stretch" },
+      ]},
+    ],
+  },
+};
+
+/**
+ * getSessionTemplate(discipline, load, weekNumber, dateStr?)
+ * Returns the session template for a given {discipline, load}, rotating through
+ * SESSION_VARIANTS when present so adjacent weeks in the same phase render
+ * different workouts. Falls back to SESSION_DESCRIPTIONS when no variants are
+ * defined for that load.
+ *
+ * Rotation seed priority:
+ *   1. weekNumber (canonical — stamped by plan generators)
+ *   2. dateStr → ISO-week-of-year (fallback for legacy entries missing weekNumber)
+ *   3. 0 (last resort — always returns variant[0])
+ *
+ * The returned object is shallow-merged from the base template so callers that
+ * read .duration / .name / .steps continue to work unchanged.
+ */
+function getSessionTemplate(discipline, load, weekNumber, dateStr) {
+  const base = (SESSION_DESCRIPTIONS[discipline] || {})[load];
+  if (!base) return null;
+  const variants = (SESSION_VARIANTS[discipline] || {})[load];
+  if (!Array.isArray(variants) || !variants.length) return base;
+  const wn = Number(weekNumber);
+  let seed;
+  if (Number.isFinite(wn) && wn > 0) {
+    seed = wn - 1;
+  } else if (dateStr) {
+    // ISO week of the year — stable across users and sessions; adjacent
+    // calendar weeks always produce adjacent variants.
+    const d = new Date(dateStr + "T00:00:00");
+    if (!isNaN(d.getTime())) {
+      const oneJan = new Date(d.getFullYear(), 0, 1);
+      const weekOfYear = Math.floor(((d - oneJan) / 86400000 + oneJan.getDay() + 1) / 7);
+      seed = weekOfYear;
+    } else {
+      seed = 0;
+    }
+  } else {
+    seed = 0;
+  }
+  const idx = ((seed % variants.length) + variants.length) % variants.length;
+  const variant = variants[idx] || {};
+  return {
+    ...base,
+    ...(variant.name ? { name: variant.name } : {}),
+    ...(variant.duration != null ? { duration: variant.duration } : {}),
+    ...(Array.isArray(variant.steps) ? { steps: variant.steps } : {}),
+  };
+}
+
+if (typeof window !== "undefined") {
+  window.getSessionTemplate = getSessionTemplate;
+}
+
 // ─── Race-week patterns (Philosophy §6.1 triathlon, §4.5 running, §4.6 hyrox) ─
 // Race week never leaves a day as pure rest — every day gets something
 // VERY light. Keyed by days-to-race (0=race, 1..6=days before). Discipline
@@ -1399,9 +1815,20 @@ function detectTrainingConflicts() {
     (e.priority || "A").toUpperCase() === "A"
   );
 
-  // Active schedules: has at least one entry in the future, grouped by type
+  // UNIFIED PLAN: schedule entries tagged with an active race's id are
+  // part of that race's plan, not a separate standalone block. Previously
+  // this triggered "Training Conflict Detected" immediately after the
+  // user built their plan because the onboarding-v2 scaffold lived in
+  // workoutSchedule alongside the race. _regeneratePlanForRace now clears
+  // those, but this filter is the defensive belt-and-suspenders.
+  const activeRaceIds = new Set(activeRaces.map(r => String(r.id)));
+  // Active schedules: has at least one entry in the future, grouped by type,
+  // excluding entries that belong to an active race's unified plan.
   const activeScheduleTypes = new Set(
-    schedule.filter(s => s.date > today).map(s => s.type).filter(Boolean)
+    schedule
+      .filter(s => s.date > today)
+      .filter(s => !(s.raceId && activeRaceIds.has(String(s.raceId))))
+      .map(s => s.type).filter(Boolean)
   );
 
   const conflicts = [];
@@ -1674,33 +2101,46 @@ function checkARacePromotion() {
 function _regeneratePlanForRace(race) {
   if (!race || typeof generateTrainingPlan !== "function") return;
 
-  // Check if onboarding-v2 has already seeded a schedule. If yes, don't
-  // double up — let the user edit their schedule via the Training tab.
-  let schedule = [];
-  try { schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]"); } catch {}
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const hasOnboardingSchedule = schedule.some(e =>
-    e && e.date >= todayStr &&
-    (e.source === "onboarding_v2" || e.source === "custom")
-  );
-  if (hasOnboardingSchedule) {
-    // Still clear any stale trainingPlan entries for this race so deletes
-    // stay clean — just don't regenerate on top.
-    const existingPlan = loadTrainingPlan().filter(e => e.raceId !== race.id);
-    saveTrainingPlanData(existingPlan);
-    return;
+  // UNIFIED PLAN MODEL: when a race exists, the race plan IS the athlete's
+  // schedule. Any onboarding-v2 workoutSchedule entries tagged with this
+  // raceId (or sharing the race's planId) are stale scaffolding from before
+  // the race plan existed and must be cleared so we don't double-book days
+  // and so the "Training Conflict Detected" warning goes away. Past entries
+  // (completed workouts) are preserved.
+  try {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
+    const keptSchedule = schedule.filter(e => {
+      if (!e) return false;
+      // Keep past sessions regardless — they're history, not future bookings.
+      if (e.date < todayStr) return true;
+      // Drop future entries that were the onboarding-v2 scaffold for THIS race.
+      if (e.raceId && String(e.raceId) === String(race.id)) return false;
+      return true;
+    });
+    if (keptSchedule.length !== schedule.length) {
+      localStorage.setItem("workoutSchedule", JSON.stringify(keptSchedule));
+      if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("workoutSchedule");
+    }
+  } catch (e) {
+    console.warn("[IronZ] failed to clear onboarding schedule for race plan", e);
   }
 
   const newEntries = generateTrainingPlan(race) || [];
   if (!newEntries.length) {
     // generateTrainingPlan returned nothing — usually because the race
-    // object is missing a required field (type, date, longDay). Warn so
-    // the empty calendar isn't silent, but still persist the filter so
-    // stale entries for this race don't linger.
+    // object is missing a required field (type, date). Warn so the empty
+    // calendar isn't silent, but still persist the filter so stale entries
+    // for this race don't linger.
     console.warn("[IronZ] _regeneratePlanForRace produced no entries for race", race && race.id, race && race.type);
   }
   const existingPlan = loadTrainingPlan().filter(e => e.raceId !== race.id);
   saveTrainingPlanData([...existingPlan, ...newEntries]);
+}
+
+if (typeof window !== "undefined") {
+  window._regeneratePlanForRace = _regeneratePlanForRace;
+  window.generateTrainingPlan = generateTrainingPlan;
 }
 
 function _showARacePromotionModal(bRaces, allEvents) {
@@ -3000,36 +3440,200 @@ function generateTrainingPlan(raceOrCalendar) {
   return _generateSingleRacePlan(raceOrCalendar);
 }
 
+/**
+ * buildPatternsFromPreferences(weeklyTemplate, phases, ctx)
+ * Converts the athlete's Training Inputs weekly template (day-of-week →
+ * enriched codes like "swim-css", "bike-interval", "run-long", "strength-push")
+ * into per-phase day-of-week → { discipline, load } patterns.
+ *
+ * Philosophy mapping (§6.1 session distribution):
+ *   Base   — no hard days; intervals/CSS demoted to moderate; long days kept
+ *   Build  — user's hard/interval day stays hard; long day stays long
+ *   Peak   — hard day becomes race-pace; add 1 extra intensity if template allows
+ *   Taper  — all quality cut; intervals → easy openers; long → moderate
+ *
+ * The "enriched code" format is "<discipline>-<variant>" from onboarding-v2.
+ * Unknown codes are treated as generic discipline-easy.
+ *
+ * @param {Object} weeklyTemplate  { mon:[codes], tue:[codes], ..., sun:[codes] }
+ * @param {Array}  phases          [{name, weeks}, ...]
+ * @param {Object} ctx             { raceType, triTypes }
+ * @returns {Object} { [phaseName]: { [dow0..6]: { discipline, load } } }
+ */
+function buildPatternsFromPreferences(weeklyTemplate, phases, ctx) {
+  // Map day-name → day-of-week (0=Sun…6=Sat).
+  const DOW = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+  // Code variant → load mapping. "long" is a load of its own.
+  const VARIANT_TO_LOAD = {
+    // run
+    long: "long", interval: "hard", hard: "hard", hills: "hard",
+    tempo: "moderate", moderate: "moderate", recovery: "easy",
+    easy: "easy", strides: "strides",
+    // bike
+    // "interval" / "hard" shared above; "long" shared above
+    // swim
+    css: "hard", threshold: "hard",
+    endurance: "moderate", technique: "easy",
+    // strength
+    push: "moderate", pull: "moderate", legs: "moderate", upper: "moderate",
+    lower: "moderate", full: "moderate", custom: "moderate",
+    // brick
+    brick: "moderate",
+  };
+  // Discipline normalization (codes use "run"/"bike"/"swim"/"strength"/"brick").
+  const parseCode = (code) => {
+    if (!code || typeof code !== "string" || code === "rest") return null;
+    const dashIdx = code.indexOf("-");
+    if (dashIdx < 0) return { discipline: code, load: "easy" };
+    const discipline = code.slice(0, dashIdx);
+    const variant = code.slice(dashIdx + 1);
+    const load = VARIANT_TO_LOAD[variant] || "easy";
+    return { discipline, load };
+  };
+
+  // Build a base weekly map: dow → list of {discipline, load} from codes.
+  const baseByDow = {};
+  Object.entries(weeklyTemplate || {}).forEach(([dayName, codes]) => {
+    const dow = DOW[dayName];
+    if (dow === undefined || !Array.isArray(codes)) return;
+    baseByDow[dow] = [];
+    codes.forEach(c => {
+      const parsed = parseCode(c);
+      if (parsed) baseByDow[dow].push(parsed);
+    });
+  });
+
+  // Phase-specific load modulation. Applied to each day's primary session
+  // (index 0 of that day's list — if a day has 2 sessions, only the first
+  // one is modulated for now). Strength is never "hard", so it's pass-through.
+  //
+  // Brick substitutions (§6.1):
+  //   Base   — no brick; substitute with easy bike (aerobic endurance)
+  //   Build  — brick stays as brick (moderate)
+  //   Peak   — brick at race intensity (hard)
+  //   Taper  — no brick; substitute with easy bike opener
+  const modulate = (phaseName, entry) => {
+    if (!entry) return null;
+    const { discipline, load } = entry;
+    if (discipline === "brick") {
+      if (phaseName === "Base")  return { discipline: "bike", load: "easy" };
+      if (phaseName === "Build") return { discipline: "brick", load: "moderate" };
+      if (phaseName === "Peak")  return { discipline: "brick", load: "hard" };
+      if (phaseName === "Taper") return { discipline: "bike", load: "easy" };
+      return { discipline: "brick", load: "moderate" };
+    }
+    if (discipline === "strength") {
+      // Strength drops entirely in Taper, stays moderate otherwise.
+      if (phaseName === "Taper") return null;
+      return { discipline, load: "moderate" };
+    }
+    if (phaseName === "Base") {
+      if (load === "hard") return { discipline, load: "moderate" };
+      return { discipline, load };
+    }
+    if (phaseName === "Build") {
+      return { discipline, load }; // honor the athlete's interval/long day as-is
+    }
+    if (phaseName === "Peak") {
+      if (load === "moderate" && discipline !== "strength") return { discipline, load: "hard" };
+      return { discipline, load };
+    }
+    if (phaseName === "Taper") {
+      if (load === "hard" || load === "long") return { discipline, load: "easy" };
+      if (load === "moderate") return { discipline, load: "easy" };
+      return { discipline, load };
+    }
+    return { discipline, load };
+  };
+
+  // Compose the final per-phase pattern map. Pick the first (primary) session
+  // on each day; secondary sessions (e.g. two-a-day) are dropped for now —
+  // the current generator only handles one session per DOW anyway.
+  const out = {};
+  phases.forEach(phase => {
+    const map = {};
+    Object.entries(baseByDow).forEach(([dow, entries]) => {
+      const primary = entries[0];
+      const modulated = modulate(phase.name, primary);
+      if (modulated) map[dow] = modulated;
+    });
+    out[phase.name] = map;
+  });
+  return out;
+}
+
+if (typeof window !== "undefined") {
+  window.buildPatternsFromPreferences = buildPatternsFromPreferences;
+}
+
 function _generateSingleRacePlan(race) {
   const config = RACE_CONFIGS[race.type];
   if (!config) return [];
 
   const raceDate = new Date(race.date + "T00:00:00");
+  const _today = new Date();
+  _today.setHours(0, 0, 0, 0);
+
+  // Phase computation follows philosophy §4.4-4.6: phases scale as PERCENTAGES
+  // of weeksToRace. Taper is capped but preserved; Peak/Build reduce before
+  // Base. Plan always spans today→race day — no gap before the plan start.
+  const _weeksToRace = Math.max(0, Math.ceil((raceDate - _today) / (86400000 * 7)));
+  let _effectivePhases = (typeof computePhasesFromRatios === "function" && _weeksToRace >= 1)
+    ? computePhasesFromRatios(race.type, _weeksToRace)
+    : null;
+  if (!_effectivePhases) {
+    // Fallback: legacy fixed-weeks path for race types without phaseRatios.
+    const _extraBaseWeeks = Math.max(0, _weeksToRace - config.totalWeeks);
+    _effectivePhases = _extraBaseWeeks > 0
+      ? (() => {
+          const out = config.phases.map(p => ({ ...p }));
+          const baseIdx = out.findIndex(p => p.name === "Base");
+          if (baseIdx >= 0) out[baseIdx].weeks += _extraBaseWeeks;
+          else out.unshift({ name: "Base", weeks: _extraBaseWeeks });
+          return out;
+        })()
+      : config.phases.map(p => ({ ...p }));
+  }
+  const _effectiveTotalWeeks = _effectivePhases.reduce((s, p) => s + p.weeks, 0);
+
   const startDate = new Date(raceDate);
-  startDate.setDate(startDate.getDate() - config.totalWeeks * 7);
+  startDate.setDate(startDate.getDate() - _effectiveTotalWeeks * 7);
 
   const plan = [];
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const rawPatterns = WEEKLY_PATTERNS[race.type] || {};
+  const todayStr = _today.toISOString().slice(0, 10);
 
-  // For running race types the pattern object is level-aware; extract the right sub-object.
+  // ── WEEKLY PATTERN ────────────────────────────────────────────────────────
+  // Priority: race.preferences.weeklyTemplate > WEEKLY_PATTERNS[raceType].
+  // When the athlete supplied their own weekly template via Training Inputs,
+  // we use their day-of-week → sport assignments as the scaffold and apply
+  // phase-based LOAD modulation on top (§6.1 — Base easy/technique, Build
+  // adds intensity, Peak adds race-pace, Taper drops volume).
+  const rawPatterns = WEEKLY_PATTERNS[race.type] || {};
   const isLevelAware = rawPatterns.beginner || rawPatterns.intermediate || rawPatterns.advanced;
   const runPatternKey = isLevelAware ? getRunPatternKey(race) : null;
   const levelPatterns = isLevelAware
     ? (rawPatterns[runPatternKey] || rawPatterns.intermediate || {})
     : rawPatterns;
-
   const triTypes = new Set(["ironman", "halfIronman", "olympic", "sprint"]);
   const longDiscipline = triTypes.has(race.type) ? "bike" : null;
-  const longDayPatterns = (race.longDay !== undefined && race.longDay !== null)
-    ? applyLongDayPreference(levelPatterns, race.longDay, longDiscipline)
-    : levelPatterns;
 
-  // Apply days-per-week and unavailable-days adjustment for all plan types
-  const hasAdjustment = race.daysPerWeek || (race.unavailableDays && race.unavailableDays.length > 0);
-  const patterns = hasAdjustment
-    ? Object.fromEntries(Object.entries(longDayPatterns).map(([ph, pat]) => [ph, adjustPatternToDays(pat, race.daysPerWeek, race.unavailableDays)]))
-    : longDayPatterns;
+  let patterns;
+  if (race.preferences && race.preferences.weeklyTemplate
+      && typeof buildPatternsFromPreferences === "function") {
+    patterns = buildPatternsFromPreferences(
+      race.preferences.weeklyTemplate,
+      _effectivePhases,
+      { raceType: race.type, triTypes }
+    );
+  } else {
+    const longDayPatterns = (race.longDay !== undefined && race.longDay !== null)
+      ? applyLongDayPreference(levelPatterns, race.longDay, longDiscipline)
+      : levelPatterns;
+    const hasAdjustment = race.daysPerWeek || (race.unavailableDays && race.unavailableDays.length > 0);
+    patterns = hasAdjustment
+      ? Object.fromEntries(Object.entries(longDayPatterns).map(([ph, pat]) => [ph, adjustPatternToDays(pat, race.daysPerWeek, race.unavailableDays)]))
+      : longDayPatterns;
+  }
 
   // Pre-plan build-up: if plan start is in the future, add gentle sessions in the gap
   const todayDate = new Date();
@@ -3067,7 +3671,7 @@ function _generateSingleRacePlan(race) {
   let weekNumber = 1;
   let phaseWeekCount = 0;
   let phaseIndex = 0;
-  let currentPhase = config.phases[0];
+  let currentPhase = _effectivePhases[0];
   const _planStartMs = new Date(startDate).setHours(0, 0, 0, 0);
   const _weekNumberFor = (d) => {
     const ms = new Date(d).setHours(0, 0, 0, 0);
@@ -3110,8 +3714,8 @@ function _generateSingleRacePlan(race) {
     // Advance phase if needed
     if (phaseWeekCount >= currentPhase.weeks) {
       phaseIndex++;
-      if (phaseIndex < config.phases.length) {
-        currentPhase = config.phases[phaseIndex];
+      if (phaseIndex < _effectivePhases.length) {
+        currentPhase = _effectivePhases[phaseIndex];
       }
       phaseWeekCount = 0;
     }
@@ -3198,7 +3802,7 @@ function _generateSingleRacePlan(race) {
       const wNum = _weekNumberFor(cursor);
       weekNumber = wNum;
       const duration = (session.discipline === "run" && runPatternKey)
-        ? getRunSessionDuration(race.type, session.load, phaseName, wNum, config.totalWeeks, runPatternKey)
+        ? getRunSessionDuration(race.type, session.load, phaseName, wNum, _effectiveTotalWeeks, runPatternKey)
         : undefined;
       plan.push({
         date: dateStr,
@@ -3237,7 +3841,7 @@ function _generateSingleRacePlan(race) {
     trackPlanGenerated({
       plan_type: "race",
       race_type: race.type,
-      duration_weeks: config.totalWeeks,
+      duration_weeks: _effectiveTotalWeeks,
       level: race.level,
     });
   }
@@ -3251,16 +3855,85 @@ function capitalize(str) {
 
 // ─── Daily nutrition target ───────────────────────────────────────────────────
 
+// Endurance races that glycogen-deplete and benefit from carb-loading.
+// Short races (sprint tri, 5K, 10K) finish before glycogen limits matter and
+// are excluded so taper fuel doesn't unnecessarily spike.
+const _CARB_LOAD_RACE_TYPES = new Set([
+  "ironman", "halfIronman", "olympic",
+  "marathon", "halfMarathon",
+  "centuryRide", "granFondo",
+]);
+
+/**
+ * getCarbLoadInfo(dateStr, entry)
+ * Returns { isCarbLoad, daysToRace, gramsPerKg, raceType } when dateStr falls
+ * in the carb-loading window of an endurance race (T-3 through T-1, with
+ * T-3=8 g/kg, T-2=9 g/kg, T-1=10 g/kg). Otherwise returns null.
+ *
+ * Keyed off the plan entry's raceId (or the nearest upcoming event), so it
+ * works even on a day that doesn't have a Race Week session.
+ */
+function getCarbLoadInfo(dateStr, entry) {
+  try {
+    const events = loadEvents();
+    if (!Array.isArray(events) || !events.length) return null;
+
+    // Prefer the race this entry belongs to — otherwise fall back to the
+    // soonest upcoming endurance race whose carb-load window covers dateStr.
+    let race = null;
+    if (entry && entry.raceId) {
+      race = events.find(e => String(e.id) === String(entry.raceId)) || null;
+    }
+    if (!race) {
+      const candidates = events
+        .filter(e => e && e.date && e.type && _CARB_LOAD_RACE_TYPES.has(e.type))
+        .sort((a, b) => a.date.localeCompare(b.date));
+      for (const e of candidates) {
+        const diff = Math.round((new Date(e.date + "T00:00:00") - new Date(dateStr + "T00:00:00")) / 86400000);
+        if (diff >= 1 && diff <= 3) { race = e; break; }
+      }
+    }
+    if (!race || !_CARB_LOAD_RACE_TYPES.has(race.type)) return null;
+
+    const daysToRace = Math.round(
+      (new Date(race.date + "T00:00:00") - new Date(dateStr + "T00:00:00")) / 86400000
+    );
+    // Only T-3 through T-1 get the load. Race day itself uses the race multiplier.
+    const rampByDays = { 3: 8, 2: 9, 1: 10 };
+    const gramsPerKg = rampByDays[daysToRace];
+    if (!gramsPerKg) return null;
+    return { isCarbLoad: true, daysToRace, gramsPerKg, raceType: race.type };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * isCarbLoadDay(dateStr)
+ * Public helper used by UI to label a meal-plan day as "Carb Load".
+ */
+function isCarbLoadDay(dateStr) {
+  const plan  = (typeof loadTrainingPlan === "function") ? loadTrainingPlan() : [];
+  const entry = plan.find(e => e.date === dateStr);
+  const info  = getCarbLoadInfo(dateStr, entry);
+  return !!(info && info.isCarbLoad);
+}
+
 /**
  * getBaseNutritionTarget(dateStr)
  * Returns macro targets personalised to the user's profile (weight, height, age, gender)
  * using the Mifflin-St Jeor BMR equation + per-load activity multipliers.
  * Falls back to generic NUTRITION_TARGETS if profile is incomplete.
+ *
+ * Carb-loading override: on T-3/T-2/T-1 before an endurance race, carbs are
+ * pinned to 8/9/10 g/kg bodyweight, fat is reduced to ~20% of calories, and
+ * protein is held at the training-day level. Total calories rise accordingly.
  */
 function getBaseNutritionTarget(dateStr) {
   const plan  = loadTrainingPlan();
   const entry = plan.find(e => e.date === dateStr);
   const load  = entry ? entry.load : "rest";
+  const carbLoad = getCarbLoadInfo(dateStr, entry);
 
   let profile = {};
   try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
@@ -3273,6 +3946,27 @@ function getBaseNutritionTarget(dateStr) {
     const weightKg = weightLbs * 0.453592;
     const heightCm = heightIn  * 2.54;
 
+    // Protein baseline — ~0.9 g per lb for athletes, held through the carb load
+    // so we're not cutting recovery nutrients during taper.
+    const protein = Math.round(weightLbs * 0.9 / 5) * 5;
+
+    if (carbLoad) {
+      const carbs = Math.round(weightKg * carbLoad.gramsPerKg / 5) * 5;
+      // Fat at 20% of calories: cal = (proteinCal + carbCal) / 0.80; fat = 0.20*cal/9
+      const nonFatCal = protein * 4 + carbs * 4;
+      const calories = Math.round((nonFatCal / 0.80) / 50) * 50;
+      const fat = Math.round((calories - nonFatCal) / 9 / 5) * 5;
+      return {
+        calories,
+        protein,
+        carbs: Math.max(carbs, 50),
+        fat: Math.max(fat, 20),
+        carbLoad: true,
+        carbLoadDaysToRace: carbLoad.daysToRace,
+        carbLoadGramsPerKg: carbLoad.gramsPerKg,
+      };
+    }
+
     // Mifflin-St Jeor BMR
     const bmr = profile.gender === "female"
       ? 10 * weightKg + 6.25 * heightCm - 5 * age - 161
@@ -3281,8 +3975,6 @@ function getBaseNutritionTarget(dateStr) {
     const multipliers = { rest: 1.3, easy: 1.55, moderate: 1.65, hard: 1.8, long: 1.9, race: 2.1 };
     const calories = Math.round(bmr * (multipliers[load] || 1.3) / 50) * 50;
 
-    // Protein: ~0.9 g per lb for athletes, rounded to nearest 5 g
-    const protein = Math.round(weightLbs * 0.9 / 5) * 5;
     // Fat: 28% of calories
     const fat     = Math.round(calories * 0.28 / 9 / 5) * 5;
     // Carbs: remaining calories
@@ -3291,8 +3983,30 @@ function getBaseNutritionTarget(dateStr) {
     return { calories, protein, carbs: Math.max(carbs, 50), fat: Math.max(fat, 20) };
   }
 
-  // Generic fallback
+  // Generic fallback — assume a 70 kg (154 lb) reference athlete for the
+  // carb-load ramp so users without a profile still get appropriate targets.
+  if (carbLoad) {
+    const refKg = 70;
+    const carbs = Math.round(refKg * carbLoad.gramsPerKg / 5) * 5;
+    const protein = 140;
+    const nonFatCal = protein * 4 + carbs * 4;
+    const calories = Math.round((nonFatCal / 0.80) / 50) * 50;
+    const fat = Math.round((calories - nonFatCal) / 9 / 5) * 5;
+    return {
+      calories, protein,
+      carbs: Math.max(carbs, 50),
+      fat: Math.max(fat, 20),
+      carbLoad: true,
+      carbLoadDaysToRace: carbLoad.daysToRace,
+      carbLoadGramsPerKg: carbLoad.gramsPerKg,
+    };
+  }
   return { ...NUTRITION_TARGETS[load] || NUTRITION_TARGETS.rest };
+}
+
+if (typeof window !== "undefined") {
+  window.getCarbLoadInfo = getCarbLoadInfo;
+  window.isCarbLoadDay = isCarbLoadDay;
 }
 
 /**

@@ -941,6 +941,15 @@
       goTo(_shouldShowLongDays() ? "bp-v2-4b" : (_state.selectedSports.includes("strength") ? "bp-v2-6" : "bp-v2-4"));
       return;
     }
+    if (currentScreen === "bp-v2-4b") {
+      // Mirror of the forward routing into 4b: strength users came from
+      // the strength setup screen (bp-v2-6); everyone else came from the
+      // plan-details screen (bp-v2-4). Hardcoding bp-v2-6 here was a bug —
+      // non-strength athletes got dropped into "strength sessions per
+      // week" when they pressed Back.
+      goTo(_state.selectedSports.includes("strength") ? "bp-v2-6" : "bp-v2-4");
+      return;
+    }
   }
 
   function _toggleSport(btn) {
@@ -2711,18 +2720,32 @@
           }
         }
 
+        // Last-resort: brick is philosophy-required for triathletes
+        // (§6.1 Build/Peak). If every earlier ladder missed — which can
+        // happen when the round-robin filled every weekday with
+        // bike/run sessions before brick placement ran — force a brick
+        // onto the least-loaded non-long day by replacing whatever bike
+        // or run is there. If the day only has a swim/strength we stack.
+        if (!target) {
+          const nonLong = _BP_DAYS.filter(d => !isLongDay(d));
+          nonLong.sort((a, b) => _state.schedule[a].length - _state.schedule[b].length);
+          target = nonLong.find(d => hasRunOrBike(d)) || nonLong.find(d => _state.schedule[d].length < 2) || nonLong[0];
+        }
+
         if (target) {
           // When placing fresh on an empty day or replacing a bare
           // bike/run, overwrite. When stacking onto a non-conflict
-          // day (e.g. swim), push.
+          // day (e.g. swim), push. If the day has bike/run mixed with
+          // something else, replace the bike/run token with brick so we
+          // don't double-count same-discipline volume.
           if (_state.schedule[target].length === 0 || hasBareBike(target) || hasBareRun(target)) {
             _state.schedule[target] = ["brick"];
           } else {
-            _state.schedule[target].push("brick");
+            const filtered = _state.schedule[target].filter(c => c !== "bike" && c !== "run" && c !== "bike-long" && c !== "run-long");
+            filtered.push("brick");
+            _state.schedule[target] = filtered;
           }
         }
-        // If no target at all (e.g. every day is long OR rest OR run/
-        // bike-only), skip the brick. Pathological config only.
       }
     }
 
@@ -3147,7 +3170,11 @@
       "bike-easy":     "Z2 Endurance",
       "swim-css":      "Technique",       // no intensity in Base
       "swim-endurance":"Endurance Swim",
-      "brick":         null,              // no brick in Base per §6.3
+      // Brick is not a Base session per §6.1 (brick is introduced in Build).
+      // Rather than dropping the day to Rest — which reads as "the app forgot
+      // my preference" — substitute an aerobic bike session. Keeps the day
+      // productive and preserves the brick slot for Build/Peak.
+      "brick":         "Z2 Endurance",
     },
     build: {
       "run-long":      "Long Run",

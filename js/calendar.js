@@ -2564,6 +2564,9 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
         // session library's canonical duration for this discipline+load.
         if (_pe.duration) {
           fallbackDuration = _pe.duration;
+        } else if (typeof getSessionTemplate === "function") {
+          const _ld = getSessionTemplate(_pe.discipline, _pe.load, _pe.weekNumber);
+          if (_ld && _ld.duration) fallbackDuration = _ld.duration;
         } else if (typeof SESSION_DESCRIPTIONS !== "undefined" && SESSION_DESCRIPTIONS[_pe.discipline]) {
           const _ld = SESSION_DESCRIPTIONS[_pe.discipline][_pe.load];
           if (_ld && _ld.duration) fallbackDuration = _ld.duration;
@@ -2823,7 +2826,11 @@ function getDayTotals(dateStr) {
     } else {
       const effectLoad    = getEffectiveLoad(p.load, restriction);
       const targetDur     = getRestrictedDuration(p.duration, p.load, restriction);
-      const rawSession    = (SESSION_DESCRIPTIONS[p.discipline] || {})[effectLoad]
+      const rawSession    = (typeof getSessionTemplate === "function"
+                              ? (getSessionTemplate(p.discipline, effectLoad, p.weekNumber, dateStr)
+                                 || getSessionTemplate(p.discipline, p.load, p.weekNumber, dateStr))
+                              : null)
+                         || (SESSION_DESCRIPTIONS[p.discipline] || {})[effectLoad]
                          || (SESSION_DESCRIPTIONS[p.discipline] || {})[p.load];
       const scaledSession = rawSession ? scaleSessionDuration(rawSession, targetDur) : rawSession;
       if (scaledSession?.duration) totalMin += _parseDurMin(scaledSession.duration);
@@ -2842,7 +2849,10 @@ function getDayTotals(dateStr) {
       if (explicit > 0) { totalMin += explicit; return; }
     }
     if (w.discipline && w.load) {
-      const session = (SESSION_DESCRIPTIONS[w.discipline] || {})[w.load];
+      const session = (typeof getSessionTemplate === "function"
+                        ? getSessionTemplate(w.discipline, w.load, w.weekNumber, w.date)
+                        : null)
+                    || (SESSION_DESCRIPTIONS[w.discipline] || {})[w.load];
       if (session?.duration) { totalMin += _parseDurMin(session.duration); return; }
     }
     if (w.exercises && w.exercises.length > 0) {
@@ -3359,8 +3369,12 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
           steps: _steps,
         };
       } else {
-        rawSession = (SESSION_DESCRIPTIONS[p.discipline] || {})[effectLoad]
-                     || (SESSION_DESCRIPTIONS[p.discipline] || {})[p.load];
+        rawSession = (typeof getSessionTemplate === "function"
+                       ? (getSessionTemplate(p.discipline, effectLoad, p.weekNumber, dateStr)
+                          || getSessionTemplate(p.discipline, p.load, p.weekNumber, dateStr))
+                       : null)
+                  || (SESSION_DESCRIPTIONS[p.discipline] || {})[effectLoad]
+                  || (SESSION_DESCRIPTIONS[p.discipline] || {})[p.load];
       }
       const session = rawSession && !p.aiSession ? scaleSessionDuration(rawSession, targetDuration) : rawSession;
       const intensLabel = getIntensityLabel(effectLoad);
@@ -3426,7 +3440,10 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       // Rich rendering for sessions with discipline + load (running philosophy)
       if (w.discipline && w.load) {
         const effectLoad     = getEffectiveLoad(w.load, data.restriction);
-        const session        = (SESSION_DESCRIPTIONS[w.discipline] || {})[effectLoad];
+        const session        = (typeof getSessionTemplate === "function"
+                                 ? getSessionTemplate(w.discipline, effectLoad, w.weekNumber, dateStr)
+                                 : null)
+                            || (SESSION_DESCRIPTIONS[w.discipline] || {})[effectLoad];
         const intensLabel    = getIntensityLabel(effectLoad);
         const intensClass    = getIntensityClass(effectLoad);
         if (session) {
@@ -4272,8 +4289,15 @@ function renderMealPlan(dateStr) {
     const totalCals = meals.reduce((s, m) => s + m.calories, 0);
     const _loadLabels = { rest: "Rest Day", light: "Light Activity", strength: "Strength Day", "endurance-easy": "Easy Cardio", "endurance-hard": "Hard / Long Session" };
     const loadNote = weekMealDay.load ? `<div class="meal-plan-load-note">${_loadLabels[weekMealDay.load] || ""}</div>` : "";
+    const _clInfo = (typeof getCarbLoadInfo === "function")
+      ? getCarbLoadInfo(dateStr, loadTrainingPlan().find(e => e.date === dateStr))
+      : null;
+    const carbLoadBadge = _clInfo
+      ? `<div class="meal-plan-carbload-badge">Carb Load · T-${_clInfo.daysToRace} · ${_clInfo.gramsPerKg} g/kg</div>`
+      : "";
     let html = `<div class="meal-plan-preview">
       <div class="meal-plan-preview-header">Meal Plan — ${totalCals} cal total</div>
+      ${carbLoadBadge}
       ${loadNote}`;
     meals.forEach(m => {
       const slot = slotLabels[m.slot] || m.slot;
@@ -4312,8 +4336,15 @@ function renderMealPlan(dateStr) {
   const totalCals = meals.reduce((s, m) => s + m.calories, 0);
 
   const _mealExplanation = buildMealExplanation(dateStr, nutrition);
+  const _clInfoSingle = (typeof getCarbLoadInfo === "function")
+    ? getCarbLoadInfo(dateStr, planEntry)
+    : null;
+  const _carbLoadBadge = _clInfoSingle
+    ? `<div class="meal-plan-carbload-badge">Carb Load · T-${_clInfoSingle.daysToRace} · ${_clInfoSingle.gramsPerKg} g/kg carbs — fat reduced to make room for glycogen</div>`
+    : "";
   let html = `<div class="meal-plan-preview">
     <div class="meal-plan-preview-header">Suggested Plan — ${totalCals} cal total</div>
+    ${_carbLoadBadge}
     ${_mealExplanation}`;
   meals.forEach(m => {
     html += `
