@@ -2323,7 +2323,7 @@ function renderTrainingInputs() {
   let html = '<div class="ti-cards">';
 
   // ── Race cards ──
-  const _goalLabels = { finish: "Just finish", time: "Time goal", compete: "Compete" };
+  const _goalLabels = { finish: "Finish", time: "Time goal", compete: "Compete" };
   races.forEach(race => {
     const cfg      = RACE_CONFIGS[race.type];
     const priority = (race.priority || "A").toUpperCase();
@@ -2504,8 +2504,17 @@ function renderTrainingInputs() {
   container.innerHTML = html;
 }
 
-/** Open the Race Events section and load the race for editing */
+/** Open the race for editing. Prefers the full Build Plan wizard (so the
+ *  user can edit their weekly schedule / sports / long days / thresholds
+ *  alongside race metadata) and falls back to the legacy race-only form
+ *  when onboarding-v2 isn't loaded. */
 function tiEditRace(id) {
+  if (typeof window !== "undefined"
+      && window.OnboardingV2
+      && typeof window.OnboardingV2.openBuildPlanEdit === "function") {
+    window.OnboardingV2.openBuildPlanEdit(null);
+    return;
+  }
   editEvent(id);
 }
 
@@ -4275,7 +4284,7 @@ function _rfStep3() {
 function _rfStep4() {
   const s = raceFormState;
   const opts = [
-    { value: "finish",  icon: ICONS.flag,   label: "Just finish",      desc: "Complete the race" },
+    { value: "finish",  icon: ICONS.flag,   label: "Finish",            desc: "Complete the race" },
     { value: "time",    icon: ICONS.clock,  label: "Hit a time goal",  desc: "Target a specific finishing time" },
     { value: "compete", icon: ICONS.trophy, label: "Compete / podium", desc: "Racing to win or place" },
   ];
@@ -4819,7 +4828,7 @@ function editEvent(id) {
         <div class="form-row">
           <label>Goal</label>
           <select id="edit-race-goal">
-            <option value="finish"  ${sel(race.runGoal, "finish")}>Just finish</option>
+            <option value="finish"  ${sel(race.runGoal, "finish")}>Finish</option>
             <option value="time"    ${sel(race.runGoal, "time")}>Time goal</option>
             <option value="compete" ${sel(race.runGoal, "compete")}>Compete</option>
           </select>
@@ -5110,7 +5119,7 @@ function renderRaceEvents() {
     .map(e => ({ ...e, dateObj: new Date(e.date + "T00:00:00") }))
     .sort((a, b) => a.dateObj - b.dateObj);
 
-  const goalLabels = { finish: "Just finish", time: "Time goal", compete: "Compete" };
+  const goalLabels = { finish: "Finish", time: "Time goal", compete: "Compete" };
 
   container.innerHTML = upcoming.map(race => {
     const daysAway = Math.ceil((race.dateObj - today) / (1000 * 60 * 60 * 24));

@@ -1693,7 +1693,7 @@ function buildSurveyRunGoal() {
     {
       value: "finish",
       icon: ICONS.flag,
-      label: "Just finish",
+      label: "Finish",
       desc: "Complete the race comfortably — confidence and durability come first",
     },
     {
@@ -1952,7 +1952,7 @@ function buildSurveySummary() {
     const gymRow = surveyData.gymStrength === true
       ? svSummaryRow("Strength training", `${surveyData.gymDays} day${surveyData.gymDays !== 1 ? "s" : ""} / week`)
       : "";
-    const goalLabels = { finish: "Just finish", time: "Hit a time goal", compete: "Compete / podium" };
+    const goalLabels = { finish: "Finish", time: "Hit a time goal", compete: "Compete / podium" };
     const runGoalRow = surveyData.sport === "running" && surveyData.runGoal
       ? svSummaryRow("Race goal", goalLabels[surveyData.runGoal] || "—")
       : "";

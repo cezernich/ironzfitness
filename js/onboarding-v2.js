@@ -2780,40 +2780,63 @@
       }
     }
 
-    // Place strength sessions up to the requested count.
-    // Gated on strength actually being a selected sport — otherwise
-    // the stale default sessionsPerWeek=3 from initial state leaks
-    // through and seeds strength days for users who never picked it.
-    // First pass: alternate days (Mon/Wed/Fri/Sun) to spread load.
-    // Second pass: fill remaining days if the user asked for >4 days,
-    // so a 5/6/7-day request actually lands the full count.
+    // Place strength sessions up to the requested count per §6.1.1
+    // placement rule #4: "Place strength sessions on a cardio day per
+    // §8.6 pairing. Prefer diverse pair types across multiple strength
+    // sessions (e.g., one swim-pair + one bike-pair rather than two
+    // run-pairs)." Priority:
+    //   1. Swim day (§8.6: swim + pull/core — no interference)
+    //   2. Bike day (§8.6: bike + legs/posterior chain)
+    //   3. Run day, non-long (§8.6: run + core/hip stability)
+    //   4. Rest day (upper body) — last choice
+    //   NEVER stack on a long-run or long-ride day (hard session).
+    //
+    // Diversity: after placing on a swim day, penalize further swim
+    // pairs so the second strength day prefers a different pair type.
     if (strength > 0 && sports.includes("strength")) {
-      let placed = 0;
-      for (let i = 0; i < _BP_DAYS.length && placed < strength; i += 2) {
-        const d = _BP_DAYS[i];
-        if (_state.schedule[d].length < 2) {
-          _state.schedule[d].push("strength");
-          placed++;
-        }
-      }
-      if (placed < strength) {
-        for (let i = 1; i < _BP_DAYS.length && placed < strength; i += 2) {
-          const d = _BP_DAYS[i];
-          if (!_state.schedule[d].includes("strength") && _state.schedule[d].length < 2) {
-            _state.schedule[d].push("strength");
-            placed++;
-          }
-        }
-      }
-      // Last resort: stack onto any day that doesn't already have strength.
-      if (placed < strength) {
-        for (let i = 0; i < _BP_DAYS.length && placed < strength; i++) {
-          const d = _BP_DAYS[i];
-          if (!_state.schedule[d].includes("strength")) {
-            _state.schedule[d].push("strength");
-            placed++;
-          }
-        }
+      const isLongDay = d => _state.schedule[d].some(c => c === "run-long" || c === "bike-long");
+      const hasSwim   = d => _state.schedule[d].includes("swim");
+      const hasBike   = d => _state.schedule[d].some(c => c === "bike");
+      const hasRun    = d => _state.schedule[d].some(c => c === "run");
+      const hasBrick  = d => _state.schedule[d].includes("brick");
+      const hasStr    = d => _state.schedule[d].includes("strength");
+      const isRest    = d => _state.schedule[d].includes("rest");
+
+      const pairTypeOf = d => {
+        if (hasSwim(d))                  return "swim";
+        if (hasBike(d) && !isLongDay(d)) return "bike";
+        if (hasRun(d)  && !isLongDay(d)) return "run";
+        return "rest";
+      };
+
+      const pairsUsed = { swim: 0, bike: 0, run: 0, rest: 0 };
+      const DIVERSITY_PENALTY = 25;
+
+      const scoreDay = d => {
+        if (hasStr(d))    return -1;   // already has strength
+        if (isLongDay(d)) return -1;   // never stack on long day
+        if (hasBrick(d))  return -1;   // brick is self-contained (§6.1.1 rule #3)
+        let base;
+        if (hasSwim(d))              base = 100;
+        else if (hasBike(d))         base = 80;
+        else if (hasRun(d))          base = 45;
+        else if (isRest(d))          base = 20;  // carve strength into rest day
+        else                         base = 10;  // empty day, unlikely here
+        const pt = pairTypeOf(d);
+        return base - pairsUsed[pt] * DIVERSITY_PENALTY;
+      };
+
+      for (let i = 0; i < strength; i++) {
+        const ranked = _BP_DAYS
+          .map(d => ({ d, score: scoreDay(d) }))
+          .filter(x => x.score >= 0)
+          .sort((a, b) => b.score - a.score);
+        if (!ranked.length) break;
+        const target = ranked[0].d;
+        // Rest day turning into a strength day: replace the rest token.
+        if (isRest(target)) _state.schedule[target] = [];
+        _state.schedule[target].push("strength");
+        pairsUsed[pairTypeOf(target)]++;
       }
     }
     // Enforce rest days to match the user's `daysPerWeek` preference.
