@@ -3789,6 +3789,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
   content.innerHTML = html;
   // Share icon click handlers auto-attach via the MutationObserver in
   // share.js — no per-render wiring needed here.
+  _attachSessionDragSources(dateStr, data);
   if (typeof isNutritionEnabled === "function" && isNutritionEnabled()) {
     renderMealPlan(dateStr);
     renderNutritionProgressBars(dateStr);
@@ -3797,6 +3798,61 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
   if (isToday && typeof renderNLInput === "function") renderNLInput(dateStr);
   // Update daily progress rings
   renderDailyRings();
+}
+
+// Walk the session cards rendered into day-detail-content and make them
+// drag sources. Extracts drag metadata (type, id/raceId, source date) from
+// the card's DOM id — the render templates already encode enough to
+// derive it:
+//   session-sw-<id>          → type=scheduled
+//   session-log-<id>         → type=logged
+//   session-plan-<date>-<raceId> → type=plan (needs discipline, looked up
+//     from the passed-in day data)
+// Race-day cards are skipped — you don't drag the race itself to another day.
+function _attachSessionDragSources(dateStr, data) {
+  const root = document.getElementById("day-detail-content");
+  if (!root) return;
+  const cards = root.querySelectorAll(".session-card");
+  cards.forEach(card => {
+    if (card.classList.contains("race-day-card")) return;
+    const id = card.id || "";
+    let dragType = null;
+    let dragId = "";
+    let raceId = "";
+    let discipline = "";
+
+    if (id.indexOf("session-sw-") === 0) {
+      dragType = "scheduled";
+      dragId = id.slice("session-sw-".length);
+    } else if (id.indexOf("session-log-") === 0) {
+      dragType = "logged";
+      dragId = id.slice("session-log-".length);
+    } else if (id.indexOf("session-plan-") === 0) {
+      // session-plan-YYYY-MM-DD-<raceId> — the first 10 chars after the
+      // prefix are the date; the rest (after the next dash) is the raceId.
+      const rest = id.slice("session-plan-".length);
+      if (rest.length > 10 && rest[10] === "-") {
+        raceId = rest.slice(11);
+      }
+      if (data && data.planEntry && data.planEntry.raceId && String(data.planEntry.raceId) === String(raceId)) {
+        discipline = data.planEntry.discipline || "";
+      }
+      dragType = "plan";
+    } else {
+      return; // unknown card shape — leave alone
+    }
+
+    card.draggable = true;
+    card.dataset.dragType = dragType;
+    card.dataset.dragSource = dateStr;
+    if (dragId) card.dataset.dragId = dragId;
+    if (raceId) card.dataset.dragRaceid = raceId;
+    if (discipline) card.dataset.dragDiscipline = discipline;
+
+    // Attach listeners (safe to reassign — replaces any prior binding).
+    card.ondragstart = onSessionDragStart;
+    card.ondragend = onSessionDragEnd;
+  });
 }
 
 // ─── Nutrition progress bars (updates with sliders) ──────────────────────────
@@ -4558,7 +4614,10 @@ function onSessionDragStart(event) {
 function onSessionDragEnd(event) {
   _dragActive = false;
   event.currentTarget.classList.remove("dragging");
-  document.querySelectorAll(".week-cell.drag-over").forEach(el => el.classList.remove("drag-over"));
+  // Clear drag-over from every cell class the calendar renders — old
+  // week-cell, new .dc (week carousel), and .md (month grid).
+  document.querySelectorAll(".week-cell.drag-over, .dc.drag-over, .md.drag-over")
+    .forEach(el => el.classList.remove("drag-over"));
 }
 
 function onCellDragOver(event, dateStr) {

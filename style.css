@@ -6518,12 +6518,21 @@ button:active {
   opacity: 0.35;
 }
 
-.week-cell.drag-over {
+.week-cell.drag-over,
+.dc.drag-over,
+.md.drag-over {
   background: rgba(129, 140, 248, 0.14);
   border-color: var(--color-accent);
   border-top-color: var(--color-accent);
   box-shadow: 0 0 0 2px var(--color-accent-glow);
 }
+
+/* Draggable session card affordance — subtle grab cursor + opacity on
+   drag so the drag source is visually obvious. The new week-view cells
+   inherit drag-over styling via the rule above. */
+.session-card[draggable="true"] { cursor: grab; }
+.session-card[draggable="true"]:active { cursor: grabbing; }
+.session-card.dragging { opacity: 0.45; }
 
 
 /* ===== PLAN GOAL & SPLIT ===== */
