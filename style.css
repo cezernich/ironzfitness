@@ -3016,6 +3016,19 @@ button:active {
   padding: 4px 0 6px;
 }
 
+.meal-plan-carbload-badge {
+  display: inline-block;
+  margin: 8px 0 4px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #7a3d00;
+  background: #ffe8b2;
+  border: 1px solid #f0b34a;
+  border-radius: 999px;
+  line-height: 1.3;
+}
+
 .meal-plan-row {
   display: flex;
   align-items: baseline;
@@ -17118,6 +17131,20 @@ body.ob-v2-lock { overflow: hidden; }
 }
 .ob-v2-btn-primary:hover { background: #D04A0C; }
 .ob-v2-btn-primary:active { transform: translateY(1px); }
+.ob-v2-btn-secondary {
+  padding: 10px 16px;
+  background: #FFF;
+  color: #E8530E;
+  border: 1.5px solid #E8530E;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+}
+.ob-v2-btn-secondary:hover { background: #FFF5F0; }
+.ob-v2-btn-secondary:active { transform: translateY(1px); }
 .ob-v2-btn-skip {
   width: 100%;
   padding: 12px;
@@ -17612,6 +17639,75 @@ body.ob-v2-lock { overflow: hidden; }
   background: #E8530E;
   border-color: #E8530E;
   color: #FFF;
+}
+
+/* Hybrid goal split — section headers + role-card description line */
+.ob-v2-goal-section-label {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #1A1A1A;
+  margin: 18px 0 8px;
+}
+.ob-v2-goal-section-label:first-child { margin-top: 0; }
+.ob-v2-goal-section-label--strength {
+  color: #E8530E;
+}
+.ob-v2-goal-section-hint {
+  font-size: 12px;
+  color: #888;
+  margin: -4px 0 10px;
+}
+.ob-v2-goal-card--role .ob-v2-goal-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ob-v2-goal-desc {
+  font-size: 12px;
+  font-weight: 500;
+  color: #888;
+  line-height: 1.35;
+}
+
+/* Standalone-endurance "Add Strength" recommendation card */
+.ob-v2-goal-recommendation {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #FFF5F0;
+  border: 1px solid rgba(232, 83, 14, 0.28);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ob-v2-goal-recommendation-body { flex: 1; min-width: 0; }
+.ob-v2-goal-recommendation-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #E8530E;
+  margin-bottom: 2px;
+}
+.ob-v2-goal-recommendation-text {
+  font-size: 12px;
+  color: #555;
+  margin: 0;
+  line-height: 1.4;
+}
+.ob-v2-goal-recommendation-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Inline error shown if Continue is pressed without picking a strength role */
+.ob-v2-goal-error {
+  font-size: 12px;
+  color: #C62828;
+  margin: 8px 0 0;
 }
 
 /* bp-3-race: race entry card + phase cards + counter */

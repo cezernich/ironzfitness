@@ -62,6 +62,10 @@
     selectedSports: [],
     gymAccess: "full",
     trainingGoals: [],
+    // Hybrid strength role per TRAINING_PHILOSOPHY.md §2.5.3. Required
+    // when the athlete selects both strength and an endurance sport.
+    // One of: injury_prevention | race_performance | hypertrophy | minimal
+    strengthRole: null,
     raceEvents: [],
     currentRace: { name: "", category: "triathlon", type: "ironman", date: "", goal: "finish", priority: "A", leadIn: null },
     leadInCount: 4,
@@ -314,6 +318,10 @@
       if (Array.isArray(goals)) _state.trainingGoals = goals;
     } catch {}
     try {
+      const role = _lsGet("strengthRole", null);
+      if (typeof role === "string" && role) _state.strengthRole = role;
+    } catch {}
+    try {
       const races = _lsGet("raceEvents", null);
       if (Array.isArray(races) && races.length) {
         _state.raceEvents = races;
@@ -465,6 +473,7 @@
     _state.selectedSports = [];
     _state.gymAccess = "full";
     _state.trainingGoals = [];
+    _state.strengthRole = null;
     _state.raceEvents = [];
     _state.currentRace = { name: "", category: "triathlon", type: "ironman", date: "", goal: "finish", priority: "A", leadIn: null };
     _state.leadInCount = 4;
@@ -984,20 +993,58 @@
     goTo("bp-v2-2");
   }
 
-  // Goal catalog. Each entry lists which sport buckets it's relevant
-  // to. Using "*" means "always show". Strength-specific goals only
-  // appear when "strength" is selected; endurance goals when at least
-  // one cardio sport is selected.
-  const _GOAL_CATALOG = [
-    { id: "race",      icon: "flag",     text: "Train for a Race",      buckets: ["endurance"] },
-    { id: "speed",     icon: "zap",      text: "Get Faster",             buckets: ["endurance"] },
-    { id: "endurance", icon: "activity", text: "Build Endurance",        buckets: ["endurance"] },
-    { id: "stronger",  icon: "trophy",   text: "Get Stronger",           buckets: ["strength"] },
-    { id: "bulk",      icon: "weights",  text: "Bulk",                   buckets: ["strength"] },
-    { id: "cut",       icon: "flame",    text: "Cut",                    buckets: ["strength"] },
-    { id: "weight",    icon: "scale",    text: "Lose Weight",            buckets: ["*"] },
-    { id: "general",   icon: "target",   text: "General Fitness",        buckets: ["*"] },
+  // Goal catalog — split into three per TRAINING_PHILOSOPHY.md §2.5.
+  //
+  // §2.5.2: Endurance athletes (standalone endurance + hybrid) pick from
+  //   the endurance goal list. Bulk/Cut are gated off — you can't bulk
+  //   and train for a triathlon.
+  // §2.5.1: Standalone-strength athletes pick from the strength-only list.
+  // §2.5.3: Hybrid athletes ALSO pick exactly one strength role below
+  //   the endurance goals. Strength role drives rep ranges, session
+  //   length, frequency, and exercise bias (see Phase 2 in _buildSessionForSport).
+
+  const _ENDURANCE_GOALS = [
+    { id: "race",      icon: "flag",     text: "Train for a Race" },
+    { id: "speed",     icon: "zap",      text: "Get Faster" },
+    { id: "endurance", icon: "activity", text: "Build Endurance" },
+    { id: "weight",    icon: "scale",    text: "Lose Weight" },
+    { id: "general",   icon: "target",   text: "General Fitness" },
   ];
+
+  const _STRENGTH_ONLY_GOALS = [
+    { id: "stronger",  icon: "trophy",   text: "Get Stronger" },
+    { id: "bulk",      icon: "weights",  text: "Bulk" },
+    { id: "cut",       icon: "flame",    text: "Cut" },
+    { id: "general",   icon: "target",   text: "General Fitness" },
+  ];
+
+  // Strength roles for hybrid athletes (§2.5.3). Radio, not checkbox —
+  // the generator needs exactly one. Descriptions are short because the
+  // full rationale lives in the philosophy doc.
+  const _HYBRID_STRENGTH_ROLES = [
+    { id: "injury_prevention", icon: "shield",   text: "Injury Prevention", desc: "Keep joints durable, fix imbalances." },
+    { id: "race_performance",  icon: "trophy",   text: "Race Performance",  desc: "Support your race with sport-specific power." },
+    { id: "hypertrophy",       icon: "weights",  text: "Build Muscle",      desc: "Add visible muscle alongside cardio." },
+    { id: "minimal",           icon: "flame",    text: "Minimal",           desc: "Light maintenance only." },
+  ];
+
+  function _goalCardHTML(g) {
+    return '<button type="button" class="ob-v2-goal-card" data-goal="' + g.id + '" onclick="OnboardingV2._toggleGoal(this)">' +
+        '<span class="ob-v2-goal-icon" data-ob-icon="' + g.icon + '"></span>' +
+        '<span class="ob-v2-goal-text">' + _escape(g.text) + '</span>' +
+        '<span class="ob-v2-goal-check">&#10003;</span>' +
+      '</button>';
+  }
+  function _roleCardHTML(r) {
+    return '<button type="button" class="ob-v2-goal-card ob-v2-goal-card--role" data-role="' + r.id + '" onclick="OnboardingV2._toggleStrengthRole(this)">' +
+        '<span class="ob-v2-goal-icon" data-ob-icon="' + r.icon + '"></span>' +
+        '<span class="ob-v2-goal-text">' +
+          _escape(r.text) +
+          '<span class="ob-v2-goal-desc">' + _escape(r.desc) + '</span>' +
+        '</span>' +
+        '<span class="ob-v2-goal-check">&#10003;</span>' +
+      '</button>';
+  }
 
   function _renderGoalCards() {
     const host = document.getElementById("bp-v2-goal-cards");
@@ -1005,45 +1052,124 @@
     const sports = _state.selectedSports || [];
     const hasStrength = sports.includes("strength");
     const hasEndurance = sports.some(s => ["run", "bike", "swim", "hyrox", "rowing"].includes(s));
-    const relevant = _GOAL_CATALOG.filter(g => {
-      if (g.buckets.includes("*")) return true;
-      if (g.buckets.includes("strength") && hasStrength) return true;
-      if (g.buckets.includes("endurance") && hasEndurance) return true;
-      return false;
-    });
-    host.innerHTML = relevant.map(g =>
-      '<button type="button" class="ob-v2-goal-card" data-goal="' + g.id + '" onclick="OnboardingV2._toggleGoal(this)">' +
-        '<span class="ob-v2-goal-icon" data-ob-icon="' + g.icon + '"></span>' +
-        '<span class="ob-v2-goal-text">' + _escape(g.text) + '</span>' +
-        '<span class="ob-v2-goal-check">&#10003;</span>' +
-      '</button>'
-    ).join("");
+
+    let html = "";
+    let subtitle = "Select all that apply.";
+
+    if (hasStrength && !hasEndurance) {
+      // Standalone strength — single section, unchanged set
+      subtitle = "Select all that apply. These shape your rep ranges, volume, and nutrition.";
+      html += _STRENGTH_ONLY_GOALS.map(_goalCardHTML).join("");
+    } else if (!hasStrength && hasEndurance) {
+      // Standalone endurance — show endurance goals + a recommendation
+      // card. The user can accept to add strength and flip into hybrid.
+      subtitle = "Select all that apply. These shape your cardio intensity and volume.";
+      html += _ENDURANCE_GOALS.map(_goalCardHTML).join("");
+      html += '<div class="ob-v2-goal-recommendation" id="bp-v2-strength-recommendation">' +
+        '<div class="ob-v2-goal-recommendation-body">' +
+          '<div class="ob-v2-goal-recommendation-title">Recommendation — Add Strength</div>' +
+          '<p class="ob-v2-goal-recommendation-text">1–2 short strength sessions per week reduce injury risk and preserve muscle while you train endurance.</p>' +
+        '</div>' +
+        '<button type="button" class="ob-v2-btn-secondary ob-v2-goal-recommendation-btn" onclick="OnboardingV2._addStrengthFromRecommendation()">Add Strength</button>' +
+      '</div>';
+    } else if (hasStrength && hasEndurance) {
+      // Hybrid — two sections on one screen
+      subtitle = "Select all that apply for endurance, then pick one Strength Goal.";
+      html += '<div class="ob-v2-goal-section-label">Endurance Goals</div>';
+      html += _ENDURANCE_GOALS.map(_goalCardHTML).join("");
+      html += '<div class="ob-v2-goal-section-label ob-v2-goal-section-label--strength">Strength Goal</div>';
+      html += '<p class="ob-v2-goal-section-hint">Pick one — this shapes your strength sessions.</p>';
+      html += _HYBRID_STRENGTH_ROLES.map(_roleCardHTML).join("");
+      html += '<p class="ob-v2-goal-error" id="bp-v2-role-error" style="display:none">Pick a strength goal to continue.</p>';
+    } else {
+      // No sports selected at all — shouldn't be reachable via the UI
+      // but render something sensible if it is.
+      html += _ENDURANCE_GOALS.map(_goalCardHTML).join("");
+    }
+
+    host.innerHTML = html;
     _hydrateIcons(host);
-    // Reapply any previously-selected goals (e.g. when user goes back)
+
+    // Reapply previously-selected endurance goals (user going back)
     (_state.trainingGoals || []).forEach(id => {
       const el = host.querySelector('[data-goal="' + id + '"]');
       if (el) el.classList.add("is-selected");
     });
-    // Contextual subtitle
-    const sub = document.getElementById("bp-v2-goal-subtitle");
-    if (sub) {
-      if (hasStrength && !hasEndurance)      sub.textContent = "Select all that apply. These shape your strength volume and recovery.";
-      else if (!hasStrength && hasEndurance) sub.textContent = "Select all that apply. These shape your cardio intensity and volume.";
-      else                                    sub.textContent = "Select all that apply. These shape how your plan balances cardio and strength.";
+    // Reapply previously-selected strength role
+    if (_state.strengthRole) {
+      const el = host.querySelector('[data-role="' + _state.strengthRole + '"]');
+      if (el) el.classList.add("is-selected");
     }
+
+    const sub = document.getElementById("bp-v2-goal-subtitle");
+    if (sub) sub.textContent = subtitle;
   }
 
   function _toggleGoal(btn) { if (btn) btn.classList.toggle("is-selected"); }
+
+  // Radio semantics — only one role can be selected.
+  function _toggleStrengthRole(btn) {
+    if (!btn) return;
+    const host = document.getElementById("bp-v2-goal-cards");
+    if (!host) return;
+    host.querySelectorAll('[data-role]').forEach(el => el.classList.remove("is-selected"));
+    btn.classList.add("is-selected");
+    const errEl = document.getElementById("bp-v2-role-error");
+    if (errEl) errEl.style.display = "none";
+  }
+
+  // "Add Strength" on the standalone-endurance recommendation card —
+  // promotes the athlete to hybrid by adding strength to their sports
+  // selection and re-rendering the goals screen with both sections.
+  function _addStrengthFromRecommendation() {
+    const sports = Array.isArray(_state.selectedSports) ? _state.selectedSports.slice() : [];
+    if (!sports.includes("strength")) sports.push("strength");
+    _state.selectedSports = sports;
+    _lsSet("selectedSports", sports);
+    _renderGoalCards();
+  }
   function _saveGoalsAndContinue() {
-    const goals = Array.from(document.querySelectorAll("#bp-v2-2 .is-selected"))
+    const goals = Array.from(document.querySelectorAll("#bp-v2-2 [data-goal].is-selected"))
       .map(el => el.getAttribute("data-goal"));
-    _state.trainingGoals = goals;
-    _lsSet("trainingGoals", goals);
-    if (goals.includes("race")) { goTo("bp-v2-3-race"); _applyRaceCategoryDefault(); _applyRacePrioritySection(); return; }
+    const sports = _state.selectedSports || [];
+    const hasStrength = sports.includes("strength");
+    const hasEndurance = sports.some(s => ["run", "bike", "swim", "hyrox", "rowing"].includes(s));
+
+    // Defensive: bulk/cut don't apply to endurance-tinged plans (you
+    // can't bulk and train for a triathlon). Drop them if they leaked
+    // in through a stale saved state.
+    const cleaned = (hasEndurance)
+      ? goals.filter(g => g !== "bulk" && g !== "cut")
+      : goals;
+    _state.trainingGoals = cleaned;
+    _lsSet("trainingGoals", cleaned);
+
+    // Hybrid athletes must ALSO pick a Strength Goal (§2.5.3).
+    if (hasStrength && hasEndurance) {
+      const pickedRole = document.querySelector("#bp-v2-2 [data-role].is-selected")?.getAttribute("data-role") || null;
+      if (!pickedRole) {
+        const errEl = document.getElementById("bp-v2-role-error");
+        if (errEl) errEl.style.display = "";
+        const host = document.getElementById("bp-v2-goal-cards");
+        const firstRole = host?.querySelector("[data-role]");
+        if (firstRole && typeof firstRole.scrollIntoView === "function") {
+          firstRole.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        return;
+      }
+      _state.strengthRole = pickedRole;
+      _lsSet("strengthRole", pickedRole);
+    } else {
+      // Not a hybrid athlete — clear any stale role so the generator
+      // doesn't read one that no longer applies.
+      _state.strengthRole = null;
+      _lsSet("strengthRole", null);
+    }
+
+    if (cleaned.includes("race")) { goTo("bp-v2-3-race"); _applyRaceCategoryDefault(); _applyRacePrioritySection(); return; }
     // Strength-only users skip the generic Plan Details screen — the
     // same fields (block length, session length, days per week) live
     // on bp-v2-6 Strength Setup to avoid asking twice.
-    const sports = _state.selectedSports || [];
     const strengthOnly = sports.length > 0 && sports.every(s => s === "strength");
     if (strengthOnly) {
       _state.raceEvents = [];
@@ -3350,6 +3476,7 @@
 
     _lsSet("selectedSports", _state.selectedSports);
     _lsSet("trainingGoals", _state.trainingGoals);
+    _lsSet("strengthRole", _state.strengthRole);
     _lsSet("raceEvents", _state.raceEvents);
     _lsSet("thresholds", _state.thresholds);
     _lsSet("strengthSetup", _state.strengthSetup);
@@ -3377,9 +3504,27 @@
     } catch (e) { console.warn("[OnboardingV2] failed to persist preferredDays", e); }
 
     // Map onboarding raceEvents into the legacy events shape so the
-    // calendar / renderRaceEvents keep working unchanged.
+    // calendar / renderRaceEvents keep working unchanged. When the user
+    // has built a weekly template in Training Inputs, attach it to the
+    // race as `preferences` so the race plan generator can honor their
+    // day-of-week sport assignments and preferred long day. Also stamp
+    // daysPerWeek + longDay so phase-based load modulation lands on the
+    // right days.
+    const _activeDaysPerWeek = _BP_DAYS.filter(d => Array.isArray(_state.schedule[d]) && _state.schedule[d].length > 0).length;
+    const _BP_LONG_RUN_DOW = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+    const _longDayName = _state.longDays && _state.longDays.longRun;
+    const _longDayIdx = _longDayName ? _BP_LONG_RUN_DOW[_longDayName] : null;
+    const _prefsForRace = {
+      weeklyTemplate: { ...(_state.schedule || {}) },
+      daysPerWeek: _activeDaysPerWeek || undefined,
+      sessionLengthMin: parseInt(_state.planDetails.sessionLength, 10) || undefined,
+      longDay: (_longDayIdx !== null && _longDayIdx !== undefined) ? _longDayIdx : undefined,
+      source: "onboarding_v2",
+    };
     const legacyEvents = _mapRacesToLegacyEvents(_state.raceEvents);
     if (legacyEvents.length) {
+      // Attach preferences to each race so the generator picks them up.
+      legacyEvents.forEach(r => { r.preferences = { ..._prefsForRace }; });
       const existing = _lsGet("events", []) || [];
       _lsSet("events", existing.concat(legacyEvents));
     }
@@ -3391,11 +3536,23 @@
     const planRace = legacyEvents.find(e => (e.priority || "A").toUpperCase() === "A") || legacyEvents[0] || null;
     const raceIdForPlan = planRace ? planRace.id : null;
 
-    // Materialize dated sessions from the weekly template.
-    try {
-      _writeScheduleSessions(raceIdForPlan);
-    } catch (e) {
-      console.warn("[OnboardingV2] writing schedule sessions failed", e);
+    // UNIFIED PLAN: if a race exists, generate the race plan (trainingPlan)
+    // which spans today→race with philosophy-based phases AND honors the
+    // athlete's preferences. Do NOT write separate workoutSchedule entries
+    // — the race plan IS the schedule. Non-race path still materializes
+    // workoutSchedule from the weekly template.
+    if (planRace && typeof window !== "undefined" && typeof window._regeneratePlanForRace === "function") {
+      try {
+        window._regeneratePlanForRace(planRace);
+      } catch (e) {
+        console.warn("[OnboardingV2] race plan generation failed", e);
+      }
+    } else {
+      try {
+        _writeScheduleSessions(raceIdForPlan, planRace);
+      } catch (e) {
+        console.warn("[OnboardingV2] writing schedule sessions failed", e);
+      }
     }
 
     // Bodyweight-only users: persist a permanent equipment restriction with
@@ -3424,7 +3581,7 @@
   // the user's calendar for the next N weeks (planDetails.duration).
   // Appends to the existing `workoutSchedule` array without touching
   // past entries.
-  function _writeScheduleSessions(raceIdForPlan) {
+  function _writeScheduleSessions(raceIdForPlan, planRace) {
     // "indefinite" → materialize 12 weeks as a rolling window; numeric
     // strings like "11" or "12" parse cleanly; "custom" falls back to
     // customWeeks (set by the custom-weeks input).
@@ -3434,6 +3591,21 @@
     else if (dur === "custom") weeks = Math.max(1, Math.min(52, parseInt(_state.planDetails.customWeeks, 10) || 12));
     else weeks = Math.max(1, parseInt(dur, 10) || 12);
     const sessionLen = Math.max(15, parseInt(_state.planDetails.sessionLength, 10) || 60);
+
+    // If this plan is tied to a race, materialize sessions all the way
+    // through the race week — otherwise races >12 weeks out left every
+    // day from week 13 onward as REST. Cap at 52 weeks for safety.
+    if (planRace && planRace.date) {
+      try {
+        const raceDate = new Date(planRace.date + "T00:00:00");
+        const startIsoForRace = _state.planDetails.startDate || _nextMondayISO();
+        const startForRace = new Date(startIsoForRace + "T00:00:00");
+        if (!isNaN(raceDate.getTime()) && !isNaN(startForRace.getTime())) {
+          const weeksToRace = Math.ceil((raceDate - startForRace) / (86400000 * 7));
+          if (weeksToRace > weeks) weeks = Math.min(52, weeksToRace);
+        }
+      } catch {}
+    }
     // Reuse the planId we're editing so Training Inputs still groups
     // the refreshed sessions under the same card. Otherwise mint new.
     const planId = _state._editingPlanId || ("ob-v2-" + Date.now());
@@ -3465,6 +3637,37 @@
     // days by split and labels runs/bikes by position.
     const enrichedTemplate = _enrichWeekTemplate();
 
+    // §2.5.5 critical rule: fat_loss ("weight" goal) and cut goals
+    // require a minimum of 2 strength sessions per week regardless of
+    // whether the athlete picked strength. If the template has fewer,
+    // inject strength-full into the lowest-load days to reach the floor.
+    // We mutate only the ENRICHED copy so _state.schedule (and the
+    // persisted buildPlanTemplate) remain as the athlete explicitly chose.
+    const _goals = _state.trainingGoals || [];
+    const _needsStrengthFloor = _goals.includes("weight") || _goals.includes("cut");
+    if (_needsStrengthFloor) {
+      const hasStrengthSlot = (slots) =>
+        Array.isArray(slots) && slots.some(s => typeof s === "string" && s.indexOf("strength") === 0);
+      const slotLoadWeight = (slots) => {
+        if (!Array.isArray(slots) || slots.length === 0) return 0; // rest = best candidate
+        if (slots.some(s => typeof s === "string" && /long/.test(s))) return 10;
+        if (slots.some(s => typeof s === "string" && /interval|hard|css/.test(s))) return 8;
+        return slots.length * 2;
+      };
+      let strengthDayCount = _BP_DAYS.filter(d => hasStrengthSlot(enrichedTemplate[d])).length;
+      if (strengthDayCount < 2) {
+        const candidates = _BP_DAYS
+          .filter(d => !hasStrengthSlot(enrichedTemplate[d]))
+          .map(d => ({ day: d, load: slotLoadWeight(enrichedTemplate[d]) }))
+          .sort((a, b) => a.load - b.load);
+        const needed = 2 - strengthDayCount;
+        for (let i = 0; i < needed && i < candidates.length; i++) {
+          const day = candidates[i].day;
+          enrichedTemplate[day] = (enrichedTemplate[day] || []).concat(["strength-full"]);
+        }
+      }
+    }
+
     // Anchor the weekly template to an actual Monday so template Mon → real
     // Mon, Tue → real Tue, etc. — previously idx=0 (Mon template) was placed
     // on the start date regardless of what day the user picked, which threw
@@ -3483,9 +3686,15 @@
     (Array.isArray(_state.raceEvents) ? _state.raceEvents : [])
       .forEach(r => { if (r && r.date) raceDateSet.add(r.date); });
 
+    // Whether this rolling-template plan is acting as the base arc for a
+    // race. Only in that case do we compute phase per week — standalone
+    // rolling plans (no race) stay phase-agnostic and get "base" reps.
+    const _hasRaceArc = !!(planRace && planRace.date);
+
     const sessions = [];
     let counter = 0;
     for (let w = 0; w < weeks; w++) {
+      const phaseKey = _hasRaceArc ? _phaseForWeek(w + 1, weeks) : "base";
       _BP_DAYS.forEach((day, idx) => {
         const slots = (enrichedTemplate[day] || []).filter(s => s && s !== "rest");
         slots.forEach(enrichedCode => {
@@ -3494,7 +3703,7 @@
           if (d < start) return; // first week is partial when start is mid-week
           const dateStr = d.toISOString().slice(0, 10);
           if (raceDateSet.has(dateStr)) return; // race day — skip training session
-          const session = _buildSessionForSport(enrichedCode, dateStr, sessionLen, w + 1, planId, counter++);
+          const session = _buildSessionForSport(enrichedCode, dateStr, sessionLen, w + 1, planId, counter++, phaseKey);
           if (session) {
             if (raceIdForPlan) session.raceId = raceIdForPlan;
             sessions.push(session);
@@ -3684,6 +3893,264 @@
     return out.length ? out : null;
   }
 
+  // ─── STRENGTH ROLE PARAMETERS (Phase 2) ──────────────────────────────
+  // Per TRAINING_PHILOSOPHY.md §2.5.3 / §7.6.2 / §7.6.3 / §7.6.4 / §8.5.
+  // The role drives session length, exercise count, rep ranges, technique
+  // bias, and sport-specific exercise overlays for race_performance.
+  //
+  // Rep-range notes:
+  //   - race_performance uses phase-specific reps: heavy (3–6) in Base,
+  //     moderate (6–10) in Build, maintenance in Peak/Taper.
+  //   - injury_prevention uses muscular-endurance reps (12–15) with
+  //     controlled tempo and a bias toward bodyweight/band/stability work.
+  //   - hypertrophy uses traditional 8–12 hypertrophy range and permits
+  //     drop sets / supersets on accessories for intermediate+.
+  //   - minimal is a short bodyweight-circuit-style session (§2.5.3).
+  const _STRENGTH_ROLE_PARAMS = {
+    injury_prevention: {
+      sessionLen: 35,         // 30–40 min; short so it doesn't interfere with key cardio
+      exerciseCount: 5,       // 4–5 per session
+      primaryReps: "12-15",
+      accessoryReps: "12-15",
+      primarySets: 3,
+      accessorySets: 3,
+      technique: "straight",  // §7.6.3 cut / injury_prevention avoid metabolic stress
+      biasBodyweight: true,
+      loadLevel: "easy",      // matches "place on easy cardio days" guidance
+    },
+    race_performance: {
+      sessionLen: 50,         // 45–60 min; heavy compound work needs rest
+      exerciseCount: 5,       // 4–6
+      primaryReps: "3-6",     // Base phase default (§2.5.3)
+      accessoryReps: "6-10",
+      primarySets: 4,
+      accessorySets: 3,
+      buildPrimaryReps: "6-10",   // Build phase override
+      buildAccessoryReps: "8-12",
+      peakPrimaryReps: "5",       // Peak — maintenance only
+      peakAccessoryReps: "8",
+      technique: "straight",
+      biasBodyweight: false,
+      loadLevel: "moderate",  // KEY session per §2.5.3 — place strategically
+    },
+    hypertrophy: {
+      sessionLen: 55,         // 45–60 min; volume drives hypertrophy
+      exerciseCount: 7,       // 6–8
+      primaryReps: "8-12",
+      accessoryReps: "10-12",
+      primarySets: 4,
+      accessorySets: 3,
+      technique: "hypertrophy",   // drop sets / supersets permitted on accessories
+      biasBodyweight: false,
+      loadLevel: "moderate",  // endurance intensity should cap on these days
+    },
+    minimal: {
+      sessionLen: 20,         // bodyweight circuit, ~20 min
+      exerciseCount: 4,       // 3–4
+      primaryReps: "10-12",
+      accessoryReps: "10-12",
+      primarySets: 2,
+      accessorySets: 2,
+      technique: "circuit",
+      biasBodyweight: true,
+      loadLevel: "easy",
+    },
+  };
+
+  // How many strength sessions per week each role permits (§2.5.3 upper bounds).
+  // Used by the fat_loss/cut floor logic to decide when to auto-add.
+  // race_performance cap is phase-dependent (2 Base / 1 Build+); we keep
+  // the cap at 2 and let the phase controller handle the Build reduction
+  // if/when that layer is added.
+  const _ROLE_FREQUENCY_CAP = {
+    injury_prevention: 2,
+    race_performance:  2,
+    hypertrophy:       3,
+    minimal:           1,
+  };
+
+  // §8.5 Sport-specific strength overlays for race_performance. Replaces
+  // the default _STRENGTH_TEMPLATES slot contents when the athlete is
+  // training for a race in that sport. Keyed by (sportBucket, focus).
+  // Sport buckets: "running" | "cycling" | "swimming" | "triathlon".
+  // Triathlon is a superset — legs get cycling emphasis, pull gets swim
+  // emphasis, core + single-leg from running.
+  const _SPORT_STRENGTH_EXERCISES = {
+    running: {
+      // Single-leg dominant + hip extension + ankle stiffness + core
+      legs:  ["Bulgarian Split Squat", "Romanian Deadlift", "Hip Thrust", "Walking Lunges", "Standing Calf Raise"],
+      lower: ["Bulgarian Split Squat", "Romanian Deadlift", "Step-up", "Walking Lunges", "Standing Calf Raise"],
+      full:  ["Bulgarian Split Squat", "Hip Thrust", "Pallof Press", "Dead Bug", "Standing Calf Raise"],
+      upper: ["Push-up", "Pull-up", "Pallof Press", "Dead Bug"],
+      push:  ["Push-up", "Overhead Press", "Pallof Press", "Dead Bug"],
+      pull:  ["Pull-up", "Face Pull", "Pallof Press", "Dead Bug"],
+    },
+    cycling: {
+      // Max force + hip extension + unilateral pedaling symmetry
+      legs:  ["Back Squat", "Leg Press", "Romanian Deadlift", "Single-leg Deadlift", "Hip Thrust"],
+      lower: ["Back Squat", "Leg Press", "Single-leg Deadlift", "Hip Thrust", "Glute Bridge"],
+      full:  ["Back Squat", "Hip Thrust", "Plank", "Dead Bug", "Standing Calf Raise"],
+      upper: ["Bench Press", "Barbell Row", "Plank", "Dead Bug"],
+      push:  ["Bench Press", "Overhead Press", "Plank", "Dead Bug"],
+      pull:  ["Barbell Row", "Face Pull", "Plank", "Dead Bug"],
+    },
+    swimming: {
+      // Pull-dominant + shoulder stability + core anti-rotation
+      legs:  ["Back Squat", "Romanian Deadlift", "Walking Lunges", "Standing Calf Raise"],
+      lower: ["Back Squat", "Romanian Deadlift", "Walking Lunges", "Standing Calf Raise"],
+      full:  ["Lat Pulldown", "Face Pull", "Pallof Press", "Back Squat", "Tricep Pushdown"],
+      upper: ["Lat Pulldown", "Pull-up", "Face Pull", "Tricep Pushdown", "Pallof Press"],
+      push:  ["Overhead Press", "Tricep Pushdown", "Face Pull", "Pallof Press"],
+      pull:  ["Lat Pulldown", "Pull-up", "Face Pull", "Barbell Row", "Pallof Press"],
+    },
+    triathlon: {
+      // Blend: cycling legs + swim pull + running core/single-leg
+      legs:  ["Back Squat", "Romanian Deadlift", "Bulgarian Split Squat", "Hip Thrust", "Standing Calf Raise"],
+      lower: ["Back Squat", "Single-leg Deadlift", "Bulgarian Split Squat", "Hip Thrust", "Standing Calf Raise"],
+      full:  ["Back Squat", "Lat Pulldown", "Hip Thrust", "Pallof Press", "Dead Bug"],
+      upper: ["Lat Pulldown", "Pull-up", "Face Pull", "Pallof Press", "Dead Bug"],
+      push:  ["Overhead Press", "Push-up", "Face Pull", "Pallof Press", "Dead Bug"],
+      pull:  ["Lat Pulldown", "Pull-up", "Face Pull", "Pallof Press", "Dead Bug"],
+    },
+  };
+
+  // Role-specific exercise overlays. Applied by _applyStrengthRoleToSession
+  // before the generic rep/set rewrite so the athlete gets movements that
+  // match the role intent:
+  //   - injury_prevention: stability, glutes, band/bodyweight pulling, core
+  //     anti-rotation. NEVER heavy bench/squat as the primary slot (§2.5.3).
+  //   - minimal: pure bodyweight circuit (§2.5.3).
+  const _INJURY_PREV_EXERCISES = {
+    legs:  ["Glute Bridge", "Single-leg Deadlift", "Walking Lunges", "Standing Calf Raise", "Plank"],
+    lower: ["Glute Bridge", "Single-leg Deadlift", "Walking Lunges", "Standing Calf Raise", "Plank"],
+    full:  ["Glute Bridge", "Push-up", "Band Row", "Pallof Press", "Dead Bug"],
+    upper: ["Push-up", "Band Row", "Face Pull", "Pallof Press", "Dead Bug"],
+    push:  ["Push-up", "Band Row", "Face Pull", "Dead Bug"],
+    pull:  ["Band Row", "Face Pull", "Pallof Press", "Dead Bug"],
+  };
+  const _MINIMAL_EXERCISES = {
+    legs:  ["Bodyweight Squat", "Walking Lunges", "Glute Bridge", "Plank"],
+    lower: ["Bodyweight Squat", "Walking Lunges", "Glute Bridge", "Plank"],
+    full:  ["Bodyweight Squat", "Push-up", "Inverted Row", "Plank"],
+    upper: ["Push-up", "Inverted Row", "Pike Push-up", "Plank"],
+    push:  ["Push-up", "Pike Push-up", "Plank"],
+    pull:  ["Inverted Row", "Pull-up", "Plank"],
+  };
+
+  // Pick a single "sport bucket" for race_performance exercise overlay.
+  // Triathlon wins if present; otherwise the first endurance sport selected.
+  function _sportBucketForRacePerf(selectedSports) {
+    const sports = Array.isArray(selectedSports) ? selectedSports : [];
+    if (sports.includes("triathlon")) return "triathlon";
+    const set = new Set(sports);
+    const hasSwim = set.has("swim"), hasBike = set.has("bike"), hasRun = set.has("run");
+    if (hasSwim && hasBike && hasRun) return "triathlon";
+    if (hasRun) return "running";
+    if (hasBike) return "cycling";
+    if (hasSwim) return "swimming";
+    return null;
+  }
+
+  // Derive the training phase from (weekNumber, totalWeeks) for race-
+  // driven plans. Same breakpoints used by _renderPlanPreview's timeline
+  // so the generator and the preview agree on which phase a given week
+  // belongs to. Returns "base" | "build" | "peak" | "taper" | "race".
+  function _phaseForWeek(weekNumber, totalWeeks) {
+    if (!(totalWeeks > 1)) return "base";
+    const frac = (weekNumber - 1) / (totalWeeks - 1);
+    if (frac < 0.35) return "base";
+    if (frac < 0.70) return "build";
+    if (frac < 0.90) return "peak";
+    if (frac < 0.98) return "taper";
+    return "race";
+  }
+
+  // Apply the strength role to a generated session IN PLACE. Runs AFTER
+  // the base session.exercises array has been built (by ExerciseDB,
+  // slot template, or the hardcoded fallback). Adjusts session length,
+  // exercise count, and sets/reps per the role's parameters.
+  // For race_performance, also swaps exercise names to the sport-specific
+  // §8.5 list when one is available for the session's focus.
+  function _applyStrengthRoleToSession(session, focus, role, phaseKey, selectedSports) {
+    if (!session || !role || !_STRENGTH_ROLE_PARAMS[role]) return;
+    const p = _STRENGTH_ROLE_PARAMS[role];
+
+    // Session length — role overrides the generic planDetails.sessionLength
+    // because these sessions have a job (stability vs hypertrophy vs heavy
+    // compound) and the right duration differs per job.
+    session.duration = p.sessionLen;
+
+    // Rep range: race_performance varies by phase; others are phase-agnostic.
+    let primaryReps = p.primaryReps;
+    let accessoryReps = p.accessoryReps;
+    if (role === "race_performance") {
+      if (phaseKey === "build") {
+        primaryReps = p.buildPrimaryReps;
+        accessoryReps = p.buildAccessoryReps;
+      } else if (phaseKey === "peak" || phaseKey === "taper") {
+        primaryReps = p.peakPrimaryReps;
+        accessoryReps = p.peakAccessoryReps;
+      }
+    }
+
+    // Pick the correct exercise overlay for this role + focus. Each role
+    // has its own table (injury_prevention favors stability, minimal is
+    // pure bodyweight, race_performance follows §8.5 by sport). If no
+    // overlay matches, fall through and we just rewrite the existing
+    // exercises' reps/sets below.
+    let overlay = null;
+    if (role === "injury_prevention" && focus) {
+      overlay = _INJURY_PREV_EXERCISES[focus] || null;
+    } else if (role === "minimal" && focus) {
+      overlay = _MINIMAL_EXERCISES[focus] || null;
+    } else if (role === "race_performance" && focus) {
+      const bucket = _sportBucketForRacePerf(selectedSports);
+      overlay = bucket && _SPORT_STRENGTH_EXERCISES[bucket] && _SPORT_STRENGTH_EXERCISES[bucket][focus];
+    }
+    if (overlay && overlay.length) {
+      const _isBodyweightName = (n) => /plank|dead bug|pallof|glute bridge|push-up|pull-up|bodyweight|inverted row|pike|band|walking lunge|standing calf/i.test(n);
+      session.exercises = overlay.map((name, idx) => ({
+        name,
+        sets: idx === 0 ? p.primarySets : p.accessorySets,
+        reps: idx === 0 ? primaryReps : accessoryReps,
+        weight: (p.biasBodyweight || _isBodyweightName(name))
+          ? "Bodyweight"
+          : (typeof _suggestWeightForExercise === "function"
+              ? _suggestWeightForExercise(name, idx === 0 ? primaryReps : accessoryReps)
+              : ""),
+      }));
+    }
+
+    // Walk the exercises and rewrite sets/reps. Preserves names + weights
+    // that earlier layers (ExerciseDB or hardcoded templates) picked. For
+    // minimal role, also force weight to "Bodyweight" since the session
+    // is meant to be a bodyweight circuit.
+    if (Array.isArray(session.exercises) && session.exercises.length) {
+      session.exercises = session.exercises.map((ex, idx) => {
+        const isPrimary = idx === 0;
+        const newReps = isPrimary ? primaryReps : accessoryReps;
+        const newSets = isPrimary ? p.primarySets : p.accessorySets;
+        const newWeight = role === "minimal"
+          ? "Bodyweight"
+          : ex.weight;
+        return {
+          ...ex,
+          sets: newSets,
+          reps: newReps,
+          weight: newWeight,
+        };
+      });
+      // Trim to role's exercise count (keep the primary compound first).
+      if (session.exercises.length > p.exerciseCount) {
+        session.exercises = session.exercises.slice(0, p.exerciseCount);
+      }
+    }
+
+    // Stamp the role on the session so the calendar / editor can show it.
+    session.strengthRole = role;
+    session.load = p.loadLevel;
+  }
+
   // Canonical strength exercise templates keyed by focus. These are
   // hand-picked baseline splits — not prescriptive per-set loads, just
   // movement patterns so the materialized session has SOMETHING to do.
@@ -3741,7 +4208,7 @@
   // an enriched slot code (e.g. "run-interval", "strength-push") and
   // produces the matching rich session, including exercise templates
   // for strength variants so the card isn't empty on the calendar.
-  function _buildSessionForSport(code, dateStr, sessionLen, weekNumber, planId, idx) {
+  function _buildSessionForSport(code, dateStr, sessionLen, weekNumber, planId, idx, phaseKey) {
     const base = {
       id: planId + "-" + idx,
       date: dateStr,
@@ -3848,6 +4315,20 @@
     // id pattern; ob-v2 ids are planId-based, so without this the
     // focus would be null and the filter silently skipped.
     if (_strengthFocus) session.strengthFocus = _strengthFocus;
+
+    // Phase 2 — apply the hybrid strength role (§2.5.3 / §7.6 / §8.5) to
+    // any strength-family session. Role is set on the Goals screen for
+    // hybrid athletes; null for standalone strength or standalone endurance.
+    // When null, the session falls through with its default shape.
+    if (session.type === "weightlifting" && _state.strengthRole) {
+      _applyStrengthRoleToSession(
+        session,
+        _strengthFocus || "full",
+        _state.strengthRole,
+        phaseKey || "base",
+        _state.selectedSports || []
+      );
+    }
     return session;
   }
 
@@ -3982,7 +4463,7 @@
     Object.assign(window.OnboardingV2, {
       _bpBack,
       _toggleSport, _applySportSideEffects, _selectGym, _saveSportsAndContinue,
-      _toggleGoal, _saveGoalsAndContinue, _renderGoalCards,
+      _toggleGoal, _toggleStrengthRole, _addStrengthFromRecommendation, _saveGoalsAndContinue, _renderGoalCards,
       _updateRaceTypes, _updateWeeksCallout, _selectRaceGoal, _selectRacePriority, _applyRacePrioritySection, _applyRaceCategoryDefault, _selectLeadInPhase, _adjustLeadIn, _saveRaceAndContinue,
       _selectPlanOption, _setCustomDuration, _adjustDaysPerWeek, _setStartDate, _saveNoraceAndContinue,
       _renderThresholdSections, _toggleTestMe, _changeThresholdMethod, _saveThresholdsAndContinue, _testMeForEverythingAndContinue, _editThreshold,

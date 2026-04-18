@@ -141,8 +141,8 @@ The app classifies athletes into two types based on what sports/activities they 
 | Activities Selected | Athlete Type | Goal Flow |
 |--------------------|-------------|-----------|
 | Strength only (no endurance sports) | Standalone strength | Show strength goals |
-| Endurance only (running, cycling, swimming, triathlon — no strength) | Standalone endurance | Show endurance goals, auto-assign strength role = injury_prevention at minimal frequency |
-| Endurance + Strength | Hybrid | Show endurance goals, then ask strength role |
+| Endurance only (running, cycling, swimming, triathlon — no strength) | Standalone endurance | Show endurance goals + an "Add Strength" recommendation card. Strength is **not** auto-assigned; the athlete must accept the recommendation (which promotes them to hybrid) to get strength in the plan. |
+| Endurance + Strength | Hybrid | Show endurance goals AND a "Strength Goal" section (radio) on the same Goals screen |
 
 #### 2.5.1 Standalone Strength Goals
 
@@ -171,7 +171,7 @@ Shown when the athlete selects any endurance sport (running, cycling, swimming, 
 
 #### 2.5.3 Strength Role (Hybrid Athletes Only)
 
-When an athlete selects both endurance and strength, the app asks a second question: "What role does strength play for you?" This determines how strength sessions are programmed alongside endurance training.
+When an athlete selects both endurance and strength, the Goals screen shows a second section ("Strength Goal", radio-select — exactly one) below the endurance goals. This determines how strength sessions are programmed alongside endurance training. The athlete cannot continue without picking one.
 
 | UI Option | Internal Strength Role | Strength Frequency | Strength Focus | Rep Ranges |
 |-----------|----------------------|-------------------|---------------|-----------|
@@ -187,7 +187,7 @@ When an athlete selects both endurance and strength, the app asks a second quest
 - **hypertrophy:** Athlete wants visible muscle alongside endurance. Higher volume strength (more sets, 8–12 rep range), may need slight caloric surplus even with endurance goals. Recovery demand is high — monitor for overtraining. Cap endurance intensity on strength days.
 - **minimal:** Athlete doesn't want to lift. Include 1 bodyweight circuit per week for injury prevention (non-negotiable for runners), or skip strength entirely for cyclists/swimmers if athlete insists. Flag that skipping strength entirely increases injury risk.
 
-**If no strength was selected (standalone endurance):** Auto-assign `strength_role: "injury_prevention"` with 1 session per week. The athlete didn't ask for strength, but injury prevention is important enough to include by default. Make it short (20–30 min), bodyweight-friendly, and place it on an easy day.
+**If no strength was selected (standalone endurance):** Do NOT auto-assign strength. Instead the Goals screen surfaces an "Add Strength" recommendation card next to the endurance goals; if the athlete accepts, they get the hybrid flow (including the Strength Goal picker). If they skip, their plan has no strength sessions at all. Exception: see the fat_loss / cut floor in §2.5.5 — those goals still require a minimum of 2 strength sessions per week regardless, so the generator will add them even when the role picker was skipped.
 
 #### 2.5.4 Goal Modifiers — Training Emphasis
 
