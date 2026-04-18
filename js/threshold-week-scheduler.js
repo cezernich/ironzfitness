@@ -274,15 +274,25 @@
     { dayIdx: 6, type: "rest",     duration_min: 0,  intensity: "rest", note: "Rest" },
   ];
 
-  // Triathlete week. Tests on Thursday (swim CSS), Friday (bike FTP), Saturday (run 5K).
+  // Triathlete week. Tests spread across the week with a recovery day
+  // between each — three max-effort tests in a row (Thu/Fri/Sat) doesn't
+  // give the body time to adapt and makes the second and third tests
+  // artificially slow. Structure: test-recovery-test-recovery-test-rest.
+  //   Mon: easy_swim
+  //   Tue: swim_test       ← test 1
+  //   Wed: easy_bike       ← recovery from swim
+  //   Thu: bike_test       ← test 2
+  //   Fri: easy_run        ← recovery from bike
+  //   Sat: run_test        ← test 3
+  //   Sun: rest
   const TRIATHLON_WEEK = [
-    { dayIdx: 0, type: "easy_swim", duration_min: 30, intensity: "Z1", note: "Easy swim 30 min Z1" },
-    { dayIdx: 1, type: "easy_bike", duration_min: 45, intensity: "Z1", note: "Easy bike 45 min Z1" },
-    { dayIdx: 2, type: "easy_run",  duration_min: 30, intensity: "Z1", note: "Easy run 30 min Z1" },
-    { dayIdx: 3, type: "swim_test", duration_min: 40, intensity: "test", note: "CSS Test" },
-    { dayIdx: 4, type: "bike_test", duration_min: 45, intensity: "test", note: "FTP Test" },
+    { dayIdx: 0, type: "easy_swim", duration_min: 30, intensity: "Z1",   note: "Easy swim 30 min Z1" },
+    { dayIdx: 1, type: "swim_test", duration_min: 40, intensity: "test", note: "CSS Test" },
+    { dayIdx: 2, type: "easy_bike", duration_min: 45, intensity: "Z1",   note: "Easy bike 45 min Z1 (recovery from swim test)" },
+    { dayIdx: 3, type: "bike_test", duration_min: 45, intensity: "test", note: "FTP Test" },
+    { dayIdx: 4, type: "easy_run",  duration_min: 30, intensity: "Z1",   note: "Easy run 30 min Z1 (recovery from bike test)" },
     { dayIdx: 5, type: "run_test",  duration_min: 50, intensity: "test", note: "5K Time Trial" },
-    { dayIdx: 6, type: "rest",      duration_min: 0,  intensity: "rest", note: "Rest or 30 min easy spin" },
+    { dayIdx: 6, type: "rest",      duration_min: 0,  intensity: "rest", note: "Rest" },
   ];
 
   /**
