@@ -2190,14 +2190,45 @@
     const strengthOnly = sports.length > 0 && sports.every(s => s === "strength");
     // Mixed-sport users already answered days/week + session length
     // on bp-v2-3-norace. Re-ask them here would be repetitive, so
-    // pre-fill the strength-days counter from planDetails.daysPerWeek
-    // (if the user hasn't already set it on a previous trip through
-    // this screen) and pre-select the matching session-length chip.
-    // The chip row is still shown so the user can override — it just
-    // lands on the value they already picked.
+    // pre-fill the strength-days counter and session-length chip.
+    //
+    // Default strength days follow TRAINING_PHILOSOPHY:
+    //   - Strength-only: match planDays (strength IS the plan)
+    //   - Hybrid with a strengthRole picked (§2.5.3): use the role's cap
+    //       injury_prevention / race_performance: 2
+    //       hypertrophy: 3
+    //       minimal: 1
+    //   - Hybrid with an endurance race (§8.4 Base phase upper bound): 3
+    //     — capping here prevents the previous bug where a 5-day Ironman
+    //     athlete ended up with 5 strength sessions/week
+    //   - Otherwise: fall back to planDays
     if (!strengthOnly && _state._strengthSyncedFromPlan !== true) {
-      const planDays = parseInt(_state.planDetails.daysPerWeek, 10);
-      if (planDays > 0) _state.strengthSetup.sessionsPerWeek = Math.max(0, Math.min(7, planDays));
+      const planDays = parseInt(_state.planDetails.daysPerWeek, 10) || 0;
+      const role = _state.strengthRole;
+      const roleCap = {
+        injury_prevention: 2,
+        race_performance:  2,
+        hypertrophy:       3,
+        minimal:           1,
+      }[role];
+      const ENDURANCE_RACES = new Set([
+        "ironman", "halfIronman", "olympic", "sprint",
+        "marathon", "halfMarathon", "tenK", "fiveK",
+        "centuryRide", "granFondo",
+      ]);
+      const raceType = (_state.currentRace && _state.currentRace.type) || null;
+      const isEnduranceRace = raceType && ENDURANCE_RACES.has(raceType);
+
+      let defaultDays;
+      if (roleCap != null) {
+        defaultDays = roleCap;
+      } else if (isEnduranceRace) {
+        defaultDays = Math.min(3, planDays || 3);
+      } else {
+        defaultDays = planDays > 0 ? Math.min(7, planDays) : 3;
+      }
+      _state.strengthSetup.sessionsPerWeek = Math.max(0, defaultDays);
+
       const planLen = parseInt(_state.planDetails.sessionLength, 10);
       if (planLen > 0) _state.strengthSetup.sessionLength = planLen;
       _state._strengthSyncedFromPlan = true;
