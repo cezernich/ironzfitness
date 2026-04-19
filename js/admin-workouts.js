@@ -23,6 +23,39 @@
   };
   const PHASES = ["base", "build", "peak", "taper"];
 
+  // "By-design empty" matrix: phases where a given (sport, session_type)
+  // should never appear. The coverage matrix renders these as gray with a
+  // dash instead of red 0 so real gaps stand out. Also excluded from the
+  // "Coverage Gaps" count.
+  //
+  // Strength: all roles are never in Taper (§5b — strength drops to 0 in
+  // Taper). Run/bike quality work is never in Base (§4a Base is all Z1–Z2)
+  // and never in Taper (volume + intensity drop). Technique-ish sessions
+  // (easy, recovery, technique) stay available everywhere except Taper for
+  // the ones that would still fatigue a tapering athlete.
+  const NEVER_MATRIX = {
+    "run/tempo":      ["base", "taper"],
+    "run/vo2max":     ["base", "taper"],
+    "run/long":       ["taper"],
+    "run/race_pace":  ["base", "build", "taper"],
+    "run/strides":    ["taper"],
+    "bike/sweet_spot": ["base", "taper"],
+    "bike/threshold": ["base", "taper"],
+    "bike/intervals": ["base", "taper"],
+    "bike/long":      ["taper"],
+    "swim/technique": ["taper"],
+    "swim/threshold": ["base", "taper"],
+    "strength/injury_prevention": ["taper"],
+    "strength/race_performance":  ["taper"],
+    "strength/hypertrophy":       ["taper"],
+    "strength/minimal":           ["taper"],
+  };
+  function _isIntentionallyEmpty(sport, sessionType, phase) {
+    const key = `${sport}/${sessionType}`;
+    const neverPhases = NEVER_MATRIX[key];
+    return !!(neverPhases && neverPhases.includes(phase));
+  }
+
   // ── Load ──────────────────────────────────────────────────────────────────
 
   async function loadAdminWorkouts() {
@@ -60,15 +93,24 @@
     const total = _workouts.length;
     const published = _workouts.filter(w => w.status === "published").length;
     const draft = total - published;
-    // Coverage gap = (sport × session_type) cells with 0 published workouts
-    // across the canonical set. Signals where the admin needs to author more.
+    // Coverage gap = (sport × session_type × phase) cells with 0 published
+    // workouts, EXCLUDING cells flagged as intentionally empty in
+    // NEVER_MATRIX. Those "never" cells shouldn't count against the admin
+    // — they're by design.
     let gaps = 0;
     Object.keys(SESSION_TYPES_BY_SPORT).forEach(sport => {
       SESSION_TYPES_BY_SPORT[sport].forEach(stype => {
-        const count = _workouts.filter(w =>
-          w.sport === sport && w.session_type === stype && w.status === "published"
-        ).length;
-        if (count === 0) gaps++;
+        PHASES.forEach(phase => {
+          if (_isIntentionallyEmpty(sport, stype, phase)) return;
+          const count = _workouts.filter(w =>
+            w.sport === sport &&
+            w.session_type === stype &&
+            w.status === "published" &&
+            Array.isArray(w.phases) &&
+            w.phases.map(p => String(p).toLowerCase()).includes(phase)
+          ).length;
+          if (count === 0) gaps++;
+        });
       });
     });
     _setText("admin-workouts-total", total);
@@ -93,6 +135,11 @@
         html += `<tr><td style="text-align:left"><strong>${sport}</strong> / ${stype}</td>`;
         let rowTotal = 0;
         PHASES.forEach(phase => {
+          if (_isIntentionallyEmpty(sport, stype, phase)) {
+            // By-design empty cell — gray dash so real red gaps stand out.
+            html += `<td style="text-align:center;background:rgba(148,163,184,0.18);color:#64748b" title="By design — this session type should never appear in ${phase}">—</td>`;
+            return;
+          }
           const count = _workouts.filter(w =>
             w.sport === sport &&
             w.session_type === stype &&
