@@ -9241,24 +9241,52 @@ function getRestDayRecommendation(dateStr) {
     }
   }
 
-  // 3. Rating-based: if recent ratings are mostly hard/crushed.
-  //    Only consider ratings submitted within the last 10 days — old ratings
-  //    shouldn't keep triggering fatigue warnings after a break. Also skip
-  //    when today's session is already easy/rest, since the plan is already
-  //    giving recovery.
+  // 3. Rating-based: if RECENT workouts rated hard/crushed AND the athlete
+  //    isn't already recovering. Previously the window was 10 days, which
+  //    made "recent" meaningless — a hard week from a week and a half ago
+  //    kept telling a currently-resting athlete to rest. Now:
+  //      - Window tightened to 4 days (catches the current block, not old
+  //        ones).
+  //      - Suppress if today OR either of the last 2 days was rest/easy —
+  //        the athlete is already in recovery, the plan is doing its job.
+  //      - Require the MOST RECENT rating to be within the last 3 days
+  //        so a stale rating from before a break doesn't fire.
   const todayLoad = (todayData && todayData.planEntry && todayData.planEntry.load) || "";
   const todayIsEasy = todayLoad === "rest" || todayLoad === "easy" || todayLoad === "recovery" || todayTypes.length === 0;
-  if (!todayIsEasy && typeof loadWorkoutRatings === "function") {
+  // Look up yesterday + day-before from the already-built typesByDate +
+  // plan/schedule, treating "no session logged or planned" as recovery.
+  const _lookupLoad = (d) => {
+    const iso = localDateStr(d);
+    const pe = (typeof loadTrainingPlan === "function")
+      ? loadTrainingPlan().find(e => e.date === iso) : null;
+    if (pe) return pe.load || "";
+    const types = typesByDate[iso] || [];
+    return types.length ? "moderate" : "rest";
+  };
+  const yd = new Date(today);   yd.setDate(yd.getDate() - 1);
+  const dbd = new Date(today);  dbd.setDate(dbd.getDate() - 2);
+  const yLoad  = _lookupLoad(yd);
+  const dbLoad = _lookupLoad(dbd);
+  const alreadyRecovering =
+    todayIsEasy ||
+    yLoad === "rest" || yLoad === "easy" || yLoad === "recovery" ||
+    dbLoad === "rest" || dbLoad === "easy" || dbLoad === "recovery";
+  if (!alreadyRecovering && typeof loadWorkoutRatings === "function") {
     const ratings = loadWorkoutRatings();
     const cutoff = new Date(today);
-    cutoff.setDate(cutoff.getDate() - 10);
+    cutoff.setDate(cutoff.getDate() - 4);
     const cutoffIso = cutoff.toISOString();
+    const staleCutoff = new Date(today);
+    staleCutoff.setDate(staleCutoff.getDate() - 3);
+    const staleCutoffIso = staleCutoff.toISOString();
     const recentRatings = Object.values(ratings)
       .filter(r => r.date && r.date >= cutoffIso)
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 5);
     const hardCount = recentRatings.filter(r => r.rating >= 4).length;
-    if (recentRatings.length >= 3 && hardCount >= 3) {
+    const mostRecent = recentRatings[0];
+    const hasFreshSignal = mostRecent && mostRecent.date >= staleCutoffIso;
+    if (recentRatings.length >= 3 && hardCount >= 3 && hasFreshSignal) {
       recommendations.push({
         type: "fatigue",
         icon: "thermometer",
