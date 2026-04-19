@@ -9030,11 +9030,20 @@ function getRestDayRecommendation(dateStr) {
     }
   }
 
-  // 3. Rating-based: if recent ratings are mostly hard/crushed
-  if (typeof loadWorkoutRatings === "function") {
+  // 3. Rating-based: if recent ratings are mostly hard/crushed.
+  //    Only consider ratings submitted within the last 10 days — old ratings
+  //    shouldn't keep triggering fatigue warnings after a break. Also skip
+  //    when today's session is already easy/rest, since the plan is already
+  //    giving recovery.
+  const todayLoad = (todayData && todayData.planEntry && todayData.planEntry.load) || "";
+  const todayIsEasy = todayLoad === "rest" || todayLoad === "easy" || todayLoad === "recovery" || todayTypes.length === 0;
+  if (!todayIsEasy && typeof loadWorkoutRatings === "function") {
     const ratings = loadWorkoutRatings();
+    const cutoff = new Date(today);
+    cutoff.setDate(cutoff.getDate() - 10);
+    const cutoffIso = cutoff.toISOString();
     const recentRatings = Object.values(ratings)
-      .filter(r => r.date)
+      .filter(r => r.date && r.date >= cutoffIso)
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 5);
     const hardCount = recentRatings.filter(r => r.rating >= 4).length;
