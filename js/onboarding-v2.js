@@ -3063,7 +3063,17 @@
     try {
       const TZ = typeof window !== "undefined" ? window.TrainingZones : null;
       if (TZ) {
-        const thresholds = (_state.thresholds || {});
+        // Pull from localStorage.trainingZones (the Training Zones UI's
+        // actual store) plus legacy localStorage.thresholds. Falls back to
+        // _state.thresholds for flows that haven't flushed to storage yet.
+        let thresholds = {};
+        if (typeof TZ.loadFromStorage === "function") {
+          thresholds = TZ.loadFromStorage() || {};
+        }
+        if (_state.thresholds) {
+          // In-memory onboarding state can override when the user is mid-flow.
+          Object.assign(thresholds, _state.thresholds);
+        }
         const weightKg = _state.profile && _state.profile.weight
           ? Number(_state.profile.weight) * 0.453592
           : null;

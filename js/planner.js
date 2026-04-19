@@ -2153,7 +2153,13 @@ function _regeneratePlanForRace(race) {
     const raw = profile.fitnessLevel || profile.fitness_level || profile.experience_level || profile.level;
     if (raw) { _level = String(raw).toLowerCase(); _levelSource = "profile.fitnessLevel"; }
     if (typeof window !== "undefined" && window.TrainingZones) {
-      const thresholds = JSON.parse(localStorage.getItem("thresholds") || "{}") || {};
+      // Read from both localStorage.thresholds AND localStorage.trainingZones
+      // so pre-existing users (who entered their 5K via the Training Zones
+      // UI, which writes to trainingZones.running.referenceTime + vdot) get
+      // classified correctly instead of falling back to "intermediate".
+      const thresholds = typeof window.TrainingZones.loadFromStorage === "function"
+        ? window.TrainingZones.loadFromStorage()
+        : JSON.parse(localStorage.getItem("thresholds") || "{}") || {};
       const weightKg = profile.weight ? Number(profile.weight) * 0.453592 : null;
       const perSport = {
         run:  window.TrainingZones.classifyRunning(thresholds),
@@ -3865,6 +3871,66 @@ function _generateSingleRacePlan(race) {
   const config = RACE_CONFIGS[race.type];
   if (!config) return [];
 
+  // ── Diagnostic snapshot ────────────────────────────────────────────────────
+  // Logs what the generator can actually see at the moment it runs, so we
+  // can catch race conditions where the survey/onboarding hasn't persisted
+  // profile/thresholds/longDays/events before generation fires. If race.*
+  // fields disagree with localStorage.profile.*, the caller persisted late.
+  try {
+    const _snap = (() => {
+      let profile = {}, thresholds = {}, longDays = {}, events = [], schedule = [], template = null;
+      try { profile    = JSON.parse(localStorage.getItem("profile") || "{}") || {}; } catch {}
+      try { thresholds = JSON.parse(localStorage.getItem("thresholds") || "{}") || {}; } catch {}
+      try { longDays   = JSON.parse(localStorage.getItem("longDays") || "{}") || {}; } catch {}
+      try { events     = JSON.parse(localStorage.getItem("events") || "[]") || []; } catch {}
+      try { schedule   = JSON.parse(localStorage.getItem("workoutSchedule") || "[]") || []; } catch {}
+      try { template   = JSON.parse(localStorage.getItem("buildPlanTemplate") || "null"); } catch {}
+      return {
+        race: {
+          id: race.id, type: race.type, sport: race.sport, level: race.level,
+          daysPerWeek: race.daysPerWeek, preferredDays: race.preferredDays,
+          longDay: race.longDay, date: race.date, goal: race.goal,
+          hasPreferences: !!(race.preferences && race.preferences.weeklyTemplate),
+          prefDaysPerWeek: race.preferences && race.preferences.daysPerWeek,
+          prefLongDay: race.preferences && race.preferences.longDay,
+          prefTemplateDayCount: race.preferences && race.preferences.weeklyTemplate
+            ? Object.values(race.preferences.weeklyTemplate).filter(v => Array.isArray(v) && v.length).length
+            : 0,
+        },
+        localStorage: {
+          surveyComplete:       localStorage.getItem("surveyComplete"),
+          profileLevel:         profile.fitnessLevel || profile.fitness_level || profile.level || null,
+          profileDaysPerWeek:   profile.daysPerWeek == null ? null : profile.daysPerWeek,
+          profilePreferredDays: profile.preferredDays || null,
+          thresholdKeys:        Object.keys(thresholds),
+          longDays,
+          eventsCount:          Array.isArray(events) ? events.length : 0,
+          workoutScheduleCount: Array.isArray(schedule) ? schedule.length : 0,
+          buildPlanTemplateDayCount: template
+            ? Object.values(template).filter(v => Array.isArray(v) && v.length).length
+            : 0,
+        },
+      };
+    })();
+    console.log("[IronZ][plan-gen] generator input snapshot:", _snap);
+    // Staleness sanity-checks — yell if the generator is seeing defaults.
+    if (_snap.race.daysPerWeek && _snap.localStorage.profileDaysPerWeek != null
+        && Number(_snap.race.daysPerWeek) !== Number(_snap.localStorage.profileDaysPerWeek)) {
+      console.warn("[IronZ][plan-gen] race.daysPerWeek (" + _snap.race.daysPerWeek +
+        ") disagrees with profile.daysPerWeek (" + _snap.localStorage.profileDaysPerWeek +
+        ") — the survey/onboarding persisted profile AFTER calling the generator. Race object wins for this run.");
+    }
+    if (_snap.localStorage.surveyComplete !== "1") {
+      console.warn("[IronZ][plan-gen] surveyComplete = '" + _snap.localStorage.surveyComplete +
+        "' at generation time. Survey hasn't been marked complete yet — any downstream code that gates on surveyComplete will see the old value.");
+    }
+    if (!_snap.localStorage.thresholdKeys.length) {
+      console.warn("[IronZ][plan-gen] thresholds localStorage is empty at generation time — running zones / FTP / CSS will fall back to defaults. Survey zone writes may not have landed yet.");
+    }
+  } catch (e) {
+    console.warn("[IronZ][plan-gen] snapshot log failed:", e && e.message);
+  }
+
   const raceDate = new Date(race.date + "T00:00:00");
   const _today = new Date();
   _today.setHours(0, 0, 0, 0);
@@ -3983,7 +4049,16 @@ function _generateSingleRacePlan(race) {
   let _libLevel = "intermediate";
   let _libRaceGoal = race.goal || race.runGoal || null;
   const _libRecentIds = []; // grows as we pick workouts within this generation
-  try { _libThresholds = JSON.parse(localStorage.getItem("thresholds") || "{}") || {}; } catch {}
+  // Use loadFromStorage so we pick up the app's actual training-zones data
+  // (localStorage.trainingZones.running.referenceTime + vdot) not just a
+  // hypothetical localStorage.thresholds key.
+  try {
+    if (typeof window !== "undefined" && window.TrainingZones && window.TrainingZones.loadFromStorage) {
+      _libThresholds = window.TrainingZones.loadFromStorage();
+    } else {
+      _libThresholds = JSON.parse(localStorage.getItem("thresholds") || "{}") || {};
+    }
+  } catch {}
   try {
     if (typeof window !== "undefined" && window.TrainingZones) {
       _libZones = window.TrainingZones.computeAllZones(_libThresholds);

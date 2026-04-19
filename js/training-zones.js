@@ -179,10 +179,35 @@
   }
 
   // Classify athlete level from a threshold per §2a/§2b/§2c.
+  //
+  // Reads from multiple shapes so pre-existing users are classified
+  // correctly regardless of where their data lives:
+  //   - thresholds.running_5k                 (legacy/explicit shape)
+  //   - thresholds.vdot                        (Daniels VDOT — preferred)
+  //   - thresholds.referenceDist/referenceTime (the app's saved shape
+  //     under trainingZones.running — if referenceDist indicates 5K)
+  //
+  // VDOT, when available, wins: it's more accurate than re-deriving
+  // a level from raw race time (race-distance dependent).
   function classifyRunning(thresholds) {
-    const t = thresholds && thresholds.running_5k;
-    if (!t) return null;
-    const sec = _parseTime(t);
+    if (!thresholds) return null;
+    // 1. VDOT direct — Daniels scale. ≥48 advanced (~<20:30 5K),
+    //    37-48 intermediate, <37 beginner.
+    const vdot = Number(thresholds.vdot || thresholds.running_vdot || 0);
+    if (vdot > 0) {
+      if (vdot >= 48) return "advanced";
+      if (vdot >= 37) return "intermediate";
+      return "beginner";
+    }
+    // 2. Explicit 5K time
+    let sec = _parseTime(thresholds.running_5k || thresholds["5k"] || thresholds.fiveK);
+    // 3. App's training-zones shape: referenceDist/referenceTime pair
+    if (!sec && thresholds.referenceDist && thresholds.referenceTime) {
+      const d = String(thresholds.referenceDist).toLowerCase().replace(/\s+/g, "");
+      if (d === "5k" || d === "5km") sec = _parseTime(thresholds.referenceTime);
+      // Other distances — could convert via VDOT tables but we already
+      // handle VDOT above. Just require 5K here.
+    }
     if (!sec) return null;
     if (sec > 31 * 60) return "beginner";          // >31:00
     if (sec >= 23 * 60 + 20) return "intermediate"; // 23:20–31:00
@@ -190,7 +215,8 @@
   }
 
   function classifyCycling(thresholds, weightKg) {
-    const ftp = thresholds && (thresholds.cycling_ftp || thresholds.ftp);
+    if (!thresholds) return null;
+    const ftp = thresholds.cycling_ftp || thresholds.ftp;
     if (!ftp || !weightKg) return null;
     const wkg = Number(ftp) / Number(weightKg);
     if (wkg < 2.0) return "beginner";
@@ -199,13 +225,50 @@
   }
 
   function classifySwim(thresholds) {
-    const t = thresholds && (thresholds.swim_css || thresholds.css);
+    if (!thresholds) return null;
+    const t = thresholds.swim_css || thresholds.css;
     if (!t) return null;
     const sec = _parseTime(t);
     if (!sec) return null;
     if (sec > 2 * 60 + 30) return "novice";
     if (sec >= 1 * 60 + 45) return "intermediate";
     return "competitive";
+  }
+
+  // Normalize the various storage shapes into a single thresholds-like
+  // object. Pulls from BOTH localStorage.thresholds (legacy/explicit shape)
+  // AND localStorage.trainingZones (the actual app data). Either or both
+  // may be populated; this merges them with trainingZones winning when
+  // both exist (it's what the Training Zones UI writes on save).
+  function loadFromStorage() {
+    const out = {};
+    try {
+      const direct = JSON.parse((typeof localStorage !== "undefined" && localStorage.getItem("thresholds")) || "{}") || {};
+      if (direct.running_5k)  out.running_5k  = direct.running_5k;
+      if (direct.cycling_ftp) out.cycling_ftp = direct.cycling_ftp;
+      if (direct.swim_css)    out.swim_css    = direct.swim_css;
+      if (direct.vdot)        out.vdot        = direct.vdot;
+    } catch {}
+    try {
+      const tz = JSON.parse((typeof localStorage !== "undefined" && localStorage.getItem("trainingZones")) || "{}") || {};
+      // Running: prefer VDOT, fall back to referenceDist/referenceTime pair.
+      if (tz.running) {
+        if (tz.running.vdot) out.vdot = tz.running.vdot;
+        if (tz.running.referenceDist) out.referenceDist = tz.running.referenceDist;
+        if (tz.running.referenceTime) out.referenceTime = tz.running.referenceTime;
+      }
+      // Biking FTP
+      if (tz.biking && tz.biking.ftp) out.cycling_ftp = tz.biking.ftp;
+      // Swim CSS — app stores tPaceSec or tPaceStr under trainingZones.swimming.
+      if (tz.swimming) {
+        if (tz.swimming.tPaceStr) out.swim_css = tz.swimming.tPaceStr;
+        else if (tz.swimming.tPaceSec) {
+          const s = Math.floor(tz.swimming.tPaceSec);
+          out.swim_css = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+        }
+      }
+    } catch {}
+    return out;
   }
 
   // Overall level = highest of per-sport levels. "competitive" counts as
@@ -236,6 +299,7 @@
     classifyCycling,
     classifySwim,
     overallLevel,
+    loadFromStorage,
     _parseTime,
   };
 
