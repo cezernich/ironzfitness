@@ -236,56 +236,106 @@
   // .zone-1..zone-5 — so the preview matches the athlete-facing UI.
 
   // Sample athletes for the "Preview as" dropdown. Each supplies thresholds
-  // that TrainingZones uses to fill in real paces. VDOT numbers map to
-  // approximate 5K times via Daniels' tables.
-  const PREVIEW_PRESETS = {
-    beginner: {
-      label: "Beginner runner (VDOT 35 — ~26:30 5K)",
-      thresholds: { running_5k: "26:30" },
-      level: "beginner",
-      weight_lbs: 195,
+  // that TrainingZones uses to fill in real paces. Presets are sport-aware
+  // — a bike workout shouldn't advertise "Intermediate runner" in its
+  // preview picker. The running table uses VDOT → 5K time (Daniels), the
+  // cycling table uses FTP watts, and swimming uses CSS pace.
+  const PREVIEW_PRESET_TABLES = {
+    running: {
+      beginner:     { label: "Beginner runner (VDOT 35 — ~26:30 5K)",                    thresholds: { running_5k: "26:30" },                                   level: "beginner",     weight_lbs: 195 },
+      intermediate: { label: "Intermediate runner (VDOT 45 — ~21:30 5K)",                thresholds: { running_5k: "21:30" },                                   level: "intermediate", weight_lbs: 170 },
+      advanced:     { label: "Advanced runner (VDOT 50.8 — 19:40 5K)",                   thresholds: { running_5k: "19:40" },                                   level: "advanced",     weight_lbs: 165 },
     },
-    intermediate: {
-      label: "Intermediate runner (VDOT 45 — ~21:30 5K, FTP 220W, CSS 2:00)",
-      thresholds: { running_5k: "21:30", cycling_ftp: 220, swim_css: "2:00" },
-      level: "intermediate",
-      weight_lbs: 170,
+    cycling: {
+      beginner:     { label: "Beginner cyclist (FTP 160W)",                              thresholds: { cycling_ftp: 160 },                                       level: "beginner",     weight_lbs: 195 },
+      intermediate: { label: "Intermediate cyclist (FTP 220W)",                          thresholds: { cycling_ftp: 220 },                                       level: "intermediate", weight_lbs: 170 },
+      advanced:     { label: "Advanced cyclist (FTP 270W)",                              thresholds: { cycling_ftp: 270 },                                       level: "advanced",     weight_lbs: 165 },
     },
-    advanced: {
-      label: "Advanced runner (VDOT 50.8 — 19:40 5K, FTP 270W, CSS 1:45)",
-      thresholds: { running_5k: "19:40", cycling_ftp: 270, swim_css: "1:45" },
-      level: "advanced",
-      weight_lbs: 165,
+    swimming: {
+      beginner:     { label: "Beginner swimmer (CSS 2:15 /100m)",                        thresholds: { swim_css: "2:15" },                                       level: "beginner",     weight_lbs: 195 },
+      intermediate: { label: "Intermediate swimmer (CSS 2:00 /100m)",                    thresholds: { swim_css: "2:00" },                                       level: "intermediate", weight_lbs: 170 },
+      advanced:     { label: "Advanced swimmer (CSS 1:45 /100m)",                        thresholds: { swim_css: "1:45" },                                       level: "advanced",     weight_lbs: 165 },
+    },
+    triathlon: {
+      beginner:     { label: "Beginner triathlete (VDOT 35, FTP 160W, CSS 2:15)",        thresholds: { running_5k: "26:30", cycling_ftp: 160, swim_css: "2:15" }, level: "beginner",     weight_lbs: 195 },
+      intermediate: { label: "Intermediate triathlete (VDOT 45, FTP 220W, CSS 2:00)",    thresholds: { running_5k: "21:30", cycling_ftp: 220, swim_css: "2:00" }, level: "intermediate", weight_lbs: 170 },
+      advanced:     { label: "Advanced triathlete (VDOT 50.8, FTP 270W, CSS 1:45)",      thresholds: { running_5k: "19:40", cycling_ftp: 270, swim_css: "1:45" }, level: "advanced",     weight_lbs: 165 },
     },
   };
+  // Map a workout's `sport` field to the right preset table. Unknown sports
+  // fall back to the multi-sport triathlete set so zone substitution still
+  // finds the threshold it needs.
+  function _previewTableForSport(sport) {
+    const s = String(sport || "").toLowerCase();
+    if (s === "run"  || s === "running")   return PREVIEW_PRESET_TABLES.running;
+    if (s === "bike" || s === "cycling")   return PREVIEW_PRESET_TABLES.cycling;
+    if (s === "swim" || s === "swimming")  return PREVIEW_PRESET_TABLES.swimming;
+    return PREVIEW_PRESET_TABLES.triathlon;
+  }
   let _currentPreviewId = null;
   let _currentPreviewPreset = "advanced";
 
+  // Render the preview as a centered modal with a dimmed backdrop so the
+  // admin doesn't have to scroll to the bottom of a long workout list to
+  // see it. Backdrop click, ESC, or the Close button all dismiss it.
   function adminShowPreview(id) {
     const w = _workouts.find(x => x.id === id);
     if (!w) return;
     _currentPreviewId = id;
     const host = document.getElementById("admin-workout-preview-panel");
     if (!host) return;
-    host.style.display = "";
-    host.innerHTML = _renderPreviewPanel(w, _currentPreviewPreset);
-    host.scrollIntoView({ behavior: "smooth", block: "start" });
+    host.style.cssText = [
+      "display:flex",
+      "position:fixed",
+      "inset:0",
+      "background:rgba(15,23,42,0.55)",
+      "z-index:9000",
+      "align-items:flex-start",
+      "justify-content:center",
+      "padding:32px 16px",
+      "overflow-y:auto",
+    ].join(";");
+    host.setAttribute("role", "dialog");
+    host.setAttribute("aria-modal", "true");
+    host.innerHTML =
+      '<div class="admin-preview-modal" style="width:min(900px,100%);max-width:900px;background:transparent">' +
+        _renderPreviewPanel(w, _currentPreviewPreset) +
+      '</div>';
+    host.onclick = (e) => { if (e.target === host) adminHidePreview(); };
+    if (!host._escBound) {
+      host._escHandler = (e) => { if (e.key === "Escape" && host.style.display !== "none") adminHidePreview(); };
+      document.addEventListener("keydown", host._escHandler);
+      host._escBound = true;
+    }
   }
 
   function adminHidePreview() {
     _currentPreviewId = null;
     const host = document.getElementById("admin-workout-preview-panel");
-    if (host) { host.style.display = "none"; host.innerHTML = ""; }
+    if (host) {
+      host.style.display = "none";
+      host.innerHTML = "";
+      host.onclick = null;
+      if (host._escBound && host._escHandler) {
+        document.removeEventListener("keydown", host._escHandler);
+        host._escBound = false;
+        host._escHandler = null;
+      }
+    }
   }
 
   function adminSwitchPreviewPreset(key) {
-    if (!PREVIEW_PRESETS[key]) return;
+    // Validate against whatever preset table the current workout uses —
+    // keys are the same (beginner/intermediate/advanced) across sports,
+    // but a stale value from another sport should still resolve.
+    if (!["beginner", "intermediate", "advanced"].includes(key)) return;
     _currentPreviewPreset = key;
     if (_currentPreviewId) adminShowPreview(_currentPreviewId);
   }
 
   function _renderPreviewPanel(w, presetKey) {
-    const preset = PREVIEW_PRESETS[presetKey] || PREVIEW_PRESETS.advanced;
+    const table = _previewTableForSport(w.sport);
+    const preset = table[presetKey] || table.advanced;
     const zones = (global.TrainingZones && global.TrainingZones.computeAllZones(preset.thresholds)) || {};
 
     // Sport badge color — re-use existing discipline tint via inline style.
@@ -307,8 +357,8 @@
       : "—";
     const created = w.created_at ? new Date(w.created_at).toLocaleDateString() : "—";
 
-    const presetOpts = Object.keys(PREVIEW_PRESETS).map(k =>
-      `<option value="${k}" ${k === presetKey ? "selected" : ""}>${_escape(PREVIEW_PRESETS[k].label)}</option>`
+    const presetOpts = Object.keys(table).map(k =>
+      `<option value="${k}" ${k === presetKey ? "selected" : ""}>${_escape(table[k].label)}</option>`
     ).join("");
 
     return `

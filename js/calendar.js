@@ -4172,6 +4172,29 @@ function _generateWorkoutRationale(dateStr, discipline, load, sessionName, entry
     }
   }
 
+  // Strength sessions don't follow the easy/hard/long/moderate endurance
+  // framing — "Steady, controlled effort. Moderate days are where most of
+  // your fitness gets built" is endurance language that misdescribes a lift.
+  // Short-circuit strength here with lifting-specific framing (phase intent
+  // + weekly split from _strengthWeekContext) and skip the endurance
+  // branches below.
+  const isStrength =
+    discipline === "weightlifting" ||
+    discipline === "strength" ||
+    discipline === "bodyweight" ||
+    discipline === "hiit" ||
+    (entry && entry.type === "weightlifting");
+  if (isStrength) {
+    const phaseKey = String((entry && entry.phase) || "").toLowerCase();
+    if (phaseKey === "base" || phaseKey === "")          parts.push("Strength work in Base is about building the movement quality and load tolerance your sport-specific training will sit on top of — moderate weights, clean reps.");
+    else if (phaseKey === "build")                       parts.push("Strength in Build skews heavier and lower-rep — the goal is peak force expression that transfers to race-pace efforts.");
+    else if (phaseKey === "peak")                        parts.push("Strength is maintenance only in Peak — keep the neural pattern alive without adding fatigue that would compromise key sessions.");
+    else if (phaseKey === "taper" || phaseKey === "race") parts.push("Light lift or skip in Taper — preserve the stimulus memory without creating soreness or fatigue into race day.");
+    const split = _strengthWeekContext(dateStr, entry);
+    if (split) parts.push(split);
+    return parts.slice(0, 3).join(" ");
+  }
+
   // Part 2 — load-specific sentence, tailored to yesterday/tomorrow
   const dayMs = 86400000;
   const d = new Date(dateStr + "T12:00:00");
@@ -4197,12 +4220,8 @@ function _generateWorkoutRationale(dateStr, discipline, load, sessionName, entry
     parts.push("Steady, controlled effort. Moderate days are where most of your fitness gets built.");
   }
 
-  // Part 3 — strength split / weekly balance, or tomorrow preview
-  const isStrength = discipline === "weightlifting" || discipline === "bodyweight" || discipline === "hiit";
-  if (isStrength) {
-    const split = _strengthWeekContext(dateStr, entry);
-    if (split) parts.push(split);
-  } else if (neighbors.t && (neighbors.t.load === "hard" || neighbors.t.load === "long")) {
+  // Part 3 — tomorrow preview for endurance sessions
+  if (neighbors.t && (neighbors.t.load === "hard" || neighbors.t.load === "long")) {
     parts.push(`Tomorrow's ${_discLabel(neighbors.t.discipline || neighbors.t.type)} is a hard effort, so today is programmed to stay controlled.`);
   }
 
