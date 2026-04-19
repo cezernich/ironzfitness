@@ -2138,13 +2138,34 @@ function _regeneratePlanForRace(race) {
   // Determine the athlete's level once so both the distribution
   // aligner (Step 4) and the constraint validator (Step 5) see the
   // same classification.
+  //
+  // Priority order (best signal first):
+  //   1. Threshold-derived classification (5K time / FTP / CSS via
+  //      TrainingZones). Most accurate — an athlete with a 19:40 5K is
+  //      Advanced regardless of what "Beginner" button they tapped.
+  //   2. race.level (onboarding override for this specific race)
+  //   3. profile.fitnessLevel (legacy self-report)
+  //   4. Default: "intermediate"
   let _level = "intermediate";
+  let _levelSource = "default";
   try {
     const profile = JSON.parse(localStorage.getItem("profile") || "{}");
     const raw = profile.fitnessLevel || profile.fitness_level || profile.experience_level || profile.level;
-    if (raw) _level = String(raw).toLowerCase();
+    if (raw) { _level = String(raw).toLowerCase(); _levelSource = "profile.fitnessLevel"; }
+    if (typeof window !== "undefined" && window.TrainingZones) {
+      const thresholds = JSON.parse(localStorage.getItem("thresholds") || "{}") || {};
+      const weightKg = profile.weight ? Number(profile.weight) * 0.453592 : null;
+      const perSport = {
+        run:  window.TrainingZones.classifyRunning(thresholds),
+        bike: window.TrainingZones.classifyCycling(thresholds, weightKg),
+        swim: window.TrainingZones.classifySwim(thresholds),
+      };
+      const derived = window.TrainingZones.overallLevel(perSport);
+      if (derived) { _level = derived; _levelSource = "thresholds(" + Object.entries(perSport).filter(([,v])=>v).map(([k,v])=>`${k}=${v}`).join(",") + ")"; }
+    }
   } catch {}
-  if (race && race.level) _level = String(race.level).toLowerCase();
+  if (race && race.level) { _level = String(race.level).toLowerCase(); _levelSource = "race.level"; }
+  console.log("[IronZ] athlete level resolved to", _level, "via", _levelSource);
 
   // Rule Engine Step 4 — align session counts per week to the
   // phase's TRAINING_PHILOSOPHY.md §6.1/§6.2/§6.3 distribution.
@@ -2153,10 +2174,51 @@ function _regeneratePlanForRace(race) {
   // deload every 4th week).
   if (newEntries.length && typeof window !== "undefined" && window.PlanSessionDistribution) {
     try {
+      // Snapshot each week's session counts BEFORE alignment so the log
+      // below can show what the aligner added and why.
+      const _preByWeek = {};
+      newEntries.forEach(e => {
+        if (e.phase === "Race" || e.phase === "Race Week") return;
+        const wk = e.weekNumber;
+        if (!_preByWeek[wk]) _preByWeek[wk] = { phase: e.phase, counts: { swim: 0, bike: 0, run: 0, strength: 0, brick: 0 } };
+        const d = e.discipline === "weightlifting" ? "strength" : e.discipline;
+        if (_preByWeek[wk].counts[d] != null) _preByWeek[wk].counts[d]++;
+      });
+
       const summary = window.PlanSessionDistribution.applySessionDistribution(newEntries, race && race.type, _level);
+
+      // Snapshot AFTER so the diff per week is visible in devtools.
+      const _postByWeek = {};
+      newEntries.forEach(e => {
+        if (e.phase === "Race" || e.phase === "Race Week") return;
+        const wk = e.weekNumber;
+        if (!_postByWeek[wk]) _postByWeek[wk] = { phase: e.phase, counts: { swim: 0, bike: 0, run: 0, strength: 0, brick: 0 } };
+        const d = e.discipline === "weightlifting" ? "strength" : e.discipline;
+        if (_postByWeek[wk].counts[d] != null) _postByWeek[wk].counts[d]++;
+      });
+
       if (summary.added || summary.demoted) {
-        console.log("[IronZ] distribution aligner — added", summary.added, "sessions, demoted", summary.demoted, "across", summary.weeksChecked, "weeks");
+        console.log("[IronZ] distribution aligner — added", summary.added, "sessions, demoted", summary.demoted, "across", summary.weeksChecked, "weeks, doubled", summary.doubledWeeks || 0, "weeks");
       }
+      // Detailed per-week trace for the first 3 weeks so the user can see
+      // what target the aligner used and what it did. Full trace available
+      // via window._ironzLastDistributionTrace.
+      const sportProfile = window.PlanSessionDistribution.sportProfileForRaceType(race && race.type);
+      const dist = window.PlanSessionDistribution.PHASE_DISTRIBUTIONS[sportProfile] || {};
+      const trace = [];
+      Object.keys(_preByWeek).sort((a, b) => Number(a) - Number(b)).forEach(wk => {
+        const pre = _preByWeek[wk];
+        const post = _postByWeek[wk] || pre;
+        const target = dist[pre.phase] || null;
+        trace.push({ week: Number(wk), phase: pre.phase, target, before: pre.counts, after: post.counts });
+      });
+      if (typeof window !== "undefined") window._ironzLastDistributionTrace = { level: _level, levelSource: _levelSource, trace };
+      trace.slice(0, 3).forEach(t => {
+        const b = t.before, a = t.after, g = t.target || {};
+        console.log(
+          `[IronZ] week ${t.week} (${t.phase}) target swim:${g.swim||0} bike:${g.bike||0} run:${g.run||0} strength:${g.strength||0} | before swim:${b.swim} bike:${b.bike} run:${b.run} strength:${b.strength} | after swim:${a.swim} bike:${a.bike} run:${a.run} strength:${a.strength}`
+        );
+      });
     } catch (e) {
       console.warn("[IronZ] distribution aligner failed:", e && e.message);
     }
