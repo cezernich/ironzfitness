@@ -333,6 +333,125 @@
     if (_currentPreviewId) adminShowPreview(_currentPreviewId);
   }
 
+  // ── Timeline bar ──────────────────────────────────────────────────────────
+  // Horizontal stacked bar: warmup + main-set pieces + cooldown, each
+  // segment's width proportional to its minutes, colored by zone. Uses the
+  // same RGB palette as .zone-1 .. .zone-5 in style.css so admin preview
+  // matches the athlete-facing calendar.
+  const TIMELINE_ZONE_FILL = {
+    0: "rgba(124, 58, 237, 0.85)",   // strength — violet
+    1: "rgba(100, 116, 139, 0.85)",  // Z1 slate
+    2: "rgba(52, 211, 153, 0.85)",   // Z2 green
+    3: "rgba(245, 158, 11, 0.85)",   // Z3 amber
+    4: "rgba(248, 113, 113, 0.85)",  // Z4 red
+    5: "rgba(168, 85, 247, 0.85)",   // Z5 violet
+  };
+  // Parse duration strings like "8 min", "30 sec", "1.5 hr" into minutes.
+  function _parseDurMin(s) {
+    if (typeof s === "number") return s;
+    const str = String(s || "").trim();
+    const m = str.match(/(\d+(?:\.\d+)?)\s*(hr|h|min|m|sec|s)\b/i);
+    if (!m) return 0;
+    const v = parseFloat(m[1]);
+    const unit = m[2].toLowerCase();
+    if (unit.startsWith("h")) return v * 60;
+    if (unit.startsWith("s")) return v / 60;
+    return v;
+  }
+  // Midpoint of [lo, hi] or pass-through a scalar.
+  function _rangeMid(x) {
+    if (Array.isArray(x) && x.length === 2) return (Number(x[0]) + Number(x[1])) / 2;
+    return Number(x) || 0;
+  }
+  function _zoneNumPreview(zoneStr) {
+    const m = String(zoneStr || "").toUpperCase().match(/Z([1-5])/);
+    return m ? parseInt(m[1], 10) : 1; // unknown → Z1 (easiest safe default)
+  }
+  // Expand the workout into an ordered list of {label, zone, minutes} segments.
+  function _buildTimelineSegments(w) {
+    const segs = [];
+    if (w.warmup) {
+      const dur = _parseDurMin(w.warmup.duration_min) || 5;
+      segs.push({ label: "Warmup", zone: 1, minutes: dur });
+    }
+    const m = w.main_set || {};
+    if (m.type === "intervals" && m.intervals) {
+      const iv = m.intervals;
+      const reps = Math.round(_rangeMid(iv.reps)) || 1;
+      const work = _parseDurMin(iv.duration);
+      const rest = _parseDurMin(iv.rest);
+      const workZone = _zoneNumPreview(iv.zone);
+      for (let i = 0; i < reps; i++) {
+        if (work > 0) segs.push({ label: `Rep ${i + 1} — ${iv.zone || "work"}`, zone: workZone, minutes: work });
+        if (i < reps - 1 && rest > 0) segs.push({ label: "Rest jog", zone: 1, minutes: rest });
+      }
+    } else if (m.type === "continuous" && m.effort) {
+      const dur = _rangeMid(m.effort.duration_min);
+      const zone = _zoneNumPreview(m.effort.zone);
+      if (dur > 0) segs.push({ label: `Continuous ${m.effort.zone || ""}`.trim(), zone, minutes: dur });
+    } else if (m.type === "ladder" && Array.isArray(m.steps)) {
+      m.steps.forEach((s, i) => {
+        const dur = _parseDurMin(s.duration);
+        if (dur > 0) segs.push({ label: `Step ${i + 1} — ${s.zone || ""}`, zone: _zoneNumPreview(s.zone), minutes: dur });
+      });
+    } else if (m.type === "mixed" && Array.isArray(m.blocks)) {
+      m.blocks.forEach(b => {
+        const reps = Math.round(_rangeMid(b.reps)) || 1;
+        const work = _parseDurMin(b.duration_min) || _parseDurMin(b.duration);
+        const rest = _parseDurMin(b.rest);
+        const zone = _zoneNumPreview(b.zone);
+        for (let i = 0; i < reps; i++) {
+          if (work > 0) segs.push({ label: `${b.zone || "Block"}`, zone, minutes: work });
+          if (i < reps - 1 && rest > 0) segs.push({ label: "Rest", zone: 1, minutes: rest });
+        }
+      });
+    } else if (m.type === "strength" && Array.isArray(m.exercises)) {
+      // Strength circuits don't have zones; estimate 4 min/exercise (3 sets
+      // × ~40s work + rest) and render as one strength-colored block.
+      const est = (m.exercises.length || 1) * 4;
+      segs.push({ label: `Strength — ${m.exercises.length} exercises`, zone: 0, minutes: est });
+    }
+    if (w.cooldown) {
+      const dur = _parseDurMin(w.cooldown.duration_min) || 5;
+      segs.push({ label: "Cooldown", zone: 1, minutes: dur });
+    }
+    return segs;
+  }
+  function _buildTimelineBar(w) {
+    const segs = _buildTimelineSegments(w);
+    const total = segs.reduce((s, x) => s + x.minutes, 0);
+    if (!total) return "";
+
+    // Legend — only show zones actually present in this workout.
+    const zonesPresent = Array.from(new Set(segs.map(s => s.zone))).sort((a, b) => a - b);
+    const zoneLabel = { 0: "Strength", 1: "Z1", 2: "Z2", 3: "Z3", 4: "Z4", 5: "Z5" };
+    const legend = zonesPresent.map(z => `
+      <span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;font-size:0.78em;color:#475569">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${TIMELINE_ZONE_FILL[z] || TIMELINE_ZONE_FILL[1]}"></span>
+        ${zoneLabel[z] || ("Z" + z)}
+      </span>
+    `).join("");
+
+    const bars = segs.map(s => {
+      const pct = (s.minutes / total) * 100;
+      const fill = TIMELINE_ZONE_FILL[s.zone] || TIMELINE_ZONE_FILL[1];
+      const mins = Math.round(s.minutes * 10) / 10;
+      return `<div title="${_escape(s.label)} — ${mins} min" style="width:${pct}%;background:${fill};min-width:2px"></div>`;
+    }).join("");
+
+    return `
+      <div class="workout-timeline" style="margin:12px 0">
+        <div class="hint" style="font-size:0.78em;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center">
+          <span>Timeline (${Math.round(total)} min)</span>
+          <span>${legend}</span>
+        </div>
+        <div class="workout-timeline-bar" style="display:flex;height:22px;border-radius:6px;overflow:hidden;background:rgba(148,163,184,0.15)">
+          ${bars}
+        </div>
+      </div>
+    `;
+  }
+
   function _renderPreviewPanel(w, presetKey) {
     const table = _previewTableForSport(w.sport);
     const preset = table[presetKey] || table.advanced;
@@ -386,6 +505,8 @@
             ${presetOpts}
           </select>
         </div>
+
+        ${_buildTimelineBar(w)}
 
         <div class="workout-structure" style="margin-top:8px">
           ${warmup}
