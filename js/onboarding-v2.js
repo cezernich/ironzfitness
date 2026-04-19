@@ -2931,6 +2931,12 @@
     const target = PSD.getDistribution(sportProfile, "Base", level);
     if (!target) return;
 
+    // Log so devtools shows what the pre-fill decided. Mirrors the planner's
+    // "athlete level resolved to X via Y" trace so the two layers agree.
+    try {
+      console.log("[IronZ] pre-fill level=" + level + " sport=" + sportProfile + " target Base:", target);
+    } catch {}
+
     // Count what the template already has, keyed by "canonical" discipline.
     const bucketOf = (code) => {
       const c = String(code || "").toLowerCase();
@@ -2969,6 +2975,11 @@
       if (idx === 0 && _BP_DAYS.length > 1) preRestDays.add(_BP_DAYS[_BP_DAYS.length - 1]);
     });
     const isEmpty = (d) => (_state.schedule[d] || []).length === 0;
+    // "Rest-like" = the day provides rest, either implicitly (no sessions)
+    // or explicitly (user marked it Rest). Both count toward the ≥1 rest
+    // day preservation rule, so a week with Mon marked Rest AND Fri empty
+    // can fill Fri without violating the rest-day floor.
+    const isRestLike = (d) => isEmpty(d) || isRestDay(d);
 
     // Add one session of `disc` as a single-day entry if an empty non-last-
     // rest slot exists, or as a double via the aligner's rules. Returns
@@ -2976,9 +2987,12 @@
     let doublesUsed = 0;
     const placeOne = (disc) => {
       const code = disc === "strength" ? "strength-full" : disc;
-      // 1) Prefer an empty day, but keep at least 1 rest day available.
+      // 1) Prefer an empty day, but keep at least 1 rest-like day (empty
+      //    or rest-marked) untouched. Never fill a day the user explicitly
+      //    marked Rest — that's their stated choice.
       const empties = _BP_DAYS.filter(d => isEmpty(d));
-      if (empties.length > 1) {
+      const restLikeCount = _BP_DAYS.filter(isRestLike).length;
+      if (empties.length > 0 && restLikeCount > 1) {
         // Prefer mid-week slots; skip days already carrying an adjacent
         // same-discipline session to avoid stacking.
         const hasDisc = (d, disc) => (_state.schedule[d] || []).some(c => bucketOf(c) === disc);
