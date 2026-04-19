@@ -1563,6 +1563,112 @@ function scaleSessionDuration(session, targetDuration) {
   };
 }
 
+// Convert a library workout (warmup / main_set / cooldown) into the
+// session.steps shape buildStepsList expects. Returns null if the library
+// workout's main_set is a shape we can't flatten (e.g. strength — handled
+// by the strength render branch separately). Supports the library's four
+// endurance main_set types: continuous, intervals, ladder, mixed.
+function _librarySessionSteps(lib) {
+  if (!lib || !lib.main_set) return null;
+  const ms = lib.main_set;
+  if (ms.type === "strength") return null;
+  const _zoneNum = z => {
+    if (typeof z === "number") return z;
+    if (!z) return 2;
+    const m = String(z).match(/\d+/);
+    return m ? Number(m[0]) : 2;
+  };
+  const _pickDur = (v) => {
+    if (Array.isArray(v) && v.length === 2) return Math.round((v[0] + v[1]) / 2);
+    if (typeof v === "number") return v;
+    if (typeof v === "string") {
+      const m = v.match(/\d+/);
+      return m ? Number(m[0]) : 0;
+    }
+    return 0;
+  };
+
+  const steps = [];
+  if (lib.warmup) {
+    steps.push({
+      type: "warmup",
+      duration: Number(lib.warmup.duration_min) || 10,
+      zone: 1,
+      label: lib.warmup.description || "Easy warm-up",
+    });
+  }
+
+  if (ms.type === "continuous" && ms.effort) {
+    steps.push({
+      type: "main",
+      duration: _pickDur(ms.effort.duration_min_actual || ms.effort.duration_min),
+      zone: _zoneNum(ms.effort.zone),
+      label: ms.description || ms.effort.description || ("Continuous at " + (ms.effort.zone || "Z2")),
+    });
+  } else if (ms.type === "intervals" && ms.intervals) {
+    const iv = ms.intervals;
+    const reps = Array.isArray(iv.reps_actual) ? Math.round((iv.reps_actual[0] + iv.reps_actual[1]) / 2)
+               : Array.isArray(iv.reps)        ? Math.round((iv.reps[0] + iv.reps[1]) / 2)
+               : (iv.reps || 1);
+    const dur = _pickDur(iv.duration);
+    const rest = _pickDur(iv.rest);
+    steps.push({
+      type: "main",
+      duration: dur,
+      zone: _zoneNum(iv.zone),
+      reps,
+      rest,
+      label: ms.description || ("Interval at " + (iv.zone || "Z4")),
+    });
+  } else if (ms.type === "ladder" && Array.isArray(ms.steps)) {
+    ms.steps.forEach(s => {
+      steps.push({
+        type: "main",
+        duration: _pickDur(s.duration || s.duration_min),
+        zone: _zoneNum(s.zone),
+        label: s.description || (s.zone + " step"),
+      });
+    });
+  } else if (ms.type === "mixed" && Array.isArray(ms.blocks)) {
+    ms.blocks.forEach(b => {
+      const reps = Array.isArray(b.reps_actual) ? Math.round((b.reps_actual[0] + b.reps_actual[1]) / 2)
+                 : Array.isArray(b.reps)        ? Math.round((b.reps[0] + b.reps[1]) / 2)
+                 : (b.reps || null);
+      const dur = _pickDur(b.duration_min_actual || b.duration_min || b.duration);
+      const entry = {
+        type: "main",
+        duration: dur,
+        zone: _zoneNum(b.zone),
+        label: b.description || (b.zone + " block"),
+      };
+      if (reps && reps > 1) {
+        entry.reps = reps;
+        if (b.rest) entry.rest = _pickDur(b.rest);
+      }
+      steps.push(entry);
+    });
+  } else {
+    // Unknown shape — fall back so the generic template renders.
+    return null;
+  }
+
+  if (lib.cooldown) {
+    steps.push({
+      type: "cooldown",
+      duration: Number(lib.cooldown.duration_min) || 5,
+      zone: 1,
+      label: lib.cooldown.description || "Easy cool-down",
+    });
+  }
+
+  const total = steps.reduce((s, st) => s + (st.duration * (st.reps || 1)) + ((st.rest || 0) * Math.max(0, (st.reps || 1) - 1)), 0);
+  return {
+    name: lib.libraryName || "Workout",
+    duration: lib.duration_min || total,
+    steps,
+  };
+}
+
 function buildStepsList(session, discipline) {
   // Load zones for the relevant sport from the unified trainingZones key
   let zones = null;
@@ -3368,6 +3474,16 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
           duration: targetDuration || p.duration || _totalMin,
           steps: _steps,
         };
+      } else if (p.libraryWorkout && p.libraryWorkout.main_set
+                 && p.discipline !== "strength"
+                 && _librarySessionSteps(p.libraryWorkout)) {
+        // The plan pulled a parameterized workout from the library but the
+        // renderer was still reading SESSION_DESCRIPTIONS / SESSION_VARIANTS,
+        // so a title like "Long Run with Race-Pace Finish" rendered with the
+        // generic "Z2 throughout" main set and the race-pace block silently
+        // disappeared. Build the session steps from the library's actual
+        // main_set (+warmup/cooldown) when one is attached.
+        rawSession = _librarySessionSteps(p.libraryWorkout);
       } else {
         rawSession = (typeof getSessionTemplate === "function"
                        ? (getSessionTemplate(p.discipline, effectLoad, p.weekNumber, dateStr)
