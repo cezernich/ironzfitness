@@ -472,8 +472,20 @@
   // ─── Progressive overload ───────────────────────────────────────────────────
   // Long run / long ride duration scales with weekInPhase. Deload week 4
   // of a 4-week mesocycle drops to ~65% of prior week's long session.
-  // 10% weekly build cap (§4.1).
-  function applyProgressiveOverload(weekGroups, plan) {
+  // Per-level weekly build cap — §0.3 of the master spec:
+  //   Beginner / Intermediate → 10%
+  //   Advanced                → 15%
+  //   Never exceed 15%.
+  // The cap applies to BOTH each individual long session week-over-week AND
+  // (downstream, in applyWeeklyVolumeCap) the weekly total minutes.
+  function _weeklyVolumeCap(athleteLevel) {
+    const lvl = String(athleteLevel || "intermediate").toLowerCase();
+    if (lvl === "advanced" || lvl === "elite") return 0.15;
+    return 0.10;
+  }
+
+  function applyProgressiveOverload(weekGroups, plan, athleteLevel) {
+    const cap = _weeklyVolumeCap(athleteLevel);
     // Index weeks by phase name → ordered list of week keys so we can tell
     // week-in-phase position (1-indexed, 1..phaseLen).
     const byPhase = {};
@@ -485,22 +497,105 @@
     });
     Object.values(byPhase).forEach(weeks => weeks.sort((a, b) => a.mondayStr.localeCompare(b.mondayStr)));
 
+    // Key a long session by discipline so we can clamp week N's long run
+    // against week N-1's long run (not against last week's long ride).
+    const longKey = e => e && e.discipline;
+
     Object.entries(byPhase).forEach(([phaseName, weeks]) => {
+      // Remember the prior week's long-session duration per discipline so
+      // library swaps can be clamped — previously each week reset its own
+      // _baseDuration and a swapped-in 160-min workout would overwrite a
+      // 105-min workout from the prior week (52% jump, violates cap).
+      const priorLongByDisc = {};
       weeks.forEach((wk, idx) => {
         const weekInPhase = idx + 1;
-        // Deload: every 4th week within a phase. Only applies when phase is
-        // long enough for it to matter.
         const isDeload = (weekInPhase % 4 === 0) && weeks.length >= 4;
-        const factor = isDeload ? 0.65 : 1 + (0.10 * (weekInPhase - 1));
+        const factor = isDeload ? 0.65 : 1 + (cap * (weekInPhase - 1));
 
         wk.entries.forEach(e => {
           if (!e || typeof e.duration !== "number") return;
           if (e.load !== "long") return;            // only scale keystone long sessions
+          const disc = longKey(e);
           const base = e._baseDuration != null ? e._baseDuration : e.duration;
           e._baseDuration = base;                   // remember for re-runs
-          e.duration = Math.round(base * factor / 5) * 5;
+          // Phase ramp from the first-week base.
+          let target = Math.round(base * factor / 5) * 5;
+          // Library-swap clamp: if a different template got picked this week
+          // and its duration (after ramp) would exceed the prior week's long
+          // session by more than the per-level cap, clamp it down. Prevents
+          // the 105→160 jump the user caught between Week 1 and Week 2.
+          const prior = priorLongByDisc[disc];
+          if (prior && !isDeload) {
+            const ceiling = Math.round(prior * (1 + cap) / 5) * 5;
+            if (target > ceiling) {
+              e._libraryClamped = { from: target, to: ceiling, prior, cap };
+              target = ceiling;
+            }
+          }
+          e.duration = target;
+          priorLongByDisc[disc] = target;
           if (isDeload) e.isDeload = true;
         });
+      });
+    });
+  }
+
+  // ─── Weekly total volume cap ───────────────────────────────────────────────
+  // Second pass after progressive overload: walks phases week-by-week and
+  // enforces "this week's total minutes ≤ prior week's total × (1 + cap)".
+  // Deload weeks are allowed to drop below the cap without triggering. When
+  // a week exceeds the ceiling we scale DOWN this week's non-key sessions
+  // (easy / moderate, in that order) proportionally until the total fits.
+  // Key sessions (long, hard) are protected so we don't silently strip the
+  // quality work that makes the week worth doing.
+  function applyWeeklyVolumeCap(weekGroups, athleteLevel) {
+    const cap = _weeklyVolumeCap(athleteLevel);
+    // Group by phase so we only compare within the same phase.
+    const byPhase = {};
+    Object.entries(weekGroups).forEach(([mondayStr, g]) => {
+      const phaseName = (g.entries[0] && g.entries[0].phase) || null;
+      if (!phaseName) return;
+      if (!byPhase[phaseName]) byPhase[phaseName] = [];
+      byPhase[phaseName].push({ mondayStr, entries: g.entries });
+    });
+    Object.values(byPhase).forEach(weeks => weeks.sort((a, b) => a.mondayStr.localeCompare(b.mondayStr)));
+
+    const weekTotal = entries =>
+      entries.reduce((s, e) => s + (typeof e.duration === "number" ? e.duration : 0), 0);
+
+    Object.values(byPhase).forEach(weeks => {
+      let priorTotal = null;
+      weeks.forEach((wk, idx) => {
+        const weekInPhase = idx + 1;
+        const isDeload = (weekInPhase % 4 === 0) && weeks.length >= 4;
+        const total = weekTotal(wk.entries);
+        if (priorTotal != null && !isDeload) {
+          const ceiling = priorTotal * (1 + cap);
+          if (total > ceiling) {
+            // How much to shave off this week, preserving key sessions.
+            const overage = total - ceiling;
+            // Pool of "soft" sessions we can trim, easy first then moderate.
+            const trimmable = wk.entries
+              .filter(e => typeof e.duration === "number" && e.duration > 0 && e.load !== "long" && e.load !== "hard" && e.load !== "rest")
+              .sort((a, b) => {
+                const rank = { easy: 0, recovery: 0, strides: 1, moderate: 2 };
+                return (rank[a.load] || 3) - (rank[b.load] || 3);
+              });
+            const trimmableTotal = trimmable.reduce((s, e) => s + e.duration, 0);
+            if (trimmableTotal > 0) {
+              // Proportional scale-down. Cap at 40% cut per session so we
+              // don't gut a session entirely — if that still doesn't fit,
+              // the leftover overage is logged but accepted.
+              const scale = Math.max(0.60, 1 - (overage / trimmableTotal));
+              trimmable.forEach(e => {
+                e._preCapDuration = e._preCapDuration != null ? e._preCapDuration : e.duration;
+                e.duration = Math.max(10, Math.round(e.duration * scale / 5) * 5);
+                e._weeklyCapScaled = true;
+              });
+            }
+          }
+        }
+        priorTotal = weekTotal(wk.entries);
       });
     });
   }
@@ -569,9 +664,16 @@
       if (weekCtx.doublesUsedRef.n > 0) doubledWeeks++;
     });
 
-    // After counts are aligned, apply progressive overload to long sessions.
+    // After counts are aligned, apply progressive overload to long sessions
+    // (now level-aware: 10% cap for Beginner/Intermediate, 15% for Advanced,
+    // with library-swap clamping against the prior week's long duration).
     const regroupedAfterAdd = groupByWeek(plan);
-    applyProgressiveOverload(regroupedAfterAdd, plan);
+    applyProgressiveOverload(regroupedAfterAdd, plan, athleteLevel);
+
+    // Final pass: enforce the same per-level cap on each week's total
+    // minutes. Without this, a collection of valid per-session durations
+    // can still compound into a >10% weekly jump.
+    applyWeeklyVolumeCap(regroupedAfterAdd, athleteLevel);
 
     // Sort plan by date for stable downstream processing.
     plan.sort((a, b) => a.date.localeCompare(b.date));

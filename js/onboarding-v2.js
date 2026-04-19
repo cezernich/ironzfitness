@@ -338,6 +338,10 @@
         _BP_DAYS.forEach(d => {
           _state.schedule[d] = Array.isArray(tpl[d]) ? tpl[d].slice() : [];
         });
+        // A saved template means the user already committed edits once —
+        // treat the re-open as "already touched" so long-day tweaks don't
+        // wipe their prior composition.
+        _state._scheduleTouched = true;
       }
     } catch {}
     _state.thresholds = _loadExistingThresholds();
@@ -483,6 +487,10 @@
     _state.longDays = { longRun: null, longRide: null };
     _state.schedule = { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] };
     _state._editingPlanId = null;
+    // Reset the "user touched the schedule chips" flag so a fresh Build
+    // Plan run starts clean. Flipped true by any chip add/remove/drag so
+    // _saveLongDaysAndContinue knows to preserve (not wipe) user edits.
+    _state._scheduleTouched = false;
     // Re-pre-fill strength setup from plan details on the next
     // visit to bp-v2-6 (one-shot flag so the user's manual tweaks
     // aren't clobbered mid-flow).
@@ -2531,15 +2539,52 @@
     // localStorage["longDays"] and anchor long run / long ride placement
     // to these days.
     _lsSet("longDays", _state.longDays);
-    // Changing long-day anchors means "redistribute the week around
-    // these days" — clear the schedule so _renderSchedule re-seeds
-    // from scratch against the new anchors. Without this, a prior
-    // Schedule visit leaves chips on the old long days and the new
-    // picks get ignored (or, worse, stacked on top of existing
-    // weekday sessions).
-    _BP_DAYS.forEach(d => { _state.schedule[d] = []; });
+    // If the user has not manually edited the Schedule yet, wipe and let
+    // _renderSchedule re-seed against the new long-day anchors. If they
+    // HAVE touched the schedule (added a Monday chip, moved a session,
+    // etc.), preserve their edits and only move the long chips — per
+    // the spec's §6 Explicit Day Preservation row, user-placed sessions
+    // are never overwritten by the distribution pass.
+    if (!_state._scheduleTouched) {
+      _BP_DAYS.forEach(d => { _state.schedule[d] = []; });
+    } else {
+      _reconcileLongDayPlacement();
+    }
     goTo("bp-v2-5");
     _renderSchedule();
+  }
+
+  // Move run-long / bike-long chips to the currently-selected long days
+  // without disturbing the rest of the week. Called when the user tweaks
+  // the long-day picker after manually editing the Schedule screen.
+  function _reconcileLongDayPlacement() {
+    const pairs = [
+      { code: "run-long",  target: _state.longDays && _state.longDays.longRun },
+      { code: "bike-long", target: _state.longDays && _state.longDays.longRide },
+    ];
+    pairs.forEach(({ code, target }) => {
+      if (!target) return;
+      let found = false;
+      _BP_DAYS.forEach(d => {
+        const slots = _state.schedule[d] || [];
+        const idx = slots.indexOf(code);
+        if (idx === -1) return;
+        if (d === target) { found = true; return; }
+        slots.splice(idx, 1);
+      });
+      if (!found) {
+        const targetSlots = _state.schedule[target] || (_state.schedule[target] = []);
+        if (!targetSlots.includes(code)) targetSlots.push(code);
+      }
+    });
+  }
+
+  // Flip the "user touched the schedule" flag from every mutation path
+  // that represents an explicit edit (chip add, chip remove, subtype
+  // swap, drag-drop). Read by _saveLongDaysAndContinue to decide
+  // whether to wipe-and-reseed or preserve the user's edits.
+  function _markScheduleTouched() {
+    _state._scheduleTouched = true;
   }
 
   const _BP_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -2867,11 +2912,31 @@
     const currentRest = _BP_DAYS.filter(isRestDay).length;
 
     if (currentRest < restNeeded) {
-      // Carve rest days from the lightest non-long days.
+      // Carve rest days from the lightest non-long days. Sort priority:
+      //   1. Fewer chips first (lightest day sheds least training stimulus).
+      //   2. Adjacent-to-long next (§4.3 / spec §6 — rest flanking a long
+      //      session serves a real recovery purpose; carving random mid-week
+      //      days fragments the training block for no benefit).
+      //   3. Later-in-week as the final tiebreak so we prefer Sunday over
+      //      Monday when all else is equal — Monday is disproportionately
+      //      often a day the athlete intends to train, and "lightest +
+      //      earliest" was silently overwriting it.
       const isLongDay = d => _state.schedule[d].includes("run-long") || _state.schedule[d].includes("bike-long");
+      const longDays = _BP_DAYS.filter(isLongDay);
+      const adjacentToLong = d => longDays.some(ld => _areAdjacentDow(d, ld));
+      const dowIdx = d => _BP_DAYS.indexOf(d);
       const carveCandidates = _BP_DAYS
         .filter(d => !isRestDay(d) && !isLongDay(d))
-        .sort((a, b) => _state.schedule[a].length - _state.schedule[b].length);
+        .sort((a, b) => {
+          const la = _state.schedule[a].length;
+          const lb = _state.schedule[b].length;
+          if (la !== lb) return la - lb;
+          const aa = adjacentToLong(a) ? 0 : 1;
+          const ab = adjacentToLong(b) ? 0 : 1;
+          if (aa !== ab) return aa - ab;
+          // Later in week wins (higher idx scored lower).
+          return dowIdx(b) - dowIdx(a);
+        });
       const toCarve = Math.min(restNeeded - currentRest, carveCandidates.length);
       for (let i = 0; i < toCarve; i++) {
         _state.schedule[carveCandidates[i]] = ["rest"];
@@ -3153,13 +3218,14 @@
   function _removeSlotAt(day, idx) {
     if (!Array.isArray(_state.schedule[day])) return;
     _state.schedule[day].splice(idx, 1);
+    _markScheduleTouched();
     _renderSchedule();
   }
   // Back-compat wrapper: delete first occurrence by sport name.
   function _removeSlot(day, sport) {
     const arr = _state.schedule[day] || [];
     const idx = arr.indexOf(sport);
-    if (idx >= 0) { arr.splice(idx, 1); _renderSchedule(); }
+    if (idx >= 0) { arr.splice(idx, 1); _markScheduleTouched(); _renderSchedule(); }
   }
 
   // Subtype picker catalog — when the user taps an existing chip
@@ -3202,6 +3268,7 @@
   function _pickSlotSubtype(day, slotIdx, enrichedCode) {
     if (!Array.isArray(_state.schedule[day])) return;
     _state.schedule[day][slotIdx] = enrichedCode;
+    _markScheduleTouched();
     _closeAddSlotPicker();
     _renderSchedule();
   }
@@ -3239,6 +3306,7 @@
   }
   function _pickAddSlot(day, sport) {
     _addSlotToDay(day, sport);
+    _markScheduleTouched();
     _closeAddSlotPicker();
     _renderSchedule();
   }
@@ -3304,6 +3372,7 @@
     if (from[payload.idx] !== payload.sport) return;
     from.splice(payload.idx, 1);
     _addSlotToDay(targetDay, payload.sport);
+    _markScheduleTouched();
     _renderSchedule();
   }
   function _saveScheduleAndContinue() {

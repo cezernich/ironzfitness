@@ -2010,6 +2010,57 @@ const SURVEY_DOW_MAP = {
 };
 
 function submitSurveyPlan() {
+  // Persist the survey answers to localStorage BEFORE the plan generator
+  // runs. Previously these writes happened inside finish() which was called
+  // AFTER generateTrainingPlan, so the generator (and downstream modules —
+  // classifier, distribution aligner, library lookup) saw stale or default
+  // profile/threshold/surveyComplete values. For the race path the race
+  // object carries the critical fields directly, but non-race flows read
+  // profile.daysPerWeek / profile.preferredDays from localStorage and were
+  // getting the previous session's values.
+  try {
+    const profile = JSON.parse(localStorage.getItem("profile")) || {};
+    profile.daysPerWeek = surveyData.daysPerWeek;
+    if (Array.isArray(surveyData.preferredDays) && surveyData.preferredDays.length > 0) {
+      profile.preferredDays = surveyData.preferredDays.slice();
+    }
+    if (surveyData.level) profile.fitnessLevel = surveyData.level;
+    localStorage.setItem("profile", JSON.stringify(profile));
+    if (typeof DB !== "undefined") DB.profile.save(profile).catch(() => {});
+  } catch { /* ignore */ }
+  localStorage.setItem("surveyComplete", "1");
+  if (typeof DB !== "undefined") DB.syncKey("surveyComplete");
+  // Zones are written pre-gen too so the generator's threshold-derived
+  // level classification (run/bike/swim) uses the values the athlete
+  // just entered instead of whatever was cached from the last session.
+  try {
+    if (surveyData.zones && Object.keys(surveyData.zones).length > 0) {
+      const z = surveyData.zones;
+      if (z.running && typeof computeRunningZones === "function" && typeof ZONE_DISTANCES !== "undefined") {
+        const totalSec = (z.running.h || 0) * 3600 + (z.running.m || 0) * 60 + (z.running.s || 0);
+        const distM = ZONE_DISTANCES[z.running.dist];
+        if (totalSec > 0 && distM) {
+          const zones = computeRunningZones(distM, totalSec);
+          if (zones && typeof saveTrainingZonesData === "function") saveTrainingZonesData("running", zones);
+        }
+      }
+      if (z.biking && typeof computeBikingZones === "function" && z.biking.ftp > 0) {
+        const zones = computeBikingZones(z.biking.ftp);
+        if (zones && typeof saveTrainingZonesData === "function") saveTrainingZonesData("biking", zones);
+      }
+      if (z.swimming && typeof computeSwimmingZones === "function") {
+        const totalSec = (z.swimming.m || 0) * 60 + (z.swimming.s || 0);
+        if (totalSec > 0) {
+          const zones = computeSwimmingZones(totalSec);
+          if (zones && typeof saveTrainingZonesData === "function") saveTrainingZonesData("swimming", zones);
+        }
+      }
+      if (z.strength && typeof saveTrainingZonesData === "function") {
+        saveTrainingZonesData("strength", { ...z.strength, updatedAt: new Date().toISOString() });
+      }
+    }
+  } catch (e) { console.warn("[Survey] pre-gen zone persist failed:", e && e.message); }
+
   const finish = (count, label) => {
     // Save days/week + preferred DOWs to profile so downstream plan
     // generators (classifier, race planner) can honor the user's

@@ -14,7 +14,7 @@ These principles govern every plan IronZ generates. They cannot be overridden by
 
 1. **Consistency beats optimization.** A slightly underdosed plan that gets completed beats an optimal plan that gets abandoned.
 2. **80/20 intensity distribution.** Roughly 80% of training volume at easy/aerobic intensity (Z1–Z2). The remaining 20% is moderate-to-hard (Z3–Z5). Applies to all endurance disciplines. Specific goals (speed_performance) may shift this to 70/30 — never more aggressive than that.
-3. **Progressive overload.** Training stress increases gradually. For endurance: max 10% weekly volume increase. For strength: add load or reps week-over-week within a mesocycle.
+3. **Progressive overload.** Training stress increases gradually. For endurance: max **10% weekly volume increase for Beginner / Intermediate, 15% for Advanced — never more than 15% under any circumstance**. Applies to (a) the weekly total minutes and (b) each keystone long session's duration, both clamped the same way. Library workout swaps between weeks must be clamped to the same cap. For strength: add load or reps week-over-week within a mesocycle.
 4. **Recovery is training.** At least 1 recovery day per week. Beginners/Intermediates = full rest. Advanced = active recovery (Z1 only). Deload weeks required for plans longer than 4 weeks.
 5. **Specificity.** Train for what you're racing. A marathon plan prioritizes running volume. A triathlon plan balances swim/bike/run. Strength supports the primary sport, never replaces it.
 6. **Individualization.** Plans adapt to level, age, goal, equipment, and threshold data. Two different athletes should get materially different plans.
@@ -96,7 +96,7 @@ Highest sport-specific level across all sports. This drives constraint rules.
 | Max intensity sessions/week | 1 | 2 | 2–3 |
 | Back-to-back hard days | NEVER | Occasionally (max 1 pair/week, must follow with easy day) | Allowed (with recovery protocol) |
 | Min rest days/week | 1 (full rest) | 1 (full rest) | 1 (active recovery OK) |
-| Max weekly volume increase | 10% | 10–15% | 10–15% |
+| Max weekly volume increase | 10% | 10% | 15% |
 | Deload cycle | Every 4th week | Every 4th week | Every 3rd–4th week |
 
 ### 2g. Dynamic Level Progression
@@ -575,8 +575,10 @@ The user's `buildPlanTemplate` tells you which sports go on which days. The phas
 **IMPORTANT:** Different weeks in the same phase should NOT be identical. Apply progressive overload:
 - Long run week 1 of Build: 75 min → week 2: 82 min → week 3: 90 min → week 4 (deload): 60 min
 - Interval count: week 1: 4×1K → week 2: 5×1K → week 3: 6×1K → week 4 (deload): 3×1K
-- Max weekly volume increase: 10%
-- Every 4th week: deload (reduce volume 30–40%, maintain intensity)
+- Max weekly volume increase: **10% (Beginner / Intermediate)** or **15% (Advanced)**. Never more than 15%.
+- The cap is enforced on BOTH the weekly total minutes AND each keystone long session (long run, long ride) — a single long session cannot jump more than the cap between weeks even if the weekly total stays flat.
+- Library workout picks that differ week-over-week must be duration-clamped to the cap — a 105-min workout one week and a 160-min workout the next is a violation even though both are "valid" long-session templates.
+- Every 4th week: deload (reduce volume 30–40%, maintain intensity). After a deload week the ramp anchors on the deload's pre-cut base so week 5's rebuild can resume from the peak.
 
 ---
 
@@ -635,7 +637,9 @@ After generating all sessions, run these checks. Fix violations automatically.
 | Intensity cap | Beginner: max 1 Z4+/week. Intermediate: max 2. Advanced: max 3. | Demote lowest-priority intensity session to Z2 |
 | Rest day minimum | At least 1 full rest day per week (active recovery OK for advanced) | Remove lowest-priority session and replace with rest |
 | No hard before long | Don't place Z4+ session the day before the long run or long ride | Swap with an easy session earlier in the week |
-| Volume increase cap | No more than 10% total weekly volume increase week-over-week | Scale down session durations proportionally |
+| Weekly volume cap | No more than **10%** total weekly volume increase week-over-week for Beginner / Intermediate; **15%** for Advanced. **Never exceeds 15% under any circumstance.** | Scale down this week's session durations proportionally until the total fits under `prior_week_total × (1 + cap)`. Preserve Z4+ / key-session minutes first; cut easy volume last. |
+| Long-session ramp cap | No single `load: "long"` session (long run, long ride) increases by more than the same per-level cap vs the prior week's equivalent — even when a different library workout is swapped in. | Clamp the swapped-in workout's `duration_min` to `prior_long × (1 + cap)`. If the library has no shorter variant, reuse the prior week's workout scaled by the ramp. |
+| Explicit day preservation | Days the user explicitly placed sessions on (via Schedule-screen chip edits, preferred-day inputs, or the long-day picker) are NEVER carved to rest by the distribution or rest-day enforcer. | Carve from unmarked days only. If no unmarked days remain and a rest is still owed, surface a warning to the user instead of silently overwriting an intended training day. |
 | Deload enforcement | Every 4th week within a phase: reduce volume 30–40% | Shorten all sessions, drop 1–2 sessions, keep intensity |
 
 ### 6b. User Modifications — Soft Constraints After Generation
