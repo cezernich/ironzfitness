@@ -2981,57 +2981,88 @@
     // can fill Fri without violating the rest-day floor.
     const isRestLike = (d) => isEmpty(d) || isRestDay(d);
 
-    // Add one session of `disc` as a single-day entry if an empty non-last-
-    // rest slot exists, or as a double via the aligner's rules. Returns
-    // true if placed.
+    // Helpers shared across placement attempts.
+    const hasDisc = (d, disc) => (_state.schedule[d] || []).some(c => bucketOf(c) === disc);
+    const adjHasDisc = (d, disc) => {
+      const idx = _BP_DAYS.indexOf(d);
+      const prev = _BP_DAYS[(idx - 1 + _BP_DAYS.length) % _BP_DAYS.length];
+      const next = _BP_DAYS[(idx + 1) % _BP_DAYS.length];
+      return hasDisc(prev, disc) || hasDisc(next, disc);
+    };
+    const MIDWEEK_ORDER = ["wed", "fri", "tue", "thu", "sat", "mon", "sun"];
+
+    // Priority ladder per user request + spec constraints:
+    //   1) Fill an empty day (non-last-rest-like)
+    //   2) Promote a rest-marked day (user prefers daily training over
+    //      doubling for the same target)
+    //   3) Double on an existing day — NEVER same-discipline (user's own
+    //      philosophy: can't do the same exercise twice in a day), never
+    //      on a long-anchor day, never on the day before the remaining
+    //      rest day
     let doublesUsed = 0;
     const placeOne = (disc) => {
       const code = disc === "strength" ? "strength-full" : disc;
-      // 1) Prefer an empty day, but keep at least 1 rest-like day (empty
-      //    or rest-marked) untouched. Never fill a day the user explicitly
-      //    marked Rest — that's their stated choice.
-      const empties = _BP_DAYS.filter(d => isEmpty(d));
-      const restLikeCount = _BP_DAYS.filter(isRestLike).length;
+      const empties     = _BP_DAYS.filter(d => isEmpty(d));
+      const restMarked  = _BP_DAYS.filter(d => isRestDay(d));
+      const restLikeCount = empties.length + restMarked.length;
+
+      // 1) Empty day — prefer mid-week, avoid adjacent same-discipline.
       if (empties.length > 0 && restLikeCount > 1) {
-        // Prefer mid-week slots; skip days already carrying an adjacent
-        // same-discipline session to avoid stacking.
-        const hasDisc = (d, disc) => (_state.schedule[d] || []).some(c => bucketOf(c) === disc);
-        const adjHasDisc = (d, disc) => {
-          const idx = _BP_DAYS.indexOf(d);
-          const prev = _BP_DAYS[(idx - 1 + _BP_DAYS.length) % _BP_DAYS.length];
-          const next = _BP_DAYS[(idx + 1) % _BP_DAYS.length];
-          return hasDisc(prev, disc) || hasDisc(next, disc);
-        };
-        const ordered = ["wed", "fri", "tue", "thu", "sat", "mon", "sun"];
-        let target = ordered.find(d => empties.includes(d) && !adjHasDisc(d, disc));
-        if (!target) target = ordered.find(d => empties.includes(d));
+        let target = MIDWEEK_ORDER.find(d => empties.includes(d) && !adjHasDisc(d, disc));
+        if (!target) target = MIDWEEK_ORDER.find(d => empties.includes(d));
         if (target) { _state.schedule[target] = [code]; return true; }
       }
-      // 2) Double budget exhausted? Can't add more.
+
+      // 2) Rest-marked day — the user's own note "would be better off just
+      //    working out every day" over creating unnecessary doubles. Promote
+      //    as long as at least one rest-like day (empty or still rest-marked)
+      //    remains after the swap. If the week would otherwise hit zero rest
+      //    days we fall through to doubling and accept that we may miss the
+      //    target rather than deleting the last rest slot.
+      if (restMarked.length > 0 && restLikeCount > 1) {
+        let target = MIDWEEK_ORDER.find(d => restMarked.includes(d) && !adjHasDisc(d, disc));
+        if (!target) target = MIDWEEK_ORDER.find(d => restMarked.includes(d));
+        if (target) { _state.schedule[target] = [code]; return true; }
+      }
+
+      // 3) Double — last resort. Respects every spec + user constraint.
       if (doublesUsed >= doubleBudget) return false;
-      // 3) Find a double-able day: has 1 session, not rest, not pre-rest,
-      //    existing session not too hard for pairing (strength or easy only
-      //    gets added as the new session, so any existing load pairs fine).
+      // Recompute pre-rest days each call in case step 2 promoted a rest
+      // day away (e.g. Mon promoted → Sun is no longer pre-rest).
+      const liveRestDays = _BP_DAYS.filter(d => isRestDay(d) || isEmpty(d));
+      const livePreRest  = new Set();
+      liveRestDays.forEach(r => {
+        const idx = _BP_DAYS.indexOf(r);
+        if (idx > 0) livePreRest.add(_BP_DAYS[idx - 1]);
+        if (idx === 0) livePreRest.add(_BP_DAYS[_BP_DAYS.length - 1]);
+      });
+
       const doubleCandidates = _BP_DAYS.filter(d => {
         const slots = _state.schedule[d] || [];
         if (slots.length !== 1) return false;
         if (isRestDay(d)) return false;
-        if (preRestDays.has(d)) return false;
-        // Preserve race-critical long days from being doubled (§3a-iii).
+        if (livePreRest.has(d)) return false;
         const existing = slots[0] || "";
         if (/-long$/.test(existing)) return false;
+        // Hard rule: NEVER stack the same discipline on a single day.
+        // Swim+swim, run+run, bike+bike are all banned regardless of load
+        // labels. The user's philosophy: "can't do the same exercise twice
+        // in a day."
+        if (bucketOf(existing) === disc) return false;
         return true;
       });
       if (!doubleCandidates.length) return false;
-      // Prefer pairings aligned with §3a-iii muscle-grouping: swim+strength,
-      // bike+strength (push day), run+swim (upper). Simple heuristic: if
-      // we're adding strength, prefer a day that carries a cardio session;
-      // if adding cardio, prefer a day whose only session is strength.
+
+      // Pairing preference — complementary muscle-group stacking per §3a-iii:
+      //   strength is best paired with a cardio session (opposite-muscle)
+      //   cardio is best paired with strength (not another endurance sport)
       doubleCandidates.sort((a, b) => {
         const aSport = bucketOf((_state.schedule[a] || [])[0] || "");
         const bSport = bucketOf((_state.schedule[b] || [])[0] || "");
-        const aPref = (disc === "strength" && aSport !== "strength") || (disc !== "strength" && aSport === "strength") ? 0 : 1;
-        const bPref = (disc === "strength" && bSport !== "strength") || (disc !== "strength" && bSport === "strength") ? 0 : 1;
+        const aPref = (disc === "strength" && aSport !== "strength") ||
+                      (disc !== "strength" && aSport === "strength") ? 0 : 1;
+        const bPref = (disc === "strength" && bSport !== "strength") ||
+                      (disc !== "strength" && bSport === "strength") ? 0 : 1;
         return aPref - bPref;
       });
       const day = doubleCandidates[0];

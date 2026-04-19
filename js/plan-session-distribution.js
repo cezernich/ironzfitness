@@ -328,10 +328,15 @@
     const byDate = sessionsByDate(weekEntries);
 
     // Already-doubled days can't take a third session.
+    // Same-discipline stacking is banned regardless of load — per the user's
+    // own philosophy rule ("can't do the same exercise twice in a day"):
+    // swim+swim, run+run, bike+bike never pair up even when the aligner
+    // needs more sessions of that discipline.
     const candidates = Object.keys(byDate).filter(date => {
       const entries = byDate[date];
       if (entries.length >= 2) return false;
       if (blockedAsPreRest.has(date)) return false;
+      if (entries.some(e => e.discipline === discipline)) return false;
       // Spec: at least one of the two sessions must be easy or strength.
       // newLoad is already constrained to easy or strength — so the pair
       // is valid regardless of the existing session's load.

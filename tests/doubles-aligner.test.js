@@ -123,6 +123,41 @@ section("Test: Intermediate Base — no doubles allowed");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+section("Test: Advanced Base — never stacks same discipline on one day");
+{
+  // Pathological template that FORCES the aligner to consider doubling run
+  // onto an existing run day. Without the same-discipline ban, the aligner
+  // used to produce a "Run + Run" Friday — the user's screenshot bug.
+  // Template: Mon strength, Tue bike, Wed run, Thu rest, Fri rest, Sat rest, Sun swim.
+  // Base target (advanced): 2 swim / 2 bike / 3 run / 2 strength = 9. Currently 1/1/1/1 = 4.
+  const monday = new Date("2026-05-18T00:00:00");
+  const entries = [];
+  const addDay = (offset, discipline, load) => {
+    const d = new Date(monday); d.setDate(d.getDate() + offset);
+    entries.push({ date: d.toISOString().slice(0, 10), raceId: "r1", phase: "Base", weekNumber: 1, discipline, load, sessionName: "s", duration: 45 });
+  };
+  addDay(0, "strength", "moderate");
+  addDay(1, "bike", "easy");
+  addDay(2, "run", "easy");
+  // Thu, Fri, Sat rest (empty)
+  addDay(6, "swim", "easy");
+  PSD.applySessionDistribution(entries, "ironman", "advanced");
+
+  // Group by date and assert no day has 2+ of the same discipline.
+  const byDate = {};
+  entries.forEach(e => (byDate[e.date] = byDate[e.date] || []).push(e));
+  const violations = [];
+  Object.entries(byDate).forEach(([date, es]) => {
+    const dCount = {};
+    es.forEach(e => { dCount[e.discipline] = (dCount[e.discipline] || 0) + 1; });
+    Object.entries(dCount).forEach(([disc, n]) => {
+      if (n >= 2) violations.push(`${date}: ${disc}×${n}`);
+    });
+  });
+  check("no same-discipline doubles on any day", violations.length === 0, violations.join(" | "));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 section("Test: Intermediate Build — 1 double allowed");
 {
   const plan = buildStubPlan("Build");
