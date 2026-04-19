@@ -20,6 +20,14 @@
     strength: ["injury_prevention", "race_performance", "hypertrophy", "minimal"],
     brick:    ["easy", "race_simulation"],
     cross_train: ["easy", "intervals"],
+    // Hyrox-specific session buckets: running intervals, individual station
+    // work (sled/wall balls/burpees/etc.), simulations that chain stations
+    // with running legs, and the easy aerobic base work hyrox athletes need
+    // alongside their station intensity.
+    hyrox:    ["easy", "intervals", "stations", "race_simulation"],
+    // Circuit / HIIT-style training — keeping HIIT formats as session types
+    // so admins can curate each workout shape independently.
+    circuit:  ["hiit", "amrap", "emom", "for_time", "metabolic"],
   };
   const PHASES = ["base", "build", "peak", "taper"];
 
@@ -705,13 +713,72 @@
     _setValue("admin-wo-duration", Array.isArray(w.total_duration_range) ? w.total_duration_range.join(", ") : "");
     _setValue("admin-wo-status", w.status || "draft");
 
-    editor.style.display = "";
-    editor.scrollIntoView({ behavior: "smooth", block: "start" });
+    // Render as a centered modal with a dimmed backdrop — same pattern as
+    // adminShowPreview so admin UX is consistent. Wrap existing children
+    // in a scrollable modal panel on first open so we don't touch the
+    // form-field IDs that _readEditor / adminSaveWorkout depend on.
+    editor.style.cssText = [
+      "display:flex",
+      "position:fixed",
+      "inset:0",
+      "background:rgba(15,23,42,0.55)",
+      "z-index:9000",
+      "align-items:flex-start",
+      "justify-content:center",
+      "padding:32px 16px",
+      "overflow-y:auto",
+    ].join(";");
+    editor.setAttribute("role", "dialog");
+    editor.setAttribute("aria-modal", "true");
+
+    // One-time wrap: move the editor's existing children inside a
+    // modal-panel div so they get a card background + max-width.
+    if (!editor.querySelector(":scope > .admin-editor-modal")) {
+      const panel = document.createElement("div");
+      panel.className = "admin-editor-modal";
+      panel.style.cssText = [
+        "width:min(900px,100%)",
+        "max-width:900px",
+        "background:var(--color-card,#fff)",
+        "border-radius:12px",
+        "padding:20px 24px",
+        "box-shadow:0 20px 60px rgba(0,0,0,0.25)",
+      ].join(";");
+      // Clicking inside the panel must NOT close the modal.
+      panel.addEventListener("click", e => e.stopPropagation());
+      while (editor.firstChild) panel.appendChild(editor.firstChild);
+      editor.appendChild(panel);
+    }
+
+    // Backdrop click (on the editor element itself, bubbles from anything
+    // NOT inside the panel) closes the modal.
+    editor.onclick = (e) => { if (e.target === editor) adminCloseWorkoutEditor(); };
+
+    // ESC to close.
+    if (!editor._escBound) {
+      editor._escHandler = (e) => {
+        if (e.key === "Escape" && editor.style.display !== "none") adminCloseWorkoutEditor();
+      };
+      document.addEventListener("keydown", editor._escHandler);
+      editor._escBound = true;
+    }
+
+    // Scroll modal body to top for a fresh form.
+    const panel = editor.querySelector(":scope > .admin-editor-modal");
+    if (panel) panel.scrollTop = 0;
   }
 
   function adminCloseWorkoutEditor() {
     const editor = document.getElementById("admin-workout-editor");
-    if (editor) editor.style.display = "none";
+    if (editor) {
+      editor.style.display = "none";
+      editor.onclick = null;
+      if (editor._escBound && editor._escHandler) {
+        document.removeEventListener("keydown", editor._escHandler);
+        editor._escBound = false;
+        editor._escHandler = null;
+      }
+    }
     _editing = null;
     const preview = document.getElementById("admin-workout-preview");
     if (preview) preview.innerHTML = "";

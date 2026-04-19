@@ -13,7 +13,7 @@ create table if not exists public.workout_library (
   description text,
 
   -- Classification (used for querying)
-  sport text not null check (sport in ('swim','bike','run','strength','brick','cross_train')),
+  sport text not null check (sport in ('swim','bike','run','strength','brick','cross_train','hyrox','circuit')),
   session_type text not null,
   energy_system text not null check (energy_system in ('aerobic','lactate_threshold','vo2max','neuromuscular','mixed','strength')),
 
