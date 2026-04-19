@@ -1578,12 +1578,24 @@ function _librarySessionSteps(lib) {
     const m = String(z).match(/\d+/);
     return m ? Number(m[0]) : 2;
   };
+  // Parse a duration value to MINUTES. Accepts [lo,hi] arrays, raw numbers
+  // (assumed minutes), and strings with units. Critically, strings like
+  // "20 sec" and "60 sec walk" are in SECONDS — treating them as minutes
+  // produced the "5 × 12 min (36 min rest)" nonsense on strides workouts.
+  // Sub-minute results (< 1.0) are preserved as fractional minutes so the
+  // downstream scaler doesn't inflate them; _formatStepDuration below
+  // renders them back as seconds for display.
   const _pickDur = (v) => {
-    if (Array.isArray(v) && v.length === 2) return Math.round((v[0] + v[1]) / 2);
+    if (Array.isArray(v) && v.length === 2) return (Number(v[0]) + Number(v[1])) / 2;
     if (typeof v === "number") return v;
     if (typeof v === "string") {
-      const m = v.match(/\d+/);
-      return m ? Number(m[0]) : 0;
+      const m = v.match(/(\d+(?:\.\d+)?)\s*(hr|hour|h|min|m|sec|s)?/i);
+      if (!m) return 0;
+      const n = Number(m[1]);
+      const unit = (m[2] || "min").toLowerCase();
+      if (unit === "hr" || unit === "hour" || unit === "h") return n * 60;
+      if (unit === "sec" || unit === "s") return n / 60;
+      return n; // default: minutes
     }
     return 0;
   };
@@ -1664,8 +1676,13 @@ function _librarySessionSteps(lib) {
   const total = steps.reduce((s, st) => s + (st.duration * (st.reps || 1)) + ((st.rest || 0) * Math.max(0, (st.reps || 1) - 1)), 0);
   return {
     name: lib.libraryName || "Workout",
-    duration: lib.duration_min || total,
+    // Use the summed-step total as the canonical duration so downstream
+    // scaleSessionDuration won't stretch a 20-second stride into a
+    // 12-minute interval. _fromLibrary flag lets the renderer skip
+    // scaling entirely.
+    duration: Math.round(total),
     steps,
+    _fromLibrary: true,
   };
 }
 
@@ -1698,12 +1715,20 @@ function buildStepsList(session, discipline) {
       brickDisc = _seenT1 ? "run" : "bike";
     }
     if (isT1) _seenT1 = true;
+    // Render durations in seconds when < 1 minute (strides, short walk
+    // breaks) so "20 sec" doesn't round to "0 min" and "60 sec walk"
+    // doesn't round to "1 min rest".
+    const _fmtDur = (v) => {
+      const n = Number(v) || 0;
+      if (n > 0 && n < 1) return Math.max(5, Math.round(n * 60)) + " sec";
+      return Math.max(1, Math.round(n)) + " min";
+    };
     let durationText;
     if (step.reps) {
-      durationText = `${step.reps} × ${step.duration} min`;
-      if (step.rest) durationText += ` (${step.rest} min rest)`;
+      durationText = `${step.reps} × ${_fmtDur(step.duration)}`;
+      if (step.rest) durationText += ` (${_fmtDur(step.rest)} rest)`;
     } else {
-      durationText = isT1 ? "~3 min" : `${step.duration} min`;
+      durationText = isT1 ? "~3 min" : _fmtDur(step.duration);
     }
     // For brick run segments, show pace from the running zones rather than
     // the bike-watts label that the outer `zones` lookup returns.
@@ -3492,7 +3517,16 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
                   || (SESSION_DESCRIPTIONS[p.discipline] || {})[effectLoad]
                   || (SESSION_DESCRIPTIONS[p.discipline] || {})[p.load];
       }
-      const session = rawSession && !p.aiSession ? scaleSessionDuration(rawSession, targetDuration) : rawSession;
+      // Library sessions are already parameterized (warmup / main_set /
+      // cooldown with concrete durations and sub-minute intervals for
+      // strides). Scaling them to a target minute count produces garbage
+      // like "5 × 12 min (36 min rest)" from what should be 5 × 20 sec
+      // strides with 60 sec rest, because the 1-minute floor and linear
+      // scaling destroy the semantics of short, hard intervals.
+      const skipScale = rawSession && rawSession._fromLibrary;
+      const session = rawSession && !p.aiSession && !skipScale
+        ? scaleSessionDuration(rawSession, targetDuration)
+        : rawSession;
       const intensLabel = getIntensityLabel(effectLoad);
       const intensClass = getIntensityClass(effectLoad);
 
