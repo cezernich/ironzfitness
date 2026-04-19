@@ -3410,6 +3410,67 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
             ${buildIntensityStrip(session, cardId, p.discipline)}
             <div class="card-body">${buildStepsList(session, p.discipline)}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(session.duration, session.name, { load: effectLoad, discipline: p.discipline }) : ""}${buildWorkoutExplanation(session, dateStr, p.discipline, effectLoad, p.sessionName, p)}${_planCompletion}</div>
           </div>`;
+      } else if (p.discipline === "strength" && (Array.isArray(p.exercises) || p.libraryWorkout)) {
+        // Strength plan entries don't live in SESSION_DESCRIPTIONS, so the
+        // `session` lookup above returned undefined and the generic path
+        // would render a bare title card. Build a strength-shaped card from
+        // p.exercises (always present when _buildStrengthForPlan ran) and
+        // from p.libraryWorkout (present when the library supplied a
+        // parameterized warmup/main_set/cooldown).
+        const _stExercises = Array.isArray(p.exercises) ? p.exercises : [];
+        const _stLib = p.libraryWorkout || null;
+        const _stWarmup = _stLib && _stLib.warmup
+          ? `<div class="workout-block" style="padding:6px 0">
+               <h4 style="margin:0 0 2px;color:var(--color-text-muted);letter-spacing:0.04em;font-size:0.78em">WARMUP</h4>
+               <p style="margin:0">${_stLib.warmup.duration_min ? `<strong>${_stLib.warmup.duration_min} min</strong> — ` : ""}${escHtml(_stLib.warmup.description || "")}</p>
+             </div>`
+          : "";
+        const _stCooldown = _stLib && _stLib.cooldown
+          ? `<div class="workout-block" style="padding:6px 0">
+               <h4 style="margin:0 0 2px;color:var(--color-text-muted);letter-spacing:0.04em;font-size:0.78em">COOLDOWN</h4>
+               <p style="margin:0">${_stLib.cooldown.duration_min ? `<strong>${_stLib.cooldown.duration_min} min</strong> — ` : ""}${escHtml(_stLib.cooldown.description || "")}</p>
+             </div>`
+          : "";
+        const _stRestLines = _stLib && _stLib.main_set
+          ? [
+              _stLib.main_set.rest_between_exercises ? `Rest between exercises: ${escHtml(_stLib.main_set.rest_between_exercises)}` : null,
+              _stLib.main_set.rest_between_sets ? `Rest between sets: ${escHtml(_stLib.main_set.rest_between_sets)}` : null,
+            ].filter(Boolean).map(l => `<div class="hint" style="font-size:0.82em">${l}</div>`).join("")
+          : "";
+        const _stExTable = _stExercises.length
+          ? (typeof buildExerciseTableHTML === "function"
+              ? buildExerciseTableHTML(_stExercises, { hiit: false })
+              : `<ul style="margin:4px 0;padding-left:18px">${_stExercises.map(ex =>
+                  `<li style="margin:3px 0"><strong>${escHtml(ex.name || "?")}</strong> — ${escHtml(String(ex.sets || ""))} × ${escHtml(String(ex.reps || ""))}${ex.weight ? ` @ ${escHtml(String(ex.weight))}` : ""}</li>`
+                ).join("")}</ul>`)
+          : `<p class="hint" style="margin:0">No exercises on this session.</p>`;
+        html += `
+          <div class="session-card collapsible${_planIsComplete ? " session-card--completed is-collapsed" : ""}" id="${cardId}">
+            <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
+              <span class="session-icon" style="color:${color}">${icon}</span>
+              <div class="session-meta">
+                <div class="session-name">${p.sessionName}${_planDoneIndicator}</div>
+                <div class="session-phase">${p.phase} · Week ${p.weekNumber}</div>
+              </div>
+              <div class="session-header-right">
+                ${p.duration ? `<span class="session-duration-badge">${p.duration} min</span>` : ""}
+                <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
+                ${_planUndoBtn}${_planOverflow}
+                <span class="card-chevron">▾</span>
+              </div>
+            </div>
+            <div class="card-body">
+              ${_stWarmup}
+              <div class="workout-block" style="padding:6px 0">
+                <h4 style="margin:0 0 4px;color:var(--color-text-muted);letter-spacing:0.04em;font-size:0.78em">MAIN SET${_stLib && _stLib.main_set && _stLib.main_set.description ? " — " + escHtml(_stLib.main_set.description) : ""}</h4>
+                ${_stExTable}
+                ${_stRestLines}
+              </div>
+              ${_stCooldown}
+              ${buildWorkoutExplanation(null, dateStr, p.discipline, effectLoad, p.sessionName, p)}
+              ${_planCompletion}
+            </div>
+          </div>`;
       } else {
         html += `
           <div class="session-card collapsible${_planIsComplete ? " session-card--completed is-collapsed" : ""}" id="${cardId}">
@@ -4344,7 +4405,22 @@ function renderMealPlan(dateStr) {
     }));
     const totalCals = meals.reduce((s, m) => s + m.calories, 0);
     const _loadLabels = { rest: "Rest Day", light: "Light Activity", strength: "Strength Day", "endurance-easy": "Easy Cardio", "endurance-hard": "Hard / Long Session" };
-    const loadNote = weekMealDay.load ? `<div class="meal-plan-load-note">${_loadLabels[weekMealDay.load] || ""}</div>` : "";
+    // Recompute the load fresh from today's actual training data rather than
+    // reading weekMealDay.load — that field was snapshotted when the meal
+    // plan was generated and doesn't update when the user later edits their
+    // schedule (e.g. a day that was tagged endurance-hard at gen time still
+    // shows "Hard / Long Session" even after the user clears the workout).
+    let _freshLoad = weekMealDay.load;
+    try {
+      const _todaySessions = [];
+      const _plan = (typeof loadTrainingPlan === "function") ? loadTrainingPlan() : [];
+      _plan.filter(e => e.date === dateStr && e.load && e.load !== "rest")
+           .forEach(e => _todaySessions.push({ type: e.discipline, discipline: e.discipline, load: e.load, sessionName: e.sessionName }));
+      const _sched = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
+      _sched.filter(s => s.date === dateStr).forEach(s => _todaySessions.push(s));
+      if (typeof _classifyDayLoad === "function") _freshLoad = _classifyDayLoad(_todaySessions);
+    } catch {}
+    const loadNote = _freshLoad ? `<div class="meal-plan-load-note">${_loadLabels[_freshLoad] || ""}</div>` : "";
     const _clInfo = (typeof getCarbLoadInfo === "function")
       ? getCarbLoadInfo(dateStr, loadTrainingPlan().find(e => e.date === dateStr))
       : null;
