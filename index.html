@@ -1821,6 +1821,7 @@
         <button class="admin-subtab" data-subtab="admin-exercises" onclick="showAdminSubtab('admin-exercises')">Exercises</button>
         <button class="admin-subtab" data-subtab="admin-workouts" onclick="showAdminSubtab('admin-workouts')">Workouts</button>
         <button class="admin-subtab" data-subtab="admin-gaps" onclick="showAdminSubtab('admin-gaps')">Gaps</button>
+        <button class="admin-subtab" data-subtab="admin-questions" onclick="showAdminSubtab('admin-questions')">Questions</button>
         <button class="admin-subtab" data-subtab="admin-analytics" onclick="showAdminSubtab('admin-analytics')">Analytics</button>
       </div>
 
@@ -2136,6 +2137,89 @@
           </select>
         </div>
         <div id="admin-gaps-list"></div>
+      </div>
+
+      <!-- ── SUB-TAB: Questions (Ask IronZ logs) ─────────────────── -->
+      <div id="admin-questions" class="admin-subtab-content" style="display:none">
+        <div class="admin-stats-row">
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-q-total">--</div>
+            <div class="admin-stat-label">Total Questions</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-q-helpful-pct">--</div>
+            <div class="admin-stat-label">% Helpful</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-q-top-category">--</div>
+            <div class="admin-stat-label">Top Category</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-q-avg-ms">--</div>
+            <div class="admin-stat-label">Avg Response (ms)</div>
+          </div>
+        </div>
+
+        <!-- Category breakdown grid -->
+        <div class="card">
+          <h3 style="margin:0 0 8px">Category Breakdown</h3>
+          <div id="admin-q-category-breakdown" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+        </div>
+
+        <!-- Filter row -->
+        <div class="card">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="text" id="admin-q-search" placeholder="Search question text..." class="input" style="flex:1;min-width:180px" oninput="renderAskIronZLogs()" />
+            <select id="admin-q-filter-category" class="input" style="width:auto" onchange="renderAskIronZLogs()">
+              <option value="">All Categories</option>
+              <option value="training_plan">Training Plan</option>
+              <option value="nutrition">Nutrition</option>
+              <option value="hydration">Hydration</option>
+              <option value="injury">Injury</option>
+              <option value="recovery">Recovery</option>
+              <option value="race_strategy">Race Strategy</option>
+              <option value="equipment">Equipment</option>
+              <option value="technique">Technique</option>
+              <option value="general_fitness">General Fitness</option>
+              <option value="app_help">App Help</option>
+              <option value="uncategorized">Uncategorized</option>
+            </select>
+            <select id="admin-q-filter-response" class="input" style="width:auto" onchange="renderAskIronZLogs()">
+              <option value="">All Responses</option>
+              <option value="plan_generated">Plan Generated</option>
+              <option value="faq_answer">FAQ Answer</option>
+              <option value="coaching_tip">Coaching Tip</option>
+              <option value="couldnt_help">Couldn't Help</option>
+              <option value="pending">Pending</option>
+            </select>
+            <select id="admin-q-filter-helpful" class="input" style="width:auto" onchange="renderAskIronZLogs()">
+              <option value="">All Feedback</option>
+              <option value="yes">👍 Helpful</option>
+              <option value="no">👎 Not Helpful</option>
+              <option value="none">No Feedback</option>
+            </select>
+            <label class="hint" style="font-size:0.78em">From <input type="date" id="admin-q-date-from" class="input" style="width:auto" onchange="renderAskIronZLogs()" /></label>
+            <label class="hint" style="font-size:0.78em">To <input type="date" id="admin-q-date-to" class="input" style="width:auto" onchange="renderAskIronZLogs()" /></label>
+            <button class="btn-secondary btn-sm" onclick="loadAdminQuestions()" title="Reload from Supabase">↻ Refresh</button>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="card" style="overflow-x:auto">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th onclick="sortAskIronZLogs('created_at')" style="cursor:pointer">Date <span class="admin-q-sort" data-col="created_at"></span></th>
+                <th onclick="sortAskIronZLogs('question_text')" style="cursor:pointer">Question <span class="admin-q-sort" data-col="question_text"></span></th>
+                <th onclick="sortAskIronZLogs('category')" style="cursor:pointer">Category <span class="admin-q-sort" data-col="category"></span></th>
+                <th onclick="sortAskIronZLogs('response_type')" style="cursor:pointer">Response Type <span class="admin-q-sort" data-col="response_type"></span></th>
+                <th onclick="sortAskIronZLogs('helpful')" style="cursor:pointer" style="text-align:center">Helpful</th>
+                <th onclick="sortAskIronZLogs('response_time_ms')" style="cursor:pointer" style="text-align:right">Response (ms)</th>
+              </tr>
+            </thead>
+            <tbody id="admin-q-tbody"></tbody>
+          </table>
+        </div>
       </div>
 
       <!-- ── SUB-TAB: Analytics ──────────────────────────────────── -->
@@ -3306,6 +3390,7 @@
   <script src="js/onboarding-v2.js"></script>
   <script src="js/admin.js"></script>
   <script src="js/admin-workouts.js"></script>
+  <script src="js/admin-questions.js"></script>
   <script src="js/analytics.js"></script>
   <script src="js/push.js"></script>
   <!-- auth.js last — overrides window.onload to gate app behind login -->
