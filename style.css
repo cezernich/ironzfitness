@@ -12773,6 +12773,11 @@ button:active {
 
 .admin-table tr:last-child td { border-bottom: none; }
 
+/* Clickable workout rows in admin → Workouts. Subtle hover tint so the
+   "click anywhere to preview" affordance is visible. Action buttons keep
+   their own hover via .btn-link. */
+.admin-table tr.workout-row:hover td { background: rgba(37, 99, 235, 0.06); }
+
 .admin-td-name { font-weight: 600; white-space: nowrap; }
 .admin-td-email { color: var(--color-text-muted); }
 

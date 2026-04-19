@@ -212,20 +212,294 @@
     }
 
     tbody.innerHTML = filtered.map(w => `
-      <tr>
+      <tr class="workout-row" onclick="adminShowPreview('${_escape(w.id)}')" style="cursor:pointer">
         <td style="text-align:left"><strong>${_escape(w.name)}</strong><br><span class="hint" style="font-size:0.85em">${_escape(w.description || "")}</span></td>
         <td>${_escape(w.sport)}</td>
         <td>${_escape(w.session_type)}</td>
         <td>${_escape((w.phases || []).join(", "))}</td>
         <td>${_escape((w.levels || []).join(", "))}</td>
         <td><span class="status-pill status-${_escape(w.status)}">${_escape(w.status)}</span></td>
-        <td>
+        <td onclick="event.stopPropagation()">
           <button class="btn-link" onclick="adminOpenWorkoutEditor('${_escape(w.id)}')">Edit</button>
           <button class="btn-link" onclick="adminDuplicateWorkout('${_escape(w.id)}')">Duplicate</button>
           <button class="btn-link" onclick="adminToggleWorkoutStatus('${_escape(w.id)}')">${w.status === "published" ? "Unpublish" : "Publish"}</button>
         </td>
       </tr>
     `).join("");
+  }
+
+  // ── Preview panel ────────────────────────────────────────────────────────
+  // Click any row → the preview panel opens showing the full workout
+  // structure (warmup / main set / cooldown) with phase/level/goal tags.
+  // The "Preview as" dropdown swaps zone placeholders (Z3) with concrete
+  // paces for a chosen sample athlete. Zone colors come from style.css —
+  // .zone-1..zone-5 — so the preview matches the athlete-facing UI.
+
+  // Sample athletes for the "Preview as" dropdown. Each supplies thresholds
+  // that TrainingZones uses to fill in real paces. VDOT numbers map to
+  // approximate 5K times via Daniels' tables.
+  const PREVIEW_PRESETS = {
+    beginner: {
+      label: "Beginner runner (VDOT 35 — ~26:30 5K)",
+      thresholds: { running_5k: "26:30" },
+      level: "beginner",
+      weight_lbs: 195,
+    },
+    intermediate: {
+      label: "Intermediate runner (VDOT 45 — ~21:30 5K, FTP 220W, CSS 2:00)",
+      thresholds: { running_5k: "21:30", cycling_ftp: 220, swim_css: "2:00" },
+      level: "intermediate",
+      weight_lbs: 170,
+    },
+    advanced: {
+      label: "Advanced runner (VDOT 50.8 — 19:40 5K, FTP 270W, CSS 1:45)",
+      thresholds: { running_5k: "19:40", cycling_ftp: 270, swim_css: "1:45" },
+      level: "advanced",
+      weight_lbs: 165,
+    },
+  };
+  let _currentPreviewId = null;
+  let _currentPreviewPreset = "advanced";
+
+  function adminShowPreview(id) {
+    const w = _workouts.find(x => x.id === id);
+    if (!w) return;
+    _currentPreviewId = id;
+    const host = document.getElementById("admin-workout-preview-panel");
+    if (!host) return;
+    host.style.display = "";
+    host.innerHTML = _renderPreviewPanel(w, _currentPreviewPreset);
+    host.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function adminHidePreview() {
+    _currentPreviewId = null;
+    const host = document.getElementById("admin-workout-preview-panel");
+    if (host) { host.style.display = "none"; host.innerHTML = ""; }
+  }
+
+  function adminSwitchPreviewPreset(key) {
+    if (!PREVIEW_PRESETS[key]) return;
+    _currentPreviewPreset = key;
+    if (_currentPreviewId) adminShowPreview(_currentPreviewId);
+  }
+
+  function _renderPreviewPanel(w, presetKey) {
+    const preset = PREVIEW_PRESETS[presetKey] || PREVIEW_PRESETS.advanced;
+    const zones = (global.TrainingZones && global.TrainingZones.computeAllZones(preset.thresholds)) || {};
+
+    // Sport badge color — re-use existing discipline tint via inline style.
+    const sportBadge = `<span class="badge badge-sport" style="background:rgba(100,116,139,0.15);color:#475569;padding:2px 8px;border-radius:8px;font-size:0.85em;font-weight:600">${_escape(w.sport)}</span>`;
+    const typeBadge  = `<span class="badge badge-type" style="background:rgba(37,99,235,0.12);color:#1d4ed8;padding:2px 8px;border-radius:8px;font-size:0.85em;font-weight:600">${_escape(w.session_type)}</span>`;
+    const energyBadge = `<span class="badge badge-energy" style="background:rgba(124,58,237,0.12);color:#6d28d9;padding:2px 8px;border-radius:8px;font-size:0.85em">${_escape(w.energy_system)}</span>`;
+
+    const phasePills = (w.phases || []).map(p => `<span class="tag-pill" style="background:rgba(16,185,129,0.12);color:#047857;padding:2px 8px;border-radius:8px;font-size:0.8em;margin-right:4px">${_escape(p)}</span>`).join("");
+    const levelPills = (w.levels || []).map(l => `<span class="tag-pill" style="background:rgba(234,179,8,0.15);color:#a16207;padding:2px 8px;border-radius:8px;font-size:0.8em;margin-right:4px">${_escape(l)}</span>`).join("");
+    const distPills  = (w.race_distances || []).map(d => `<span class="tag-pill" style="background:rgba(244,114,182,0.15);color:#be185d;padding:2px 8px;border-radius:8px;font-size:0.8em;margin-right:4px">${_escape(d)}</span>`).join("");
+    const goalPills  = (w.race_goals || []).map(g => `<span class="tag-pill" style="background:rgba(59,130,246,0.12);color:#1e40af;padding:2px 8px;border-radius:8px;font-size:0.8em;margin-right:4px">${_escape(g)}</span>`).join("");
+
+    const warmup   = _renderSection("WARMUP", w.warmup, w.sport, zones);
+    const mainSet  = _renderMainSet(w.main_set, w.sport, zones);
+    const cooldown = _renderSection("COOLDOWN", w.cooldown, w.sport, zones);
+
+    const totalDur = Array.isArray(w.total_duration_range) && w.total_duration_range.length === 2
+      ? `${w.total_duration_range[0]}–${w.total_duration_range[1]} min`
+      : "—";
+    const created = w.created_at ? new Date(w.created_at).toLocaleDateString() : "—";
+
+    const presetOpts = Object.keys(PREVIEW_PRESETS).map(k =>
+      `<option value="${k}" ${k === presetKey ? "selected" : ""}>${_escape(PREVIEW_PRESETS[k].label)}</option>`
+    ).join("");
+
+    return `
+      <div class="card" style="border:2px solid rgba(37,99,235,0.25);background:#fafbff">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div>
+            <h3 style="margin:0 0 4px">${_escape(w.name)}</h3>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">${sportBadge}${typeBadge}${energyBadge}</div>
+          </div>
+          <button class="btn-secondary btn-sm" onclick="adminHidePreview()">Close preview</button>
+        </div>
+
+        ${w.description ? `<p class="hint" style="margin:12px 0 0">${_escape(w.description)}</p>` : ""}
+
+        <div style="margin:12px 0;display:flex;gap:12px;flex-wrap:wrap">
+          ${phasePills ? `<div><div class="hint" style="font-size:0.75em;margin-bottom:3px">Phases</div><div>${phasePills}</div></div>` : ""}
+          ${levelPills ? `<div><div class="hint" style="font-size:0.75em;margin-bottom:3px">Levels</div><div>${levelPills}</div></div>` : ""}
+          ${distPills  ? `<div><div class="hint" style="font-size:0.75em;margin-bottom:3px">Race distances</div><div>${distPills}</div></div>` : ""}
+          ${goalPills  ? `<div><div class="hint" style="font-size:0.75em;margin-bottom:3px">Race goals</div><div>${goalPills}</div></div>` : ""}
+        </div>
+
+        <div class="form-row" style="margin:12px 0;padding:8px 10px;background:rgba(37,99,235,0.06);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <label style="margin:0;font-weight:600">Preview as athlete:</label>
+          <select class="input" style="flex:1;min-width:220px" onchange="adminSwitchPreviewPreset(this.value)">
+            ${presetOpts}
+          </select>
+        </div>
+
+        <div class="workout-structure" style="margin-top:8px">
+          ${warmup}
+          ${mainSet}
+          ${cooldown}
+        </div>
+
+        <div style="margin-top:14px;padding-top:10px;border-top:1px solid rgba(100,116,139,0.2);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-size:0.85em;color:#64748b">
+          <span><strong>Total:</strong> ${_escape(totalDur)}</span>
+          <span><strong>Status:</strong> <span class="status-pill status-${_escape(w.status)}">${_escape(w.status)}</span></span>
+          <span><strong>Created:</strong> ${_escape(created)}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // Render warmup or cooldown. Both are `{ description, duration_min }` in
+  // the seed but defensive against missing fields.
+  function _renderSection(heading, section, sport, zones) {
+    if (!section || typeof section !== "object") {
+      return `<div class="workout-block"><h4 style="margin:12px 0 4px;color:#475569;letter-spacing:0.05em;font-size:0.85em">${heading}</h4><p class="hint" style="margin:0">—</p></div>`;
+    }
+    const dur = section.duration_min ? `<span style="font-weight:600">${section.duration_min} min</span>` : "";
+    const desc = section.description ? _substituteZones(section.description, sport, zones) : "";
+    return `
+      <div class="workout-block" style="padding:8px 0">
+        <h4 style="margin:0 0 4px;color:#475569;letter-spacing:0.05em;font-size:0.85em">${heading}</h4>
+        <p style="margin:0">${dur}${dur && desc ? " — " : ""}${desc}</p>
+      </div>
+    `;
+  }
+
+  // Render main set — the shape depends on type (intervals / continuous /
+  // ladder / mixed / strength). Produces a zone-colored block per piece so
+  // the admin can visually scan intensity distribution.
+  function _renderMainSet(main, sport, zones) {
+    if (!main || typeof main !== "object") {
+      return `<div class="workout-block"><h4 style="margin:12px 0 4px;color:#475569;letter-spacing:0.05em;font-size:0.85em">MAIN SET</h4><p class="hint" style="margin:0">—</p></div>`;
+    }
+    const typeLabel = _mainSetTypeLabel(main.type);
+    const desc = main.description ? `<p style="margin:4px 0">${_substituteZones(main.description, sport, zones)}</p>` : "";
+    let body = "";
+
+    if (main.type === "intervals" && main.intervals) {
+      const iv = main.intervals;
+      const reps = Array.isArray(iv.reps) ? `${iv.reps[0]}–${iv.reps[1]}` : (iv.reps || "?");
+      body = `
+        <div class="zone-${_zoneNum(iv.zone)}" style="padding:8px 10px;border-radius:8px;margin-top:6px">
+          <strong>${reps} × ${_escape(iv.duration || "")}</strong> at <strong>${_resolveZoneLabel(sport, iv.zone, zones)}</strong>
+          ${iv.rest ? `<div class="hint" style="margin-top:2px;font-size:0.85em">Rest: ${_escape(iv.rest)}</div>` : ""}
+        </div>
+      `;
+    } else if (main.type === "continuous" && main.effort) {
+      const ef = main.effort;
+      const dur = Array.isArray(ef.duration_min) ? `${ef.duration_min[0]}–${ef.duration_min[1]} min` : (ef.duration_min ? `${ef.duration_min} min` : "?");
+      body = `
+        <div class="zone-${_zoneNum(ef.zone)}" style="padding:8px 10px;border-radius:8px;margin-top:6px">
+          <strong>${dur}</strong> continuous at <strong>${_resolveZoneLabel(sport, ef.zone, zones)}</strong>
+        </div>
+      `;
+    } else if (main.type === "ladder" && Array.isArray(main.steps)) {
+      body = `
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">
+          ${main.steps.map(s => `
+            <div class="zone-${_zoneNum(s.zone)}" style="padding:6px 10px;border-radius:8px;font-size:0.85em">
+              <strong>${_escape(s.duration || "?")}</strong> @ <strong>${_resolveZoneLabel(sport, s.zone, zones)}</strong>
+            </div>
+          `).join("")}
+        </div>
+        ${main.rest_between ? `<div class="hint" style="margin-top:6px;font-size:0.85em">Rest between: ${_escape(main.rest_between)}</div>` : ""}
+        ${Array.isArray(main.reps_range) ? `<div class="hint" style="margin-top:2px;font-size:0.85em">Volume range: ${main.reps_range[0]}–${main.reps_range[1]} sets</div>` : ""}
+      `;
+    } else if (main.type === "mixed" && Array.isArray(main.blocks)) {
+      body = main.blocks.map(b => {
+        const reps = Array.isArray(b.reps) ? `${b.reps[0]}–${b.reps[1]}` : (b.reps || "?");
+        const dur = Array.isArray(b.duration_min) ? `${b.duration_min[0]}–${b.duration_min[1]} min` : (b.duration || b.distance || "");
+        return `
+          <div class="zone-${_zoneNum(b.zone)}" style="padding:8px 10px;border-radius:8px;margin-top:6px">
+            <strong>${reps} × ${_escape(dur)}</strong> at <strong>${_resolveZoneLabel(sport, b.zone, zones)}</strong>
+            ${b.rest ? `<div class="hint" style="margin-top:2px;font-size:0.85em">Rest: ${_escape(b.rest)}</div>` : ""}
+            ${b.description ? `<div class="hint" style="margin-top:2px;font-size:0.85em">${_escape(b.description)}</div>` : ""}
+          </div>
+        `;
+      }).join("");
+    } else if (main.type === "strength" && Array.isArray(main.exercises)) {
+      body = `
+        <ul style="margin:6px 0;padding-left:20px">
+          ${main.exercises.map(ex => `
+            <li style="margin:4px 0">
+              <strong>${_escape(ex.name || "?")}</strong> —
+              ${Array.isArray(ex.sets) ? `${ex.sets[0]}–${ex.sets[1]}` : (ex.sets || "?")} sets
+              × ${_escape(ex.reps || "?")}
+              ${ex.load ? ` @ ${_escape(ex.load)}` : ""}
+            </li>
+          `).join("")}
+        </ul>
+        ${main.rest_between_exercises ? `<div class="hint" style="font-size:0.85em">Rest between exercises: ${_escape(main.rest_between_exercises)}</div>` : ""}
+        ${main.rest_between_sets ? `<div class="hint" style="font-size:0.85em">Rest between sets: ${_escape(main.rest_between_sets)}</div>` : ""}
+      `;
+    } else {
+      // Fallback: raw JSON for patterns we don't recognize yet.
+      body = `<pre style="background:rgba(100,116,139,0.08);padding:8px;border-radius:6px;font-size:0.8em;margin:6px 0;white-space:pre-wrap">${_escape(JSON.stringify(main, null, 2))}</pre>`;
+    }
+
+    // Volume / rest summary at the bottom — user-requested line.
+    let volLine = "";
+    if (main.intervals && Array.isArray(main.intervals.reps)) {
+      volLine = `Volume range: ${main.intervals.reps[0]}–${main.intervals.reps[1]} reps`;
+      if (main.intervals.rest) volLine += ` · Rest: ${main.intervals.rest}`;
+    } else if (main.effort && Array.isArray(main.effort.duration_min)) {
+      volLine = `Volume range: ${main.effort.duration_min[0]}–${main.effort.duration_min[1]} min`;
+    }
+
+    return `
+      <div class="workout-block" style="padding:8px 0">
+        <h4 style="margin:0 0 4px;color:#475569;letter-spacing:0.05em;font-size:0.85em">MAIN SET — ${typeLabel}</h4>
+        ${desc}
+        ${body}
+        ${volLine ? `<div class="hint" style="margin-top:8px;font-size:0.85em">${_escape(volLine)}</div>` : ""}
+      </div>
+    `;
+  }
+
+  function _mainSetTypeLabel(t) {
+    switch (t) {
+      case "intervals":  return "Intervals";
+      case "continuous": return "Continuous";
+      case "ladder":     return "Ladder";
+      case "mixed":      return "Mixed Set";
+      case "strength":   return "Strength Circuit";
+      default:           return t ? _escape(t) : "Main Set";
+    }
+  }
+
+  // Extract the numeric part of a zone string ("Z3" → 3, "Z2–Z3" → 2 for
+  // color purposes — pick the lower/easier end so the block doesn't look
+  // more intense than it is). Returns empty string when absent so the
+  // zone-N class simply isn't applied.
+  function _zoneNum(zoneStr) {
+    if (!zoneStr) return "";
+    const m = String(zoneStr).toUpperCase().match(/Z([1-5])/);
+    return m ? m[1] : "";
+  }
+
+  // Resolve a zone to a concrete label using TrainingZones.resolveZone if
+  // available; otherwise echo the raw zone string.
+  function _resolveZoneLabel(sport, zone, zones) {
+    if (!zone) return "";
+    if (global.TrainingZones && typeof global.TrainingZones.resolveZone === "function") {
+      return _escape(global.TrainingZones.resolveZone(zones, sport, zone));
+    }
+    return _escape(String(zone));
+  }
+
+  // Replace inline "Z3" / "Z2–Z3" tokens inside a description string with
+  // concrete paces. Keeps the rest of the sentence intact.
+  function _substituteZones(text, sport, zones) {
+    const s = _escape(String(text || ""));
+    return s.replace(/Z[1-5](?:[\u2013\u2014\-]Z[1-5])?/g, (match) => {
+      const label = _resolveZoneLabel(sport, match, zones);
+      // If the label is the same as the match, no threshold data → keep Z-ref.
+      if (label === _escape(match)) return match;
+      return `<strong>${label}</strong>`;
+    });
   }
 
   // ── Editor ────────────────────────────────────────────────────────────────
@@ -459,4 +733,7 @@
   global.adminDuplicateWorkout = adminDuplicateWorkout;
   global.adminToggleWorkoutStatus = adminToggleWorkoutStatus;
   global.adminPreviewWorkout = adminPreviewWorkout;
+  global.adminShowPreview = adminShowPreview;
+  global.adminHidePreview = adminHidePreview;
+  global.adminSwitchPreviewPreset = adminSwitchPreviewPreset;
 })(typeof window !== "undefined" ? window : globalThis);
