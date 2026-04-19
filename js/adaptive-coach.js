@@ -101,20 +101,40 @@ function analyzeNutritionEngagement() {
   let meals = [];
   try { meals = JSON.parse(localStorage.getItem("meals") || "[]"); } catch {}
 
+  // Build the 7-day window in LOCAL time. Previously this used
+  // d.toISOString().slice(0,10) which returns a UTC date — when the user
+  // is in a timezone behind UTC and the current UTC clock has rolled past
+  // midnight, "today" showed as tomorrow's date in the window, skipping
+  // today's meals. Meanwhile meal.date comes from <input type="date">,
+  // which is always a LOCAL YYYY-MM-DD. The mismatch reported 0/7 logged
+  // even when the user had meals on file.
+  const _localDateStr = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
   const today = new Date();
-  const recentDays = [];
+  const recentDays = new Set();
   for (let i = 0; i < 7; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    recentDays.push(d.toISOString().slice(0, 10));
+    recentDays.add(_localDateStr(d));
   }
 
-  const daysLogged = new Set(meals.filter(m => recentDays.includes(m.date)).map(m => m.date)).size;
+  // Meal.date is usually "YYYY-MM-DD" but some code paths may store a full
+  // ISO timestamp. Slice to 10 chars so either shape counts.
+  const daysLogged = new Set(
+    meals
+      .map(m => String((m && m.date) || "").slice(0, 10))
+      .filter(d => recentDays.has(d))
+  ).size;
 
   if (daysLogged <= 2) {
     return {
       engaged: false,
-      message: "You've logged meals on ${daysLogged}/7 days. Try just logging one meal per day — every bit counts.",
+      daysLogged,
+      message: `You've logged meals on ${daysLogged}/7 days. Try just logging one meal per day — every bit counts.`,
       suggestion: "simplify",
     };
   }
@@ -255,12 +275,11 @@ function getCoachingInsights() {
       && !_isCoachingDismissed("nutrition")) {
     const nutrition = analyzeNutritionEngagement();
     if (!nutrition.engaged) {
-      const msg = nutrition.message.replace("${daysLogged}", nutrition.daysLogged || 0);
       insights.push({
         type: "nutrition",
         icon: ICONS.utensils,
         title: "Nutrition Logging",
-        message: msg,
+        message: nutrition.message,
       });
     }
   }
