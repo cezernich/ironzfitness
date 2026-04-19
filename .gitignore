@@ -14,3 +14,13 @@ ios/App/Podfile.lock
 
 # Supabase CLI scratch (not project data)
 supabase/.temp/
+
+# Local secrets — service_role keys, etc. Source before running scripts:
+#   set -a && source .env && set +a && node scripts/seed-workout-library.js
+.env
+.env.*
+!.env.example
+
+# Apple developer keys — never ship these
+App Developer Download/
+*.p8
