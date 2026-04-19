@@ -100,6 +100,97 @@ function renderNLInput(dateStr) {
     </div>`;
 }
 
+// ─── Question classifier (keyword-based) ──────────────────────────────────
+// Assigns one of the ask_ironz_logs.category enum values based on keywords
+// in the question. Ordered: the first matching category wins. Designed so
+// the most specific topics (injury, race_strategy) are checked before
+// broader ones (general_fitness). Unknown → "uncategorized".
+const _NL_CATEGORY_RULES = [
+  { category: "injury",         patterns: [/\b(injur(y|ies|ed)|pain|hurt|sore|strain|sprain|pull(ed)?|tendon|knee|shin|achill|plantar|IT[ -]?band|stress fracture|inflam|swell)\b/i] },
+  { category: "recovery",       patterns: [/\b(recover|rest day|sleep|fatigue|burned? out|overtrain|deload|taper|off day|recovery)\b/i] },
+  { category: "nutrition",      patterns: [/\b(nutrit|food|diet|eat|meal|calorie|macro|carb|protein|fat|fuel|snack|breakfast|lunch|dinner|grocery|recipe)\b/i] },
+  { category: "hydration",      patterns: [/\b(hydrat|water|drink|electrolyte|sodium|thirst|fluid)\b/i] },
+  { category: "race_strategy",  patterns: [/\b(race|pace|PR|personal record|goal time|BQ|podium|strategy|pacing|taper strategy|carb[- ]load|race day|race week|negative split|taper)\b/i] },
+  { category: "technique",      patterns: [/\b(form|technique|cadence|stride|gait|breathing|drill|posture|footstrike|pull (mechanics|form)|swim stroke|catch|kick|aero position)\b/i] },
+  { category: "equipment",      patterns: [/\b(shoes?|bike|gear|watch|garmin|strava|hrm|heart rate monitor|pedals?|cleats?|wetsuit|kit|trainer|treadmill)\b/i] },
+  { category: "training_plan",  patterns: [/\b(plan|schedule|workout|session|intervals|tempo|long run|long ride|vo2|threshold|build|base|peak|week|day|mon|tue|wed|thu|fri|sat|sun|generate)\b/i] },
+  { category: "app_help",       patterns: [/\b(how do I|how does|account|sign up|log in|login|password|settings|delete|export|import|sync|bug|crash|error)\b/i] },
+  { category: "general_fitness", patterns: [/\b(strength|mobility|flexibility|stretch|warm[- ]up|cooldown|fitness|cardio)\b/i] },
+];
+function _classifyQuestion(text) {
+  if (!text) return "uncategorized";
+  for (const rule of _NL_CATEGORY_RULES) {
+    if (rule.patterns.some(p => p.test(text))) return rule.category;
+  }
+  return "uncategorized";
+}
+
+// Insert a pending log row. Returns the row id (or null on failure / when
+// the user isn't authenticated / when Supabase isn't wired up). Logging
+// failures MUST NOT break the Ask IronZ flow — always returns gracefully.
+async function _logAskIronZPending(questionText) {
+  try {
+    const client = window.supabaseClient;
+    if (!client) return null;
+    const { data: { session } } = await client.auth.getSession();
+    if (!session || !session.user || !session.user.id) return null;
+    const { data, error } = await client
+      .from("ask_ironz_logs")
+      .insert({
+        user_id: session.user.id,
+        question_text: questionText,
+        category: _classifyQuestion(questionText),
+        response_type: "pending",
+      })
+      .select("id")
+      .single();
+    if (error) { console.warn("[ask-ironz-log] insert failed:", error.message); return null; }
+    return data && data.id;
+  } catch (e) {
+    console.warn("[ask-ironz-log] insert exception:", e && e.message);
+    return null;
+  }
+}
+
+// Finalize a log row after the response completes. Non-blocking: swallows
+// any errors so analytics never break the UX.
+async function _logAskIronZComplete(logId, payload) {
+  if (!logId) return;
+  try {
+    const client = window.supabaseClient;
+    if (!client) return;
+    const update = {};
+    if (payload.response_type)   update.response_type   = payload.response_type;
+    if (payload.tokens_used != null)     update.tokens_used     = payload.tokens_used;
+    if (payload.response_time_ms != null) update.response_time_ms = payload.response_time_ms;
+    const { error } = await client.from("ask_ironz_logs").update(update).eq("id", logId);
+    if (error) console.warn("[ask-ironz-log] update failed:", error.message);
+  } catch (e) {
+    console.warn("[ask-ironz-log] update exception:", e && e.message);
+  }
+}
+
+// User clicked thumbs-up / thumbs-down. Called from the rendered response.
+async function submitAskIronZFeedback(logId, helpful) {
+  if (!logId) return;
+  try {
+    const client = window.supabaseClient;
+    if (!client) return;
+    const { error } = await client
+      .from("ask_ironz_logs")
+      .update({ helpful: !!helpful })
+      .eq("id", logId);
+    if (error) { console.warn("[ask-ironz-log] feedback failed:", error.message); return; }
+    // Reflect state in the UI — replace the buttons with a small confirmation.
+    const host = document.getElementById("nl-feedback-" + logId);
+    if (host) {
+      host.innerHTML = `<span class="nl-feedback-thanks">Thanks — feedback recorded.</span>`;
+    }
+  } catch (e) {
+    console.warn("[ask-ironz-log] feedback exception:", e && e.message);
+  }
+}
+
 async function submitNLInput(dateStr) {
   if (_nlProcessing) return;
   const input = document.getElementById("nl-input-field");
@@ -115,6 +206,12 @@ async function submitNLInput(dateStr) {
   responseEl.style.display = "";
   responseEl.innerHTML = `<div class="nl-loading">Thinking\u2026</div>`;
 
+  // Log every submission with a pending response_type. Final status gets
+  // patched in after the response lands. Log id is threaded through the
+  // render so the thumbs-up/down button can update the same row.
+  const _startedAt = Date.now();
+  const _logId = await _logAskIronZPending(text);
+
   try {
     // FAQ short-circuit: when the question clearly maps to a documented
     // answer, return the canonical FAQ text instead of paying for an LLM
@@ -126,7 +223,12 @@ async function submitNLInput(dateStr) {
         summary: faqMatch.question,
         actions: [{ type: "message", text: faqMatch.answer }],
         source: "faq",
-      }, dateStr, text);
+      }, dateStr, text, _logId);
+      _logAskIronZComplete(_logId, {
+        response_type: "faq_answer",
+        tokens_used: 0,
+        response_time_ms: Date.now() - _startedAt,
+      });
       return;
     }
 
@@ -193,17 +295,36 @@ When referring to dates, use the correct day-of-week name from the schedule cont
     const result = JSON.parse(rawText.replace(/```json|```/g, "").trim());
 
     // Show the response with confirmation
-    _renderNLResponse(result, dateStr, text);
+    _renderNLResponse(result, dateStr, text, _logId);
+
+    // Classify final response type — if the LLM produced any restriction
+    // action, treat as plan_generated (schedule change). Otherwise it's a
+    // coaching_tip (advice only). tokens_used comes from Claude's usage
+    // block surfaced by the Edge Function in data._raw.
+    const hasRestriction = Array.isArray(result.actions) &&
+      result.actions.some(a => a && a.type === "restriction");
+    const usage = (data && data._raw && data._raw.usage) || {};
+    const totalTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0);
+    _logAskIronZComplete(_logId, {
+      response_type: hasRestriction ? "plan_generated" : "coaching_tip",
+      tokens_used: totalTokens || null,
+      response_time_ms: Date.now() - _startedAt,
+    });
 
   } catch (err) {
     responseEl.innerHTML = `<div class="nl-error">Something went wrong: ${_escHtml(err.message || "Unknown error")}</div>`;
+    // Log the failure so we can see what kinds of questions bounce.
+    _logAskIronZComplete(_logId, {
+      response_type: "couldnt_help",
+      response_time_ms: Date.now() - _startedAt,
+    });
   } finally {
     _nlProcessing = false;
     if (btn) btn.disabled = false;
   }
 }
 
-function _renderNLResponse(result, dateStr, originalInput) {
+function _renderNLResponse(result, dateStr, originalInput, logId) {
   const responseEl = document.getElementById("nl-response");
   if (!responseEl) return;
 
@@ -235,6 +356,23 @@ function _renderNLResponse(result, dateStr, originalInput) {
   messages.forEach(m => {
     html += `<div class="nl-coach-msg">${_escHtml(m.text || "")}</div>`;
   });
+
+  // Feedback row — only render when we have a log id (authenticated user
+  // whose insert succeeded). Updates ask_ironz_logs.helpful via a scoped
+  // RLS-protected UPDATE from the anon key.
+  if (logId) {
+    html += `
+      <div class="nl-feedback" id="nl-feedback-${_escHtml(logId)}">
+        <span class="nl-feedback-label">Was this helpful?</span>
+        <button class="nl-feedback-btn nl-feedback-up"
+                onclick="submitAskIronZFeedback('${_escHtml(logId)}', true)"
+                title="Helpful" aria-label="Helpful">👍</button>
+        <button class="nl-feedback-btn nl-feedback-down"
+                onclick="submitAskIronZFeedback('${_escHtml(logId)}', false)"
+                title="Not helpful" aria-label="Not helpful">👎</button>
+      </div>
+    `;
+  }
 
   // Always show dismiss button
   if (restrictions.length === 0) {
