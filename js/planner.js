@@ -3618,6 +3618,99 @@ if (typeof window !== "undefined") {
   window.buildPatternsFromPreferences = buildPatternsFromPreferences;
 }
 
+/**
+ * _buildStrengthForPlan(weekNumber, phaseName)
+ * Returns { name, exercises } for a strength plan entry. Rotates through the
+ * user's selected split (strengthSetup.split: "full" | "upper-lower" | "ppl" |
+ * "custom") by weekNumber so adjacent strength days don't repeat. Falls back
+ * to a generic Full Body template when no strengthSetup is saved.
+ *
+ * In Peak and Taper, strength drops to a maintenance template (fewer sets,
+ * same exercises) — per §6.1 strength is 1×/week maintenance in Peak and
+ * drops entirely in Taper (though we leave it as opt-in maintenance here).
+ */
+function _buildStrengthForPlan(weekNumber, phaseName) {
+  const _STRENGTH_FALLBACK = {
+    full: [
+      { name: "Back Squat",            sets: 4, reps: "5-8",  weight: "" },
+      { name: "Barbell Bench Press",   sets: 4, reps: "6-8",  weight: "" },
+      { name: "Barbell Row",           sets: 3, reps: "8-10", weight: "" },
+      { name: "Romanian Deadlift",     sets: 3, reps: "8",    weight: "" },
+      { name: "Overhead Press",        sets: 3, reps: "8-10", weight: "" },
+      { name: "Plank",                 sets: 3, reps: "45s",  weight: "Bodyweight" },
+    ],
+    push: [
+      { name: "Barbell Bench Press",      sets: 4, reps: "6-8",   weight: "" },
+      { name: "Overhead Press",           sets: 3, reps: "8-10",  weight: "" },
+      { name: "Incline Dumbbell Press",   sets: 3, reps: "10",    weight: "" },
+      { name: "Lateral Raise",            sets: 3, reps: "12-15", weight: "" },
+      { name: "Tricep Pushdown",          sets: 3, reps: "12",    weight: "" },
+    ],
+    pull: [
+      { name: "Deadlift",       sets: 4, reps: "5",     weight: "" },
+      { name: "Barbell Row",    sets: 4, reps: "8",     weight: "" },
+      { name: "Lat Pulldown",   sets: 3, reps: "10-12", weight: "" },
+      { name: "Face Pull",      sets: 3, reps: "15",    weight: "Light cable" },
+      { name: "Barbell Curl",   sets: 3, reps: "10",    weight: "" },
+    ],
+    legs: [
+      { name: "Back Squat",            sets: 4, reps: "5-8",    weight: "" },
+      { name: "Romanian Deadlift",     sets: 3, reps: "8",      weight: "" },
+      { name: "Bulgarian Split Squat", sets: 3, reps: "10/leg", weight: "" },
+      { name: "Hip Thrust",            sets: 3, reps: "10",     weight: "" },
+      { name: "Standing Calf Raise",   sets: 4, reps: "15",     weight: "" },
+    ],
+    upper: [
+      { name: "Barbell Bench Press", sets: 4, reps: "6-8",   weight: "" },
+      { name: "Barbell Row",         sets: 4, reps: "8",     weight: "" },
+      { name: "Overhead Press",      sets: 3, reps: "8-10",  weight: "" },
+      { name: "Lat Pulldown",        sets: 3, reps: "10-12", weight: "" },
+      { name: "Face Pull",           sets: 3, reps: "15",    weight: "Light cable" },
+    ],
+    lower: [
+      { name: "Back Squat",          sets: 4, reps: "5-8",    weight: "" },
+      { name: "Romanian Deadlift",   sets: 3, reps: "8",      weight: "" },
+      { name: "Leg Press",           sets: 3, reps: "10",     weight: "" },
+      { name: "Hip Thrust",          sets: 3, reps: "10",     weight: "" },
+      { name: "Standing Calf Raise", sets: 4, reps: "15",     weight: "" },
+    ],
+  };
+
+  let setup = {};
+  try { setup = JSON.parse(localStorage.getItem("strengthSetup") || "{}") || {}; } catch {}
+
+  const split = setup.split || "full";
+  // Rotation order per split (§ common programming patterns).
+  const rotations = {
+    full:        ["full"],
+    "upper-lower": ["upper", "lower"],
+    ppl:         ["push", "pull", "legs"],
+    custom:      ["full"], // TODO: pull customMuscles by day index
+  };
+  const rot = rotations[split] || rotations.full;
+  const wn = Math.max(1, Number(weekNumber) || 1);
+  const focus = rot[(wn - 1) % rot.length];
+
+  // Maintenance cut in Peak/Taper: drop one set per exercise (§6.1 says
+  // strength is maintenance-only in Peak and drops in Taper; if the athlete
+  // keeps it, it should be brief).
+  let exercises = (_STRENGTH_FALLBACK[focus] || _STRENGTH_FALLBACK.full).slice()
+    .map(e => ({ ...e }));
+  if (phaseName === "Peak" || phaseName === "Taper") {
+    exercises = exercises.map(e => ({
+      ...e,
+      sets: Math.max(2, (typeof e.sets === "number" ? e.sets : parseInt(e.sets, 10) || 3) - 1),
+    }));
+  }
+
+  const labels = { full: "Full Body", push: "Push Day", pull: "Pull Day", legs: "Leg Day", upper: "Upper Body", lower: "Lower Body" };
+  return { name: labels[focus] || "Strength", exercises };
+}
+
+if (typeof window !== "undefined") {
+  window._buildStrengthForPlan = _buildStrengthForPlan;
+}
+
 function _generateSingleRacePlan(race) {
   const config = RACE_CONFIGS[race.type];
   if (!config) return [];
@@ -3856,16 +3949,38 @@ function _generateSingleRacePlan(race) {
       const duration = (session.discipline === "run" && runPatternKey)
         ? getRunSessionDuration(race.type, session.load, phaseName, wNum, _effectiveTotalWeeks, runPatternKey)
         : undefined;
-      plan.push({
+
+      // Strength plan entries need an `exercises` array — the render path
+      // keys off that, so an empty strength entry appears as a blank card.
+      // Session label uses the strength focus (Push / Pull / Legs / Full)
+      // rather than "Tempo Strength" since intensity labels don't apply to
+      // lifting. The exercises list rotates through the user's selected
+      // split so adjacent strength days don't repeat the same template.
+      let strengthExercises = null;
+      let strengthName = null;
+      if (session.discipline === "strength") {
+        const built = _buildStrengthForPlan(wNum, phaseName);
+        strengthExercises = built.exercises;
+        strengthName = built.name;
+      }
+
+      const baseEntry = {
         date: dateStr,
         raceId: race.id,
         phase: phaseName,
         weekNumber: wNum,
         discipline: session.discipline,
         load: session.load,
-        sessionName: `${loadName} ${capitalize(session.discipline)}`,
+        sessionName: session.discipline === "strength"
+          ? (strengthName || "Strength Training")
+          : `${loadName} ${capitalize(session.discipline)}`,
         ...(duration != null ? { duration } : {}),
-      });
+      };
+      if (strengthExercises && strengthExercises.length) {
+        baseEntry.type = "weightlifting";
+        baseEntry.exercises = strengthExercises;
+      }
+      plan.push(baseEntry);
     }
 
     // Advance day; phase tracking still pivots on Mondays so each
