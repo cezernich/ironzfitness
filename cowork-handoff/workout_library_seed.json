@@ -1,0 +1,1537 @@
+[
+
+
+  {"_comment": "========== RUN — EASY / Z2 =========="},
+
+  {
+    "name": "Steady Easy Run",
+    "description": "Classic easy effort. Conversational pace throughout. The bread and butter.",
+    "sport": "run",
+    "session_type": "easy",
+    "energy_system": "aerobic",
+    "phases": ["base", "build", "peak", "taper"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "Start with 3–5 min walk/very easy jog to settle in", "duration_min": 4 },
+    "main_set": {
+      "type": "continuous",
+      "description": "Steady easy effort — stay conversational the entire time",
+      "effort": { "duration_min": [20, 40], "zone": "Z2" }
+    },
+    "cooldown": { "description": "3 min walk + light stretching", "duration_min": 3 },
+    "volume_range": { "duration_min": [20, 40] },
+    "total_duration_range": [27, 47],
+    "status": "published"
+  },
+
+  {
+    "name": "Easy Run with Strides",
+    "description": "Easy effort with short accelerations at the end to keep legs snappy without adding fatigue.",
+    "sport": "run",
+    "session_type": "easy",
+    "energy_system": "aerobic",
+    "phases": ["base", "build", "peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "5 min easy jog", "duration_min": 5 },
+    "main_set": {
+      "type": "mixed",
+      "description": "Easy run + finishing strides",
+      "blocks": [
+        { "type": "continuous", "duration_min": [20, 35], "zone": "Z2", "description": "Easy aerobic run" },
+        { "type": "intervals", "reps": [4, 6], "duration": "20 sec", "rest": "60 sec walk", "zone": "Z5", "description": "Strides: smooth acceleration to near-sprint, focus on form not effort" }
+      ]
+    },
+    "cooldown": { "description": "5 min easy jog + stretching", "duration_min": 5 },
+    "volume_range": { "duration_min": [20, 35], "strides": [4, 6] },
+    "total_duration_range": [34, 50],
+    "status": "published"
+  },
+
+  {
+    "name": "Easy Progression Run",
+    "description": "Start very easy, finish at the upper end of easy. Teaches pace discipline and negative splitting.",
+    "sport": "run",
+    "session_type": "easy",
+    "energy_system": "aerobic",
+    "phases": ["base", "build"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "5 min very easy jog (slower than Z2)", "duration_min": 5 },
+    "main_set": {
+      "type": "mixed",
+      "description": "Negative split easy run — each third slightly faster but all within Z1–Z2",
+      "blocks": [
+        { "type": "continuous", "duration_min": [8, 12], "zone": "Z1", "description": "First third: very easy, lower Z1" },
+        { "type": "continuous", "duration_min": [8, 12], "zone": "Z2", "description": "Middle third: settle into Z2" },
+        { "type": "continuous", "duration_min": [8, 12], "zone": "Z2", "description": "Final third: upper Z2, still comfortable" }
+      ]
+    },
+    "cooldown": { "description": "5 min easy walk", "duration_min": 5 },
+    "volume_range": { "duration_min": [24, 36] },
+    "total_duration_range": [34, 46],
+    "status": "published"
+  },
+
+  {
+    "name": "Walk-Run Easy Session",
+    "description": "Alternating walk and run intervals. Perfect for new runners building aerobic base safely.",
+    "sport": "run",
+    "session_type": "easy",
+    "energy_system": "aerobic",
+    "phases": ["base", "build"],
+    "levels": ["beginner"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "5 min brisk walk", "duration_min": 5 },
+    "main_set": {
+      "type": "intervals",
+      "description": "Alternating run and walk — run should feel easy, walk is active recovery",
+      "intervals": {
+        "reps": [4, 8],
+        "duration": "3 min run",
+        "rest": "2 min walk",
+        "zone": "Z2"
+      }
+    },
+    "cooldown": { "description": "5 min easy walk + stretching", "duration_min": 5 },
+    "volume_range": { "reps": [4, 8] },
+    "total_duration_range": [30, 50],
+    "status": "published"
+  },
+
+
+  {"_comment": "========== RUN — TEMPO / THRESHOLD =========="},
+
+  {
+    "name": "Steady State Tempo",
+    "description": "Continuous tempo effort. The classic threshold builder — sustained, controlled, not a race.",
+    "sport": "run",
+    "session_type": "tempo",
+    "energy_system": "lactate_threshold",
+    "phases": ["build", "peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "12 min easy jog + 4×100m strides", "duration_min": 15 },
+    "main_set": {
+      "type": "continuous",
+      "description": "Sustained tempo — lock into Z3 and hold. Should feel comfortably hard.",
+      "effort": { "duration_min": [20, 35], "zone": "Z3" }
+    },
+    "cooldown": { "description": "10 min easy jog", "duration_min": 10 },
+    "volume_range": { "duration_min": [20, 35] },
+    "total_duration_range": [45, 60],
+    "status": "published"
+  },
+
+  {
+    "name": "Cruise Intervals",
+    "description": "Tempo broken into repeats with short rest. Same threshold stimulus, more manageable for longer total time at Z3.",
+    "sport": "run",
+    "session_type": "tempo",
+    "energy_system": "lactate_threshold",
+    "phases": ["build", "peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "12 min easy jog + 4×100m strides", "duration_min": 15 },
+    "main_set": {
+      "type": "intervals",
+      "description": "Cruise intervals at threshold — the short rest keeps HR elevated while giving a mental break",
+      "intervals": {
+        "reps": [3, 5],
+        "duration": "8 min",
+        "rest": "90 sec easy jog",
+        "zone": "Z3"
+      }
+    },
+    "cooldown": { "description": "10 min easy jog", "duration_min": 10 },
+    "volume_range": { "reps": [3, 5] },
+    "total_duration_range": [49, 65],
+    "status": "published"
+  },
+
+  {
+    "name": "Tempo with Surge Finish",
+    "description": "Sustained tempo with a short harder pickup at the end. Teaches finishing under fatigue.",
+    "sport": "run",
+    "session_type": "tempo",
+    "energy_system": "lactate_threshold",
+    "phases": ["build", "peak"],
+    "levels": ["advanced"],
+    "race_distances": ["10k", "half", "marathon", "half_ironman", "full_ironman"],
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "12 min easy jog + dynamic drills + 4×100m strides", "duration_min": 16 },
+    "main_set": {
+      "type": "mixed",
+      "description": "Sustained tempo with a surge to practice closing under fatigue",
+      "blocks": [
+        { "type": "continuous", "duration_min": [18, 28], "zone": "Z3", "description": "Steady tempo — patient, controlled" },
+        { "type": "continuous", "duration_min": [3, 5], "zone": "Z4", "description": "Surge to close — pick it up to Z4 for the final minutes" }
+      ]
+    },
+    "cooldown": { "description": "10 min easy jog", "duration_min": 10 },
+    "volume_range": { "duration_min": [21, 33] },
+    "total_duration_range": [47, 59],
+    "status": "published"
+  },
+
+  {
+    "name": "Progression Tempo",
+    "description": "Start at lower tempo, build to upper threshold. Teaches the feel of progressive pacing on tired legs.",
+    "sport": "run",
+    "session_type": "tempo",
+    "energy_system": "lactate_threshold",
+    "phases": ["build", "peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": ["half", "marathon", "half_ironman", "full_ironman"],
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "12 min easy jog + 4×100m strides", "duration_min": 15 },
+    "main_set": {
+      "type": "mixed",
+      "description": "Progressive tempo — each segment slightly faster but all controlled",
+      "blocks": [
+        { "type": "continuous", "duration_min": [8, 12], "zone": "Z3", "description": "Low Z3 — the easiest tempo pace" },
+        { "type": "continuous", "duration_min": [8, 10], "zone": "Z3", "description": "Mid Z3 — settle in" },
+        { "type": "continuous", "duration_min": [5, 8], "zone": "Z3-Z4", "description": "Upper Z3 to low Z4 — strong finish" }
+      ]
+    },
+    "cooldown": { "description": "10 min easy jog", "duration_min": 10 },
+    "volume_range": { "duration_min": [21, 30] },
+    "total_duration_range": [46, 55],
+    "status": "published"
+  },
+
+  {
+    "name": "Gentle Tempo",
+    "description": "Conservative tempo for just-finish athletes. Lower Z3, shorter duration. Getting comfortable being uncomfortable.",
+    "sport": "run",
+    "session_type": "tempo",
+    "energy_system": "lactate_threshold",
+    "phases": ["build", "peak"],
+    "levels": ["beginner", "intermediate"],
+    "race_distances": null,
+    "race_goals": ["just_finish"],
+    "warmup": { "description": "10 min easy jog", "duration_min": 10 },
+    "main_set": {
+      "type": "continuous",
+      "description": "Gentle tempo — low Z3, should feel like you're working but not suffering",
+      "effort": { "duration_min": [12, 22], "zone": "Z3" }
+    },
+    "cooldown": { "description": "8 min easy jog + stretching", "duration_min": 8 },
+    "volume_range": { "duration_min": [12, 22] },
+    "total_duration_range": [30, 40],
+    "status": "published"
+  },
+
+  {
+    "name": "Broken Tempo",
+    "description": "Tempo in shorter chunks with generous recovery. Good stepping stone before sustained tempo.",
+    "sport": "run",
+    "session_type": "tempo",
+    "energy_system": "lactate_threshold",
+    "phases": ["build"],
+    "levels": ["beginner", "intermediate"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "10 min easy jog + 2×100m strides", "duration_min": 12 },
+    "main_set": {
+      "type": "intervals",
+      "description": "Short tempo blocks with real recovery — build confidence at threshold",
+      "intervals": {
+        "reps": [3, 5],
+        "duration": "5 min",
+        "rest": "2 min easy jog",
+        "zone": "Z3"
+      }
+    },
+    "cooldown": { "description": "8 min easy jog", "duration_min": 8 },
+    "volume_range": { "reps": [3, 5] },
+    "total_duration_range": [35, 47],
+    "status": "published"
+  },
+
+  {
+    "name": "Mile Repeat Tempo",
+    "description": "Classic mile repeats at threshold. Great benchmark workout — track progress over weeks.",
+    "sport": "run",
+    "session_type": "tempo",
+    "energy_system": "lactate_threshold",
+    "phases": ["build", "peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": ["10k", "half", "marathon"],
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "12 min easy jog + drills + 4×100m strides", "duration_min": 16 },
+    "main_set": {
+      "type": "intervals",
+      "description": "Mile repeats — lock into Z3 pace per mile, use the rest to reset mentally",
+      "intervals": {
+        "reps": [3, 5],
+        "duration": "1 mile",
+        "rest": "90 sec easy jog",
+        "zone": "Z3"
+      }
+    },
+    "cooldown": { "description": "10 min easy jog", "duration_min": 10 },
+    "volume_range": { "reps": [3, 5] },
+    "total_duration_range": [45, 60],
+    "status": "published"
+  },
+
+  {
+    "name": "Half Marathon Pace Tempo",
+    "description": "Extended tempo at half marathon race pace. The key session for half and full marathoners.",
+    "sport": "run",
+    "session_type": "tempo",
+    "energy_system": "lactate_threshold",
+    "phases": ["build", "peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": ["half", "marathon"],
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "15 min easy jog + 4×100m strides", "duration_min": 18 },
+    "main_set": {
+      "type": "continuous",
+      "description": "Extended half marathon pace effort — practice the exact race feel",
+      "effort": { "duration_min": [25, 45], "zone": "Z3" }
+    },
+    "cooldown": { "description": "10 min easy jog", "duration_min": 10 },
+    "volume_range": { "duration_min": [25, 45] },
+    "total_duration_range": [53, 73],
+    "status": "published"
+  },
+
+
+  {"_comment": "========== RUN — VO2MAX / INTERVALS =========="},
+
+  {
+    "name": "Classic 1K Repeats",
+    "description": "The gold standard VO2max workout. 1000m repeats at Z4 with equal jog recovery.",
+    "sport": "run",
+    "session_type": "vo2max",
+    "energy_system": "vo2max",
+    "phases": ["build", "peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "12 min easy jog + drills + 4×100m strides", "duration_min": 16 },
+    "main_set": {
+      "type": "intervals",
+      "description": "1K repeats — hard but controlled, don't sprint the first one",
+      "intervals": {
+        "reps": [4, 7],
+        "duration": "1000m",
+        "rest": "3 min easy jog",
+        "zone": "Z4"
+      }
+    },
+    "cooldown": { "description": "10 min easy jog", "duration_min": 10 },
+    "volume_range": { "reps": [4, 7] },
+    "total_duration_range": [48, 64],
+    "status": "published"
+  },
+
+  {
+    "name": "800m Repeats",
+    "description": "Shorter, slightly faster VO2max work. Great for 5K and 10K specificity.",
+    "sport": "run",
+    "session_type": "vo2max",
+    "energy_system": "vo2max",
+    "phases": ["build", "peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": ["5k", "10k"],
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "12 min easy jog + drills + 4×100m strides", "duration_min": 16 },
+    "main_set": {
+      "type": "intervals",
+      "description": "800m repeats — quicker turnover than 1Ks, practice holding form when legs burn",
+      "intervals": {
+        "reps": [5, 8],
+        "duration": "800m",
+        "rest": "2:30 easy jog",
+        "zone": "Z4"
+      }
+    },
+    "cooldown": { "description": "10 min easy jog", "duration_min": 10 },
+    "volume_range": { "reps": [5, 8] },
+    "total_duration_range": [45, 58],
+    "status": "published"
+  },
+
+  {
+    "name": "3-Minute VO2max Intervals",
+    "description": "Time-based VO2max work. Easier to execute than distance-based if no track available.",
+    "sport": "run",
+    "session_type": "vo2max",
+    "energy_system": "vo2max",
+    "phases": ["build", "peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "12 min easy jog + 4×100m strides", "duration_min": 15 },
+    "main_set": {
+      "type": "intervals",
+      "description": "3 min hard intervals — long enough to reach VO2max, short enough to maintain quality",
+      "intervals": {
+        "reps": [4, 6],
+        "duration": "3 min",
+        "rest": "3 min easy jog",
+        "zone": "Z4"
+      }
+    },
+    "cooldown": { "description": "10 min easy jog", "duration_min": 10 },
+    "volume_range": { "reps": [4, 6] },
+    "total_duration_range": [45, 57],
+    "status": "published"
+  },
+
+  {
+    "name": "Ascending Ladder",
+    "description": "Build from short to long intervals. Mentally easier — the hardest rep is when you're freshest.",
+    "sport": "run",
+    "session_type": "vo2max",
+    "energy_system": "vo2max",
+    "phases": ["build"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "12 min easy jog + drills + 4×100m strides", "duration_min": 16 },
+    "main_set": {
+      "type": "ladder",
+      "description": "Ascending ladder — build into the workout, each rep longer but same effort",
+      "steps": [
+        { "duration": "1 min", "zone": "Z4" },
+        { "duration": "2 min", "zone": "Z4" },
+        { "duration": "3 min", "zone": "Z4" },
+        { "duration": "4 min", "zone": "Z4" },
+        { "duration": "5 min", "zone": "Z4" }
+      ],
+      "rest_between": "equal to work duration, easy jog",
+      "scale_rule": "add_outer_steps",
+      "reps_range": [3, 5]
+    },
+    "cooldown": { "description": "10 min easy jog", "duration_min": 10 },
+    "volume_range": { "reps_range": [3, 5] },
+    "total_duration_range": [42, 56],
+    "status": "published"
+  },
+
+  {
+    "name": "Pyramid Intervals",
+    "description": "Up and back down. The longest rep in the middle is the crux — everything after is a victory lap.",
+    "sport": "run",
+    "session_type": "vo2max",
+    "energy_system": "vo2max",
+    "phases": ["build", "peak"],
+    "levels": ["advanced"],
+    "race_distances": null,
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "12 min easy jog + drills + 4×100m strides", "duration_min": 16 },
+    "main_set": {
+      "type": "ladder",
+      "description": "Pyramid — build up, hit the peak, come back down. Match the effort on the way down.",
+      "steps": [
+        { "duration": "2 min", "zone": "Z4" },
+        { "duration": "3 min", "zone": "Z4" },
+        { "duration": "4 min", "zone": "Z4" },
+        { "duration": "3 min", "zone": "Z4" },
+        { "duration": "2 min", "zone": "Z4" }
+      ],
+      "rest_between": "90 sec easy jog",
+      "scale_rule": "add_outer_steps",
+      "reps_range": [5, 7]
+    },
+    "cooldown": { "description": "10 min easy jog", "duration_min": 10 },
+    "volume_range": { "reps_range": [5, 7] },
+    "total_duration_range": [48, 58],
+    "status": "published"
+  },
+
+  {
+    "name": "400m Speed Repeats",
+    "description": "Short, fast repeats for neuromuscular power. Sharpening workout for 5K racers.",
+    "sport": "run",
+    "session_type": "vo2max",
+    "energy_system": "neuromuscular",
+    "phases": ["peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": ["5k", "10k"],
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "15 min easy jog + drills + 6×100m strides", "duration_min": 20 },
+    "main_set": {
+      "type": "intervals",
+      "description": "400m repeats — fast and crisp, not all-out sprints. Smooth, quick turnover.",
+      "intervals": {
+        "reps": [6, 10],
+        "duration": "400m",
+        "rest": "90 sec easy jog",
+        "zone": "Z5"
+      }
+    },
+    "cooldown": { "description": "10 min easy jog", "duration_min": 10 },
+    "volume_range": { "reps": [6, 10] },
+    "total_duration_range": [42, 52],
+    "status": "published"
+  },
+
+  {
+    "name": "Long VO2max Intervals",
+    "description": "4–5 min repeats for sustained VO2max stimulus. Brutal but effective for half marathoners and above.",
+    "sport": "run",
+    "session_type": "vo2max",
+    "energy_system": "vo2max",
+    "phases": ["build", "peak"],
+    "levels": ["advanced"],
+    "race_distances": ["half", "marathon", "half_ironman", "full_ironman"],
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "15 min easy jog + drills + 4×100m strides", "duration_min": 18 },
+    "main_set": {
+      "type": "intervals",
+      "description": "Long VO2max — stay at Z4 effort, don't start too fast. These are about time at intensity.",
+      "intervals": {
+        "reps": [3, 5],
+        "duration": "5 min",
+        "rest": "3 min easy jog",
+        "zone": "Z4"
+      }
+    },
+    "cooldown": { "description": "10 min easy jog", "duration_min": 10 },
+    "volume_range": { "reps": [3, 5] },
+    "total_duration_range": [49, 63],
+    "status": "published"
+  },
+
+  {
+    "name": "Hill Repeats",
+    "description": "VO2max stimulus with lower impact. The hill provides resistance — no need to go as fast.",
+    "sport": "run",
+    "session_type": "vo2max",
+    "energy_system": "vo2max",
+    "phases": ["base", "build"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "12 min easy jog on flat", "duration_min": 12 },
+    "main_set": {
+      "type": "intervals",
+      "description": "Hill repeats — 4–6% grade, strong effort uphill, easy jog down. Focus on driving arms and knees.",
+      "intervals": {
+        "reps": [4, 8],
+        "duration": "90 sec uphill",
+        "rest": "jog down recovery (2–3 min)",
+        "zone": "Z4"
+      }
+    },
+    "cooldown": { "description": "10 min easy jog on flat", "duration_min": 10 },
+    "volume_range": { "reps": [4, 8] },
+    "total_duration_range": [36, 52],
+    "status": "published"
+  },
+
+
+  {"_comment": "========== RUN — LONG RUN =========="},
+
+  {
+    "name": "Steady Long Run",
+    "description": "Classic long run. Easy pace throughout. Building aerobic endurance and mental toughness.",
+    "sport": "run",
+    "session_type": "long",
+    "energy_system": "aerobic",
+    "phases": ["base", "build", "peak"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "First 10 min at very easy pace — let the body settle in", "duration_min": 10 },
+    "main_set": {
+      "type": "continuous",
+      "description": "Steady Z2 effort — resist the urge to speed up. Practice patience.",
+      "effort": { "duration_min": [40, 120], "zone": "Z2" }
+    },
+    "cooldown": { "description": "5 min easy walk + stretching", "duration_min": 5 },
+    "volume_range": { "duration_min": [40, 120] },
+    "total_duration_range": [55, 135],
+    "status": "published"
+  },
+
+  {
+    "name": "Long Run with Race-Pace Finish",
+    "description": "Easy long run with the last 20–30% at race pace. Teaches closing strong on tired legs.",
+    "sport": "run",
+    "session_type": "long",
+    "energy_system": "mixed",
+    "phases": ["build", "peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": ["half", "marathon", "half_ironman", "full_ironman"],
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "First 10 min very easy", "duration_min": 10 },
+    "main_set": {
+      "type": "mixed",
+      "description": "Build into race pace — patient start, strong finish",
+      "blocks": [
+        { "type": "continuous", "duration_min": [35, 75], "zone": "Z2", "description": "Easy aerobic — bank the miles" },
+        { "type": "continuous", "duration_min": [15, 35], "zone": "Z3", "description": "Drop to race pace for the final segment — practice running fast on tired legs" }
+      ]
+    },
+    "cooldown": { "description": "5 min walk", "duration_min": 5 },
+    "volume_range": { "duration_min": [50, 110] },
+    "total_duration_range": [65, 125],
+    "status": "published"
+  },
+
+  {
+    "name": "Long Run with Mid-Run Tempo",
+    "description": "Sandwich a tempo block in the middle of a long run. Simulates surging mid-race.",
+    "sport": "run",
+    "session_type": "long",
+    "energy_system": "mixed",
+    "phases": ["build", "peak"],
+    "levels": ["advanced"],
+    "race_distances": ["half", "marathon"],
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "First 10 min very easy", "duration_min": 10 },
+    "main_set": {
+      "type": "mixed",
+      "description": "Tempo sandwich — easy start, tempo in the middle, easy to finish",
+      "blocks": [
+        { "type": "continuous", "duration_min": [20, 30], "zone": "Z2", "description": "Easy warmup miles" },
+        { "type": "continuous", "duration_min": [15, 30], "zone": "Z3", "description": "Tempo block — controlled, strong" },
+        { "type": "continuous", "duration_min": [15, 25], "zone": "Z2", "description": "Easy cool down miles — resist temptation to push" }
+      ]
+    },
+    "cooldown": { "description": "5 min walk", "duration_min": 5 },
+    "volume_range": { "duration_min": [50, 85] },
+    "total_duration_range": [65, 100],
+    "status": "published"
+  },
+
+  {
+    "name": "Marathon Pace Long Run",
+    "description": "Extended marathon pace effort embedded in a long run. The key marathon-specific workout.",
+    "sport": "run",
+    "session_type": "long",
+    "energy_system": "mixed",
+    "phases": ["build", "peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": ["marathon", "full_ironman"],
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "15 min easy jog", "duration_min": 15 },
+    "main_set": {
+      "type": "mixed",
+      "description": "Extended marathon pace — this is THE workout that builds marathon confidence",
+      "blocks": [
+        { "type": "continuous", "duration_min": [15, 20], "zone": "Z2", "description": "Easy to settle in" },
+        { "type": "continuous", "duration_min": [30, 60], "zone": "Z3", "description": "Marathon pace — steady, sustainable, practice nutrition" },
+        { "type": "continuous", "duration_min": [10, 15], "zone": "Z2", "description": "Easy to cool down" }
+      ]
+    },
+    "cooldown": { "description": "5 min walk + stretching", "duration_min": 5 },
+    "volume_range": { "duration_min": [55, 95] },
+    "total_duration_range": [75, 115],
+    "status": "published"
+  },
+
+
+  {"_comment": "========== BIKE — Z2 ENDURANCE =========="},
+
+  {
+    "name": "Steady Z2 Ride",
+    "description": "Classic aerobic endurance ride. Flat or rolling terrain, steady effort, conversational.",
+    "sport": "bike",
+    "session_type": "easy",
+    "energy_system": "aerobic",
+    "phases": ["base", "build", "peak", "taper"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "5 min easy spin, gradually increase cadence", "duration_min": 5 },
+    "main_set": {
+      "type": "continuous",
+      "description": "Steady Z2 effort — keep cadence 85–95 RPM, controlled breathing",
+      "effort": { "duration_min": [40, 90], "zone": "Z2" }
+    },
+    "cooldown": { "description": "5 min easy spin", "duration_min": 5 },
+    "volume_range": { "duration_min": [40, 90] },
+    "total_duration_range": [50, 100],
+    "status": "published"
+  },
+
+  {
+    "name": "Cadence Focus Ride",
+    "description": "Z2 ride with cadence drills. Build pedaling efficiency and neuromuscular coordination.",
+    "sport": "bike",
+    "session_type": "easy",
+    "energy_system": "aerobic",
+    "phases": ["base", "build"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "10 min easy spin", "duration_min": 10 },
+    "main_set": {
+      "type": "mixed",
+      "description": "Z2 ride with cadence variations — same power, different leg speed",
+      "blocks": [
+        { "type": "continuous", "duration_min": [10, 15], "zone": "Z2", "description": "Normal cadence (85–95 RPM)" },
+        { "type": "intervals", "reps": [3, 5], "duration": "3 min at 100–110 RPM", "rest": "3 min normal cadence", "zone": "Z2", "description": "High cadence spins — smooth pedal circles, no bouncing" },
+        { "type": "continuous", "duration_min": [10, 15], "zone": "Z2", "description": "Normal cadence to finish" }
+      ]
+    },
+    "cooldown": { "description": "5 min easy spin", "duration_min": 5 },
+    "volume_range": { "duration_min": [38, 55] },
+    "total_duration_range": [53, 70],
+    "status": "published"
+  },
+
+  {
+    "name": "Progressive Endurance Ride",
+    "description": "Start easy, finish at upper Z2. Teaches pacing discipline — don't go out too hard.",
+    "sport": "bike",
+    "session_type": "easy",
+    "energy_system": "aerobic",
+    "phases": ["base", "build"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "10 min very easy spin", "duration_min": 10 },
+    "main_set": {
+      "type": "mixed",
+      "description": "Gradual build — each block slightly higher power but all Z2",
+      "blocks": [
+        { "type": "continuous", "duration_min": [15, 25], "zone": "Z1", "description": "Low Z1–Z2 — easy spinning" },
+        { "type": "continuous", "duration_min": [15, 25], "zone": "Z2", "description": "Mid Z2 — steady state" },
+        { "type": "continuous", "duration_min": [15, 25], "zone": "Z2", "description": "Upper Z2 — strong but sustainable" }
+      ]
+    },
+    "cooldown": { "description": "5 min easy spin", "duration_min": 5 },
+    "volume_range": { "duration_min": [45, 75] },
+    "total_duration_range": [60, 90],
+    "status": "published"
+  },
+
+
+  {"_comment": "========== BIKE — SWEET SPOT / THRESHOLD =========="},
+
+  {
+    "name": "Sweet Spot Intervals",
+    "description": "88–94% of FTP — the sweet spot between tempo and threshold. Maximum training stimulus with manageable fatigue.",
+    "sport": "bike",
+    "session_type": "sweet_spot",
+    "energy_system": "lactate_threshold",
+    "phases": ["build", "peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "10 min easy spin + 2×1 min spin-ups", "duration_min": 12 },
+    "main_set": {
+      "type": "intervals",
+      "description": "Sweet spot intervals — feels hard but manageable. You should NOT be gasping.",
+      "intervals": {
+        "reps": [2, 4],
+        "duration": "12 min",
+        "rest": "5 min easy spin",
+        "zone": "Z3"
+      }
+    },
+    "cooldown": { "description": "10 min easy spin", "duration_min": 10 },
+    "volume_range": { "reps": [2, 4] },
+    "total_duration_range": [46, 70],
+    "status": "published"
+  },
+
+  {
+    "name": "Over-Under Intervals",
+    "description": "Alternate between just below and just above FTP. Teaches the body to clear lactate while riding hard.",
+    "sport": "bike",
+    "session_type": "threshold",
+    "energy_system": "lactate_threshold",
+    "phases": ["build", "peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "12 min easy spin + 3×1 min progressive spin-ups", "duration_min": 15 },
+    "main_set": {
+      "type": "intervals",
+      "description": "Over-unders — 3 min at 95% FTP (under), 1 min at 105% FTP (over), repeat without stopping. That's 1 block.",
+      "intervals": {
+        "reps": [2, 4],
+        "duration": "12 min (3 cycles of 3 min under + 1 min over)",
+        "rest": "5 min easy spin between blocks",
+        "zone": "Z3-Z4"
+      }
+    },
+    "cooldown": { "description": "10 min easy spin", "duration_min": 10 },
+    "volume_range": { "reps": [2, 4] },
+    "total_duration_range": [49, 73],
+    "status": "published"
+  },
+
+  {
+    "name": "FTP Sustained Intervals",
+    "description": "Long intervals at or near FTP. The purest threshold builder on the bike.",
+    "sport": "bike",
+    "session_type": "threshold",
+    "energy_system": "lactate_threshold",
+    "phases": ["build", "peak"],
+    "levels": ["advanced"],
+    "race_distances": null,
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "15 min progressive warmup: Z1→Z2→Z3 spin-ups", "duration_min": 15 },
+    "main_set": {
+      "type": "intervals",
+      "description": "Sustained FTP intervals — right at threshold. These should feel like controlled suffering.",
+      "intervals": {
+        "reps": [2, 3],
+        "duration": "20 min",
+        "rest": "5 min easy spin",
+        "zone": "Z4"
+      }
+    },
+    "cooldown": { "description": "10 min easy spin", "duration_min": 10 },
+    "volume_range": { "reps": [2, 3] },
+    "total_duration_range": [65, 80],
+    "status": "published"
+  },
+
+  {
+    "name": "Tempo Ride",
+    "description": "Sustained moderate effort. Builds muscular endurance without the fatigue of threshold work.",
+    "sport": "bike",
+    "session_type": "sweet_spot",
+    "energy_system": "lactate_threshold",
+    "phases": ["base", "build"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "10 min easy spin", "duration_min": 10 },
+    "main_set": {
+      "type": "continuous",
+      "description": "Sustained tempo — moderate effort, you can still talk but in shorter sentences",
+      "effort": { "duration_min": [20, 40], "zone": "Z3" }
+    },
+    "cooldown": { "description": "10 min easy spin", "duration_min": 10 },
+    "volume_range": { "duration_min": [20, 40] },
+    "total_duration_range": [40, 60],
+    "status": "published"
+  },
+
+  {
+    "name": "VO2max Bike Intervals",
+    "description": "Short, hard intervals above FTP. Builds peak cycling power and oxygen uptake.",
+    "sport": "bike",
+    "session_type": "intervals",
+    "energy_system": "vo2max",
+    "phases": ["build", "peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "12 min easy spin + 3×30 sec spin-ups", "duration_min": 14 },
+    "main_set": {
+      "type": "intervals",
+      "description": "VO2max intervals — above FTP, breathing hard but controlled",
+      "intervals": {
+        "reps": [4, 6],
+        "duration": "3 min",
+        "rest": "3 min easy spin",
+        "zone": "Z5"
+      }
+    },
+    "cooldown": { "description": "10 min easy spin", "duration_min": 10 },
+    "volume_range": { "reps": [4, 6] },
+    "total_duration_range": [44, 56],
+    "status": "published"
+  },
+
+
+  {"_comment": "========== BIKE — LONG RIDE =========="},
+
+  {
+    "name": "Steady Long Ride",
+    "description": "Classic long aerobic ride. Build time in the saddle and endurance foundation.",
+    "sport": "bike",
+    "session_type": "long",
+    "energy_system": "aerobic",
+    "phases": ["base", "build", "peak"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "First 15 min easy spin to settle in", "duration_min": 15 },
+    "main_set": {
+      "type": "continuous",
+      "description": "Long steady Z2 — practice fueling every 30–45 min, stay hydrated",
+      "effort": { "duration_min": [60, 180], "zone": "Z2" }
+    },
+    "cooldown": { "description": "10 min easy spin", "duration_min": 10 },
+    "volume_range": { "duration_min": [60, 180] },
+    "total_duration_range": [85, 205],
+    "status": "published"
+  },
+
+  {
+    "name": "Long Ride with Race Pace Blocks",
+    "description": "Long ride with periodic surges to race effort. Simulates race conditions and nutrition strategy.",
+    "sport": "bike",
+    "session_type": "long",
+    "energy_system": "mixed",
+    "phases": ["build", "peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": ["half_ironman", "full_ironman", "olympic_tri"],
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "15 min easy spin", "duration_min": 15 },
+    "main_set": {
+      "type": "mixed",
+      "description": "Long ride with race-pace insertions — practice holding power when fatigued",
+      "blocks": [
+        { "type": "continuous", "duration_min": [20, 30], "zone": "Z2", "description": "Easy to settle in" },
+        { "type": "intervals", "reps": [3, 5], "duration": "10 min at race pace", "rest": "15 min Z2", "zone": "Z3", "description": "Race-pace surges embedded in the ride — practice fueling during easy segments" },
+        { "type": "continuous", "duration_min": [15, 25], "zone": "Z2", "description": "Easy to finish — ride home spin" }
+      ]
+    },
+    "cooldown": { "description": "5 min easy spin", "duration_min": 5 },
+    "volume_range": { "duration_min": [90, 165] },
+    "total_duration_range": [110, 185],
+    "status": "published"
+  },
+
+
+  {"_comment": "========== SWIM — TECHNIQUE / DRILL =========="},
+
+  {
+    "name": "Catch and Pull Focus",
+    "description": "Drill-heavy session focused on the catch phase. Where most swimmers lose free speed.",
+    "sport": "swim",
+    "session_type": "technique",
+    "energy_system": "aerobic",
+    "phases": ["base", "build", "peak"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "200m easy choice stroke + 100m kick", "duration_min": 8 },
+    "main_set": {
+      "type": "mixed",
+      "description": "Catch drills with swimming to apply the feel immediately",
+      "blocks": [
+        { "reps": [4, 6], "distance": "50m", "zone": "Z1", "rest": "15s", "description": "Fingertip drag drill — exaggerate high elbow recovery" },
+        { "reps": [4, 6], "distance": "50m", "zone": "Z2", "rest": "15s", "description": "Swim — focus on applying the high-elbow catch you just drilled" },
+        { "reps": [4, 6], "distance": "50m", "zone": "Z1", "rest": "15s", "description": "Catch-up drill — one arm completes full stroke before other begins" },
+        { "reps": [4, 6], "distance": "50m", "zone": "Z2", "rest": "15s", "description": "Swim — blend the catch timing into normal stroke" }
+      ]
+    },
+    "cooldown": { "description": "200m easy choice", "duration_min": 5 },
+    "volume_range": { "reps": [4, 6] },
+    "total_duration_range": [40, 55],
+    "status": "published"
+  },
+
+  {
+    "name": "Body Position and Rotation Drills",
+    "description": "Side drills and rotation work. Fixes the #1 beginner problem: swimming flat.",
+    "sport": "swim",
+    "session_type": "technique",
+    "energy_system": "aerobic",
+    "phases": ["base", "build"],
+    "levels": ["beginner", "intermediate"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "200m easy swim + 100m kick with board", "duration_min": 8 },
+    "main_set": {
+      "type": "mixed",
+      "description": "Rotation and body position drills",
+      "blocks": [
+        { "reps": [4, 6], "distance": "50m", "zone": "Z1", "rest": "15s", "description": "Side kick drill — lay on side, bottom arm extended, kick for 25m, rotate and switch" },
+        { "reps": [4, 6], "distance": "50m", "zone": "Z1", "rest": "15s", "description": "6-3-6 drill — 6 kicks on side, 3 strokes, 6 kicks other side. Forces rotation." },
+        { "reps": [3, 4], "distance": "100m", "zone": "Z2", "rest": "20s", "description": "Swim — focus on rotating hips and shoulders together" }
+      ]
+    },
+    "cooldown": { "description": "200m easy backstroke or choice", "duration_min": 5 },
+    "volume_range": { "reps": [4, 6] },
+    "total_duration_range": [40, 55],
+    "status": "published"
+  },
+
+  {
+    "name": "Kick and Breathing Technique",
+    "description": "Bilateral breathing practice and kick efficiency. Two skills that pay dividends in open water.",
+    "sport": "swim",
+    "session_type": "technique",
+    "energy_system": "aerobic",
+    "phases": ["base", "build"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "300m easy with mix of strokes", "duration_min": 8 },
+    "main_set": {
+      "type": "mixed",
+      "description": "Kick and breathing pattern work",
+      "blocks": [
+        { "reps": [4, 6], "distance": "50m kick", "zone": "Z1", "rest": "15s", "description": "Kick with board — streamlined body, small fast kicks from hips not knees" },
+        { "reps": [4, 6], "distance": "50m", "zone": "Z2", "rest": "10s", "description": "Bilateral breathing drill — breathe every 3 strokes, both sides" },
+        { "reps": [2, 4], "distance": "100m", "zone": "Z2", "rest": "15s", "description": "Swim — alternate 25m breathing left / 25m breathing right" }
+      ]
+    },
+    "cooldown": { "description": "200m easy choice", "duration_min": 5 },
+    "volume_range": { "reps": [4, 6] },
+    "total_duration_range": [40, 55],
+    "status": "published"
+  },
+
+
+  {"_comment": "========== SWIM — CSS THRESHOLD =========="},
+
+  {
+    "name": "CSS 200s",
+    "description": "Classic CSS threshold set at 200m intervals. The workhorse triathlon swim workout.",
+    "sport": "swim",
+    "session_type": "threshold",
+    "energy_system": "lactate_threshold",
+    "phases": ["build", "peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "300m easy + 4×50m drill/swim (25 drill / 25 swim)", "duration_min": 10 },
+    "main_set": {
+      "type": "intervals",
+      "description": "200m repeats at CSS pace — should feel hard but sustainable. Hold the same split every rep.",
+      "intervals": {
+        "reps": [5, 8],
+        "duration": "200m",
+        "rest": "20s",
+        "zone": "Z3"
+      }
+    },
+    "cooldown": { "description": "200m easy choice", "duration_min": 5 },
+    "volume_range": { "reps": [5, 8] },
+    "total_duration_range": [40, 55],
+    "status": "published"
+  },
+
+  {
+    "name": "CSS Descending Set",
+    "description": "Mix of distances at CSS, getting shorter. More rest as distances drop, so you hold pace even when fatigued.",
+    "sport": "swim",
+    "session_type": "threshold",
+    "energy_system": "lactate_threshold",
+    "phases": ["build", "peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "300m easy + 4×50m build (each 50 faster than last)", "duration_min": 10 },
+    "main_set": {
+      "type": "mixed",
+      "description": "Descending distances at CSS — maintain the same pace per 100m throughout",
+      "blocks": [
+        { "reps": [2, 3], "distance": "300m", "zone": "Z3", "rest": "30s", "description": "300s at CSS — long and steady" },
+        { "reps": [3, 4], "distance": "200m", "zone": "Z3", "rest": "20s", "description": "200s at CSS — hold the same split" },
+        { "reps": [4, 6], "distance": "100m", "zone": "Z3-Z4", "rest": "15s", "description": "100s at CSS or slightly faster — finish strong" }
+      ]
+    },
+    "cooldown": { "description": "200m easy", "duration_min": 5 },
+    "volume_range": { "reps_range": [9, 13] },
+    "total_duration_range": [45, 60],
+    "status": "published"
+  },
+
+  {
+    "name": "CSS 100s",
+    "description": "Shorter CSS intervals with less rest. Higher perceived effort, great for race-pace sharpening.",
+    "sport": "swim",
+    "session_type": "threshold",
+    "energy_system": "lactate_threshold",
+    "phases": ["build", "peak"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "200m easy + 4×50m drill/swim", "duration_min": 8 },
+    "main_set": {
+      "type": "intervals",
+      "description": "100m repeats at CSS — short rest keeps HR up. Focus on consistent splits.",
+      "intervals": {
+        "reps": [6, 12],
+        "duration": "100m",
+        "rest": "10s",
+        "zone": "Z3"
+      }
+    },
+    "cooldown": { "description": "200m easy", "duration_min": 5 },
+    "volume_range": { "reps": [6, 12] },
+    "total_duration_range": [35, 50],
+    "status": "published"
+  },
+
+  {
+    "name": "Broken 400s at CSS",
+    "description": "4×100 with 5 sec rest = 1 broken 400. Teaches race pacing over longer distances.",
+    "sport": "swim",
+    "session_type": "threshold",
+    "energy_system": "lactate_threshold",
+    "phases": ["build", "peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": ["olympic_tri", "half_ironman", "full_ironman"],
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "300m easy + 4×50m descend (each faster)", "duration_min": 10 },
+    "main_set": {
+      "type": "mixed",
+      "description": "Broken 400s — swim 4×100 with micro-rest, then full recovery between 400s",
+      "blocks": [
+        { "reps": [3, 5], "distance": "400m (as 4×100 with 5s rest)", "zone": "Z3", "rest": "45s between 400s", "description": "Each 100 at CSS pace. The 5s rest lets you check your split without breaking rhythm." }
+      ]
+    },
+    "cooldown": { "description": "200m easy", "duration_min": 5 },
+    "volume_range": { "reps": [3, 5] },
+    "total_duration_range": [45, 60],
+    "status": "published"
+  },
+
+  {
+    "name": "Race-Pace Sprint Set",
+    "description": "Short fast 50s above CSS. Neuromuscular speed work for the swim — leg speed and turnover.",
+    "sport": "swim",
+    "session_type": "threshold",
+    "energy_system": "vo2max",
+    "phases": ["peak"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": ["sprint_tri", "5k", "10k"],
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "300m easy + 4×50m build", "duration_min": 10 },
+    "main_set": {
+      "type": "intervals",
+      "description": "Fast 50s — above CSS pace, focus on high turnover and strong kick",
+      "intervals": {
+        "reps": [8, 12],
+        "duration": "50m",
+        "rest": "15s",
+        "zone": "Z4"
+      }
+    },
+    "cooldown": { "description": "300m easy pull", "duration_min": 7 },
+    "volume_range": { "reps": [8, 12] },
+    "total_duration_range": [35, 45],
+    "status": "published"
+  },
+
+
+  {"_comment": "========== SWIM — ENDURANCE =========="},
+
+  {
+    "name": "Steady Swim Endurance",
+    "description": "Continuous swimming at easy effort. Build comfort in the water and aerobic base.",
+    "sport": "swim",
+    "session_type": "easy",
+    "energy_system": "aerobic",
+    "phases": ["base", "build", "peak"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "200m easy mix of strokes", "duration_min": 5 },
+    "main_set": {
+      "type": "continuous",
+      "description": "Continuous easy swimming — focus on rhythm and breathing, not speed",
+      "effort": { "duration_min": [20, 45], "zone": "Z2" }
+    },
+    "cooldown": { "description": "100m easy backstroke", "duration_min": 3 },
+    "volume_range": { "duration_min": [20, 45] },
+    "total_duration_range": [28, 53],
+    "status": "published"
+  },
+
+  {
+    "name": "Pull Set Endurance",
+    "description": "Pull buoy between legs, paddles optional. Isolates upper body for endurance with less kick fatigue.",
+    "sport": "swim",
+    "session_type": "easy",
+    "energy_system": "aerobic",
+    "phases": ["base", "build"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "300m easy swim", "duration_min": 8 },
+    "main_set": {
+      "type": "mixed",
+      "description": "Pull-focused endurance — great for building swim-specific upper body stamina",
+      "blocks": [
+        { "reps": [3, 5], "distance": "200m pull", "zone": "Z2", "rest": "15s", "description": "Pull buoy in, focus on high elbow catch and body rotation" },
+        { "reps": [2, 3], "distance": "200m swim", "zone": "Z2", "rest": "15s", "description": "Full stroke — feel the difference with kick added back in" }
+      ]
+    },
+    "cooldown": { "description": "200m easy choice", "duration_min": 5 },
+    "volume_range": { "total_distance": [1000, 1600] },
+    "total_duration_range": [40, 55],
+    "status": "published"
+  },
+
+  {
+    "name": "Swim Endurance Pyramid",
+    "description": "Building and descending distances. Mentally engaging way to accumulate volume.",
+    "sport": "swim",
+    "session_type": "easy",
+    "energy_system": "aerobic",
+    "phases": ["base", "build"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "300m easy mix", "duration_min": 8 },
+    "main_set": {
+      "type": "ladder",
+      "description": "Distance pyramid — build up then come back down. All Z2.",
+      "steps": [
+        { "distance": "100m", "zone": "Z2" },
+        { "distance": "200m", "zone": "Z2" },
+        { "distance": "300m", "zone": "Z2" },
+        { "distance": "400m", "zone": "Z2" },
+        { "distance": "300m", "zone": "Z2" },
+        { "distance": "200m", "zone": "Z2" },
+        { "distance": "100m", "zone": "Z2" }
+      ],
+      "rest_between": "15s rest after each",
+      "scale_rule": "add_outer_steps",
+      "reps_range": [5, 7]
+    },
+    "cooldown": { "description": "200m easy", "duration_min": 5 },
+    "volume_range": { "total_distance": [1200, 1600] },
+    "total_duration_range": [40, 55],
+    "status": "published"
+  },
+
+
+  {"_comment": "========== STRENGTH — INJURY PREVENTION =========="},
+
+  {
+    "name": "Runner's Prehab Circuit",
+    "description": "Hip, glute, and ankle stability. The non-negotiable circuit for every runner.",
+    "sport": "strength",
+    "session_type": "easy",
+    "energy_system": "mixed",
+    "phases": ["base", "build", "peak"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "5 min easy walk or jog + dynamic leg swings", "duration_min": 5 },
+    "main_set": {
+      "type": "strength",
+      "description": "Injury prevention circuit — controlled movement, full range of motion",
+      "exercises": [
+        { "name": "Single-Leg Glute Bridge", "sets": [2, 3], "reps": "12 each side", "load": "bodyweight", "notes": "Squeeze at top for 2 sec" },
+        { "name": "Clamshell", "sets": [2, 3], "reps": "15 each side", "load": "band above knees", "notes": "Keep hips stacked, don't roll back" },
+        { "name": "Dead Bug", "sets": [2, 3], "reps": "10 each side", "load": "bodyweight", "notes": "Press low back into floor throughout" },
+        { "name": "Single-Leg RDL", "sets": [2, 3], "reps": "10 each side", "load": "bodyweight or light dumbbell", "notes": "Slow and controlled — balance is the point" },
+        { "name": "Banded Lateral Walk", "sets": [2, 3], "reps": "12 steps each direction", "load": "band around ankles", "notes": "Stay low in a quarter squat" }
+      ],
+      "rest_between_exercises": "30s",
+      "rest_between_sets": "30s"
+    },
+    "cooldown": { "description": "2 min standing quad + calf stretch", "duration_min": 2 },
+    "volume_range": { "sets": [2, 3] },
+    "total_duration_range": [25, 35],
+    "status": "published"
+  },
+
+  {
+    "name": "Core Anti-Rotation Circuit",
+    "description": "Core stability focused on anti-rotation and anti-extension. Protects the spine during running and cycling.",
+    "sport": "strength",
+    "session_type": "easy",
+    "energy_system": "mixed",
+    "phases": ["base", "build", "peak"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "3 min light cardio + hip circles", "duration_min": 3 },
+    "main_set": {
+      "type": "strength",
+      "description": "Core stability — resist rotation and extension. Quality reps, not speed.",
+      "exercises": [
+        { "name": "Pallof Press", "sets": [2, 3], "reps": "10 each side", "load": "band or cable", "notes": "Arms extend straight, resist the pull to rotate" },
+        { "name": "Plank with Shoulder Tap", "sets": [2, 3], "reps": "8 each side", "load": "bodyweight", "notes": "Hips stay level — don't rock side to side" },
+        { "name": "Bird Dog", "sets": [2, 3], "reps": "10 each side", "load": "bodyweight", "notes": "Extend opposite arm and leg, hold 2 sec" },
+        { "name": "Side Plank with Hip Dip", "sets": [2, 3], "reps": "10 each side", "load": "bodyweight", "notes": "Control the dip — don't crash to the floor" }
+      ],
+      "rest_between_exercises": "30s",
+      "rest_between_sets": "30s"
+    },
+    "cooldown": { "description": "2 min child's pose + cat-cow", "duration_min": 2 },
+    "volume_range": { "sets": [2, 3] },
+    "total_duration_range": [20, 30],
+    "status": "published"
+  },
+
+  {
+    "name": "Swimmer's Shoulder Prehab",
+    "description": "Rotator cuff and scapular stability. Prevents the most common triathlete injury: shoulder impingement.",
+    "sport": "strength",
+    "session_type": "easy",
+    "energy_system": "mixed",
+    "phases": ["base", "build", "peak"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "3 min arm circles + band pull-aparts", "duration_min": 3 },
+    "main_set": {
+      "type": "strength",
+      "description": "Shoulder stability — light load, controlled tempo, full range",
+      "exercises": [
+        { "name": "Band External Rotation", "sets": [2, 3], "reps": "15 each side", "load": "light band", "notes": "Elbow pinned to side, slow rotation out" },
+        { "name": "Band Pull-Apart", "sets": [2, 3], "reps": "15", "load": "light band", "notes": "Squeeze shoulder blades together" },
+        { "name": "Y-T-W Raises", "sets": [2, 3], "reps": "8 each position", "load": "bodyweight or 2–3 lb", "notes": "Face down on bench or standing bent over" },
+        { "name": "Face Pull", "sets": [2, 3], "reps": "15", "load": "band or cable", "notes": "Pull to face height, externally rotate at end" },
+        { "name": "Scapular Push-Up", "sets": [2, 3], "reps": "12", "load": "bodyweight", "notes": "Arms locked — movement comes only from shoulder blades" }
+      ],
+      "rest_between_exercises": "30s",
+      "rest_between_sets": "30s"
+    },
+    "cooldown": { "description": "2 min doorway chest stretch + cross-body shoulder stretch", "duration_min": 2 },
+    "volume_range": { "sets": [2, 3] },
+    "total_duration_range": [25, 35],
+    "status": "published"
+  },
+
+
+  {"_comment": "========== STRENGTH — RACE PERFORMANCE =========="},
+
+  {
+    "name": "Runner's Power Session",
+    "description": "Single-leg strength and hip power for runners. The key lifts that translate to faster running.",
+    "sport": "strength",
+    "session_type": "intervals",
+    "energy_system": "mixed",
+    "phases": ["base", "build"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "5 min easy jog + leg swings + bodyweight squats", "duration_min": 5 },
+    "main_set": {
+      "type": "strength",
+      "description": "Running-specific power — heavy compound movements, low reps, full recovery",
+      "exercises": [
+        { "name": "Bulgarian Split Squat", "sets": [3, 4], "reps": "6 each side", "load": "heavy dumbbells or barbell", "notes": "Full depth, drive through front heel" },
+        { "name": "Single-Leg RDL", "sets": [3, 4], "reps": "8 each side", "load": "moderate-heavy dumbbell", "notes": "Hip hinge — feel the hamstring stretch" },
+        { "name": "Step-Up with Drive", "sets": [3, 4], "reps": "8 each side", "load": "dumbbells, 16–20 inch box", "notes": "Explode up, drive opposite knee high" },
+        { "name": "Calf Raise (single-leg)", "sets": [3, 4], "reps": "12 each side", "load": "bodyweight + dumbbell", "notes": "Full range — below parallel at bottom, max squeeze at top" }
+      ],
+      "rest_between_exercises": "90s",
+      "rest_between_sets": "60–90s"
+    },
+    "cooldown": { "description": "3 min hip flexor + hamstring stretch", "duration_min": 3 },
+    "volume_range": { "sets": [3, 4] },
+    "total_duration_range": [40, 50],
+    "status": "published"
+  },
+
+  {
+    "name": "Cyclist Power Session",
+    "description": "Quad and glute dominant. Heavy compounds that build pedal force and climbing power.",
+    "sport": "strength",
+    "session_type": "intervals",
+    "energy_system": "mixed",
+    "phases": ["base", "build"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "5 min bike spin or dynamic warmup", "duration_min": 5 },
+    "main_set": {
+      "type": "strength",
+      "description": "Cycling-specific power — build force production through pedal stroke range of motion",
+      "exercises": [
+        { "name": "Barbell Back Squat", "sets": [3, 4], "reps": "5", "load": "heavy", "notes": "Parallel depth minimum, controlled descent" },
+        { "name": "Leg Press", "sets": [3, 4], "reps": "8", "load": "heavy", "notes": "Feet shoulder width, full range" },
+        { "name": "Romanian Deadlift", "sets": [3, 4], "reps": "8", "load": "moderate-heavy barbell", "notes": "Hamstring and glute focus — hip hinge pattern" },
+        { "name": "Leg Extension", "sets": [3, 4], "reps": "10", "load": "moderate", "notes": "Quad isolation — hold at top for 1 sec" },
+        { "name": "Weighted Plank", "sets": [2, 3], "reps": "30–45 sec hold", "load": "plate on back", "notes": "Core stiffness for power transfer on the bike" }
+      ],
+      "rest_between_exercises": "90–120s",
+      "rest_between_sets": "90s"
+    },
+    "cooldown": { "description": "3 min quad + hip flexor stretch", "duration_min": 3 },
+    "volume_range": { "sets": [3, 4] },
+    "total_duration_range": [45, 55],
+    "status": "published"
+  },
+
+  {
+    "name": "Swimmer's Lat and Pull Power",
+    "description": "Lat, back, and rotational power for faster pulling. The swim-specific strength session.",
+    "sport": "strength",
+    "session_type": "intervals",
+    "energy_system": "mixed",
+    "phases": ["base", "build"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": ["time_goal", "pr_podium"],
+    "warmup": { "description": "3 min band pull-aparts + arm circles", "duration_min": 3 },
+    "main_set": {
+      "type": "strength",
+      "description": "Swim-specific pulling power — lat dominance, scapular control",
+      "exercises": [
+        { "name": "Lat Pulldown", "sets": [3, 4], "reps": "8", "load": "moderate-heavy", "notes": "Wide grip, squeeze lats at bottom, control the return" },
+        { "name": "Single-Arm Cable Row", "sets": [3, 4], "reps": "10 each side", "load": "moderate", "notes": "Rotate slightly toward pulling arm — mimics swim catch" },
+        { "name": "Straight-Arm Pulldown", "sets": [3, 4], "reps": "12", "load": "light-moderate cable", "notes": "Swim-specific catch pattern — feel the lats engage" },
+        { "name": "Face Pull", "sets": [3, 4], "reps": "12", "load": "band or cable", "notes": "Rear delt and external rotation — prevents shoulder impingement" },
+        { "name": "Cable Woodchop", "sets": [2, 3], "reps": "10 each side", "load": "moderate cable", "notes": "Rotational power — core transfers force between upper and lower body" }
+      ],
+      "rest_between_exercises": "60–90s",
+      "rest_between_sets": "60s"
+    },
+    "cooldown": { "description": "3 min lat stretch + doorway pec stretch", "duration_min": 3 },
+    "volume_range": { "sets": [3, 4] },
+    "total_duration_range": [40, 50],
+    "status": "published"
+  },
+
+
+  {"_comment": "========== STRENGTH — HYPERTROPHY =========="},
+
+  {
+    "name": "Push Day (Hypertrophy)",
+    "description": "Chest, shoulders, triceps. Traditional push hypertrophy for the hybrid athlete.",
+    "sport": "strength",
+    "session_type": "intervals",
+    "energy_system": "mixed",
+    "phases": ["base", "build"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "5 min light cardio + band pull-aparts + arm circles", "duration_min": 5 },
+    "main_set": {
+      "type": "strength",
+      "description": "Push hypertrophy — moderate-heavy weight, controlled tempo, chase the pump",
+      "exercises": [
+        { "name": "Dumbbell Bench Press", "sets": [3, 4], "reps": "10", "load": "moderate-heavy", "notes": "Full range of motion, 2 sec negative" },
+        { "name": "Incline Dumbbell Press", "sets": [3, 4], "reps": "10", "load": "moderate", "notes": "30° incline, upper chest focus" },
+        { "name": "Overhead Press", "sets": [3, 4], "reps": "10", "load": "moderate", "notes": "Dumbbells or barbell, strict form" },
+        { "name": "Lateral Raise", "sets": [3, 4], "reps": "12–15", "load": "light-moderate", "notes": "Control the negative — don't swing" },
+        { "name": "Cable Tricep Pushdown", "sets": [3, 4], "reps": "12", "load": "moderate", "notes": "Squeeze at bottom, slow return" },
+        { "name": "Dips or Close-Grip Push-Up", "sets": [2, 3], "reps": "10–12", "load": "bodyweight or weighted", "notes": "Tricep emphasis — elbows close to body" }
+      ],
+      "rest_between_exercises": "60–90s",
+      "rest_between_sets": "60s"
+    },
+    "cooldown": { "description": "3 min chest + shoulder stretch", "duration_min": 3 },
+    "volume_range": { "sets": [3, 4] },
+    "total_duration_range": [45, 60],
+    "status": "published"
+  },
+
+  {
+    "name": "Pull Day (Hypertrophy)",
+    "description": "Back, biceps, rear delts. Traditional pull hypertrophy. Pairs well with swim day.",
+    "sport": "strength",
+    "session_type": "intervals",
+    "energy_system": "mixed",
+    "phases": ["base", "build"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "5 min light cardio + band pull-aparts", "duration_min": 5 },
+    "main_set": {
+      "type": "strength",
+      "description": "Pull hypertrophy — focus on the squeeze, feel the back working",
+      "exercises": [
+        { "name": "Lat Pulldown", "sets": [3, 4], "reps": "10", "load": "moderate-heavy", "notes": "Wide grip, pull to upper chest" },
+        { "name": "Seated Cable Row", "sets": [3, 4], "reps": "10", "load": "moderate-heavy", "notes": "Squeeze shoulder blades at peak contraction" },
+        { "name": "Dumbbell Row", "sets": [3, 4], "reps": "10 each", "load": "moderate-heavy", "notes": "Support on bench, full stretch to full squeeze" },
+        { "name": "Face Pull", "sets": [3, 4], "reps": "15", "load": "light-moderate band or cable", "notes": "Rear delt and external rotation — pull to face, spread hands" },
+        { "name": "Dumbbell Bicep Curl", "sets": [3, 4], "reps": "12", "load": "moderate", "notes": "No swinging — control both directions" },
+        { "name": "Hammer Curl", "sets": [2, 3], "reps": "12", "load": "moderate", "notes": "Neutral grip — hits brachialis and forearms" }
+      ],
+      "rest_between_exercises": "60–90s",
+      "rest_between_sets": "60s"
+    },
+    "cooldown": { "description": "3 min lat stretch + bicep stretch", "duration_min": 3 },
+    "volume_range": { "sets": [3, 4] },
+    "total_duration_range": [45, 60],
+    "status": "published"
+  },
+
+  {
+    "name": "Leg Day (Hypertrophy)",
+    "description": "Quads, glutes, hamstrings. Full leg hypertrophy. Place on swim day or rest day to protect run/bike.",
+    "sport": "strength",
+    "session_type": "intervals",
+    "energy_system": "mixed",
+    "phases": ["base", "build"],
+    "levels": ["intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "5 min easy bike or walk + bodyweight squats + leg swings", "duration_min": 5 },
+    "main_set": {
+      "type": "strength",
+      "description": "Leg hypertrophy — moderate-heavy load, chase volume and metabolic stress",
+      "exercises": [
+        { "name": "Barbell Back Squat or Goblet Squat", "sets": [3, 4], "reps": "10", "load": "moderate-heavy", "notes": "Full depth if mobility allows" },
+        { "name": "Romanian Deadlift", "sets": [3, 4], "reps": "10", "load": "moderate-heavy", "notes": "Feel the hamstring stretch, squeeze glutes at top" },
+        { "name": "Walking Lunge", "sets": [3, 4], "reps": "12 each", "load": "dumbbells", "notes": "Long stride, upright torso" },
+        { "name": "Leg Press", "sets": [3, 4], "reps": "12", "load": "moderate-heavy", "notes": "Feet shoulder width, don't lock knees at top" },
+        { "name": "Leg Curl", "sets": [3, 4], "reps": "12", "load": "moderate", "notes": "Hamstring isolation — slow negative" },
+        { "name": "Calf Raise", "sets": [3, 4], "reps": "15", "load": "moderate", "notes": "Full range — pause at bottom stretch and top squeeze" }
+      ],
+      "rest_between_exercises": "90s",
+      "rest_between_sets": "60–90s"
+    },
+    "cooldown": { "description": "5 min quad + hamstring + hip flexor stretch", "duration_min": 5 },
+    "volume_range": { "sets": [3, 4] },
+    "total_duration_range": [50, 65],
+    "status": "published"
+  },
+
+
+  {"_comment": "========== STRENGTH — MINIMAL =========="},
+
+  {
+    "name": "Bodyweight Baseline Circuit",
+    "description": "The bare minimum. 20 minutes, no equipment, covers all major patterns. For athletes who just want to not get hurt.",
+    "sport": "strength",
+    "session_type": "easy",
+    "energy_system": "mixed",
+    "phases": ["base", "build", "peak"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "2 min jumping jacks + arm circles", "duration_min": 2 },
+    "main_set": {
+      "type": "strength",
+      "description": "Full body bodyweight circuit — do all exercises as a circuit, rest 60s between rounds",
+      "exercises": [
+        { "name": "Push-Up", "sets": [2, 3], "reps": "10–15", "load": "bodyweight", "notes": "Knees OK for beginners — full range of motion" },
+        { "name": "Air Squat", "sets": [2, 3], "reps": "15", "load": "bodyweight", "notes": "Hips below parallel if possible" },
+        { "name": "Plank", "sets": [2, 3], "reps": "30–45 sec", "load": "bodyweight", "notes": "Straight line from head to heels" },
+        { "name": "Reverse Lunge", "sets": [2, 3], "reps": "10 each", "load": "bodyweight", "notes": "Step back, knee hovers above floor" },
+        { "name": "Glute Bridge", "sets": [2, 3], "reps": "15", "load": "bodyweight", "notes": "Squeeze at top for 2 sec" }
+      ],
+      "rest_between_exercises": "minimal (circuit style)",
+      "rest_between_sets": "60s between rounds"
+    },
+    "cooldown": { "description": "2 min full body stretch", "duration_min": 2 },
+    "volume_range": { "sets": [2, 3] },
+    "total_duration_range": [18, 25],
+    "status": "published"
+  },
+
+  {
+    "name": "Runner's Minimum Effective Dose",
+    "description": "The 4 exercises every runner should do, even if they do nothing else. 15 minutes, huge ROI.",
+    "sport": "strength",
+    "session_type": "easy",
+    "energy_system": "mixed",
+    "phases": ["base", "build", "peak"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "2 min easy jog in place + leg swings", "duration_min": 2 },
+    "main_set": {
+      "type": "strength",
+      "description": "The non-negotiable 4 for runners — glutes, hips, core, calves",
+      "exercises": [
+        { "name": "Single-Leg Glute Bridge", "sets": [2, 3], "reps": "12 each", "load": "bodyweight", "notes": "The most important exercise for runners — glute activation prevents IT band issues" },
+        { "name": "Side-Lying Clamshell", "sets": [2, 3], "reps": "15 each", "load": "bodyweight or band", "notes": "Hip abductor strength — prevents knee cave" },
+        { "name": "Dead Bug", "sets": [2, 3], "reps": "10 each side", "load": "bodyweight", "notes": "Core stability under movement — protects the spine" },
+        { "name": "Single-Leg Calf Raise", "sets": [2, 3], "reps": "15 each", "load": "bodyweight", "notes": "Full range — prevents Achilles and plantar fasciitis" }
+      ],
+      "rest_between_exercises": "30s",
+      "rest_between_sets": "30s"
+    },
+    "cooldown": { "description": "2 min calf + hip flexor stretch", "duration_min": 2 },
+    "volume_range": { "sets": [2, 3] },
+    "total_duration_range": [15, 22],
+    "status": "published"
+  }
+]

@@ -1819,6 +1819,7 @@
         <button class="admin-subtab active" data-subtab="admin-users" onclick="showAdminSubtab('admin-users')">Users</button>
         <button class="admin-subtab" data-subtab="admin-philosophy" onclick="showAdminSubtab('admin-philosophy')">Philosophy</button>
         <button class="admin-subtab" data-subtab="admin-exercises" onclick="showAdminSubtab('admin-exercises')">Exercises</button>
+        <button class="admin-subtab" data-subtab="admin-workouts" onclick="showAdminSubtab('admin-workouts')">Workouts</button>
         <button class="admin-subtab" data-subtab="admin-gaps" onclick="showAdminSubtab('admin-gaps')">Gaps</button>
         <button class="admin-subtab" data-subtab="admin-analytics" onclick="showAdminSubtab('admin-analytics')">Analytics</button>
       </div>
@@ -1961,6 +1962,142 @@
             <thead><tr><th>Name</th><th>Pattern</th><th>Muscles</th><th>Level</th><th>Tier</th><th>Equipment</th></tr></thead>
             <tbody id="admin-exercises-tbody"></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- ── SUB-TAB: Workout Library ────────────────────────────── -->
+      <div id="admin-workouts" class="admin-subtab-content" style="display:none">
+        <div class="admin-stats-row">
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-workouts-total">--</div>
+            <div class="admin-stat-label">Total Workouts</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-workouts-published">--</div>
+            <div class="admin-stat-label">Published</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-workouts-draft">--</div>
+            <div class="admin-stat-label">Drafts</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-workouts-gaps">--</div>
+            <div class="admin-stat-label">Coverage Gaps</div>
+          </div>
+        </div>
+
+        <!-- Coverage matrix: (sport × session_type × phase) with counts -->
+        <div class="card">
+          <h3 style="margin:0 0 8px">Coverage Matrix</h3>
+          <p class="hint" style="margin:0 0 12px">Published workouts per (sport × session_type). Red = 0, yellow = 1–3, green = 4+, blue = 8+.</p>
+          <div id="admin-workouts-coverage" style="overflow-x:auto"></div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="text" id="admin-workouts-search" placeholder="Search by name..." class="input" style="flex:1;min-width:150px" oninput="renderWorkoutLibraryTable()" />
+            <select id="admin-workouts-sport-filter" class="input" style="width:auto" onchange="renderWorkoutLibraryTable()">
+              <option value="">All Sports</option>
+              <option value="run">Run</option>
+              <option value="bike">Bike</option>
+              <option value="swim">Swim</option>
+              <option value="strength">Strength</option>
+              <option value="brick">Brick</option>
+              <option value="cross_train">Cross-Train</option>
+            </select>
+            <select id="admin-workouts-type-filter" class="input" style="width:auto" onchange="renderWorkoutLibraryTable()">
+              <option value="">All Types</option>
+            </select>
+            <select id="admin-workouts-phase-filter" class="input" style="width:auto" onchange="renderWorkoutLibraryTable()">
+              <option value="">All Phases</option>
+              <option value="base">Base</option>
+              <option value="build">Build</option>
+              <option value="peak">Peak</option>
+              <option value="taper">Taper</option>
+            </select>
+            <select id="admin-workouts-status-filter" class="input" style="width:auto" onchange="renderWorkoutLibraryTable()">
+              <option value="">All Statuses</option>
+              <option value="published">Published</option>
+              <option value="draft">Draft</option>
+            </select>
+            <button class="btn-primary btn-sm" onclick="adminOpenWorkoutEditor(null)">+ Add Workout</button>
+          </div>
+        </div>
+
+        <!-- Table of all workouts -->
+        <div class="card" style="overflow-x:auto">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Sport</th>
+                <th>Type</th>
+                <th>Phases</th>
+                <th>Levels</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="admin-workouts-tbody"></tbody>
+          </table>
+        </div>
+
+        <!-- Editor modal (hidden by default) -->
+        <div class="card" id="admin-workout-editor" style="display:none">
+          <h3 style="margin:0 0 12px" id="admin-workout-editor-title">Add Workout</h3>
+          <div class="form-grid">
+            <div class="form-row"><label>Name</label><input type="text" id="admin-wo-name" class="input" placeholder="e.g. Cruise Intervals" /></div>
+            <div class="form-row">
+              <label>Sport</label>
+              <select id="admin-wo-sport" class="input">
+                <option value="run">Run</option>
+                <option value="bike">Bike</option>
+                <option value="swim">Swim</option>
+                <option value="strength">Strength</option>
+                <option value="brick">Brick</option>
+                <option value="cross_train">Cross-Train</option>
+              </select>
+            </div>
+            <div class="form-row"><label>Session Type</label><input type="text" id="admin-wo-type" class="input" placeholder="e.g. tempo, vo2max, injury_prevention" /></div>
+            <div class="form-row">
+              <label>Energy System</label>
+              <select id="admin-wo-energy" class="input">
+                <option value="aerobic">Aerobic</option>
+                <option value="lactate_threshold">Lactate Threshold</option>
+                <option value="vo2max">VO2max</option>
+                <option value="neuromuscular">Neuromuscular</option>
+                <option value="mixed">Mixed</option>
+                <option value="strength">Strength</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row"><label>Description</label><textarea id="admin-wo-description" class="input" rows="2" placeholder="Short coach's note"></textarea></div>
+          <div class="form-grid">
+            <div class="form-row"><label>Phases (comma-separated)</label><input type="text" id="admin-wo-phases" class="input" placeholder="base, build, peak, taper" /></div>
+            <div class="form-row"><label>Levels (comma-separated)</label><input type="text" id="admin-wo-levels" class="input" placeholder="beginner, intermediate, advanced" /></div>
+            <div class="form-row"><label>Race Distances (optional)</label><input type="text" id="admin-wo-distances" class="input" placeholder="5k, 10k — leave blank for all" /></div>
+            <div class="form-row"><label>Race Goals (optional)</label><input type="text" id="admin-wo-goals" class="input" placeholder="just_finish, time_goal, pr_podium — blank for all" /></div>
+          </div>
+          <div class="form-row"><label>Warmup JSON</label><textarea id="admin-wo-warmup" class="input" rows="3" placeholder='{"description":"12 min easy jog","duration_min":12}'></textarea></div>
+          <div class="form-row"><label>Main Set JSON</label><textarea id="admin-wo-main" class="input" rows="8" placeholder='{"type":"intervals","intervals":{"reps":[3,5],"duration":"8 min","rest":"2 min","zone":"Z3"}}'></textarea></div>
+          <div class="form-row"><label>Cooldown JSON</label><textarea id="admin-wo-cooldown" class="input" rows="3" placeholder='{"description":"10 min easy jog","duration_min":10}'></textarea></div>
+          <div class="form-grid">
+            <div class="form-row"><label>Volume Range JSON</label><input type="text" id="admin-wo-volume" class="input" placeholder='{"reps":[3,5]}' /></div>
+            <div class="form-row"><label>Total Duration Range [min, max]</label><input type="text" id="admin-wo-duration" class="input" placeholder="40, 55" /></div>
+            <div class="form-row">
+              <label>Status</label>
+              <select id="admin-wo-status" class="input">
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap">
+            <button class="btn-primary btn-sm" onclick="adminSaveWorkout()">Save</button>
+            <button class="btn-secondary btn-sm" onclick="adminCloseWorkoutEditor()">Cancel</button>
+            <button class="btn-secondary btn-sm" onclick="adminPreviewWorkout()">Preview as Chase (Advanced run)</button>
+          </div>
+          <div id="admin-workout-preview" style="margin-top:12px"></div>
         </div>
       </div>
 
@@ -3016,6 +3153,12 @@
        functions, no side effects on load. -->
   <script src="js/plan-session-distribution.js"></script>
   <script src="js/plan-constraint-validator.js"></script>
+  <!-- Training zones + workout library (PLAN_GENERATOR_MASTER_SPEC §8–§9).
+       Zones must load before library so parameterize() can resolve Z1..Z5
+       placeholders; both must load before planner.js so the generator can
+       query the library per session slot. -->
+  <script src="js/training-zones.js"></script>
+  <script src="js/workout-library.js"></script>
   <script src="js/session-type-library.js"></script>
   <!-- Variant libraries (pure data) — must load before any code that consumes them -->
   <script src="js/variant-libraries/run.js"></script>
@@ -3152,6 +3295,7 @@
        auth.js so init() can call OnboardingV2.maybeStart(). -->
   <script src="js/onboarding-v2.js"></script>
   <script src="js/admin.js"></script>
+  <script src="js/admin-workouts.js"></script>
   <script src="js/analytics.js"></script>
   <script src="js/push.js"></script>
   <!-- auth.js last — overrides window.onload to gate app behind login -->

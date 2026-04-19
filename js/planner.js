@@ -3711,7 +3711,93 @@ if (typeof window !== "undefined") {
   window._buildStrengthForPlan = _buildStrengthForPlan;
 }
 
+// ─── Workout Library integration (§9 of PLAN_GENERATOR_MASTER_SPEC) ─────────
+// Maps (discipline, load) → library session_type. Returns null when the load
+// doesn't map to a library-queryable type (e.g. "strides") so the generator
+// falls back to its built-in templates.
+function _mapToLibraryType(discipline, load, raceType) {
+  if (discipline === "strength") {
+    let role = null;
+    try { role = localStorage.getItem("strengthRole"); } catch {}
+    return role || "injury_prevention";
+  }
+  if (discipline === "run") {
+    if (load === "easy") return "easy";
+    if (load === "long") return "long";
+    if (load === "moderate") return "tempo";
+    if (load === "hard") {
+      // §4b — 5K builds use VO2max intervals as the primary quality session,
+      // longer races use tempo. Default to tempo for ambiguity.
+      return raceType === "fiveK" || raceType === "tenK" ? "vo2max" : "tempo";
+    }
+    return null;
+  }
+  if (discipline === "bike") {
+    if (load === "easy") return "easy";
+    if (load === "long") return "long";
+    if (load === "moderate") return "sweet_spot";
+    if (load === "hard") return "threshold";
+    return null;
+  }
+  if (discipline === "swim") {
+    if (load === "easy") return "easy";
+    if (load === "technique") return "technique";
+    if (load === "moderate" || load === "hard") return "threshold";
+    return null;
+  }
+  return null;
+}
+
+// Map race.type → library race_distances tag. null for non-race use.
+function _mapRaceDistance(raceType) {
+  const M = {
+    ironman: "full_ironman", halfIronman: "half_ironman",
+    olympic: "olympic_tri", sprint: "sprint_tri",
+    marathon: "marathon", halfMarathon: "half",
+    tenK: "10k", fiveK: "5k",
+  };
+  return M[raceType] || null;
+}
+
+// Pull a workout from the library for a given session slot, parameterize it
+// against the athlete's zones + week-within-phase, and return the enriched
+// payload ready to attach to the plan entry. Returns null if the library has
+// no matching workout or the cache isn't loaded — the caller should fall
+// back to the built-in session templates.
+function _libraryWorkoutFor(opts) {
+  if (typeof window === "undefined" || !window.WorkoutLibrary) return null;
+  const {
+    discipline, load, raceType, raceGoal, phaseName, level,
+    weekInPhase, totalWeeksInPhase, isDeload, zones, recentlyUsedIds, seed,
+  } = opts;
+
+  const sessionType = _mapToLibraryType(discipline, load, raceType);
+  if (!sessionType) return null;
+
+  const pool = window.WorkoutLibrary.querySync({
+    sport:        discipline,
+    sessionType:  sessionType,
+    phase:        String(phaseName || "").toLowerCase(),
+    level:        level || "intermediate",
+    raceDistance: _mapRaceDistance(raceType),
+    raceGoal:     raceGoal || null,
+  });
+  if (!pool.length) return null;
+
+  const picker = (typeof seed === "number")
+    ? window.WorkoutLibrary.pickDeterministic
+    : window.WorkoutLibrary.pick;
+  const picked = picker(pool, recentlyUsedIds, seed);
+  if (!picked) return null;
+
+  return window.WorkoutLibrary.parameterize(picked, {
+    zones, sport: discipline, phase: phaseName,
+    weekInPhase, totalWeeksInPhase, isDeload, level,
+  });
+}
+
 function _generateSingleRacePlan(race) {
+  if (!race || !race.type || !race.date) return [];
   const config = RACE_CONFIGS[race.type];
   if (!config) return [];
 
@@ -3823,6 +3909,32 @@ function _generateSingleRacePlan(race) {
     const days = Math.floor((ms - _planStartMs) / 86400000);
     return Math.max(1, Math.floor(days / 7) + 1);
   };
+
+  // ── WORKOUT LIBRARY CONTEXT ────────────────────────────────────────────────
+  // Load thresholds + compute zones once per plan generation so every session
+  // lookup reuses the same athlete context. `level` feeds library filtering;
+  // `zones` drives parameterization of main_set zone placeholders.
+  let _libThresholds = {};
+  let _libZones = null;
+  let _libLevel = "intermediate";
+  let _libRaceGoal = race.goal || race.runGoal || null;
+  const _libRecentIds = []; // grows as we pick workouts within this generation
+  try { _libThresholds = JSON.parse(localStorage.getItem("thresholds") || "{}") || {}; } catch {}
+  try {
+    if (typeof window !== "undefined" && window.TrainingZones) {
+      _libZones = window.TrainingZones.computeAllZones(_libThresholds);
+      const perSport = {
+        run:  window.TrainingZones.classifyRunning(_libThresholds),
+        bike: window.TrainingZones.classifyCycling(_libThresholds, race.weightKg || (function(){
+          try { const p = JSON.parse(localStorage.getItem("profile") || "{}"); return p.weight ? Number(p.weight) * 0.453592 : null; } catch { return null; }
+        })()),
+        swim: window.TrainingZones.classifySwim(_libThresholds),
+      };
+      const derived = window.TrainingZones.overallLevel(perSport);
+      if (derived) _libLevel = derived;
+    }
+    if (race && race.level) _libLevel = String(race.level).toLowerCase();
+  } catch {}
 
   // ── THRESHOLD WEEK SCHEDULING ──────────────────────────────────────────────
   // Added 2026-04-09 (PHILOSOPHY_UPDATE_2026-04-09_threshold_weeks.md).
@@ -3980,6 +4092,62 @@ function _generateSingleRacePlan(race) {
         baseEntry.type = "weightlifting";
         baseEntry.exercises = strengthExercises;
       }
+
+      // Workout library lookup — §9d. Attaches a fully-parameterized workout
+      // (warmup / main_set with concrete paces / cooldown / volume-scaled
+      // reps) to the plan entry. The calendar renderer prefers libraryWorkout
+      // when present. Falls through silently if the library isn't loaded or
+      // has no match for this slot.
+      const _phaseWeeks = (currentPhase && currentPhase.weeks) || 1;
+      const _weekInPhase = phaseWeekCount + 1;
+      const _isDeload = (_weekInPhase % 4 === 0);
+      // Deterministic seed per (raceId, dateStr) so regenerating a plan
+      // produces the same workout selections — users don't expect Tuesday's
+      // session to randomly change when they tweak an unrelated setting.
+      const _seedForSlot = (function(){
+        const s = (race.id || "") + "|" + dateStr;
+        let h = 0;
+        for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+        return Math.abs(h);
+      })();
+      const _libWorkout = _libraryWorkoutFor({
+        discipline:          session.discipline,
+        load:                session.load,
+        raceType:            race.type,
+        raceGoal:            _libRaceGoal,
+        phaseName:           phaseName,
+        level:               _libLevel,
+        weekInPhase:         _weekInPhase,
+        totalWeeksInPhase:   _phaseWeeks,
+        isDeload:            _isDeload,
+        zones:               _libZones,
+        recentlyUsedIds:     _libRecentIds,
+        seed:                _seedForSlot,
+      });
+      if (_libWorkout) {
+        baseEntry.libraryWorkout = _libWorkout;
+        baseEntry.sessionName = _libWorkout.libraryName || baseEntry.sessionName;
+        if (_libWorkout.duration_min) baseEntry.duration = _libWorkout.duration_min;
+        // Strength: when the library provides a role-matched circuit, its
+        // exercises are the source of truth — drop the generic split fallback
+        // so the calendar renders the curated session rather than both.
+        if (session.discipline === "strength"
+            && _libWorkout.main_set
+            && Array.isArray(_libWorkout.main_set.exercises)
+            && _libWorkout.main_set.exercises.length) {
+          baseEntry.exercises = _libWorkout.main_set.exercises.map(ex => ({
+            name:   ex.name,
+            sets:   Array.isArray(ex.sets) ? (ex.sets_actual || ex.sets[0]) : ex.sets,
+            reps:   ex.reps,
+            weight: ex.load || "",
+          }));
+        }
+        _libRecentIds.push(_libWorkout.workoutId);
+        // Keep the recent-used window at 4 weeks × 11 sessions ≈ 44, cap
+        // the list so it doesn't balloon over a 21-week plan.
+        if (_libRecentIds.length > 50) _libRecentIds.splice(0, _libRecentIds.length - 50);
+      }
+
       plan.push(baseEntry);
     }
 

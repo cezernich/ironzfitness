@@ -466,6 +466,11 @@ function init() {
   if (typeof loadExerciseLibrary === 'function') {
     loadExerciseLibrary().catch(e => console.warn('[IronZ] Exercise library load:', e.message));
   }
+  // Prefetch the admin-curated workout library so the plan generator can
+  // query synchronously when the user hits "Generate & Schedule Plan".
+  if (typeof WorkoutLibrary !== 'undefined' && WorkoutLibrary._ensureLoaded) {
+    WorkoutLibrary._ensureLoaded().catch(e => console.warn('[IronZ] Workout library load:', e.message));
+  }
 
   // Refresh all caches from Supabase (non-blocking)
   if (typeof DB !== 'undefined') {
