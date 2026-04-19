@@ -1232,15 +1232,23 @@
     const has = s => sports.includes(s);
     if (has("triathlon")) return "triathlon";
     if (has("swim") && has("bike") && has("run")) return "triathlon";
-    if (sports.length === 1) {
-      if (sports[0] === "hyrox") return "hyrox";
-      if (sports[0] === "run")   return "running";
-      if (sports[0] === "bike")  return "cycling";
-      if (sports[0] === "swim")  return "swimming";
-    }
-    // Hyrox is distinctive enough that any selection containing it leans
-    // Hyrox, except when the three triathlon sports are also picked.
+    // Hyrox is distinctive — any selection containing it defaults to
+    // hyrox, unless the three tri disciplines were also picked (handled
+    // above). Checked before the single-discipline branch so run+hyrox
+    // stays Hyrox rather than degrading to Running.
     if (has("hyrox")) return "hyrox";
+    // Strength is a companion sport, not a race category — ignore it
+    // when deciding the default so "run + strength" still defaults to
+    // Running and "bike + strength" still defaults to Cycling.
+    const endurance = sports.filter(s => s !== "strength");
+    if (endurance.length === 1) {
+      if (endurance[0] === "run")   return "running";
+      if (endurance[0] === "bike")  return "cycling";
+      if (endurance[0] === "swim")  return "swimming";
+    }
+    if (endurance.includes("run"))  return "running";
+    if (endurance.includes("bike")) return "cycling";
+    if (endurance.includes("swim")) return "swimming";
     return null;
   }
 
@@ -2523,6 +2531,13 @@
     // localStorage["longDays"] and anchor long run / long ride placement
     // to these days.
     _lsSet("longDays", _state.longDays);
+    // Changing long-day anchors means "redistribute the week around
+    // these days" — clear the schedule so _renderSchedule re-seeds
+    // from scratch against the new anchors. Without this, a prior
+    // Schedule visit leaves chips on the old long days and the new
+    // picks get ignored (or, worse, stacked on top of existing
+    // weekday sessions).
+    _BP_DAYS.forEach(d => { _state.schedule[d] = []; });
     goTo("bp-v2-5");
     _renderSchedule();
   }
