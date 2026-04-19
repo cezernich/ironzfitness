@@ -156,12 +156,19 @@ async function main() {
   const returned = Array.isArray(result) ? result.length : 0;
   console.log(`  Upserted ${returned} rows.`);
 
-  // Quick tally so the user can eyeball what landed.
-  const { data: counted } = (await supabaseFetch("GET", "/rest/v1/workout_library?select=sport,session_type,status")) || [];
+  // Quick tally so the user can eyeball what landed. supabaseFetch returns
+  // the parsed array directly (not wrapped in {data}) — earlier code
+  // destructured `{data: counted}` which left counted undefined.
+  const counted = await supabaseFetch("GET", "/rest/v1/workout_library?select=sport,session_type,status");
   if (Array.isArray(counted)) {
     const bySport = {};
-    counted.forEach(r => { bySport[r.sport] = (bySport[r.sport] || 0) + 1; });
-    console.log("Table totals by sport:", bySport);
+    const byStatus = {};
+    counted.forEach(r => {
+      bySport[r.sport] = (bySport[r.sport] || 0) + 1;
+      byStatus[r.status] = (byStatus[r.status] || 0) + 1;
+    });
+    console.log("Table totals by sport:  ", bySport);
+    console.log("Table totals by status:", byStatus);
   }
 }
 
