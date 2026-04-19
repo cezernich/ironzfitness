@@ -3598,16 +3598,18 @@ function buildPatternsFromPreferences(weeklyTemplate, phases, ctx) {
     return { discipline, load };
   };
 
-  // Compose the final per-phase pattern map. Pick the first (primary) session
-  // on each day; secondary sessions (e.g. two-a-day) are dropped for now —
-  // the current generator only handles one session per DOW anyway.
+  // Compose the final per-phase pattern map. Emit an array of sessions per
+  // DOW so two-a-day slots (e.g. mon=[swim, strength]) are preserved —
+  // previously only entries[0] survived and the strength leg silently
+  // dropped out of the generated plan. Consumers must iterate the array.
   const out = {};
   phases.forEach(phase => {
     const map = {};
     Object.entries(baseByDow).forEach(([dow, entries]) => {
-      const primary = entries[0];
-      const modulated = modulate(phase.name, primary);
-      if (modulated) map[dow] = modulated;
+      const modulatedList = entries
+        .map(e => modulate(phase.name, e))
+        .filter(Boolean);
+      if (modulatedList.length) map[dow] = modulatedList;
     });
     out[phase.name] = map;
   });
@@ -3979,7 +3981,18 @@ function _generateSingleRacePlan(race) {
 
     const phaseName = currentPhase ? currentPhase.name : "Taper";
     const phasePattern = patterns[phaseName] || {};
-    const session = phasePattern[dow];
+    // phasePattern[dow] is either a legacy single {discipline, load} or
+    // (from buildPatternsFromPreferences) an array of sessions so two-a-day
+    // slots (e.g. mon=[swim, strength]) can both make it into the plan.
+    const _rawPatternSession = phasePattern[dow];
+    const _patternSessionList = Array.isArray(_rawPatternSession)
+      ? _rawPatternSession
+      : (_rawPatternSession ? [_rawPatternSession] : []);
+    // `session` kept for the race-week / threshold-week overrides below,
+    // which were written against the single-session legacy shape and only
+    // need to know whether *any* session was scheduled. The multi-session
+    // branch lower down iterates _patternSessionList directly.
+    const session = _patternSessionList[0] || null;
 
     // ── Race-week override (Philosophy §6.1 / §4.5 / §4.6) ───────────────────
     // The last 6 days before the race get a dedicated pattern so every
@@ -4050,105 +4063,105 @@ function _generateSingleRacePlan(race) {
         thresholdTestType: testType,
         thresholdNote: _twOverride.note,
       });
-    } else if (session && dateStr >= todayStr) {
+    } else if (_patternSessionList.length && dateStr >= todayStr) {
       const LOAD_NAMES = { easy: "Easy", strides: "Strides", moderate: "Tempo", hard: "Threshold", long: "Long" };
-      const loadName  = LOAD_NAMES[session.load] || capitalize(session.load);
-      // Week number is derived from days-since-plan-start, so all
-      // sessions on a given day share a consistent label regardless
-      // of which weekday the plan started on.
       const wNum = _weekNumberFor(cursor);
       weekNumber = wNum;
-      const duration = (session.discipline === "run" && runPatternKey)
-        ? getRunSessionDuration(race.type, session.load, phaseName, wNum, _effectiveTotalWeeks, runPatternKey)
-        : undefined;
-
-      // Strength plan entries need an `exercises` array — the render path
-      // keys off that, so an empty strength entry appears as a blank card.
-      // Session label uses the strength focus (Push / Pull / Legs / Full)
-      // rather than "Tempo Strength" since intensity labels don't apply to
-      // lifting. The exercises list rotates through the user's selected
-      // split so adjacent strength days don't repeat the same template.
-      let strengthExercises = null;
-      let strengthName = null;
-      if (session.discipline === "strength") {
-        const built = _buildStrengthForPlan(wNum, phaseName);
-        strengthExercises = built.exercises;
-        strengthName = built.name;
-      }
-
-      const baseEntry = {
-        date: dateStr,
-        raceId: race.id,
-        phase: phaseName,
-        weekNumber: wNum,
-        discipline: session.discipline,
-        load: session.load,
-        sessionName: session.discipline === "strength"
-          ? (strengthName || "Strength Training")
-          : `${loadName} ${capitalize(session.discipline)}`,
-        ...(duration != null ? { duration } : {}),
-      };
-      if (strengthExercises && strengthExercises.length) {
-        baseEntry.type = "weightlifting";
-        baseEntry.exercises = strengthExercises;
-      }
-
-      // Workout library lookup — §9d. Attaches a fully-parameterized workout
-      // (warmup / main_set with concrete paces / cooldown / volume-scaled
-      // reps) to the plan entry. The calendar renderer prefers libraryWorkout
-      // when present. Falls through silently if the library isn't loaded or
-      // has no match for this slot.
       const _phaseWeeks = (currentPhase && currentPhase.weeks) || 1;
       const _weekInPhase = phaseWeekCount + 1;
       const _isDeload = (_weekInPhase % 4 === 0);
-      // Deterministic seed per (raceId, dateStr) so regenerating a plan
-      // produces the same workout selections — users don't expect Tuesday's
-      // session to randomly change when they tweak an unrelated setting.
-      const _seedForSlot = (function(){
-        const s = (race.id || "") + "|" + dateStr;
-        let h = 0;
-        for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-        return Math.abs(h);
-      })();
-      const _libWorkout = _libraryWorkoutFor({
-        discipline:          session.discipline,
-        load:                session.load,
-        raceType:            race.type,
-        raceGoal:            _libRaceGoal,
-        phaseName:           phaseName,
-        level:               _libLevel,
-        weekInPhase:         _weekInPhase,
-        totalWeeksInPhase:   _phaseWeeks,
-        isDeload:            _isDeload,
-        zones:               _libZones,
-        recentlyUsedIds:     _libRecentIds,
-        seed:                _seedForSlot,
-      });
-      if (_libWorkout) {
-        baseEntry.libraryWorkout = _libWorkout;
-        baseEntry.sessionName = _libWorkout.libraryName || baseEntry.sessionName;
-        if (_libWorkout.duration_min) baseEntry.duration = _libWorkout.duration_min;
-        // Strength: when the library provides a role-matched circuit, its
-        // exercises are the source of truth — drop the generic split fallback
-        // so the calendar renders the curated session rather than both.
-        if (session.discipline === "strength"
-            && _libWorkout.main_set
-            && Array.isArray(_libWorkout.main_set.exercises)
-            && _libWorkout.main_set.exercises.length) {
-          baseEntry.exercises = _libWorkout.main_set.exercises.map(ex => ({
-            name:   ex.name,
-            sets:   Array.isArray(ex.sets) ? (ex.sets_actual || ex.sets[0]) : ex.sets,
-            reps:   ex.reps,
-            weight: ex.load || "",
-          }));
-        }
-        _libRecentIds.push(_libWorkout.workoutId);
-        // Keep the recent-used window at 4 weeks × 11 sessions ≈ 44, cap
-        // the list so it doesn't balloon over a 21-week plan.
-        if (_libRecentIds.length > 50) _libRecentIds.splice(0, _libRecentIds.length - 50);
-      }
+      _patternSessionList.forEach((sessionEntry, sessionIdx) => {
+        const loadName  = LOAD_NAMES[sessionEntry.load] || capitalize(sessionEntry.load);
+        const duration = (sessionEntry.discipline === "run" && runPatternKey)
+          ? getRunSessionDuration(race.type, sessionEntry.load, phaseName, wNum, _effectiveTotalWeeks, runPatternKey)
+          : undefined;
 
-      plan.push(baseEntry);
+        // Strength plan entries need an `exercises` array — the render path
+        // keys off that, so an empty strength entry appears as a blank card.
+        // Session label uses the strength focus (Push / Pull / Legs / Full)
+        // rather than "Tempo Strength" since intensity labels don't apply to
+        // lifting. The exercises list rotates through the user's selected
+        // split so adjacent strength days don't repeat the same template.
+        let strengthExercises = null;
+        let strengthName = null;
+        if (sessionEntry.discipline === "strength") {
+          const built = _buildStrengthForPlan(wNum, phaseName);
+          strengthExercises = built.exercises;
+          strengthName = built.name;
+        }
+
+        const baseEntry = {
+          date: dateStr,
+          raceId: race.id,
+          phase: phaseName,
+          weekNumber: wNum,
+          discipline: sessionEntry.discipline,
+          load: sessionEntry.load,
+          sessionName: sessionEntry.discipline === "strength"
+            ? (strengthName || "Strength Training")
+            : `${loadName} ${capitalize(sessionEntry.discipline)}`,
+          ...(duration != null ? { duration } : {}),
+        };
+        if (strengthExercises && strengthExercises.length) {
+          baseEntry.type = "weightlifting";
+          baseEntry.exercises = strengthExercises;
+        }
+
+        // Workout library lookup — §9d. Seed includes the session index so
+        // two-a-day slots (e.g. mon=[swim, strength]) get independent
+        // library picks instead of two copies of the same workout.
+        const _seedForSlot = (function(){
+          const s = (race.id || "") + "|" + dateStr + "|" + sessionIdx;
+          let h = 0;
+          for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+          return Math.abs(h);
+        })();
+        const _libWorkout = _libraryWorkoutFor({
+          discipline:          sessionEntry.discipline,
+          load:                sessionEntry.load,
+          raceType:            race.type,
+          raceGoal:            _libRaceGoal,
+          phaseName:           phaseName,
+          level:               _libLevel,
+          weekInPhase:         _weekInPhase,
+          totalWeeksInPhase:   _phaseWeeks,
+          isDeload:            _isDeload,
+          zones:               _libZones,
+          recentlyUsedIds:     _libRecentIds,
+          seed:                _seedForSlot,
+        });
+        if (_libWorkout) {
+          baseEntry.libraryWorkout = _libWorkout;
+          baseEntry.sessionName = _libWorkout.libraryName || baseEntry.sessionName;
+          if (_libWorkout.duration_min) baseEntry.duration = _libWorkout.duration_min;
+          if (sessionEntry.discipline === "strength"
+              && _libWorkout.main_set
+              && Array.isArray(_libWorkout.main_set.exercises)
+              && _libWorkout.main_set.exercises.length) {
+            // Map library exercises into the plan-entry shape. Pipe through
+            // _personalizeWeights so qualitative labels ("heavy",
+            // "moderate-heavy barbell") become real pounds when the
+            // athlete has entered bench/squat/deadlift/ohp/row in
+            // trainingZones.strength. Without those inputs the qualitative
+            // label stays as a hint.
+            let _libExercises = _libWorkout.main_set.exercises.map(ex => ({
+              name:   ex.name,
+              sets:   Array.isArray(ex.sets) ? (ex.sets_actual || ex.sets[0]) : ex.sets,
+              reps:   ex.reps,
+              weight: ex.load || "",
+              notes:  ex.notes || "",
+            }));
+            if (typeof window !== "undefined" && typeof window._personalizeWeights === "function") {
+              try { _libExercises = window._personalizeWeights(_libExercises); } catch {}
+            }
+            baseEntry.exercises = _libExercises;
+          }
+          _libRecentIds.push(_libWorkout.workoutId);
+          if (_libRecentIds.length > 50) _libRecentIds.splice(0, _libRecentIds.length - 50);
+        }
+
+        plan.push(baseEntry);
+      });
     }
 
     // Advance day; phase tracking still pivots on Mondays so each

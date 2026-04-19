@@ -715,6 +715,13 @@ function _personalizeWeights(exercises) {
   });
 }
 
+// Expose on window so planner.js (loaded after) can pipe library-sourced
+// strength exercises through the same 1RM-based weight personalization as
+// the rest of the app.
+if (typeof window !== "undefined") {
+  window._personalizeWeights = _personalizeWeights;
+}
+
 /* ── Training Preferences UI ─────────────────────────────────────────────── */
 
 function loadTrainingPreferences() {

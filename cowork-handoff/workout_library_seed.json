@@ -1327,7 +1327,7 @@
     "levels": ["intermediate", "advanced"],
     "race_distances": null,
     "race_goals": ["time_goal", "pr_podium"],
-    "warmup": { "description": "5 min bike spin or dynamic warmup", "duration_min": 5 },
+    "warmup": { "description": "5 min dynamic warmup: hip circles, leg swings, bodyweight squats, arm circles", "duration_min": 5 },
     "main_set": {
       "type": "strength",
       "description": "Cycling-specific power — build force production through pedal stroke range of motion",
@@ -1452,7 +1452,7 @@
     "levels": ["intermediate", "advanced"],
     "race_distances": null,
     "race_goals": null,
-    "warmup": { "description": "5 min easy bike or walk + bodyweight squats + leg swings", "duration_min": 5 },
+    "warmup": { "description": "5 min dynamic warmup: bodyweight squats, leg swings, walking lunges, glute bridges", "duration_min": 5 },
     "main_set": {
       "type": "strength",
       "description": "Leg hypertrophy — moderate-heavy load, chase volume and metabolic stress",
