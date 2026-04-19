@@ -2,6 +2,85 @@
 
 let _nlProcessing = false;
 let _pendingNLRestrictions = null;
+let _faqCache = null; // lazy-loaded FAQ; single fetch then in-memory.
+
+// Load the canonical FAQ that also powers the Supabase ask-ironz function.
+// Fetched lazily on first ask; cached for the rest of the session. Failures
+// are swallowed so the LLM fallback still runs (offline / deploy issues).
+async function _loadFaq() {
+  if (_faqCache !== null) return _faqCache;
+  try {
+    const resp = await fetch("assets/faq.json", { cache: "force-cache" });
+    if (!resp.ok) throw new Error("faq fetch " + resp.status);
+    _faqCache = await resp.json();
+  } catch (e) {
+    _faqCache = [];
+  }
+  return _faqCache;
+}
+
+// Strip filler words so "how do I create an account" matches keyword
+// "create account" (the user naturally inserts articles/prepositions the
+// keyword list doesn't include). Applied to both the user text and the
+// FAQ keyword so comparisons are symmetric.
+const _NL_FILLERS = new Set([
+  "a", "an", "the", "to", "of", "for", "on", "in", "at",
+  "my", "me", "i", "is", "it", "this", "that", "do", "does",
+  "can", "will", "how", "what", "why", "when", "where", "should",
+]);
+function _stripFillers(s) {
+  return String(s || "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(w => w && !_NL_FILLERS.has(w))
+    .join(" ");
+}
+
+// Score a single FAQ entry against the user's question text. Mirrors the
+// backend matcher in supabase/functions/ask-ironz/index.ts: counts keyword
+// substring hits plus a question-text fuzzy overlap bonus. Returns 0 when
+// nothing meaningful matched so the caller can thresh-hold easily.
+function _scoreFaqEntry(text, entry) {
+  const q      = String(text || "").toLowerCase();
+  const qClean = _stripFillers(q);
+  if (!q) return 0;
+  let score = 0;
+  const keywords = Array.isArray(entry.keywords) ? entry.keywords : [];
+  for (const kw of keywords) {
+    const k      = String(kw || "").toLowerCase().trim();
+    const kClean = _stripFillers(k);
+    if (!k) continue;
+    if (q.includes(k) || (kClean && qClean.includes(kClean))) {
+      // Longer keywords get more weight — "generate plan" beats "plan".
+      const weight = Math.max(kClean.length, k.length);
+      score += Math.max(2, Math.ceil(weight / 4));
+    }
+  }
+  // Question-text overlap: for each 4+ letter word shared between the user's
+  // text and the FAQ question, add a small bonus.
+  const faqQ = String(entry.question || "").toLowerCase();
+  const words = Array.from(new Set(q.split(/[^a-z0-9]+/).filter(w => w.length >= 4)));
+  for (const w of words) {
+    if (faqQ.includes(w)) score += 1;
+  }
+  return score;
+}
+
+// Return the best-matching FAQ entry (or null) for the given user text.
+// Only returns a match when the score clears MIN_CONFIDENT_SCORE so the
+// LLM still handles open-ended questions that don't map to an FAQ.
+async function _findFaqMatch(text) {
+  const MIN_CONFIDENT_SCORE = 4; // ~2 keyword hits, or 1 long keyword + shared words
+  const faq = await _loadFaq();
+  if (!Array.isArray(faq) || !faq.length) return null;
+  let best = null;
+  let bestScore = 0;
+  for (const entry of faq) {
+    const s = _scoreFaqEntry(text, entry);
+    if (s > bestScore) { best = entry; bestScore = s; }
+  }
+  return bestScore >= MIN_CONFIDENT_SCORE ? best : null;
+}
 
 function renderNLInput(dateStr) {
   const container = document.getElementById("nl-input-container");
@@ -37,6 +116,20 @@ async function submitNLInput(dateStr) {
   responseEl.innerHTML = `<div class="nl-loading">Thinking\u2026</div>`;
 
   try {
+    // FAQ short-circuit: when the question clearly maps to a documented
+    // answer, return the canonical FAQ text instead of paying for an LLM
+    // call that will hallucinate details (wrong disciplines, imagined
+    // ratings, etc.). The LLM still handles anything the FAQ doesn't cover.
+    const faqMatch = await _findFaqMatch(text);
+    if (faqMatch) {
+      _renderNLResponse({
+        summary: faqMatch.question,
+        actions: [{ type: "message", text: faqMatch.answer }],
+        source: "faq",
+      }, dateStr, text);
+      return;
+    }
+
     // Gather context
     const profile = _safeJSON("profile") || {};
     const schedule = (_safeJSON("workoutSchedule") || []).filter(w => w.date >= dateStr).slice(0, 14);
