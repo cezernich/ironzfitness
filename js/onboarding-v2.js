@@ -2677,6 +2677,32 @@
       const d = _state.longDays.longRide;
       if (!_state.schedule[d].length) _state.schedule[d] = ["bike-long"];
     }
+
+    // Post-long-run shakeout (running-only plans, §4b): the day after a
+    // long run wants an easy recovery run (Z1, 20-30 min) — not a blank.
+    // Round-robin below actively avoids same-sport adjacency, which would
+    // leave Sunday empty for a Saturday long run. Anchor the shakeout
+    // here so adjacency skips this day but the run is already placed.
+    // Skipped for triathletes (their long-ride / long-run often share the
+    // weekend and doubling up would wreck recovery) and for days the user
+    // explicitly marked Rest.
+    const _isRunningOnly =
+      Array.isArray(sports) &&
+      sports.includes("run") &&
+      !sports.includes("bike") &&
+      !sports.includes("swim");
+    if (_isRunningOnly && _state.longDays.longRun) {
+      const dowOf = { sun:0, mon:1, tue:2, wed:3, thu:4, fri:5, sat:6 };
+      const longDow = dowOf[_state.longDays.longRun];
+      if (longDow != null) {
+        const nextDow = (longDow + 1) % 7;
+        const nextKey = Object.keys(dowOf).find(k => dowOf[k] === nextDow);
+        if (nextKey && !_state.schedule[nextKey].includes("rest")
+            && _state.schedule[nextKey].length === 0) {
+          _state.schedule[nextKey] = ["run-recovery"];
+        }
+      }
+    }
     // Distribute remaining endurance sports round-robin across remaining
     // days, but cap at the user's requested daysPerWeek. Previously this
     // filled ALL 7 days then carved rest from the leftovers, which meant

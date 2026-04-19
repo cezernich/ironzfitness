@@ -9216,6 +9216,21 @@ function getRestDayRecommendation(dateStr) {
   const yTypes = _visibleTypes(yData);
   const HIGH_IMPACT = ["running", "weightlifting", "run"];
   const overlap = todayTypes.filter(t => yTypes.includes(t) && HIGH_IMPACT.includes(t));
+  // Helper: pull per-discipline load labels from a day so we can tell
+  // "easy + easy" (fine — standard running) apart from "hard + hard"
+  // (actual recovery risk).
+  const _loadsForDisc = (data, disc) => {
+    const out = [];
+    const match = (d) => d === disc || (disc === "run" && d === "running") || (disc === "running" && d === "run");
+    if (data.planEntry && match(data.planEntry.discipline)) out.push(data.planEntry.load);
+    data.scheduledWorkouts.forEach(w => {
+      if (match(w.discipline) || match(w.type)) out.push(w.load);
+    });
+    data.loggedWorkouts.forEach(w => { if (match(w.type)) out.push(w.load); });
+    return out.filter(Boolean);
+  };
+  const _isHardLoad = (l) => l === "hard" || l === "moderate" || l === "long";
+
   if (overlap.length > 0) {
     // For weightlifting, only warn if same muscle groups are targeted
     if (overlap[0] === "weightlifting") {
@@ -9231,8 +9246,24 @@ function getRestDayRecommendation(dateStr) {
           message: `Back-to-back ${label.toLowerCase()} sessions. Consider alternating muscle groups or adding recovery.`
         });
       }
+    } else if (overlap[0] === "run" || overlap[0] === "running") {
+      // Dedicated runners train multiple days in a row — back-to-back runs
+      // are expected. Only warn when BOTH days are hard/quality sessions
+      // (hard + hard, hard + long, long + hard), which is the pattern that
+      // actually accumulates fatigue and leaves nothing for recovery.
+      const todayRunLoads = _loadsForDisc(todayData, "run");
+      const yRunLoads     = _loadsForDisc(yData, "run");
+      const todayHardRun  = todayRunLoads.some(_isHardLoad);
+      const yHardRun      = yRunLoads.some(_isHardLoad);
+      if (todayHardRun && yHardRun) {
+        recommendations.push({
+          type: "overlap",
+          icon: "alertCircle",
+          message: `Two hard runs in a row. Space these out if you can — Z2 the day between keeps the adaptation without stacking fatigue.`
+        });
+      }
     } else {
-      const label = overlap[0] === "run" ? "running" : overlap[0];
+      const label = overlap[0];
       recommendations.push({
         type: "overlap",
         icon: "alertCircle",
