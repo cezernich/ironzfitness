@@ -3479,10 +3479,16 @@
         if (s === "run") {
           const isLong = _state.longDays && _state.longDays.longRun === d && runIdx === 0;
           const runTotal = runDays.length;
+          // Quality-session slots depend on total run volume:
+          //   ≥4 runs → [interval, tempo, ...easy..., recovery, long]
+          //             (2 quality sessions — hits spec §4c time_goal Build/Peak)
+          //   3 runs  → [interval, easy, recovery] (+ long if applicable)
+          //   ≤2 runs → [interval, easy] (+ long)
           if (isLong) out.push("run-long");
-          else if (runTotal >= 3 && runIdx === runTotal - 1) out.push("run-recovery");
-          else if (runIdx === 0)                              out.push("run-interval");
-          else                                                out.push("run-easy");
+          else if (runIdx === 0)                                   out.push("run-interval");
+          else if (runIdx === 1 && runTotal >= 4)                  out.push("run-tempo");
+          else if (runTotal >= 3 && runIdx === runTotal - 1)       out.push("run-recovery");
+          else                                                     out.push("run-easy");
           runIdx++;
         } else if (s === "bike") {
           const isLong = _state.longDays && _state.longDays.longRide === d && bikeIdx === 0;
@@ -3907,8 +3913,19 @@
     const _BP_LONG_RUN_DOW = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
     const _longDayName = _state.longDays && _state.longDays.longRun;
     const _longDayIdx = _longDayName ? _BP_LONG_RUN_DOW[_longDayName] : null;
+    // Use the ENRICHED template (run → run-interval / run-tempo / run-long /
+    // run-easy / run-recovery) instead of raw _state.schedule so the plan
+    // generator sees the intended intensity distribution. Passing plain
+    // "run" codes made every session default to easy in every phase — the
+    // bug that produced all-Z2 time_goal plans. _enrichWeekTemplate is
+    // pure (derives from _state.schedule + _state.longDays + strength
+    // split, writes nothing), so calling it for preview is safe.
+    let _enrichedForRace;
+    try { _enrichedForRace = _enrichWeekTemplate(); }
+    catch (e) { _enrichedForRace = { ...(_state.schedule || {}) }; }
+
     const _prefsForRace = {
-      weeklyTemplate: { ...(_state.schedule || {}) },
+      weeklyTemplate: _enrichedForRace,
       daysPerWeek: _activeDaysPerWeek || undefined,
       sessionLengthMin: parseInt(_state.planDetails.sessionLength, 10) || undefined,
       longDay: (_longDayIdx !== null && _longDayIdx !== undefined) ? _longDayIdx : undefined,
