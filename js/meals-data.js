@@ -133,9 +133,19 @@ function _dateSeed(dateStr) {
  * 8. Rotate among the top candidates using (dateSeed + slot index) so the
  *    same day is reproducible but different days surface different meals.
  */
-function pickMeal(options, targetCalories, preferHighCarb, preferHighProtein, exclude = [], recentNames = [], preferLowFat = false, dateSeed = 0) {
+function pickMeal(options, targetCalories, preferHighCarb, preferHighProtein, exclude = [], recentNames = [], preferLowFat = false, dateSeed = 0, carbLoad = false) {
   const prefs = loadFoodPreferences();
   const dietary = loadDietaryRestrictions();
+
+  // Helper: carbohydrate share of a meal's calories (0..1).
+  const _carbShare = (m) => {
+    const cal = m.calories || (m.protein * 4 + m.carbs * 4 + m.fat * 9);
+    return cal > 0 ? (m.carbs * 4) / cal : 0;
+  };
+  const _fatShare = (m) => {
+    const cal = m.calories || (m.protein * 4 + m.carbs * 4 + m.fat * 9);
+    return cal > 0 ? (m.fat * 9) / cal : 0;
+  };
 
   // 1. Exclude same-day duplicates
   let pool = options.filter(m => !exclude.includes(m.name));
@@ -172,8 +182,23 @@ function pickMeal(options, targetCalories, preferHighCarb, preferHighProtein, ex
     if (filtered.length > 0) pool = filtered;
   }
 
-  // 4. Narrow by macro preference — filter to matching tags when possible
-  if (preferHighProtein && preferHighCarb) {
+  // 4. Narrow by macro preference — filter to matching tags when possible.
+  // Carb-load days (race week T-3/T-2/T-1) get a stricter filter: the meal
+  // itself must be >=55% carbs and <=25% fat by calories, regardless of its
+  // "high-carb" tag. This keeps the rendered recipe name aligned with the
+  // glycogen-loading prescription — Oatmeal / Pancakes / Bagels / Pasta /
+  // Rice Bowls win; Avocado Toast and Beef Tacos lose.
+  if (carbLoad) {
+    const carbForward = pool.filter(m => _carbShare(m) >= 0.55 && _fatShare(m) <= 0.25);
+    if (carbForward.length > 0) {
+      pool = carbForward;
+    } else {
+      // Relaxed fallback: any meal with carb share > fat share. Keeps the
+      // picker from crashing out when the library is sparse.
+      const lean = pool.filter(m => _carbShare(m) > _fatShare(m));
+      if (lean.length > 0) pool = lean;
+    }
+  } else if (preferHighProtein && preferHighCarb) {
     const both = pool.filter(m => m.tags.includes("high-protein") && m.tags.includes("high-carb"));
     if (both.length > 0) pool = both;
     else {
@@ -208,6 +233,14 @@ function pickMeal(options, targetCalories, preferHighCarb, preferHighProtein, ex
     const aLiked = prefs.likes.length > 0 && mealContainsTerm(a, prefs.likes) ? 0 : 1;
     const bLiked = prefs.likes.length > 0 && mealContainsTerm(b, prefs.likes) ? 0 : 1;
     if (aLiked !== bLiked) return aLiked - bLiked;
+
+    // On carb-load days, the most-carb-dominant meal wins once dietary +
+    // allergen filters are satisfied. Empty-stomach effort here directly
+    // affects race-day glycogen.
+    if (carbLoad) {
+      const ratioDelta = _carbShare(b) - _carbShare(a);
+      if (Math.abs(ratioDelta) > 0.02) return ratioDelta;
+    }
 
     // Calorie proximity
     return Math.abs(a.calories - targetCalories) - Math.abs(b.calories - targetCalories);
@@ -246,6 +279,7 @@ function generateDayMeals(nutrition, trainingLoad, dateStr, workoutType) {
   const proteinTarget   = typeof nutrition === "object" ? (nutrition.protein || 0) : 0;
   const carbsTarget     = typeof nutrition === "object" ? (nutrition.carbs || 0) : 0;
   const fatTarget        = typeof nutrition === "object" ? (nutrition.fat || 0) : 0;
+  const isCarbLoad       = typeof nutrition === "object" && !!nutrition.carbLoad;
 
   // Macro preferences based on slider values, load, AND workout type
   const isHighIntensity = ["hard", "long", "race"].includes(trainingLoad);
@@ -257,8 +291,8 @@ function generateDayMeals(nutrition, trainingLoad, dateStr, workoutType) {
   const carbsRatio   = carbsTarget > 0 ? (carbsTarget * 4 / calorieTarget) : 0;
 
   const preferHighProtein = proteinRatio > 0.28 || isStrengthDay;
-  const preferHighCarb    = carbsRatio > 0.45 || isEnduranceDay || (isHighIntensity && !isStrengthDay);
-  const preferLowFat      = fatTarget > 0 && (fatTarget * 9 / calorieTarget) < 0.22;
+  const preferHighCarb    = carbsRatio > 0.45 || isEnduranceDay || (isHighIntensity && !isStrengthDay) || isCarbLoad;
+  const preferLowFat      = (fatTarget > 0 && (fatTarget * 9 / calorieTarget) < 0.22) || isCarbLoad;
 
   // Get recently eaten meal names (last 3 days) to avoid repetition
   const recentNames = dateStr ? getRecentMealNames(dateStr, 3) : [];
@@ -275,10 +309,30 @@ function generateDayMeals(nutrition, trainingLoad, dateStr, workoutType) {
   // Per-slot macro targets based on the same fraction split
   const _macroTargets = { protein: proteinTarget, carbs: carbsTarget, fat: fatTarget };
 
-  /** Scale a meal's macros to hit the slot's calorie and macro targets */
+  /** Scale a meal's macros to hit the slot's calorie and macro targets.
+   *  On carb-load days we pin macros directly to the per-slot target so the
+   *  rendered plan matches the 8-10 g/kg carbs / ~20% fat prescription
+   *  rather than drifting with whatever macros the picked recipe happened
+   *  to have. On normal days we keep the softer 50/50 blend so portion
+   *  sizes stay realistic. */
   function _scaleMeal(meal, targetCals, slotFraction) {
     if (!meal.calories || meal.calories <= 0) return meal;
     const calRatio = targetCals / meal.calories;
+
+    if (isCarbLoad && slotFraction && proteinTarget > 0) {
+      const slotP = Math.round(proteinTarget * slotFraction);
+      const slotC = Math.round(carbsTarget * slotFraction);
+      const slotF = Math.round(fatTarget * slotFraction);
+      const scaled = {
+        ...meal,
+        protein: Math.max(5, slotP),
+        carbs:   Math.max(10, slotC),
+        fat:     Math.max(3, slotF),
+      };
+      scaled.calories = Math.round(scaled.protein * 4 + scaled.carbs * 4 + scaled.fat * 9);
+      return scaled;
+    }
+
     // Don't scale if close enough (within 15%) — keeps portions realistic
     if (calRatio >= 0.85 && calRatio <= 1.15) return meal;
     // Scale macros: if we have specific macro targets, blend toward them
@@ -309,7 +363,7 @@ function generateDayMeals(nutrition, trainingLoad, dateStr, workoutType) {
 
   for (const slot of slots) {
     const slotTarget = Math.round(calorieTarget * slot.fraction);
-    const meal = pickMeal(MEAL_LIBRARY[slot.key], slotTarget, preferHighCarb, preferHighProtein, usedNames, recentNames, preferLowFat, dateSeed);
+    const meal = pickMeal(MEAL_LIBRARY[slot.key], slotTarget, preferHighCarb, preferHighProtein, usedNames, recentNames, preferLowFat, dateSeed, isCarbLoad);
     usedNames.push(meal.name);
     chosen.push({ ..._scaleMeal(meal, slotTarget, slot.fraction), slot: slot.label });
   }
@@ -327,7 +381,7 @@ function generateDayMeals(nutrition, trainingLoad, dateStr, workoutType) {
   while (totalCals < calorieTarget - 100 && extraIdx < extraSlots.length) {
     const gap     = calorieTarget - totalCals;
     const mealKey = gap >= 400 ? extraSlots[extraIdx].key : "snack";
-    const meal    = pickMeal(MEAL_LIBRARY[mealKey], gap, preferHighCarb, preferHighProtein, usedNames, recentNames, preferLowFat, dateSeed);
+    const meal    = pickMeal(MEAL_LIBRARY[mealKey], gap, preferHighCarb, preferHighProtein, usedNames, recentNames, preferLowFat, dateSeed, isCarbLoad);
     usedNames.push(meal.name);
     const scaled = _scaleMeal(meal, gap, null);
     chosen.push({ ...scaled, slot: extraSlots[extraIdx].label });
