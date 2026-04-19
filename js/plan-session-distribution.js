@@ -165,16 +165,163 @@
     return null; // week is packed; give up (caller tolerates under-count)
   }
 
-  function addMissingSession(weekEntries, mondayStr, discipline, phaseName, raceId, weekNumber) {
-    const dateStr = pickSlotForDiscipline(weekEntries, mondayStr, discipline);
+  // ── Doubles (§3a-iii) ──────────────────────────────────────────────────────
+  // When no empty days remain and the athlete's level + phase allows, place
+  // the new session as a second session on an existing day. Enforces:
+  //   - Max 2 sessions per day
+  //   - Never stack two hard sessions (new session is never hard when
+  //     doubling — this helper caps newLoad at easy/strength)
+  //   - Preserve ≥1 rest day per week (spec §3a-iii)
+  //   - Don't double on the day before the remaining rest day
+  //   - Respect the weekly double budget per level+phase
+  function maxDoublesAllowed(level, phaseName) {
+    const lvl = String(level || "intermediate").toLowerCase();
+    const phase = String(phaseName || "");
+    if (lvl === "beginner")     return 0;
+    if (lvl === "intermediate") return (phase === "Build" || phase === "Peak") ? 1 : 0;
+    return 3; // advanced
+  }
+  function isHardLoad(load) {
+    return load === "hard" || load === "moderate" || load === "long";
+  }
+  function emptyDatesInWeek(weekEntries, mondayStr) {
+    const used = new Set(weekEntries.filter(e => e.load !== "rest").map(e => e.date));
+    const monday = new Date(mondayStr + "T00:00:00");
+    const empty = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const s = d.toISOString().slice(0, 10);
+      if (!used.has(s)) empty.push(s);
+    }
+    return empty;
+  }
+  function sessionsByDate(weekEntries) {
+    const m = {};
+    weekEntries.forEach(e => {
+      if (e.load === "rest") return;
+      (m[e.date] = m[e.date] || []).push(e);
+    });
+    return m;
+  }
+  // Returns a viable doubling date, or null if budget exhausted / no valid day.
+  function pickDoubleSlot(weekEntries, mondayStr, discipline, newLoad, level, phaseName, doublesUsed) {
+    const budget = maxDoublesAllowed(level, phaseName);
+    if (doublesUsed >= budget) return null;
+    if (isHardLoad(newLoad) && discipline !== "strength") return null;
+
+    const rests = emptyDatesInWeek(weekEntries, mondayStr);
+    // Pre-compute "days before rest" so we can block those for doubling.
+    const blockedAsPreRest = new Set();
+    rests.forEach(r => {
+      const d = new Date(r + "T00:00:00");
+      d.setDate(d.getDate() - 1);
+      blockedAsPreRest.add(d.toISOString().slice(0, 10));
+    });
+
+    const byDate = sessionsByDate(weekEntries);
+
+    // Already-doubled days can't take a third session.
+    const candidates = Object.keys(byDate).filter(date => {
+      const entries = byDate[date];
+      if (entries.length >= 2) return false;
+      if (blockedAsPreRest.has(date)) return false;
+      // Spec: at least one of the two sessions must be easy or strength.
+      // newLoad is already constrained to easy or strength — so the pair
+      // is valid regardless of the existing session's load.
+      return true;
+    });
+    if (candidates.length === 0) return null;
+
+    // Prefer days where existing session is ALREADY easy — avoids stacking
+    // fatigue on quality days. Secondary preference: complementary
+    // discipline pairings per spec §3a-iii (swim+strength, bike+easy run, etc.).
+    const disciplinePairs = {
+      swim:     { complement: ["strength", "bike"] },
+      bike:     { complement: ["strength", "swim"] },
+      run:      { complement: ["strength", "swim"] },
+      strength: { complement: ["swim", "bike", "run"] },
+    };
+    const preferred = (disciplinePairs[discipline] || { complement: [] }).complement;
+
+    candidates.sort((a, b) => {
+      const aEntries = byDate[a], bEntries = byDate[b];
+      const aExistingHard = aEntries.some(e => isHardLoad(e.load)) ? 1 : 0;
+      const bExistingHard = bEntries.some(e => isHardLoad(e.load)) ? 1 : 0;
+      if (aExistingHard !== bExistingHard) return aExistingHard - bExistingHard;
+      const aPair = aEntries.some(e => preferred.includes(e.discipline)) ? 0 : 1;
+      const bPair = bEntries.some(e => preferred.includes(e.discipline)) ? 0 : 1;
+      if (aPair !== bPair) return aPair - bPair;
+      return a.localeCompare(b); // stable tiebreak
+    });
+    return candidates[0];
+  }
+
+  // When we place a strength session on a day that already has a cardio
+  // session, spec §3a-iii says strength goes in the AM slot and the cardio
+  // becomes the PM session. We stamp timeOfDay hints on both entries so
+  // downstream renders can show order — harmless for now (UI doesn't use
+  // it yet) but preserves the ordering signal.
+  function tagDoubleOrdering(existingEntries, newEntry) {
+    if (newEntry.discipline === "strength") {
+      newEntry.timeOfDay = "AM";
+      existingEntries.forEach(e => { if (!e.timeOfDay) e.timeOfDay = "PM"; });
+    } else if (existingEntries.some(e => e.discipline === "strength")) {
+      // Existing is strength → keep strength AM, put new cardio PM.
+      newEntry.timeOfDay = "PM";
+      existingEntries.forEach(e => { if (e.discipline === "strength" && !e.timeOfDay) e.timeOfDay = "AM"; });
+    } else {
+      // Two cardios — easy precedes hard; our new session is non-hard so
+      // default it to AM, existing becomes PM if still unset.
+      newEntry.timeOfDay = "AM";
+      existingEntries.forEach(e => { if (!e.timeOfDay) e.timeOfDay = "PM"; });
+    }
+  }
+
+  function addMissingSession(weekEntries, mondayStr, discipline, phaseName, raceId, weekNumber, ctx) {
+    const c = ctx || { level: "intermediate", doublesUsedRef: { n: 0 } };
+    const load = discipline === "strength" ? "moderate" : "easy";
+
+    // Fill order:
+    //   1) pickSlotForDiscipline — only fills an empty day when >1 rest
+    //      day remains (so we preserve at least one rest day per week,
+    //      per spec §3a-iii).
+    //   2) pickDoubleSlot — places this session on an existing day,
+    //      subject to level+phase budget and hard-pair rules.
+    let dateStr = null;
+    let isDouble = false;
+    const empties = emptyDatesInWeek(weekEntries, mondayStr);
+    if (empties.length > 1) {
+      dateStr = pickSlotForDiscipline(weekEntries, mondayStr, discipline);
+    }
+    if (!dateStr) {
+      dateStr = pickDoubleSlot(weekEntries, mondayStr, discipline, load, c.level, phaseName, c.doublesUsedRef.n);
+      if (dateStr) {
+        isDouble = true;
+        c.doublesUsedRef.n++;
+      }
+    }
     if (!dateStr) return null;
+
     const LOAD_NAMES = {
       swim: "Easy", bike: "Easy", run: "Easy", strength: "Moderate", brick: "Moderate", hyrox: "Moderate",
     };
     const DISC_NAMES = {
       swim: "Swim", bike: "Ride", run: "Run", strength: "Strength", brick: "Brick", hyrox: "Hyrox",
     };
-    const load = discipline === "strength" ? "moderate" : "easy";
+    // Strength sessions need an `exercises` array and a split-aware name
+    // ("Push Day" / "Pull Day" / "Full Body" …) — otherwise the injected
+    // entry rendered as a blank "Moderate Strength" card with no exercises.
+    // Reuse the shared helper from planner.js so the distribution-added
+    // strength days match the ones _generateSingleRacePlan produces.
+    let sessionName = `${LOAD_NAMES[discipline] || "Easy"} ${DISC_NAMES[discipline] || discipline}`;
+    let strengthBuild = null;
+    if (discipline === "strength" && typeof window !== "undefined" && typeof window._buildStrengthForPlan === "function") {
+      try {
+        strengthBuild = window._buildStrengthForPlan(weekNumber, phaseName);
+        if (strengthBuild && strengthBuild.name) sessionName = strengthBuild.name;
+      } catch (e) { strengthBuild = null; }
+    }
     const entry = {
       date: dateStr,
       raceId: raceId,
@@ -182,10 +329,21 @@
       weekNumber,
       discipline,
       load,
-      sessionName: `${LOAD_NAMES[discipline] || "Easy"} ${DISC_NAMES[discipline] || discipline}`,
+      sessionName,
       duration: discipline === "strength" ? 45 : 30,
       _distributionAdded: true,
     };
+    if (strengthBuild && Array.isArray(strengthBuild.exercises) && strengthBuild.exercises.length) {
+      entry.type = "weightlifting";
+      entry.exercises = strengthBuild.exercises;
+    }
+    if (isDouble) {
+      entry._isDouble = true;
+      // Tag AM/PM ordering on both the new entry and the existing one(s)
+      // on that date so a future UI can render "AM" / "PM" columns.
+      const existingOnDate = weekEntries.filter(e => e.date === dateStr);
+      tagDoubleOrdering(existingOnDate, entry);
+    }
     weekEntries.push(entry);
     weekEntries.sort((a, b) => a.date.localeCompare(b.date));
     return entry;
@@ -249,6 +407,8 @@
     const groups = groupByWeek(plan);
     let added = 0, demoted = 0;
 
+    let doubledWeeks = 0;
+
     Object.values(groups).forEach(g => {
       const firstEntry = g.entries[0];
       if (!firstEntry) return;
@@ -257,6 +417,10 @@
       if (!target) return; // unknown phase (e.g. Pre-Plan) — leave alone
 
       const counts = countByDiscipline(g.entries);
+
+      // Per-week doubling context. Budget is capped by level+phase; the
+      // ref object is mutated by addMissingSession as doubles accumulate.
+      const weekCtx = { level: athleteLevel || "intermediate", doublesUsedRef: { n: 0 } };
 
       // Add missing sessions, each discipline.
       ["swim", "bike", "run", "strength", "brick", "hyrox"].forEach(disc => {
@@ -267,7 +431,7 @@
           for (let i = 0; i < missing; i++) {
             const newEntry = addMissingSession(
               g.entries, g.mondayStr, disc,
-              phaseName, firstEntry.raceId, firstEntry.weekNumber
+              phaseName, firstEntry.raceId, firstEntry.weekNumber, weekCtx
             );
             if (newEntry) {
               plan.push(newEntry);
@@ -291,6 +455,8 @@
           }
         }
       });
+
+      if (weekCtx.doublesUsedRef.n > 0) doubledWeeks++;
     });
 
     // After counts are aligned, apply progressive overload to long sessions.
@@ -300,7 +466,7 @@
     // Sort plan by date for stable downstream processing.
     plan.sort((a, b) => a.date.localeCompare(b.date));
 
-    return { added, demoted, weeksChecked: Object.keys(groups).length };
+    return { added, demoted, weeksChecked: Object.keys(groups).length, doubledWeeks };
   }
 
   if (typeof window !== "undefined") {
