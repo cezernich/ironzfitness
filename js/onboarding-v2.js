@@ -2893,6 +2893,179 @@
         });
       }
     }
+
+    // ── Spec-target enforcement (PLAN_GENERATOR_MASTER_SPEC §4) ─────────
+    // After the round-robin scaffolding, ask the shared distribution matrix
+    // how many sessions of each discipline this athlete actually needs in
+    // BASE phase (the phase the template renders against by default) and
+    // add whatever's missing — using doubles when the user's active days
+    // aren't enough single-session slots. Keeps pre-fill and aligner using
+    // the same source of truth so the onboarding screen shows what the
+    // user will actually train.
+    _enforceSpecTarget();
+  }
+
+  // ─── Spec-target enforcement for the Weekly Schedule template ─────────────
+  // Derives athlete level from thresholds the same way planner.js does, looks
+  // up PHASE_DISTRIBUTIONS_BY_LEVEL[sportProfile].Base[level], and adds
+  // sessions to _state.schedule so the per-discipline counts match.
+  //
+  // Doubling rules match PlanSessionDistribution (§3a-iii):
+  //   - Beginner: no doubles ever
+  //   - Intermediate in Base: no doubles (budget 0)
+  //   - Advanced: up to 3 doubles
+  //   - Max 2 sessions per day
+  //   - Preserve ≥1 rest day per week
+  //   - Never double the day before a rest day
+  //   - Non-hard sessions only get added as doubles (easy/strength)
+  function _enforceSpecTarget() {
+    if (typeof window === "undefined") return;
+    const PSD = window.PlanSessionDistribution;
+    if (!PSD || !PSD.getDistribution) return;
+    const race = _state.currentRace;
+    if (!race || !race.type) return;
+
+    const sportProfile = PSD.sportProfileForRaceType(race.type);
+    if (!sportProfile) return;
+    const level = _deriveAthleteLevel();
+    const target = PSD.getDistribution(sportProfile, "Base", level);
+    if (!target) return;
+
+    // Count what the template already has, keyed by "canonical" discipline.
+    const bucketOf = (code) => {
+      const c = String(code || "").toLowerCase();
+      if (c === "rest") return null;
+      if (c.indexOf("strength") === 0 || c === "weightlifting" || c === "bodyweight") return "strength";
+      if (c.indexOf("swim") === 0 || c.indexOf("pool") === 0 || c.indexOf("openwater") === 0) return "swim";
+      if (c.indexOf("bike") === 0 || c.indexOf("cycle") === 0 || c.indexOf("cycling") === 0) return "bike";
+      if (c.indexOf("run") === 0 || c.indexOf("walk") === 0) return "run";
+      if (c.indexOf("brick") === 0) return "brick";
+      if (c.indexOf("hyrox") === 0) return "hyrox";
+      return null;
+    };
+    const currentCounts = () => {
+      const n = { swim: 0, bike: 0, run: 0, strength: 0, brick: 0, hyrox: 0 };
+      _BP_DAYS.forEach(d => {
+        (_state.schedule[d] || []).forEach(code => {
+          const b = bucketOf(code);
+          if (b && n[b] != null) n[b]++;
+        });
+      });
+      return n;
+    };
+
+    // Double budget per level+Base (matches plan-session-distribution.js).
+    const doubleBudget = level === "advanced" ? 3 : 0;
+
+    // Days already at max (2 slots), rest days, and "pre-rest" days that
+    // shouldn't carry doubles.
+    const isRestDay = (d) => (_state.schedule[d] || []).includes("rest");
+    const restDays = _BP_DAYS.filter(isRestDay);
+    const preRestDays = new Set();
+    restDays.forEach(r => {
+      const idx = _BP_DAYS.indexOf(r);
+      if (idx > 0) preRestDays.add(_BP_DAYS[idx - 1]);
+      // Wrap — Monday's "day before" is Sunday if Sun is rest.
+      if (idx === 0 && _BP_DAYS.length > 1) preRestDays.add(_BP_DAYS[_BP_DAYS.length - 1]);
+    });
+    const isEmpty = (d) => (_state.schedule[d] || []).length === 0;
+
+    // Add one session of `disc` as a single-day entry if an empty non-last-
+    // rest slot exists, or as a double via the aligner's rules. Returns
+    // true if placed.
+    let doublesUsed = 0;
+    const placeOne = (disc) => {
+      const code = disc === "strength" ? "strength-full" : disc;
+      // 1) Prefer an empty day, but keep at least 1 rest day available.
+      const empties = _BP_DAYS.filter(d => isEmpty(d));
+      if (empties.length > 1) {
+        // Prefer mid-week slots; skip days already carrying an adjacent
+        // same-discipline session to avoid stacking.
+        const hasDisc = (d, disc) => (_state.schedule[d] || []).some(c => bucketOf(c) === disc);
+        const adjHasDisc = (d, disc) => {
+          const idx = _BP_DAYS.indexOf(d);
+          const prev = _BP_DAYS[(idx - 1 + _BP_DAYS.length) % _BP_DAYS.length];
+          const next = _BP_DAYS[(idx + 1) % _BP_DAYS.length];
+          return hasDisc(prev, disc) || hasDisc(next, disc);
+        };
+        const ordered = ["wed", "fri", "tue", "thu", "sat", "mon", "sun"];
+        let target = ordered.find(d => empties.includes(d) && !adjHasDisc(d, disc));
+        if (!target) target = ordered.find(d => empties.includes(d));
+        if (target) { _state.schedule[target] = [code]; return true; }
+      }
+      // 2) Double budget exhausted? Can't add more.
+      if (doublesUsed >= doubleBudget) return false;
+      // 3) Find a double-able day: has 1 session, not rest, not pre-rest,
+      //    existing session not too hard for pairing (strength or easy only
+      //    gets added as the new session, so any existing load pairs fine).
+      const doubleCandidates = _BP_DAYS.filter(d => {
+        const slots = _state.schedule[d] || [];
+        if (slots.length !== 1) return false;
+        if (isRestDay(d)) return false;
+        if (preRestDays.has(d)) return false;
+        // Preserve race-critical long days from being doubled (§3a-iii).
+        const existing = slots[0] || "";
+        if (/-long$/.test(existing)) return false;
+        return true;
+      });
+      if (!doubleCandidates.length) return false;
+      // Prefer pairings aligned with §3a-iii muscle-grouping: swim+strength,
+      // bike+strength (push day), run+swim (upper). Simple heuristic: if
+      // we're adding strength, prefer a day that carries a cardio session;
+      // if adding cardio, prefer a day whose only session is strength.
+      doubleCandidates.sort((a, b) => {
+        const aSport = bucketOf((_state.schedule[a] || [])[0] || "");
+        const bSport = bucketOf((_state.schedule[b] || [])[0] || "");
+        const aPref = (disc === "strength" && aSport !== "strength") || (disc !== "strength" && aSport === "strength") ? 0 : 1;
+        const bPref = (disc === "strength" && bSport !== "strength") || (disc !== "strength" && bSport === "strength") ? 0 : 1;
+        return aPref - bPref;
+      });
+      const day = doubleCandidates[0];
+      _state.schedule[day].push(code);
+      doublesUsed++;
+      return true;
+    };
+
+    // Walk each discipline and bring counts up to the target. Order swim →
+    // bike → run → strength → brick matches the aligner's so debugging is
+    // consistent between the two layers.
+    ["swim", "bike", "run", "strength", "brick"].forEach(disc => {
+      const want = target[disc] || 0;
+      let have = currentCounts()[disc] || 0;
+      let safety = 0;
+      while (have < want && safety < 14) {
+        safety++;
+        if (!placeOne(disc)) break;
+        have = currentCounts()[disc] || 0;
+      }
+    });
+  }
+
+  // Derive athlete level the same way planner.js does so pre-fill and
+  // generator agree. Priority: thresholds → race.level → profile.fitnessLevel
+  // → default "intermediate".
+  function _deriveAthleteLevel() {
+    let level = "intermediate";
+    try {
+      const TZ = typeof window !== "undefined" ? window.TrainingZones : null;
+      if (TZ) {
+        const thresholds = (_state.thresholds || {});
+        const weightKg = _state.profile && _state.profile.weight
+          ? Number(_state.profile.weight) * 0.453592
+          : null;
+        const perSport = {
+          run:  TZ.classifyRunning(thresholds),
+          bike: TZ.classifyCycling(thresholds, weightKg),
+          swim: TZ.classifySwim(thresholds),
+        };
+        const derived = TZ.overallLevel(perSport);
+        if (derived) level = derived;
+      }
+    } catch {}
+    if (_state.currentRace && _state.currentRace.level) {
+      level = String(_state.currentRace.level).toLowerCase();
+    }
+    return level;
   }
   function _prettySport(s) {
     const map = {

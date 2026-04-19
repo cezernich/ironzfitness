@@ -22,36 +22,142 @@
 (function () {
   "use strict";
 
-  // ─── §6.1 / §6.2 / §6.3 session distributions ───────────────────────────────
-  // Target session count per discipline per week, indexed by sportProfile + phase.
-  // When the actual week has fewer, add on rest days. When it has more (Taper),
-  // demote excess to easy / drop to rest.
-  const PHASE_DISTRIBUTIONS = {
+  // ─── Level-aware phase distributions (PLAN_GENERATOR_MASTER_SPEC §4) ─────
+  // Target session counts per discipline per week, indexed by
+  //   sportProfile → phase → level → disciplineCounts
+  //
+  // Derivations:
+  //   Triathlon Advanced — §4a exact day tables (Base=9, Build=10, Peak=11,
+  //     Taper=6). Build is 3 swim / 3 bike / 2 run / 1 strength / 1 brick
+  //     (Tempo OR Intervals + Long run = 2 run slots), NOT 3 run / 0 brick.
+  //   Triathlon Beginner/Intermediate — §3a-ii "Sessions/week" column
+  //     (Base 5-6/6-7/8-9, Build 5-7/6-8/9-11). Brick per §3a-ii timing:
+  //     beginner "NOT until late Build", intermediate "mid-Build",
+  //     advanced "early Build". Strength per §3a-ii: beginner 1-2×,
+  //     intermediate 2×, advanced 2×. Counts chosen to land in the
+  //     mid of each spec range.
+  //   Running — §4b session-type lists (Base 6-7, Build 6-8, Peak 5-6,
+  //     Taper 3-4). Level scales within the range: beginner at low end,
+  //     advanced at high end.
+  //   Cycling / Hyrox — spec doesn't give a per-level table. Keep the
+  //     existing single row and replicate across levels so callers still
+  //     get a value; tune later when the spec documents those sports.
+  const PHASE_DISTRIBUTIONS_BY_LEVEL = {
     triathlon: {
-      Base:  { swim: 2, bike: 2, run: 3, strength: 2, brick: 0 },   // 9 total
-      Build: { swim: 3, bike: 3, run: 3, strength: 1, brick: 0 },   // 10
-      Peak:  { swim: 3, bike: 3, run: 3, strength: 1, brick: 1 },   // 11
-      Taper: { swim: 2, bike: 2, run: 2, strength: 0, brick: 0 },   //  6
+      Base: {
+        beginner:     { swim: 1, bike: 1, run: 2, strength: 1, brick: 0 }, //  5
+        intermediate: { swim: 2, bike: 2, run: 2, strength: 1, brick: 0 }, //  7
+        advanced:     { swim: 2, bike: 2, run: 3, strength: 2, brick: 0 }, //  9
+      },
+      Build: {
+        beginner:     { swim: 2, bike: 2, run: 1, strength: 1, brick: 0 }, //  6
+        intermediate: { swim: 2, bike: 2, run: 2, strength: 1, brick: 1 }, //  8
+        advanced:     { swim: 3, bike: 3, run: 2, strength: 1, brick: 1 }, // 10
+      },
+      Peak: {
+        beginner:     { swim: 2, bike: 2, run: 2, strength: 1, brick: 0 }, //  7
+        intermediate: { swim: 2, bike: 3, run: 2, strength: 1, brick: 1 }, //  9
+        advanced:     { swim: 3, bike: 3, run: 3, strength: 1, brick: 1 }, // 11
+      },
+      Taper: {
+        beginner:     { swim: 2, bike: 2, run: 2, strength: 0, brick: 0 }, //  6
+        intermediate: { swim: 2, bike: 2, run: 2, strength: 0, brick: 0 }, //  6
+        advanced:     { swim: 2, bike: 2, run: 2, strength: 0, brick: 0 }, //  6
+      },
     },
     running: {
-      Base:  { run: 4, strength: 2, bike: 0, swim: 0, brick: 0 },   // 4 easy+1 long = 4 runs
-      Build: { run: 4, strength: 1, bike: 0, swim: 0, brick: 0 },   // 2-3 easy + 1 tempo + 1 intervals + 1 long
-      Peak:  { run: 4, strength: 1, bike: 0, swim: 0, brick: 0 },
-      Taper: { run: 3, strength: 0, bike: 0, swim: 0, brick: 0 },   // 2 easy + 1 opener
+      Base: {
+        beginner:     { run: 3, strength: 1, bike: 0, swim: 0, brick: 0 }, //  4 (+ optional cross)
+        intermediate: { run: 4, strength: 2, bike: 0, swim: 0, brick: 0 }, //  6
+        advanced:     { run: 5, strength: 2, bike: 0, swim: 0, brick: 0 }, //  7
+      },
+      Build: {
+        beginner:     { run: 4, strength: 1, bike: 0, swim: 0, brick: 0 }, //  5 — 1 quality max
+        intermediate: { run: 5, strength: 1, bike: 0, swim: 0, brick: 0 }, //  6 — 2 quality
+        advanced:     { run: 6, strength: 1, bike: 0, swim: 0, brick: 0 }, //  7 — 2-3 quality
+      },
+      Peak: {
+        beginner:     { run: 4, strength: 1, bike: 0, swim: 0, brick: 0 }, //  5
+        intermediate: { run: 4, strength: 1, bike: 0, swim: 0, brick: 0 }, //  5
+        advanced:     { run: 5, strength: 1, bike: 0, swim: 0, brick: 0 }, //  6
+      },
+      Taper: {
+        beginner:     { run: 3, strength: 0, bike: 0, swim: 0, brick: 0 }, //  3
+        intermediate: { run: 3, strength: 0, bike: 0, swim: 0, brick: 0 }, //  3
+        advanced:     { run: 4, strength: 0, bike: 0, swim: 0, brick: 0 }, //  4
+      },
     },
     hyrox: {
-      Base:  { run: 3, strength: 3, hyrox: 1, bike: 0, swim: 0, brick: 0 },
-      Build: { run: 3, strength: 2, hyrox: 2, bike: 0, swim: 0, brick: 0 },  // includes run+station combo
-      Peak:  { run: 3, strength: 1, hyrox: 2, bike: 0, swim: 0, brick: 0 },
-      Taper: { run: 2, strength: 0, hyrox: 1, bike: 0, swim: 0, brick: 0 },
+      Base: {
+        beginner:     { run: 2, strength: 2, hyrox: 1, bike: 0, swim: 0, brick: 0 },
+        intermediate: { run: 3, strength: 3, hyrox: 1, bike: 0, swim: 0, brick: 0 },
+        advanced:     { run: 3, strength: 3, hyrox: 1, bike: 0, swim: 0, brick: 0 },
+      },
+      Build: {
+        beginner:     { run: 2, strength: 2, hyrox: 1, bike: 0, swim: 0, brick: 0 },
+        intermediate: { run: 3, strength: 2, hyrox: 2, bike: 0, swim: 0, brick: 0 },
+        advanced:     { run: 3, strength: 2, hyrox: 2, bike: 0, swim: 0, brick: 0 },
+      },
+      Peak: {
+        beginner:     { run: 2, strength: 1, hyrox: 1, bike: 0, swim: 0, brick: 0 },
+        intermediate: { run: 3, strength: 1, hyrox: 2, bike: 0, swim: 0, brick: 0 },
+        advanced:     { run: 3, strength: 1, hyrox: 2, bike: 0, swim: 0, brick: 0 },
+      },
+      Taper: {
+        beginner:     { run: 2, strength: 0, hyrox: 1, bike: 0, swim: 0, brick: 0 },
+        intermediate: { run: 2, strength: 0, hyrox: 1, bike: 0, swim: 0, brick: 0 },
+        advanced:     { run: 2, strength: 0, hyrox: 1, bike: 0, swim: 0, brick: 0 },
+      },
     },
     cycling: {
-      Base:  { bike: 4, strength: 2, run: 0, swim: 0, brick: 0 },
-      Build: { bike: 4, strength: 1, run: 0, swim: 0, brick: 0 },
-      Peak:  { bike: 4, strength: 1, run: 0, swim: 0, brick: 0 },
-      Taper: { bike: 3, strength: 0, run: 0, swim: 0, brick: 0 },
+      Base: {
+        beginner:     { bike: 3, strength: 1, run: 0, swim: 0, brick: 0 },
+        intermediate: { bike: 4, strength: 2, run: 0, swim: 0, brick: 0 },
+        advanced:     { bike: 4, strength: 2, run: 0, swim: 0, brick: 0 },
+      },
+      Build: {
+        beginner:     { bike: 3, strength: 1, run: 0, swim: 0, brick: 0 },
+        intermediate: { bike: 4, strength: 1, run: 0, swim: 0, brick: 0 },
+        advanced:     { bike: 4, strength: 1, run: 0, swim: 0, brick: 0 },
+      },
+      Peak: {
+        beginner:     { bike: 3, strength: 1, run: 0, swim: 0, brick: 0 },
+        intermediate: { bike: 4, strength: 1, run: 0, swim: 0, brick: 0 },
+        advanced:     { bike: 4, strength: 1, run: 0, swim: 0, brick: 0 },
+      },
+      Taper: {
+        beginner:     { bike: 3, strength: 0, run: 0, swim: 0, brick: 0 },
+        intermediate: { bike: 3, strength: 0, run: 0, swim: 0, brick: 0 },
+        advanced:     { bike: 3, strength: 0, run: 0, swim: 0, brick: 0 },
+      },
     },
   };
+
+  // Look up the right distribution row. Falls back to intermediate when the
+  // level is unknown, and to the advanced row when intermediate is missing.
+  function getDistribution(sportProfile, phaseName, level) {
+    const sp = PHASE_DISTRIBUTIONS_BY_LEVEL[sportProfile];
+    if (!sp) return null;
+    const ph = sp[phaseName];
+    if (!ph) return null;
+    const lvl = String(level || "intermediate").toLowerCase();
+    return ph[lvl] || ph.intermediate || ph.advanced || null;
+  }
+
+  // Back-compat: collapse the level-aware matrix into a flat phase→counts
+  // view (using the intermediate row as the canonical default). Older
+  // callers that read PHASE_DISTRIBUTIONS directly continue to work.
+  const PHASE_DISTRIBUTIONS = (function () {
+    const out = {};
+    Object.keys(PHASE_DISTRIBUTIONS_BY_LEVEL).forEach(sp => {
+      out[sp] = {};
+      Object.keys(PHASE_DISTRIBUTIONS_BY_LEVEL[sp]).forEach(phase => {
+        const row = PHASE_DISTRIBUTIONS_BY_LEVEL[sp][phase];
+        out[sp][phase] = row.intermediate || row.advanced || {};
+      });
+    });
+    return out;
+  })();
 
   // ─── §4.8 hour ceilings ─────────────────────────────────────────────────────
   // Used for warning / soft-capping. Not hard-enforced in Phase B — a future
@@ -401,8 +507,7 @@
   function applySessionDistribution(plan, raceType, athleteLevel) {
     if (!Array.isArray(plan) || plan.length === 0) return { added: 0, demoted: 0, weeksChecked: 0 };
     const sportProfile = sportProfileForRaceType(raceType);
-    const dist = PHASE_DISTRIBUTIONS[sportProfile];
-    if (!dist) return { added: 0, demoted: 0, weeksChecked: 0 };
+    if (!PHASE_DISTRIBUTIONS_BY_LEVEL[sportProfile]) return { added: 0, demoted: 0, weeksChecked: 0 };
 
     const groups = groupByWeek(plan);
     let added = 0, demoted = 0;
@@ -413,7 +518,7 @@
       const firstEntry = g.entries[0];
       if (!firstEntry) return;
       const phaseName = firstEntry.phase;
-      const target = dist[phaseName];
+      const target = getDistribution(sportProfile, phaseName, athleteLevel);
       if (!target) return; // unknown phase (e.g. Pre-Plan) — leave alone
 
       const counts = countByDiscipline(g.entries);
@@ -473,7 +578,9 @@
     window.PlanSessionDistribution = {
       applySessionDistribution,
       sportProfileForRaceType,
+      getDistribution,
       PHASE_DISTRIBUTIONS,
+      PHASE_DISTRIBUTIONS_BY_LEVEL,
       HOUR_CEILINGS,
     };
   }
@@ -481,7 +588,9 @@
     module.exports = {
       applySessionDistribution,
       sportProfileForRaceType,
+      getDistribution,
       PHASE_DISTRIBUTIONS,
+      PHASE_DISTRIBUTIONS_BY_LEVEL,
       HOUR_CEILINGS,
     };
   }
