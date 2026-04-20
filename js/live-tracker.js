@@ -562,22 +562,43 @@ function _buildLiveSingleExerciseCard(ei) {
   const ex = t.exercises[ei];
   const sets = t.sets[ei] || [];
   const allDone = sets.every(s => s.done);
+  // Unilateral clarity: "Bulgarian Split Squat 3 × 12 @ 175 lbs" reads
+  // the same whether 12 reps means per leg or total, and whether 175 is
+  // one barbell or two dumbbells. Flag unilateral exercises and append
+  // the loading method so users don't double-up the weight by mistake.
+  const U = typeof UnilateralDisplay !== "undefined" ? UnilateralDisplay : null;
+  const isUni = U ? U.isUnilateral(ex.name) : false;
+  const rawMethod = U && ex.weight ? U.getLoadingMethod(ex.name, ex.weight) : "";
+  // Only surface the loading method when it carries new information:
+  // unilateral exercises (most important — 175 lbs Bulgarian could mean
+  // three different things) and single-implement lifts (goblet, suitcase)
+  // where the name alone doesn't make one-vs-two clear. For common
+  // barbell lifts the label would just be noise.
+  const showMethod = !!rawMethod && (isUni || rawMethod === "single DB" || rawMethod === "single KB");
+  const method = showMethod ? rawMethod : "";
+  const weightLabel = U && ex.weight ? (showMethod ? U.formatWeightLabel(ex.weight, rawMethod) : ex.weight) : (ex.weight || "");
+  const repsWithSide = U ? U.formatRepsLabel(ex.reps || "", ex.name) : (ex.reps || "");
+  const perLabel = U && isUni ? U._perLabel(ex.name) : "";
+
   return `
-    <div class="live-exercise${allDone ? " live-exercise--done" : ""}${ei === t.currentExercise ? " live-exercise--active" : ""}" id="live-ex-${ei}">
+    <div class="live-exercise${allDone ? " live-exercise--done" : ""}${ei === t.currentExercise ? " live-exercise--active" : ""}${isUni ? " live-exercise--unilateral" : ""}" id="live-ex-${ei}">
       <div class="live-exercise-header" onclick="_toggleLiveExercise(${ei})">
         <span class="live-exercise-name">${_escLiveHtml(ex.name)}</span>
-        <span class="live-exercise-target">${ex.sets || "3"} x ${ex.reps || ""} ${ex.weight ? "@ " + ex.weight : ""}</span>
+        <span class="live-exercise-target">${ex.sets || "3"} x ${_escLiveHtml(repsWithSide)} ${weightLabel ? "@ " + _escLiveHtml(weightLabel) : ""}</span>
         ${allDone ? '<span class="live-done-check">&#10003;</span>' : ""}
         ${!allDone ? `<button class="live-swap-btn" onclick="_swapLiveExercise(${ei})" title="Swap exercise">&#8644;</button>` : ""}
       </div>
       <div class="live-sets-grid" id="live-sets-${ei}">
         <div class="live-sets-header">
-          <span>Set</span><span>Reps</span><span>Weight</span><span></span>
+          <span>Set</span>
+          <span>Reps${isUni ? `<span class="live-set-subhint"> · ${_escLiveHtml(perLabel)}</span>` : ""}</span>
+          <span>Weight${method ? `<span class="live-set-subhint"> · ${_escLiveHtml(method)}</span>` : ""}</span>
+          <span></span>
         </div>
         ${sets.map((s, si) => `
           <div class="live-set-row${s.done ? " live-set--done" : ""}" id="live-set-${ei}-${si}">
             <span class="live-set-num">${si + 1}</span>
-            <input class="live-set-input" type="text" inputmode="numeric" value="${s.reps}" id="live-reps-${ei}-${si}" placeholder="reps" ${s.done ? "disabled" : ""} />
+            <input class="live-set-input" type="text" inputmode="numeric" value="${s.reps}" id="live-reps-${ei}-${si}" placeholder="${isUni ? _escLiveHtml(perLabel) : "reps"}" ${s.done ? "disabled" : ""} />
             <input class="live-set-input" type="text" value="${s.weight}" id="live-wt-${ei}-${si}" placeholder="lbs" ${s.done ? "disabled" : ""} />
             <button class="live-set-btn${s.done ? " live-set-btn--done" : ""}" onclick="_logLiveSet(${ei},${si})">${s.done ? "&#10003;" : "Log"}</button>
           </div>

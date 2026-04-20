@@ -11796,6 +11796,26 @@ button:active {
 .live-set--done { opacity: 0.5; }
 .live-set--done .live-set-input { text-decoration: line-through; }
 
+/* Per-leg / loading-method hint under the live-tracker set headers for
+   unilateral exercises. Normal (bilateral) exercises don't render this
+   span, so the sub-hint only appears when it carries meaning. */
+.live-set-subhint {
+  display: block;
+  font-size: 0.58rem;
+  color: var(--color-accent, #ea580c);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  opacity: 0.85;
+  margin-top: 1px;
+}
+/* Unilateral marker on the card itself — a thin accent stripe on the
+   left edge so the card is visually distinct in a long session. Kept
+   subtle so it doesn't shout. */
+.live-exercise--unilateral {
+  border-left: 3px solid var(--color-accent, #ea580c);
+}
+
 .live-set-num {
   font-weight: 700;
   font-size: 0.82rem;

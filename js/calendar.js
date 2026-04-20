@@ -3842,14 +3842,33 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       if (w.aiSession && w.aiSession.intervals && w.aiSession.intervals.length) {
         const _effortToZone = { RW:"rw",Z1:"z1",Z2:"z2",Z3:"z3",Z4:"z4",Z5:"z5",Z6:"z6", Easy:"z2",Moderate:"z3",Hard:"z4",Max:"z5",T1:"z-transition" };
         const _paceMap = { RW:8, Z1:7, Z2:6.2, Z3:5.5, Z4:5, Z5:4.5, Z6:4 };
-        const _parseDur = (str, effort) => {
+        // Swim pace map in min / 100m. Applied when the workout type is
+        // swim so a 100m interval doesn't get computed at running pace
+        // and shrink the main set in the intensity strip.
+        const _swimPaceMap = { RW:2.3, Z1:2.1, Z2:1.9, Z3:1.7, Z4:1.55, Z5:1.4, Z6:1.3 };
+        const _isSwim = w.type === "swim" || w.type === "swimming" || w.discipline === "swim" || w.discipline === "swimming";
+        // Parse "1:29/100m" → minutes per 100m (1.483).
+        const _parsePaceTarget = (pt) => {
+          if (!pt) return null;
+          const m = String(pt).match(/(\d+):(\d+)\s*\/\s*100\s*m/i);
+          if (!m) return null;
+          return parseInt(m[1], 10) + parseInt(m[2], 10) / 60;
+        };
+        const _parseDur = (str, effort, paceTarget) => {
           const s = String(str||"").toLowerCase().trim();
           const n = s.match(/([\d.]+)/); if(!n) return 1;
           const v = parseFloat(n[1]);
           if (/sec/.test(s)) return v / 60;
           if (/km/.test(s)) return v * (_paceMap[effort]||5.5);
           if (/mi/.test(s) && !/min/.test(s)) return v * 1.60934 * (_paceMap[effort]||5.5);
-          if (/\d+m$/.test(s)) return (v / 1000) * (_paceMap[effort]||5.5);
+          if (/\d+m$/.test(s)) {
+            if (_isSwim) {
+              const pt = _parsePaceTarget(paceTarget);
+              const perHundred = pt || _swimPaceMap[effort] || 1.9;
+              return (v / 100) * perHundred;
+            }
+            return (v / 1000) * (_paceMap[effort]||5.5);
+          }
           return v;
         };
         const _allSegs = [];
@@ -3905,7 +3924,11 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
             if (dm) { _ivDur = `${dm[2]}m`; }
             else { const t = parseFloat(_ivDur); if (t > 0) _ivDur = `${Math.round(t / reps)} min`; }
           }
-          const mainDur = _parseDur(_ivDur, iv.effort);
+          // _swimStepsToIntervals stashes the pace target in the details
+          // string as "@ 1:29/100m"; pull it back out so per-rep swim
+          // duration reflects actual pace rather than the generic Z-map.
+          const _paceTarget = (iv.details || "").match(/@\s*(\d+:\d+\s*\/\s*100\s*m)/i)?.[1] || iv.pace_target;
+          const mainDur = _parseDur(_ivDur, iv.effort, _paceTarget);
           // Prefer restDuration field; fall back to parsing it from the
           // details text so AI-generated intervals that described rest
           // in free text still render gaps in the strip.
@@ -6844,14 +6867,31 @@ function _renderExerciseRow(i, inSuperset) {
     <button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();qeRegenExercise(${i})">Regenerate</button>
     <button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();qeEditExercise(${i})">Edit</button>
     <button class="ovflow-item ovflow-item--danger" onclick="event.stopPropagation();closeOverflowMenu();qeRemoveExercise(${i})">Delete</button>`;
-  return `<div class="qe-exercise-item" draggable="true"
+  // Unilateral clarity — append "per leg"/"per arm" to the reps and show
+  // the loading method (barbell / DB each hand / single DB) under the
+  // name so 175 lbs on a Bulgarian split squat isn't confused for a
+  // single barbell load.
+  const U = typeof UnilateralDisplay !== "undefined" ? UnilateralDisplay : null;
+  const isUni = U ? U.isUnilateral(ex.name) : false;
+  const rawMethod = U && ex.weight ? U.getLoadingMethod(ex.name, ex.weight) : "";
+  // Only show the loading-method hint for unilateral or single-implement
+  // exercises; common barbell lifts don't need it.
+  const showMethod = !!rawMethod && (isUni || rawMethod === "single DB" || rawMethod === "single KB");
+  const repsWithSide = U ? U.formatRepsLabel(ex.reps || "", ex.name) : (ex.reps || "");
+
+  const subParts = [];
+  if (ex.rest) subParts.push(escHtml(ex.rest) + " rest");
+  if (showMethod) subParts.push(escHtml(rawMethod));
+  const sub = subParts.join(" · ");
+
+  return `<div class="qe-exercise-item${isUni ? " qe-exercise-item--unilateral" : ""}" draggable="true"
     ondragstart="qeDragStart(event,${i})"
     ondragover="qeDragOver(event,${i})"
     ondragleave="qeDragLeave(event)"
     ondrop="qeDrop(event,${i})">
     <span class="drag-handle" title="Drag to reorder">⠿</span>
-    <div class="qe-exercise-name">${escHtml(ex.name)}<div class="qe-exercise-sub">${escHtml(ex.rest)} rest</div></div>
-    <div class="qe-exercise-detail">${inSuperset ? "" : escHtml(ex.sets) + "×"}${escHtml(ex.reps)}</div>
+    <div class="qe-exercise-name">${escHtml(ex.name)}<div class="qe-exercise-sub">${sub}</div></div>
+    <div class="qe-exercise-detail">${inSuperset ? "" : escHtml(ex.sets) + "×"}${escHtml(repsWithSide)}</div>
     <input class="qe-weight-input" id="qe-weight-${i}" type="text" value="${escHtml(_roundExWeight(ex.weight) || '')}" placeholder="lbs / BW" />
     ${_buildOverflowMenu(`qe-ex-${i}`, menuItems)}
   </div>`;
@@ -7101,17 +7141,31 @@ function _swimStepsToIntervals(steps) {
   const out = [];
   function walk(arr, reps) {
     if (!Array.isArray(arr)) return;
-    for (const s of arr) {
+    for (let i = 0; i < arr.length; i++) {
+      const s = arr[i];
       if (!s || typeof s !== "object") continue;
       if (s.kind === "interval") {
-        out.push({
+        const iv = {
           name: s.name || "Swim",
           duration: `${Math.round(s.distance_m || 0)}m`,
           effort: _swimPaceTargetToZone(s.pace_target, s.name),
           details: s.pace_target ? `@ ${s.pace_target}` : "",
           reps: reps > 1 ? reps : undefined,
-        });
+        };
+        // Look ahead: if the NEXT sibling is a rest, attach it as this
+        // interval's restDuration so the intensity strip interleaves
+        // work / rest / work / rest instead of stacking the rests at
+        // the end. Swallow the rest node so we don't also emit it.
+        const next = arr[i + 1];
+        if (next && next.kind === "rest" && next.duration_sec) {
+          iv.restDuration = `${Math.round(next.duration_sec)}s`;
+          iv.restEffort = "RW";
+          i++;
+        }
+        out.push(iv);
       } else if (s.kind === "rest") {
+        // Standalone rest (not consumed by an adjacent interval) — keep
+        // emitting it so between-block rests still render as a gap.
         out.push({
           name: "Rest",
           duration: `${Math.round(s.duration_sec || 0)}s`,
@@ -7605,7 +7659,27 @@ function _qeBuildCardioWorkout(opts) {
       const variants = (lib && lib.variants && lib.variants[sessionTypeId]) || [];
       const variant = variants[Math.floor(Math.random() * variants.length)];
       if (variant) {
-        const css = (zones.swimming && zones.swimming.css) || null;
+        // Swim zones get saved under three different key names depending
+        // on which flow the user came through:
+        //   - onboarding-v2 CSS test → { css: <int sec/100m> }
+        //   - Training Zones page / survey → { tPaceSec: <sec/100m>, tPaceStr: "M:SS" }
+        //   - onboarding-v2 "known" mode → { cssPace: <int> }
+        // Reading only `css` missed the Training Zones flow entirely, so
+        // the generator fell back to the 132 default even when the user
+        // had a real threshold logged.
+        const _swim = zones.swimming || {};
+        let css = null;
+        if (typeof _swim.css === "number") css = _swim.css;
+        else if (typeof _swim.cssPace === "number") css = _swim.cssPace;
+        else if (typeof _swim.tPaceSec === "number") css = _swim.tPaceSec;
+        else if (typeof _swim.css === "string") {
+          const m = _swim.css.match(/(\d+):(\d+)/);
+          if (m) css = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+          else {
+            const n = parseInt(_swim.css, 10);
+            if (n > 0) css = n;
+          }
+        }
         // Pool size: explicit override from the form, else the profile
         // setting via SwimWorkout.getUserPoolSize().
         let poolSize = null;

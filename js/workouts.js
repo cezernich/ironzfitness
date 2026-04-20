@@ -2398,15 +2398,51 @@ function _isDumbbellExercise(name) {
   if (/\bdb\b/.test(n)) return true;
   return false;
 }
+// Format reps with a "per leg" / "per arm" / "per side" suffix for
+// unilateral exercises. Bilateral exercises render unchanged. Keeps
+// the em-dash fallback for empty values.
+function _formatRepsWithSide(reps, exerciseName) {
+  const raw = String(reps == null ? "" : reps).trim();
+  if (!raw) return "\u2014";
+  const U = typeof UnilateralDisplay !== "undefined" ? UnilateralDisplay : null;
+  return U ? U.formatRepsLabel(raw, exerciseName) : raw;
+}
+
 function _formatWeightWithDbHint(weightStr, exerciseName) {
   if (!weightStr) return weightStr;
-  if (!_isDumbbellExercise(exerciseName)) return weightStr;
+  const str = String(weightStr);
   // "BW" / "Bodyweight" stays as-is — can't halve that.
-  if (/^(bw|bodyweight)$/i.test(String(weightStr))) return weightStr;
-  const m = String(weightStr).match(/^([\d.]+)/);
-  if (!m) return weightStr;
+  if (/^(bw|bodyweight)$/i.test(str)) return str;
+
+  // Unilateral exercises (Bulgarian split squat, lunges, single-leg RDL)
+  // need the loading method shown so 175 lbs isn't confused for a single
+  // barbell. "DB each hand" / "barbell" / "single DB" is appended via
+  // UnilateralDisplay. We do NOT halve for unilateral exercises — the
+  // stored number is interpreted by the user against the method label.
+  //
+  // Single-implement lifts (goblet squat, suitcase carry) also get the
+  // method shown — those names are semantically ambiguous about whether
+  // the weight is per side or total. Common barbell lifts don't need
+  // the hint; it would just add visual noise.
+  const U = typeof UnilateralDisplay !== "undefined" ? UnilateralDisplay : null;
+  if (U) {
+    const uni = U.isUnilateral(exerciseName);
+    const method = U.getLoadingMethod(exerciseName, str);
+    const singleImplement = method === "single DB" || method === "single KB";
+    if (uni || singleImplement) {
+      return U.formatWeightLabel(str, method);
+    }
+  }
+
+  // Bilateral dumbbell exercises (DB Bench Press, DB Row) store the
+  // total weight and halve on display: "150 lbs" → "75 / hand". This
+  // has been the app's convention for a while and is what the existing
+  // data is keyed against.
+  if (!_isDumbbellExercise(exerciseName)) return str;
+  const m = str.match(/^([\d.]+)/);
+  if (!m) return str;
   const total = parseFloat(m[1]);
-  if (!isFinite(total) || total <= 0) return weightStr;
+  if (!isFinite(total) || total <= 0) return str;
   const perHand = _roundWeight(total / 2);
   return `${perHand} / hand`;
 }
@@ -2462,10 +2498,10 @@ function buildExerciseTableHTML(exercises, opts) {
       const ssSets = seg.items[0]?.sets || "—";
       rows += `<tr class="superset-label-row"><td colspan="${cols}">Superset &mdash; ${ssSets} sets</td></tr>`;
       seg.items.forEach(e => {
-        rows += `<tr class="superset-ex-row"><td>${escHtml(e.name)}</td><td></td><td>${escHtml(String(e.reps||"—"))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name)||"—")}</td></tr>`;
+        rows += `<tr class="superset-ex-row"><td>${escHtml(e.name)}</td><td></td><td>${escHtml(_formatRepsWithSide(e.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name)||"—")}</td></tr>`;
         if (e.setDetails && e.setDetails.length) {
           e.setDetails.forEach((sd, si) => {
-            rows += `<tr class="superset-ex-row set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${escHtml(String(sd.reps||"—"))}</td><td>${escHtml(_normalizeWeightDisplay(sd.weight, e.name)||"—")}</td></tr>`;
+            rows += `<tr class="superset-ex-row set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${escHtml(_formatRepsWithSide(sd.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(sd.weight, e.name)||"—")}</td></tr>`;
           });
         }
       });
@@ -2476,7 +2512,7 @@ function buildExerciseTableHTML(exercises, opts) {
         const _isRun = /^run\s/i.test(e.name);
         const _wtStr = e.weight ? ` <span style="opacity:0.6">@ ${escHtml(e.weight)}</span>` : "";
         rows += `<tr${_isRun ? ' style="opacity:0.75"' : ""}>`;
-        rows += `<td>${escHtml(e.name)}</td><td>${escHtml(String(e.reps||"—"))}${_wtStr}</td>`;
+        rows += `<td>${escHtml(e.name)}</td><td>${escHtml(_formatRepsWithSide(e.reps, e.name))}${_wtStr}</td>`;
         if (hyroxHasTimes) rows += `<td style="font-variant-numeric:tabular-nums;text-align:right">${e.splitTime ? _fmtSplitMs(e.splitTime) : "—"}</td>`;
         rows += `</tr>`;
       } else if (isHiit) {
@@ -2499,11 +2535,11 @@ function buildExerciseTableHTML(exercises, opts) {
         }
         rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(repsDisplay)}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name)||"—")}</td></tr>`;
       } else {
-        rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(String(e.sets||"—"))}</td><td>${escHtml(String(e.reps||"—"))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name)||"—")}</td></tr>`;
+        rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(String(e.sets||"—"))}</td><td>${escHtml(_formatRepsWithSide(e.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name)||"—")}</td></tr>`;
       }
       if (e.setDetails && e.setDetails.length) {
         e.setDetails.forEach((sd, si) => {
-          rows += `<tr class="set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${escHtml(String(sd.reps||"—"))}</td><td>${escHtml(_normalizeWeightDisplay(sd.weight, e.name)||"—")}</td></tr>`;
+          rows += `<tr class="set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${escHtml(_formatRepsWithSide(sd.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(sd.weight, e.name)||"—")}</td></tr>`;
         });
       }
     }

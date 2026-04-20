@@ -255,10 +255,20 @@ function buildExerciseTableHTML(exercises, opts) {
     : `<th>Exercise</th><th>Sets</th><th>Reps</th><th>Weight</th>${swappable ? "<th></th>" : ""}`;
 
   // Second arg passes the exercise name so _normalizeWeightDisplay can
-  // append "/hand" to dumbbell rows. Legacy fallback for safety.
+  // append "/hand" to dumbbell rows and the unilateral loading method
+  // ("DB each hand" / "barbell") to Bulgarian split squats etc. Legacy
+  // fallback for safety.
   const _wt = typeof _normalizeWeightDisplay === "function"
     ? (v, name) => _normalizeWeightDisplay(v, name)
     : v => v || "\u2014";
+  // Reps formatter — adds "per leg" / "per arm" for unilateral exercises
+  // so the card reads "12 per leg" instead of the ambiguous "12".
+  const _reps = (v, name) => {
+    const raw = String(v == null ? "" : v).trim();
+    if (!raw) return "\u2014";
+    const U = typeof UnilateralDisplay !== "undefined" ? UnilateralDisplay : null;
+    return U ? U.formatRepsLabel(raw, name) : raw;
+  };
   const _link = e => `<a class="ex-name-link" onclick="showExerciseInfo('${_exEsc(e.name).replace(/'/g, "\\'")}')">${_exEsc(e.name)}</a>`;
   const swapCallbackId = swappable ? (opts.swapCallbackId || "") : "";
   const _swapBtn = (idx) => swappable ? `<td class="ex-swap-cell"><button class="ex-swap-btn" onclick="event.stopPropagation();_swapExerciseInTable('${swapCallbackId}',${idx},'${_exEsc(exercises[idx]?.name || "").replace(/'/g, "\\'")}')" title="Swap">&#8644;</button></td>` : "";
@@ -289,10 +299,10 @@ function buildExerciseTableHTML(exercises, opts) {
       const ssSets = seg.items[0]?.sets || "\u2014";
       rows += `<tr class="superset-label-row"><td colspan="${cols}">Superset &mdash; ${ssSets} sets</td></tr>`;
       seg.items.forEach(e => {
-        rows += `<tr class="superset-ex-row"><td>${_link(e)}</td><td></td><td>${e.reps||"\u2014"}</td><td>${_wt(e.weight, e.name)}</td>${_swapBtn(flatIdx)}</tr>`;
+        rows += `<tr class="superset-ex-row"><td>${_link(e)}</td><td></td><td>${_reps(e.reps, e.name)}</td><td>${_wt(e.weight, e.name)}</td>${_swapBtn(flatIdx)}</tr>`;
         if (e.setDetails && e.setDetails.length) {
           e.setDetails.forEach((sd, si) => {
-            rows += `<tr class="superset-ex-row set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${sd.reps||"\u2014"}</td><td>${_wt(sd.weight, e.name)}</td>${swappable ? "<td></td>" : ""}</tr>`;
+            rows += `<tr class="superset-ex-row set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${_reps(sd.reps, e.name)}</td><td>${_wt(sd.weight, e.name)}</td>${swappable ? "<td></td>" : ""}</tr>`;
           });
         }
         flatIdx++;
@@ -301,13 +311,13 @@ function buildExerciseTableHTML(exercises, opts) {
     } else {
       const e = seg.items[0];
       if (isHiit) {
-        rows += `<tr><td>${_link(e)}</td><td>${e.reps||"\u2014"}</td><td>${_wt(e.weight, e.name)}</td>${_swapBtn(flatIdx)}</tr>`;
+        rows += `<tr><td>${_link(e)}</td><td>${_reps(e.reps, e.name)}</td><td>${_wt(e.weight, e.name)}</td>${_swapBtn(flatIdx)}</tr>`;
       } else {
-        rows += `<tr><td>${_link(e)}</td><td>${e.sets||"\u2014"}</td><td>${e.reps||"\u2014"}</td><td>${_wt(e.weight, e.name)}</td>${_swapBtn(flatIdx)}</tr>`;
+        rows += `<tr><td>${_link(e)}</td><td>${e.sets||"\u2014"}</td><td>${_reps(e.reps, e.name)}</td><td>${_wt(e.weight, e.name)}</td>${_swapBtn(flatIdx)}</tr>`;
       }
       if (e.setDetails && e.setDetails.length) {
         e.setDetails.forEach((sd, si) => {
-          rows += `<tr class="set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${sd.reps||"\u2014"}</td><td>${_wt(sd.weight, e.name)}</td>${swappable ? "<td></td>" : ""}</tr>`;
+          rows += `<tr class="set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${_reps(sd.reps, e.name)}</td><td>${_wt(sd.weight, e.name)}</td>${swappable ? "<td></td>" : ""}</tr>`;
         });
       }
       flatIdx++;
