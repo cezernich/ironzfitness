@@ -3730,6 +3730,41 @@ button:active {
 }
 .qe-library-link:hover { color: var(--color-accent); }
 
+/* Plan-Aligned / Freestyle mode toggle (Section 6c). Shown only when the
+   user has an active plan; hidden entirely for plan-less users since they
+   default straight to Freestyle. */
+.qe-mode-toggle { margin: 0 0 8px; }
+.qe-mode-toggle-inner {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--color-bg-alt, #eee);
+  border-radius: 999px;
+}
+.qe-mode-pill {
+  flex: 1;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.qe-mode-pill.is-active {
+  background: var(--color-surface, #fff);
+  color: var(--color-text);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+.qe-mode-banner {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin: 0 0 12px;
+  padding-left: 2px;
+}
+
 .qe-type-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;

@@ -5052,6 +5052,12 @@ function openQuickEntry(dateStr) {
   updateQERestrictionWarning(defaultDate);
 
   qeShowStep(0, null);
+  // Initialize the Plan-Aligned / Freestyle toggle. Defaults to
+  // Plan-Aligned when an active plan exists; hides the toggle entirely
+  // when it doesn't (so Freestyle is implicit).
+  if (typeof AddSessionMode !== "undefined" && AddSessionMode.init) {
+    AddSessionMode.init(_qeDateStr || defaultDate);
+  }
   overlay.classList.add("is-open");
 }
 
@@ -5395,8 +5401,20 @@ function toggleMoreTypes(btn, panelId) {
   if (arrow) arrow.style.transform = showing ? "" : "rotate(180deg)";
 }
 
-function qeSelectType(type) {
+async function qeSelectType(type) {
   _qeSelectedType = type;
+
+  // Section 6c gate: Plan-Aligned mode checks weekly-volume cap, tomorrow's
+  // key session, and strength-role caps before routing to the type form.
+  // Freestyle mode only checks the 24h key-session guardrail. Either way
+  // the warnings are advisory — user can proceed. Restriction / equipment
+  // / sauna entries bypass the gate (they're not training sessions).
+  const _gated = !["restriction", "equipment", "sauna"].includes(type);
+  if (_gated && typeof AddSessionMode !== "undefined" && AddSessionMode.maybeWarnOnTypeSelect) {
+    const proceed = await AddSessionMode.maybeWarnOnTypeSelect(type);
+    if (!proceed) return;
+  }
+
   // Running goes through the new structured 8-type generator (Phase 2 spec).
   // The legacy intervals/phases form is replaced by AddRunningSessionFlow.
   if (type === "running" && typeof window !== "undefined" && window.AddRunningSessionFlow) {

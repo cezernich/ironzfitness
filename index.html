@@ -2340,6 +2340,8 @@
           <input type="date" id="qe-date" onchange="updateQERestrictionWarning(this.value)" />
         </div>
         <div id="qe-restriction-warning" class="qe-restriction-warning" style="display:none"></div>
+        <div id="qe-mode-toggle" class="qe-mode-toggle" style="display:none"></div>
+        <div id="qe-mode-banner" class="qe-mode-banner" style="display:none"></div>
         <div class="qe-top-links">
           <a href="#" class="qe-library-link" onclick="event.preventDefault();qeShowLibrary()">Choose from library</a>
           <a href="#" class="qe-library-link" onclick="event.preventDefault();qeShowAskIronZ()">Ask IronZ</a>
@@ -3253,6 +3255,7 @@
        query the library per session slot. -->
   <script src="js/training-zones.js"></script>
   <script src="js/workout-library.js"></script>
+  <script src="js/add-session-mode.js"></script>
   <script src="js/session-type-library.js"></script>
   <!-- Variant libraries (pure data) — must load before any code that consumes them -->
   <script src="js/variant-libraries/run.js"></script>
