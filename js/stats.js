@@ -1622,6 +1622,12 @@ function buildStatsPlanConsistency() {
   const byType = {};
   function ensure(type) { if (!byType[type]) byType[type] = { planned: 0, completed: 0 }; }
 
+  // Diagnostic trace: every counted row is pushed here so the user can
+  // inspect window._ironzLastConsistencyTrace in devtools to see exactly
+  // which dates got tallied. The inflated-denominator bug is almost always
+  // a stale-plan-entry issue — this surfaces them.
+  const _trace = [];
+
   // trainingPlan first — it's the source of truth for race-plan-driven
   // athletes. workoutSchedule dates that overlap get skipped below.
   plan.forEach(p => {
@@ -1635,6 +1641,7 @@ function buildStatsPlanConsistency() {
       ensure(type);
       byType[type].planned++;
       if (isCompleted) byType[type].completed++;
+      _trace.push({ source: "trainingPlan", date, type, load: p.load, raceId: p.raceId, phase: p.phase, weekNumber: p.weekNumber, sessionName: p.sessionName, completed: isCompleted });
     }
   });
 
@@ -1653,8 +1660,21 @@ function buildStatsPlanConsistency() {
       ensure(type);
       byType[type].planned++;
       if (isCompleted) byType[type].completed++;
+      _trace.push({ source: "workoutSchedule", date, type, load: w.load, planId: w.planId, source_tag: w.source, sessionName: w.sessionName, id: w.id, completed: isCompleted });
     }
   });
+
+  // Expose the trace so devtools can inspect exactly which sessions were
+  // counted: `window._ironzLastConsistencyTrace.forEach(r => console.log(r))`.
+  // A bar of the earliest counted date is an instant "plan has entries from
+  // weeks ago" or "workoutSchedule wasn't cleared" signal.
+  if (typeof window !== "undefined") {
+    window._ironzLastConsistencyTrace = _trace.slice().sort((a, b) => a.date.localeCompare(b.date));
+    if (_trace.length > 0) {
+      const dates = _trace.map(r => r.date).sort();
+      console.log(`[IronZ] plan-consistency counted ${_trace.length} sessions across ${dates[0]} → ${dates[dates.length - 1]}. Inspect window._ironzLastConsistencyTrace for detail.`);
+    }
+  }
 
   // Calculate overall
   let totalPlanned = 0, totalCompleted = 0;
