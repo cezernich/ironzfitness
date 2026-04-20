@@ -76,13 +76,7 @@ function analyzeCompletionRate() {
   const rate = completed.length / recent.length;
 
   let suggestion = null;
-  if (rate >= 0.9) {
-    suggestion = {
-      type: "progressive-overload",
-      message: "You've completed ${Math.round(rate * 100)}% of sessions. Consider increasing intensity or adding a session.",
-      action: "increase",
-    };
-  } else if (rate < 0.5) {
+  if (rate < 0.5) {
     suggestion = {
       type: "reduce-volume",
       message: "Completion is at ${Math.round(rate * 100)}%. Let's reduce to ${Math.max(2, recent.length - 2)} sessions/week to build consistency first.",
@@ -260,12 +254,10 @@ function getCoachingInsights() {
         .replace("${Math.max(2, recent.length - 2)}", "fewer");
       insights.push({
         type: "volume",
-        icon: completion.suggestion.action === "increase" ? ICONS.trendingUp : ICONS.lightbulb,
-        title: completion.suggestion.action === "increase" ? "Strong Consistency" : "Let's Simplify",
+        icon: ICONS.lightbulb,
+        title: "Let's Simplify",
         message: msg,
-        action: completion.suggestion.action === "decrease"
-          ? { label: "Reduce Volume", handler: "applyCoachingAction('reduceVolume')" }
-          : null,
+        action: { label: "Reduce Volume", handler: "applyCoachingAction('reduceVolume')" },
       });
     }
   }

@@ -63,10 +63,14 @@ function _renderCameraPanel() {
 }
 
 function _startNativeOrFallback() {
-  if ("BarcodeDetector" in window) {
-    _startNativeScan();
-  } else if (typeof Html5Qrcode !== "undefined") {
+  // Prefer Html5Qrcode: iOS Safari exposes BarcodeDetector but detection
+  // silently fails on every frame, leaving the camera running with no
+  // scans. The CDN-loaded Html5Qrcode library is slower but actually works
+  // cross-browser.
+  if (typeof Html5Qrcode !== "undefined") {
     _startFallbackScan();
+  } else if ("BarcodeDetector" in window) {
+    _startNativeScan();
   } else {
     _showCameraError("Barcode scanning is not supported on this device.");
   }
@@ -165,9 +169,28 @@ function _startFallbackScan() {
   if (reader) reader.innerHTML = '<div class="barcode-scan-line" aria-hidden="true"></div>';
   const html5 = new Html5Qrcode("barcode-reader");
   _scanState = { native: false, html5 };
+  // Restrict to food-barcode formats. Html5Qrcode's default scan set
+  // includes QR + every 1D format, which makes the scanner slower and
+  // more prone to false-positive reads on grocery packaging. Food UPCs
+  // are overwhelmingly EAN-13 / UPC-A / EAN-8 / UPC-E.
+  const supportedFormats = (typeof Html5QrcodeSupportedFormats !== "undefined")
+    ? [
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION,
+      ]
+    : undefined;
+  const config = {
+    fps: 10,
+    qrbox: { width: 250, height: 150 },
+    aspectRatio: 1.5,
+  };
+  if (supportedFormats) config.formatsToSupport = supportedFormats;
   html5.start(
     { facingMode: "environment" },
-    { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.5 },
+    config,
     function (decodedText) {
       if (!_scanState || !_scanState.html5) return;
       _scanState.html5.stop().catch(() => {});

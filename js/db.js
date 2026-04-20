@@ -432,7 +432,7 @@ const DB = (() => {
   // workoutRatings hits the same race whenever the user rates and reloads.
   const _IMMEDIATE_SYNC_KEYS = new Set([
     'workoutSchedule', 'workouts', 'trainingPlan', 'events', 'meals',
-    'completedSessions', 'workoutRatings',
+    'completedSessions', 'workoutRatings', 'coachingDismissed',
   ]);
 
   async function _doSyncKey(lsKey, expectedAtSchedule) {
