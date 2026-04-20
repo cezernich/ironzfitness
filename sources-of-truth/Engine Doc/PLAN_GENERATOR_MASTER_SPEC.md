@@ -1,6 +1,6 @@
 # IronZ — Single Source of Truth
 
-> **Version:** 2.1
+> **Version:** 2.2
 > **Last updated:** 2026-04-20
 > **Purpose:** This is the SINGLE REFERENCE for all IronZ training logic — philosophy, plan generation, exercise selection, nutrition, recovery, and coaching. There is no other document. If it's not here, it doesn't exist.
 >
@@ -1415,15 +1415,67 @@ TDEE is calculated using Mifflin-St Jeor equation with activity multiplier.
 
 ### 11e. Hydration
 
-**Daily baseline:** 0.5 oz per pound of bodyweight per day. Adjust up for heat, altitude, and training.
+**Daily baseline:** 0.6 oz per pound of bodyweight per day (default — the code computes `weight * 0.6` when the user hasn't overridden). Adjust up for heat, altitude, and training.
 
-**Training day:**
-- Before: 16–20 oz in the 2 hours before training
-- During (<60 min): sip as needed
-- During (>60 min): 20–30 oz per hour, consider electrolytes
-- After: 16–24 oz per pound lost during exercise
+**Training-day workout bonus (duration-scaled):**
 
-**Race day:** Practice hydration strategy in training. Electrolyte drink for endurance events. Hot weather: +25–50% intake, add sodium.
+Rate × scheduled duration, floored at 16 oz so a short workout still gets meaningful extra. Replaces the old flat per-type table.
+
+| Discipline group | Rate | Examples |
+|------------------|------|----------|
+| Endurance        | 22 oz/hr | run, bike, swim, brick, rowing, hyrox |
+| Strength / HIIT  | 18 oz/hr | strength, weightlifting, HIIT, crossfit |
+| Circuit          | 20 oz/hr | circuit |
+| Low-intensity    | 12 oz/hr | yoga, mobility, stretch, walking |
+| Bodyweight       | 16 oz/hr | bodyweight-only sessions |
+| Floor            | **16 oz minimum** for any scheduled workout regardless of duration |
+
+Worked examples:
+- 30-min strength → `round(18 × 0.5) = 9` → floored to **16 oz**
+- 60-min strength → `round(18 × 1.0) = 18 oz`
+- 90-min run → `round(22 × 1.5) = 33 oz`
+- 120-min bike → `round(22 × 2.0) = 44 oz`
+
+Electrolyte guidance on top of the bonus: water is fine for sessions ≤60 min; add electrolytes for sessions >60 min or in hot conditions.
+
+**Race-week preload ramp (mirrors carb-load structure):**
+
+| Days to race | Added to daily base | Sodium guidance | Note surfaced on hydration card |
+|--------------|---------------------|-----------------|---------------------------------|
+| T-3          | **+8 oz** | — | "Race prep (T-3): +8 oz to your daily base. Start building hydration stores." |
+| T-2          | **+16 oz** | — | "Race prep (T-2): +16 oz today. Keep water visible and sip steadily." |
+| T-1          | **+16 oz** | ~1,500 mg total sodium preload across the day (electrolyte drink or salted meals) | "Race tomorrow (T-1): +16 oz plus ~1,500 mg sodium preload across the day." |
+
+Preload layers on top of any scheduled workout bonus (taper sessions still need their own hydration). Preload does NOT stack with the race-day target — on race day the distance-scaled bonus replaces it.
+
+**Race-day targets (distance-scaled):**
+
+Each race type has an expected-duration midpoint and per-hour hydration rate. Race-day bonus = `max(16, round(ratePerHour × expectedHours))`. The scheduled-workout bonus is suppressed on race day — the race IS the workout.
+
+| Race type    | Expected duration | Hydration rate | Race-day bonus | Sodium target |
+|--------------|-------------------|----------------|----------------|---------------|
+| 5K           | ~0.5 h            | 18 oz/hr       | **16 oz** (floor) | — (pre-race prep covers it) |
+| 10K          | ~1.0 h            | 18 oz/hr       | **18 oz**      | — |
+| Sprint tri   | ~1.5 h            | 20 oz/hr       | **30 oz**      | ~300 mg/hr |
+| Hyrox        | ~1.5 h            | 20 oz/hr       | **30 oz**      | ~300 mg/hr |
+| Half Marathon| ~2.0 h            | 18 oz/hr       | **36 oz**      | ~300 mg/hr |
+| Olympic tri  | ~2.5 h            | 20 oz/hr       | **50 oz**      | ~400 mg/hr |
+| Gran Fondo   | ~4.0 h            | 20 oz/hr       | **80 oz**      | ~400 mg/hr |
+| Marathon     | ~4.0 h            | 20 oz/hr       | **80 oz**      | ~500 mg/hr |
+| Century Ride | ~6.0 h            | 20 oz/hr       | **120 oz**     | ~500 mg/hr |
+| 70.3 / Half Ironman | ~6.0 h     | 20 oz/hr       | **120 oz**     | ~500 mg/hr |
+| Ironman      | ~12.0 h           | 22 oz/hr       | **264 oz**     | ~600 mg/hr |
+
+Sodium guidance for events > ~2 hours: target the per-hour sodium rate during the race itself (electrolyte drink, salt capsules, or fortified gels). Total sodium guidance surfaced on the card = `ratePerHour × hours`.
+
+Hot weather adjustment: **+25–50% intake**, add sodium to the upper end of the range. This is surfaced as a coaching note, not auto-applied (the app can't read weather at scheduling time).
+
+**Layering priority** (code enforces in `getHydrationBreakdownForDate`):
+1. **Race day** → `baseOz + raceDayBonusOz + saunaBonus`. Workout bonus suppressed.
+2. **T-3 / T-2 / T-1** → `baseOz + preloadBonusOz + workoutBonusOz + saunaBonus`.
+3. **Otherwise** → `baseOz + workoutBonusOz + saunaBonus`.
+
+Sodium guidance surfaces as a second line on the hydration card whenever a race-day bonus or T-1 preload applies.
 
 ---
 

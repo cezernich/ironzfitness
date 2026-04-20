@@ -11,10 +11,59 @@ const BEVERAGE_TYPES = {
   coffee:       { label: "Coffee",       coeff: 0.75, icon: "\u2615" }
 };
 
-const WORKOUT_HYDRATION_BONUS = {
-  strength: 20, hiit: 20, crossfit: 20, weights: 20,
-  run: 24, bike: 24, swim: 24, brick: 24, cycling: 24, running: 24,
-  yoga: 12, bodyweight: 12, stretch: 12, flexibility: 12
+// ── Workout bonus: duration-scaled hydration (Section 11e) ──────────────
+//
+// Replaces the old flat lookup (strength=20, run=24, etc.) with a per-hour
+// rate × actual duration, floored at 16 oz. The floor protects short
+// workouts (a 20-min strength session still gets 16 oz even though
+// 18/hr × 0.33 hr = 6). Ceilings are enforced only at the race-day path
+// below, where the race distance determines the expected duration.
+const HYDRATION_RATE_OZ_PER_HOUR = {
+  run: 22, running: 22, bike: 22, cycling: 22, swim: 22, swimming: 22, brick: 22, rowing: 22,
+  hyrox: 22, circuit: 20,
+  strength: 18, hiit: 18, weights: 18, crossfit: 18, weightlifting: 18, bodyweight: 16,
+  yoga: 12, stretch: 12, flexibility: 12, mobility: 12, walking: 12,
+};
+const HYDRATION_FLOOR_OZ = 16;
+
+function computeWorkoutBonusOz(type, durationMin) {
+  const t = String(type || "").toLowerCase();
+  const rate = HYDRATION_RATE_OZ_PER_HOUR[t] || 18;
+  const hours = Math.max(0, (parseFloat(durationMin) || 0) / 60);
+  const scaled = Math.round(rate * hours);
+  return Math.max(HYDRATION_FLOOR_OZ, scaled);
+}
+
+// ── Race hydration profiles (Section 11e) ────────────────────────────────
+//
+// Keys match RACE_CONFIGS from planner.js so a race.type string drops in
+// directly. `hours` is a middle-of-range estimate of actual race duration;
+// `ratePerHour` stays in the 18–22 oz/hr band per the spec. Sodium targets
+// for long races come from ACSM/Sports Dietitians Australia (500–700 mg/hr
+// for events > ~2 hours); we pick a midpoint.
+const RACE_HYDRATION_PROFILES = {
+  fiveK:        { label: "5K",            hours: 0.5, ratePerHour: 18, sodiumMgPerHour: 0   },
+  tenK:         { label: "10K",           hours: 1.0, ratePerHour: 18, sodiumMgPerHour: 0   },
+  halfMarathon: { label: "Half Marathon", hours: 2.0, ratePerHour: 18, sodiumMgPerHour: 300 },
+  marathon:     { label: "Marathon",      hours: 4.0, ratePerHour: 20, sodiumMgPerHour: 500 },
+  sprint:       { label: "Sprint Tri",    hours: 1.5, ratePerHour: 20, sodiumMgPerHour: 300 },
+  olympic:      { label: "Olympic Tri",   hours: 2.5, ratePerHour: 20, sodiumMgPerHour: 400 },
+  halfIronman:  { label: "70.3 Tri",      hours: 6.0, ratePerHour: 20, sodiumMgPerHour: 500 },
+  ironman:      { label: "Ironman",       hours: 12.0, ratePerHour: 22, sodiumMgPerHour: 600 },
+  centuryRide:  { label: "Century Ride",  hours: 6.0, ratePerHour: 20, sodiumMgPerHour: 500 },
+  granFondo:    { label: "Gran Fondo",    hours: 4.0, ratePerHour: 20, sodiumMgPerHour: 400 },
+  hyrox:        { label: "Hyrox",         hours: 1.5, ratePerHour: 20, sodiumMgPerHour: 300 },
+  hyroxDoubles: { label: "Hyrox Doubles", hours: 1.5, ratePerHour: 20, sodiumMgPerHour: 300 },
+};
+
+// Race-week preload — mirrors the carb-load ramp structure. Race day itself
+// uses the distance-scaled bonus from RACE_HYDRATION_PROFILES, not the
+// preload (to avoid stacking: the bonus already accounts for the event's
+// full duration and intensity).
+const RACE_WEEK_PRELOAD = {
+  3: { bonusOz:  8, sodiumMg: 0,    note: "Race prep (T-3): +8 oz to your daily base. Start building hydration stores." },
+  2: { bonusOz: 16, sodiumMg: 0,    note: "Race prep (T-2): +16 oz today. Keep water visible and sip steadily." },
+  1: { bonusOz: 16, sodiumMg: 1500, note: "Race tomorrow (T-1): +16 oz plus ~1,500 mg sodium preload across the day (electrolyte drink or salted meals)." },
 };
 
 /* =====================================================================
@@ -244,7 +293,8 @@ function getEffectiveOzForDate(dateStr) {
   return Math.max(0, Math.round(effectiveOz));
 }
 
-/** Get workout bonus for a specific date */
+/** Get workout bonus for a specific date. Picks the session with the
+ *  highest duration-scaled bonus when multiple are scheduled on one day. */
 function getWorkoutInfoForDate(dateStr) {
   try {
     const schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
@@ -254,39 +304,130 @@ function getWorkoutInfoForDate(dateStr) {
     let bestName = "";
     let bestDurationMin = 0;
     for (const w of dayWorkouts) {
-      const t = (w.type || "").toLowerCase();
-      const bonus = WORKOUT_HYDRATION_BONUS[t] || 16;
+      const d = parseFloat(w.duration);
+      const durationMin = isFinite(d) && d > 0 ? d : 0;
+      const bonus = computeWorkoutBonusOz(w.type, durationMin);
       if (bonus > bestBonus) {
         bestBonus = bonus;
         bestName = w.sessionName || w.type || "workout";
-        const d = parseFloat(w.duration);
-        bestDurationMin = isFinite(d) && d > 0 ? d : 0;
+        bestDurationMin = durationMin;
       }
     }
     return { bonusOz: bestBonus, sessionName: bestName, durationMin: bestDurationMin };
   } catch { return null; }
 }
 
-/** Get hydration breakdown for a specific date */
+// ── Race context for a date ──────────────────────────────────────────────
+// Returns the nearest upcoming race and how many days out the target date
+// sits from that race (0 = race day, 1 = T-1, ..., or null when no race
+// is within the preload window).
+function getRaceContextForDate(dateStr) {
+  try {
+    const events = JSON.parse(localStorage.getItem("events") || "[]");
+    if (!Array.isArray(events) || events.length === 0) return null;
+    // Sort ascending by date so we find the next race after the target.
+    const withDates = events
+      .filter(e => e && e.date && e.type)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const target = new Date(dateStr + "T00:00:00");
+    for (const e of withDates) {
+      const eventDay = new Date(e.date + "T00:00:00");
+      const daysUntil = Math.round((eventDay - target) / 86400000);
+      // Only care about race day itself (0) or the 3-day preload window.
+      // Past races are ignored; races > 3 days out don't affect today.
+      if (daysUntil < 0) continue;
+      if (daysUntil > 3) break;
+      const profile = RACE_HYDRATION_PROFILES[e.type];
+      if (!profile) continue; // unknown race type — skip gracefully
+      return { race: e, daysUntil, profile };
+    }
+    return null;
+  } catch { return null; }
+}
+
+function computeRaceDayBonusOz(profile) {
+  if (!profile) return 0;
+  const raw = Math.round((profile.ratePerHour || 20) * (profile.hours || 1));
+  return Math.max(HYDRATION_FLOOR_OZ, raw);
+}
+
+/** Get hydration breakdown for a specific date.
+ *
+ *  Layering priority (Section 11e):
+ *    1. Race day: bonusOz = computeRaceDayBonusOz(profile). Ignores the
+ *       scheduled workout (race IS the workout).
+ *    2. T-1 / T-2 / T-3: bonusOz = RACE_WEEK_PRELOAD[daysUntil].bonusOz
+ *       PLUS any scheduled-workout bonus for that day (taper sessions
+ *       are real workouts and still need their own hydration).
+ *    3. Otherwise: bonusOz = workout bonus only.
+ *  Sauna adds on top in all cases.
+ */
 function getHydrationBreakdownForDate(dateStr) {
   const baseOz = getBaseHydrationTarget();
   const workoutInfo = getWorkoutInfoForDate(dateStr);
-  const bonusOz = workoutInfo ? workoutInfo.bonusOz : 0;
+  const raceCtx = getRaceContextForDate(dateStr);
+
   let saunaBonus = 0;
   try {
     const log = JSON.parse(localStorage.getItem("hydrationLog") || "{}");
     saunaBonus = (log[dateStr] && log[dateStr].saunaBonus) || 0;
   } catch {}
-  const totalBonus = bonusOz + saunaBonus;
+
+  let workoutBonusOz = workoutInfo ? workoutInfo.bonusOz : 0;
+  let raceBonusOz = 0;
+  let preloadBonusOz = 0;
+  let sodiumGuidance = null;
   let reason = null;
-  if (workoutInfo && saunaBonus > 0) {
-    reason = `${baseOz} base + ${bonusOz} workout + ${saunaBonus} sauna`;
-  } else if (workoutInfo) {
-    reason = `${baseOz} base + ${bonusOz} for your ${workoutInfo.sessionName}`;
-  } else if (saunaBonus > 0) {
+  let race = null;
+  let preload = null;
+
+  if (raceCtx && raceCtx.daysUntil === 0) {
+    // Race day — distance-scaled bonus replaces the workout bonus.
+    race = { type: raceCtx.race.type, label: raceCtx.profile.label, hours: raceCtx.profile.hours };
+    raceBonusOz = computeRaceDayBonusOz(raceCtx.profile);
+    workoutBonusOz = 0;
+    if (raceCtx.profile.sodiumMgPerHour > 0) {
+      const total = Math.round(raceCtx.profile.sodiumMgPerHour * raceCtx.profile.hours);
+      sodiumGuidance = `Target ~${raceCtx.profile.sodiumMgPerHour} mg sodium per hour of racing (~${total.toLocaleString()} mg total).`;
+    }
+    reason = `${baseOz} base + ${raceBonusOz} for race day (${raceCtx.profile.label}, ~${raceCtx.profile.hours}h)`;
+  } else if (raceCtx && raceCtx.daysUntil >= 1 && raceCtx.daysUntil <= 3) {
+    // Preload window — layer preload on top of normal workout bonus.
+    const p = RACE_WEEK_PRELOAD[raceCtx.daysUntil];
+    if (p) {
+      preloadBonusOz = p.bonusOz;
+      preload = { daysUntil: raceCtx.daysUntil, note: p.note, sodiumMg: p.sodiumMg || 0 };
+      if (p.sodiumMg > 0) {
+        sodiumGuidance = `~${p.sodiumMg.toLocaleString()} mg sodium preload today (electrolyte drink or salted meals).`;
+      }
+      reason = workoutInfo
+        ? `${baseOz} base + ${preloadBonusOz} race-week preload + ${workoutBonusOz} for your ${workoutInfo.sessionName}`
+        : `${baseOz} base + ${preloadBonusOz} race-week preload (T-${raceCtx.daysUntil})`;
+    }
+  }
+
+  if (!reason && workoutInfo && saunaBonus > 0) {
+    reason = `${baseOz} base + ${workoutBonusOz} workout + ${saunaBonus} sauna`;
+  } else if (!reason && workoutInfo) {
+    reason = `${baseOz} base + ${workoutBonusOz} for your ${workoutInfo.sessionName}`;
+  } else if (!reason && saunaBonus > 0) {
     reason = `${baseOz} base + ${saunaBonus} for sauna session`;
   }
-  return { baseOz, bonusOz: totalBonus, totalOz: baseOz + totalBonus, reason };
+
+  const totalBonus = workoutBonusOz + raceBonusOz + preloadBonusOz + saunaBonus;
+  return {
+    baseOz,
+    bonusOz: totalBonus,
+    totalOz: baseOz + totalBonus,
+    reason,
+    race,
+    preload,
+    sodiumGuidance,
+    workoutBonusOz,
+    raceBonusOz,
+    preloadBonusOz,
+    saunaBonus,
+  };
 }
 
 // Core push — records a single hydration event on the current day.
@@ -529,19 +670,36 @@ function updateHydrationVisualPct(pct) {
 function renderHydrationContext(breakdown) {
   const el = document.getElementById("hydration-context");
   if (!el) return;
-  if (breakdown.bonusOz > 0) {
-    el.style.display = "";
-    // Unambiguous phrasing: show base → total so the user can see the
-    // bonus has already been added. The old "Target is 133oz today (+16oz
-    // for your Long Run)" read as "target WAS 133, adding 16 now".
-    const who = escHtml(breakdown.reason ? breakdown.reason.split("for your ").pop() : "workout");
-    el.innerHTML = `<span class="hydration-transparency-note">${typeof ICONS !== "undefined" ? ICONS.lightbulb : ""} Today's target: ${breakdown.totalOz}oz &mdash; ${breakdown.baseOz}oz base + ${breakdown.bonusOz}oz for your ${who}.</span>`;
-  } else {
+  if (breakdown.bonusOz <= 0) {
     // Suppress the base-target note on rest days — it takes up a line of
     // vertical space with information the user has already seen.
     el.style.display = "none";
     el.innerHTML = "";
+    return;
   }
+
+  el.style.display = "";
+  const icon = typeof ICONS !== "undefined" ? ICONS.lightbulb : "";
+  let html = "";
+
+  // Race-day and race-week preload get a dedicated top line that names
+  // the race — the breakdown reason string already carries the oz math.
+  if (breakdown.race) {
+    html += `<span class="hydration-transparency-note">${icon} Race day — ${escHtml(breakdown.race.label)}. Target: ${breakdown.totalOz}oz (${breakdown.baseOz} base + ${breakdown.raceBonusOz} for ~${breakdown.race.hours}h of racing).</span>`;
+  } else if (breakdown.preload) {
+    html += `<span class="hydration-transparency-note">${icon} ${escHtml(breakdown.preload.note)} Today's target: ${breakdown.totalOz}oz.</span>`;
+  } else {
+    const who = escHtml(breakdown.reason ? breakdown.reason.split("for your ").pop() : "workout");
+    html += `<span class="hydration-transparency-note">${icon} Today's target: ${breakdown.totalOz}oz &mdash; ${breakdown.baseOz}oz base + ${breakdown.bonusOz}oz for your ${who}.</span>`;
+  }
+
+  // Sodium guidance surfaces as a second line when the day warrants it
+  // (race day > ~2h, or T-1 preload).
+  if (breakdown.sodiumGuidance) {
+    html += `<span class="hydration-transparency-note hydration-sodium-note">${escHtml(breakdown.sodiumGuidance)}</span>`;
+  }
+
+  el.innerHTML = html;
 }
 
 function _renderBottleButtons() {
