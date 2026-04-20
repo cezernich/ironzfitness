@@ -205,12 +205,17 @@ function _classifyDayLoad(sessions) {
   const loads = sessions.map(s => (s.load || "").toLowerCase());
   const names = sessions.map(s => (s.sessionName || "").toLowerCase());
 
-  // "strength" is the race-plan discipline value for weightlifting days
-  // (planner.js uses discipline: "strength"), while workoutSchedule
-  // uses type: "weightlifting". Accept both or a day with only a race-
-  // plan strength session silently classifies as rest.
-  const isStrength = types.some(t => t === "weightlifting" || t === "bodyweight" || t === "hiit" || t === "strength");
-  const isEndurance = types.some(t => t === "running" || t === "run" || t === "cycling" || t === "bike" || t === "swimming" || t === "swim" || t === "triathlon" || t === "brick");
+  // Strength detection needs to work for three different write paths:
+  //   - workoutSchedule (onboarding_v2 / custom):    type: "weightlifting"
+  //   - race plan (planner.js _generateSingleRacePlan): discipline: "strength"
+  //   - legacy / external imports:                   sessionName carries the clue
+  // Checking BOTH type AND sessionName catches all three without needing
+  // every caller to normalize upstream.
+  const strengthTypes = ["weightlifting", "bodyweight", "hiit", "strength"];
+  const isStrength = types.some(t => strengthTypes.includes(t)) ||
+    names.some(n => /\b(weightlifting|strength|lifting|lift day|push day|pull day|leg day|upper body|lower body|full body|squat|bench|deadlift|ohp|row)\b/.test(n));
+  const isEndurance = types.some(t => t === "running" || t === "run" || t === "cycling" || t === "bike" || t === "swimming" || t === "swim" || t === "triathlon" || t === "brick") ||
+    names.some(n => /\b(easy run|tempo|long run|intervals?|threshold|race pace|shakeout|long ride|z2 ride|brick)\b/.test(n));
   const isHard = loads.some(l => l === "hard" || l === "long") ||
     names.some(n => /interval|tempo|threshold|long run|long ride|brick|race/i.test(n));
 

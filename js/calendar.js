@@ -4591,8 +4591,13 @@ function renderMealPlan(dateStr) {
       _plan.filter(e => e.date === dateStr && e.load !== "rest" && e.discipline !== "rest")
            .forEach(e => _todaySessions.push({ type: e.discipline, discipline: e.discipline, load: e.load || "", sessionName: e.sessionName }));
       const _sched = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
-      _sched.filter(s => s.date === dateStr).forEach(s => _todaySessions.push(s));
+      _sched.filter(s => s.date === dateStr && s.load !== "rest" && s.type !== "rest").forEach(s => _todaySessions.push(s));
       if (typeof _classifyDayLoad === "function") _freshLoad = _classifyDayLoad(_todaySessions);
+      // Stash the per-date trace so devtools can see what was classified.
+      if (typeof window !== "undefined") {
+        window._ironzLastMealLoadTrace = window._ironzLastMealLoadTrace || {};
+        window._ironzLastMealLoadTrace[dateStr] = { sessions: _todaySessions, classifiedAs: _freshLoad };
+      }
     } catch {}
     const loadNote = _freshLoad ? `<div class="meal-plan-load-note">${_loadLabels[_freshLoad] || ""}</div>` : "";
     const _clInfo = (typeof getCarbLoadInfo === "function")
