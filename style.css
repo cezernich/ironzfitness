@@ -12513,7 +12513,10 @@ button:active {
 [data-ux-level="advanced"] .ux-guidance { display: none !important; }
 
 /* Beginner: simplify some UI elements */
-[data-ux-level="beginner"] .completion-expand-btn { display: none; }
+/* "Log per set" button stays visible at all levels — varying weight/reps
+   across sets (drop sets, warm-up sets, pyramids) is a core need, not
+   an advanced-only feature. Hiding it forced beginners into a single
+   uniform set. */
 /* Zone strips and labels always visible — useful context at all levels */
 
 /* Advanced: show extra metrics */

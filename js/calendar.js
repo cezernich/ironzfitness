@@ -4625,6 +4625,15 @@ function renderMealPlan(dateStr) {
            .forEach(e => _todaySessions.push({ type: e.discipline, discipline: e.discipline, load: e.load || "", sessionName: e.sessionName }));
       const _sched = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
       _sched.filter(s => s.date === dateStr && s.load !== "rest" && s.type !== "rest").forEach(s => _todaySessions.push(s));
+      // Also include manually-logged workouts for the date — a user who
+      // lifts ad-hoc without a plan still needs "Strength Day" macros,
+      // not the rest-day preset.
+      try {
+        const _logged = JSON.parse(localStorage.getItem("workouts") || "[]");
+        _logged.filter(w => w.date === dateStr).forEach(w => {
+          _todaySessions.push({ type: w.type || w.discipline || "", discipline: w.discipline || "", load: w.load || "", sessionName: w.name || w.sessionName || "" });
+        });
+      } catch {}
       if (typeof _classifyDayLoad === "function") _freshLoad = _classifyDayLoad(_todaySessions);
       // Stash the per-date trace so devtools can see what was classified.
       if (typeof window !== "undefined") {
@@ -6144,6 +6153,16 @@ function qeToggleMuscle(btn) {
 
 // ── Manual strength entry ─────────────────────────────────────────────────────
 function qeGoManual() {
+  // The HIIT wizard reuses this same Add Manually handler but has no
+  // muscle-chip picker and no strength-duration select — it uses a Focus
+  // dropdown and its own duration field. Detect the HIIT step and route
+  // through qeGoManualHIIT so users don't hit "Please select at least one
+  // muscle group" on a screen that has no muscle picker.
+  const hiitStep = document.getElementById("qe-step-1-hiit");
+  if (hiitStep && hiitStep.style.display !== "none") {
+    qeGoManualHIIT();
+    return;
+  }
   if (_qeSelectedMuscles.size === 0) {
     alert("Please select at least one muscle group.");
     return;
@@ -6154,6 +6173,24 @@ function qeGoManual() {
     document.getElementById("qe-strength-duration")?.focus();
     return;
   }
+  qeShowStep(2, "manual");
+}
+
+// Hydrate _qeSelectedMuscles from the HIIT Focus dropdown and advance to
+// the manual builder. Reuses the same focus→muscles mapping that
+// qeGenerateHIIT applies so "Core" selects core, "Upper Body" selects
+// chest/back/shoulders, etc.
+function qeGoManualHIIT() {
+  const focus = document.getElementById("qe-hiit-focus")?.value || "full body";
+  const focusToMuscles = {
+    "full body":  ["chest", "back", "quads", "core"],
+    "upper body": ["chest", "back", "shoulders"],
+    "lower body": ["quads", "hamstrings", "glutes"],
+    "core":       ["core"],
+    "cardio":     ["full body"],
+  };
+  _qeSelectedMuscles.clear();
+  (focusToMuscles[focus] || focusToMuscles["full body"]).forEach(m => _qeSelectedMuscles.add(m));
   qeShowStep(2, "manual");
 }
 
