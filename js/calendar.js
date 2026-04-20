@@ -290,6 +290,18 @@ function renderWeekOverview() {
         if (s === "swimming") return "swim";
         if (s === "cycling") return "bike";
         if (s === "running") return "run";
+        // Run-variant session_type ids ("easy_recovery", "long_run",
+        // "tempo_threshold", "hills", "endurance", "track_workout",
+        // "speed_work", "fun_social") leak through from logged workouts
+        // and from aiSession payloads. They're all still runs — coalesce
+        // into one bucket so the week strip doesn't sprout a fallback
+        // pulse icon next to the real run icon.
+        if (/^(easy_recovery|long_run|tempo_threshold|speed_work|hills|endurance|track_workout|fun_social)$/.test(s)) return "run";
+        // Race plans emit discipline: "strength" for lifting days while
+        // workoutSchedule + logged entries use type: "weightlifting".
+        // Merge into one bucket so the week-summary strip shows a single
+        // weights pill (not a weights pill + a pulse fallback).
+        if (s === "strength" || s === "bodyweight") return "weightlifting";
         return s || "general";
       };
       const addType = (type) => { const k = canonType(type); byType[k] = (byType[k] || 0) + 1; };
