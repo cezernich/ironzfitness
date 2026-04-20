@@ -205,8 +205,12 @@ function _classifyDayLoad(sessions) {
   const loads = sessions.map(s => (s.load || "").toLowerCase());
   const names = sessions.map(s => (s.sessionName || "").toLowerCase());
 
-  const isStrength = types.some(t => t === "weightlifting" || t === "bodyweight" || t === "hiit");
-  const isEndurance = types.some(t => t === "running" || t === "run" || t === "cycling" || t === "bike" || t === "swimming" || t === "swim" || t === "triathlon");
+  // "strength" is the race-plan discipline value for weightlifting days
+  // (planner.js uses discipline: "strength"), while workoutSchedule
+  // uses type: "weightlifting". Accept both or a day with only a race-
+  // plan strength session silently classifies as rest.
+  const isStrength = types.some(t => t === "weightlifting" || t === "bodyweight" || t === "hiit" || t === "strength");
+  const isEndurance = types.some(t => t === "running" || t === "run" || t === "cycling" || t === "bike" || t === "swimming" || t === "swim" || t === "triathlon" || t === "brick");
   const isHard = loads.some(l => l === "hard" || l === "long") ||
     names.some(n => /interval|tempo|threshold|long run|long ride|brick|race/i.test(n));
 

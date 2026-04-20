@@ -4583,8 +4583,13 @@ function renderMealPlan(dateStr) {
     try {
       const _todaySessions = [];
       const _plan = (typeof loadTrainingPlan === "function") ? loadTrainingPlan() : [];
-      _plan.filter(e => e.date === dateStr && e.load && e.load !== "rest")
-           .forEach(e => _todaySessions.push({ type: e.discipline, discipline: e.discipline, load: e.load, sessionName: e.sessionName }));
+      // Keep everything except explicit rest entries. Older / manual plan
+      // entries can have load undefined — requiring a truthy load dropped
+      // those silently and a day with only a weightlifting session
+      // classified as "rest." _classifyDayLoad reads type first and
+      // tolerates missing load, so we just need to not pre-filter here.
+      _plan.filter(e => e.date === dateStr && e.load !== "rest" && e.discipline !== "rest")
+           .forEach(e => _todaySessions.push({ type: e.discipline, discipline: e.discipline, load: e.load || "", sessionName: e.sessionName }));
       const _sched = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
       _sched.filter(s => s.date === dateStr).forEach(s => _todaySessions.push(s));
       if (typeof _classifyDayLoad === "function") _freshLoad = _classifyDayLoad(_todaySessions);
