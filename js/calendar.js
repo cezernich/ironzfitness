@@ -1709,7 +1709,17 @@ function buildStepsList(session, discipline) {
   let _seenT1 = false;
   return session.steps.map(step => {
     const isT1      = step.note === "T1";
-    const typeLabel = isT1 ? "TRANSITION" : (SESSION_TYPE_LABELS[step.type] || (step.type ? step.type.toUpperCase() : "SET"));
+    // SESSION_TYPE_LABELS only maps the three structural roles (warmup /
+    // main / cooldown). Older writes sometimes stored the whole-session
+    // type ("easy_recovery", "long_run", "tempo_threshold", …) on an
+    // individual step, which then screamed back to the user as
+    // "EASY_RECOVERY" in all-caps. Treat anything that isn't a known
+    // structural role as MAIN SET — the step is the body of the workout,
+    // not a dedicated warmup/cooldown.
+    const _STRUCTURAL_ROLES = new Set(["warmup", "main", "cooldown"]);
+    const typeLabel = isT1 ? "TRANSITION"
+      : SESSION_TYPE_LABELS[step.type]
+      || (step.type && _STRUCTURAL_ROLES.has(String(step.type).toLowerCase()) ? String(step.type).toUpperCase() : "MAIN SET");
     let brickDisc = null;
     if (isBrick && !isT1) {
       brickDisc = _seenT1 ? "run" : "bike";
