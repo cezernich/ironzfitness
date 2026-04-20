@@ -1,9 +1,11 @@
 # IronZ Rule Engine Spec — Production Ready
 
-> **Version:** 1.0  
-> **Last updated:** 2026-04-16  
-> **Depends on:** TRAINING_PHILOSOPHY.md (v1.1), PLAN_SCHEMA.json, EXERCISE_DB (307 exercises)  
+> **Version:** 1.1
+> **Last updated:** 2026-04-20
+> **Depends on:** PLAN_GENERATOR_MASTER_SPEC.md (v2.1) — the single source of truth for training logic, classification, phases, and session templates. PLAN_SCHEMA.json, EXERCISE_DB (307 exercises).
 > **Architecture:** Constraint-driven, not template-driven. The engine fills sessions based on rules, not by copying a fixed template.
+>
+> **Note:** Earlier revisions referenced TRAINING_PHILOSOPHY.md. That document has been consolidated into PLAN_GENERATOR_MASTER_SPEC.md — all section references below are against the master spec's numbering (Sections 0–9 are the plan generation pipeline; Sections 10–15 cover supporting systems).
 
 ---
 

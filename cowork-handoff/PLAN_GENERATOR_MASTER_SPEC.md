@@ -1,7 +1,7 @@
 # IronZ — Single Source of Truth
 
-> **Version:** 2.0
-> **Last updated:** 2026-04-19
+> **Version:** 2.1
+> **Last updated:** 2026-04-20
 > **Purpose:** This is the SINGLE REFERENCE for all IronZ training logic — philosophy, plan generation, exercise selection, nutrition, recovery, and coaching. There is no other document. If it's not here, it doesn't exist.
 >
 > **For Code:** When implementing features, this document is your spec. Sections 1–9 are the plan generation pipeline (walk through in order). Sections 10–15 cover supporting systems (exercise selection, nutrition, recovery, etc.). Appendices have reference tables.
@@ -47,33 +47,120 @@ When the user presses "Generate & Schedule Plan," these inputs are available:
 
 ## 2. CLASSIFY — Determine the Athlete's Profile
 
-### 2a. Running Level (from 5K time)
+### 2a-0. Age-Graded Classification — Code Approach
 
-| 5K Time | 5K Pace (/mile) | Level |
-|---------|----------------|-------|
-| > 31:00 | > 10:00/mile | Beginner |
-| 23:20–31:00 | 7:30–10:00/mile | Intermediate |
-| < 23:20 | < 7:30/mile | Advanced |
+**Absolute performance metrics (raw VDOT, raw w/kg, raw CSS pace) are not sufficient to classify an athlete.** A 9:00 mile is beginner-level for a 25-year-old man and intermediate-to-advanced for a 65-year-old woman — the same time means very different things depending on age and sex. Classification MUST be age × gender aware.
 
-**Chase's case:** 5K time of 19:40 → 6:20/mile pace → VDOT 50.8 → **Advanced runner**
+**Canonical implementation — normalization formula:**
 
-### 2b. Cycling Level (from FTP w/kg)
+```
+adjustedMetric = rawMetric / ageFactor(age) / sexFactor(sex)
+```
 
-| FTP (w/kg) | Level |
-|-----------|-------|
-| < 2.0 | Beginner |
-| 2.0–3.5 | Intermediate |
-| > 3.5 | Advanced |
+- `ageFactor(age)`: baseline 1.00 at age 25; decreases ~0.008 per year after 30 (matches World Masters Athletics age-grading).
+  - Age <16: not supported (app gates to 16+).
+  - Age 16–20: use 1.00 (youth are not penalized; other modifiers apply in Section 2m).
+  - Age 21–29: 1.00.
+  - Age 30+: `1.00 - (age - 30) * 0.008`. Floor at 0.55 (reached at age ~86).
+- `sexFactor(sex)`: 1.00 male, 0.90 female. `unknown` / `prefer_not_to_say` → 0.95 midpoint to avoid over- or under-classifying.
+- After normalization, compare against the **same single set of cut-offs** used by the absolute-VDOT classifier (≥48 advanced, ≥37 intermediate, <37 beginner for running). This gives identical behavior for a baseline 25-year-old male and age-grades everyone else.
+
+The tables in 2a / 2b / 2c below are the **validated output** of the formula — a lookup for correctness checks and for situations where a closed-form calculation isn't practical (e.g., editor preview of a specific age group). If a formula output disagrees with the table by more than one level-boundary, the table wins (and the formula constants should be retuned).
+
+### 2a. Running Level (5K time, by age × gender)
+
+Classification uses age × gender-adjusted VDOT. The table below lists raw 5K times that map to each level for a given bracket. For any other distance (Mile, 10K, HM, Marathon), convert to VDOT first using Appendix C, then classify using the same brackets.
+
+| Age | Gender | Beginner | Intermediate | Advanced |
+|-----|--------|----------|--------------|----------|
+| 16–17 | Male   | > 28:00 | 21:00–28:00 | < 21:00 |
+| 16–17 | Female | > 33:00 | 25:00–33:00 | < 25:00 |
+| 18–20 | Male   | > 30:00 | 22:00–30:00 | < 22:00 |
+| 18–20 | Female | > 35:00 | 26:00–35:00 | < 26:00 |
+| 20–29 | Male   | > 31:00 | 23:00–31:00 | < 23:00 |
+| 20–29 | Female | > 36:00 | 27:00–36:00 | < 27:00 |
+| 30–39 | Male   | > 32:00 | 24:00–32:00 | < 24:00 |
+| 30–39 | Female | > 37:00 | 28:00–37:00 | < 28:00 |
+| 40–49 | Male   | > 34:00 | 26:00–34:00 | < 26:00 |
+| 40–49 | Female | > 39:00 | 30:00–39:00 | < 30:00 |
+| 50–59 | Male   | > 37:00 | 29:00–37:00 | < 29:00 |
+| 50–59 | Female | > 43:00 | 33:00–43:00 | < 33:00 |
+| 60+   | Male   | > 41:00 | 32:00–41:00 | < 32:00 |
+| 60+   | Female | > 48:00 | 37:00–48:00 | < 37:00 |
+
+**Chase's case (26M):** 5K time of 19:40 → VDOT 50.8 → 20–29 Male column → **Advanced runner**.
+
+**Chase's mom (61F):** Mile time of 9:00 → VDOT ~31 → 5K-equivalent ~29:30 → 60+ Female column → **Intermediate runner** (would misclassify as Beginner under the old unisex/unaged cuts).
+
+#### Multi-Distance Input Support
+
+The onboarding flow MUST accept any of the following race times and convert to VDOT before classification:
+
+| Input Distance | How to Convert |
+|----------------|---------------|
+| Mile           | Daniels VDOT table — mile to VDOT lookup (Appendix C) |
+| 5K             | Direct — already the primary input |
+| 10K            | Daniels VDOT table — 10K to VDOT lookup (Appendix C) |
+| Half Marathon  | Daniels VDOT table — HM to VDOT lookup (Appendix C) |
+| Marathon       | Daniels VDOT table — marathon to VDOT lookup (Appendix C) |
+
+**Reference conversion examples** (for code validation — full lookup in Appendix C):
+
+| Mile  | 5K     | 10K     | Half Marathon | Marathon   | VDOT |
+|-------|--------|---------|---------------|------------|------|
+| 5:30  | 18:30  | 38:36   | 1:25:40       | 2:58:47    | ~54  |
+| 6:20  | 21:30  | 44:47   | 1:39:06       | 3:27:00    | ~46  |
+| 7:30  | 25:30  | 53:10   | 1:57:44       | 4:05:00    | ~38  |
+| 9:00  | 31:00  | 64:30   | 2:22:00       | 4:58:00    | ~31  |
+| 10:30 | 36:30  | 76:00   | 2:48:00       | 5:52:00    | ~25  |
+
+**UI flow (onboarding):**
+1. Ask: "What's your best recent race time?"
+2. Distance dropdown: Mile / 5K / 10K / Half Marathon / Marathon.
+3. Time input (mm:ss or h:mm:ss depending on distance).
+4. Convert the entry to VDOT using the Appendix C lookup.
+5. Classify with the age × gender table above.
+6. **Store both** the raw input (distance + time) and the derived VDOT on the profile so the source of truth is preserved for audits and re-classification when a new VDOT table ships.
+
+**Multiple race times on file:** Use the one that produces the **highest VDOT** — that's the athlete's best indicator of current fitness. A runner whose mile VDOT is 50 but marathon VDOT is 44 is speed-biased, but the classification should reflect peak capability, not the weakest distance.
+
+If no running threshold data → default Intermediate.
+
+### 2b. Cycling Level (FTP w/kg, by age × gender)
+
+Thresholds are w/kg cut-offs. Apply sex adjustment via the table directly — w/kg already captures body-size effects, so sex differences in the table reflect physiology (roughly 15% lower FTP/kg at matched relative aerobic fitness).
+
+| Age | Gender | Beginner | Intermediate | Advanced |
+|-----|--------|----------|--------------|----------|
+| 16–20 | Male   | < 1.8 | 1.8–3.2 | > 3.2 |
+| 16–20 | Female | < 1.5 | 1.5–2.7 | > 2.7 |
+| 20–34 | Male   | < 2.0 | 2.0–3.5 | > 3.5 |
+| 20–34 | Female | < 1.7 | 1.7–3.0 | > 3.0 |
+| 35–49 | Male   | < 1.8 | 1.8–3.2 | > 3.2 |
+| 35–49 | Female | < 1.5 | 1.5–2.7 | > 2.7 |
+| 50–64 | Male   | < 1.5 | 1.5–2.8 | > 2.8 |
+| 50–64 | Female | < 1.3 | 1.3–2.4 | > 2.4 |
+| 65+   | Male   | < 1.3 | 1.3–2.4 | > 2.4 |
+| 65+   | Female | < 1.1 | 1.1–2.0 | > 2.0 |
 
 If no FTP data → default Intermediate.
 
-### 2c. Swimming Level (from CSS)
+### 2c. Swimming Level (CSS pace/100m, by age × gender)
 
-| CSS Pace | Level |
-|----------|-------|
-| > 2:30/100m | Novice |
-| 1:45–2:30/100m | Intermediate |
-| < 1:45/100m | Competitive |
+Classification uses 100m CSS pace, adjusted per age × gender bracket. Use "Novice / Intermediate / Competitive" labels (swim convention) that the rest of the spec already maps to Beginner / Intermediate / Advanced.
+
+| Age | Gender | Novice | Intermediate | Competitive |
+|-----|--------|--------|--------------|-------------|
+| 16–20 | Male   | > 2:25 | 1:40–2:25 | < 1:40 |
+| 16–20 | Female | > 2:40 | 1:55–2:40 | < 1:55 |
+| 20–34 | Male   | > 2:30 | 1:45–2:30 | < 1:45 |
+| 20–34 | Female | > 2:45 | 2:00–2:45 | < 2:00 |
+| 35–49 | Male   | > 2:40 | 1:55–2:40 | < 1:55 |
+| 35–49 | Female | > 2:55 | 2:10–2:55 | < 2:10 |
+| 50–64 | Male   | > 2:55 | 2:10–2:55 | < 2:10 |
+| 50–64 | Female | > 3:10 | 2:25–3:10 | < 2:25 |
+| 65+   | Male   | > 3:10 | 2:25–3:10 | < 2:25 |
+| 65+   | Female | > 3:30 | 2:45–3:30 | < 2:45 |
 
 If no CSS data → default Intermediate.
 
@@ -150,6 +237,36 @@ If no equipment profile is set, assume full gym access (no filtering).
 ### 2k. Threshold Refresh
 
 Thresholds should be re-tested every 90 days. If stale (>90 days), show a subtle reminder on Add Session / Build Plan screens. Dismissable for 14 days, then reappears.
+
+### 2m. Youth Athlete Modifiers (16–20)
+
+Applies on top of the 2a / 2b / 2c classification. The app gates at 16+; under-16 is not supported.
+
+**16–17 year olds:**
+- **No Z5 restrictions.** Recovery is fast at this age — Z5 work is well-tolerated when technique is sound.
+- **Strength: cap at moderate load.** Emphasize bodyweight, dumbbells, movement quality. **No heavy overhead pressing. No 1RM-based prescriptions** — use RPE-based loading instead.
+- **Plyometrics flagged as "requires coaching supervision"** — surface this in the workout notes any time plyos are prescribed.
+- **Volume:** can run slightly higher than adult same-level, but maintain **48-hour spacing between Z4+ sessions**.
+- **Growth-plate safety note:** avoid high-impact plyometrics and heavy overhead work without supervision. Insert this disclaimer in-session notes for any workout that includes those categories.
+
+**18–20 year olds:**
+- Treat as a **standard adult** with one exception: strength programming still **favors movement quality over max load** unless the user has explicitly entered strength-zone data (i.e., they know their 1RMs and have logged them).
+
+### 2n. Sex-Specific Training Modifiers
+
+These are **population-level tendencies**, not prescriptions. They act as soft defaults; the athlete's actual performance data should override them over time.
+
+**Female athletes:**
+- Can handle **slightly higher training frequency at moderate intensity** (fatigue-resistance advantage from a higher proportion of slow-twitch fibers).
+- **Same-day doubles used more cautiously** (higher relative energy cost — plan generator should prefer splitting across days when possible).
+- **Nutrition monitoring is more critical.** Flag **relative energy deficiency (RED-S) risk** if training volume is high AND calorie logging shows a consistent deficit across ≥7 days.
+- **Menstrual cycle awareness.** Add a note in coaching tips that performance and recovery may vary with cycle phase. **Do not auto-adjust training** — just acknowledge it.
+
+**Male athletes:**
+- Tolerate **higher absolute loads** but need **more recovery time between max-effort sessions**.
+- Higher muscle-damage markers after eccentric work — **space heavy eccentric sessions further apart** (downhill runs, heavy negatives): 72-hour minimum instead of the usual 48.
+
+**Both:** These modifiers apply as tie-breakers. When the athlete's logged performance disagrees with the modifier (e.g., a female athlete consistently handles same-day doubles without elevated fatigue markers), trust the data.
 
 ---
 
@@ -546,18 +663,51 @@ Emphasis on hitting a target time. More threshold and VO2max work. Tempo runs ar
 **"pr_podium" — Most aggressive:**
 Same as time_goal but Build/Peak can go to 2–3 quality sessions/week (only for advanced athletes). Includes race simulations and dress rehearsals. Age constraints are relaxed one tier (a 61-year-old pr_podium athlete trains closer to how a standard 50-year-old would).
 
-### 4c-ii. How Race Goal Modifies Age Constraints
+### 4c-ii. How Race Goal × Sport Profile × Age Interact
 
-The race goal acts as the intensity dial. A 61-year-old who selects "PR/Podium" is telling you they want to be pushed. A 25-year-old who selects "Just Finish" is telling you they want it easy.
+The old single age × goal table applied the same modifiers regardless of sport. That's wrong — cycling is low-impact and tolerates age far better than running, and triathlon's stacked-discipline volume needs tighter session caps than any single sport. The modifiers below are **sport-profile-specific**. Age and goal are cross-referenced on top of the sport-profile table.
 
-| Age Group | just_finish | time_goal | pr_podium |
-|-----------|-----------|-----------|-----------|
-| Under 40 | Apply level constraints as-is, lean conservative (fewer quality sessions at low end of range) | Apply level constraints as-is, standard | Apply level constraints as-is, push to high end of quality session range |
-| 40–49 | Rest +15%, Z5 work reduced 20%, longer warm-up | Rest +10%, standard age modifiers | Standard — minimal age modifiers, athlete accepts the risk |
-| 50–59 | Rest +30%, Z5 reduced 50%, max session 70% baseline | Rest +25%, Z5 reduced 40%, max session 75% baseline (standard 50+ rules) | Rest +15%, Z5 reduced 20%, max session 85% baseline |
-| 60+ | Rest +45%, NO Z5, volume –25%, joint-friendly subs only | Rest +40%, NO Z5, volume –20%, joint-friendly subs | Rest +25%, limited Z5 (1×/week short efforts only), volume –10%, joint-friendly subs preferred but not mandatory |
+The **goal dial** still applies across all four sport profiles:
+- **`just_finish`** → apply age modifiers **more aggressively** (protect the athlete).
+- **`time_goal`** → apply age modifiers as written below.
+- **`pr_podium`** → **relax** age modifiers by one age bracket (a 65-year-old pr_podium athlete trains closer to how a standard 55-year-old would). Safety floors always apply — even a pr_podium 65-year-old still gets longer rest periods and careful volume management. We just don't lock them out of intensity entirely.
 
-**The principle:** "Just finish" applies age modifiers more aggressively (protect the athlete). "PR/Podium" relaxes them (respect the athlete's ambition). But safety floors always apply — even a pr_podium 65-year-old still gets longer rest periods and careful volume management. We just don't lock them out of intensity work entirely.
+#### Running age modifiers
+
+| Age   | Modifiers |
+|-------|-----------|
+| 40–49 | Rest **+15%** between hard sessions. Warm-up / cool-down extended **5 min**. No other changes. |
+| 50–59 | **72-hour minimum** between Z5 sessions (not 48). Volume **–10%**. Deload **every 3rd week**. Warm-up **+5 min**. |
+| 60+   | Z5 allowed but **limited to 1×/week, short efforts only (30–90 sec intervals)**. Volume **–20%**. Deload every 3rd week. Coaching tip: **joint-friendly surface preference** (trail > treadmill > road). |
+
+#### Triathlon age modifiers
+
+| Age   | Modifiers |
+|-------|-----------|
+| 40–49 | Rest **+15%**. **No doubles involving run + bike on the same day unless one is Z1.** Everything else standard. |
+| 50–59 | Total weekly sessions capped at **7** (not 9–10). **72hr** between Z5. Doubles restricted to **swim+strength only**. Volume **–15%**. Deload every 3rd week. |
+| 60+   | Total weekly sessions capped at **6**. Z5 limited to **1×/week on the bike only** (lowest impact). **No run Z5.** Doubles restricted to swim+strength. Volume **–25%**. Deload every 3rd week. |
+
+#### Cycling age modifiers
+
+| Age   | Modifiers |
+|-------|-----------|
+| 40–49 | Minimal changes. Warm-up **+5 min**. |
+| 50–59 | **72hr** between Z5. Volume **–10%**. Otherwise standard — cycling is low-impact and well-tolerated. |
+| 60+   | Z5 still allowed **1×/week (short intervals)**. Volume **–15%**. Deload every 3rd week. No other major restrictions — **cycling is the most age-friendly endurance sport**. |
+
+#### Strength-focused age modifiers
+
+| Age   | Modifiers |
+|-------|-----------|
+| 40–49 | Warm-up sets **+1**. Rest between sets **+30 sec**. No other changes. |
+| 50–59 | **High-intensity, low-volume approach** (fewer sets, heavier weight, longer rest). Deload every 3rd week. Joint-friendly exercise substitutions available but not mandatory. |
+| 60+   | Same as 50–59 **but deload every 2nd–3rd week**. Avoid high-impact plyometrics. **Machine / cable preference over free-weight** when available. |
+
+**How the goal layer cross-references:**
+- `just_finish` × any age × any sport: apply the sport-specific row AND shift one bracket older (a 45-year-old just_finish runner gets the 50–59 row's rest-spacing rules).
+- `time_goal`: apply the sport-specific row as written.
+- `pr_podium` × any age × any sport: shift one bracket younger (a 65-year-old pr_podium cyclist gets the 50–59 row). Safety floors from the actual bracket (e.g., "Z5 1×/week on bike only" for 60+ triathletes) still apply — the shift only relaxes the rest/volume percentages, not the hard safety gates.
 
 ### 4d. HOW TO MAP SESSIONS TO DAYS
 
@@ -1491,6 +1641,8 @@ These are hard constraints the validator enforces on every generated plan. They 
 
 ## APPENDIX C: VDOT Reference Table
 
+### C-1. Pace Tables by VDOT
+
 | VDOT | Easy Pace | Marathon Pace | Threshold | Interval | Repetition |
 |------|-----------|-------------|-----------|----------|------------|
 | 30 | 12:40/mi | 11:13/mi | 10:18/mi | 9:18/mi | 8:40/mi |
@@ -1502,6 +1654,29 @@ These are hard constraints the validator enforces on every generated plan. They 
 | 60 | 7:22/mi | 6:12/mi | 5:35/mi | 4:58/mi | 4:36/mi |
 | 65 | 6:54/mi | 5:47/mi | 5:13/mi | 4:38/mi | 4:18/mi |
 | 70 | 6:30/mi | 5:25/mi | 4:53/mi | 4:20/mi | 4:01/mi |
+
+### C-2. Race Time → VDOT Lookup
+
+Used by Section 2a multi-distance input support. Code should derive VDOT from the athlete's best race time across supported distances (Mile, 5K, 10K, HM, Marathon) and classify using the age × gender tables in Section 2a.
+
+| Mile  | 5K     | 10K     | Half Marathon | Marathon   | VDOT |
+|-------|--------|---------|---------------|------------|------|
+| 4:40  | 15:42  | 32:43   | 1:12:34       | 2:32:35    | ~65  |
+| 5:00  | 16:55  | 35:08   | 1:17:58       | 2:43:25    | ~60  |
+| 5:30  | 18:30  | 38:36   | 1:25:40       | 2:58:47    | ~54  |
+| 6:00  | 20:10  | 42:02   | 1:33:10       | 3:14:06    | ~50  |
+| 6:20  | 21:30  | 44:47   | 1:39:06       | 3:27:00    | ~46  |
+| 7:00  | 23:52  | 49:55   | 1:50:50       | 3:50:00    | ~42  |
+| 7:30  | 25:30  | 53:10   | 1:57:44       | 4:05:00    | ~38  |
+| 8:15  | 28:00  | 58:30   | 2:09:40       | 4:30:00    | ~34  |
+| 9:00  | 31:00  | 64:30   | 2:22:00       | 4:58:00    | ~31  |
+| 10:30 | 36:30  | 76:00   | 2:48:00       | 5:52:00    | ~25  |
+
+**Code conversion notes:**
+- Interpolate linearly between adjacent rows for in-between times.
+- The underlying formula is Daniels' velocity → VO₂ → VDOT (implemented in `computeRunningZones`).
+- When an athlete has multiple race times on file, **use the highest computed VDOT** — that reflects peak capability (see Section 2a).
+- The full VDOT table (range 25–85) is maintained in the VDOT calculation module; this appendix is a spec-anchored validation subset.
 
 Full VDOT table (range 30–85) maintained in the VDOT calculation module.
 
