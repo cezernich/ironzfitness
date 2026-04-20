@@ -2433,7 +2433,7 @@ function renderTrainingInputs() {
             <button class="delete-btn" onclick="removeTrainingInput('race','${race.id}')" title="Remove race"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
           </div>
         </div>
-        <div class="race-card-name">${_escapeHtml(race.name || (cfg ? cfg.label : race.type))}</div>
+        <button class="race-card-name race-card-name--editable" onclick="editEvent('${race.id}')" title="Edit name / date">${_escapeHtml(race.name || (cfg ? cfg.label : race.type))}</button>
         <div class="race-card-meta">${cfg ? cfg.label : race.type}</div>
         ${race.location ? `<div class="race-card-detail">${_escapeHtml(race.location)}</div>` : ""}
         ${race.elevation ? `<div class="race-card-detail">Elevation: +${race.elevation} ft</div>` : ""}
@@ -2442,7 +2442,7 @@ function renderTrainingInputs() {
         ${tags ? `<div class="race-tags">${tags}</div>` : ""}
         ${gearBtnHtml}
         <div class="race-card-footer">
-          <span class="race-date-badge">${formatDisplayDate(race.date)}</span>
+          <button class="race-date-badge race-date-badge--editable" onclick="editEvent('${race.id}')" title="Edit name / date">${formatDisplayDate(race.date)}</button>
           <span class="race-countdown">${label}</span>
         </div>
       </div>`;

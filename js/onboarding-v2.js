@@ -2597,6 +2597,22 @@
     _BP_DAYS.forEach(d => {
       if (!Array.isArray(_state.schedule[d])) _state.schedule[d] = [];
     });
+    // Strip slots whose sport the user didn't select — fixes the case where
+    // the user toggled strength on earlier (directly, or via a Hyrox pick
+    // that auto-added it), went through strength setup, then came back and
+    // deselected strength on the sports grid. Without this filter the
+    // previously-seeded "strength" / "strength-*" chips linger on Mon/Fri
+    // even though the sport is no longer in selectedSports.
+    const selectedSet = new Set(_state.selectedSports || []);
+    const slotBelongsToSelectedSport = (code) => {
+      if (code === "rest" || code === "brick") return true;
+      if (code.indexOf("strength") === 0) return selectedSet.has("strength");
+      const base = code.split("-")[0];
+      return selectedSet.has(base);
+    };
+    _BP_DAYS.forEach(d => {
+      _state.schedule[d] = _state.schedule[d].filter(slotBelongsToSelectedSport);
+    });
     // Seed only on FIRST entry to bp-5 in a fresh build flow. Skip the
     // seed entirely when editing an existing plan — even if the saved
     // template was empty (older saves predate buildPlanTemplate), we
