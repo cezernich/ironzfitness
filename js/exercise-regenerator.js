@@ -152,7 +152,7 @@
   }
 
   // In-place swap handler for the workout editor. Reads the row's name
-  // input, regenerates, updates the name, flashes a toast hint.
+  // input, regenerates, updates the name + weight, flashes a toast hint.
   function regenerateEditRow(rowId) {
     const nameInput = document.getElementById("edit-ex-" + rowId);
     if (!nameInput) return;
@@ -163,14 +163,45 @@
     const exclude = [currentName].concat(_recentByRow[rowId] || []);
     const result = regenerate(currentName, { exclude });
     if (!result) {
-      // Nothing to swap to — flash the button briefly to show it tried.
       _flashRowMessage(rowId, "No alternatives found for that exercise.");
       return;
     }
     nameInput.value = result.name;
-    // Fire input event so any autocomplete / weight recalculation wired to
-    // the name field runs (e.g., _personalizeWeights via the planner, or
-    // exercise-row-weight-toggle handlers).
+
+    // Re-derive weight for the new exercise. A pure name swap leaves
+    // the old weight — e.g. Front Squat 185 → Bulgarian Split Squat 185
+    // would be crushingly heavy because Bulgarians scale at 0.50× of back
+    // squat. Piping through _personalizeWeights picks up the new
+    // accessoryScale factor automatically. If the user has no strength
+    // zones entered, _personalizeWeights returns the row unchanged and
+    // we leave the weight as-is.
+    const repsInput   = document.getElementById("edit-reps-" + rowId);
+    const weightInput = document.getElementById("edit-wt-"   + rowId);
+    if (repsInput && weightInput && typeof global._personalizeWeights === "function") {
+      try {
+        const reps = String(repsInput.value || "").trim();
+        if (reps) {
+          const repsInt = parseInt(reps, 10);
+          const repsForCalc = Number.isFinite(repsInt) && repsInt > 0 ? repsInt : reps;
+          const scaled = global._personalizeWeights([{
+            name: result.name,
+            reps: repsForCalc,
+            weight: "",
+          }]);
+          const newWeight = (scaled && scaled[0] && scaled[0].weight) || "";
+          // Only overwrite when _personalizeWeights actually produced a
+          // number — otherwise leave the existing weight (user may have
+          // typed their own value we shouldn't wipe).
+          if (newWeight && /\d/.test(newWeight)) {
+            weightInput.value = newWeight;
+            weightInput.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+        }
+      } catch (e) { /* leave weight alone on any calc error */ }
+    }
+
+    // Fire input event on the name so autocomplete / weight-toggle
+    // handlers wired to the name field run.
     nameInput.dispatchEvent(new Event("input", { bubbles: true }));
     _pushRecent(rowId, result.name);
     _flashRowMessage(rowId, `Swapped — ${result.reason}`);
