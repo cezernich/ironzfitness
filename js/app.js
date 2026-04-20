@@ -1260,13 +1260,20 @@ function saveTrainingZonesData(sport, data) {
 function _zoneEntryMaterialDiff(prev, next) {
   const fields = [
     "thresholdPace", "vdot", "referenceDist", "referenceTime",
-    "ftp", "css", "cssPace",
+    "ftp", "css", "cssPace", "tPaceSec", "tPaceStr",
     // strength lifts are objects themselves — compare via JSON
     "squat", "bench", "deadlift", "ohp", "row",
   ];
   for (const f of fields) {
     const a = prev ? prev[f] : undefined;
     const b = next ? next[f] : undefined;
+    // If the new save doesn't mention this field, it's preserved via the
+    // Object.assign merge in saveTrainingZonesData — that isn't a change
+    // from the user's perspective. Previously this counted as a diff and
+    // caused the survey (which saves with a smaller field set than the
+    // Training Zones UI) to archive a new history row on every Confirm,
+    // producing 20+ duplicate entries with identical values.
+    if (b === undefined) continue;
     if (a === undefined && b === undefined) continue;
     const as = typeof a === "object" ? JSON.stringify(a) : String(a == null ? "" : a);
     const bs = typeof b === "object" ? JSON.stringify(b) : String(b == null ? "" : b);
@@ -1306,7 +1313,32 @@ function _appendZoneHistory(sport, data) {
 function _getZoneHistory(sport) {
   let history = [];
   try { history = JSON.parse(localStorage.getItem("trainingZonesHistory")) || []; } catch {}
-  return history.filter(h => h.sport === sport).sort((a, b) => new Date(b.date) - new Date(a.date));
+  const sorted = history.filter(h => h.sport === sport).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  // Collapse consecutive identical snapshots into one. An older version of
+  // _zoneEntryMaterialDiff treated "field missing in new save" as a change
+  // and archived a duplicate on every survey Confirm; those duplicates are
+  // still in storage even after the diff check was fixed. Hiding them from
+  // render avoids 20+ identical rows without a destructive cleanup pass.
+  const fp = (entry) => {
+    const d = entry && entry.data || {};
+    return JSON.stringify({
+      thresholdPace: d.thresholdPace, vdot: d.vdot,
+      referenceDist: d.referenceDist, referenceTime: d.referenceTime,
+      ftp: d.ftp, css: d.css, cssPace: d.cssPace,
+      tPaceSec: d.tPaceSec, tPaceStr: d.tPaceStr,
+      squat: d.squat, bench: d.bench, deadlift: d.deadlift, ohp: d.ohp, row: d.row,
+    });
+  };
+  const out = [];
+  let lastFp = null;
+  for (const h of sorted) {
+    const f = fp(h);
+    if (f === lastFp) continue;
+    out.push(h);
+    lastFp = f;
+  }
+  return out;
 }
 
 function deleteZoneHistoryEntry(dateISO) {
