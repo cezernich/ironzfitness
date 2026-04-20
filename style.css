@@ -3108,7 +3108,13 @@ button:active {
   font: inherit;
   color: inherit;
 }
-.race-card-name--editable { display: block; width: 100%; }
+.race-card-name--editable {
+  display: block;
+  width: 100%;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
 .race-card-name--editable:hover,
 .race-date-badge--editable:hover {
   text-decoration: underline;

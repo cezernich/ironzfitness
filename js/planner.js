@@ -5230,6 +5230,10 @@ function editEvent(id) {
   if (!race) return;
 
   const cfg = RACE_CONFIGS[race.type] || {};
+  // Goal is stored under `runGoal` by the legacy Add Race flow and under
+  // `goal` by the onboarding-v2 Build Plan flow. Read both so the Edit
+  // modal reflects whatever the user actually picked.
+  const currentGoal = race.runGoal || race.goal || "finish";
   const sel = (cur, val) => cur === val ? "selected" : "";
   const DOW_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -5261,9 +5265,9 @@ function editEvent(id) {
         <div class="form-row">
           <label>Goal</label>
           <select id="edit-race-goal">
-            <option value="finish"  ${sel(race.runGoal, "finish")}>Finish</option>
-            <option value="time"    ${sel(race.runGoal, "time")}>Time goal</option>
-            <option value="compete" ${sel(race.runGoal, "compete")}>Compete</option>
+            <option value="finish"  ${sel(currentGoal, "finish")}>Finish</option>
+            <option value="time"    ${sel(currentGoal, "time")}>Time goal</option>
+            <option value="compete" ${sel(currentGoal, "compete")}>Compete</option>
           </select>
         </div>
         <div class="form-row">
@@ -5320,10 +5324,11 @@ function _saveEditedRace(raceId) {
 
   race.name = document.getElementById("edit-race-name")?.value.trim() || race.name;
   race.date = document.getElementById("edit-race-date")?.value || race.date;
-  // Goal replaced the removed Level dropdown — keep runGoal as the
-  // canonical field so generateTrainingPlan still sees it.
+  // Goal replaced the removed Level dropdown. Write both `runGoal`
+  // (read by generateTrainingPlan) and `goal` (written by the
+  // onboarding-v2 Build Plan flow) so the two paths stay in sync.
   const goalVal = document.getElementById("edit-race-goal")?.value;
-  if (goalVal) race.runGoal = goalVal;
+  if (goalVal) { race.runGoal = goalVal; race.goal = goalVal; }
   race.priority = document.getElementById("edit-race-priority")?.value || race.priority;
 
   const days = document.getElementById("edit-race-days")?.value;
