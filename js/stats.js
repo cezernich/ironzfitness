@@ -1565,6 +1565,42 @@ function loadCompletedSessions() {
 
 /* ─── Plan Consistency ─────────────────────────────────────────────────── */
 
+// One-time cleanup: remove trainingPlan entries whose raceId points to a
+// race that's either no longer in localStorage.events or has a date in the
+// past. Over time, deleting or completing a race leaves stale plan rows
+// around — they don't show up in any UI but do skew stats. Exposed on
+// window so the user can run it from devtools when needed.
+//
+// Usage: `cleanupStaleTrainingPlanEntries()` → logs how many rows removed.
+function cleanupStaleTrainingPlanEntries(opts) {
+  opts = opts || {};
+  const dryRun = !!opts.dryRun;
+  const today = (typeof getTodayString === "function") ? getTodayString() : new Date().toISOString().slice(0, 10);
+  let events = [];
+  let plan = [];
+  try { events = JSON.parse(localStorage.getItem("events") || "[]"); } catch {}
+  try { plan   = JSON.parse(localStorage.getItem("trainingPlan") || "[]"); } catch {}
+  const activeRaceIds = new Set(
+    events
+      .filter(e => e && e.id && String(e.date || "").slice(0, 10) >= today)
+      .map(e => String(e.id))
+  );
+  const before = plan.length;
+  const kept = plan.filter(p => {
+    if (!p || !p.raceId) return true; // no race association — keep
+    return activeRaceIds.has(String(p.raceId));
+  });
+  const removed = before - kept.length;
+  if (removed > 0 && !dryRun) {
+    localStorage.setItem("trainingPlan", JSON.stringify(kept));
+    if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("trainingPlan");
+    if (typeof renderCalendar === "function") renderCalendar();
+  }
+  console.log(`[IronZ] cleanupStaleTrainingPlanEntries: ${dryRun ? "would remove" : "removed"} ${removed} of ${before} entries (kept ${kept.length} tied to upcoming races).`);
+  return { before, after: kept.length, removed, activeRaceIds: [...activeRaceIds] };
+}
+if (typeof window !== "undefined") window.cleanupStaleTrainingPlanEntries = cleanupStaleTrainingPlanEntries;
+
 function buildStatsPlanConsistency() {
   const today = getTodayString();
   let completionMeta = {};
@@ -1628,12 +1664,27 @@ function buildStatsPlanConsistency() {
   // a stale-plan-entry issue — this surfaces them.
   const _trace = [];
 
+  // Build the set of raceIds that are still RELEVANT: race is in the
+  // events table AND hasn't finished yet. Plan entries tied to a past or
+  // deleted race represent history, not "missed" training — skip them.
+  // A user who raced Ironman Austria a year ago shouldn't see those old
+  // plan dates counted against their current consistency.
+  let events = [];
+  try { events = JSON.parse(localStorage.getItem("events") || "[]"); } catch {}
+  const activeRaceIds = new Set(
+    events
+      .filter(e => e && e.id && _dateKey(e.date) >= today)
+      .map(e => String(e.id))
+  );
+
   // trainingPlan first — it's the source of truth for race-plan-driven
   // athletes. workoutSchedule dates that overlap get skipped below.
   plan.forEach(p => {
     if (_isRestEntry(p)) return;
     const date = _dateKey(p.date);
     if (!date) return;
+    // Skip entries whose race has passed or been deleted.
+    if (p.raceId && !activeRaceIds.has(String(p.raceId))) return;
     const sessionId = `session-plan-${p.date}-${p.raceId}`;
     const isCompleted = !!(completionMeta[sessionId] || completedSessionIds.has(sessionId));
     if (date < today || (date === today && isCompleted)) {
