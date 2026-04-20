@@ -657,6 +657,19 @@ function _personalizeWeights(exercises) {
       { pattern: /chest press/i, factor: 0.90 },
     ],
     squat: [
+      // Front squat — rack position shifts load to anterior chain + limits
+      // absolute load. 1RM lands ~75-85% of back squat for most athletes;
+      // 0.80 is the commonly-cited midpoint (Rippetoe / Greg Nuckols).
+      // Previously missing → front squat got factor 1.0 and over-prescribed
+      // the full back-squat working weight (315 BS → 235 lb FS for 8 reps
+      // when it should be ~190).
+      { pattern: /front/i, factor: 0.80 },
+      // Overhead squat — severely limited by shoulder mobility and bar
+      // stability. Typically 55-65% of back squat, middle estimate 0.60.
+      { pattern: /overhead/i, factor: 0.60 },
+      // Zercher squat — bar in elbow crooks, hits posterior chain hard.
+      // Roughly 70% of back squat.
+      { pattern: /zercher/i, factor: 0.70 },
       { pattern: /hack/i, factor: 0.80 },
       { pattern: /leg press/i, factor: 1.3 },
       { pattern: /goblet/i, factor: 0.35 },
