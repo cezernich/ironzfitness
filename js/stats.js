@@ -1570,23 +1570,12 @@ function buildStatsPlanConsistency() {
   let completionMeta = {};
   try { completionMeta = JSON.parse(localStorage.getItem("completedSessions") || "{}"); } catch {}
 
-  // Count scheduled workouts (workoutSchedule) due up to today
   let schedule = [];
   try { schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]"); } catch {}
-  const pastSchedule = schedule.filter(w => w.date <= today);
 
-  // Count training plan entries due up to today
   let plan = [];
   try { plan = JSON.parse(localStorage.getItem("trainingPlan") || "[]"); } catch {}
-  const pastPlan = plan.filter(p => p.date <= today);
 
-  // Build per-type stats: { type: { planned, completed } }
-  const byType = {};
-
-  function ensure(type) { if (!byType[type]) byType[type] = { planned: 0, completed: 0 }; }
-
-  // Also count logged workouts that were marked complete for a scheduled/plan session
-  // (these have completedSessionId pointing back to a session-sw- or session-plan- key)
   let logged = [];
   try { logged = JSON.parse(localStorage.getItem("workouts") || "[]"); } catch {}
   const completedSessionIds = new Set();
@@ -1594,28 +1583,74 @@ function buildStatsPlanConsistency() {
     if (w.isCompletion && w.completedSessionId) completedSessionIds.add(w.completedSessionId);
   });
 
-  // A session counts as "planned" if:
-  // - Its date is before today (past — should have been done), OR
-  // - Its date is today AND it has been completed
-  // This prevents today's not-yet-done sessions from showing as missed.
+  // A session counts in the denominator when it SHOULD have been trained
+  // already: date strictly before today, OR (date === today AND completed).
+  // Future dates never count. Normalize date fields via slice(0,10) so an
+  // ISO timestamp ("2026-04-19T00:00:00Z") compares correctly against the
+  // local-date "today" string.
+  const _dateKey = (d) => String(d || "").slice(0, 10);
 
-  pastSchedule.forEach(w => {
-    const type = w.type || w.discipline || "general";
-    ensure(type);
-    const sessionId = `session-sw-${w.id}`;
+  // Drop sessions that aren't real trainable slots:
+  //   - rest-day placeholders (load === "rest" or discipline === "rest")
+  //   - scheduled workoutSchedule entries that share a date with a
+  //     trainingPlan entry (race plan covers the same day — the race plan
+  //     is the source of truth per the unified-plan model, so counting
+  //     both double-counts the athlete's workload)
+  const planDates = new Set(plan.map(p => _dateKey(p.date)));
+
+  const _isRestEntry = (e) => {
+    if (!e) return true;
+    if (e.load === "rest") return true;
+    if (e.discipline === "rest") return true;
+    if (e.type === "rest") return true;
+    return false;
+  };
+  // Coalesce discipline variants into broad type buckets so the breakdown
+  // table doesn't fragment into "easy_recovery" / "run" / "running" rows.
+  // Run / bike / swim / strength / brick are the real buckets.
+  const _normalizeType = (e) => {
+    const raw = String(e.discipline || e.type || "general").toLowerCase();
+    if (raw === "running" || raw.startsWith("run") || raw === "easy_recovery" || raw === "long_run" || raw === "tempo_threshold") return "run";
+    if (raw === "cycling" || raw.startsWith("bike")) return "bike";
+    if (raw === "swimming" || raw.startsWith("swim")) return "swim";
+    if (raw === "weightlifting" || raw === "bodyweight" || raw === "strength") return "strength";
+    if (raw === "brick") return "brick";
+    if (raw === "hyrox") return "hyrox";
+    return raw;
+  };
+
+  const byType = {};
+  function ensure(type) { if (!byType[type]) byType[type] = { planned: 0, completed: 0 }; }
+
+  // trainingPlan first — it's the source of truth for race-plan-driven
+  // athletes. workoutSchedule dates that overlap get skipped below.
+  plan.forEach(p => {
+    if (_isRestEntry(p)) return;
+    const date = _dateKey(p.date);
+    if (!date) return;
+    const sessionId = `session-plan-${p.date}-${p.raceId}`;
     const isCompleted = !!(completionMeta[sessionId] || completedSessionIds.has(sessionId));
-    if (w.date < today || isCompleted) {
+    if (date < today || (date === today && isCompleted)) {
+      const type = _normalizeType(p);
+      ensure(type);
       byType[type].planned++;
       if (isCompleted) byType[type].completed++;
     }
   });
 
-  pastPlan.forEach(p => {
-    const type = p.discipline || "run";
-    ensure(type);
-    const sessionId = `session-plan-${p.date}-${p.raceId}`;
+  schedule.forEach(w => {
+    if (_isRestEntry(w)) return;
+    const date = _dateKey(w.date);
+    if (!date) return;
+    // Deduplicate: if the race plan already covers this date, skip the
+    // build-plan entry rather than double-count. Pre-unified-plan users
+    // can have both collections populated at once.
+    if (planDates.has(date)) return;
+    const sessionId = `session-sw-${w.id}`;
     const isCompleted = !!(completionMeta[sessionId] || completedSessionIds.has(sessionId));
-    if (p.date < today || isCompleted) {
+    if (date < today || (date === today && isCompleted)) {
+      const type = _normalizeType(w);
+      ensure(type);
       byType[type].planned++;
       if (isCompleted) byType[type].completed++;
     }
