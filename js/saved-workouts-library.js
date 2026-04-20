@@ -968,6 +968,43 @@
     }
   }
 
+  // One-time dedup pass: the legacy save path (#sw-save-btn inline onclick
+  // that survived cloneNode) was producing a second row for every custom
+  // save, which then got re-imported on each login as a new UUID. Collapse
+  // custom rows that share (custom_name, workout_kind), keeping the most
+  // recently saved one and deleting the rest locally and remotely.
+  async function _dedupCustomRows() {
+    const list = _readLocal();
+    const groups = new Map();
+    for (const r of list) {
+      if (r.source !== "custom") continue;
+      const key = `${(r.custom_name || "").trim().toLowerCase()}::${r.workout_kind || ""}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(r);
+    }
+    const toRemove = [];
+    for (const rows of groups.values()) {
+      if (rows.length <= 1) continue;
+      rows.sort((a, b) => (b.saved_at || "").localeCompare(a.saved_at || ""));
+      for (let i = 1; i < rows.length; i++) toRemove.push(rows[i].id);
+    }
+    if (toRemove.length === 0) return;
+    const removeSet = new Set(toRemove);
+    const next = list.filter(r => !removeSet.has(r.id));
+    _writeLocal(next);
+    const client = _client();
+    const uid = await _getUserId();
+    if (client && uid) {
+      try {
+        await client.from(TABLE).delete().in("id", toRemove).eq("user_id", uid);
+      } catch (e) {
+        for (const id of toRemove) _addPendingDelete(id);
+      }
+    } else {
+      for (const id of toRemove) _addPendingDelete(id);
+    }
+  }
+
   // Entry point called once by auth.js after the session is confirmed.
   async function bootSyncSupabase() {
     // Retry failed deletes FIRST so _refreshFromSupabase sees the
@@ -990,6 +1027,12 @@
     } catch (e) {
       console.warn("[SavedWorkouts] refresh error:", e);
       if (typeof reportCaughtError === "function") reportCaughtError(e, { context: "saved_workouts_library", action: "boot_sync_refresh" });
+    }
+    try {
+      await _dedupCustomRows();
+    } catch (e) {
+      console.warn("[SavedWorkouts] dedup error:", e);
+      if (typeof reportCaughtError === "function") reportCaughtError(e, { context: "saved_workouts_library", action: "boot_sync_dedup" });
     }
     try {
       await _retryPendingSync();

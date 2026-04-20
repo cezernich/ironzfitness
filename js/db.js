@@ -433,6 +433,7 @@ const DB = (() => {
   const _IMMEDIATE_SYNC_KEYS = new Set([
     'workoutSchedule', 'workouts', 'trainingPlan', 'events', 'meals',
     'completedSessions', 'workoutRatings', 'coachingDismissed',
+    'ironz_saved_workouts_v1', 'ironz_saved_workouts_pending_delete_v1',
   ]);
 
   async function _doSyncKey(lsKey, expectedAtSchedule) {

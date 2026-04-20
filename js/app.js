@@ -483,6 +483,10 @@ function init() {
   let _lastVisibilityRefresh = 0;
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState !== "visible") return;
+    // iOS screenshots briefly background the tab; if the live tracker is open,
+    // skip the re-render so the user's scroll position in the workout view
+    // isn't thrown back to the top.
+    if (document.getElementById("live-tracker-overlay")) return;
     const now = Date.now();
     if (now - _lastVisibilityRefresh < 5000) return; // throttle to once per 5s
     _lastVisibilityRefresh = now;

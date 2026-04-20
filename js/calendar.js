@@ -908,7 +908,18 @@ function deleteScheduledWorkout(id, dateStr) {
 
 function deletePlanEntry(raceId, discipline, dateStr) {
   if (!confirm("Remove this session from your training plan?")) return;
-  const plan = loadTrainingPlan().filter(e => !(e.date === dateStr && e.raceId === raceId && e.discipline === discipline));
+  // raceId can arrive as the literal string "undefined"/"null"/"" when the
+  // plan entry was generated without a raceId (legacy flows, orphaned
+  // post-race history, AI-generated sessions). Treat those as wildcards so
+  // the date+discipline alone identifies the row; otherwise the strict
+  // triple-equal filter finds no match and the card appears undeletable.
+  const raceIdClean = (raceId && raceId !== "undefined" && raceId !== "null") ? raceId : null;
+  const plan = loadTrainingPlan().filter(e => {
+    if (e.date !== dateStr) return true;
+    if (e.discipline !== discipline) return true;
+    if (raceIdClean && e.raceId && String(e.raceId) !== String(raceIdClean)) return true;
+    return false;
+  });
   saveTrainingPlanData(plan);
   _cleanupCompletionRecord(`session-plan-${dateStr}-${raceId}`);
   renderCalendar();

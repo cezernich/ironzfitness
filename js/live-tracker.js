@@ -409,7 +409,7 @@ function _updateLiveTimerDisplay() {
   if (restEl) {
     if (_liveTracker.inRest && _liveTracker.restCountdown > 0) {
       restEl.style.display = "";
-      restEl.textContent = `Rest: ${Math.ceil(_liveTracker.restCountdown / 1000)}s`;
+      restEl.textContent = `Rest: ${_formatMs(_liveTracker.restCountdown)}`;
     } else {
       restEl.style.display = "none";
     }
@@ -537,6 +537,13 @@ function _renderLiveTracker() {
 function _buildStrengthView() {
   const t = _liveTracker;
   const groups = t._groups || _computeLiveGroups();
+
+  // Outline follows the first exercise with unfinished sets — that's the
+  // one the user is actually working on. Last-tap-wins was confusing because
+  // users often scroll past cards without the border meaning to follow.
+  t.currentExercise = t.sets.findIndex(exSets => !(exSets || []).every(s => s.done));
+  if (t.currentExercise === -1) t.currentExercise = t.exercises.length; // all done
+
   let html = "";
 
   for (const g of groups) {
@@ -768,7 +775,13 @@ function _toggleLivePause() {
     const pauseDuration = Date.now() - _liveTracker.pausedAt;
     _liveTracker.startTime += pauseDuration;
     _liveTracker.stepStart += pauseDuration;
-    if (_liveTracker.inRest) _liveTracker.restEndTime += pauseDuration;
+    // Rest timer is NOT extended by pause — a pause is already rest, so
+    // pretending the user still owes the full rest window afterward
+    // produced 5-7 min "Rest:" readouts when the user paused mid-set.
+    if (_liveTracker.inRest && _liveTracker.restEndTime <= Date.now()) {
+      _liveTracker.inRest = false;
+      _liveTracker.restCountdown = 0;
+    }
     _liveTracker.paused = false;
     _liveTracker.pausedAt = null;
   } else {
@@ -800,6 +813,18 @@ function _captureLiveSetInputs() {
   }
 }
 
+// Rest duration based on the just-completed set's rep count. Not a cap —
+// user can always tap the rest timer to skip.
+function _liveRestForSet(exIdx, setIdx) {
+  const set = _liveTracker?.sets?.[exIdx]?.[setIdx];
+  const reps = parseInt(String(set?.reps || "").match(/\d+/)?.[0]);
+  if (!reps || Number.isNaN(reps)) return 90000;
+  if (reps <= 5)  return 150000; // 2:30 — heavy strength
+  if (reps <= 8)  return 120000; // 2:00
+  if (reps <= 12) return 90000;  // 1:30 — hypertrophy
+  return 60000;                  // 1:00 — endurance
+}
+
 function _logLiveSet(exIdx, setIdx) {
   if (!_liveTracker) return;
   const set = _liveTracker.sets[exIdx]?.[setIdx];
@@ -821,7 +846,7 @@ function _logLiveSet(exIdx, setIdx) {
     // shorter default (60s vs 90s for normal exercises).
     if (!_getLivePrefs().hideRestTimer) {
       const group = _findLiveGroupContaining(exIdx);
-      let restMs = 90000;
+      let restMs = _liveRestForSet(exIdx, setIdx);
       let shouldRest = true;
       if (group && group.kind === "superset") {
         const roundComplete = group.indices.every(ix => !!_liveTracker.sets[ix]?.[setIdx]?.done);
@@ -969,7 +994,8 @@ function _showEnduranceFinishModal() {
   overlay.id = "live-endurance-finish";
   overlay.className = "quick-entry-overlay is-open";
   overlay.style.cssText = "display:flex;z-index:10001";
-  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+  // No tap-outside dismiss: Finish must always commit or be explicitly
+  // cancelled. Silent dismiss was losing workouts.
 
   overlay.innerHTML = `
     <div class="quick-entry-modal" style="max-width:360px;padding:24px">
@@ -1008,15 +1034,17 @@ function _showFinishChoiceModal() {
   overlay.id = "live-finish-choice";
   overlay.className = "quick-entry-overlay is-open";
   overlay.style.cssText = "display:flex;z-index:10001";
-  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+  // No tap-outside dismiss. Previously tapping the dim backdrop silently
+  // closed the modal without saving, so the user would hit Finish and
+  // end up with nothing persisted. Force an explicit choice instead.
 
   overlay.innerHTML = `
     <div class="quick-entry-modal" style="max-width:360px;text-align:center;padding:24px">
       <h3 style="margin:0 0 8px">Finish Workout</h3>
       <p style="margin:0 0 20px;color:var(--color-text-muted);font-size:0.9rem">You have unlogged sets remaining.</p>
-      <button class="btn-primary" style="width:100%;margin-bottom:10px" onclick="document.getElementById('live-finish-choice').remove();_commitLiveWorkout(true)">Log Everything</button>
-      <button class="btn-secondary" style="width:100%;margin-bottom:10px" onclick="document.getElementById('live-finish-choice').remove();_commitLiveWorkout(false)">Log Completed Only</button>
-      <button class="btn-secondary" style="width:100%;opacity:0.7" onclick="document.getElementById('live-finish-choice').remove()">Cancel</button>
+      <button class="btn-primary" style="width:100%;margin-bottom:10px" onclick="document.getElementById('live-finish-choice').remove();_commitLiveWorkout(true)">Log Everything as Planned</button>
+      <button class="btn-secondary" style="width:100%;margin-bottom:10px" onclick="document.getElementById('live-finish-choice').remove();_commitLiveWorkout(false)">Save What I Completed</button>
+      <button class="btn-secondary" style="width:100%;opacity:0.7" onclick="document.getElementById('live-finish-choice').remove()">Keep Going</button>
     </div>
   `;
 

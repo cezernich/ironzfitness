@@ -484,10 +484,17 @@
       if (typeof addSwExerciseRow === "function") addSwExerciseRow();
     }
 
-    // Override the save button to route through SavedWorkoutsLibrary
+    // Override the save button to route through SavedWorkoutsLibrary.
+    // cloneNode(true) strips addEventListener listeners but preserves the
+    // inline onclick="saveSavedWorkout()" attribute from index.html, so
+    // without the explicit clear BOTH handlers fire on click — one writing
+    // to the new library and one writing to the legacy savedWorkouts key,
+    // which then gets re-imported as a duplicate on the next login.
     const saveBtn = modal.querySelector("#sw-save-btn");
     if (saveBtn) {
       const clone = saveBtn.cloneNode(true);
+      clone.onclick = null;
+      clone.removeAttribute("onclick");
       saveBtn.parentNode.replaceChild(clone, saveBtn);
       clone.addEventListener("click", () => _handleCustomSave(item ? item.id : null, containerId));
     }

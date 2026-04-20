@@ -172,7 +172,7 @@ function showSwapExerciseSheet(exerciseName, onSelect) {
         </button>`;
       }).join("")}
       <div class="swap-custom-row">
-        <input type="text" id="swap-custom-input" class="swap-custom-input" placeholder="Other exercise..." onkeydown="if(event.key==='Enter')_swapPickCustom()" />
+        <input type="text" id="swap-custom-input" class="swap-custom-input ex-row-name" placeholder="Other exercise..." autocomplete="off" onkeydown="if(event.key==='Enter')_swapPickCustom()" />
         <button class="btn-primary swap-custom-btn" onclick="_swapPickCustom()">Use</button>
       </div>
       <button class="btn-secondary" style="width:100%;margin-top:8px" onclick="document.getElementById('swap-exercise-overlay')?.remove();_swapOnSelect=null">Cancel</button>
