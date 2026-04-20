@@ -3350,6 +3350,10 @@
   <script src="js/calendar-sync.js"></script>
   <script src="js/app.js"></script>
   <script src="js/workout-editor.js"></script>
+  <!-- Per-exercise "swap for same-muscle alternative" button. Reads from
+       window.EXERCISE_DB (loaded via exercise-data.js earlier). Used by
+       the editor row's ↻ button. -->
+  <script src="js/exercise-regenerator.js"></script>
   <!-- Exercise name typeahead — wires document-level delegation for any
        .ex-row-name input. Reads suggestions directly from window.EXERCISE_DB
        (loaded earlier as exercise-data.js) — no separate database needed. -->

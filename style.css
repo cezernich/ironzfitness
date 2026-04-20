@@ -14632,6 +14632,32 @@ body.auth-visible #bottom-nav { display: none !important; }
   border-color: var(--color-danger, #ef4444);
 }
 
+/* Regenerate / swap button — same shape as the delete button but tinted
+   to read as "another option" rather than destructive. Animates a spin
+   on click as visual feedback that the swap happened. */
+.ex-row-regen {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s, border-color 0.15s, transform 0.3s ease;
+}
+.ex-row-regen:hover {
+  color: var(--color-accent, #2563eb);
+  border-color: var(--color-accent, #2563eb);
+}
+.ex-row-regen:active { transform: rotate(180deg); }
+
 .ex-row-defaults {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
