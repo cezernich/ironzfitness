@@ -1,6 +1,6 @@
 # IronZ — Single Source of Truth
 
-> **Version:** 2.2
+> **Version:** 2.3
 > **Last updated:** 2026-04-20
 > **Purpose:** This is the SINGLE REFERENCE for all IronZ training logic — philosophy, plan generation, exercise selection, nutrition, recovery, and coaching. There is no other document. If it's not here, it doesn't exist.
 >
@@ -721,6 +721,18 @@ The user's `buildPlanTemplate` tells you which sports go on which days. The phas
    - Intensity sessions → NOT adjacent to each other, NOT the day before/after long sessions
 4. Fill remaining slots with easy/Z2 sessions
 5. Validate constraints (Section 6)
+
+#### 4d-i. Rest-Day Distribution (Anti-Cluster Rule)
+
+Daniels, Pfitzinger, and Higdon all distribute rest across the week rather than clustering. Back-to-back rest days for a ≥5-days/week athlete is a code smell — it usually means the scaffold placed runs too eagerly into the early week and left a weekend-edge rest gap.
+
+**Placement rule:** at each placement step in the round-robin (both when the non-same-sport-adjacent pool is non-empty AND when falling back to any empty day), pick the slot that **minimizes the longest consecutive rest-day streak** in the resulting week. Ties break toward the earlier weekday so placement stays deterministic.
+
+Example — running-only, 5 days/week, Saturday long run, post-long shakeout on Sunday:
+- Naive "earliest empty" fallback produced: Mon Run / Tue Run / Wed Run / Thu rest / Fri rest / Sat Long / Sun Recovery — two consecutive rest days mid-week.
+- Anti-cluster selection produces: Mon Run / Tue rest / Wed Run / Thu Run / Fri rest / Sat Long / Sun Recovery — two non-adjacent single rest days.
+
+For weeks where the math forces a cluster (e.g., 3 days/week = 4 rest days must fit in 7 slots), the rule picks the placement with the shortest maximum cluster. No 3-day rest streaks unless the count of training days leaves no alternative.
 
 **IMPORTANT:** Different weeks in the same phase should NOT be identical. Apply progressive overload:
 - Long run week 1 of Build: 75 min → week 2: 82 min → week 3: 90 min → week 4 (deload): 60 min

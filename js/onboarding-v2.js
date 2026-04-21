@@ -2741,16 +2741,54 @@
       const dayHasSport = (d, sport) => (_state.schedule[d] || []).some(c => sameSport(c, sport));
       const adjacentHasSport = (d, sport) => _BP_DAYS.some(dd => _areAdjacentDow(d, dd) && dayHasSport(dd, sport));
 
+      // Anti-rest-cluster placement. Research-backed running programming
+      // (Daniels, Pfitzinger, Higdon) spreads rest across the week rather
+      // than clustering two off-days back-to-back. At each placement
+      // step we:
+      //   1. Among empty non-same-sport-adjacent days, pick the one
+      //      whose placement minimizes the longest consecutive-rest
+      //      streak across the resulting week.
+      //   2. If none are non-adjacent, fall back to any empty day using
+      //      the same streak-minimization rule.
+      // Ties break toward the earlier weekday so placement stays
+      // deterministic across runs. Without this, a 5-day runner with
+      // Sat long + Sun recovery ended up with runs Mon/Tue/Wed and rest
+      // Thu+Fri — a 2-day rest block mid-week that the literature
+      // discourages.
+      const _maxEmptyStreakIfFilled = (candidate) => {
+        let maxStreak = 0, cur = 0;
+        for (const d of _BP_DAYS) {
+          const emptyAfter = d === candidate ? false : _state.schedule[d].length === 0;
+          if (emptyAfter) { cur++; if (cur > maxStreak) maxStreak = cur; }
+          else cur = 0;
+        }
+        return maxStreak;
+      };
+      const _pickBestSpread = (candidates) => {
+        if (!candidates.length) return null;
+        let best = null, bestStreak = Infinity;
+        for (const d of candidates) {
+          const s = _maxEmptyStreakIfFilled(d);
+          if (s < bestStreak) { bestStreak = s; best = d; }
+        }
+        return best;
+      };
+
       let placed = 0;
       let idx = 0;
       let safety = 0;
       while (placed < remainingSlots && safety < endurance.length * 14) {
         safety++;
         const sport = endurance[idx % endurance.length];
-        // First preference: empty day not adjacent to another day with this sport.
-        let target = _BP_DAYS.find(d => _state.schedule[d].length === 0 && !adjacentHasSport(d, sport));
-        // Fallback: any empty day (we've run out of non-adjacent slots).
-        if (!target) target = _BP_DAYS.find(d => _state.schedule[d].length === 0);
+        // Prefer non-adjacent empty days, optimizing spread within that set.
+        const nonAdj = _BP_DAYS.filter(d => _state.schedule[d].length === 0 && !adjacentHasSport(d, sport));
+        let target = _pickBestSpread(nonAdj);
+        // If every empty day is adjacent to the sport, allow adjacency
+        // but still optimize spread among empties.
+        if (!target) {
+          const empties = _BP_DAYS.filter(d => _state.schedule[d].length === 0);
+          target = _pickBestSpread(empties);
+        }
         if (!target) break;
         _state.schedule[target].push(sport);
         idx++;
