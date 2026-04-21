@@ -30,7 +30,7 @@ raceEvents: [
     name: "Ironman Wisconsin",     // user-entered, optional
     date: "2026-09-06",            // ISO date string
     priority: "A",                 // "A" or "B" — ONLY ONE "A" ALLOWED
-    goal: "just_finish",           // just_finish | time_goal | pr_podium
+    goal: "finish",           // finish | get_faster | pr
     leadIn: {                      // only for gap-fill scenarios
       phase: "structured",         // structured | speed | loose
       daysPerWeek: 4
@@ -43,7 +43,7 @@ raceEvents: [
     name: "Chicago Half",
     date: "2026-07-19",
     priority: "B",
-    goal: "time_goal",
+    goal: "get_faster",
     leadIn: null
   }
 ]

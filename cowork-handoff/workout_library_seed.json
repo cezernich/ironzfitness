@@ -115,7 +115,7 @@
     "phases": ["build", "peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": null,
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "12 min easy jog + 4×100m strides", "duration_min": 15 },
     "main_set": {
       "type": "continuous",
@@ -137,7 +137,7 @@
     "phases": ["build", "peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": null,
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "12 min easy jog + 4×100m strides", "duration_min": 15 },
     "main_set": {
       "type": "intervals",
@@ -164,7 +164,7 @@
     "phases": ["build", "peak"],
     "levels": ["advanced"],
     "race_distances": ["10k", "half", "marathon", "half_ironman", "full_ironman"],
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "12 min easy jog + dynamic drills + 4×100m strides", "duration_min": 16 },
     "main_set": {
       "type": "mixed",
@@ -189,7 +189,7 @@
     "phases": ["build", "peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": ["half", "marathon", "half_ironman", "full_ironman"],
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "12 min easy jog + 4×100m strides", "duration_min": 15 },
     "main_set": {
       "type": "mixed",
@@ -215,7 +215,7 @@
     "phases": ["build", "peak"],
     "levels": ["beginner", "intermediate"],
     "race_distances": null,
-    "race_goals": ["just_finish"],
+    "race_goals": ["finish"],
     "warmup": { "description": "10 min easy jog", "duration_min": 10 },
     "main_set": {
       "type": "continuous",
@@ -264,7 +264,7 @@
     "phases": ["build", "peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": ["10k", "half", "marathon"],
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "12 min easy jog + drills + 4×100m strides", "duration_min": 16 },
     "main_set": {
       "type": "intervals",
@@ -291,7 +291,7 @@
     "phases": ["build", "peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": ["half", "marathon"],
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "15 min easy jog + 4×100m strides", "duration_min": 18 },
     "main_set": {
       "type": "continuous",
@@ -316,7 +316,7 @@
     "phases": ["build", "peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": null,
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "12 min easy jog + drills + 4×100m strides", "duration_min": 16 },
     "main_set": {
       "type": "intervals",
@@ -343,7 +343,7 @@
     "phases": ["build", "peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": ["5k", "10k"],
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "12 min easy jog + drills + 4×100m strides", "duration_min": 16 },
     "main_set": {
       "type": "intervals",
@@ -370,7 +370,7 @@
     "phases": ["build", "peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": null,
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "12 min easy jog + 4×100m strides", "duration_min": 15 },
     "main_set": {
       "type": "intervals",
@@ -397,7 +397,7 @@
     "phases": ["build"],
     "levels": ["intermediate", "advanced"],
     "race_distances": null,
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "12 min easy jog + drills + 4×100m strides", "duration_min": 16 },
     "main_set": {
       "type": "ladder",
@@ -428,7 +428,7 @@
     "phases": ["build", "peak"],
     "levels": ["advanced"],
     "race_distances": null,
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "12 min easy jog + drills + 4×100m strides", "duration_min": 16 },
     "main_set": {
       "type": "ladder",
@@ -459,7 +459,7 @@
     "phases": ["peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": ["5k", "10k"],
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "15 min easy jog + drills + 6×100m strides", "duration_min": 20 },
     "main_set": {
       "type": "intervals",
@@ -486,7 +486,7 @@
     "phases": ["build", "peak"],
     "levels": ["advanced"],
     "race_distances": ["half", "marathon", "half_ironman", "full_ironman"],
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "15 min easy jog + drills + 4×100m strides", "duration_min": 18 },
     "main_set": {
       "type": "intervals",
@@ -565,7 +565,7 @@
     "phases": ["build", "peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": ["half", "marathon", "half_ironman", "full_ironman"],
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "First 10 min very easy", "duration_min": 10 },
     "main_set": {
       "type": "mixed",
@@ -590,7 +590,7 @@
     "phases": ["build", "peak"],
     "levels": ["advanced"],
     "race_distances": ["half", "marathon"],
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "First 10 min very easy", "duration_min": 10 },
     "main_set": {
       "type": "mixed",
@@ -616,7 +616,7 @@
     "phases": ["build", "peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": ["marathon", "full_ironman"],
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "15 min easy jog", "duration_min": 15 },
     "main_set": {
       "type": "mixed",
@@ -722,7 +722,7 @@
     "phases": ["build", "peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": null,
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "10 min easy spin + 2×1 min spin-ups", "duration_min": 12 },
     "main_set": {
       "type": "intervals",
@@ -749,7 +749,7 @@
     "phases": ["build", "peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": null,
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "12 min easy spin + 3×1 min progressive spin-ups", "duration_min": 15 },
     "main_set": {
       "type": "intervals",
@@ -776,7 +776,7 @@
     "phases": ["build", "peak"],
     "levels": ["advanced"],
     "race_distances": null,
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "15 min progressive warmup: Z1→Z2→Z3 spin-ups", "duration_min": 15 },
     "main_set": {
       "type": "intervals",
@@ -825,7 +825,7 @@
     "phases": ["build", "peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": null,
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "12 min easy spin + 3×30 sec spin-ups", "duration_min": 14 },
     "main_set": {
       "type": "intervals",
@@ -877,7 +877,7 @@
     "phases": ["build", "peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": ["half_ironman", "full_ironman", "olympic_tri"],
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "15 min easy spin", "duration_min": 15 },
     "main_set": {
       "type": "mixed",
@@ -988,7 +988,7 @@
     "phases": ["build", "peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": null,
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "300m easy + 4×50m drill/swim (25 drill / 25 swim)", "duration_min": 10 },
     "main_set": {
       "type": "intervals",
@@ -1015,7 +1015,7 @@
     "phases": ["build", "peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": null,
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "300m easy + 4×50m build (each 50 faster than last)", "duration_min": 10 },
     "main_set": {
       "type": "mixed",
@@ -1068,7 +1068,7 @@
     "phases": ["build", "peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": ["olympic_tri", "half_ironman", "full_ironman"],
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "300m easy + 4×50m descend (each faster)", "duration_min": 10 },
     "main_set": {
       "type": "mixed",
@@ -1092,7 +1092,7 @@
     "phases": ["peak"],
     "levels": ["intermediate", "advanced"],
     "race_distances": ["sprint_tri", "5k", "10k"],
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "300m easy + 4×50m build", "duration_min": 10 },
     "main_set": {
       "type": "intervals",
@@ -1297,7 +1297,7 @@
     "phases": ["base", "build"],
     "levels": ["intermediate", "advanced"],
     "race_distances": null,
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "5 min easy jog + leg swings + bodyweight squats", "duration_min": 5 },
     "main_set": {
       "type": "strength",
@@ -1326,7 +1326,7 @@
     "phases": ["base", "build"],
     "levels": ["intermediate", "advanced"],
     "race_distances": null,
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "5 min dynamic warmup: hip circles, leg swings, bodyweight squats, arm circles", "duration_min": 5 },
     "main_set": {
       "type": "strength",
@@ -1356,7 +1356,7 @@
     "phases": ["base", "build"],
     "levels": ["intermediate", "advanced"],
     "race_distances": null,
-    "race_goals": ["time_goal", "pr_podium"],
+    "race_goals": ["get_faster", "pr"],
     "warmup": { "description": "3 min band pull-aparts + arm circles", "duration_min": 3 },
     "main_set": {
       "type": "strength",

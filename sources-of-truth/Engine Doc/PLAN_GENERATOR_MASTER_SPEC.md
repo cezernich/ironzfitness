@@ -1,6 +1,6 @@
 # IronZ — Single Source of Truth
 
-> **Version:** 2.3
+> **Version:** 2.4
 > **Last updated:** 2026-04-20
 > **Purpose:** This is the SINGLE REFERENCE for all IronZ training logic — philosophy, plan generation, exercise selection, nutrition, recovery, and coaching. There is no other document. If it's not here, it doesn't exist.
 >
@@ -31,7 +31,7 @@ When the user presses "Generate & Schedule Plan," these inputs are available:
 | selectedSports | onboarding | ["swimming", "cycling", "running", "strength"] |
 | trainingGoals | onboarding | ["race"] |
 | strengthRole | onboarding | "injury_prevention" |
-| raceEvents | onboarding | [{ category: "triathlon", type: "Full Ironman", date: "2026-09-13", priority: "A", goal: "time_goal" }] |
+| raceEvents | onboarding | [{ category: "triathlon", type: "Full Ironman", date: "2026-09-13", priority: "A", goal: "get_faster" }] |
 | buildPlanTemplate | onboarding | { mon: ["swim"], tue: ["run"], wed: ["bike"], thu: ["run"], fri: ["swim"], sat: ["bike","run"], sun: ["rest"] } |
 | profile.age | profile | 26 |
 | profile.weight | profile | 195 lbs |
@@ -164,9 +164,23 @@ Classification uses 100m CSS pace, adjusted per age × gender bracket. Use "Novi
 
 If no CSS data → default Intermediate.
 
-### 2d. Overall Level
+### 2d. Overall Level vs Per-Sport Prescription
 
-Highest sport-specific level across all sports. This drives constraint rules.
+**Overall level** = the highest sport-specific level across selected sports. This drives **scheduling constraint rules** ONLY — rest day frequency, back-to-back hard-day allowance, deload cadence, and same-day double rules all read from overall level.
+
+**Per-sport prescription** (the content and intensity of individual sessions) uses **that sport's specific level**, NOT overall. This is a critical distinction: a triathlete with Advanced run / Advanced bike / Beginner swim should see:
+
+| Layer | Source | Example |
+|-------|--------|---------|
+| Swim session content | Swim level (Beginner) | Technique focus, drill work, lower volume, no CSS intervals |
+| Run session content | Run level (Advanced) | VO2max, tempo, race-pace long runs |
+| Bike session content | Bike level (Advanced) | Threshold intervals, sweet spot, power-targeted long rides |
+| Strength session content | Overall level (Advanced) | Strength content follows overall — no sport-specific parallel |
+| Scheduling constraints | Overall level (Advanced) | Rest days, spacing, deload |
+
+The weakest discipline gets a slight **volume priority bump in Base phase** per Appendix E (weakness bias system). A triathlete who's fast on the bike but weak in the pool spends proportionally more Base-phase time on swim improvement — the idea is to close the gap in the phase that has the most time to build aerobic foundation.
+
+**Implementation note:** `planner.js` / `workout-library` queries must filter by per-sport level, not overall. The constraint validator (Section 6) reads from overall. Conflating the two produces either under-prescribed strong disciplines or over-prescribed weak ones.
 
 ### 2e. Athlete Type
 
@@ -501,6 +515,71 @@ If total planned session hours exceed the ceiling, shorten session durations (do
 
 This is the heart of the generator. For each week, determine which phase it belongs to, then use the correct session template.
 
+### 4a-0. Session Count Matrix (Goal × Level × Distance)
+
+The **per-phase session count** depends on three axes simultaneously: the athlete's level, the race distance, and the race goal. These tables are the canonical source — the plan generator picks a row by `(sport, distance, level, goal)` and treats the result as the Build-phase session count target. Base/Peak scale from Build using the phase ratios in Section 3a; quality count is specifically an upper bound on Z4+ sessions per week.
+
+`get_faster` is the baseline column (matches the older single-axis matrix). `finish` trims 1–2 sessions and drops a quality day. `pr` adds 1 session and a quality day in Build/Peak.
+
+Read sessions as `total_sessions, training_days, quality_sessions_per_week`.
+
+#### Running — by distance
+
+**5K / 10K:**
+| Level | Finish | Get Faster | PR |
+|-------|--------|-----------|-----|
+| Beginner | 3 sessions, 3 days, 0 quality | 3–4 sessions, 3–4 days, 1 quality | 4–5 sessions, 4 days, 2 quality |
+| Intermediate | 4 sessions, 4 days, 1 quality | 4–5 sessions, 4–5 days, 2 quality | 5–6 sessions, 5 days, 2–3 quality |
+| Advanced | 5 sessions, 5 days, 1 quality | 6–7 sessions, 5–6 days, 2–3 quality | 7–8 sessions, 6 days, 3 quality |
+
+**Half Marathon:**
+| Level | Finish | Get Faster | PR |
+|-------|--------|-----------|-----|
+| Beginner | 3 sessions, 3 days, 0 quality | 3–4 sessions, 3–4 days, 1 quality | 4–5 sessions, 4–5 days, 2 quality |
+| Intermediate | 4–5 sessions, 4 days, 1 quality | 5–6 sessions, 4–5 days, 2 quality | 6–7 sessions, 5–6 days, 2–3 quality |
+| Advanced | 5–6 sessions, 5 days, 1–2 quality | 7–8 sessions, 5–6 days, 2–3 quality | 8–9 sessions, 6 days, 3 quality |
+
+**Marathon:**
+| Level | Finish | Get Faster | PR |
+|-------|--------|-----------|-----|
+| Beginner | 4 sessions, 4 days, 0 quality | 4–5 sessions, 4–5 days, 1 quality | 5–6 sessions, 5 days, 2 quality |
+| Intermediate | 5–6 sessions, 5 days, 1 quality | 6–7 sessions, 5–6 days, 2 quality | 7–8 sessions, 6 days, 2–3 quality |
+| Advanced | 6–7 sessions, 6 days, 1–2 quality | 8–10 sessions, 6 days, 2–3 quality | 10–11 sessions, 6 days, 3 quality |
+
+#### Triathlon — by distance
+
+Session tuple is `(swim/bike/run/strength)` per week.
+
+**Sprint Tri:**
+| Level | Finish | Get Faster | PR |
+|-------|--------|-----------|-----|
+| Beginner | 3–4, 3–4 days (1/1/1/0–1) | 4–5, 4–5 days (1/1/2/1) | 6–7, 5–6 days (2/2/2/1) |
+| Intermediate | 5–6, 5 days (1/2/2/1) | 6–7, 5–6 days (2/2/2/1) | 7–8, 5–6 days (2/2/2/2) |
+| Advanced | 6–7, 5–6 days (2/2/2/1) | 7–8, 5–6 days (2/2/2/2) | 8–9, 6 days (2/3/2/2) |
+
+**Olympic Tri:**
+| Level | Finish | Get Faster | PR |
+|-------|--------|-----------|-----|
+| Beginner | 4–5, 4–5 days (1/1/2/1) | 5–6, 4–5 days (1/2/2/1) | 6–7, 5–6 days (2/2/2/1) |
+| Intermediate | 6–7, 5–6 days (2/2/2/1) | 7–8, 5–6 days (2/2/2/1–2) | 8–9, 6 days (2/3/2/2) |
+| Advanced | 7–8, 6 days (2/2/2/1–2) | 8–10, 6 days (3/3/3/1–2) | 9–11, 6 days (3/3/3/2) |
+
+**70.3 / Half Ironman:**
+| Level | Finish | Get Faster | PR |
+|-------|--------|-----------|-----|
+| Beginner | 5–6, 5 days (1/2/2/1) | 6–7, 5–6 days (2/2/2/1–2) | 7–8, 6 days (2/3/2/1–2) |
+| Intermediate | 7–8, 5–6 days (2/2/2/1–2) | 8–9, 5–6 days (2/3/2/1–2) | 9–10, 6 days (3/3/3/1–2) |
+| Advanced | 8–9, 6 days (2/3/2/1–2) | 9–11, 6 days (3/3/3/2) | 10–12, 6 days (3/3/3/2) |
+
+**Ironman:**
+| Level | Finish | Get Faster | PR |
+|-------|--------|-----------|-----|
+| Beginner | 5–6, 5 days (1/2/2/1) | 7–8, 5–6 days (2/2/2/1–2) | 8–9, 6 days (2/3/2/1–2) |
+| Intermediate | 7–8, 6 days (2/2/2/1–2) | 9–10, 6 days (2/3/3/1–2) | 10–11, 6 days (3/3/3/2) |
+| Advanced | 8–9, 6 days (2/3/2/1–2) | 10–12, 6 days (3/3/3/2) | 11–13, 7 days (3/3/3/2) |
+
+**Advanced Ironman + PR is the only configuration that trains all 7 days of the week.** The 7th day is active recovery Z1 only — not full rest. Every other row above includes at least one rest day per week.
+
 ### 4a. TRIATHLON SESSION TEMPLATES BY PHASE
 
 **BASE PHASE — 9 sessions/week:**
@@ -638,39 +717,51 @@ ALL Z1–Z2. No intervals. No tempo.
 
 **RACE WEEK — 1–2 easy runs + strides, then RACE DAY.**
 
-### 4c. THE CRITICAL DIFFERENCE: "time_goal" vs "just_finish"
+### 4c. RACE GOALS: finish vs get_faster vs pr
 
-This is what's currently broken. The race.goal field MUST change the intensity distribution:
+The `race.goal` field drives intensity distribution, progression rate, taper shape, and quality-session count. Internal values are `finish`, `get_faster`, `pr`. Onboarding surfaces these three with plain-English labels and descriptions:
 
-**"just_finish" — Conservative, volume-focused:**
+| Internal Value | Display Label | Description |
+|----------------|--------------|-------------|
+| `finish` | **Finish** | Train to cross the finish line strong. Focused on building endurance safely with a gradual progression. |
+| `get_faster` | **Get Faster** | Train to improve your speed and fitness. More intensity, structured workouts, and real accountability. |
+| `pr` | **PR** | Train for your best performance. Aggressive progression, high-intensity sessions, and a plan that pushes your limits. |
+
+**`finish` — Conservative, volume-focused:**
 | Phase | Intensity Distribution | Quality Sessions/Week |
 |-------|----------------------|----------------------|
 | Base | 90% easy / 10% moderate | 0 |
 | Build | 85% easy / 15% moderate | 1 (tempo only, no VO2max) |
 | Peak | 80% easy / 20% moderate | 1 (race-pace practice) |
 
-Emphasis on completing the distance. Sessions are longer but easier. No hard intervals. Tempo runs are gentle (Z3, not Z4). Long runs/rides are the key sessions.
+Progression: **max 10%/week**. Taper: **long (3 weeks)**, gradual. No hard intervals. Tempo is **Z3 only**. Emphasis on completing the distance. Sessions are longer but easier.
 
-**"time_goal" — More aggressive, intensity-focused:**
+**`get_faster` — Balanced, intensity-focused:**
 | Phase | Intensity Distribution | Quality Sessions/Week |
 |-------|----------------------|----------------------|
 | Base | 80% easy / 20% moderate | 0–1 (strides only) |
-| Build | 70% easy / 30% hard | 2 (tempo + intervals) |
+| Build | 75% easy / 25% hard | 2 (tempo + intervals) |
 | Peak | 70% easy / 30% hard | 2 (race-pace + intervals) |
 
-Emphasis on hitting a target time. More threshold and VO2max work. Tempo runs are at Z4. Intervals are at Z5. Long runs include race-pace segments. Brick workouts simulate race conditions at target pace.
+Progression: **10–12%/week**. Taper: **standard (2–3 weeks)**. Tempo at **Z4**, intervals at **Z5**. Long runs include race-pace segments. Brick workouts simulate race conditions.
 
-**"pr_podium" — Most aggressive:**
-Same as time_goal but Build/Peak can go to 2–3 quality sessions/week (only for advanced athletes). Includes race simulations and dress rehearsals. Age constraints are relaxed one tier (a 61-year-old pr_podium athlete trains closer to how a standard 50-year-old would).
+**`pr` — Most aggressive, performance-maximizing:**
+| Phase | Intensity Distribution | Quality Sessions/Week |
+|-------|----------------------|----------------------|
+| Base | 80% easy / 20% moderate | 0–1 (strides only) |
+| Build | 70% easy / 30% hard | 2–3 (tempo + intervals + race-specific) |
+| Peak | 70% easy / 30% hard | 2–3 (race-pace + VO2max + race simulations) |
+
+Progression: **12–15%/week**. Taper: **sharp (2 weeks)**. Race simulations in Peak. Age constraints relaxed one tier (see 4c-ii).
 
 ### 4c-ii. How Race Goal × Sport Profile × Age Interact
 
 The old single age × goal table applied the same modifiers regardless of sport. That's wrong — cycling is low-impact and tolerates age far better than running, and triathlon's stacked-discipline volume needs tighter session caps than any single sport. The modifiers below are **sport-profile-specific**. Age and goal are cross-referenced on top of the sport-profile table.
 
 The **goal dial** still applies across all four sport profiles:
-- **`just_finish`** → apply age modifiers **more aggressively** (protect the athlete).
-- **`time_goal`** → apply age modifiers as written below.
-- **`pr_podium`** → **relax** age modifiers by one age bracket (a 65-year-old pr_podium athlete trains closer to how a standard 55-year-old would). Safety floors always apply — even a pr_podium 65-year-old still gets longer rest periods and careful volume management. We just don't lock them out of intensity entirely.
+- **`finish`** → apply age modifiers **more aggressively** (protect the athlete).
+- **`get_faster`** → apply age modifiers as written below.
+- **`pr`** → **relax** age modifiers by one age bracket (a 65-year-old `pr` athlete trains closer to how a standard 55-year-old would). Safety floors always apply — even a `pr` 65-year-old still gets longer rest periods and careful volume management. We just don't lock them out of intensity entirely.
 
 #### Running age modifiers
 
@@ -705,9 +796,9 @@ The **goal dial** still applies across all four sport profiles:
 | 60+   | Same as 50–59 **but deload every 2nd–3rd week**. Avoid high-impact plyometrics. **Machine / cable preference over free-weight** when available. |
 
 **How the goal layer cross-references:**
-- `just_finish` × any age × any sport: apply the sport-specific row AND shift one bracket older (a 45-year-old just_finish runner gets the 50–59 row's rest-spacing rules).
-- `time_goal`: apply the sport-specific row as written.
-- `pr_podium` × any age × any sport: shift one bracket younger (a 65-year-old pr_podium cyclist gets the 50–59 row). Safety floors from the actual bracket (e.g., "Z5 1×/week on bike only" for 60+ triathletes) still apply — the shift only relaxes the rest/volume percentages, not the hard safety gates.
+- `finish` × any age × any sport: apply the sport-specific row AND shift one bracket older (a 45-year-old `finish` runner gets the 50–59 row's rest-spacing rules).
+- `get_faster`: apply the sport-specific row as written.
+- `pr` × any age × any sport: shift one bracket younger (a 65-year-old `pr` cyclist gets the 50–59 row). Safety floors from the actual bracket (e.g., "Z5 1×/week on bike only" for 60+ triathletes) still apply — the shift only relaxes the rest/volume percentages, not the hard safety gates.
 
 ### 4d. HOW TO MAP SESSIONS TO DAYS
 
@@ -828,6 +919,40 @@ The constraint validator in Section 6 runs at **generation time** — it enforce
 
 **When to re-validate:** Run the soft constraint check whenever the user moves, adds, or swaps a session. Not on every page load — only on user action.
 
+### 6c. Add Session — Plan-Aligned vs Freestyle
+
+When the user taps "+" to add a session, show a two-option toggle at the top of the Add Session flow. Default mode depends on whether the user has an active plan; when they don't, the toggle is hidden and Freestyle is implicit.
+
+| Mode | Default When | Behavior |
+|------|--------------|----------|
+| **Align with my plan** | Active plan exists (future `trainingPlan` entry or upcoming `events` row) | Plan-aware filtering and soft warnings per the rules below. |
+| **Freestyle** | No active plan, or user explicitly toggles | No plan context; full picker; single 24h key-session guardrail. |
+
+**Plan-Aligned mode reads context from:**
+- Current phase (from the nearest `trainingPlan` entry on or before today)
+- `strengthRole` (injury_prevention / race_performance / hypertrophy / minimal)
+- `race.goal` (finish / get_faster / pr)
+- Sport profile (triathlon / running / cycling — inferred from the nearest upcoming race)
+- This week's already-scheduled sessions (via `getWeekBounds` → `workoutSchedule` + `trainingPlan` + `workouts`)
+- Tomorrow's schedule
+
+**Plan-Aligned rules:**
+1. **Library filtering.** Queries `workout_library` by `{sport, session_type, phase, level, race_distance, race_goal}`. Level is per-sport (Section 2d); goal is the renamed enum.
+2. **Strength role cap.** Weekly strength count is compared against the Section 5 cap for the athlete's role and phase. `race_performance` athletes also get an absolute ceiling of 3 heavy-compound strength sessions per week regardless of phase.
+3. **Tomorrow-key-session hint.** If tomorrow has a `key_session` (tempo / threshold / VO2 / long run/ride / intervals / hills), surface a non-blocking hint suggesting today stay easy/recovery.
+4. **Weekly-target soft warning.** If the week's session count already meets the `(sport, distance, level, goal)` target from 4a-0, show the soft warning: **"You're already at your target volume this week. Adding more might affect recovery — but you know your body best."** Never blocks save.
+
+**Freestyle mode:**
+- No phase / level / role filtering.
+- User picks sport, muscle groups (strength), duration, intensity (easy / moderate / hard).
+- Full exercise database; any sport-specific library row is allowed.
+- Single guardrail: if a key session sits within 24 hours (yesterday OR tomorrow), show a non-blocking warning naming the session. User can proceed.
+
+**UI:**
+- Two-pill toggle at the top of Add Session step 0. Hidden when no active plan exists.
+- One-line banner below the toggle in Plan-Aligned mode: "Plan-Aligned · Base phase · race-performance strength" — specific to the user's resolved context.
+- All warnings route through a shared advisory modal with "Add anyway" as the primary action and "Cancel" as secondary. Warnings are **non-blocking by design** — the user knows their body best.
+
 ---
 
 ## 7. TEST CASES — Verify Against These
@@ -836,7 +961,7 @@ The constraint validator in Section 6 runs at **generation time** — it enforce
 
 **Inputs:**
 - Sports: swim, bike, run, strength
-- Goal: race_performance (time_goal)
+- Goal: race_performance (get_faster)
 - Race: Ironman, Sep 13 2026
 - Level: Advanced runner (19:40 5K, VDOT 50.8), Intermediate bike/swim (no data)
 - Overall: Advanced
@@ -854,11 +979,11 @@ The constraint validator in Section 6 runs at **generation time** — it enforce
 - NO back-to-back hard days
 - Deload every 4th week within each phase
 
-### Test Case 2: Beginner 5K Runner (time_goal)
+### Test Case 2: Beginner 5K Runner (get_faster)
 
 **Inputs:**
 - Sports: running, strength
-- Goal: race_performance (time_goal)
+- Goal: race_performance (get_faster)
 - Race: 5K, 8 weeks out
 - Level: Beginner (5K time 30:00)
 - Strength role: injury_prevention
@@ -867,7 +992,7 @@ The constraint validator in Section 6 runs at **generation time** — it enforce
 **Expected Output:**
 - 8 weeks, 5 phases (Base 2, Build 3, Peak 1, Taper 1, Race Week 1)
 - Base: 3 easy runs + 1 strength. NO intervals. NO tempo. Max 1 quality/week.
-- Build: 2 easy + 1 VO2max intervals (because 5K + time_goal) + 1 long run + 1 strength
+- Build: 2 easy + 1 VO2max intervals (because 5K + get_faster) + 1 long run + 1 strength
 - BUT beginner cap = max 1 intensity session/week, so the VO2max session is the only hard one
 - Taper: 7–10 days, 2 easy runs + strides
 - Hour ceiling: 3–4 hrs/week
@@ -1039,7 +1164,7 @@ CREATE TABLE workout_library (
   phases TEXT[] NOT NULL,                -- ["base", "build", "peak", "taper"] — which phases this workout is appropriate for
   levels TEXT[] NOT NULL,                -- ["beginner", "intermediate", "advanced"] — which levels can do this workout
   race_distances TEXT[],                 -- ["5k", "10k", "half", "marathon", "sprint_tri", "olympic_tri", "half_ironman", "full_ironman"] — NULL means all distances
-  race_goals TEXT[],                     -- ["just_finish", "time_goal", "pr_podium"] — NULL means all goals
+  race_goals TEXT[],                     -- ["finish", "get_faster", "pr"] — NULL means all goals
   
   -- The actual workout content
   warmup JSONB NOT NULL,                 -- { description: "10 min easy jog + 4x100m strides", duration_min: 12 }
@@ -1642,7 +1767,7 @@ These are hard constraints the validator enforces on every generated plan. They 
 | Input | What It Changes |
 |-------|----------------|
 | 5K time / FTP / CSS | Level → intensity cap, constraint rules, complexity. Also generates training zones (§8b) that parameterize every workout from the repository. |
-| race.goal (time_goal vs just_finish) | Intensity distribution (70/30 vs 85/15), quality session count. Also filters workout repository — "just_finish" excludes VO2max workouts (§9d). |
+| race.goal (get_faster vs finish) | Intensity distribution (70/30 vs 85/15), quality session count. Also filters workout repository — "finish" excludes VO2max workouts (§9d). |
 | race.type (Ironman vs 5K) | Phase ratios, session distribution templates, hour ceiling. Also filters workout repository by race_distances tag (§9b). |
 | race.date | Total weeks → phase lengths |
 | strengthRole | Strength session frequency, duration, exercises, rep ranges |
@@ -1654,7 +1779,7 @@ These are hard constraints the validator enforces on every generated plan. They 
 | weight | Nutrition targets (protein = g/lb × weight). Does NOT affect workouts. |
 | height | Currently unused in training logic. |
 | age | Recovery modifiers: 40+ gets longer rest, 50+ gets reduced Z5, 60+ gets no Z5 (modified by race.goal) |
-| race.goal | Drives intensity: "just_finish" = conservative constraints, "time_goal" = standard, "pr_podium" = aggressive. Overrides age defaults when appropriate (see §4c) |
+| race.goal | Drives intensity: "finish" = conservative constraints, "get_faster" = standard, "pr" = aggressive. Overrides age defaults when appropriate (see §4c) |
 | week-within-phase | Scales workout volume from repository's volume_range (§8c): week 1 = min, last week = max, deload = 60–70% of min |
 | workout_library (Supabase) | Admin-curated workout pool. Generator queries by sport + session_type + phase + level + race_distance + race_goal, then picks with recency filter (§9d). |
 

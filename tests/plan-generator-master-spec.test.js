@@ -141,7 +141,7 @@ section("Test 1: Chase's Ironman Madison (21 weeks, Advanced)");
     type: "ironman",
     date: "2026-09-13",
     priority: "A",
-    goal: "time_goal",
+    goal: "get_faster",
     level: "advanced",
     daysPerWeek: 6,
     preferences: {
@@ -198,9 +198,9 @@ section("Test 1: Chase's Ironman Madison (21 weeks, Advanced)");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TEST 2: Beginner 5K Runner (time_goal)
+// TEST 2: Beginner 5K Runner (get_faster)
 // ─────────────────────────────────────────────────────────────────────────────
-section("Test 2: Beginner 5K Runner, 8 weeks out, time_goal");
+section("Test 2: Beginner 5K Runner, 8 weeks out, get_faster");
 {
   reset();
   // Set race 8 weeks out. Today = 2026-04-20, race = 2026-06-15 (≈8 weeks).
@@ -210,7 +210,7 @@ section("Test 2: Beginner 5K Runner, 8 weeks out, time_goal");
     type: "fiveK",
     date: "2026-06-15",
     priority: "A",
-    goal: "time_goal",
+    goal: "get_faster",
     level: "beginner",
     daysPerWeek: 4,
     preferences: {

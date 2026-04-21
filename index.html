@@ -2087,7 +2087,7 @@
             <div class="form-row"><label>Phases (comma-separated)</label><input type="text" id="admin-wo-phases" class="input" placeholder="base, build, peak, taper" /></div>
             <div class="form-row"><label>Levels (comma-separated)</label><input type="text" id="admin-wo-levels" class="input" placeholder="beginner, intermediate, advanced" /></div>
             <div class="form-row"><label>Race Distances (optional)</label><input type="text" id="admin-wo-distances" class="input" placeholder="5k, 10k — leave blank for all" /></div>
-            <div class="form-row"><label>Race Goals (optional)</label><input type="text" id="admin-wo-goals" class="input" placeholder="just_finish, time_goal, pr_podium — blank for all" /></div>
+            <div class="form-row"><label>Race Goals (optional)</label><input type="text" id="admin-wo-goals" class="input" placeholder="finish, get_faster, pr — blank for all" /></div>
           </div>
           <div class="form-row"><label>Warmup JSON</label><textarea id="admin-wo-warmup" class="input" rows="3" placeholder='{"description":"12 min easy jog","duration_min":12}'></textarea></div>
           <div class="form-row"><label>Main Set JSON</label><textarea id="admin-wo-main" class="input" rows="8" placeholder='{"type":"intervals","intervals":{"reps":[3,5],"duration":"8 min","rest":"2 min","zone":"Z3"}}'></textarea></div>
@@ -3801,10 +3801,19 @@
             </div>
             <div class="ob-v2-form-group"><label for="bp-v2-race-date">Race Date</label><input type="date" id="bp-v2-race-date" onchange="OnboardingV2._updateWeeksCallout()" oninput="OnboardingV2._updateWeeksCallout()" /></div>
             <div class="ob-v2-form-group"><label>Goal</label>
-              <div class="ob-v2-chips">
-                <button type="button" class="ob-v2-chip is-selected" data-race-goal="finish" onclick="OnboardingV2._selectRaceGoal(this)">Finish</button>
-                <button type="button" class="ob-v2-chip" data-race-goal="time" onclick="OnboardingV2._selectRaceGoal(this)">Time Goal</button>
-                <button type="button" class="ob-v2-chip" data-race-goal="podium" onclick="OnboardingV2._selectRaceGoal(this)">PR / Podium</button>
+              <div class="ob-v2-race-goals">
+                <button type="button" class="ob-v2-race-goal is-selected" data-race-goal="finish" onclick="OnboardingV2._selectRaceGoal(this)">
+                  <span class="ob-v2-race-goal-title">Finish</span>
+                  <span class="ob-v2-race-goal-desc">Train to cross the finish line strong. Focused on building endurance safely with a gradual progression.</span>
+                </button>
+                <button type="button" class="ob-v2-race-goal" data-race-goal="get_faster" onclick="OnboardingV2._selectRaceGoal(this)">
+                  <span class="ob-v2-race-goal-title">Get Faster</span>
+                  <span class="ob-v2-race-goal-desc">Train to improve your speed and fitness. More intensity, structured workouts, and real accountability.</span>
+                </button>
+                <button type="button" class="ob-v2-race-goal" data-race-goal="pr" onclick="OnboardingV2._selectRaceGoal(this)">
+                  <span class="ob-v2-race-goal-title">PR</span>
+                  <span class="ob-v2-race-goal-desc">Train for your best performance. Aggressive progression, high-intensity sessions, and a plan that pushes your limits.</span>
+                </button>
               </div>
             </div>
             <!-- Priority section — only rendered when the user already has

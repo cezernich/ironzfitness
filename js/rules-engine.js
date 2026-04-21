@@ -116,7 +116,14 @@ function getMarathonLongRunScaling(profile, classification) {
  * Determine if the runner has a specific time goal and build interval guidance.
  */
 function getIntervalSessionGuidance(profile, classification) {
-  const hasTimeGoal = profile.timeGoal || profile.time_goal || profile.goalType === 'time' || profile.goal === 'compete';
+  // profile.time_goal / timeGoal are legacy boolean flags from the old
+  // onboarding schema. profile.goal === 'compete' is another legacy
+  // signal. The new race.goal enum uses 'get_faster' and 'pr' — both
+  // mean "athlete cares about time" so either counts here.
+  const hasTimeGoal = profile.timeGoal || profile.time_goal
+    || profile.goalType === 'time'
+    || profile.goal === 'compete'
+    || profile.goal === 'get_faster' || profile.goal === 'pr';
   if (!hasTimeGoal) return null;
 
   const mpw = parseFloat(profile.weeklyMileage || profile.weekly_mileage) || 30;

@@ -681,13 +681,145 @@
     return { added, demoted, weeksChecked: Object.keys(groups).length, doubledWeeks };
   }
 
+  // ─── §4a-0. Goal × Level × Distance session count matrix ──────────────────
+  //
+  // Replaces the old single-axis (level-only) matrix for Build-phase
+  // targets. get_faster is the baseline column. finish trims 1–2 sessions
+  // and drops a quality day. pr adds a session and a quality day in
+  // Build/Peak. Returns: { swim, bike, run, strength, brick, total,
+  //                        days, quality }.
+  //
+  // Distance keys:
+  //   running:   "fiveK_tenK" | "halfMarathon" | "marathon"
+  //   triathlon: "sprint" | "olympic" | "halfIronman" | "ironman"
+  //
+  // Ranges in the spec (e.g. "6-7 sessions") are stored as midpoints.
+  // Callers that need the range can look up the matrix directly.
+  const SESSION_COUNT_MATRIX = {
+    running: {
+      fiveK_tenK: {
+        beginner:     { finish: { run: 3, strength: 0, total: 3, days: 3, quality: 0 },
+                        get_faster: { run: 3, strength: 1, total: 4, days: 4, quality: 1 },
+                        pr:         { run: 4, strength: 1, total: 5, days: 4, quality: 2 } },
+        intermediate: { finish: { run: 3, strength: 1, total: 4, days: 4, quality: 1 },
+                        get_faster: { run: 4, strength: 1, total: 5, days: 5, quality: 2 },
+                        pr:         { run: 5, strength: 1, total: 6, days: 5, quality: 3 } },
+        advanced:     { finish: { run: 4, strength: 1, total: 5, days: 5, quality: 1 },
+                        get_faster: { run: 6, strength: 1, total: 7, days: 6, quality: 3 },
+                        pr:         { run: 7, strength: 1, total: 8, days: 6, quality: 3 } },
+      },
+      halfMarathon: {
+        beginner:     { finish: { run: 3, strength: 0, total: 3, days: 3, quality: 0 },
+                        get_faster: { run: 3, strength: 1, total: 4, days: 4, quality: 1 },
+                        pr:         { run: 4, strength: 1, total: 5, days: 5, quality: 2 } },
+        intermediate: { finish: { run: 4, strength: 1, total: 5, days: 4, quality: 1 },
+                        get_faster: { run: 5, strength: 1, total: 6, days: 5, quality: 2 },
+                        pr:         { run: 6, strength: 1, total: 7, days: 6, quality: 3 } },
+        advanced:     { finish: { run: 5, strength: 1, total: 6, days: 5, quality: 2 },
+                        get_faster: { run: 7, strength: 1, total: 8, days: 6, quality: 3 },
+                        pr:         { run: 8, strength: 1, total: 9, days: 6, quality: 3 } },
+      },
+      marathon: {
+        beginner:     { finish: { run: 4, strength: 0, total: 4, days: 4, quality: 0 },
+                        get_faster: { run: 4, strength: 1, total: 5, days: 5, quality: 1 },
+                        pr:         { run: 5, strength: 1, total: 6, days: 5, quality: 2 } },
+        intermediate: { finish: { run: 5, strength: 1, total: 6, days: 5, quality: 1 },
+                        get_faster: { run: 6, strength: 1, total: 7, days: 6, quality: 2 },
+                        pr:         { run: 7, strength: 1, total: 8, days: 6, quality: 3 } },
+        advanced:     { finish: { run: 6, strength: 1, total: 7, days: 6, quality: 2 },
+                        get_faster: { run: 8, strength: 1, total: 9, days: 6, quality: 3 },
+                        pr:         { run: 10, strength: 1, total: 11, days: 6, quality: 3 } },
+      },
+    },
+    triathlon: {
+      sprint: {
+        beginner:     { finish: { swim: 1, bike: 1, run: 1, strength: 1, total: 4, days: 4, quality: 1 },
+                        get_faster: { swim: 1, bike: 1, run: 2, strength: 1, total: 5, days: 5, quality: 1 },
+                        pr:         { swim: 2, bike: 2, run: 2, strength: 1, total: 7, days: 6, quality: 2 } },
+        intermediate: { finish: { swim: 1, bike: 2, run: 2, strength: 1, total: 6, days: 5, quality: 1 },
+                        get_faster: { swim: 2, bike: 2, run: 2, strength: 1, total: 7, days: 6, quality: 2 },
+                        pr:         { swim: 2, bike: 2, run: 2, strength: 2, total: 8, days: 6, quality: 2 } },
+        advanced:     { finish: { swim: 2, bike: 2, run: 2, strength: 1, total: 7, days: 6, quality: 1 },
+                        get_faster: { swim: 2, bike: 2, run: 2, strength: 2, total: 8, days: 6, quality: 2 },
+                        pr:         { swim: 2, bike: 3, run: 2, strength: 2, total: 9, days: 6, quality: 2 } },
+      },
+      olympic: {
+        beginner:     { finish: { swim: 1, bike: 1, run: 2, strength: 1, total: 5, days: 5, quality: 1 },
+                        get_faster: { swim: 1, bike: 2, run: 2, strength: 1, total: 6, days: 5, quality: 1 },
+                        pr:         { swim: 2, bike: 2, run: 2, strength: 1, total: 7, days: 6, quality: 1 } },
+        intermediate: { finish: { swim: 2, bike: 2, run: 2, strength: 1, total: 7, days: 6, quality: 1 },
+                        get_faster: { swim: 2, bike: 2, run: 2, strength: 2, total: 8, days: 6, quality: 2 },
+                        pr:         { swim: 2, bike: 3, run: 2, strength: 2, total: 9, days: 6, quality: 2 } },
+        advanced:     { finish: { swim: 2, bike: 2, run: 2, strength: 2, total: 8, days: 6, quality: 2 },
+                        get_faster: { swim: 3, bike: 3, run: 3, strength: 2, total: 11, days: 6, quality: 2 },
+                        pr:         { swim: 3, bike: 3, run: 3, strength: 2, total: 11, days: 6, quality: 2 } },
+      },
+      halfIronman: {
+        beginner:     { finish: { swim: 1, bike: 2, run: 2, strength: 1, total: 6, days: 5, quality: 1 },
+                        get_faster: { swim: 2, bike: 2, run: 2, strength: 2, total: 8, days: 6, quality: 2 },
+                        pr:         { swim: 2, bike: 3, run: 2, strength: 2, total: 9, days: 6, quality: 2 } },
+        intermediate: { finish: { swim: 2, bike: 2, run: 2, strength: 2, total: 8, days: 6, quality: 2 },
+                        get_faster: { swim: 2, bike: 3, run: 2, strength: 2, total: 9, days: 6, quality: 2 },
+                        pr:         { swim: 3, bike: 3, run: 3, strength: 2, total: 11, days: 6, quality: 2 } },
+        advanced:     { finish: { swim: 2, bike: 3, run: 2, strength: 2, total: 9, days: 6, quality: 2 },
+                        get_faster: { swim: 3, bike: 3, run: 3, strength: 2, total: 11, days: 6, quality: 2 },
+                        pr:         { swim: 3, bike: 3, run: 3, strength: 2, total: 11, days: 6, quality: 2 } },
+      },
+      ironman: {
+        beginner:     { finish: { swim: 1, bike: 2, run: 2, strength: 1, total: 6, days: 5, quality: 1 },
+                        get_faster: { swim: 2, bike: 2, run: 2, strength: 2, total: 8, days: 6, quality: 2 },
+                        pr:         { swim: 2, bike: 3, run: 2, strength: 2, total: 9, days: 6, quality: 2 } },
+        intermediate: { finish: { swim: 2, bike: 2, run: 2, strength: 2, total: 8, days: 6, quality: 2 },
+                        get_faster: { swim: 2, bike: 3, run: 3, strength: 2, total: 10, days: 6, quality: 2 },
+                        pr:         { swim: 3, bike: 3, run: 3, strength: 2, total: 11, days: 6, quality: 2 } },
+        advanced:     { finish: { swim: 2, bike: 3, run: 2, strength: 2, total: 9, days: 6, quality: 2 },
+                        get_faster: { swim: 3, bike: 3, run: 3, strength: 2, total: 11, days: 6, quality: 2 },
+                        pr:         { swim: 3, bike: 3, run: 3, strength: 2, total: 12, days: 7, quality: 2 } },
+      },
+    },
+  };
+
+  // Map race.type (RACE_CONFIGS keys) → SESSION_COUNT_MATRIX distance key.
+  function _raceTypeToDistanceKey(raceType) {
+    const t = String(raceType || "").toLowerCase();
+    if (t === "fivek" || t === "tenk") return { sport: "running", distance: "fiveK_tenK" };
+    if (t === "halfmarathon")            return { sport: "running", distance: "halfMarathon" };
+    if (t === "marathon")                return { sport: "running", distance: "marathon" };
+    if (t === "sprint")                  return { sport: "triathlon", distance: "sprint" };
+    if (t === "olympic")                 return { sport: "triathlon", distance: "olympic" };
+    if (t === "halfironman")             return { sport: "triathlon", distance: "halfIronman" };
+    if (t === "ironman")                 return { sport: "triathlon", distance: "ironman" };
+    return null;
+  }
+
+  // Canonical lookup: (raceType, level, goal) → session count row.
+  // Returns null if the race type doesn't have a distance-specific table
+  // (hyrox, cycling century, etc.) — callers fall back to the legacy
+  // PHASE_DISTRIBUTIONS_BY_LEVEL for those sports.
+  function getSessionCount(raceType, level, goal) {
+    const key = _raceTypeToDistanceKey(raceType);
+    if (!key) return null;
+    const byDist = SESSION_COUNT_MATRIX[key.sport]?.[key.distance];
+    if (!byDist) return null;
+    const byLevel = byDist[String(level || "intermediate").toLowerCase()];
+    if (!byLevel) return null;
+    const g = String(goal || "get_faster").toLowerCase();
+    // Legacy goal strings kept alive for transition — translate to the
+    // new names so any unmigrated call site keeps working.
+    const goalMap = { just_finish: "finish", time_goal: "get_faster", pr_podium: "pr" };
+    const resolved = goalMap[g] || g;
+    return byLevel[resolved] || byLevel.get_faster || null;
+  }
+
   if (typeof window !== "undefined") {
     window.PlanSessionDistribution = {
       applySessionDistribution,
       sportProfileForRaceType,
       getDistribution,
+      getSessionCount,
       PHASE_DISTRIBUTIONS,
       PHASE_DISTRIBUTIONS_BY_LEVEL,
+      SESSION_COUNT_MATRIX,
       HOUR_CEILINGS,
     };
   }
@@ -696,8 +828,10 @@
       applySessionDistribution,
       sportProfileForRaceType,
       getDistribution,
+      getSessionCount,
       PHASE_DISTRIBUTIONS,
       PHASE_DISTRIBUTIONS_BY_LEVEL,
+      SESSION_COUNT_MATRIX,
       HOUR_CEILINGS,
     };
   }

@@ -677,6 +677,14 @@ function _personalizeWeights(exercises) {
       { pattern: /bulgarian|split/i, factor: 0.50 },
     ],
     deadlift: [
+      // Single-leg / split-stance variants are unilateral AND typically
+      // DB-loaded — matching only `rdl` inherited the bilateral 0.70
+      // factor and produced impossibly heavy per-hand DB weights
+      // (user's 270 lb DL 5RM → "165 lbs · DB each hand" on single-leg
+      // RDL, which reads as 165 per hand instead of a 80 lb total).
+      // Keep this BEFORE romanian|rdl so single-leg RDL / single-leg
+      // deadlift hit this rule first.
+      { pattern: /single.?leg|split.?leg|single.?arm/i, factor: 0.35 },
       { pattern: /romanian|rdl|stiff/i, factor: 0.70 },
       { pattern: /sumo/i, factor: 0.95 },
     ],
@@ -715,7 +723,12 @@ function _personalizeWeights(exercises) {
     const targetWeight = roundLbs(workingWeight(oneRM * factor, ex.reps));
     if (targetWeight <= 0) return ex;
 
-    const isDumbbell = /dumbbell|2×|arnold|goblet/i.test(ex.name) || /2×/i.test(ex.weight || "");
+    // Unilateral stance exercises (single-leg RDL, split squat, etc.)
+    // are almost always DB-loaded. Split the computed total across two
+    // hands so the card doesn't suggest loading the entire target into
+    // each hand.
+    const isUnilateralStance = /single.?leg|split.?leg|single.?arm|bulgarian|split\s*squat/i.test(ex.name);
+    const isDumbbell = /dumbbell|2×|arnold|goblet/i.test(ex.name) || /2×/i.test(ex.weight || "") || isUnilateralStance;
     let weightStr;
     if (isDumbbell) {
       const perHand = roundLbs(targetWeight / 2);

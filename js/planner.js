@@ -4042,12 +4042,26 @@ function _generateSingleRacePlan(race) {
 
   // ── WORKOUT LIBRARY CONTEXT ────────────────────────────────────────────────
   // Load thresholds + compute zones once per plan generation so every session
-  // lookup reuses the same athlete context. `level` feeds library filtering;
-  // `zones` drives parameterization of main_set zone placeholders.
+  // lookup reuses the same athlete context. Per Section 2d, scheduling
+  // constraints use the OVERALL level (highest across sports) while each
+  // sport's session CONTENT uses that sport's own level. Mixed-level
+  // triathletes (e.g. advanced runner / beginner swimmer) must get
+  // technique-focused beginner swim sessions alongside advanced runs.
   let _libThresholds = {};
   let _libZones = null;
-  let _libLevel = "intermediate";
-  let _libRaceGoal = race.goal || race.runGoal || null;
+  let _libLevel = "intermediate";           // overall — used by constraints
+  let _libLevelPerSport = { run: null, bike: null, swim: null }; // per-sport content
+  // Normalize legacy goal strings on read. The onboarding UI has used
+  // three different enum shapes over time: old {"time","podium"} from an
+  // earlier chip picker, {"just_finish","time_goal","pr_podium"} from
+  // the spec-v1 naming, and the current {"finish","get_faster","pr"}.
+  // Map them all to the current values so stored events stay valid.
+  const _GOAL_ALIASES = {
+    just_finish: "finish", time_goal: "get_faster", pr_podium: "pr",
+    time: "get_faster", podium: "pr",
+  };
+  function _normGoal(g) { return _GOAL_ALIASES[g] || g || null; }
+  let _libRaceGoal = _normGoal(race.goal || race.runGoal);
   const _libRecentIds = []; // grows as we pick workouts within this generation
   // Use loadFromStorage so we pick up the app's actual training-zones data
   // (localStorage.trainingZones.running.referenceTime + vdot) not just a
@@ -4069,11 +4083,34 @@ function _generateSingleRacePlan(race) {
         })()),
         swim: window.TrainingZones.classifySwim(_libThresholds),
       };
+      // Per-sport content levels. null → fall back to overall.
+      _libLevelPerSport = {
+        run:  perSport.run  || null,
+        bike: perSport.bike || null,
+        swim: perSport.swim || null,
+      };
       const derived = window.TrainingZones.overallLevel(perSport);
       if (derived) _libLevel = derived;
     }
     if (race && race.level) _libLevel = String(race.level).toLowerCase();
   } catch {}
+
+  // Resolve a per-sport level for workout-library filtering. Discipline is
+  // "run" / "bike" / "swim" / "strength". Unknown disciplines (brick,
+  // weightlifting variants) fall back to overall. "novice" / "competitive"
+  // (swim labels) get normalized to beginner / advanced so downstream
+  // consumers see the three-tier enum.
+  function _levelForDiscipline(discipline) {
+    const d = String(discipline || "").toLowerCase();
+    let lvl = null;
+    if (d === "run" || d === "running")    lvl = _libLevelPerSport.run;
+    else if (d === "bike" || d === "cycling") lvl = _libLevelPerSport.bike;
+    else if (d === "swim" || d === "swimming") lvl = _libLevelPerSport.swim;
+    if (!lvl) return _libLevel; // strength, brick, unknown
+    if (lvl === "novice")      return "beginner";
+    if (lvl === "competitive") return "advanced";
+    return lvl;
+  }
 
   // ── THRESHOLD WEEK SCHEDULING ──────────────────────────────────────────────
   // Added 2026-04-09 (PHILOSOPHY_UPDATE_2026-04-09_threshold_weeks.md).
@@ -4253,13 +4290,18 @@ function _generateSingleRacePlan(race) {
           for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
           return Math.abs(h);
         })();
+        // Per-sport level (Section 2d) — swim sessions for an advanced
+        // runner / beginner swimmer pull from the beginner swim workout
+        // pool. Overall _libLevel drives scheduling only (rest days,
+        // spacing, deload cadence), not content selection.
+        const _sessionLevel = _levelForDiscipline(sessionEntry.discipline);
         const _libWorkout = _libraryWorkoutFor({
           discipline:          sessionEntry.discipline,
           load:                sessionEntry.load,
           raceType:            race.type,
           raceGoal:            _libRaceGoal,
           phaseName:           phaseName,
-          level:               _libLevel,
+          level:               _sessionLevel,
           weekInPhase:         _weekInPhase,
           totalWeeksInPhase:   _phaseWeeks,
           isDeload:            _isDeload,

@@ -3561,7 +3561,7 @@
           const runTotal = runDays.length;
           // Quality-session slots depend on total run volume:
           //   ≥4 runs → [interval, tempo, ...easy..., recovery, long]
-          //             (2 quality sessions — hits spec §4c time_goal Build/Peak)
+          //             (2 quality sessions — hits spec §4c get_faster Build/Peak)
           //   3 runs  → [interval, easy, recovery] (+ long if applicable)
           //   ≤2 runs → [interval, easy] (+ long)
           if (isLong) out.push("run-long");
@@ -3997,7 +3997,7 @@
     // run-easy / run-recovery) instead of raw _state.schedule so the plan
     // generator sees the intended intensity distribution. Passing plain
     // "run" codes made every session default to easy in every phase — the
-    // bug that produced all-Z2 time_goal plans. _enrichWeekTemplate is
+    // bug that produced all-Z2 get_faster plans. _enrichWeekTemplate is
     // pure (derives from _state.schedule + _state.longDays + strength
     // split, writes nothing), so calling it for preview is safe.
     let _enrichedForRace;
