@@ -3219,7 +3219,25 @@
     // Walk each discipline and bring counts up to the target. Order swim →
     // bike → run → strength → brick matches the aligner's so debugging is
     // consistent between the two layers.
+    //
+    // Scope enforcement to disciplines the user actually opted into via
+    // selectedSports. Prior behavior auto-added strength (or any other
+    // discipline in the spec target) even when the user never picked it,
+    // so a runner who skipped strength during sport selection would see
+    // 2 Full Body sessions appear on their Weekly Schedule preview.
+    const selected = Array.isArray(_state.selectedSports) ? _state.selectedSports : [];
+    const selectedBuckets = new Set();
+    selected.forEach(s => {
+      const k = String(s || "").toLowerCase();
+      if (k === "swim") selectedBuckets.add("swim");
+      else if (k === "bike" || k === "cycling") selectedBuckets.add("bike");
+      else if (k === "run" || k === "running") selectedBuckets.add("run");
+      else if (k === "strength" || k === "weightlifting" || k === "bodyweight") selectedBuckets.add("strength");
+      else if (k === "brick") selectedBuckets.add("brick");
+      else if (k === "hyrox") selectedBuckets.add("hyrox");
+    });
     ["swim", "bike", "run", "strength", "brick"].forEach(disc => {
+      if (!selectedBuckets.has(disc)) return; // user didn't opt in — skip
       const want = target[disc] || 0;
       let have = currentCounts()[disc] || 0;
       let safety = 0;
