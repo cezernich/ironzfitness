@@ -872,6 +872,17 @@ function getDataForDate(dateStr) {
 function selectDay(dateStr) {
   _dragActive = false; // Always reset drag state
   selectedDate = dateStr;
+  // Keep the week strip in sync with the selected day. Without this,
+  // selecting a date that lives in a different week (e.g. an Apr 17
+  // card rendered below while the strip shows Apr 20-26) leaves the
+  // active pill on today / whatever was previously centered, and the
+  // strip silently disagrees with the detail view below it.
+  try {
+    const target = new Date(dateStr + "T00:00:00");
+    if (!isNaN(target.getTime())) {
+      currentWeekStart = getWeekStart(target);
+    }
+  } catch {}
   renderCalendar();
   renderDayDetail(dateStr);
 }
