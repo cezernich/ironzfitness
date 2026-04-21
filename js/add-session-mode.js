@@ -202,13 +202,30 @@
         const roleNote = _strengthRoleAtCap(ctx);
         if (roleNote) warnings.push(roleNote);
       }
+      // 4. No-rest-day warning. Auto-generated plans reserve one rest
+      // day per week for running-only athletes (6-day cap). If the user
+      // is about to add a session that erases the last remaining rest
+      // day, surface that explicitly.
+      if (_wouldEraseLastRestDay(ctx)) {
+        warnings.push(
+          "Adding this session leaves you with no rest day this week. One full rest day is a big part of how your body adapts — consider swapping another session to an easier day instead."
+        );
+      }
     } else {
-      // Freestyle: only 24-hour key-session guardrail.
+      // Freestyle: two guardrails — a 24h key-session warning, plus
+      // the same no-rest-day check (applies whether or not you have an
+      // active plan).
       const within24 = _keySessionWithin24h(_currentDate);
       if (within24) {
         warnings.push(
           "Heads up: " + within24.when + " has " + within24.label + ". " +
           "Stacking a hard session against it can hurt recovery."
+        );
+      }
+      const freeCtx = { date: _currentDate };
+      if (_wouldEraseLastRestDay(freeCtx)) {
+        warnings.push(
+          "Adding this session leaves you with no rest day this week. One full rest day is a big part of how your body adapts — consider swapping another session to an easier day instead."
         );
       }
     }
@@ -367,6 +384,41 @@
     (plan || []).forEach(e => { if (e && e.date === dateStr) hits.push(e); });
     (sched || []).forEach(e => { if (e && e.date === dateStr) hits.push(e); });
     return hits;
+  }
+
+  // Would placing a new session on `dateStr` leave the athlete with no
+  // rest day for the entire week? Used by maybeWarnOnTypeSelect to flag
+  // the no-rest-day situation — one full rest day per week is the
+  // non-negotiable floor for running-only athletes per §4d-i.
+  function _wouldEraseLastRestDay(context) {
+    const dateStr = (context && context.date) || _getTodayStr();
+    const { start, end } = _weekBounds(dateStr);
+    const plan = _safeJSON("trainingPlan", []);
+    const sched = _safeJSON("workoutSchedule", []);
+    const logged = _safeJSON("workouts", []);
+    const hasSessionOn = (d) => {
+      return (plan  || []).some(e => e && e.date === d && !/rest/i.test(String(e.type || "")))
+          || (sched || []).some(e => e && e.date === d && !/rest/i.test(String(e.type || "")))
+          || (logged|| []).some(e => e && e.date === d);
+    };
+    // Enumerate the 7 days of the week containing dateStr.
+    const days = [];
+    for (let d = new Date(start + "T00:00:00"); d <= new Date(end + "T00:00:00"); d.setDate(d.getDate() + 1)) {
+      days.push(d.toISOString().slice(0, 10));
+    }
+    // "Rest days" before the hypothetical add = days in the week with no
+    // session AND not equal to dateStr (since dateStr is the slot we're
+    // about to fill). If that count is ≤ 1, adding erases the last rest.
+    let rest = 0;
+    for (const d of days) {
+      if (d === dateStr) continue;
+      if (!hasSessionOn(d)) rest++;
+    }
+    // dateStr itself — if it already has a session, we're stacking into
+    // a training day, not erasing rest. Only warn when dateStr was the
+    // rest day we're about to erase.
+    if (hasSessionOn(dateStr)) return false;
+    return rest === 0;
   }
 
   function _isKeySession(s) {

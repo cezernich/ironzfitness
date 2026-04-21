@@ -3115,11 +3115,19 @@
     // user's selected daysPerWeek, bump daysPerWeek up to the matrix value
     // BEFORE placement so the scaffolding has room. We only ever bump up,
     // never down — the user's floor stands. Matrix-source only.
+    //
+    // For running-only athletes with no strength counter-load, hold the
+    // ceiling at 6 days so we never auto-erase the weekly rest day. The
+    // matrix's 7-day Advanced PR Ironman row doesn't apply here.
+    const selectedNow = Array.isArray(_state.selectedSports) ? _state.selectedSports : [];
+    const runOnly = selectedNow.length === 1 &&
+      String(selectedNow[0] || "").toLowerCase() === "run";
     if (sourceLabel === "matrix" && typeof target.days === "number") {
       const cur = parseInt(_state.planDetails.daysPerWeek, 10) || 5;
-      if (target.days > cur) {
-        try { console.log("[IronZ] bumping daysPerWeek " + cur + " → " + target.days + " to match matrix target"); } catch {}
-        _state.planDetails.daysPerWeek = String(target.days);
+      const desired = runOnly ? Math.min(target.days, 6) : target.days;
+      if (desired > cur) {
+        try { console.log("[IronZ] bumping daysPerWeek " + cur + " → " + desired + " to match matrix target"); } catch {}
+        _state.planDetails.daysPerWeek = String(desired);
       }
     }
 
@@ -3277,9 +3285,23 @@
       else if (k === "brick") selectedBuckets.add("brick");
       else if (k === "hyrox") selectedBuckets.add("hyrox");
     });
+
+    // Running-only cap: when the user has selected only run (no strength,
+    // swim, bike), hold the week at 6 runs on 6 days — one rest day is
+    // non-negotiable via the auto-generator. The matrix target may ask
+    // for 7/8/10 runs (Advanced PR distances assume doubling), but for a
+    // single-discipline athlete with no strength counter-load we never
+    // erase the rest day. If the user wants a 7th run they can use
+    // Add Session manually; Section 6c will show the "no rest day this
+    // week" soft warning but won't block them.
+    const isRunningOnly =
+      selectedBuckets.size === 1 && selectedBuckets.has("run");
+    const runCap = isRunningOnly ? 6 : null;
+
     ["swim", "bike", "run", "strength", "brick"].forEach(disc => {
       if (!selectedBuckets.has(disc)) return; // user didn't opt in — skip
-      const want = target[disc] || 0;
+      let want = target[disc] || 0;
+      if (runCap != null && disc === "run") want = Math.min(want, runCap);
       let have = currentCounts()[disc] || 0;
       let safety = 0;
       while (have < want && safety < 14) {

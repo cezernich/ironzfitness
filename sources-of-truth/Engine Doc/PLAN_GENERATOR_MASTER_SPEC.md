@@ -578,7 +578,13 @@ Session tuple is `(swim/bike/run/strength)` per week.
 | Intermediate | 7–8, 6 days (2/2/2/1–2) | 9–10, 6 days (2/3/3/1–2) | 10–11, 6 days (3/3/3/2) |
 | Advanced | 8–9, 6 days (2/3/2/1–2) | 10–12, 6 days (3/3/3/2) | 11–13, 7 days (3/3/3/2) |
 
-**Advanced Ironman + PR is the only configuration that trains all 7 days of the week.** The 7th day is active recovery Z1 only — not full rest. Every other row above includes at least one rest day per week.
+**Advanced Ironman + PR is the only auto-generated configuration that trains all 7 days of the week.** The 7th day is active recovery Z1 only — not full rest. Every other row above includes at least one rest day per week.
+
+#### Running-only cap
+
+When the user has selected **only running** (no strength, no swim, no bike), the auto-generator caps the week at **6 runs on 6 days** regardless of what the matrix asks for. Single-discipline athletes without any counter-load need a non-negotiable full rest day per week — the matrix's higher run counts (7 runs for Advanced 5K PR, 8 for HM PR, 10 for Marathon PR) assume doubling or cross-discipline volume absorption that isn't available without strength.
+
+So: 5K / HM / Marathon × Advanced × PR with no strength selected all collapse to **run: 6, days: 6, quality: 3**, not the raw matrix value. If the athlete wants a 7th run they can add it manually via Add Session — Section 6c shows a soft "no rest day this week" warning but doesn't block.
 
 ### 4a. TRIATHLON SESSION TEMPLATES BY PHASE
 
@@ -941,6 +947,7 @@ When the user taps "+" to add a session, show a two-option toggle at the top of 
 2. **Strength role cap.** Weekly strength count is compared against the Section 5 cap for the athlete's role and phase. `race_performance` athletes also get an absolute ceiling of 3 heavy-compound strength sessions per week regardless of phase.
 3. **Tomorrow-key-session hint.** If tomorrow has a `key_session` (tempo / threshold / VO2 / long run/ride / intervals / hills), surface a non-blocking hint suggesting today stay easy/recovery.
 4. **Weekly-target soft warning.** If the week's session count already meets the `(sport, distance, level, goal)` target from 4a-0, show the soft warning: **"You're already at your target volume this week. Adding more might affect recovery — but you know your body best."** Never blocks save.
+5. **No-rest-day warning.** If adding the session would leave the week with **zero rest days** (all 7 days filled), show: **"Adding this session leaves you with no rest day this week. One full rest day is a big part of how your body adapts — consider swapping another session to an easier day instead."** Fires in both Plan-Aligned and Freestyle modes. Never blocks save.
 
 **Freestyle mode:**
 - No phase / level / role filtering.

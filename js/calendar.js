@@ -528,16 +528,16 @@ function renderWeekView() {
   const todayStr  = getTodayString();
   const weekDates = getWeekDates(currentWeekStart);
 
-  // Center card = selectedDate if it falls within this week, else today
-  // if today is in this week, else NO center. When browsing a week
-  // that doesn't contain today or the user's last-selected date, all
-  // 7 days render as equal side cards — the user hasn't expressed
-  // intent about any of them yet, so auto-centering Mon was misleading
-  // (looked like Mon was "selected" when it wasn't).
+  // Center card = the selected date, and ONLY the selected date. The
+  // previous fallback centered "today" when selectedDate lived in a
+  // different week, which made the strip contradict the day detail
+  // below it (detail shows Apr 18, strip shows Mon 20 dark with TODAY
+  // pill — reads like Mon 20 is selected when it isn't). Today still
+  // gets its own pill treatment via is-today elsewhere; this flag is
+  // purely about which card gets the bigger, darker centered look.
   const weekDateStrs = weekDates.map(d => d.toISOString().slice(0, 10));
   let centerStr = null;
   if (selectedDate && weekDateStrs.includes(selectedDate)) centerStr = selectedDate;
-  else if (weekDateStrs.includes(todayStr)) centerStr = todayStr;
 
   const cards = weekDates.map(d => {
     const dateStr = d.toISOString().slice(0, 10);
@@ -908,8 +908,26 @@ function deleteScheduledWorkout(id, dateStr) {
   if (!confirm("Remove this session from your plan?")) return;
   let schedule = [];
   try { schedule = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
+  // Find the victim so we know which discipline to also scrub from
+  // trainingPlan on the same date. Without this, the day-detail
+  // render path (calendar.js:848) unmasks the parallel race-plan entry
+  // once the schedule entry is gone — user deletes a bike and a swim
+  // "appears" on the same day, which reads as a bug even though both
+  // entries always existed.
+  const victim = schedule.find(w => String(w.id) === String(id)) || null;
   schedule = schedule.filter(w => String(w.id) !== String(id));
   localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
+  if (victim) {
+    try {
+      let plan = JSON.parse(localStorage.getItem("trainingPlan")) || [];
+      const before = plan.length;
+      plan = plan.filter(e => e.date !== dateStr);
+      if (plan.length !== before) {
+        localStorage.setItem("trainingPlan", JSON.stringify(plan));
+        if (typeof DB !== 'undefined' && DB.syncTrainingPlan) DB.syncTrainingPlan();
+      }
+    } catch {}
+  }
   _cleanupCompletionRecord(`session-sw-${id}`);
   try { const r = JSON.parse(localStorage.getItem("workoutRatings") || "{}"); if (r[String(id)]) { delete r[String(id)]; localStorage.setItem("workoutRatings", JSON.stringify(r)); if (typeof DB !== 'undefined') DB.syncKey('workoutRatings'); } } catch {}
   renderCalendar();
