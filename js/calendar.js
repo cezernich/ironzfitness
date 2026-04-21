@@ -3919,7 +3919,11 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
           const s = String(str||"").toLowerCase().trim();
           const n = s.match(/([\d.]+)/); if(!n) return 1;
           const v = parseFloat(n[1]);
-          if (/sec/.test(s)) return v / 60;
+          // Seconds: "90 sec", "90s", "90 s", "90 seconds". The old
+          // regex only matched /sec/ which missed bare "s" — a 90s
+          // rest between 4×8min cruise intervals was being read as
+          // 90 MINUTES each, inflating the session total by +270 min.
+          if (/sec/.test(s) || /\d\s*s$/.test(s)) return v / 60;
           if (/km/.test(s)) return v * (_paceMap[effort]||5.5);
           if (/mi/.test(s) && !/min/.test(s)) return v * 1.60934 * (_paceMap[effort]||5.5);
           if (/\d+m$/.test(s)) {

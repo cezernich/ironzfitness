@@ -251,13 +251,35 @@
     }
 
     // Default: cruise intervals
-    const reps = scaling.reps;
+    let reps = scaling.reps;
     const repMin = scaling.rep_duration_min;
     const restSec = scaling.rest_sec;
-    const restMin = ((reps - 1) * restSec) / 60;
-    const totalDuration = wuMin + reps * repMin + restMin + cdMin;
-    if (durationOverrideMin && Math.abs(durationOverrideMin - totalDuration) > totalDuration * 0.5) {
-      warnings.push(`Duration override ignored — outside ±50% of ${Math.round(totalDuration)} min.`);
+    let restMin = ((reps - 1) * restSec) / 60;
+    let totalDuration = wuMin + reps * repMin + restMin + cdMin;
+
+    // Honor the user's asked-for duration (±50% band). The old code
+    // gated the override with a warning but never actually scaled the
+    // workout — if you asked for 45 min the generator still returned
+    // whatever totalDuration the experience scaling produced (often
+    // 60+). Scale reps down/up to land near the target, keeping warmup
+    // and cooldown fixed because those are calibrated to the session,
+    // not the volume.
+    if (durationOverrideMin) {
+      const delta = Math.abs(durationOverrideMin - totalDuration);
+      if (delta > totalDuration * 0.5) {
+        warnings.push(`Duration override ignored — outside ±50% of ${Math.round(totalDuration)} min.`);
+      } else if (delta > 3) {
+        // Target minutes for the main set (reps × repMin + rest between).
+        // Solve for reps given a fixed repMin + per-rest: totalMain =
+        // r*repMin + (r-1)*restSec/60. Invert:
+        //   r = (totalMain + restSec/60) / (repMin + restSec/60)
+        const targetMain = Math.max(repMin + 1, durationOverrideMin - wuMin - cdMin);
+        const restPer    = restSec / 60;
+        const targetReps = (targetMain + restPer) / (repMin + restPer);
+        reps = Math.max(2, Math.min(8, Math.round(targetReps)));
+        restMin = ((reps - 1) * restSec) / 60;
+        totalDuration = wuMin + reps * repMin + restMin + cdMin;
+      }
     }
     const phases = [
       {
