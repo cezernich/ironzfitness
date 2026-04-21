@@ -1763,9 +1763,54 @@ function zonesUpdateTimeFields() {
   hEl.style.display = (dist === "Half Marathon" || dist === "Marathon") ? "inline-block" : "none";
 }
 
+// Spec §6: within 30 days of an A race, logging a threshold test is
+// allowed but gets a soft warning. Testing this close to race day costs
+// more in fatigue than it gains in data. Returns days until race, or
+// null when there's no A race in the next 30 days.
+function _daysToNearestARaceForThresholds() {
+  let events = [];
+  try { events = JSON.parse(localStorage.getItem("events") || "[]") || []; } catch {}
+  if (!Array.isArray(events) || events.length === 0) return null;
+  const todayMs = new Date().setHours(0, 0, 0, 0);
+  let nearest = null;
+  for (const ev of events) {
+    if (!ev || !ev.date) continue;
+    const priority = String(ev.priority || "A").toUpperCase();
+    if (priority !== "A") continue;
+    const raceMs = new Date(ev.date + "T00:00:00").setHours(0, 0, 0, 0);
+    const days = Math.floor((raceMs - todayMs) / 86400000);
+    if (days >= 0 && days <= 30) {
+      if (nearest == null || days < nearest) nearest = days;
+    }
+  }
+  return nearest;
+}
+
 function saveZonesFromForm() {
   const msg  = document.getElementById("zones-calc-msg");
   const sport = _activeZonesSport;
+
+  // Soft warning: A race within 30 days. User can proceed — this isn't
+  // a block, just an advisory. Surfaced for every sport except strength
+  // (strength lifts don't carry the same race-day fatigue cost).
+  if (sport !== "strength") {
+    const daysToRace = _daysToNearestARaceForThresholds();
+    if (daysToRace != null) {
+      const whenLabel = daysToRace === 0 ? "race day" :
+                        daysToRace === 1 ? "tomorrow" :
+                        `in ${daysToRace} days`;
+      const proceed = confirm(
+        "You're within 30 days of race day (" + whenLabel + "). " +
+        "Threshold testing this close to your race may cost more in fatigue than you gain in data. " +
+        "Your current zones are solid — trust your training.\n\n" +
+        "Log this test anyway?"
+      );
+      if (!proceed) {
+        if (msg) { msg.style.color = "var(--color-text-muted)"; msg.textContent = "Test cancelled — your zones stay as they were."; }
+        return;
+      }
+    }
+  }
 
   if (sport === "strength") {
     const lifts = ["bench","squat","deadlift","ohp","row"];

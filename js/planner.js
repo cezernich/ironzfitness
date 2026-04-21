@@ -4142,6 +4142,25 @@ function _generateSingleRacePlan(race) {
         _profileForScheduling, startDate, raceDate, _lastThresh
       );
     }
+
+    // Hard constraint (Section 6): no threshold / time-trial test weeks
+    // within 30 days of the A race. Threshold testing that close to race
+    // day costs more in fatigue than it gains in data, and the athlete's
+    // current zones are load-bearing for the taper anyway. Drop any
+    // scheduled week that falls inside the 30-day window; downstream the
+    // generator parameterizes sessions against the last-known zones.
+    const _raceMs = new Date(race.date + "T00:00:00").getTime();
+    const _window = 30 * 86400000;
+    const _beforeFilter = _scheduledThresholdWeeks.length;
+    _scheduledThresholdWeeks = _scheduledThresholdWeeks.filter(t => {
+      const wk = new Date(t.thresholdWeekStartDate);
+      const msToRace = _raceMs - wk.getTime();
+      return msToRace > _window; // keep only weeks > 30 days before race
+    });
+    const _dropped = _beforeFilter - _scheduledThresholdWeeks.length;
+    if (_dropped > 0) {
+      try { console.log("[IronZ] dropped " + _dropped + " threshold week(s) within 30 days of race"); } catch {}
+    }
   } catch (e) {
     console.warn("[IronZ] threshold-week scheduling skipped:", e.message);
   }

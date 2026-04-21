@@ -131,6 +131,33 @@
 
   // getStatus(sport) — tells the caller everything they need to decide
   // whether to render the banner. `stale` is the gate: true means render.
+  // Hard constraint (spec §6): threshold reminders suppressed within
+  // 30 days of an A race. Testing this close to race day costs more in
+  // fatigue than it gains in data. Returns the number of days until the
+  // nearest upcoming A race, or null when no A race is within the
+  // 30-day window.
+  function _daysToNearestARace(now) {
+    let events = [];
+    try { events = JSON.parse(localStorage.getItem("events") || "[]") || []; } catch {}
+    if (!Array.isArray(events) || events.length === 0) return null;
+    const today = now || new Date();
+    const todayMs = today.setHours(0, 0, 0, 0);
+    let nearestDays = null;
+    for (const ev of events) {
+      if (!ev || !ev.date) continue;
+      // Only A-priority races trigger the block. B/C races aren't
+      // race-day-critical enough to gate threshold tests.
+      const priority = String(ev.priority || "A").toUpperCase();
+      if (priority !== "A") continue;
+      const raceMs = new Date(ev.date + "T00:00:00").setHours(0, 0, 0, 0);
+      const days = Math.floor((raceMs - todayMs) / 86400000);
+      if (days >= 0 && days <= 30) {
+        if (nearestDays == null || days < nearestDays) nearestDays = days;
+      }
+    }
+    return nearestDays;
+  }
+
   function getStatus(sport) {
     const profile = _loadProfile();
     const zones = _loadZones();
@@ -144,14 +171,20 @@
     const dismissedUntil = dismissed[sport];
     const now = new Date();
     const dismissedActive = dismissedUntil && new Date(dismissedUntil) > now;
-    const stale = !dismissedActive && ageDays >= STALE_DAYS;
+    const daysToRace = _daysToNearestARace(now);
+    const raceWindow = daysToRace != null;
+    const stale = !dismissedActive && !raceWindow && ageDays >= STALE_DAYS;
     return {
       stale,
-      reason: stale ? "stale" : dismissedActive ? "dismissed" : "fresh",
+      reason: stale ? "stale"
+            : raceWindow ? "race_window"
+            : dismissedActive ? "dismissed"
+            : "fresh",
       hasThreshold: true,
       ageDays: isFinite(ageDays) ? ageDays : null,
       lastUpdated: lastUpdated || null,
       dismissedUntil: dismissedActive ? dismissedUntil : null,
+      daysToRace: raceWindow ? daysToRace : null,
     };
   }
 

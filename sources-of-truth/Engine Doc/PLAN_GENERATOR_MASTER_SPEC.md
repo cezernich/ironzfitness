@@ -1,6 +1,6 @@
 # IronZ — Single Source of Truth
 
-> **Version:** 2.4
+> **Version:** 2.5
 > **Last updated:** 2026-04-20
 > **Purpose:** This is the SINGLE REFERENCE for all IronZ training logic — philosophy, plan generation, exercise selection, nutrition, recovery, and coaching. There is no other document. If it's not here, it doesn't exist.
 >
@@ -900,6 +900,15 @@ After generating all sessions, run these checks. Fix violations automatically.
 | Long-session ramp cap | No single `load: "long"` session (long run, long ride) increases by more than the same per-level cap vs the prior week's equivalent — even when a different library workout is swapped in. | Clamp the swapped-in workout's `duration_min` to `prior_long × (1 + cap)`. If the library has no shorter variant, reuse the prior week's workout scaled by the ramp. |
 | Explicit day preservation | Days the user explicitly placed sessions on (via Schedule-screen chip edits, preferred-day inputs, or the long-day picker) are NEVER carved to rest by the distribution or rest-day enforcer. | Carve from unmarked days only. If no unmarked days remain and a rest is still owed, surface a warning to the user instead of silently overwriting an intended training day. |
 | Deload enforcement | Every 4th week within a phase: reduce volume 30–40% | Shorten all sessions, drop 1–2 sessions, keep intensity |
+| No threshold test within 30 days of A race | **Hard block.** Threshold / time-trial / CSS-test weeks must never fall within 30 days of any A-priority race date. Testing this close costs more in fatigue than it gains in data, and the taper leans on already-calibrated zones. | Drop the scheduled threshold week from the generator output. Use the last-known thresholds to parameterize the rest of the plan. Does NOT apply to B/C races — those don't carry the same race-day cost. |
+
+#### 6a-i. Threshold Test Gating (30-day pre-race block)
+
+This is a dedicated hard rule that spans the entire app, not just the generator:
+
+1. **Plan generation.** `ThresholdWeekScheduler.listThresholdWeeksForPlan` is filtered — any week whose Monday falls within 30 days of the A race is dropped. The remaining plan is parameterized against the athlete's last-known thresholds.
+2. **Threshold-refresh reminders.** The "your threshold was last updated X months ago" nudge (js/threshold-reminders.js) is suppressed during the 30-day window. `getStatus` returns `reason: "race_window"` and `buildBannerHtml` returns empty. Users don't get prompted to test when testing would be counterproductive.
+3. **Manual log in Settings → Training Zones.** Allowed (never blocked), but shows a soft confirm before save: **"You're within 30 days of race day. Threshold testing this close to your race may cost more in fatigue than you gain in data. Your current zones are solid — trust your training."** Strength lifts are exempt from this warning — they don't carry the same race-day fatigue cost.
 
 ### 6b. User Modifications — Soft Constraints After Generation
 
