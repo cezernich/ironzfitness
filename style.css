@@ -2606,6 +2606,27 @@ button:active {
   text-overflow: ellipsis;
 }
 
+/* When rendered as an editable input, shed the default form styling
+   so the name reads like text at rest but gets a visible border on
+   hover / focus so the user knows it's editable. */
+input.completion-ex-name {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-weight: 500;
+  min-width: 0;
+  width: 100%;
+}
+input.completion-ex-name:hover {
+  border-color: var(--color-border);
+}
+input.completion-ex-name:focus {
+  border-color: var(--color-accent, #6366f1);
+  background: var(--color-surface);
+  outline: none;
+}
+
 /* Per-set expansion */
 .completion-expand-wrap { padding-left: 8px; }
 .completion-expand-btn, .completion-collapse-btn {

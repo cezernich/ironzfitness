@@ -1232,7 +1232,16 @@ function saveTrainingZonesData(sport, data) {
   const merged = Object.assign({}, previous || {}, data, { lastUpdated: nowIso });
   all[sport] = merged;
   localStorage.setItem("trainingZones", JSON.stringify(all));
-  if (typeof DB !== 'undefined') DB.syncKey('trainingZones');
+  // Flush to Supabase without the 2s debounce. Zones drive pacing
+  // across every generator, so losing the most recent edit to a
+  // refresh race means plans get built against stale thresholds. The
+  // async flush is fire-and-forget here; callers that need a strong
+  // guarantee (the save button's onSave) can `await DB.flushKey` after
+  // calling this function.
+  if (typeof DB !== 'undefined') {
+    if (DB.flushKey) DB.flushKey('trainingZones');
+    else DB.syncKey('trainingZones');
+  }
 
   // Mirror the stamp onto the profile's per-sport field so the reminder's
   // primary candidate (profile.*Updated) is populated too.
@@ -1247,7 +1256,10 @@ function saveTrainingZonesData(sport, data) {
     if (profileField) {
       profile[profileField] = nowIso;
       localStorage.setItem("profile", JSON.stringify(profile));
-      if (typeof DB !== 'undefined') DB.syncKey('profile');
+      if (typeof DB !== 'undefined') {
+        if (DB.flushKey) DB.flushKey('profile');
+        else DB.syncKey('profile');
+      }
     }
   } catch {}
 }
@@ -1803,6 +1815,10 @@ function saveZonesFromForm() {
     const mStr = String(m), sStr = String(s).padStart(2, "0");
     saveTrainingZonesData("swimming", {
       referenceDist: "400m", referenceTime: `${mStr}:${sStr}`, tPaceSec, tPaceStr, zones,
+      // Mirror to `css` so consumers that only check swimming.css
+      // (threshold-reminders, sport-levels, swim-workout-generator default
+      // path) see the same value as consumers that read tPaceSec.
+      css: tPaceSec, cssPace: tPaceSec,
       calculatedAt: new Date().toISOString(),
     });
     renderZones();

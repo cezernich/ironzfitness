@@ -1488,8 +1488,38 @@ function _getZoneLabel(sport, zoneNum) {
  * share the same `repeatGroup` letter are collected and repeated
  * `groupSets` times (default 1). Non-grouped intervals pass through.
  */
+// Collapse an older swim-intervals shape where the rest lived as a
+// separate sibling entry (e.g. [{name:"Drill", reps:8}, {name:"Rest",
+// reps:8, duration:"15s"}]) into the newer shape where the work
+// interval carries restDuration. Without this, legacy logged workouts
+// render 8 work bars back-to-back followed by 8 rest bars back-to-back
+// instead of interleaving them in the intensity strip.
+function _mergeSiblingRests(intervals) {
+  if (!Array.isArray(intervals) || intervals.length < 2) return intervals;
+  const out = [];
+  for (let i = 0; i < intervals.length; i++) {
+    const iv = intervals[i];
+    const next = intervals[i + 1];
+    const isWork = iv && iv.name !== "Rest" && iv.effort !== "RW";
+    const nextIsRest = next && (next.name === "Rest" || next.effort === "RW");
+    const repsMatch = next && (next.reps || 1) === ((iv && iv.reps) || 1);
+    if (isWork && nextIsRest && repsMatch && !iv.restDuration && next.duration) {
+      out.push({ ...iv, restDuration: next.duration, restEffort: "RW" });
+      i++;
+      continue;
+    }
+    out.push(iv);
+  }
+  return out;
+}
+
 function _expandRepeatGroups(intervals) {
   if (!intervals || !intervals.length) return intervals;
+  // Merge sibling rest entries first so downstream code sees the
+  // canonical (work-with-restDuration) shape regardless of when the
+  // workout was generated. Fixes legacy logged swim workouts that
+  // stacked 8 rests at the end of a drill set.
+  intervals = _mergeSiblingRests(intervals);
   // Fast path: skip if no interval uses repeatGroup
   if (!intervals.some(iv => iv.repeatGroup)) return intervals;
   const out = [];
@@ -2384,7 +2414,8 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
       }
       return `
       <div class="completion-ex-row" id="cex-row-${sessionId}-${i}">
-        <span class="completion-ex-name">${escHtml(ex.name)}</span>
+        <input class="completion-ex-name ex-row-name" id="cex-name-${sessionId}-${i}"
+          value="${escHtml(ex.name).replace(/"/g, "&quot;")}" placeholder="Exercise name" autocomplete="off" />
         <input class="qe-edit-sets" type="text" inputmode="numeric" id="cex-sets-${sessionId}-${i}"
           value="${setsVal}" onchange="cexCollapseSets('${sessionId}',${i})" />
         <span class="completion-x">×</span>
@@ -2660,8 +2691,9 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   let exercises = [];
   if (hasExercises) {
     ((_completionExerciseMap[sessionId]) || []).forEach((ex, i) => {
+      const _editedName = document.getElementById(`cex-name-${sessionId}-${i}`)?.value.trim();
       const entry = {
-        name:   ex.name,
+        name:   _editedName || ex.name,
         sets:   parseInt(document.getElementById(`cex-sets-${sessionId}-${i}`)?.value)   || ex.sets,
         reps:   document.getElementById(`cex-reps-${sessionId}-${i}`)?.value             || ex.reps   || "",
         weight: document.getElementById(`cex-weight-${sessionId}-${i}`)?.value           || ex.weight || "",

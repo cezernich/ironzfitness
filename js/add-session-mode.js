@@ -169,17 +169,26 @@
   // Non-blocking warnings resolve true after the user dismisses; only
   // explicit Cancel returns false.
   async function maybeWarnOnTypeSelect(type) {
+    // Honor user's opt-out — if they've dismissed these once with
+    // "Don't show again", skip the modal entirely.
+    try {
+      if (localStorage.getItem("addSessionWarningsDisabled") === "1") return true;
+    } catch {}
     const mode = _currentMode;
     const ctx = mode === "plan_aligned" ? getPlanContext(_currentDate) : null;
     const warnings = [];
 
     if (mode === "plan_aligned" && ctx) {
-      // 1. Weekly-at-target soft warning (any type).
+      // 1. Weekly-over-target soft warning. Only fire when ADDING the
+      // new session would push the user ABOVE target — being at target
+      // just means the user is executing their plan, which isn't
+      // something to warn about.
       const vc = weeklyVolumeCheck(ctx);
-      if (vc.atTarget) {
+      if (vc.count + 1 > vc.target) {
         warnings.push(
-          "You're already at your target volume this week (" +
-          vc.count + "/" + vc.target + "). Adding more might affect recovery — but you know your body best."
+          "This week has " + vc.count + " session" + (vc.count === 1 ? "" : "s") +
+          " planned against a target of " + vc.target + " for your phase. " +
+          "Adding another puts you over — fine occasionally, just be aware of recovery."
         );
       }
       // 2. Tomorrow-key-session note (non-blocking, intensity hint).
@@ -329,13 +338,27 @@
   function _sessionsInWeek(dateStr, plan, sched, logged) {
     const { start, end } = _weekBounds(dateStr);
     const inRange = (d) => d && d >= start && d <= end;
+    const isRest = (e) => {
+      const t = String(e.type || e.discipline || e.load || "").toLowerCase();
+      return t === "rest";
+    };
+    // Dedup by (date, discipline) — the race plan writes a session into
+    // BOTH trainingPlan and workoutSchedule, so a naive sum double-counts
+    // the user's actual load and the "You're at target" warning fires on
+    // Monday morning even though nothing has been done yet.
+    const seen = new Set();
     const hits = [];
-    (plan || []).forEach(e => { if (e && inRange(e.date)) hits.push(e); });
-    (sched || []).forEach(e => { if (e && inRange(e.date)) hits.push(e); });
-    // Logged workouts go into the count too — if the user already finished
-    // 3 strength this week, adding another IS above the cap even if they
-    // weren't pre-scheduled.
-    (logged || []).forEach(e => { if (e && inRange(e.date)) hits.push(e); });
+    const consider = (e) => {
+      if (!e || !inRange(e.date) || isRest(e)) return;
+      const disc = String(e.discipline || e.type || "").toLowerCase() || "?";
+      const key = e.date + "::" + disc;
+      if (seen.has(key)) return;
+      seen.add(key);
+      hits.push(e);
+    };
+    (plan || []).forEach(consider);
+    (sched || []).forEach(consider);
+    (logged || []).forEach(consider);
     return hits;
   }
 
@@ -450,16 +473,30 @@
           '<ul style="margin:0 0 18px;padding-left:20px;line-height:1.5;color:var(--color-text);font-size:0.95rem">' +
             listHtml +
           '</ul>' +
+          '<label style="display:flex;align-items:center;gap:8px;margin:0 0 14px;font-size:0.85rem;color:var(--color-text-muted);cursor:pointer">' +
+            '<input type="checkbox" id="asw-silence" style="width:16px;height:16px;accent-color:var(--color-accent)">' +
+            '<span>Don\u2019t show these again</span>' +
+          '</label>' +
           '<button class="btn-primary" id="asw-go" style="width:100%;margin-bottom:8px">Add anyway</button>' +
           '<button class="btn-secondary" id="asw-cancel" style="width:100%;opacity:0.7">Cancel</button>' +
         '</div>';
 
       document.body.appendChild(overlay);
+      const persistSilenceIfChecked = () => {
+        try {
+          if (document.getElementById("asw-silence")?.checked) {
+            localStorage.setItem("addSessionWarningsDisabled", "1");
+            if (global.DB && global.DB.syncKey) global.DB.syncKey("addSessionWarningsDisabled");
+          }
+        } catch {}
+      };
       document.getElementById("asw-go").onclick = () => {
+        persistSilenceIfChecked();
         overlay.remove();
         resolve(true);
       };
       document.getElementById("asw-cancel").onclick = () => {
+        persistSilenceIfChecked();
         overlay.remove();
         resolve(false);
       };

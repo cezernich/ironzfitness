@@ -409,7 +409,7 @@ const DB = (() => {
     'currentRecoveryState', 'latestCheckIn',
     // Preferences
     'notifSettings', 'theme', 'userLevel', 'coachingDismissed',
-    'coachingInsightsEnabled', 'fuelingEnabled',
+    'coachingInsightsEnabled', 'fuelingEnabled', 'addSessionWarningsDisabled',
     // Onboarding v2 / Build Plan inputs (spec §5.1)
     // These capture the user's answers from the onboarding survey and
     // the standalone Build Plan flow. They feed generateTrainingPlan()
@@ -434,6 +434,13 @@ const DB = (() => {
     'workoutSchedule', 'workouts', 'trainingPlan', 'events', 'meals',
     'completedSessions', 'workoutRatings', 'coachingDismissed',
     'ironz_saved_workouts_v1', 'ironz_saved_workouts_pending_delete_v1',
+    // Thresholds / 1RMs / CSS / FTP / VDOT — these drive pacing across
+    // the generators, so losing the most recent edit to a refresh race
+    // produces workouts that disagree with the values the user just
+    // typed in. profile goes in the immediate set for the same reason:
+    // saveTrainingZonesData mirrors per-sport "*Updated" timestamps
+    // onto the profile and the reminder banner reads those.
+    'trainingZones', 'trainingZonesHistory', 'profile',
   ]);
 
   async function _doSyncKey(lsKey, expectedAtSchedule) {
@@ -468,6 +475,19 @@ const DB = (() => {
     // Critical keys fire immediately; others debounce 2s to batch rapid writes
     const delay = _IMMEDIATE_SYNC_KEYS.has(lsKey) ? 200 : 2000;
     _keyTimers[lsKey] = setTimeout(() => _doSyncKey(lsKey, expectedAtSchedule), delay);
+  }
+
+  // Force-flush a pending debounced sync and await the Supabase upsert.
+  // Callers that need a strong write guarantee — e.g. the Training Zones
+  // save buttons, where losing a CSS/FTP edit to a refresh race breaks
+  // plan generation — can `await DB.flushKey('trainingZones')` after
+  // they write to localStorage.
+  async function flushKey(lsKey) {
+    if (_keyTimers[lsKey]) {
+      clearTimeout(_keyTimers[lsKey]);
+      delete _keyTimers[lsKey];
+    }
+    try { await _doSyncKey(lsKey, _expectedUid()); } catch {}
   }
 
   // ── User isolation — wipe local cache on sign-out / user switch ──────────
@@ -962,6 +982,7 @@ const DB = (() => {
     syncEvents,
     syncGoals,
     syncKey,
+    flushKey,
     refreshAllKeys,
     refreshAllTables,
     SYNCED_KEYS,
