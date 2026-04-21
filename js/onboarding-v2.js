@@ -3063,6 +3063,18 @@
   //   - Preserve ≥1 rest day per week
   //   - Never double the day before a rest day
   //   - Non-hard sessions only get added as doubles (easy/strength)
+  // Normalize goal strings across multiple historical enum shapes.
+  // Current values: finish / get_faster / pr. Legacy values that may
+  // still live in saved onboarding state get rewritten on read.
+  function _normalizeGoal(g) {
+    const s = String(g || "").toLowerCase();
+    if (s === "just_finish") return "finish";
+    if (s === "time_goal" || s === "time") return "get_faster";
+    if (s === "pr_podium" || s === "podium") return "pr";
+    if (s === "finish" || s === "get_faster" || s === "pr") return s;
+    return "get_faster"; // default dial
+  }
+
   function _enforceSpecTarget() {
     if (typeof window === "undefined") return;
     const PSD = window.PlanSessionDistribution;
@@ -3073,14 +3085,43 @@
     const sportProfile = PSD.sportProfileForRaceType(race.type);
     if (!sportProfile) return;
     const level = _deriveAthleteLevel();
-    const target = PSD.getDistribution(sportProfile, "Base", level);
+
+    // Prefer the new goal × level × distance matrix (SESSION_COUNT_MATRIX
+    // per spec §4a-0). It varies by goal so Advanced/PR gets more sessions
+    // than Advanced/Finish. Falls back to the legacy level-only matrix for
+    // race types that aren't in the distance-specific table (hyrox, cycling
+    // century). The legacy fallback is goal-agnostic and matches the old
+    // behavior for plans predating the matrix rewrite.
+    const goal = _normalizeGoal((race && race.goal) || "get_faster");
+    let target = null;
+    let sourceLabel = "legacy";
+    if (typeof PSD.getSessionCount === "function") {
+      const gm = PSD.getSessionCount(race.type, level, goal);
+      if (gm) {
+        target = gm;
+        sourceLabel = "matrix";
+      }
+    }
+    if (!target) target = PSD.getDistribution(sportProfile, "Base", level);
     if (!target) return;
 
     // Log so devtools shows what the pre-fill decided. Mirrors the planner's
     // "athlete level resolved to X via Y" trace so the two layers agree.
     try {
-      console.log("[IronZ] pre-fill level=" + level + " sport=" + sportProfile + " target Base:", target);
+      console.log("[IronZ] pre-fill level=" + level + " goal=" + goal + " sport=" + sportProfile + " source=" + sourceLabel + " target:", target);
     } catch {}
+
+    // When the matrix-derived target asks for more training days than the
+    // user's selected daysPerWeek, bump daysPerWeek up to the matrix value
+    // BEFORE placement so the scaffolding has room. We only ever bump up,
+    // never down — the user's floor stands. Matrix-source only.
+    if (sourceLabel === "matrix" && typeof target.days === "number") {
+      const cur = parseInt(_state.planDetails.daysPerWeek, 10) || 5;
+      if (target.days > cur) {
+        try { console.log("[IronZ] bumping daysPerWeek " + cur + " → " + target.days + " to match matrix target"); } catch {}
+        _state.planDetails.daysPerWeek = String(target.days);
+      }
+    }
 
     // Count what the template already has, keyed by "canonical" discipline.
     const bucketOf = (code) => {
@@ -3782,6 +3823,16 @@
     if (!body) return;
     const race = _state.currentRace;
     const hasRace = _state.trainingGoals.includes("race") && race && race.date;
+
+    // Re-run spec-target enforcement on every preview render so users
+    // who change goal / level after the schedule was first seeded still
+    // see the matrix-correct session count. Idempotent — it only ADDS
+    // missing sessions up to the matrix target, never removes.
+    // Previously a user who selected PR goal and Advanced level AFTER
+    // visiting the Weekly Schedule step saw a 5-session, 1-quality plan
+    // because the schedule was seeded under the old intermediate
+    // defaults and never re-enforced.
+    try { _enforceSpecTarget(); } catch (e) { try { console.warn("[IronZ] preview enforce failed:", e.message); } catch {} }
     // Strength-only users don't follow a race-phased arc, so the
     // base/build/peak/taper timeline is irrelevant — skip it.
     const sports = _state.selectedSports || [];
