@@ -2871,33 +2871,6 @@ input.completion-ex-name:focus {
   background: rgba(34, 197, 94, 0.15);
 }
 
-/* Header-level "Share to Strava" icon button. Rendered next to Undo on
-   completed session cards when Strava is connected and the workout
-   hasn't been uploaded yet — keeps the action one tap away regardless
-   of whether the auto-prompt after completion landed. */
-.strava-share-header-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  margin-right: 4px;
-  border-radius: 6px;
-  border: 1px solid rgba(252, 82, 0, 0.35);
-  background: rgba(252, 82, 0, 0.06);
-  color: #fc5200;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-.strava-share-header-btn:hover {
-  background: rgba(252, 82, 0, 0.15);
-  border-color: #fc5200;
-}
-.strava-share-header-btn svg {
-  display: block;
-}
-
 .session-complete-indicator {
   display: inline-flex;
   align-items: center;

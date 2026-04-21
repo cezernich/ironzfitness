@@ -2228,69 +2228,9 @@ if (typeof window !== "undefined") {
 }
 
 // Returns header-level undo button shown in collapsed view when session is complete.
-// Also emits a Strava quick-share icon when Strava is connected and the
-// workout hasn't been uploaded yet — the post-completion auto-prompt
-// runs behind the rating modal and users were missing it.
 function _buildUndoHeaderBtn(sessionId, dateStr) {
   if (!isSessionComplete(sessionId)) return "";
-  const undoBtn = `<button class="undo-complete-btn-header" title="Undo completion" onclick="event.stopPropagation();undoSessionCompletion('${sessionId}','${dateStr}')">↩ Undo</button>`;
-  // Derive workoutId from the completion meta — each sessionId maps to
-  // exactly one workout row via loadCompletionMeta()[sessionId].workoutId.
-  let stravaBtn = "";
-  try {
-    const meta = loadCompletionMeta()[sessionId];
-    if (meta && meta.workoutId) {
-      stravaBtn = _buildStravaShareHeaderBtn(sessionId, meta.workoutId);
-    }
-  } catch {}
-  return stravaBtn + undoBtn;
-}
-
-// Header-level Strava quick-share icon. Shown on completed sessions when
-// the user has Strava connected and the workout hasn't been uploaded yet.
-// Falls back to the in-app share prompt (force:true) so users can adjust
-// the card contents before posting. The auto-prompt on completion runs
-// behind a rating modal and can be missed — this puts the action one tap
-// away on the card header for as long as the upload hasn't happened.
-function _buildStravaShareHeaderBtn(sessionId, workoutId) {
-  if (!isSessionComplete(sessionId)) return "";
-  if (typeof window === "undefined") return "";
-  // Skip only when the workout is already uploaded — easy sync check
-  // against the workouts list. Whether Strava is actually connected is
-  // handled downstream in promptStravaShareIfEligible (force:true will
-  // fire a "Reconnect Strava" toast if the write scope is missing),
-  // which gives the user a clear action path either way.
-  let alreadyUploaded = false;
-  try {
-    const list = JSON.parse(localStorage.getItem("workouts") || "[]");
-    const w = list.find(x => String(x.id) === String(workoutId));
-    if (w && w.stravaUploadId) alreadyUploaded = true;
-  } catch {}
-  if (alreadyUploaded) return "";
-  const svg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/></svg>';
-  return `<button class="strava-share-header-btn" title="Share to Strava"
-            onclick="event.stopPropagation();_shareCompletedWorkoutToStrava('${workoutId}')">
-            ${svg}
-          </button>`;
-}
-
-// Click handler for the header Strava button. Looks up the completed
-// workout in localStorage and routes through the same prompt used by the
-// share action sheet (force:true so the prompt shows even after the
-// post-completion dedup key is already set for this session).
-if (typeof window !== "undefined") {
-  window._shareCompletedWorkoutToStrava = function (workoutId) {
-    try {
-      const list = JSON.parse(localStorage.getItem("workouts") || "[]");
-      const w = list.find(x => String(x.id) === String(workoutId));
-      if (!w) return;
-      if (typeof window.promptStravaShareIfEligible === "function") {
-        window.promptStravaShareIfEligible(w, { force: true });
-      }
-    } catch (e) {
-      console.warn("[IronZ] strava header share failed:", e && e.message);
-    }
-  };
+  return `<button class="undo-complete-btn-header" title="Undo completion" onclick="event.stopPropagation();undoSessionCompletion('${sessionId}','${dateStr}')">↩ Undo</button>`;
 }
 
 // ─── Share button (delegates to share.js) ──────────────────────────────────

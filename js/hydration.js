@@ -297,22 +297,39 @@ function getEffectiveOzForDate(dateStr) {
  *  highest duration-scaled bonus when multiple are scheduled on one day. */
 function getWorkoutInfoForDate(dateStr) {
   try {
-    const schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
-    const dayWorkouts = schedule.filter(w => w.date === dateStr);
+    // Three write paths land a workout on a date:
+    //   - workoutSchedule — onboarding-v2 / custom-plan prescheduled sessions
+    //   - trainingPlan    — race plan entries
+    //   - workouts        — logged completions AND sessions saved via
+    //                        Add Session (qeSaveGeneratedCardio etc.) which
+    //                        writes to `workouts` not workoutSchedule
+    // Hydration bonus applies to ANY of them — if the athlete trained or
+    // is about to train today, they need the volume adjustment. Previously
+    // this only read workoutSchedule, so a brick added via Add Session
+    // got no hydration bump.
+    const sources = [];
+    try { sources.push(...(JSON.parse(localStorage.getItem("workoutSchedule") || "[]") || [])); } catch {}
+    try { sources.push(...(JSON.parse(localStorage.getItem("trainingPlan") || "[]") || [])); } catch {}
+    try { sources.push(...(JSON.parse(localStorage.getItem("workouts") || "[]") || [])); } catch {}
+    const dayWorkouts = sources.filter(w => w && w.date === dateStr);
     if (dayWorkouts.length === 0) return null;
     let bestBonus = 0;
     let bestName = "";
     let bestDurationMin = 0;
     for (const w of dayWorkouts) {
+      // Skip rest-marker entries.
+      const t = String(w.type || w.discipline || "").toLowerCase();
+      if (t === "rest" || w.load === "rest") continue;
       const d = parseFloat(w.duration);
       const durationMin = isFinite(d) && d > 0 ? d : 0;
-      const bonus = computeWorkoutBonusOz(w.type, durationMin);
+      const bonus = computeWorkoutBonusOz(t, durationMin);
       if (bonus > bestBonus) {
         bestBonus = bonus;
-        bestName = w.sessionName || w.type || "workout";
+        bestName = w.sessionName || w.name || w.type || w.discipline || "workout";
         bestDurationMin = durationMin;
       }
     }
+    if (bestBonus === 0) return null;
     return { bonusOz: bestBonus, sessionName: bestName, durationMin: bestDurationMin };
   } catch { return null; }
 }

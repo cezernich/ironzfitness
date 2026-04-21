@@ -4483,10 +4483,53 @@ function isCarbLoadDay(dateStr) {
  * pinned to 8/9/10 g/kg bodyweight, fat is reduced to ~20% of calories, and
  * protein is held at the training-day level. Total calories rise accordingly.
  */
+// Infer the day's training load from any session data on the date, not
+// just race-plan entries. BMR multiplier table keys off {rest, easy,
+// moderate, hard, long, race} — map arbitrary session types onto one
+// of those buckets. Returns the heaviest load across all sources so a
+// rest-day plan entry doesn't mask a manually-added brick.
+function _inferDayLoadFromAllSources(dateStr) {
+  const RANK = { rest: 0, easy: 1, moderate: 2, hard: 3, long: 4, race: 5 };
+  const sources = [];
+  try { sources.push(...(JSON.parse(localStorage.getItem("trainingPlan")    || "[]") || [])); } catch {}
+  try { sources.push(...(JSON.parse(localStorage.getItem("workoutSchedule") || "[]") || [])); } catch {}
+  try { sources.push(...(JSON.parse(localStorage.getItem("workouts")        || "[]") || [])); } catch {}
+  const dayOf = sources.filter(s => s && s.date === dateStr);
+  if (dayOf.length === 0) return "rest";
+
+  let best = "rest";
+  for (const s of dayOf) {
+    // Explicit load wins — race plan entries carry it directly.
+    let load = String(s.load || "").toLowerCase();
+    // If no explicit load, derive from type/name/duration. Bricks, long
+    // runs/rides, tempos, intervals, and anything named "race" are hard
+    // or long. Everything else caps at moderate (strength) or easy.
+    if (!load) {
+      const type = String(s.type || s.discipline || "").toLowerCase();
+      const name = String(s.sessionName || s.name || "").toLowerCase();
+      const dur  = parseFloat(s.duration) || 0;
+      if (type === "rest" || /rest/i.test(name)) load = "rest";
+      else if (/long\s*run|long\s*ride|long\s*bike|brick|race/i.test(name) || dur >= 90) load = "long";
+      else if (/tempo|threshold|interval|hard|race.?pace|vo2|hiit/i.test(name)) load = "hard";
+      else if (type === "brick") load = "hard"; // brick with no name still counts
+      else if (type === "weightlifting" || type === "strength" || type === "bodyweight" || type === "hiit") load = "moderate";
+      else if (type === "running" || type === "run" || type === "cycling" || type === "bike" ||
+               type === "swimming" || type === "swim" || type === "rowing") load = "easy";
+      else load = "easy";
+    }
+    if ((RANK[load] ?? 0) > (RANK[best] ?? 0)) best = load;
+  }
+  return best;
+}
+
 function getBaseNutritionTarget(dateStr) {
   const plan  = loadTrainingPlan();
   const entry = plan.find(e => e.date === dateStr);
-  const load  = entry ? entry.load : "rest";
+  // Derive load from ALL session sources (trainingPlan, workoutSchedule,
+  // workouts). Previously we only read entry.load from the race plan,
+  // which meant a manually-added brick or a logged workout on a
+  // non-race day silently defaulted to "rest" calories.
+  const load = _inferDayLoadFromAllSources(dateStr);
   const carbLoad = getCarbLoadInfo(dateStr, entry);
 
   let profile = {};
