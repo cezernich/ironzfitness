@@ -4501,21 +4501,44 @@ function _inferDayLoadFromAllSources(dateStr) {
   for (const s of dayOf) {
     // Explicit load wins — race plan entries carry it directly.
     let load = String(s.load || "").toLowerCase();
-    // If no explicit load, derive from type/name/duration. Bricks, long
-    // runs/rides, tempos, intervals, and anything named "race" are hard
-    // or long. Everything else caps at moderate (strength) or easy.
+    // If no explicit load, derive from type/name/duration. Priority
+    // order matters — evaluate most-specific / highest-impact rules first.
     if (!load) {
       const type = String(s.type || s.discipline || "").toLowerCase();
       const name = String(s.sessionName || s.name || "").toLowerCase();
       const dur  = parseFloat(s.duration) || 0;
-      if (type === "rest" || /rest/i.test(name)) load = "rest";
-      else if (/long\s*run|long\s*ride|long\s*bike|brick|race/i.test(name) || dur >= 90) load = "long";
-      else if (/tempo|threshold|interval|hard|race.?pace|vo2|hiit/i.test(name)) load = "hard";
-      else if (type === "brick") load = "hard"; // brick with no name still counts
-      else if (type === "weightlifting" || type === "strength" || type === "bodyweight" || type === "hiit") load = "moderate";
+
+      if (type === "rest" || /rest/i.test(name)) {
+        load = "rest";
+      }
+      // Long: canonical long-session names, race day, OR any session ≥90 min.
+      // "brick" is intentionally NOT in this regex — a 45-min brick is hard,
+      // only a 90+ min brick earns long fueling (caught by the duration rule).
+      else if (/long\s*run|long\s*ride|long\s*bike|race/i.test(name) || dur >= 90) {
+        load = "long";
+      }
+      // Hard: explicit quality-session names OR the hiit type. HIIT gets
+      // the hard bucket even when the session has no descriptive name —
+      // it's always a high-intensity effort by definition.
+      else if (type === "hiit" || /tempo|threshold|interval|hard|race.?pace|vo2|hiit/i.test(name)) {
+        load = "hard";
+      }
+      // Brick under 90 min — not long-fueled but still hard-effort cardio.
+      else if (type === "brick") {
+        load = "hard";
+      }
+      // Strength. HIIT already caught above — don't re-list it here.
+      else if (type === "weightlifting" || type === "strength" || type === "bodyweight") {
+        load = "moderate";
+      }
+      // Default aerobic session.
       else if (type === "running" || type === "run" || type === "cycling" || type === "bike" ||
-               type === "swimming" || type === "swim" || type === "rowing") load = "easy";
-      else load = "easy";
+               type === "swimming" || type === "swim" || type === "rowing") {
+        load = "easy";
+      }
+      else {
+        load = "easy";
+      }
     }
     if ((RANK[load] ?? 0) > (RANK[best] ?? 0)) best = load;
   }
