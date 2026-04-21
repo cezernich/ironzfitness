@@ -3583,11 +3583,16 @@ function generateTrainingPlan(raceOrCalendar) {
 function buildPatternsFromPreferences(weeklyTemplate, phases, ctx) {
   // Map day-name → day-of-week (0=Sun…6=Sat).
   const DOW = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
-  // Code variant → load mapping. "long" is a load of its own.
+  // Code variant → load mapping. "long", "strides", and "recovery" are
+  // loads of their own. Recovery was previously collapsed into "easy",
+  // which made the generator pull from the easy-run library pool —
+  // including "Easy Run with Strides" templates that include Z5 strides.
+  // Keeping "recovery" distinct so the generator queries the dedicated
+  // recovery-run pool (Z1 only, 20–30 min, no pickups).
   const VARIANT_TO_LOAD = {
     // run
     long: "long", interval: "hard", hard: "hard", hills: "hard",
-    tempo: "moderate", moderate: "moderate", recovery: "easy",
+    tempo: "moderate", moderate: "moderate", recovery: "recovery",
     easy: "easy", strides: "strides",
     // bike
     // "interval" / "hard" shared above; "long" shared above
@@ -3792,6 +3797,7 @@ function _mapToLibraryType(discipline, load, raceType) {
     return role || "injury_prevention";
   }
   if (discipline === "run") {
+    if (load === "recovery") return "recovery"; // Z1 only, 20-30 min, no strides
     if (load === "easy") return "easy";
     if (load === "long") return "long";
     if (load === "moderate") return "tempo";
@@ -3803,6 +3809,7 @@ function _mapToLibraryType(discipline, load, raceType) {
     return null;
   }
   if (discipline === "bike") {
+    if (load === "recovery") return "recovery"; // spin-out ride, Z1
     if (load === "easy") return "easy";
     if (load === "long") return "long";
     if (load === "moderate") return "sweet_spot";
@@ -3810,6 +3817,7 @@ function _mapToLibraryType(discipline, load, raceType) {
     return null;
   }
   if (discipline === "swim") {
+    if (load === "recovery") return "recovery"; // flush swim, Z1
     if (load === "easy") return "easy";
     if (load === "technique") return "technique";
     if (load === "moderate" || load === "hard") return "threshold";
@@ -4238,7 +4246,7 @@ function _generateSingleRacePlan(race) {
         thresholdNote: _twOverride.note,
       });
     } else if (_patternSessionList.length && dateStr >= todayStr) {
-      const LOAD_NAMES = { easy: "Easy", strides: "Strides", moderate: "Tempo", hard: "Threshold", long: "Long" };
+      const LOAD_NAMES = { easy: "Easy", strides: "Strides", moderate: "Tempo", hard: "Threshold", long: "Long", recovery: "Recovery" };
       const wNum = _weekNumberFor(cursor);
       weekNumber = wNum;
       const _phaseWeeks = (currentPhase && currentPhase.weeks) || 1;

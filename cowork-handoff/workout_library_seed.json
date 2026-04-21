@@ -1,6 +1,123 @@
 [
 
 
+  {"_comment": "========== RUN — RECOVERY / Z1 =========="},
+
+  {
+    "name": "Pure Recovery Jog",
+    "description": "Z1 only. The sole purpose is blood flow to flush the legs after a hard session. No strides, no pickups, no acceleration. If you feel the urge to speed up, slow down.",
+    "sport": "run",
+    "session_type": "recovery",
+    "energy_system": "aerobic",
+    "phases": ["base", "build", "peak", "taper"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "2 min walk → very easy jog", "duration_min": 2 },
+    "main_set": {
+      "type": "continuous",
+      "description": "Very easy jog at Z1 only. Slower than your easy pace. Comfortable nasal breathing throughout.",
+      "effort": { "duration_min": [15, 25], "zone": "Z1" }
+    },
+    "cooldown": { "description": "3 min walk + foam roll quads, calves, glutes", "duration_min": 3 },
+    "volume_range": { "duration_min": [15, 25] },
+    "total_duration_range": [20, 30],
+    "status": "published"
+  },
+
+  {
+    "name": "Shakeout Recovery Run",
+    "description": "Short, gentle shakeout the day after a hard session. Shorter than Pure Recovery — for days you're still stiff or if the long run was especially demanding.",
+    "sport": "run",
+    "session_type": "recovery",
+    "energy_system": "aerobic",
+    "phases": ["base", "build", "peak", "taper"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "5 min walk — let the body wake up before running", "duration_min": 5 },
+    "main_set": {
+      "type": "continuous",
+      "description": "Easy jog at Z1. 10–20 min total. Walk breaks fine if you need them.",
+      "effort": { "duration_min": [10, 20], "zone": "Z1" }
+    },
+    "cooldown": { "description": "2 min walk + calf/hip stretches", "duration_min": 2 },
+    "volume_range": { "duration_min": [10, 20] },
+    "total_duration_range": [17, 27],
+    "status": "published"
+  },
+
+  {
+    "name": "Recovery Walk-Jog",
+    "description": "Alternates easy jog and walk. For beginner runners or days when even Z1 jogging feels too much. Movement without stress.",
+    "sport": "run",
+    "session_type": "recovery",
+    "energy_system": "aerobic",
+    "phases": ["base", "build", "peak", "taper"],
+    "levels": ["beginner"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "5 min walk", "duration_min": 5 },
+    "main_set": {
+      "type": "intervals",
+      "description": "Alternate 3 min easy jog + 1 min walk. Z1 throughout.",
+      "intervals": { "reps": [4, 6], "duration": "3 min", "rest": "1 min walk", "zone": "Z1" }
+    },
+    "cooldown": { "description": "5 min walk + gentle stretches", "duration_min": 5 },
+    "volume_range": { "duration_min": [16, 24] },
+    "total_duration_range": [26, 34],
+    "status": "published"
+  },
+
+  {"_comment": "========== BIKE — RECOVERY / Z1 =========="},
+
+  {
+    "name": "Recovery Spin",
+    "description": "Z1 only. Active recovery on the bike — legs spinning freely, no resistance, no power targets. Blood flow without fatigue.",
+    "sport": "bike",
+    "session_type": "recovery",
+    "energy_system": "aerobic",
+    "phases": ["base", "build", "peak", "taper"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "5 min very easy spin — settle in", "duration_min": 5 },
+    "main_set": {
+      "type": "continuous",
+      "description": "Easy spin at Z1. 20–35 min. If you feel yourself pushing, back off.",
+      "effort": { "duration_min": [20, 35], "zone": "Z1" }
+    },
+    "cooldown": { "description": "5 min easy spin → off the bike, stretch quads and hip flexors", "duration_min": 5 },
+    "volume_range": { "duration_min": [20, 35] },
+    "total_duration_range": [30, 45],
+    "status": "published"
+  },
+
+  {"_comment": "========== SWIM — RECOVERY / Z1 =========="},
+
+  {
+    "name": "Recovery Flush Swim",
+    "description": "Gentle swim focused on easy stroke mechanics and blood flow. No pace targets, no hard strokes. Flush the legs after a land-based hard session.",
+    "sport": "swim",
+    "session_type": "recovery",
+    "energy_system": "aerobic",
+    "phases": ["base", "build", "peak", "taper"],
+    "levels": ["beginner", "intermediate", "advanced"],
+    "race_distances": null,
+    "race_goals": null,
+    "warmup": { "description": "200m easy freestyle + 100m kick on board", "duration_min": 6 },
+    "main_set": {
+      "type": "continuous",
+      "description": "Easy continuous swim at Z1. Smooth, relaxed stroke. Mix freestyle and backstroke if you like.",
+      "effort": { "duration_min": [15, 25], "zone": "Z1" }
+    },
+    "cooldown": { "description": "100m easy backstroke + stretching poolside", "duration_min": 4 },
+    "volume_range": { "duration_min": [15, 25] },
+    "total_duration_range": [25, 35],
+    "status": "published"
+  },
+
+
   {"_comment": "========== RUN — EASY / Z2 =========="},
 
   {
