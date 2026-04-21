@@ -3696,6 +3696,7 @@
     base: {
       "run-long":      "Long Run",
       "run-interval":  "Easy Run",        // no intensity in Base
+      "run-tempo":     "Easy Run",        // no intensity in Base
       "run-recovery":  "Recovery Run",
       "run-easy":      "Easy Run",
       "bike-long":     "Long Ride",
@@ -3712,6 +3713,7 @@
     build: {
       "run-long":      "Long Run",
       "run-interval":  "Interval Run",
+      "run-tempo":     "Tempo Run",
       "run-recovery":  "Recovery Run",
       "run-easy":      "Easy Run",
       "bike-long":     "Long Ride",
@@ -3728,6 +3730,7 @@
       // shorter length. "Long Run (short)" read as a contradiction.
       "run-long":      "Long Run",
       "run-interval":  "Race-Pace Run",
+      "run-tempo":     "Tempo Run",
       "run-recovery":  "Recovery Run",
       "run-easy":      "Easy Run",
       "bike-long":     "Long Ride",
@@ -3740,6 +3743,7 @@
     taper: {
       "run-long":      "Taper Long Run",
       "run-interval":  "Short Race-Pace",
+      "run-tempo":     "Short Tempo",
       "run-recovery":  "Easy Run",
       "run-easy":      "Easy Run",
       "bike-long":     "Short Opener",
@@ -3761,6 +3765,7 @@
     race: {
       "run-long":      null,                            // no long run in race week
       "run-interval":  "Short Race-Pace Opener",        // 10-min race-pace primer
+      "run-tempo":     "Shakeout Run",                   // no tempo in race week
       "run-recovery":  "Shakeout Run",
       "run-easy":      "Shakeout Run",
       "bike-long":     null,                            // no long ride in race week
@@ -3786,6 +3791,7 @@
     const map = {
       "run-long":     "Long Run",
       "run-interval": "Interval Run",
+      "run-tempo":    "Tempo Run",
       "run-recovery": "Recovery Run",
       "run-easy":     "Easy Run",
       "bike-long":    "Long Ride",
@@ -3989,6 +3995,7 @@
     const EXPLAIN = {
       "run-long":     "Builds aerobic base and bone-tendon durability. Longest run of the week at conversational pace.",
       "run-interval": "Drives VO2max and lactate threshold up. Hard reps with full recovery so each one is quality.",
+      "run-tempo":    "Sustained effort at comfortably-hard pace. Extends the speed you can hold aerobically — the engine behind a strong finish.",
       "run-recovery": "Flush day. Easy effort the day after your hardest session so your body absorbs the work.",
       "run-easy":     "Aerobic volume at conversational pace. 70–80% of your weekly run time should feel this easy.",
       "bike-long":    "Endurance base for cycling. Long, steady, fuel well — the foundation for everything else.",
@@ -4824,6 +4831,7 @@
       // Enriched run variants
       "run-long":      { type: "running",      discipline: "run",  sessionName: "Long Run",       load: "long",    duration: Math.round(sessionLen * 1.5) },
       "run-interval":  { type: "running",      discipline: "run",  sessionName: "Interval Run",   load: "hard" },
+      "run-tempo":     { type: "running",      discipline: "run",  sessionName: "Tempo Run",      load: "moderate" },
       "run-recovery":  { type: "running",      discipline: "run",  sessionName: "Recovery Run",   load: "easy",    duration: Math.max(20, Math.round(sessionLen * 0.7)) },
       "run-easy":      { type: "running",      discipline: "run",  sessionName: "Easy Run",       load: "easy" },
       // Enriched bike variants
