@@ -1942,7 +1942,42 @@ function buildAiIntervalsList(session, type) {
       }
     }
     let durText = reps > 1 ? `${reps} × ${perRepDur}` : (perRepDur || iv.duration);
-    if (reps > 1 && iv.restDuration) durText += ` (${iv.restDuration} rest)`;
+    // Surface the between-rep rest in the duration line so multi-rep
+    // blocks read as "4 × 8 min (90s rest)" rather than an ambiguous
+    // "4 × 8 min". Prefer the structured restDuration field; fall back
+    // to extracting it from the details free text when the interval
+    // was emitted by a generator that only described rest in prose
+    // (e.g. "4×8 min @ ... w/ 90s jog rest"). Same extraction logic
+    // the intensity-strip uses, so strip + step list always agree.
+    let _restLabel = iv.restDuration || null;
+    if (reps > 1 && !_restLabel) {
+      const _ds = String(iv.details || "");
+      // Require the "rest" keyword to sit close to the number — patterns
+      // anchor with at most a single filler word (jog / easy / walk)
+      // between the unit and "rest". Looser patterns incorrectly matched
+      // the distance portion of strings like "8×400m @ R pace w/ 2 min
+      // rest" (picking up "400m" instead of "2 min").
+      const _pats = [
+        /(\d+)\s*(?:sec|seconds|s)\s+(?:jog|easy|walk)?\s*rest\b/i,
+        /(\d+)\s*(?:min|minutes|m)\s+(?:jog|easy|walk)?\s*rest\b/i,
+        /\brest\s*:?\s*(\d+)\s*(?:sec|seconds|s)\b/i,
+        /\brest\s*:?\s*(\d+)\s*(?:min|minutes|m)\b/i,
+      ];
+      for (let i = 0; i < _pats.length; i++) {
+        const m = _ds.match(_pats[i]);
+        if (m) {
+          const val = parseInt(m[1], 10);
+          if (val > 0) {
+            // Unit is disambiguated by WHICH pattern matched: index 0/2
+            // are sec; 1/3 are min.
+            const isMin = (i === 1 || i === 3);
+            _restLabel = isMin ? `${val} min` : `${val}s`;
+            break;
+          }
+        }
+      }
+    }
+    if (reps > 1 && _restLabel) durText += ` (${_restLabel} rest)`;
     const nameLow   = (iv.name || "").toLowerCase();
     const sportTag  = iv.sport ? `<span class="qe-brick-sport qe-brick-${iv.sport}">${iv.sport === "bike" ? "Bike" : "Run"}</span> ` : "";
 
