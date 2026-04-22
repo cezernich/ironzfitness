@@ -613,14 +613,32 @@ async function generateMealSuggestions() {
   const workout = getTodayScheduledWorkout();
   const workoutCtx = workout ? `Today's workout: ${workout.title || workout.type || "training session"}. ` : "Rest day. ";
 
-  const prompt = `Generate 3 meal suggestions for the rest of today.
+  // Recently suggested meals (last 4 sessions worth) — fed into the prompt
+  // so Claude doesn't regenerate the same three staple meals every tap.
+  // Without this, identical inputs produced identical outputs and "Oatmeal
+  // with Protein Powder" / "Grilled Chicken + Rice + Broccoli" / "Salmon +
+  // Sweet Potato" became the permanent trio.
+  let recentNames = [];
+  try {
+    const raw = JSON.parse(localStorage.getItem("mealSuggestionHistory") || "[]");
+    if (Array.isArray(raw)) recentNames = raw.slice(0, 12);
+  } catch {}
+  const recentClause = recentNames.length
+    ? `\nAVOID repeating any of these recently suggested meals (pick different dishes, different proteins, different cuisines): ${recentNames.join(", ")}.`
+    : "";
+  // Random variety nonce — invalidates any lingering prompt cache and
+  // nudges Claude toward different dishes even when other inputs match.
+  const varietyNonce = Math.random().toString(36).slice(2, 10);
+
+  const prompt = `Generate 3 meal suggestions for the rest of today. Favor variety — different cuisines, proteins, and preparation styles. Don't default to the same Western staples (oatmeal, chicken + rice + broccoli, salmon + sweet potato) unless explicitly requested.
 ${allergyConstraint}
 User: ${profile.age || 30}yo, ${profile.weight || 160}lbs, goal: ${profile.goal || "general fitness"}.
 ${workoutCtx}${dietaryCtx}
 Foods they love: ${prefs.likes.join(", ") || "none specified"}.
 Foods to avoid: ${avoidsText || "none specified"}.
 Already eaten today: ${todaysMeals.length ? todaysMeals.map(m => m.name).join(", ") : "nothing yet"}.
-Remaining macros needed: ${remaining.calories} cal, ${remaining.protein}g protein, ${remaining.carbs}g carbs, ${remaining.fat}g fat.
+Remaining macros needed: ${remaining.calories} cal, ${remaining.protein}g protein, ${remaining.carbs}g carbs, ${remaining.fat}g fat.${recentClause}
+Variety key: ${varietyNonce}
 
 Return ONLY valid JSON array, no markdown:
 [{"meal_type":"lunch","name":"Meal Name","ingredients":["item1","item2"],"calories":0,"protein":0,"carbs":0,"fat":0,"prep_time":"15 min"}]`;
@@ -648,6 +666,18 @@ Return ONLY valid JSON array, no markdown:
     }
     resultEl.style.display = "";
     window._mealSuggestions = suggestions;
+
+    // Persist the new suggestion names to history so the next generation
+    // avoids them. Cap the list at 12 so we don't shrink the candidate
+    // space indefinitely — after 4 sessions of 3 meals the oldest names
+    // drop off and can re-appear.
+    try {
+      const newNames = suggestions.map(s => s && s.name).filter(Boolean);
+      const merged = newNames.concat(recentNames).slice(0, 12);
+      localStorage.setItem("mealSuggestionHistory", JSON.stringify(merged));
+      if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("mealSuggestionHistory");
+    } catch {}
+
     resultEl.innerHTML = suggestions.map((s, i) => `
       <div class="meal-suggestion-card">
         <div class="meal-suggestion-header">
