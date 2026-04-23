@@ -4,12 +4,43 @@
    BEVERAGE TYPES & COEFFICIENTS
    ===================================================================== */
 
+// Beverage types contribute to the hydration target at their coefficient
+// (effective_oz = logged_oz × coeff). Kept tight to the drinks that
+// genuinely serve hydration AND have a meaningful consumer base:
+//   - Water: baseline.
+//   - Sports Drink: umbrella for electrolyte drinks (Gatorade, LMNT,
+//     Liquid IV, Nuun, etc.). Full coefficient — electrolytes improve
+//     retention during training.
+//   - Coconut Water: natural electrolyte drink, widely available in
+//     grocery stores, growing athlete consumer base. Research treats
+//     it as on par with water for hydration.
+//
+// Removed: Coffee and Tea. Both are moderately hydrating in isolation
+// (the "net dehydrating" idea is a myth at typical consumption), but
+// their primary use is as a stimulant, not hydration — tracking them
+// toward a hydration target was leading users to believe they'd met
+// fluid needs when they'd had three cups of coffee.
 const BEVERAGE_TYPES = {
-  water:        { label: "Water",        coeff: 1.0,  icon: "\u{1F4A7}" },
-  sports_drink: { label: "Sports Drink", coeff: 1.0,  icon: "\u26A1" },
-  tea:          { label: "Tea",          coeff: 0.85, icon: "\u{1F375}" },
-  coffee:       { label: "Coffee",       coeff: 0.75, icon: "\u2615" }
+  water:         { label: "Water",         coeff: 1.0, icon: "\u{1F4A7}" }, // 💧
+  sports_drink:  { label: "Sports Drink",  coeff: 1.0, icon: "\u26A1" },    // ⚡
+  coconut_water: { label: "Coconut Water", coeff: 1.0, icon: "\u{1F965}" }, // 🥥
 };
+
+// Legacy beverage types that may still appear in saved logs from earlier
+// versions. Kept here so existing entries still count toward the target;
+// not offered in the new picker. Coefficients match the old values so
+// historical totals don't shift retroactively.
+const LEGACY_BEVERAGE_TYPES = {
+  tea:    { label: "Tea",    coeff: 0.85, icon: "\u{1F375}" },
+  coffee: { label: "Coffee", coeff: 0.75, icon: "\u2615" },
+};
+
+// Resolve a beverage type from either the active map or the legacy map
+// so per-log entries written under an older beverage (tea/coffee) still
+// compute effective oz correctly.
+function _beverageFor(type) {
+  return BEVERAGE_TYPES[type] || LEGACY_BEVERAGE_TYPES[type] || BEVERAGE_TYPES.water;
+}
 
 // ── Workout bonus: duration-scaled hydration (Section 11e) ──────────────
 //
@@ -276,7 +307,7 @@ function getEffectiveOzForDate(dateStr) {
   if (Array.isArray(day.entries) && day.entries.length) {
     let oz = 0;
     for (const e of day.entries) {
-      const coeff = (BEVERAGE_TYPES[e.type] || BEVERAGE_TYPES.water).coeff;
+      const coeff = _beverageFor(e.type).coeff;
       oz += (parseFloat(e.oz) || 0) * coeff;
     }
     return Math.max(0, Math.round(oz));
@@ -287,7 +318,7 @@ function getEffectiveOzForDate(dateStr) {
   const bottleSize = getBottleSize();
   let effectiveOz = 0;
   for (const b of day.beverages || []) {
-    const coeff = (BEVERAGE_TYPES[b.type] || BEVERAGE_TYPES.water).coeff;
+    const coeff = _beverageFor(b.type).coeff;
     effectiveOz += Math.max(0, parseFloat(b.count) || 0) * bottleSize * coeff;
   }
   return Math.max(0, Math.round(effectiveOz));
@@ -493,7 +524,7 @@ function logWater(beverageType) {
   if (dateStr === getTodayString()) {
     const effectiveOz = getEffectiveOzForDate(dateStr);
     const targetOz = getHydrationBreakdownForDate(dateStr).totalOz;
-    const prevOz = effectiveOz - bottleSize * (BEVERAGE_TYPES[type] || BEVERAGE_TYPES.water).coeff;
+    const prevOz = effectiveOz - bottleSize * _beverageFor(type).coeff;
     if (effectiveOz >= targetOz && prevOz < targetOz) {
       playHydrationGoalAnimation();
     }
@@ -514,7 +545,7 @@ function logWaterOz(oz) {
   if (dateStr === getTodayString()) {
     const effectiveOz = getEffectiveOzForDate(dateStr);
     const targetOz = getHydrationBreakdownForDate(dateStr).totalOz;
-    const coeff = (BEVERAGE_TYPES[type] || BEVERAGE_TYPES.water).coeff;
+    const coeff = _beverageFor(type).coeff;
     const prevOz = effectiveOz - oz * coeff;
     if (effectiveOz >= targetOz && prevOz < targetOz) {
       playHydrationGoalAnimation();
