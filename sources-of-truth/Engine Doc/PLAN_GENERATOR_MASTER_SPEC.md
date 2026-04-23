@@ -1506,6 +1506,31 @@ Strength sessions use slot templates that define the shape of the workout:
 
 Volume increase cap: max 4 additional sets per muscle group per week, week-over-week.
 
+### 10h-pre. Strength Session Duration Scaling (2026-04-22)
+
+User-requested duration is a **hard target**, not a loose ceiling. First-real-use testing surfaced: a 30-min chest request returned a 26-min workout because the generator picked `maxEx` exercises (30 min → 4) and shipped whatever the prescriptions totalled, even when that came in 4–6 min short.
+
+**Algorithm — `_localSelectForMuscles` in `js/calendar.js`:**
+
+1. Pick initial exercises via the two-pass tier selection (unchanged).
+2. Build **provisional prescriptions** (sets, reps, rest) before committing. We need them to estimate duration accurately.
+3. **Estimate duration:**
+    ```
+    perSet  = reps × 3s + 10s (setup + transition)
+    perEx   = sets × perSet + (sets − 1) × restSec
+    total   = 180s warmup + 120s cooldown + Σ perEx
+    ```
+4. **Scale to budget** — target is `durMin × 60`, bands `[90%, 110%]`:
+    - **Under 90%** → bump a set on the highest-tier exercise below 5 sets. If every exercise is already at 5 sets AND we're still under, add one more accessory from the filtered pool (capped at `maxEx + 2`).
+    - **Over 110%** → shed a set from any exercise with > 2 sets. Keep all exercises — removing a whole movement risks leaving a muscle group unhit.
+    - Loop until in-band or no further moves available.
+5. Loop caps: 20 up-scale iterations, 40 down-scale iterations. Safety guard, not expected to hit in practice.
+
+**Why this matters:**
+- Users trust the requested duration — a 30-min session that runs 26 min reads as "the app doesn't know how long its own workouts are."
+- Added exercises during the session (e.g. Pull-Up 4×5 after the planned work) also don't extend the planned duration. This scaling is **before** any such additions.
+- Same principle as the cycling duration-scaling fix (April 14) — different sport, same root cause.
+
 ### 10h. Same-Day Strength + Cardio Pairing
 
 | Cardio Discipline | Recommended Strength Focus | Rationale |

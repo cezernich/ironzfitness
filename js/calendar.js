@@ -6561,10 +6561,75 @@ function _localSelectForMuscles(muscleSet, level, duration, equipmentAccess) {
 
   // Build exercise prescriptions with weight estimates
   const modules = _getActiveModules(classification);
-  return selected.map(ex => {
-    const prescription = buildExerciseSet(ex, classification, modules);
-    const repRange = { min: prescription.rep_min || 8, max: prescription.rep_max || 12 };
-    // Estimate weight — only show "Bodyweight" for genuinely bodyweight exercises
+
+  // Provisional prescriptions so we can estimate duration accurately
+  // before committing. The previous maxEx-only cap routinely
+  // undershot the user's requested duration by 4–6 min (30-min chest
+  // returned a 26-min workout). Duration-budget scaling below bumps
+  // sets or adds an accessory to reach 90%+ of the target, and trims
+  // sets if we're over 110%.
+  let prescribed = selected.map(ex => {
+    const p = buildExerciseSet(ex, classification, modules);
+    return {
+      ex,
+      sets: p.sets || 3,
+      repMin: p.rep_min || 8,
+      repMax: p.rep_max || 12,
+      rest: p.rest_seconds || 60,
+      prescription: p,
+    };
+  });
+
+  const budgetSec = durMin * 60;
+  const lowBand = budgetSec * 0.90;
+  const highBand = budgetSec * 1.10;
+  const hardExCap = maxEx + 2; // allow up to +2 over the ceiling when bumping sets isn't enough
+
+  let currentEst = _estimateStrengthSec(prescribed);
+  let iterations = 0;
+
+  // UP-scale: prefer bumping sets on a compound-tier exercise below 5
+  // sets; fall back to adding an accessory from the filtered pool.
+  while (currentEst < lowBand && iterations < 20) {
+    iterations++;
+    let target = prescribed.find(p => p.sets < 5 && (p.ex.tier === 1 || p.ex.tier === 2));
+    if (!target) target = prescribed.find(p => p.sets < 5);
+    if (target) {
+      target.sets += 1;
+    } else if (prescribed.length < hardExCap) {
+      const usedIds = new Set(prescribed.map(p => p.ex.id));
+      const candidates = filtered.filter(x => !usedIds.has(x.id));
+      const next = selectByTier(candidates, allTiers, [...usedIds, ...recentIds]);
+      if (!next) break;
+      const p = buildExerciseSet(next, classification, modules);
+      prescribed.push({
+        ex: next,
+        sets: p.sets || 3,
+        repMin: p.rep_min || 8,
+        repMax: p.rep_max || 12,
+        rest: p.rest_seconds || 60,
+        prescription: p,
+      });
+    } else {
+      break;
+    }
+    currentEst = _estimateStrengthSec(prescribed);
+  }
+
+  // DOWN-scale: shed sets from any exercise that still has >2. Keep
+  // all exercises — reducing set counts is safer than dropping a whole
+  // movement (which might leave a muscle group unhit).
+  while (currentEst > highBand && iterations < 40) {
+    iterations++;
+    const target = prescribed.find(p => p.sets > 2);
+    if (!target) break;
+    target.sets -= 1;
+    currentEst = _estimateStrengthSec(prescribed);
+  }
+
+  return prescribed.map(p => {
+    const ex = p.ex;
+    const repRange = { min: p.repMin, max: p.repMax };
     const hasEquip = ex.equipment_required && ex.equipment_required.length > 0;
     const looksWeighted = /bar|dumbbell|cable|machine|ez|kettlebell|smith|curl|press|fly|skull|extension|pushdown|pulldown|row/i.test(ex.name);
     const weight = (hasEquip || looksWeighted)
@@ -6572,13 +6637,30 @@ function _localSelectForMuscles(muscleSet, level, duration, equipmentAccess) {
       : "Bodyweight";
     return {
       name: ex.name,
-      sets: prescription.sets || 3,
-      reps: prescription.rep_max || 10,
-      rest: prescription.rest_seconds ? prescription.rest_seconds + "s" : "60s",
+      sets: p.sets,
+      reps: p.repMax,
+      rest: p.rest + "s",
       weight: _roundExWeight(weight) || "Bodyweight",
       _exerciseId: ex.id,
     };
   });
+}
+
+// Estimate strength-session duration in seconds for duration-budget
+// scaling. Per-rep work = 3s + 10s setup/transition; rest between
+// sets uses the prescribed rest_seconds. Fixed 3 min warmup + 2 min
+// cooldown. Good enough for ±5 min targeting; not precise enough to
+// drive the live timer.
+function _estimateStrengthSec(prescribed) {
+  let total = 180 + 120; // warmup + cooldown
+  for (const p of prescribed) {
+    const sets = p.sets || 3;
+    const reps = p.repMax || 10;
+    const rest = p.rest || 60;
+    const workPerSet = reps * 3 + 10;
+    total += sets * workPerSet + Math.max(0, sets - 1) * rest;
+  }
+  return total;
 }
 
 function _mapGoalForClassification(goal) {
