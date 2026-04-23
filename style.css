@@ -3671,13 +3671,25 @@ input.completion-ex-name:focus {
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(4px);
-  z-index: 1000;
+  /* Above #bottom-nav (z-index 1000) — the nav was rendering on top of
+     the modal and hiding the Save button on notched devices. Also
+     shared by the Edit Workout overlay. */
+  z-index: 1100;
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s;
+  /* Constrain the available area so the modal cannot overlap the
+     iOS status-bar/notch (top inset) or the bottom tab bar + home
+     indicator (bottom inset + 56px nav). Before this, the modal was
+     free to extend edge-to-edge and the "Save Changes" / header
+     disappeared on iPhone 13. */
+  padding-top: calc(env(safe-area-inset-top, 20px) + 16px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 20px) + 56px + 16px);
+  padding-left: calc(env(safe-area-inset-left, 0px) + 12px);
+  padding-right: calc(env(safe-area-inset-right, 0px) + 12px);
 }
 
 .quick-entry-overlay.is-open {
@@ -3691,7 +3703,9 @@ input.completion-ex-name:focus {
   border-radius: 16px;
   padding: 22px 20px 20px;
   width: min(440px, 94vw);
-  max-height: 90vh;
+  /* Bound by the overlay's padded area — no longer free to run under
+     the notch or the bottom nav. */
+  max-height: 100%;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -11585,6 +11599,10 @@ input.completion-ex-name:focus {
   top: 0;
   background: var(--color-surface);
   padding: 16px 16px 8px;
+  /* Push the Exit button + timer out of the iOS notch. Live tracker
+     is a full-screen overlay (z-index 10000) so nothing else reserves
+     this space on the user's behalf. */
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
   z-index: 2;
   border-bottom: 1px solid var(--color-border);
 }

@@ -12,6 +12,14 @@ const config: CapacitorConfig = {
   server: {
     url: 'https://ironz.fit',
     cleartext: false
+  },
+  ios: {
+    // Let the WebView render edge-to-edge under the status bar + home
+    // indicator. The CSS handles per-component insets via
+    // env(safe-area-inset-*) combined with viewport-fit=cover in
+    // index.html. Default ("automatic") adds hidden padding that
+    // fights our safe-area-aware layout.
+    contentInset: 'never'
   }
 };
 
