@@ -347,6 +347,7 @@ function getWorkoutInfoForDate(dateStr) {
     let bestBonus = 0;
     let bestName = "";
     let bestDurationMin = 0;
+    let bestType = "";
     for (const w of dayWorkouts) {
       // Skip rest-marker entries.
       const t = String(w.type || w.discipline || "").toLowerCase();
@@ -358,10 +359,11 @@ function getWorkoutInfoForDate(dateStr) {
         bestBonus = bonus;
         bestName = w.sessionName || w.name || w.type || w.discipline || "workout";
         bestDurationMin = durationMin;
+        bestType = t;
       }
     }
     if (bestBonus === 0) return null;
-    return { bonusOz: bestBonus, sessionName: bestName, durationMin: bestDurationMin };
+    return { bonusOz: bestBonus, sessionName: bestName, durationMin: bestDurationMin, type: bestType };
   } catch { return null; }
 }
 
@@ -850,8 +852,32 @@ function renderHydrationTimingTip() {
   // duration, tailor the electrolyte guidance instead of hedging with "if
   // it's over 60 min" — the app already knows how long the session is.
   const dur = workoutInfo.durationMin || 0;
+
+  // Lifting has different hydration timing than endurance. Research:
+  // Judelson et al. (2007) — 2% bodyweight dehydration drops strength
+  // output by ~5-7% and reps-to-failure by ~10%. But a stomach full of
+  // water during a heavy squat is worse than under-hydrated. So lifting
+  // benefits MOST from front-loading fluids 2-3 hrs before the session,
+  // then sipping only during rest intervals. Endurance sessions prefer
+  // continuous sipping throughout.
+  const _strengthTypes = new Set([
+    "strength", "weightlifting", "bodyweight", "hiit", "crossfit",
+  ]);
+  const isStrength = _strengthTypes.has(String(workoutInfo.type || "").toLowerCase());
+
   let tip;
-  if (hour < 10) {
+  if (isStrength) {
+    // Lifting-specific timing — consistent across morning / afternoon
+    // because the pre-session front-load and rest-interval sipping are
+    // the same regardless of when the session happens.
+    if (hour < 10) {
+      tip = `Lifting today: front-load 16–20 oz in the 2 hours before you start. Sip only during rest intervals — a full stomach under the bar hurts more than it helps.`;
+    } else if (hour < 16) {
+      tip = `Lifting day: if your session is still ahead, aim for 16–20 oz in the 2 hours before. During the session sip during rest intervals only. Even 2% dehydration can cost you 5–7% strength.`;
+    } else {
+      tip = `Post-lift: prioritize ${Math.round(workoutInfo.bonusOz * 0.6)}oz of your remaining target. Protein absorption and glycogen replenishment both need water.`;
+    }
+  } else if (hour < 10) {
     tip = `Training day: front-load hydration before your ${workoutInfo.sessionName}. Aim for ${Math.round(workoutInfo.bonusOz * 0.6)}oz before you start.`;
   } else if (hour < 16) {
     let electrolyteClause;
