@@ -128,8 +128,32 @@ const _DIST_TYPES = new Set([
 // Types grouped as "lifting" for display consolidation. Bodyweight and
 // weightlifting roll up to a single row because most users think of them
 // together. Everything else keeps its own row.
+// Subtype → parent-discipline buckets. The running-workout generator
+// emits type values like "easy_recovery", "long_run", "tempo_threshold"
+// per individual session template. Without bucketing these up, the
+// Totals breakdown fragments into rows like "Easy recovery" and
+// "Long run" alongside "Running", which reads as separate categories.
+const _RUN_SUBTYPES = new Set([
+  "easy_recovery", "endurance", "long_run", "tempo_threshold",
+  "track_workout", "speed_work", "hills", "fun_social",
+  "recovery_run", "base_run", "progression_run",
+]);
+const _BIKE_SUBTYPES = new Set([
+  "bike_endurance", "bike_tempo", "bike_threshold", "bike_intervals",
+  "bike_vo2", "bike_recovery", "bike_long", "bike_sweetspot",
+]);
+const _SWIM_SUBTYPES = new Set([
+  "swim_endurance", "swim_technique", "swim_css_intervals", "swim_speed",
+  "swim_threshold", "swim_recovery", "swim_long",
+]);
+
 function _normalizeType(t) {
   const x = (t || "").toLowerCase();
+  // Subtype rollups first so "easy_recovery" resolves to "running" before
+  // the simpler alias checks below.
+  if (_RUN_SUBTYPES.has(x))  return "running";
+  if (_BIKE_SUBTYPES.has(x)) return "cycling";
+  if (_SWIM_SUBTYPES.has(x)) return "swimming";
   if (x === "bodyweight") return "weightlifting";
   if (x === "run")  return "running";
   if (x === "bike" || x === "bicycling") return "cycling";
@@ -1835,7 +1859,15 @@ function buildStatsHydration() {
 
   // Total oz and average (denominator = all active days, including 0s)
   const totalBottles = activeDays.reduce((s, d) => s + _hb(log[d]), 0);
-  const totalOz = totalBottles * bottleSize;
+  // Round to 2 decimals to kill floating-point artifacts like
+  // 115.00000000000001 that come from summing coefficient-adjusted
+  // beverages. Integers render as "115" (no trailing .00); values
+  // with real fractional content render as "115.75" / "118.5".
+  const _roundOz = (n) => {
+    const r = Math.round((n || 0) * 100) / 100;
+    return r;
+  };
+  const totalOz = _roundOz(totalBottles * bottleSize);
   const avgOzPerDay = Math.round(totalOz / activeDays.length);
 
   // Days that met target (out of all active days)
@@ -1894,7 +1926,7 @@ function buildStatsHydration() {
     d.setDate(d.getDate() - i);
     const key = d.toISOString().slice(0, 10);
     const bottles = _hb(log[key]);
-    const oz = bottles * bottleSize;
+    const oz = _roundOz(bottles * bottleSize);
     const active = key >= firstLogDate; // day is within active tracking range
     last7.push({ label: dayLabels[d.getDay()], oz, bottles, met: bottles >= targetBottles, active });
   }
