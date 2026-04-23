@@ -885,6 +885,19 @@ function selectDay(dateStr) {
   } catch {}
   renderCalendar();
   renderDayDetail(dateStr);
+  // Follow the selected day in the hydration card too. Previously the
+  // hydration view had its own independent date state, so clicking Apr 17
+  // in the calendar left the hydration card on today — the two reads
+  // disagreed and users couldn't see historical hydration against a
+  // day's workouts in one place. Future days stay on today's log since
+  // there's no meaningful water data to show yet (and the log buttons
+  // would otherwise write forward-dated entries).
+  if (typeof setHydrationDate === "function") {
+    try {
+      const today = getTodayString();
+      setHydrationDate(dateStr > today ? null : dateStr);
+    } catch {}
+  }
 }
 
 // ─── Scheduled workout CRUD ───────────────────────────────────────────────────
