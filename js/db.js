@@ -443,6 +443,49 @@ const DB = (() => {
     'trainingZones', 'trainingZonesHistory', 'profile',
   ]);
 
+  // ── Pending-sync queue ────────────────────────────────────────────────────
+  //
+  // Debounced syncs have a fatal failure mode: the user edits, schedules a
+  // 200ms setTimeout, and refreshes within the window → the timer is killed
+  // before the upsert runs, and refreshAllKeys on the next load pulls the
+  // stale remote row over the user's actual change. The user sees their
+  // delete/add silently revert.
+  //
+  // We fix it by persisting "this key has unsynced changes" to localStorage
+  // so the intent survives a reload. On next load, replayPendingSyncs()
+  // upserts everything in the queue BEFORE refreshAllKeys runs, so the
+  // remote pull sees the user's most recent writes.
+  //
+  // Value stored: `{ [lsKey]: { scheduledAt: iso, expectedUid: string }`.
+  // We don't store the value itself — _doSyncKey reads the current
+  // localStorage value at send time, which is always the freshest one.
+
+  const _PENDING_QUEUE_KEY = 'ironz_pending_sync_queue';
+
+  function _loadPendingQueue() {
+    try {
+      const raw = localStorage.getItem(_PENDING_QUEUE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return (parsed && typeof parsed === 'object') ? parsed : {};
+    } catch { return {}; }
+  }
+  function _savePendingQueue(q) {
+    try { localStorage.setItem(_PENDING_QUEUE_KEY, JSON.stringify(q)); } catch {}
+  }
+  function _markPending(lsKey, expectedUid) {
+    const q = _loadPendingQueue();
+    q[lsKey] = { scheduledAt: new Date().toISOString(), expectedUid: expectedUid || null };
+    _savePendingQueue(q);
+  }
+  function _clearPending(lsKey) {
+    const q = _loadPendingQueue();
+    if (q[lsKey]) {
+      delete q[lsKey];
+      _savePendingQueue(q);
+    }
+  }
+
   async function _doSyncKey(lsKey, expectedAtSchedule) {
     const uid = await _userId();
     if (!uid) return;
@@ -451,7 +494,7 @@ const DB = (() => {
       return;
     }
     const raw = localStorage.getItem(lsKey);
-    if (raw === null) return;
+    if (raw === null) { _clearPending(lsKey); return; }
     let val;
     try { val = JSON.parse(raw); } catch { val = raw; }
     try {
@@ -463,8 +506,15 @@ const DB = (() => {
           data_value: val,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id,data_key' });
-      if (error) console.warn(`DB: syncKey ${lsKey} error`, error.message);
-    } catch (e) { console.warn(`DB: syncKey ${lsKey} offline`, e); }
+      if (error) {
+        console.warn(`DB: syncKey ${lsKey} error`, error.message);
+        return; // leave pending entry — retry on next load
+      }
+      _clearPending(lsKey);
+    } catch (e) {
+      console.warn(`DB: syncKey ${lsKey} offline`, e);
+      // leave pending entry — replay will retry
+    }
   }
 
   function syncKey(lsKey) {
@@ -472,6 +522,9 @@ const DB = (() => {
     // Capture the user id at schedule time so a user switch during the
     // debounce window can't silently upsert our data under the new user.
     const expectedAtSchedule = _expectedUid();
+    // Mark the key as dirty NOW — survives page reload even if the timer
+    // below never fires.
+    _markPending(lsKey, expectedAtSchedule);
     // Critical keys fire immediately; others debounce 2s to batch rapid writes
     const delay = _IMMEDIATE_SYNC_KEYS.has(lsKey) ? 200 : 2000;
     _keyTimers[lsKey] = setTimeout(() => _doSyncKey(lsKey, expectedAtSchedule), delay);
@@ -489,6 +542,30 @@ const DB = (() => {
     }
     try { await _doSyncKey(lsKey, _expectedUid()); } catch {}
   }
+
+  // Replay any pending syncs from the queue. Called by auth.js on every
+  // session init BEFORE refreshAllKeys — so the user's unsynced writes
+  // are upserted to Supabase first, and the subsequent remote pull sees
+  // the up-to-date state (instead of overwriting local with stale).
+  async function replayPendingSyncs() {
+    const q = _loadPendingQueue();
+    const keys = Object.keys(q);
+    if (!keys.length) return;
+    const currentUid = await _userId();
+    if (!currentUid) return;
+    for (const lsKey of keys) {
+      const entry = q[lsKey];
+      // Cross-user safety: if the queued write was scheduled under a
+      // different uid than the current session, drop it. Writing another
+      // user's cached value under this user's id would corrupt data.
+      if (entry && entry.expectedUid && entry.expectedUid !== currentUid) {
+        _clearPending(lsKey);
+        continue;
+      }
+      try { await _doSyncKey(lsKey, currentUid); } catch {}
+    }
+  }
+
 
   // ── User isolation — wipe local cache on sign-out / user switch ──────────
   //
@@ -983,6 +1060,7 @@ const DB = (() => {
     syncGoals,
     syncKey,
     flushKey,
+    replayPendingSyncs,
     refreshAllKeys,
     refreshAllTables,
     SYNCED_KEYS,

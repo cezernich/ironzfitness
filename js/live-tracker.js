@@ -15,6 +15,30 @@ function _setLivePref(key, val) {
   localStorage.setItem("liveTrackerPrefs", JSON.stringify(p));
 }
 
+// Mid-workout snapshot. Persisted after every Log / Swap / Capture so a
+// refresh or crash mid-session doesn't silently discard what the user has
+// already logged. Cleared on _commitLiveWorkout and _closeLiveTracker.
+const _LIVE_SESSION_KEY = "ironz_live_session";
+function _saveLiveState() {
+  if (!_liveTracker) return;
+  try {
+    const snapshot = {
+      sessionId:  _liveTracker.sessionId,
+      dateStr:    _liveTracker.dateStr,
+      type:       _liveTracker.type,
+      exercises:  _liveTracker.exercises,
+      sets:       _liveTracker.sets,
+      isStrength: _liveTracker.isStrength,
+      isHyrox:    _liveTracker.isHyrox,
+      savedAt:    new Date().toISOString(),
+    };
+    localStorage.setItem(_LIVE_SESSION_KEY, JSON.stringify(snapshot));
+  } catch {}
+}
+function _clearLiveState() {
+  try { localStorage.removeItem(_LIVE_SESSION_KEY); } catch {}
+}
+
 // ── Step building from workout data ──────────────────────────────────────
 //
 // For cardio / swim / circuit workouts, translate whatever the workout
@@ -598,8 +622,8 @@ function _buildLiveSingleExerciseCard(ei) {
         ${sets.map((s, si) => `
           <div class="live-set-row${s.done ? " live-set--done" : ""}" id="live-set-${ei}-${si}">
             <span class="live-set-num">${si + 1}</span>
-            <input class="live-set-input" type="text" inputmode="numeric" value="${s.reps}" id="live-reps-${ei}-${si}" placeholder="${isUni ? _escLiveHtml(perLabel) : "reps"}" ${s.done ? "disabled" : ""} />
-            <input class="live-set-input" type="text" value="${s.weight}" id="live-wt-${ei}-${si}" placeholder="lbs" ${s.done ? "disabled" : ""} />
+            <input class="live-set-input" type="text" inputmode="numeric" value="${s.reps}" id="live-reps-${ei}-${si}" placeholder="${isUni ? _escLiveHtml(perLabel) : "reps"}" oninput="_onLiveInputEdit(${ei},${si})" />
+            <input class="live-set-input" type="text" value="${s.weight}" id="live-wt-${ei}-${si}" placeholder="lbs" oninput="_onLiveInputEdit(${ei},${si})" />
             <button class="live-set-btn${s.done ? " live-set-btn--done" : ""}" onclick="_logLiveSet(${ei},${si})">${s.done ? "&#10003;" : "Log"}</button>
           </div>
         `).join("")}
@@ -819,13 +843,20 @@ function _toggleLiveExercise(idx) {
   if (body) body.innerHTML = _buildStrengthView();
 }
 
+// Capture reps/weight from the DOM into the live-tracker state.
+//
+// We iterate ALL sets, not just undone ones — done-set inputs are now
+// editable (see _buildLiveSingleExerciseCard) so a user can correct a
+// rep count after tapping Log without losing their intent. Empty inputs
+// preserve the existing stored value so we don't clobber captured
+// actuals with blanks.
 function _captureLiveSetInputs() {
   if (!_liveTracker?.sets) return;
   for (let ei = 0; ei < _liveTracker.sets.length; ei++) {
     const arr = _liveTracker.sets[ei] || [];
     for (let si = 0; si < arr.length; si++) {
       const s = arr[si];
-      if (!s || s.done) continue;
+      if (!s) continue;
       const repsEl = document.getElementById(`live-reps-${ei}-${si}`);
       const wtEl = document.getElementById(`live-wt-${ei}-${si}`);
       if (repsEl && repsEl.value !== "") s.reps = repsEl.value;
@@ -844,6 +875,21 @@ function _liveRestForSet(exIdx, setIdx) {
   if (reps <= 8)  return 120000; // 2:00
   if (reps <= 12) return 90000;  // 1:30 — hypertrophy
   return 60000;                  // 1:00 — endurance
+}
+
+// oninput handler for the live set reps/weight fields. Flushes the DOM
+// value into _liveTracker.sets immediately and snapshots to localStorage
+// so if the user edits a number and refreshes before tapping Log, the
+// correction survives. Cheap — no re-render.
+function _onLiveInputEdit(exIdx, setIdx) {
+  if (!_liveTracker?.sets) return;
+  const s = _liveTracker.sets[exIdx]?.[setIdx];
+  if (!s) return;
+  const repsEl = document.getElementById(`live-reps-${exIdx}-${setIdx}`);
+  const wtEl = document.getElementById(`live-wt-${exIdx}-${setIdx}`);
+  if (repsEl) s.reps = repsEl.value;
+  if (wtEl) s.weight = wtEl.value;
+  _saveLiveState();
 }
 
 function _logLiveSet(exIdx, setIdx) {
@@ -881,6 +927,10 @@ function _logLiveSet(exIdx, setIdx) {
       }
     }
   }
+
+  // Persist every log to localStorage immediately so a refresh or crash
+  // mid-workout doesn't silently drop the user's logged sets.
+  _saveLiveState();
 
   // Re-render the body
   const body = document.getElementById("live-tracker-body");
@@ -1072,7 +1122,7 @@ function _showFinishChoiceModal() {
   document.body.appendChild(overlay);
 }
 
-function _commitLiveWorkout(logAll) {
+async function _commitLiveWorkout(logAll) {
   if (!_liveTracker) return;
   const t = _liveTracker;
   const durationMin = Math.round(t.elapsed / 60000);
@@ -1197,7 +1247,18 @@ function _commitLiveWorkout(logAll) {
     isHyrox: !!t.isHyrox,
   };
   workouts.unshift(completedWorkout);
-  localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
+  localStorage.setItem("workouts", JSON.stringify(workouts));
+  // Flush workouts + completedSessions synchronously so a second device
+  // (or a refresh on this one) sees the completion without waiting on
+  // the 200ms debounce + network round-trip. Cross-device lag was a
+  // reported data-loss-flavored bug — user would complete on phone,
+  // open laptop, and see the session still looking undone.
+  if (typeof DB !== 'undefined' && DB.flushKey) {
+    try { await DB.flushKey('workouts'); } catch (e) { console.warn('[IronZ] workouts flush failed', e); }
+  }
+  // Finish succeeded → drop the mid-workout snapshot so we don't
+  // prompt the user to resume an already-completed session.
+  _clearLiveState();
 
   // Push-to-Strava: auto-share silently OR prompt the user, per the
   // Section 1 spec. Short-circuits if not connected / no write scope.
@@ -1218,7 +1279,10 @@ function _commitLiveWorkout(logAll) {
   // Mark session as completed
   const meta = typeof loadCompletionMeta === "function" ? loadCompletionMeta() : {};
   meta[t.sessionId] = { workoutId, completedAt: new Date().toISOString() };
-  localStorage.setItem("completedSessions", JSON.stringify(meta)); if (typeof DB !== 'undefined') DB.syncKey('completedSessions');
+  localStorage.setItem("completedSessions", JSON.stringify(meta));
+  if (typeof DB !== 'undefined' && DB.flushKey) {
+    try { await DB.flushKey('completedSessions'); } catch (e) { console.warn('[IronZ] completedSessions flush failed', e); }
+  }
 
   const dateStr = t.dateStr;
 
@@ -1268,6 +1332,7 @@ function _swapLiveExercise(exerciseIndex) {
     _liveTracker.exercises[exerciseIndex].name = newName;
     _liveTracker.exercises[exerciseIndex].swappedFrom = oldName;
     _liveTracker.exercises[exerciseIndex].swapReason = "equipment_busy";
+    _saveLiveState();
     // Re-render
     const body = document.getElementById("live-tracker-body");
     if (body) body.innerHTML = _buildStrengthView();
@@ -1297,6 +1362,7 @@ function _closeLiveTracker() {
   if (_liveTimerInterval) { clearInterval(_liveTimerInterval); _liveTimerInterval = null; }
   _releaseWakeLock();
   _liveTracker = null;
+  _clearLiveState();
   const overlay = document.getElementById("live-tracker-overlay");
   if (overlay) {
     overlay.classList.remove("visible");

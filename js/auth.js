@@ -180,6 +180,9 @@ async function handleNewPassword() {
           try { DB.handleUserContext(session.user.id); } catch (e) { console.warn('Auth: handleUserContext error', e); }
           try { await ensureProfile(session.user); } catch (e) { console.warn('Auth: ensureProfile error', e); }
           try { await DB.migrateLocalStorage(); } catch (e) { console.warn('Auth: migration error', e); }
+          // Replay any pending local writes BEFORE pulling remote — otherwise
+          // refreshAllKeys overwrites unsynced edits with stale Supabase rows.
+          try { await DB.replayPendingSyncs(); } catch (e) { console.warn('Auth: replayPendingSyncs error', e); }
           try { await DB.refreshAllKeys(); } catch (e) { console.warn('Auth: refreshAllKeys error', e); }
           try { await DB.refreshAllTables(); } catch (e) { console.warn('Auth: refreshAllTables error', e); }
         }
@@ -642,6 +645,9 @@ async function authBoot() {
     try { DB.handleUserContext(session.user.id); } catch (e) { console.warn('Auth: handleUserContext error', e); }
     try { await ensureProfile(session.user); } catch (e) { console.warn('Auth: ensureProfile error', e); }
     try { await DB.migrateLocalStorage(); } catch (e) { console.warn('Auth: migration error', e); }
+    // Replay any pending local writes BEFORE pulling remote — otherwise
+    // refreshAllKeys overwrites unsynced edits with stale Supabase rows.
+    try { await DB.replayPendingSyncs(); } catch (e) { console.warn('Auth: replayPendingSyncs error', e); }
     // Pull all data from Supabase before initializing UI
     try { await DB.refreshAllKeys(); } catch (e) { console.warn('Auth: refreshAllKeys error', e); }
     try { await DB.refreshAllTables(); } catch (e) { console.warn('Auth: refreshAllTables error', e); }
@@ -676,6 +682,9 @@ async function authBoot() {
       try { DB.handleUserContext(session.user.id); } catch (e) { console.warn('Auth: handleUserContext error', e); }
       try { await ensureProfile(session.user); } catch (e) { console.warn('Auth: ensureProfile error', e); }
       try { await DB.migrateLocalStorage(); } catch (e) { console.warn('Auth: migration error', e); }
+      // Replay any pending local writes BEFORE pulling remote — otherwise
+      // refreshAllKeys overwrites unsynced edits with stale Supabase rows.
+      try { await DB.replayPendingSyncs(); } catch (e) { console.warn('Auth: replayPendingSyncs error', e); }
       try { await DB.refreshAllKeys(); } catch (e) { console.warn('Auth: refreshAllKeys error', e); }
       try { await DB.refreshAllTables(); } catch (e) { console.warn('Auth: refreshAllTables error', e); }
       // Migrate legacy savedWorkouts into unified saved library

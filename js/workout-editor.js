@@ -854,7 +854,7 @@ function applySwap(rowId, name, pickerEl) {
 
 // ── Save ──────────────────────────────────────────────────────────────────────
 
-function saveEditedWorkout() {
+async function saveEditedWorkout() {
   const msg   = document.getElementById("edit-workout-msg");
   const notes = document.getElementById("edit-workout-notes").value.trim();
 
@@ -946,10 +946,17 @@ function saveEditedWorkout() {
   }
 
   localStorage.setItem(_editSource, JSON.stringify(workouts));
-  if (typeof DB !== 'undefined') {
-    if (_editSource === "workouts") DB.syncWorkouts();
-    else if (_editSource === "workoutSchedule") DB.syncKey('workoutSchedule');
-    else if (_editSource === "trainingPlan") DB.syncKey('trainingPlan');
+  // Flush to Supabase synchronously so a cross-device view (or a refresh
+  // on this device) picks up the edit immediately. The non-flushed
+  // syncKey path debounces 200ms and relies on the page not being torn
+  // down before the timer fires — not good enough for user-initiated
+  // saves where they expect "Saved!" to mean "actually saved".
+  if (typeof DB !== 'undefined' && DB.flushKey) {
+    try {
+      if (_editSource === "workouts") await DB.flushKey('workouts');
+      else if (_editSource === "workoutSchedule") await DB.flushKey('workoutSchedule');
+      else if (_editSource === "trainingPlan") await DB.flushKey('trainingPlan');
+    } catch (e) { console.warn('[IronZ] edit save flush failed', e); }
   }
 
   if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
@@ -957,6 +964,7 @@ function saveEditedWorkout() {
   if (typeof selectedDate !== "undefined" && selectedDate) {
     if (typeof renderDayDetail === "function") renderDayDetail(selectedDate);
   }
+  if (typeof renderStats === "function") renderStats();
 
   msg.style.color = "var(--color-success)";
   msg.textContent = "Saved!";

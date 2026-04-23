@@ -1439,11 +1439,12 @@ async function promptStravaShareIfEligible(workout, opts) {
   // right now.
   const force = !!opts.force;
 
-  if (!force && workout.stravaUploadId) return;
-  if (!force && workout.source === "strava") return;
+  if (!force && workout.stravaUploadId) { console.log("[Strava] prompt skipped: already uploaded", workout.id); return; }
+  if (!force && workout.source === "strava") { console.log("[Strava] prompt skipped: workout came from Strava", workout.id); return; }
 
   const hasWrite = await hasStravaWriteScope();
   if (!hasWrite) {
+    console.log("[Strava] prompt skipped: no write scope (reconnect in Settings)", { force });
     if (force) {
       _showStravaToast("Reconnect Strava in Settings to enable uploads");
     }
@@ -1452,6 +1453,7 @@ async function promptStravaShareIfEligible(workout, opts) {
 
   // Auto-share branch — silent background upload, only when NOT forced.
   if (!force && isStravaAutoShareEnabled()) {
+    console.log("[Strava] auto-share uploading silently", workout.id);
     uploadWorkoutToStrava(workout, { silent: true }).catch(() => {});
     return;
   }
@@ -1461,9 +1463,10 @@ async function promptStravaShareIfEligible(workout, opts) {
   if (!force) {
     try {
       const key = "stravaPromptShown:" + String(workout.id || "");
-      if (sessionStorage.getItem(key) === "1") return;
+      if (sessionStorage.getItem(key) === "1") { console.log("[Strava] prompt skipped: already shown this session for", workout.id); return; }
       sessionStorage.setItem(key, "1");
     } catch {}
+    console.log("[Strava] scheduling prompt for", workout.id);
     // Defer the modal a beat so it lands AFTER the rating modal opens
     // (the rating modal shows at +400ms from saveSessionCompletion).
     setTimeout(() => _showStravaSharePrompt(workout), 900);

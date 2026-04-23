@@ -492,11 +492,21 @@ function init() {
     _lastVisibilityRefresh = now;
     if (typeof DB === 'undefined' || !DB.refreshAllKeys) return;
     try {
+      // Flush any writes THIS tab scheduled but hasn't pushed yet BEFORE
+      // pulling remote. Without this, a user who logs a completion on
+      // this tab, switches away, and comes back can lose the write when
+      // refreshAllKeys overwrites local with stale Supabase data.
+      if (DB.replayPendingSyncs) await DB.replayPendingSyncs();
       await DB.refreshAllKeys();
       if (typeof renderCalendar === "function") renderCalendar();
       if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
         renderDayDetail(selectedDate);
       }
+      // Second-device scenario: user finished a workout on phone,
+      // switched to laptop. Home / history / stats tabs must reflect
+      // the new completion without a full relaunch.
+      if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
+      if (typeof renderStats === "function") renderStats();
     } catch (e) { console.warn("[IronZ] visibility refresh failed:", e); }
   });
   if (typeof trackSessionStarted === "function") trackSessionStarted();
