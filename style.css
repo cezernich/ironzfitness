@@ -14649,6 +14649,14 @@ input.completion-ex-name:focus {
   border-top: 1px solid var(--color-border);
   z-index: 1000;
   box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.04);
+  /* Keyboard-aware: slide off-screen when the iOS keyboard is up so
+     the nav doesn't overlap the focused input. Toggled from
+     app.js via visualViewport. */
+  transition: transform 0.2s ease-out;
+}
+#bottom-nav.nav-hidden-keyboard {
+  transform: translateY(100%);
+  pointer-events: none;
 }
 
 .bottom-nav-tab {
@@ -16079,9 +16087,13 @@ body.auth-visible #bottom-nav { display: none !important; }
 .exercise-autocomplete-name {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* Wrap long names onto a second line instead of ellipsising —
+     "Band F…" and "Behind-the-N…" are indistinguishable and defeat
+     the purpose of the suggestion. Keep the muscle tag on one line
+     via flex-shrink:0 elsewhere. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
 }
 .exercise-autocomplete-name strong {
   color: var(--color-cyan);

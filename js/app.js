@@ -509,6 +509,35 @@ function init() {
       if (typeof renderStats === "function") renderStats();
     } catch (e) { console.warn("[IronZ] visibility refresh failed:", e); }
   });
+  // Keyboard-aware tab bar. iOS doesn't shrink window.innerHeight when
+  // the keyboard appears, so `position: fixed; bottom: 0` on
+  // #bottom-nav stays anchored to the BELOW-keyboard area — which from
+  // the user's perspective means nav icons overlap the text input they
+  // were trying to type into. visualViewport IS keyboard-aware; watch
+  // it and hide the nav when the viewport shrinks by enough that we
+  // can attribute it to the keyboard.
+  if (window.visualViewport) {
+    const nav = document.getElementById("bottom-nav");
+    if (nav) {
+      // Track the tallest height we've ever seen, not just the current
+      // height at init — the nav can initialize with the keyboard
+      // already up (e.g. during a hot reload) and latch the wrong
+      // baseline.
+      let baselineHeight = window.visualViewport.height;
+      const onViewportChange = () => {
+        baselineHeight = Math.max(baselineHeight, window.visualViewport.height);
+        const delta = baselineHeight - window.visualViewport.height;
+        // >150px delta is almost always a software keyboard. Below
+        // that we could be seeing iOS address-bar animation or a
+        // landscape rotation — leave the nav alone.
+        if (delta > 150) nav.classList.add("nav-hidden-keyboard");
+        else nav.classList.remove("nav-hidden-keyboard");
+      };
+      window.visualViewport.addEventListener("resize", onViewportChange);
+      window.visualViewport.addEventListener("scroll", onViewportChange);
+    }
+  }
+
   if (typeof trackSessionStarted === "function") trackSessionStarted();
   if (typeof updateLastActive === "function") updateLastActive();
 

@@ -562,11 +562,17 @@ function _buildStrengthView() {
   const t = _liveTracker;
   const groups = t._groups || _computeLiveGroups();
 
-  // Outline follows the first exercise with unfinished sets — that's the
-  // one the user is actually working on. Last-tap-wins was confusing because
-  // users often scroll past cards without the border meaning to follow.
-  t.currentExercise = t.sets.findIndex(exSets => !(exSets || []).every(s => s.done));
-  if (t.currentExercise === -1) t.currentExercise = t.exercises.length; // all done
+  // Active-frame rule: follow whichever exercise the user most recently
+  // interacted with (tapped Log on, focused an input of, expanded). If
+  // they haven't touched anything yet this render, fall back to the
+  // first exercise with unfinished sets. "Follow first unfinished"
+  // alone was breaking the non-sequential-order workflow — user tapped
+  // Log on bench after skipping ahead and the frame stayed on an
+  // earlier unfinished exercise.
+  if (typeof t.currentExercise !== "number" || t.currentExercise < 0 || t.currentExercise >= t.exercises.length) {
+    t.currentExercise = t.sets.findIndex(exSets => !(exSets || []).every(s => s.done));
+    if (t.currentExercise === -1) t.currentExercise = t.exercises.length; // all done
+  }
 
   let html = "";
 
@@ -889,6 +895,9 @@ function _onLiveInputEdit(exIdx, setIdx) {
   const wtEl = document.getElementById(`live-wt-${exIdx}-${setIdx}`);
   if (repsEl) s.reps = repsEl.value;
   if (wtEl) s.weight = wtEl.value;
+  // Active frame follows the exercise the user is currently editing.
+  // Don't re-render on every keystroke though — just update state.
+  _liveTracker.currentExercise = exIdx;
   _saveLiveState();
 }
 
@@ -898,6 +907,10 @@ function _logLiveSet(exIdx, setIdx) {
   if (!set) return;
 
   _captureLiveSetInputs();
+
+  // Tap Log on bench set 2 → active frame moves to bench even if a
+  // prior exercise has unlogged sets. Lets the user work in any order.
+  _liveTracker.currentExercise = exIdx;
 
   if (set.done) {
     // Undo

@@ -100,12 +100,19 @@
     _currentQuery   = "";
   }
 
-  // Position the dropdown relative to the input. Uses fixed positioning so
-  // we can flip above the input when there's not enough room below (e.g.
-  // when the on-screen keyboard pushes the input toward the bottom).
+  // Position the dropdown relative to the input. Default: below. Only
+  // flip above if there's genuinely no room below AND meaningfully
+  // more above — previously it was flipping aggressively and users
+  // saw results rendered above the input then pushed off-screen.
+  //
+  // window.innerHeight doesn't shrink when iOS shows the keyboard, so
+  // using it for spaceBelow under-estimates the occlusion. visualViewport
+  // IS keyboard-aware; use it when available so the heuristic reflects
+  // what the user actually sees.
   function _positionDropdown(input) {
     const rect = input.getBoundingClientRect();
-    const viewportH = window.innerHeight;
+    const vv = window.visualViewport;
+    const visualBottom = vv ? (vv.offsetTop + vv.height) : window.innerHeight;
     const dropdown = _getDropdown();
 
     dropdown.style.position = "fixed";
@@ -113,14 +120,18 @@
     dropdown.style.width = rect.width + "px";
 
     const estHeight = Math.min(_currentResults.length, MAX_RESULTS) * ROW_HEIGHT + 4;
-    const spaceBelow = viewportH - rect.bottom;
-    const spaceAbove = rect.top;
+    const spaceBelow = Math.max(0, visualBottom - rect.bottom);
+    const spaceAbove = Math.max(0, rect.top);
 
-    if (spaceBelow < estHeight && spaceAbove > spaceBelow) {
+    // Flip above only if below is genuinely too tight AND above is
+    // clearly bigger by a margin. 40px slack avoids oscillating when
+    // the two are close.
+    const flipAbove = spaceBelow < 120 && spaceAbove > spaceBelow + 40;
+    if (flipAbove) {
       dropdown.style.top    = "auto";
-      dropdown.style.bottom = (viewportH - rect.top) + "px";
+      dropdown.style.bottom = (window.innerHeight - rect.top + 4) + "px";
     } else {
-      dropdown.style.top    = rect.bottom + "px";
+      dropdown.style.top    = (rect.bottom + 4) + "px";
       dropdown.style.bottom = "auto";
     }
   }
@@ -209,6 +220,14 @@
     const input = e.target;
     if (!input || !input.matches || !input.matches(".ex-row-name")) return;
     if ((input.value || "").trim().length >= MIN_CHARS) _updateForInput(input);
+    // iOS shows the keyboard after a small delay; wait for it to settle
+    // then nudge the input into the visible area. Without this, the
+    // keyboard often covers the input (and any dropdown rendered below
+    // it) and the user has to dismiss the keyboard to pick an option.
+    setTimeout(() => {
+      try { input.scrollIntoView({ block: "center", behavior: "smooth" }); } catch {}
+      if (_activeInput === input) _positionDropdown(input);
+    }, 300);
   }
 
   function _selectResult(idx) {
