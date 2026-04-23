@@ -326,6 +326,74 @@ function getEffectiveOzForDate(dateStr) {
 
 /** Get workout bonus for a specific date. Picks the session with the
  *  highest duration-scaled bonus when multiple are scheduled on one day. */
+// Resolve a workout's duration in minutes from whichever field
+// actually carries it. The top-level `duration` is only reliably set
+// on logged completions and Add-Session entries — plan/schedule
+// entries usually store duration on aiSession, session.steps, or the
+// generated session template. Previously hydration.js only read
+// w.duration, which fell through to 0 for planned cycling sessions
+// and then to the 16 oz floor (user saw "+16 oz for your cycling"
+// on a 2-hour ride that should have been ~44 oz).
+function _hydrationResolveDurationMin(w) {
+  if (!w) return 0;
+  const parseStrMin = (v) => {
+    if (v == null) return 0;
+    const n = parseFloat(v);
+    return isFinite(n) && n > 0 ? n : 0;
+  };
+  // 1. Explicit top-level field
+  let d = parseStrMin(w.duration);
+  if (d > 0) return d;
+  // 2. aiSession: either .duration (number) or sum of .intervals[].duration
+  if (w.aiSession) {
+    d = parseStrMin(w.aiSession.duration);
+    if (d > 0) return d;
+    const intervals = Array.isArray(w.aiSession.intervals) ? w.aiSession.intervals : [];
+    let sum = 0;
+    for (const iv of intervals) {
+      const n = parseStrMin(iv && iv.duration);
+      const reps = parseInt(iv && iv.reps) || 1;
+      if (n > 0) sum += n * reps;
+    }
+    if (sum > 0) return sum;
+  }
+  // 3. session.steps pattern (plan/scheduled entries derived from
+  //    SESSION_DESCRIPTIONS templates before the editor hydrates them)
+  if (w.session && Array.isArray(w.session.steps)) {
+    let sum = 0;
+    for (const st of w.session.steps) {
+      const n = parseStrMin(st && st.duration);
+      const reps = parseInt(st && st.reps) || 1;
+      if (n > 0) sum += n * reps;
+    }
+    if (sum > 0) return sum;
+    d = parseStrMin(w.session.duration);
+    if (d > 0) return d;
+  }
+  // 4. Plan-entry discipline+load shape — look up the SESSION_DESCRIPTIONS
+  //    template and sum its steps. Uses getSessionTemplate when present so
+  //    phase-specific variants are respected.
+  try {
+    if (w.discipline && w.load && typeof getSessionTemplate === "function") {
+      const tmpl = getSessionTemplate(w.discipline, w.load, w.weekNumber);
+      if (tmpl && Array.isArray(tmpl.steps)) {
+        let sum = 0;
+        for (const st of tmpl.steps) {
+          const n = parseStrMin(st && st.duration);
+          const reps = parseInt(st && st.reps) || 1;
+          if (n > 0) sum += n * reps;
+        }
+        if (sum > 0) return sum;
+      }
+      if (tmpl && tmpl.duration) {
+        d = parseStrMin(tmpl.duration);
+        if (d > 0) return d;
+      }
+    }
+  } catch {}
+  return 0;
+}
+
 function getWorkoutInfoForDate(dateStr) {
   try {
     // Three write paths land a workout on a date:
@@ -352,8 +420,7 @@ function getWorkoutInfoForDate(dateStr) {
       // Skip rest-marker entries.
       const t = String(w.type || w.discipline || "").toLowerCase();
       if (t === "rest" || w.load === "rest") continue;
-      const d = parseFloat(w.duration);
-      const durationMin = isFinite(d) && d > 0 ? d : 0;
+      const durationMin = _hydrationResolveDurationMin(w);
       const bonus = computeWorkoutBonusOz(t, durationMin);
       if (bonus > bestBonus) {
         bestBonus = bonus;
