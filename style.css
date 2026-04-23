@@ -8475,6 +8475,23 @@ input.completion-ex-name:focus {
 
 .nutri-training-context { background: var(--color-surface-alt, var(--color-surface-2)); border-radius: 8px; padding: 12px; border-left: 3px solid var(--color-accent); }
 
+/* Goal-based tip — shown on bulk / cut profiles beneath the calorie
+   row. Sits below the training context note so the two read as a
+   stacked pair ("today's load" + "why your target looks different"). */
+.nutri-goal-tip {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--color-surface-alt, var(--color-surface-2));
+  border-left: 3px solid var(--color-accent);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--color-text);
+}
+.nutri-goal-tip-icon {
+  margin-right: 4px;
+}
+
 /* Quick log buttons */
 .nutri-log-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .nutri-log-btn {

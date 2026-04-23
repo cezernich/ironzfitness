@@ -132,6 +132,36 @@ function updateNutritionDashboard() {
 
   // Training context
   updateTrainingContext();
+
+  // Bulking / cutting tip — surfaced once per session (dismissable).
+  // Bulkers get a specific protein-shake nudge because hitting a surplus
+  // on whole food alone is the main reason bulks stall. Cutters get a
+  // protein-priority note to preserve lean mass in deficit.
+  try {
+    let tipHost = document.getElementById("nutri-goal-tip");
+    if (!tipHost) {
+      const target = document.getElementById("nutri-calories-target");
+      const wrap = target && target.closest(".nutri-calorie-row, .nutri-calories, .nutrition-target-section, .section-card");
+      if (wrap) {
+        tipHost = document.createElement("div");
+        tipHost.id = "nutri-goal-tip";
+        tipHost.className = "nutri-goal-tip";
+        wrap.appendChild(tipHost);
+      }
+    }
+    if (tipHost) {
+      if (targets.bulkingTip) {
+        tipHost.style.display = "";
+        tipHost.innerHTML = '<span class="nutri-goal-tip-icon">\uD83D\uDCA1</span> ' + _nutEsc(targets.bulkingTip);
+      } else if (targets.isCutting) {
+        tipHost.style.display = "";
+        tipHost.innerHTML = '<span class="nutri-goal-tip-icon">\uD83D\uDCA1</span> Cutting — protein is the priority. Aim to hit protein before you cap calories so you preserve muscle in the deficit.';
+      } else {
+        tipHost.style.display = "none";
+        tipHost.innerHTML = "";
+      }
+    }
+  } catch {}
 }
 
 function drawMacroRing(canvasId, current, target, color) {

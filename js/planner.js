@@ -4545,6 +4545,73 @@ function _inferDayLoadFromAllSources(dateStr) {
   return best;
 }
 
+// Read body-composition goals from persisted onboarding state and derive
+// a calorie multiplier + protein target. Bulking mandates a surplus;
+// cutting mandates a deficit with elevated protein to preserve muscle.
+// Returns { calorieMult, proteinPerLb, isBulking, isCutting, bulkingTip }.
+function _nutritionGoalAdjustment() {
+  let trainingGoals = [];
+  let strengthRole = null;
+  try {
+    const raw = localStorage.getItem("trainingGoals");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) trainingGoals = parsed;
+    }
+  } catch {}
+  try {
+    const raw = localStorage.getItem("strengthRole");
+    if (raw) {
+      let parsed;
+      try { parsed = JSON.parse(raw); } catch { parsed = raw; }
+      strengthRole = typeof parsed === "string" ? parsed : (parsed && parsed.role) || null;
+    }
+  } catch {}
+
+  // Bulking signals: "bulk" or "stronger" in trainingGoals (strength-only
+  // onboarding), or hybrid athletes who picked strengthRole=hypertrophy.
+  const isBulking = trainingGoals.includes("bulk")
+                 || trainingGoals.includes("stronger")
+                 || strengthRole === "hypertrophy";
+  // Cutting signals: "cut" in strength-only trainingGoals, or "weight"
+  // (lose-weight) in hybrid/endurance trainingGoals.
+  const isCutting = trainingGoals.includes("cut")
+                 || trainingGoals.includes("weight");
+
+  // Conflicting signals (both bulk and cut chosen) → treat as maintain
+  // so we don't under- or over-shoot. Most real profiles have only one.
+  if (isBulking && isCutting) {
+    return { calorieMult: 1.0, proteinPerLb: 0.9, isBulking: false, isCutting: false, bulkingTip: null };
+  }
+  if (isBulking) {
+    // ~12% surplus = 300–500 kcal/day for most adults. Protein bumped
+    // to 1.0 g/lb per Phillips et al. (2016) hypertrophy lit — above
+    // 1.0 g/lb the marginal muscle-protein-synthesis return flattens.
+    return {
+      calorieMult: 1.12,
+      proteinPerLb: 1.0,
+      isBulking: true,
+      isCutting: false,
+      // Bulking tip — protein shakes are the most research-supported
+      // practical tool for hitting surplus + protein targets without
+      // over-eating solid food.
+      bulkingTip: "Bulking takes a daily caloric surplus. A 25–30 g whey protein shake (~160 cal) after training or between meals is the simplest way to close the gap without over-eating solid food.",
+    };
+  }
+  if (isCutting) {
+    // ~18% deficit = 400–600 kcal/day. Protein UP to 1.1 g/lb to
+    // preserve lean mass in deficit (Helms 2014 / ISSN position stand).
+    return {
+      calorieMult: 0.82,
+      proteinPerLb: 1.1,
+      isBulking: false,
+      isCutting: true,
+      bulkingTip: null,
+    };
+  }
+  return { calorieMult: 1.0, proteinPerLb: 0.9, isBulking: false, isCutting: false, bulkingTip: null };
+}
+
 function getBaseNutritionTarget(dateStr) {
   const plan  = loadTrainingPlan();
   const entry = plan.find(e => e.date === dateStr);
@@ -4554,6 +4621,7 @@ function getBaseNutritionTarget(dateStr) {
   // non-race day silently defaulted to "rest" calories.
   const load = _inferDayLoadFromAllSources(dateStr);
   const carbLoad = getCarbLoadInfo(dateStr, entry);
+  const goalAdj = _nutritionGoalAdjustment();
 
   let profile = {};
   try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
@@ -4566,9 +4634,10 @@ function getBaseNutritionTarget(dateStr) {
     const weightKg = weightLbs * 0.453592;
     const heightCm = heightIn  * 2.54;
 
-    // Protein baseline — ~0.9 g per lb for athletes, held through the carb load
-    // so we're not cutting recovery nutrients during taper.
-    const protein = Math.round(weightLbs * 0.9 / 5) * 5;
+    // Protein: 0.9 g/lb baseline, 1.0 for bulkers, 1.1 for cutters.
+    // Held through the carb load so we're not cutting recovery nutrients
+    // during taper.
+    const protein = Math.round(weightLbs * goalAdj.proteinPerLb / 5) * 5;
 
     if (carbLoad) {
       const carbs = Math.round(weightKg * carbLoad.gramsPerKg / 5) * 5;
@@ -4593,14 +4662,24 @@ function getBaseNutritionTarget(dateStr) {
       : 10 * weightKg + 6.25 * heightCm - 5 * age + 5; // male / default
 
     const multipliers = { rest: 1.3, easy: 1.55, moderate: 1.65, hard: 1.8, long: 1.9, race: 2.1 };
-    const calories = Math.round(bmr * (multipliers[load] || 1.3) / 50) * 50;
+    // Apply body-comp goal multiplier on top of TDEE. Bulkers get ~+12%
+    // surplus, cutters ~-18% deficit. Maintenance / general fitness
+    // passes through at 1.0.
+    const tdee = bmr * (multipliers[load] || 1.3);
+    const calories = Math.round(tdee * goalAdj.calorieMult / 50) * 50;
 
     // Fat: 28% of calories
     const fat     = Math.round(calories * 0.28 / 9 / 5) * 5;
     // Carbs: remaining calories
     const carbs   = Math.round((calories - protein * 4 - fat * 9) / 4 / 5) * 5;
 
-    return { calories, protein, carbs: Math.max(carbs, 50), fat: Math.max(fat, 20) };
+    return {
+      calories, protein,
+      carbs: Math.max(carbs, 50),
+      fat:   Math.max(fat, 20),
+      ...(goalAdj.isBulking && { isBulking: true, bulkingTip: goalAdj.bulkingTip }),
+      ...(goalAdj.isCutting && { isCutting: true }),
+    };
   }
 
   // Generic fallback — assume a 70 kg (154 lb) reference athlete for the
