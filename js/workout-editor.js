@@ -918,7 +918,12 @@ async function saveEditedWorkout() {
     const exercises = [];
     document.querySelectorAll("[id^='edit-ex-']").forEach(inp => {
       const id   = inp.id.replace("edit-ex-", "");
-      const name = inp.value.trim();
+      // Normalise casing at the write boundary. Users type "cable fly"
+      // lowercase and read back "Cable Fly" everywhere else; keeping
+      // everything in Title Case downstream means card renderers don't
+      // need to compensate.
+      const rawName = inp.value.trim();
+      const name = (typeof _toExerciseTitleCase === "function") ? _toExerciseTitleCase(rawName) : rawName;
       if (!name) return;
       const row = document.getElementById(`edit-row-${id}`);
       const ex = {

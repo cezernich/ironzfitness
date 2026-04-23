@@ -1329,9 +1329,26 @@ function _swapLiveExercise(exerciseIndex) {
 
   showSwapExerciseSheet(ex.name, function(newName) {
     const oldName = ex.name;
-    _liveTracker.exercises[exerciseIndex].name = newName;
+    // Resolve the new exercise's own last-logged weight — prevents the
+    // dumbbell-flye → cable-fly 35-lb carryover bug. Preserves the
+    // prescribed reps so the Sets × Reps line stays coherent.
+    const d = (typeof _resolveSwapDefaults === "function")
+      ? _resolveSwapDefaults(newName, ex.reps)
+      : { name: newName, weight: "", reps: ex.reps || "" };
+    _liveTracker.exercises[exerciseIndex].name = d.name;
+    _liveTracker.exercises[exerciseIndex].weight = d.weight;
+    _liveTracker.exercises[exerciseIndex].reps = d.reps;
     _liveTracker.exercises[exerciseIndex].swappedFrom = oldName;
     _liveTracker.exercises[exerciseIndex].swapReason = "equipment_busy";
+    // Reset per-set tracking so unlogged sets seed from the new
+    // exercise's weight, not the old one. Done sets keep their logged
+    // reps/weight — those are actuals the user just performed and
+    // shouldn't be silently rewritten.
+    const existingSets = _liveTracker.sets[exerciseIndex] || [];
+    _liveTracker.sets[exerciseIndex] = existingSets.map(s => {
+      if (s.done) return s;
+      return { ...s, reps: d.reps, weight: d.weight };
+    });
     _saveLiveState();
     // Re-render
     const body = document.getElementById("live-tracker-body");

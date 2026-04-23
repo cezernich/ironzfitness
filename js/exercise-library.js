@@ -124,8 +124,93 @@ function getExerciseAlternatives(name) {
 
 var _swapOnSelect = null;
 
+// Exercise names are canonicalized to Title Case before flowing into the
+// live tracker or saved workout data. EXERCISE_SUBSTITUTIONS stores keys
+// in lowercase, so a raw pick rendered as "cable fly" in the user's
+// session card. Users type freehand in the "Other exercise..." field
+// with inconsistent casing too. Centralising here means the bug can't
+// come back through a new call site.
+function _toExerciseTitleCase(str) {
+  const raw = String(str == null ? "" : str).trim();
+  if (!raw) return raw;
+  // Preserve common abbreviations as uppercase (DB, BB, KB, RDL, etc.)
+  const KEEP_UPPER = new Set(["db", "bb", "kb", "rdl", "gpp", "sl", "hiit", "amrap", "emom"]);
+  return raw
+    .toLowerCase()
+    .split(/\s+/)
+    .map(w => {
+      if (!w) return w;
+      if (KEEP_UPPER.has(w)) return w.toUpperCase();
+      // Hyphenated: capitalise each segment (e.g. "pull-up" → "Pull-Up")
+      if (w.includes("-")) {
+        return w.split("-").map(p => p ? p.charAt(0).toUpperCase() + p.slice(1) : p).join("-");
+      }
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    })
+    .join(" ");
+}
+
+// Find the user's last-logged weight for the named exercise. Scans the
+// workouts array newest-first (workouts.unshift pattern means index 0
+// is newest). Returns { weight, reps } or null. Match is case-
+// insensitive and ignores leading/trailing whitespace so a freshly
+// Title-Cased name resolves against older lowercase history.
+function _lookupLastLoggedFor(exerciseName) {
+  if (!exerciseName) return null;
+  const key = String(exerciseName).trim().toLowerCase();
+  try {
+    const workouts = JSON.parse(localStorage.getItem("workouts") || "[]");
+    for (const w of workouts) {
+      if (!Array.isArray(w.exercises)) continue;
+      for (const ex of w.exercises) {
+        if (!ex || !ex.name) continue;
+        if (String(ex.name).trim().toLowerCase() === key) {
+          return { weight: ex.weight || "", reps: ex.reps || "" };
+        }
+      }
+    }
+  } catch {}
+  return null;
+}
+
+// Bodyweight-only lifts have no dumbbell/barbell load by default. When
+// a swap lands on one of these and the user has no history for it yet,
+// seed the weight as "Bodyweight" instead of carrying the old 35 lb
+// value from the exercise we're replacing.
+const _BODYWEIGHT_EXERCISE_RE = /\b(pull[- ]?up|chin[- ]?up|push[- ]?up|dip|muscle[- ]?up|handstand|pistol[- ]?squat|burpee|mountain climber|plank|hollow hold|l[- ]?sit|inverted row|ring row|hanging leg raise|hanging knee raise|jumping jack|air squat|calf raise|sit[- ]?up|crunch)\b/i;
+function _isBodyweightExercise(name) {
+  if (!name) return false;
+  return _BODYWEIGHT_EXERCISE_RE.test(String(name));
+}
+
+// Derive { name, weight, reps } to apply when the user swaps INTO a
+// new exercise. Preserves the prescribed reps so the set count stays
+// consistent, but swaps the weight to the user's own last-logged
+// value for the new exercise (or "Bodyweight" / blank) rather than
+// carrying the replaced exercise's load over silently — that bug
+// surfaced with dumbbell flye → cable fly staying at 35 lb.
+function _resolveSwapDefaults(newName, priorReps) {
+  const canonical = _toExerciseTitleCase(newName);
+  const last = _lookupLastLoggedFor(canonical);
+  let weight;
+  let reps = priorReps || "";
+  if (last) {
+    weight = last.weight || "";
+    if (last.reps && !priorReps) reps = last.reps;
+  } else if (_isBodyweightExercise(canonical)) {
+    weight = "Bodyweight";
+  } else {
+    weight = "";
+  }
+  return { name: canonical, weight, reps };
+}
+
 function _swapPick(name) {
-  if (_swapOnSelect) _swapOnSelect(name);
+  // Title-case at the boundary so every downstream consumer (live
+  // tracker, scheduled workout, workout history detail view) sees a
+  // consistent canonical name.
+  const canonical = _toExerciseTitleCase(name);
+  if (_swapOnSelect) _swapOnSelect(canonical);
   document.getElementById("swap-exercise-overlay")?.remove();
   _swapOnSelect = null;
 }
@@ -333,21 +418,43 @@ function buildExerciseTableHTML(exercises, opts) {
  */
 function _swapExerciseInTable(callbackId, exerciseIndex, exerciseName) {
   showSwapExerciseSheet(exerciseName, function(newName) {
-    // Find the workout by callback ID and update the exercise
+    // Find the workout by callback ID and update the exercise. Weight
+    // is re-seeded from the new exercise's own history (or blanked /
+    // set to Bodyweight) — the old weight was carrying over silently
+    // when the user swapped across exercises.
     try {
       const workouts = JSON.parse(localStorage.getItem("workouts") || "[]");
       const w = workouts.find(w => String(w.id) === callbackId);
       if (w && w.exercises && w.exercises[exerciseIndex]) {
-        w.exercises[exerciseIndex].swappedFrom = w.exercises[exerciseIndex].name;
-        w.exercises[exerciseIndex].name = newName;
+        const prior = w.exercises[exerciseIndex];
+        const d = _resolveSwapDefaults(newName, prior.reps);
+        w.exercises[exerciseIndex] = {
+          ...prior,
+          swappedFrom: prior.name,
+          name: d.name,
+          weight: d.weight,
+          reps: d.reps,
+          // Drop any stale per-set details keyed to the old exercise.
+          perSet: undefined,
+          setDetails: undefined,
+        };
         localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
       }
       // Also check workoutSchedule
       const schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
       const s = schedule.find(s => s.id === callbackId);
       if (s && s.exercises && s.exercises[exerciseIndex]) {
-        s.exercises[exerciseIndex].swappedFrom = s.exercises[exerciseIndex].name;
-        s.exercises[exerciseIndex].name = newName;
+        const prior = s.exercises[exerciseIndex];
+        const d = _resolveSwapDefaults(newName, prior.reps);
+        s.exercises[exerciseIndex] = {
+          ...prior,
+          swappedFrom: prior.name,
+          name: d.name,
+          weight: d.weight,
+          reps: d.reps,
+          perSet: undefined,
+          setDetails: undefined,
+        };
         localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
       }
     } catch {}
