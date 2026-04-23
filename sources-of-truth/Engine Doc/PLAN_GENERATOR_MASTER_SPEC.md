@@ -1595,9 +1595,11 @@ TDEE is calculated using Mifflin-St Jeor equation with activity multiplier.
 
 **Daily baseline:** 0.6 oz per pound of bodyweight per day (default — the code computes `weight * 0.6` when the user hasn't overridden). Adjust up for heat, altitude, and training.
 
-**Training-day workout bonus (duration-scaled):**
+**Training-day workout bonus (duration × weight × intensity):**
 
-Rate × scheduled duration, floored at 16 oz so a short workout still gets meaningful extra. Replaces the old flat per-type table.
+Bonus = `rate × hours × weightFactor × intensityFactor`, floored at 16 oz so a short workout still gets meaningful extra.
+
+Rate table (baseline for a ~160 lb athlete at moderate Z2–Z3 effort — matches the old flat table since the factors are both 1.0 at that anchor):
 
 | Discipline group | Rate | Examples |
 |------------------|------|----------|
@@ -1608,11 +1610,36 @@ Rate × scheduled duration, floored at 16 oz so a short workout still gets meani
 | Bodyweight       | 16 oz/hr | bodyweight-only sessions |
 | Floor            | **16 oz minimum** for any scheduled workout regardless of duration |
 
-Worked examples:
-- 30-min strength → `round(18 × 0.5) = 9` → floored to **16 oz**
-- 60-min strength → `round(18 × 1.0) = 18 oz`
-- 90-min run → `round(22 × 1.5) = 33 oz`
-- 120-min bike → `round(22 × 2.0) = 44 oz`
+**Weight factor** — linear scaling, anchored at 160 lb, clamped to [0.5, 2.0]:
+```
+weightFactor = clamp(weightLbs / 160, 0.5, 2.0)
+```
+Linear-by-weight is an approximation — sweat rate actually scales with body surface area (`weight^0.425 × height^0.725` per DuBois) — but captures ~90% of the variance in the 100–300 lb range where our athletes live. Clamp prevents very small / very large athletes from getting negative or blown-out numbers.
+
+**Intensity factor** — derived from the workout's `load` tag (plan/schedule) or session metadata:
+
+| Load tag | Factor | Typical zone |
+|----------|--------|--------------|
+| easy / recovery / z1 | 0.7× | Z1 |
+| z2 | 0.85× | Z2 |
+| moderate / long | 1.0× | Z2–Z3 (baseline) |
+| z3 | 1.15× | Z3 |
+| tempo | 1.25× | Z3 upper |
+| hard / threshold / intervals / z4 | 1.3× | Z4 |
+| vo2 / vo2max / max / race / race pace / z5 | 1.5× | Z5 |
+| z6 | 1.6× | Z5+ / neuromuscular |
+
+Sweat rate roughly doubles from easy aerobic (Z1–Z2, ~0.3–0.5% BW/hr) to threshold (Z4, ~0.8–1.2% BW/hr) to max (Z5+, ~1.2–1.8% BW/hr) per ACSM's 2007 Position Stand on Fluid Replacement. The multipliers anchor at 1.0 = moderate (the effort the rate table was calibrated for).
+
+Worked examples (cycling rate = 22 oz/hr):
+- **30-min strength, moderate, 160 lb** → `round(18 × 0.5 × 1.0 × 1.0) = 9` → floored to **16 oz**
+- **60-min strength, moderate, 160 lb** → `round(18 × 1.0 × 1.0 × 1.0) = 18 oz`
+- **120-min long ride, moderate, 160 lb** → `22 × 2 × 1.0 × 1.0 = 44 oz`
+- **120-min long ride, moderate, 100 lb** → `22 × 2 × 0.625 × 1.0 = 28 oz`
+- **120-min long ride, moderate, 250 lb** → `22 × 2 × 1.5625 × 1.0 = 69 oz`
+- **60-min tempo ride, 180 lb** → `22 × 1 × 1.125 × 1.25 = 31 oz`
+- **60-min VO2 ride, 180 lb** → `22 × 1 × 1.125 × 1.5 = 37 oz`
+- **90-min threshold run, 180 lb** → `22 × 1.5 × 1.125 × 1.3 = 48 oz`
 
 Electrolyte guidance on top of the bonus: water is fine for sessions ≤60 min; add electrolytes for sessions >60 min or in hot conditions.
 

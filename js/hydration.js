@@ -57,11 +57,54 @@ const HYDRATION_RATE_OZ_PER_HOUR = {
 };
 const HYDRATION_FLOOR_OZ = 16;
 
-function computeWorkoutBonusOz(type, durationMin) {
+// Intensity → sweat-rate multiplier. Sweat rate roughly doubles from
+// easy aerobic (Z1–Z2) to threshold (Z4) to max (Z5+). The flat per-
+// sport table underestimates hard sessions and overestimates recovery
+// work. Multipliers anchored at 1.0 = typical moderate-Z2/Z3 session
+// (what the rate table was already calibrated for).
+const _INTENSITY_MULTIPLIER = {
+  easy:      0.7,
+  recovery:  0.7,
+  z1:        0.7,
+  z2:        0.85,
+  moderate:  1.0,
+  long:      1.0,   // Z2-dominant but accumulated volume handles net loss
+  tempo:     1.25,
+  threshold: 1.3,
+  z3:        1.15,
+  z4:        1.3,
+  hard:      1.3,
+  intervals: 1.3,
+  vo2:       1.5,
+  "vo2max":  1.5,
+  max:       1.5,
+  race:      1.5,
+  "race pace": 1.5,
+  z5:        1.5,
+  z6:        1.6,
+};
+function _intensityMultiplierFromLoad(load) {
+  if (!load) return 1.0;
+  const key = String(load).toLowerCase().trim();
+  return _INTENSITY_MULTIPLIER[key] || 1.0;
+}
+
+function computeWorkoutBonusOz(type, durationMin, opts) {
   const t = String(type || "").toLowerCase();
   const rate = HYDRATION_RATE_OZ_PER_HOUR[t] || 18;
   const hours = Math.max(0, (parseFloat(durationMin) || 0) / 60);
-  const scaled = Math.round(rate * hours);
+  // Body-weight scaling. Rate table is calibrated for ~160 lb; clamped
+  // so a 100-lb athlete doesn't get hit with a negative-feeling
+  // percentage cut and a 300-lb athlete doesn't blow past a sane
+  // ceiling. Sweat rate doesn't scale exactly linearly with mass, but
+  // linear-by-weight captures ~90% of the variance in the 100–300 lb
+  // range where our athletes live.
+  const rawWeight = parseFloat(opts && opts.weightLbs);
+  const weightFactor = (isFinite(rawWeight) && rawWeight > 0)
+    ? Math.min(2.0, Math.max(0.5, rawWeight / 160))
+    : 1.0;
+  const intensityFactor = _intensityMultiplierFromLoad(opts && opts.load);
+  const scaled = Math.round(rate * hours * weightFactor * intensityFactor);
   return Math.max(HYDRATION_FLOOR_OZ, scaled);
 }
 
@@ -412,6 +455,14 @@ function getWorkoutInfoForDate(dateStr) {
     try { sources.push(...(JSON.parse(localStorage.getItem("workouts") || "[]") || [])); } catch {}
     const dayWorkouts = sources.filter(w => w && w.date === dateStr);
     if (dayWorkouts.length === 0) return null;
+    // Athlete weight scales every bonus equally today — pull once here
+    // instead of re-reading profile for each workout in the loop.
+    let weightLbs = 0;
+    try {
+      const profile = JSON.parse(localStorage.getItem("profile") || "{}");
+      const w = parseFloat(profile.weight);
+      if (isFinite(w) && w > 0) weightLbs = w;
+    } catch {}
     let bestBonus = 0;
     let bestName = "";
     let bestDurationMin = 0;
@@ -421,7 +472,12 @@ function getWorkoutInfoForDate(dateStr) {
       const t = String(w.type || w.discipline || "").toLowerCase();
       if (t === "rest" || w.load === "rest") continue;
       const durationMin = _hydrationResolveDurationMin(w);
-      const bonus = computeWorkoutBonusOz(t, durationMin);
+      // Load / intensity signal. Plan + schedule entries carry `load`
+      // (easy / moderate / hard / long / tempo / threshold / vo2).
+      // Logged entries sometimes carry it on the session level. Falls
+      // back to "moderate" → 1.0× multiplier.
+      const load = w.load || (w.session && w.session.load) || (w.aiSession && w.aiSession.load) || "";
+      const bonus = computeWorkoutBonusOz(t, durationMin, { weightLbs, load });
       if (bonus > bestBonus) {
         bestBonus = bonus;
         bestName = w.sessionName || w.name || w.type || w.discipline || "workout";
