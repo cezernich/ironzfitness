@@ -11,11 +11,10 @@ const AVAILABLE_CHALLENGES = [
   { id: "strength-7",    name: "7-Day Strength Sprint",  duration: 7,  type: "workout",     goal: "Complete all scheduled workouts",   icon: ICONS.weights },
 ];
 
-const FAKE_PARTICIPANTS = [
-  "Runner42", "FitMom_88", "IronWill_7", "TrailBoss", "LiftHeavy99",
-  "ZenYogi_3", "SprintKing", "GymRat_22", "MileEater", "SweatFactory",
-  "CoreCrusher", "PedalPush", "RepQueen_5", "BurnZone", "StridePro_11",
-];
+// Real participants only — fake-name padding was removed 2026-04-24.
+// generateLeaderboard now reads from Supabase challenge_participants
+// when available (see supabase/migrations/2026-04-24-...) and falls
+// back to a "first to join" empty state when there's nobody else yet.
 
 /* =====================================================================
    LOCAL STORAGE HELPERS
@@ -52,9 +51,15 @@ function joinChallenge(challengeId) {
   active.push({
     challengeId,
     startDate: today,
-    seed: Math.floor(Math.random() * 10000), // for deterministic leaderboard
+    // seed kept for backwards compatibility — old clients still read it.
+    // Real leaderboard now reads challenge_participants from Supabase.
+    seed: Math.floor(Math.random() * 10000),
   });
   _saveActiveChallenges(active);
+  // Register on the public leaderboard. Best-effort — failure leaves
+  // the local join intact so the user can still track progress while
+  // offline; the next progress push will retry the upsert.
+  _upsertChallengeParticipant(challengeId, 0);
   renderChallenges();
 }
 
@@ -62,6 +67,7 @@ function abandonChallenge(challengeId) {
   let active = _loadActiveChallenges();
   active = active.filter(c => c.challengeId !== challengeId);
   _saveActiveChallenges(active);
+  _deleteChallengeParticipant(challengeId);
   renderChallenges();
 }
 
@@ -203,32 +209,106 @@ function _checkWorkoutDay(dateStr) {
    LEADERBOARD (SIMULATED)
    ===================================================================== */
 
+// Real-participant leaderboard. Pulls from challenge_participants
+// (Supabase) for everyone OTHER than the current user; the user's own
+// row comes from local progress so it reflects in-flight changes
+// without waiting on a sync round-trip. Returns the cached snapshot
+// synchronously and kicks off a refresh in the background — the UI
+// re-renders via window.renderChallenges when fresh data lands.
+//
+// "First to join" empty state: when the only participant is the user,
+// renderChallengeCard shows the share-this-challenge prompt.
+const _challengeBoardCache = {};      // challengeId → [{name, pct}, ...] from supabase
+let _challengeBoardLoading = new Set();
+
 function generateLeaderboard(challengeId, userPct) {
-  const active = _loadActiveChallenges();
-  const entry = active.find(c => c.challengeId === challengeId);
-  const seed = entry ? entry.seed : 42;
-
-  // Deterministic pseudo-random from seed
-  let rng = seed;
-  function nextRand() {
-    rng = (rng * 16807 + 0) % 2147483647;
-    return (rng & 0x7fffffff) / 2147483647;
+  // Trigger a background fetch on first call per challengeId so the
+  // next render has data. Subsequent calls hit the cache.
+  if (!_challengeBoardCache[challengeId] && !_challengeBoardLoading.has(challengeId)) {
+    _fetchChallengeParticipants(challengeId);
   }
+  // Push the user's current pct to Supabase (throttled) so OTHER
+  // participants' clients see it on their next leaderboard refresh.
+  _maybePushProgress(challengeId, userPct);
+  const others = _challengeBoardCache[challengeId] || [];
+  const me = { name: "You", pct: userPct, isUser: true };
+  const all = [...others, me];
+  all.sort((a, b) => b.pct - a.pct);
+  return all.map((p, i) => ({ rank: i + 1, ...p }));
+}
 
-  // Pick 10 random fake names
-  const shuffled = [...FAKE_PARTICIPANTS].sort(() => nextRand() - 0.5);
-  const participants = shuffled.slice(0, 10).map(name => ({
-    name,
-    pct: Math.min(100, Math.max(5, Math.round(nextRand() * 100))),
-  }));
+// Upsert the current user's row in challenge_participants. Called on
+// join (with pct=0) and on every render via _maybePushProgress so the
+// leaderboard reflects in-flight progress without per-keystroke
+// chattiness. Throttled to once-per-30s per challenge via
+// _lastProgressPush.
+const _lastProgressPush = {};
+async function _upsertChallengeParticipant(challengeId, pct) {
+  try {
+    const client = (typeof window !== "undefined") ? window.supabaseClient : null;
+    if (!client) return;
+    const { data: { session } } = await client.auth.getSession();
+    if (!session) return;
+    let displayName = null;
+    try {
+      const profile = JSON.parse(localStorage.getItem("profile") || "{}");
+      displayName = (profile.full_name || profile.fullName || profile.name || "").trim() || null;
+    } catch {}
+    await client.from("challenge_participants").upsert({
+      challenge_id: challengeId,
+      user_id: session.user.id,
+      display_name: displayName,
+      pct: Math.min(100, Math.max(0, Math.round(pct || 0))),
+    }, { onConflict: "challenge_id,user_id" });
+  } catch {}
+}
+async function _deleteChallengeParticipant(challengeId) {
+  try {
+    const client = (typeof window !== "undefined") ? window.supabaseClient : null;
+    if (!client) return;
+    const { data: { session } } = await client.auth.getSession();
+    if (!session) return;
+    await client.from("challenge_participants")
+      .delete()
+      .eq("challenge_id", challengeId)
+      .eq("user_id", session.user.id);
+  } catch {}
+}
+function _maybePushProgress(challengeId, pct) {
+  const now = Date.now();
+  if (_lastProgressPush[challengeId] && now - _lastProgressPush[challengeId] < 30000) return;
+  _lastProgressPush[challengeId] = now;
+  _upsertChallengeParticipant(challengeId, pct);
+}
 
-  // Add user
-  participants.push({ name: "You", pct: userPct, isUser: true });
-
-  // Sort descending by pct
-  participants.sort((a, b) => b.pct - a.pct);
-
-  return participants.map((p, i) => ({ rank: i + 1, ...p }));
+async function _fetchChallengeParticipants(challengeId) {
+  _challengeBoardLoading.add(challengeId);
+  try {
+    const client = (typeof window !== "undefined") ? window.supabaseClient : null;
+    if (!client) return;
+    const { data, error } = await client
+      .from("challenge_participants")
+      .select("display_name, pct, user_id")
+      .eq("challenge_id", challengeId)
+      .order("pct", { ascending: false })
+      .limit(20);
+    if (error || !Array.isArray(data)) return;
+    // Filter out the current user (we add them locally with their
+    // live pct). Falling back to display_name when set, otherwise a
+    // generic "Athlete" tag — never a faked one.
+    let myUid = null;
+    try {
+      const { data: { session } } = await client.auth.getSession();
+      myUid = session?.user?.id || null;
+    } catch {}
+    _challengeBoardCache[challengeId] = data
+      .filter(r => r && r.user_id !== myUid)
+      .map(r => ({ name: r.display_name || "Athlete", pct: Math.round(Number(r.pct) || 0) }));
+    if (typeof renderChallenges === "function") renderChallenges();
+  } catch {}
+  finally {
+    _challengeBoardLoading.delete(challengeId);
+  }
 }
 
 /* =====================================================================
@@ -346,24 +426,30 @@ function renderChallengeCard(def, progress) {
       <span class="ch-progress-text">${progress.completedCount}/${progress.totalDays} days (${progress.pct}%)</span>
     </div>`;
 
-  // Leaderboard top 5
+  // Leaderboard. "First to join" state when nobody else is on the
+  // board — better than a 1-row board that just shows the user.
   let lbHtml = `<div class="ch-leaderboard">
     <div class="ch-lb-title">Leaderboard</div>`;
-  leaderboard.slice(0, 5).forEach(p => {
-    const cls = p.isUser ? "ch-lb-row ch-lb-row--user" : "ch-lb-row";
-    lbHtml += `<div class="${cls}">
-      <span class="ch-lb-rank">#${p.rank}</span>
-      <span class="ch-lb-name">${escHtml(p.name)}</span>
-      <span class="ch-lb-pct">${p.pct}%</span>
-    </div>`;
-  });
-  // Show user if not in top 5
-  if (userRank && userRank.rank > 5) {
-    lbHtml += `<div class="ch-lb-row ch-lb-row--user ch-lb-row--sep">
-      <span class="ch-lb-rank">#${userRank.rank}</span>
-      <span class="ch-lb-name">You</span>
-      <span class="ch-lb-pct">${userRank.pct}%</span>
-    </div>`;
+  const others = leaderboard.filter(p => !p.isUser);
+  if (others.length === 0) {
+    lbHtml += `<div class="ch-lb-empty">You're the first — share this challenge to get friends on the board.</div>`;
+  } else {
+    leaderboard.slice(0, 5).forEach(p => {
+      const cls = p.isUser ? "ch-lb-row ch-lb-row--user" : "ch-lb-row";
+      lbHtml += `<div class="${cls}">
+        <span class="ch-lb-rank">#${p.rank}</span>
+        <span class="ch-lb-name">${escHtml(p.name)}</span>
+        <span class="ch-lb-pct">${p.pct}%</span>
+      </div>`;
+    });
+    // Show user if not in top 5
+    if (userRank && userRank.rank > 5) {
+      lbHtml += `<div class="ch-lb-row ch-lb-row--user ch-lb-row--sep">
+        <span class="ch-lb-rank">#${userRank.rank}</span>
+        <span class="ch-lb-name">You</span>
+        <span class="ch-lb-pct">${userRank.pct}%</span>
+      </div>`;
+    }
   }
   lbHtml += "</div>";
 

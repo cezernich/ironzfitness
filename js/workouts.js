@@ -3332,15 +3332,6 @@ const COMMUNITY_WORKOUTS = [
       { name: "Leg Curl", sets: 3, reps: 12, weight: "Moderate" },
       { name: "Calf Raises", sets: 4, reps: 15, weight: "Moderate" },
     ]},
-  { id: "c-upper-lower-u", category: "Strength", name: "Upper Body Blast", author: "Coach Marcus", difficulty: "Advanced", type: "weightlifting",
-    exercises: [
-      { name: "Barbell Bench Press", sets: 5, reps: 5, weight: "Bar + 90lbs" },
-      { name: "Weighted Pull-ups", sets: 4, reps: 6, weight: "+25lb belt" },
-      { name: "Overhead Press", sets: 4, reps: 6, weight: "Bar + 50lbs" },
-      { name: "Pendlay Row", sets: 4, reps: 6, weight: "Bar + 70lbs" },
-      { name: "Weighted Dips", sets: 3, reps: 8, weight: "+25lb belt" },
-      { name: "Barbell Curl", sets: 3, reps: 10, weight: "Bar + 30lbs" },
-    ]},
   { id: "c-strength-full", category: "Strength", name: "Full Body Strength", author: "IronZ Team", difficulty: "Beginner", type: "weightlifting",
     exercises: [
       { name: "Goblet Squat", sets: 3, reps: 12, weight: "30lb kettlebell" },
@@ -3349,32 +3340,8 @@ const COMMUNITY_WORKOUTS = [
       { name: "Dumbbell Shoulder Press", sets: 3, reps: 10, weight: "2×15lb" },
       { name: "Plank", sets: 3, reps: "30 sec", weight: "Bodyweight" },
     ]},
-  { id: "c-strength-531", category: "Strength", name: "5/3/1 Squat Day", author: "Coach Marcus", difficulty: "Advanced", type: "weightlifting",
-    exercises: [
-      { name: "Barbell Back Squat", sets: 3, reps: "5/3/1", weight: "65-95% 1RM" },
-      { name: "Front Squat", sets: 3, reps: 8, weight: "Bar + 50lbs" },
-      { name: "Leg Press", sets: 4, reps: 10, weight: "Heavy" },
-      { name: "Glute Ham Raise", sets: 3, reps: 10, weight: "Bodyweight" },
-      { name: "Ab Wheel Rollout", sets: 3, reps: 10, weight: "Bodyweight" },
-    ]},
 
   // --- Bodyweight ---
-  { id: "c-bw-upper", category: "Bodyweight", name: "Upper Body Calisthenics", author: "Alex K.", difficulty: "Intermediate", type: "bodyweight",
-    exercises: [
-      { name: "Diamond Push-ups", sets: 4, reps: 12, weight: "Bodyweight" },
-      { name: "Pull-ups", sets: 4, reps: 8, weight: "Bodyweight" },
-      { name: "Pike Push-ups", sets: 3, reps: 10, weight: "Bodyweight" },
-      { name: "Chin-ups", sets: 3, reps: 8, weight: "Bodyweight" },
-      { name: "Tricep Dips", sets: 3, reps: 12, weight: "Bodyweight" },
-    ]},
-  { id: "c-bw-lower", category: "Bodyweight", name: "Legs No Equipment", author: "Alex K.", difficulty: "Intermediate", type: "bodyweight",
-    exercises: [
-      { name: "Bulgarian Split Squats", sets: 4, reps: 10, weight: "Bodyweight" },
-      { name: "Jump Squats", sets: 3, reps: 12, weight: "Bodyweight" },
-      { name: "Single-leg RDL", sets: 3, reps: 10, weight: "Bodyweight" },
-      { name: "Glute Bridges", sets: 3, reps: 15, weight: "Bodyweight" },
-      { name: "Wall Sit", sets: 3, reps: "45 sec", weight: "Bodyweight" },
-    ]},
   { id: "c-bw-full", category: "Bodyweight", name: "Hotel Room Full Body", author: "IronZ Team", difficulty: "Beginner", type: "bodyweight",
     exercises: [
       { name: "Push-ups", sets: 3, reps: 10, weight: "Bodyweight" },
@@ -3382,23 +3349,6 @@ const COMMUNITY_WORKOUTS = [
       { name: "Plank", sets: 3, reps: "30 sec", weight: "Bodyweight" },
       { name: "Lunges", sets: 3, reps: 10, weight: "Bodyweight" },
       { name: "Superman Hold", sets: 3, reps: "20 sec", weight: "Bodyweight" },
-    ]},
-
-  // --- HIIT ---
-  { id: "c-hiit-burner", category: "HIIT", name: "20-Min Burner", author: "Coach Jen", difficulty: "Intermediate", type: "hiit",
-    exercises: [
-      { name: "Burpees", sets: 4, reps: 10, weight: "Bodyweight" },
-      { name: "Kettlebell Swings", sets: 4, reps: 15, weight: "35lb" },
-      { name: "Box Jumps", sets: 4, reps: 10, weight: "Bodyweight" },
-      { name: "Battle Ropes", sets: 4, reps: "30 sec", weight: "—" },
-      { name: "Mountain Climbers", sets: 4, reps: 20, weight: "Bodyweight" },
-    ]},
-  { id: "c-hiit-tabata", category: "HIIT", name: "Tabata Circuit", author: "Coach Jen", difficulty: "Advanced", type: "hiit",
-    exercises: [
-      { name: "Jump Squats", sets: 8, reps: "20 sec on / 10 sec off", weight: "Bodyweight" },
-      { name: "Push-ups", sets: 8, reps: "20 sec on / 10 sec off", weight: "Bodyweight" },
-      { name: "High Knees", sets: 8, reps: "20 sec on / 10 sec off", weight: "Bodyweight" },
-      { name: "Plank Jacks", sets: 8, reps: "20 sec on / 10 sec off", weight: "Bodyweight" },
     ]},
 
   // --- Running ---
@@ -3409,24 +3359,6 @@ const COMMUNITY_WORKOUTS = [
       { name: "Walk Break", duration: "2 min", effort: "Z1" },
       { name: "Easy Jog", duration: "10 min", effort: "Z2" },
       { name: "Cool-down Walk", duration: "3 min", effort: "Z1" },
-    ]},
-  { id: "c-run-tempo", category: "Running", name: "Tempo Run", author: "Coach Dave", difficulty: "Intermediate", type: "running",
-    segments: [
-      { name: "Warm-up", duration: "10 min", effort: "Z2" },
-      { name: "Tempo", duration: "20 min", effort: "Z3" },
-      { name: "Cool-down", duration: "10 min", effort: "Z1" },
-    ]},
-  { id: "c-run-intervals", category: "Running", name: "800m Repeats", author: "Coach Dave", difficulty: "Advanced", type: "running",
-    segments: [
-      { name: "Warm-up", duration: "10 min", effort: "Z2" },
-      { name: "800m Hard", duration: "3 min", effort: "Z4" },
-      { name: "Jog Recovery", duration: "2 min", effort: "Z1" },
-      { name: "800m Hard", duration: "3 min", effort: "Z4" },
-      { name: "Jog Recovery", duration: "2 min", effort: "Z1" },
-      { name: "800m Hard", duration: "3 min", effort: "Z4" },
-      { name: "Jog Recovery", duration: "2 min", effort: "Z1" },
-      { name: "800m Hard", duration: "3 min", effort: "Z4" },
-      { name: "Cool-down", duration: "10 min", effort: "Z1" },
     ]},
   { id: "c-run-long", category: "Running", name: "Long Run Builder", author: "IronZ Team", difficulty: "Intermediate", type: "running",
     segments: [
@@ -3441,29 +3373,6 @@ const COMMUNITY_WORKOUTS = [
       { name: "Easy Spin", duration: "45 min", effort: "Z2" },
       { name: "Cool-down", duration: "5 min", effort: "Z1" },
     ]},
-  { id: "c-bike-ss", category: "Cycling", name: "Sweet Spot Intervals", author: "Coach Lisa", difficulty: "Intermediate", type: "cycling",
-    segments: [
-      { name: "Warm-up", duration: "10 min", effort: "Z2" },
-      { name: "Sweet Spot", duration: "10 min", effort: "Z3" },
-      { name: "Recovery", duration: "5 min", effort: "Z1" },
-      { name: "Sweet Spot", duration: "10 min", effort: "Z3" },
-      { name: "Recovery", duration: "5 min", effort: "Z1" },
-      { name: "Sweet Spot", duration: "10 min", effort: "Z3" },
-      { name: "Cool-down", duration: "10 min", effort: "Z1" },
-    ]},
-  { id: "c-bike-vo2", category: "Cycling", name: "VO2 Max Blaster", author: "Coach Lisa", difficulty: "Advanced", type: "cycling",
-    segments: [
-      { name: "Warm-up", duration: "15 min", effort: "Z2" },
-      { name: "VO2 Interval", duration: "4 min", effort: "Z5" },
-      { name: "Recovery", duration: "4 min", effort: "Z1" },
-      { name: "VO2 Interval", duration: "4 min", effort: "Z5" },
-      { name: "Recovery", duration: "4 min", effort: "Z1" },
-      { name: "VO2 Interval", duration: "4 min", effort: "Z5" },
-      { name: "Recovery", duration: "4 min", effort: "Z1" },
-      { name: "VO2 Interval", duration: "4 min", effort: "Z5" },
-      { name: "Cool-down", duration: "10 min", effort: "Z1" },
-    ]},
-
   // --- Yoga ---
   { id: "c-yoga-morning", category: "Yoga", name: "Morning Flow", author: "IronZ Team", difficulty: "Beginner", type: "yoga",
     segments: [
@@ -3473,16 +3382,6 @@ const COMMUNITY_WORKOUTS = [
       { name: "Standing Balance", duration: "5 min", effort: "Z2" },
       { name: "Seated Stretch + Savasana", duration: "5 min", effort: "Z1" },
     ]},
-  { id: "c-yoga-power", category: "Yoga", name: "Power Vinyasa", author: "Coach Maya", difficulty: "Advanced", type: "yoga",
-    segments: [
-      { name: "Breath Work", duration: "3 min", effort: "Z1" },
-      { name: "Sun Sal A+B Flow", duration: "10 min", effort: "Z3" },
-      { name: "Warrior Sequence", duration: "12 min", effort: "Z3" },
-      { name: "Arm Balances + Inversions", duration: "10 min", effort: "Z4" },
-      { name: "Hip Openers", duration: "8 min", effort: "Z2" },
-      { name: "Savasana", duration: "5 min", effort: "Z1" },
-    ]},
-
   // --- Fun ---
   { id: "c-fun-obstacle", category: "Fun", name: "Obstacle Course Prep", author: "IronZ Team", difficulty: "Intermediate", type: "general",
     exercises: [
@@ -3492,38 +3391,6 @@ const COMMUNITY_WORKOUTS = [
       { name: "Farmer's Carry", sets: 3, reps: "40 yd", weight: "2×40lb" },
       { name: "Dead Hang", sets: 3, reps: "30 sec", weight: "Bodyweight" },
       { name: "Sled Push", sets: 3, reps: "20 yd", weight: "Moderate" },
-    ]},
-  { id: "c-fun-partner", category: "Fun", name: "Partner Throwdown", author: "Coach Jen", difficulty: "Intermediate", type: "general",
-    exercises: [
-      { name: "Med Ball Chest Pass", sets: 4, reps: 12, weight: "15lb ball" },
-      { name: "Partner Plank High-Five", sets: 3, reps: "30 sec", weight: "Bodyweight" },
-      { name: "Wheelbarrow Walk", sets: 3, reps: "20 yd", weight: "Bodyweight" },
-      { name: "Band Resisted Sprint", sets: 4, reps: "15 sec", weight: "Band" },
-      { name: "Synchro Burpees", sets: 3, reps: 8, weight: "Bodyweight" },
-    ]},
-  { id: "c-fun-emom", category: "Fun", name: "EMOM Challenge (20 min)", author: "Coach Jen", difficulty: "Advanced", type: "hiit",
-    exercises: [
-      { name: "Min 1: Thrusters", sets: 1, reps: 12, weight: "Bar + 25lbs" },
-      { name: "Min 2: Pull-ups", sets: 1, reps: 10, weight: "Bodyweight" },
-      { name: "Min 3: Box Jumps", sets: 1, reps: 12, weight: "Bodyweight" },
-      { name: "Min 4: Kettlebell Swings", sets: 1, reps: 15, weight: "35lb" },
-      { name: "Repeat 5 rounds", sets: "—", reps: "—", weight: "—" },
-    ]},
-  { id: "c-fun-playground", category: "Fun", name: "Playground Workout", author: "Alex K.", difficulty: "Beginner", type: "bodyweight",
-    exercises: [
-      { name: "Monkey Bar Traverse", sets: 3, reps: "1 crossing", weight: "Bodyweight" },
-      { name: "Bench Step-ups", sets: 3, reps: 12, weight: "Bodyweight" },
-      { name: "Swing Set Rows", sets: 3, reps: 10, weight: "Bodyweight" },
-      { name: "Slide Plank Hold", sets: 3, reps: "30 sec", weight: "Bodyweight" },
-      { name: "Sprint to Next Station", sets: 4, reps: "30 sec", weight: "Bodyweight" },
-    ]},
-  { id: "c-fun-dance-hiit", category: "Fun", name: "Dance HIIT", author: "Coach Maya", difficulty: "Beginner", type: "hiit",
-    exercises: [
-      { name: "Shuffle Side-to-Side", sets: 3, reps: "30 sec", weight: "Bodyweight" },
-      { name: "Jump Squat Twist", sets: 3, reps: 10, weight: "Bodyweight" },
-      { name: "Grapevine + Clap", sets: 3, reps: "30 sec", weight: "Bodyweight" },
-      { name: "High Knee March", sets: 3, reps: "30 sec", weight: "Bodyweight" },
-      { name: "Freestyle Combo", sets: 3, reps: "45 sec", weight: "Bodyweight" },
     ]},
 ];
 
@@ -3539,8 +3406,15 @@ async function _commFetchFromDb() {
   if (!client || SUPABASE_URL === "YOUR_SUPABASE_PROJECT_URL") return; // not configured
 
   try {
+    // Only IronZ-authored workouts surface in Community. is_official is
+    // the canonical flag; legacy rows without that column are accepted
+    // when author === "IronZ Team" so an unmigrated DB doesn't blank
+    // the tab. Once the migration in supabase/migrations/2026-04-24-...
+    // runs, all rows will have is_official set explicitly.
     const { data, error } = await client.from("community_workouts").select("*").order("created_at", { ascending: true });
-    if (!error && data) _commDbWorkouts = data;
+    if (!error && data) {
+      _commDbWorkouts = data.filter(w => w && (w.is_official === true || w.author === "IronZ Team"));
+    }
   } catch {}
 
   // Check admin role
@@ -4114,7 +3988,7 @@ function openCommAdminForm() {
       </div>
       <div class="form-row">
         <label>Author</label>
-        <input type="text" id="ca-author" placeholder="e.g. Coach Dave" value="IronZ Team" />
+        <input type="text" id="ca-author" placeholder="IronZ Team" value="IronZ Team" readonly />
       </div>
 
       <!-- HIIT metadata: only visible when category/type = HIIT -->

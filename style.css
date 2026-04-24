@@ -7824,6 +7824,12 @@ input.completion-ex-name:focus {
 }
 .ch-lb-row--user { background: var(--color-accent-glow); font-weight: 700; }
 .ch-lb-row--sep { margin-top: 4px; border-top: 1px dashed var(--color-border); padding-top: 6px; }
+.ch-lb-empty {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: 6px 0;
+}
 .ch-lb-rank { width: 28px; text-align: right; color: var(--color-text-muted); font-size: 0.78rem; }
 .ch-lb-name { flex: 1; }
 .ch-lb-pct { font-weight: 600; }
