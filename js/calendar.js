@@ -5548,6 +5548,114 @@ function saveHyroxWorkout() {
   setTimeout(() => closeQuickEntry(), 700);
 }
 
+// ── Hyrox auto-generate (Bug 16) ─────────────────────────────────────────────
+//
+// Quick-Add now offers four Hyrox session focuses on top of the
+// existing manual station picker:
+//   easy_aerobic     — 45-60 min Z2 run
+//   run_intervals    — 6-10 × 1K @ threshold
+//   stations         — 3-4 rounds of 2-3 stations, no runs
+//   race_simulation  — full 8-station Hyrox (or scaled) at moderate pace
+//
+// TODO: Chase to provide more Hyrox templates. These four cover the
+// session buckets named in admin-workouts.js and arc-builder.js;
+// expand the bank when content is ready.
+function qeGenerateHyrox() {
+  const msg = document.getElementById("hyrox-save-msg");
+  const dateStr = _qeDateStr;
+  if (!dateStr) { if (msg) msg.textContent = "No date selected."; return; }
+
+  const focus = document.getElementById("qe-hyrox-focus")?.value || "easy_aerobic";
+  const duration = parseInt(document.getElementById("qe-hyrox-duration")?.value, 10) || 60;
+  const allStations = (typeof HYROX_STATIONS !== "undefined") ? HYROX_STATIONS : [];
+
+  let exercises = [];
+  let workoutName = "";
+
+  if (focus === "easy_aerobic") {
+    workoutName = `Hyrox · Easy Aerobic ${duration} min`;
+    exercises = [
+      { name: "Run", sets: "1", reps: `${duration} min`, weight: "" },
+    ];
+  } else if (focus === "run_intervals") {
+    const reps = duration <= 30 ? 6 : duration <= 45 ? 8 : 10;
+    workoutName = `Hyrox · ${reps} × 1K Run Intervals`;
+    exercises = [
+      { name: "Warmup", sets: "1", reps: "10 min", weight: "" },
+    ];
+    for (let i = 1; i <= reps; i++) {
+      exercises.push({ name: `1K Run ${i}`, sets: "1", reps: "1 km @ threshold", weight: "" });
+      if (i < reps) exercises.push({ name: "Rest", sets: "1", reps: "90 sec", weight: "" });
+    }
+    exercises.push({ name: "Cooldown", sets: "1", reps: "5 min", weight: "" });
+  } else if (focus === "stations") {
+    const rounds = duration <= 30 ? 3 : duration <= 60 ? 4 : 5;
+    workoutName = `Hyrox · ${rounds} Round Stations`;
+    // Pick 3 stations: SkiErg + Wall Balls + Sandbag Lunges (skill-day
+    // staples — no overlap with each other).
+    const pickIds = ["skierg", "wall-balls", "sandbag-lunges"];
+    const picks = pickIds.map(id => allStations.find(s => s.id === id)).filter(Boolean);
+    exercises.push({ name: "Warmup", sets: "1", reps: "8 min", weight: "" });
+    for (let r = 1; r <= rounds; r++) {
+      picks.forEach((station) => {
+        exercises.push({
+          name: `${station.name} (R${r})`,
+          sets: "1",
+          reps: `${station.defaultDistance || ""} ${station.unit || ""}`.trim() || "1 round",
+          weight: station.defaultWeight ? `${station.defaultWeight} lb` : "",
+        });
+      });
+      if (r < rounds) exercises.push({ name: "Rest", sets: "1", reps: "60 sec", weight: "" });
+    }
+  } else if (focus === "race_simulation") {
+    workoutName = "Hyrox · Race Simulation";
+    // Full Hyrox: 8 stations × 1K runs between, scaled by duration.
+    // 60 min → half (4 stations + 4 × 500m runs); 90 min → full 8.
+    const isHalf = duration < 75;
+    const stationOrder = isHalf
+      ? ["wall-balls", "sandbag-lunges", "farmers-carry", "sled-pull"]
+      : ["skierg", "sled-push", "sled-pull", "burpee-broad-jump", "rowing", "farmers-carry", "sandbag-lunges", "wall-balls"];
+    const runDist = isHalf ? "500m" : "1km";
+    exercises.push({ name: "Warmup", sets: "1", reps: "8 min easy", weight: "" });
+    stationOrder.forEach((id, i) => {
+      exercises.push({ name: `Run ${i + 1}`, sets: "1", reps: `${runDist} @ race pace`, weight: "" });
+      const s = allStations.find(x => x.id === id);
+      if (!s) return;
+      exercises.push({
+        name: s.name,
+        sets: "1",
+        reps: `${s.defaultDistance || ""} ${s.unit || ""}`.trim() || "1 round",
+        weight: s.defaultWeight ? `${s.defaultWeight} lb` : "",
+      });
+    });
+    exercises.push({ name: `Final Run`, sets: "1", reps: `${runDist} @ race pace`, weight: "" });
+    exercises.push({ name: "Cooldown", sets: "1", reps: "5 min", weight: "" });
+  }
+
+  // Save as a Hyrox workout — same shape saveHyroxWorkout produces so
+  // the live tracker / calendar render it identically.
+  let workouts = [];
+  try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
+  workouts.unshift({
+    id: Date.now(),
+    date: dateStr,
+    name: workoutName,
+    type: "hyrox",
+    notes: `Auto-generated · ${focus.replace(/_/g, " ")} · ${duration} min`,
+    duration: String(duration),
+    exercises,
+    isHyrox: true,
+    hyroxFocus: focus,
+  });
+  localStorage.setItem("workouts", JSON.stringify(workouts));
+  if (typeof DB !== "undefined") DB.syncWorkouts();
+
+  if (msg) { msg.style.color = "var(--color-success)"; msg.textContent = "Generated!"; }
+  renderCalendar();
+  if (typeof renderDayDetail === "function") renderDayDetail(dateStr);
+  setTimeout(() => closeQuickEntry(), 700);
+}
+
 // ── Sauna / Steam Session ────────────────────────────────────────────────────
 
 function saveSaunaSession() {
