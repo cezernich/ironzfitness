@@ -701,43 +701,76 @@ function _personalizeWeights(exercises) {
     ],
   };
 
+  // Last-resort default when neither logged history nor parent-lift
+  // calculation can fill in a weight. Picks "Bodyweight" for movements
+  // that genuinely need no load, and "Moderate" for everything else
+  // (machines, isolation work, accessories the user hasn't logged
+  // yet) so the row never renders blank — Bug 11.
+  function _defaultWeight(name) {
+    const n = String(name).toLowerCase();
+    if (/\b(pull[- ]?up|chin[- ]?up|push[- ]?up|dip|muscle[- ]?up|burpee|plank|hollow|bird[- ]?dog|superman|glute bridge|hip thrust|step[- ]?up|sit[- ]?up|crunch|mountain climber|jumping jack|air squat|lunge)\b/.test(n)) return "Bodyweight";
+    return "Moderate";
+  }
+
   return exercises.map(ex => {
     if (/bodyweight|bw|assisted|plank|bird|crunch/i.test(ex.weight || "")) return ex;
     if (/bodyweight/i.test(ex.name)) return ex;
 
+    // Priority 1 (per Bug 11 spec): most recent logged weight for
+    // THIS EXACT exercise. _lookupLastLoggedFor scans workouts newest-
+    // first, case-insensitive name match. If the user has done Hip
+    // Adductor Machine before, surface that weight instead of falling
+    // through to a string default.
+    if (typeof _lookupLastLoggedFor === "function") {
+      const last = _lookupLastLoggedFor(ex.name);
+      if (last && last.weight && String(last.weight).trim()) {
+        return { ...ex, weight: last.weight };
+      }
+    }
+
+    // Priority 2: parent-lift personalisation. Maps the exercise to
+    // a tracked compound (squat / bench / deadlift / OHP / row) and
+    // applies a tier-specific factor.
     let refKey = null;
     for (const m of liftMap) {
       if (m.patterns.some(p => p.test(ex.name))) { refKey = m.key; break; }
     }
-    if (!refKey) return ex;
+    if (refKey && refs) {
+      const oneRM = to1RM(refs[refKey]);
+      if (oneRM) {
+        let factor = 1.0;
+        const scaleRules = accessoryScale[refKey] || [];
+        for (const rule of scaleRules) {
+          if (rule.pattern.test(ex.name)) { factor = rule.factor; break; }
+        }
 
-    const oneRM = to1RM(refs[refKey]);
-    if (!oneRM) return ex;
-
-    let factor = 1.0;
-    const scaleRules = accessoryScale[refKey] || [];
-    for (const rule of scaleRules) {
-      if (rule.pattern.test(ex.name)) { factor = rule.factor; break; }
+        const targetWeight = roundLbs(workingWeight(oneRM * factor, ex.reps));
+        if (targetWeight > 0) {
+          // Unilateral stance exercises (single-leg RDL, split squat, etc.)
+          // are almost always DB-loaded. Split the computed total across two
+          // hands so the card doesn't suggest loading the entire target into
+          // each hand.
+          const isUnilateralStance = /single.?leg|split.?leg|single.?arm|bulgarian|split\s*squat/i.test(ex.name);
+          const isDumbbell = /dumbbell|2×|arnold|goblet/i.test(ex.name) || /2×/i.test(ex.weight || "") || isUnilateralStance;
+          let weightStr;
+          if (isDumbbell) {
+            const perHand = roundLbs(targetWeight / 2);
+            weightStr = perHand > 0 ? `2x${perHand} lbs` : ex.weight;
+          } else {
+            weightStr = `${targetWeight} lbs`;
+          }
+          return { ...ex, weight: weightStr };
+        }
+      }
     }
 
-    const targetWeight = roundLbs(workingWeight(oneRM * factor, ex.reps));
-    if (targetWeight <= 0) return ex;
+    // Priority 3: keep whatever the community / library template
+    // already filled in (e.g. "Moderate", "Light", "Heavy" strings).
+    if (ex.weight && String(ex.weight).trim() && ex.weight !== "—") return ex;
 
-    // Unilateral stance exercises (single-leg RDL, split squat, etc.)
-    // are almost always DB-loaded. Split the computed total across two
-    // hands so the card doesn't suggest loading the entire target into
-    // each hand.
-    const isUnilateralStance = /single.?leg|split.?leg|single.?arm|bulgarian|split\s*squat/i.test(ex.name);
-    const isDumbbell = /dumbbell|2×|arnold|goblet/i.test(ex.name) || /2×/i.test(ex.weight || "") || isUnilateralStance;
-    let weightStr;
-    if (isDumbbell) {
-      const perHand = roundLbs(targetWeight / 2);
-      weightStr = perHand > 0 ? `2x${perHand} lbs` : ex.weight;
-    } else {
-      weightStr = `${targetWeight} lbs`;
-    }
-
-    return { ...ex, weight: weightStr };
+    // Priority 4: text default — "Bodyweight" for movements that
+    // need no load, "Moderate" otherwise. Never renders blank.
+    return { ...ex, weight: _defaultWeight(ex.name) };
   });
 }
 
@@ -2383,7 +2416,16 @@ function _roundWeight(val) {
 
 function _normalizeWeightDisplay(raw, exerciseName) {
   const w = String(raw || "").trim();
-  if (!w || w === "—") return w;
+  // Bug 11 last-resort: never render a blank Weight cell. Use the
+  // exercise name to pick "Bodyweight" or "Moderate" so the user
+  // sees a sensible default instead of an empty column. Renders as
+  // "Log your first set to set a baseline" via the title attribute
+  // when the cell falls back to the dash.
+  if (!w || w === "—") {
+    const n = String(exerciseName || "").toLowerCase();
+    if (/\b(pull[- ]?up|chin[- ]?up|push[- ]?up|dip|burpee|plank|hollow|bird[- ]?dog|superman|glute bridge|hip thrust|step[- ]?up|sit[- ]?up|crunch|mountain climber|jumping jack|air squat|lunge)\b/.test(n)) return "BW";
+    return "Moderate";
+  }
   if (/bodyweight/i.test(w)) return "BW";
   if (/bar\s*\+\s*([\d.]+)/i.test(w)) {
     const m = w.match(/bar\s*\+\s*([\d.]+)/i);

@@ -1850,6 +1850,40 @@ function buildStepsList(session, discipline) {
     const discTag = brickDisc
       ? `<span class="seg-disc-tag seg-disc-${brickDisc}">${brickDisc === "bike" ? "Bike" : "Run"}</span> `
       : "";
+
+    // Swim: when a step has reps > 1 (e.g. "6 × 200m @ 1:29/100m
+    // w/ 1 min rest"), unfold each rep into its own row so the user
+    // can mentally tick them off mid-set instead of staring at one
+    // collapsed line. Bug 12 — flagged multiple times. Each set gets
+    // distance + pace + rest (last set drops the rest line).
+    const isSwim = discipline === "swim" || discipline === "swimming";
+    const repCount = parseInt(step.reps) || 1;
+    if (isSwim && repCount > 1) {
+      const restPerRep = step.rest;
+      const distLabel = step.distance ? `${step.distance}m` : (typeof step.duration === "number" ? `${_fmtDur(step.duration)}` : `${step.duration}`);
+      const paceFromLabel = step.label || "";
+      // Try to extract a pace target ("@ 1:29/100m") from step.label so
+      // each row repeats the pace target the user is aiming for.
+      const paceMatch = paceFromLabel.match(/@\s*([0-9:]+\/100m)/);
+      const paceStr = paceMatch ? `@ ${paceMatch[1]}` : (zoneLabel ? `@ ${zoneLabel}` : "");
+      const cleanedLabel = paceFromLabel.replace(/^\d+\s*[×x]\s*[^—]+—\s*/i, "").trim();
+      let html = "";
+      for (let r = 0; r < repCount; r++) {
+        const isLast = r === repCount - 1;
+        const restText = (!isLast && restPerRep) ? ` · ${_fmtDur(restPerRep)} rest` : "";
+        html += `
+      <div class="session-step ${stepCls} session-step--swim-rep" data-set-index="${r + 1}">
+        <div class="session-step-meta">
+          <span class="session-step-type">SET ${r + 1}</span>
+          <span class="session-step-zone">Z${step.zone}${paceStr ? `<span class="session-step-pace">${paceStr}</span>` : ""}</span>
+          <span class="session-step-duration">${distLabel}${restText}</span>
+        </div>
+        ${cleanedLabel ? `<div class="session-step-label">${cleanedLabel}</div>` : ""}
+      </div>`;
+      }
+      return html;
+    }
+
     return `
       <div class="session-step ${stepCls}">
         <div class="session-step-meta">
@@ -2019,6 +2053,34 @@ function buildAiIntervalsList(session, type) {
                     : effectiveName ? effectiveName.toUpperCase() : "INTERVAL";
     const stepCls   = isTransition ? "session-step--transition" : isRestWalk ? "session-step--rw" : `session-step--z${zone}`;
     const zoneBadge = isTransition ? "T1" : isRestWalk ? "RW" : `Z${zone}${zoneLabel ? `<span class="session-step-pace">${zoneLabel}</span>` : ""}`;
+    // Swim per-set unfold (Bug 12): instead of one collapsed
+    // "6 × 200m @ 1:29/100m w/ 1 min rest" row, emit one row per rep
+    // so the user can mentally tick them off mid-set. Detection
+    // matches both type-level swim sessions and per-interval sport=swim
+    // (used by mixed-modality bricks etc., though brick swims are rare
+    // in practice). Last set drops the rest line so the user knows the
+    // workout ends after that rep, not after another rest.
+    const isSwimIv = type === "swim" || type === "swimming"
+                  || iv.sport === "swim" || iv.sport === "swimming";
+    if (isSwimIv && reps > 1 && !isTransition && !isRestWalk) {
+      const rest = _restLabel || null;
+      let html = "";
+      for (let r = 0; r < reps; r++) {
+        const isLast = r === reps - 1;
+        const restText = (!isLast && rest) ? ` · ${rest} rest` : "";
+        html += `
+      <div class="session-step ${stepCls} session-step--swim-rep" data-set-index="${r + 1}">
+        <div class="session-step-meta">
+          <span class="session-step-type">SET ${r + 1}</span>
+          <span class="session-step-duration">${perRepDur}${restText}</span>
+        </div>
+        <div class="session-step-zone-row"><span class="session-step-zone">${zoneBadge}</span></div>
+        ${iv.details ? `<div class="session-step-label">${escHtml(iv.details)}</div>` : ""}
+      </div>`;
+      }
+      return html;
+    }
+
     // Top row: name on left, duration on right. Zone badge moves to its
     // own row underneath so it isn't squeezed between name and duration.
     return `
