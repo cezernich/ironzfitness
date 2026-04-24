@@ -72,7 +72,7 @@
   function _generateSimpleSinglePhase(template, experience, durationOverrideMin, zones, warnings) {
     const range = template.experience_scaling[experience] || template.default_duration_min;
     const defaultMin = (range[0] + range[1]) / 2;
-    const rawDuration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings, template.max_duration_min);
+    const rawDuration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings, template.max_duration_min, template.name);
     // Easy / Recovery is one continuous conversational block — there's no
     // interval math, so snap to the nearest 5 minutes for a cleaner read.
     // 44 → 45, 47 → 45, 48 → 50, etc.
@@ -93,7 +93,7 @@
   function _generateEndurance(template, experience, durationOverrideMin, zones, warnings) {
     const range = template.experience_scaling[experience] || template.default_duration_min;
     const defaultMin = (range[0] + range[1]) / 2;
-    const duration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings, template.max_duration_min);
+    const duration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings, template.max_duration_min, template.name);
     const allowsFinish = experience === "intermediate" || experience === "advanced";
     const eMin = Math.round(duration * 0.85);
     const mMin = Math.round(duration * 0.15);
@@ -124,7 +124,7 @@
     // Long runs always snap to multiples of 5 minutes — users plan long
     // runs in round numbers (100, 105, 110, …), and showing "113 min"
     // in the preview when the slider step is 5 read like a bug.
-    const rawDuration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings, template.max_duration_min);
+    const rawDuration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings, template.max_duration_min, template.name);
     const duration = Math.max(5, Math.round(rawDuration / 5) * 5);
     const allowsFinish = experience === "intermediate" || experience === "advanced";
     const eLabel = zones ? _ePaceLabel(zones) : "Z1 (conversational)";
@@ -580,7 +580,7 @@
   function _generateFunSocial(template, experience, durationOverrideMin, zones, warnings) {
     const range = template.default_duration_min;
     const defaultMin = (range[0] + range[1]) / 2;
-    const duration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings, template.max_duration_min);
+    const duration = _clampDurationOverride(defaultMin, durationOverrideMin, range, warnings, template.max_duration_min, template.name);
     const text = (template.instruction_text || "").replace("{duration}", String(duration));
     return {
       duration,
@@ -602,15 +602,28 @@
     return doy + (offset || 0);
   }
 
-  function _clampDurationOverride(defaultMin, override, range, warnings, maxOverride) {
+  function _clampDurationOverride(defaultMin, override, range, warnings, maxOverride, sessionLabel) {
     if (override == null) return Math.round(defaultMin);
     const lo = defaultMin * 0.5;
     // If the template declares an explicit upper bound (e.g. endurance up to
     // 150 min), honor it. Otherwise default to ±50% of the midpoint.
     const hi = Math.max(defaultMin * 1.5, maxOverride || 0);
     if (override < lo || override > hi) {
-      warnings.push(`Duration override ${override} min is outside the allowed range; clamping.`);
-      return Math.round(Math.max(lo, Math.min(hi, override)));
+      const clamped = Math.round(Math.max(lo, Math.min(hi, override)));
+      const label = sessionLabel || "this session type";
+      // Plain-English message — the previous "outside the allowed range;
+      // clamping" reads like a developer error. Lead with the philosophy
+      // (why the cap exists), then surface the value we'll use. Direction
+      // matters: over-the-cap is a different physiological story than
+      // under-the-floor.
+      let msg;
+      if (override > hi) {
+        msg = `${label} is capped at ${Math.round(hi)} min — going longer changes the physiological purpose of the workout. Using ${clamped} min.`;
+      } else {
+        msg = `${label} has a ${Math.round(lo)}-min floor — shorter than that doesn't trigger the adaptation this session is for. Using ${clamped} min.`;
+      }
+      warnings.push(msg);
+      return clamped;
     }
     return Math.round(override);
   }

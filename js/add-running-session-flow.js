@@ -513,8 +513,14 @@
       // while the generated workout shows 115 min.
       const rawMid = isArrayRange ? (lo + hi) / 2 : 45;
       const mid = Math.max(5, Math.round(rawMid / 5) * 5);
-      const sliderMax = Math.max(Math.round(mid * 1.5), tmpl.max_duration_min || 0);
-      $dur.min = String(Math.max(15, Math.round(mid * 0.5)));
+      // Slider min/max also snap to multiples of 5 so the slider only
+      // lands on round numbers — Bug 17 surfaced cases where the
+      // computed bounds (e.g. 38, 42) gave the slider non-multiple
+      // ticks even though step=5.
+      const _round5 = (n) => Math.max(5, Math.round(n / 5) * 5);
+      const sliderMax = _round5(Math.max(Math.round(mid * 1.5), tmpl.max_duration_min || 0));
+      const sliderMin = _round5(Math.max(15, Math.round(mid * 0.5)));
+      $dur.min = String(sliderMin);
       $dur.max = String(sliderMax);
       if (!$dur.dataset.touched) $dur.value = String(mid);
       const result = RWG.generateRunWorkout({

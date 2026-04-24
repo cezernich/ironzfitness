@@ -1935,7 +1935,7 @@ function buildStatsHydration() {
   const barChart = last7.map(d => {
     const pct = maxOz > 0 ? Math.round((d.oz / maxOz) * 100) : 0;
     const color = !d.active ? "#555" : d.met ? "var(--color-accent)" : "rgba(129, 140, 248, 0.5)";
-    const countLabel = d.active ? `${d.oz} oz` : "—";
+    const countLabel = d.active ? `${Math.round(d.oz)} oz` : "—";
     return `<div class="weekly-col">
       <div class="weekly-count" style="${!d.active ? 'opacity:0.4' : ''}">${countLabel}</div>
       <div class="weekly-track">
@@ -1977,7 +1977,7 @@ function buildStatsHydration() {
         </div>
         <div class="totals-row" style="margin-top:14px">
           <span class="totals-label">Total Logged</span>
-          <span class="totals-value">${totalOz.toLocaleString()} oz over ${activeDays.length} days</span>
+          <span class="totals-value">${Math.round(totalOz).toLocaleString()} oz over ${activeDays.length} days</span>
         </div>
       </div>
     </section>`;

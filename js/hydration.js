@@ -1142,7 +1142,10 @@ function closeHydrationSettings() {
 
 function saveHydrationSettings() {
   const bottleSize = parseInt(document.getElementById("hydration-bottle-size")?.value || "12");
-  const dailyTargetOz = parseInt(document.getElementById("hydration-daily-target-oz")?.value || "96");
+  // Math.round (not parseInt) so a typed "96.5" rounds to 97 instead of
+  // truncating to 96 — keeps the saved target consistent with what the
+  // user sees on the bar and matches Bug 3's "no fractional oz" rule.
+  const dailyTargetOz = Math.round(parseFloat(document.getElementById("hydration-daily-target-oz")?.value || "96")) || 96;
 
   // Harvest the bottle editor rows — each row carries its id and the
   // latest name/size the user typed. Empty or zero-sized entries are
