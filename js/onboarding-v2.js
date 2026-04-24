@@ -3575,10 +3575,15 @@
     _renderSchedule();
   }
 
-  // Add a session to a day with rest/workout mutual exclusion:
-  //   - adding "rest"    → drops every other session on that day
+  // Add a session to a day with rest/workout mutual exclusion AND
+  // brick mutual exclusion:
+  //   - adding "rest"  → drops every other session on that day
   //   - adding a workout → drops any "rest" marker already present
-  // No day can be both resting and training at the same time.
+  //   - adding "brick" → drops any standalone bike/run/long/interval
+  //     chips on the same day (a brick already includes a ride and a
+  //     run; having both reads as double-counting)
+  //   - adding bike/run on a day that already has brick → no-op (brick
+  //     covers it)
   function _addSlotToDay(day, sport) {
     if (!Array.isArray(_state.schedule[day])) _state.schedule[day] = [];
     if (sport === "rest") {
@@ -3586,6 +3591,22 @@
       return;
     }
     _state.schedule[day] = _state.schedule[day].filter(s => s !== "rest");
+
+    // Brick covers bike + run for the day. Strip any bike/run-family
+    // chips when adding brick; ignore bike/run additions when brick
+    // is already there. Bug 7: manual chip-add was bypassing the
+    // dedup logic that auto-placement (_seedSchedule) already had.
+    const _isBikeRunFamily = (s) =>
+      s === "bike" || s === "run" ||
+      s.indexOf("bike-") === 0 || s.indexOf("run-") === 0;
+    if (sport === "brick") {
+      _state.schedule[day] = _state.schedule[day].filter(s => !_isBikeRunFamily(s));
+    } else if (_isBikeRunFamily(sport) && _state.schedule[day].includes("brick")) {
+      // Brick already includes a ride + run — silently no-op so the
+      // user doesn't end up with [Brick, Bike] on the same day.
+      return;
+    }
+
     // Avoid duplicate-same-sport spam (e.g., two Rests via drag).
     if (!_state.schedule[day].includes(sport)) _state.schedule[day].push(sport);
   }
