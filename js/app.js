@@ -3,6 +3,15 @@
 // App version — included in every client_error report via error-reporting.js
 // so we can tell which build a bug came from. Bump on each meaningful release.
 const IRONZ_VERSION = "1.0.0";
+
+// "Indefinite" plan duration. Used by every plan-generation entry
+// point that surfaces an "indefinite" option (Build Plan triathlon
+// path, lifting plan, life-training endurance plan). The three
+// previously disagreed (12 / 104 / 12 weeks) — picking one here
+// stops the wall-at-3-months bug Build-Plan users were hitting.
+// 52 weeks materializes a year of sessions; refresh blocks pick
+// new variants as the user advances.
+const INDEFINITE_PLAN_WEEKS = 52;
 if (typeof window !== "undefined") window.IRONZ_VERSION = IRONZ_VERSION;
 
 // Health-disclaimer gate. Required on first launch per App Store

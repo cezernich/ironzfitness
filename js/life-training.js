@@ -8,7 +8,9 @@ async function generateLifePlan(params) {
   const level = params?.level || document.getElementById("life-current-level")?.value || "beginner";
   const startDate = params?.startDate || document.getElementById("life-start-date")?.value;
   const durationVal = params?.duration || document.getElementById("life-duration")?.value || "8";
-  const weeks = durationVal === "indefinite" ? 12 : parseInt(durationVal);
+  const weeks = durationVal === "indefinite"
+    ? (typeof INDEFINITE_PLAN_WEEKS !== "undefined" ? INDEFINITE_PLAN_WEEKS : 52)
+    : parseInt(durationVal);
 
   const selectedDays = params?.selectedDays || Array.from(document.querySelectorAll("#life-day-picker input:checked")).map(el => parseInt(el.value));
   const daysPerWeek = selectedDays.length;

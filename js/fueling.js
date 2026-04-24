@@ -161,10 +161,13 @@ function renderFuelingPlanHTML(durationMinutes, sessionName, sessionCtx) {
   if (!isFuelingEnabled()) return "";
   const _disc = String(sessionCtx?.discipline || "").toLowerCase();
   const _name = String(sessionName || "").toLowerCase();
-  // Fueling plans are only meaningful for sustained aerobic work (running,
-  // cycling, swimming, brick). Strength, HIIT, circuit, yoga, mobility etc.
-  // don't warrant a mid-session carb plan — skip rendering entirely.
-  const AEROBIC_DISCIPLINES = new Set(["run", "running", "bike", "cycling", "cycle", "swim", "swimming", "brick", "triathlon"]);
+  // Fueling plans only render for disciplines where mid-session
+  // intake is realistic. Swim is excluded — mid-pool gels aren't a
+  // thing for typical training swims. Brick stays in because the
+  // run/bike legs DO warrant fueling. Triathlon stays in for the
+  // multi-leg sessions where fueling is critical (long bricks, long
+  // open-water swims that lead into a bike).
+  const AEROBIC_DISCIPLINES = new Set(["run", "running", "bike", "cycling", "cycle", "brick", "triathlon"]);
   if (!AEROBIC_DISCIPLINES.has(_disc)) return "";
   const plan = generateFuelingPlan(durationMinutes, sessionCtx);
   if (!plan) return "";

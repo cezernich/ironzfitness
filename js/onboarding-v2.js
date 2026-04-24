@@ -4175,7 +4175,8 @@
     // customWeeks (set by the custom-weeks input).
     let weeks = 12;
     const dur = _state.planDetails.duration;
-    if (dur === "indefinite") weeks = 12;
+    const isIndefinite = dur === "indefinite";
+    if (isIndefinite) weeks = (typeof INDEFINITE_PLAN_WEEKS !== "undefined") ? INDEFINITE_PLAN_WEEKS : 52;
     else if (dur === "custom") weeks = Math.max(1, Math.min(52, parseInt(_state.planDetails.customWeeks, 10) || 12));
     else weeks = Math.max(1, parseInt(dur, 10) || 12);
     const sessionLen = Math.max(15, parseInt(_state.planDetails.sessionLength, 10) || 60);
@@ -4294,6 +4295,12 @@
           const session = _buildSessionForSport(enrichedCode, dateStr, sessionLen, w + 1, planId, counter++, phaseKey);
           if (session) {
             if (raceIdForPlan) session.raceId = raceIdForPlan;
+            // Mark every session in an indefinite plan so the Training
+            // Inputs card can render "Ongoing" instead of a hard end
+            // date. Bug 14: the user picks indefinite, expects the plan
+            // to roll, and the card was misrepresenting it as fixed-12-
+            // weeks-then-stops.
+            if (isIndefinite) session.indefinite = true;
             sessions.push(session);
           }
         });

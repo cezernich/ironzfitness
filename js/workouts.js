@@ -1236,7 +1236,7 @@ async function generatePlan() {
   const startDate    = document.getElementById("plan-start-date").value;
   const weeksRaw     = document.getElementById("plan-weeks").value;
   const isIndefinite = weeksRaw === "indefinite";
-  const weeks        = isIndefinite ? 104 : parseInt(weeksRaw);
+  const weeks        = isIndefinite ? (typeof INDEFINITE_PLAN_WEEKS !== "undefined" ? INDEFINITE_PLAN_WEEKS : 52) : parseInt(weeksRaw);
   const refreshWeeks = parseInt(document.getElementById("plan-refresh").value) || 4;
   const msgEl        = document.getElementById("plan-save-msg");
   if (startDate && weeks) {

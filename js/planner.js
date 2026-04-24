@@ -2005,7 +2005,7 @@ function _getBuildPlanInputs() {
   const byPlan = {};
   future.forEach(e => {
     if (!byPlan[e.planId]) {
-      byPlan[e.planId] = { planId: e.planId, sessions: [], startDate: e.date, endDate: e.date, types: new Set(), source: e.source, planName: null, raceId: e.raceId || null };
+      byPlan[e.planId] = { planId: e.planId, sessions: [], startDate: e.date, endDate: e.date, types: new Set(), source: e.source, planName: null, raceId: e.raceId || null, indefinite: false };
     }
     const b = byPlan[e.planId];
     b.sessions.push(e);
@@ -2014,6 +2014,10 @@ function _getBuildPlanInputs() {
     if (e.type) b.types.add(e.type);
     if (!b.planName && e.planName) b.planName = e.planName;
     if (!b.raceId && e.raceId)    b.raceId = e.raceId;
+    // Single indefinite session marks the whole plan as ongoing —
+    // the Build Plan flow stamps every session in an indefinite plan,
+    // so seeing it on any one is sufficient.
+    if (e.indefinite) b.indefinite = true;
   });
   return Object.values(byPlan).map(b => {
     const wk = Math.max(1, Math.round((new Date(b.endDate + "T00:00:00") - new Date(b.startDate + "T00:00:00")) / (7 * 864e5)) + 1);
@@ -2027,6 +2031,7 @@ function _getBuildPlanInputs() {
       source:   b.source,
       planName: b.planName,
       raceId:   b.raceId,
+      indefinite: b.indefinite,
     };
   });
 }
@@ -2495,11 +2500,11 @@ function renderTrainingInputs() {
           </div>
         </div>
         <div class="race-card-name">${cardTitle}</div>
-        <div class="race-card-meta">${bp.sessions} session${bp.sessions !== 1 ? "s" : ""} · ${bp.weeks} week${bp.weeks !== 1 ? "s" : ""}</div>
+        <div class="race-card-meta">${bp.sessions} session${bp.sessions !== 1 ? "s" : ""} · ${bp.indefinite ? "Ongoing" : (bp.weeks + " week" + (bp.weeks !== 1 ? "s" : ""))}</div>
         ${typeChips ? `<div class="race-tags">${typeChips}</div>` : ""}
         <div class="race-card-footer">
           <span class="race-date-badge">${rangeStart}</span>
-          <span class="race-countdown">through ${rangeEnd}</span>
+          <span class="race-countdown">${bp.indefinite ? "ongoing" : ("through " + rangeEnd)}</span>
         </div>
       </div>`;
   });
