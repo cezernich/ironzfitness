@@ -926,8 +926,22 @@ async function loadProfileIntoForm() {
       profile = JSON.parse(localStorage.getItem("profile")) || {};
     }
     if (profile.name)   document.getElementById("profile-name").value   = profile.name;
-    if (profile.birthday) document.getElementById("profile-birthday").value = profile.birthday;
-    else if (profile.age) document.getElementById("profile-birthday").value = ""; // legacy: had age but no birthday
+    // Birthday picker uses three Month/Day/Year selects (Bug 18) —
+    // initialize the option lists then set the saved value via the
+    // helper. Falls back to plain assignment if the selects aren't
+    // present (other settings pages might still use type="date").
+    if (typeof window._initBdayPicker === "function") {
+      window._initBdayPicker("profile-birthday");
+    }
+    if (profile.birthday) {
+      if (typeof window._setBdayPickerValue === "function") {
+        window._setBdayPickerValue("profile-birthday", profile.birthday);
+      } else {
+        document.getElementById("profile-birthday").value = profile.birthday;
+      }
+    } else if (profile.age) {
+      document.getElementById("profile-birthday").value = ""; // legacy: had age but no birthday
+    }
     if (profile.weight) document.getElementById("profile-weight").value = profile.weight;
     if (profile.height) {
       const h = parseInt(profile.height);

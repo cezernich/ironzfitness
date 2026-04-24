@@ -1439,7 +1439,13 @@
             </div>
             <div class="form-row">
               <label for="profile-birthday">Birthday</label>
-              <input type="date" id="profile-birthday" />
+              <!-- See ob-v2-bday — same Month/Day/Year selects pattern. -->
+              <div class="bday-picker">
+                <select id="profile-birthday-month" class="bday-month" aria-label="Birth month"></select>
+                <select id="profile-birthday-day" class="bday-day" aria-label="Birth day"></select>
+                <select id="profile-birthday-year" class="bday-year" aria-label="Birth year"></select>
+              </div>
+              <input type="hidden" id="profile-birthday" />
             </div>
             <div class="form-row">
               <label for="profile-weight">Weight (lbs)</label>
@@ -3473,7 +3479,18 @@
           </div>
           <div class="ob-v2-form-group">
             <label for="ob-v2-bday">Birthday</label>
-            <input type="date" id="ob-v2-bday" min="1930-01-01" max="2015-12-31" />
+            <!-- Three selects (Month / Day / Year) instead of <input type="date">.
+                 The iOS date wheel forced a "tap out / tap back in" dance to set
+                 all three fields. Selects commit each on tap and match the
+                 MyFitnessPal / Strava convention. ob-v2-bday remains as a
+                 hidden ISO mirror so onboarding code that reads the value
+                 keeps working unchanged. -->
+            <div class="bday-picker">
+              <select id="ob-v2-bday-month" class="bday-month" aria-label="Birth month"></select>
+              <select id="ob-v2-bday-day" class="bday-day" aria-label="Birth day"></select>
+              <select id="ob-v2-bday-year" class="bday-year" aria-label="Birth year"></select>
+            </div>
+            <input type="hidden" id="ob-v2-bday" />
             <div class="ob-v2-error-msg" id="ob-v2-err-bday"></div>
           </div>
           <div class="ob-v2-form-group">

@@ -36,8 +36,18 @@ async function loadAdminData() {
   // Dev bypass with placeholder credentials — show mock data
   if (typeof DEV_BYPASS_AUTH !== "undefined" && DEV_BYPASS_AUTH) {
     _adminProfiles = generateMockProfiles();
+    _hideAdminError();
     renderAdminStats();
     renderAdminUsers();
+    return;
+  }
+
+  // Bug 4: silent failures (Supabase not initialized in the Capacitor
+  // WebView, RLS denying the query, network error) used to leave "--"
+  // in every stat. Now we surface a red error banner so the cause is
+  // visible instead of guessable.
+  if (!client) {
+    _showAdminError("Supabase client not available — check connection.");
     return;
   }
 
@@ -49,16 +59,37 @@ async function loadAdminData() {
 
     if (error) {
       console.warn("Admin: failed to load profiles", error.message);
+      _showAdminError(`Failed to load profiles: ${error.message}`);
       return;
     }
     _adminProfiles = data || [];
+    _hideAdminError();
   } catch (e) {
     console.warn("Admin: supabase error", e);
     _adminProfiles = [];
+    _showAdminError(`Network error: ${e && e.message ? e.message : "unknown"}`);
+    return;
   }
 
   renderAdminStats();
   renderAdminUsers();
+}
+
+function _showAdminError(msg) {
+  let banner = document.getElementById("admin-error-banner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "admin-error-banner";
+    banner.className = "admin-error-banner";
+    const tab = document.getElementById("tab-admin") || document.body;
+    tab.insertBefore(banner, tab.firstChild);
+  }
+  banner.textContent = msg;
+  banner.style.display = "";
+}
+function _hideAdminError() {
+  const banner = document.getElementById("admin-error-banner");
+  if (banner) banner.style.display = "none";
 }
 
 // ── Mock data for dev mode ───────────────────────────────────────────────────

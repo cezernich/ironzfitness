@@ -159,6 +159,106 @@
     return age;
   }
 
+  // ── Birthday picker (Month / Day / Year selects) ─────────────────
+  //
+  // Replaces native <input type="date"> on iOS, where the wheel UI
+  // requires a "tap out / tap back in" dance to set Day after Month
+  // and Year. Three selects commit each value on tap and match the
+  // pattern used by MyFitnessPal / Strava.
+  //
+  // Wired against TWO inputs in the app: ob-v2-bday (onboarding) and
+  // profile-birthday (settings). Both have a hidden mirror that
+  // carries the ISO YYYY-MM-DD string so existing readers
+  // (loadProfile, _calcAge) work unchanged.
+  const _BDAY_MONTHS = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+  function _initBdayPicker(hiddenInputId) {
+    const monthSel = document.getElementById(hiddenInputId + "-month");
+    const daySel   = document.getElementById(hiddenInputId + "-day");
+    const yearSel  = document.getElementById(hiddenInputId + "-year");
+    const hidden   = document.getElementById(hiddenInputId);
+    if (!monthSel || !daySel || !yearSel || !hidden) return;
+    // Idempotent: skip re-population if options are already filled.
+    if (monthSel.options.length > 0) return;
+
+    monthSel.innerHTML = '<option value="">Month</option>' +
+      _BDAY_MONTHS.slice(1).map((m, i) => `<option value="${i + 1}">${m}</option>`).join("");
+    daySel.innerHTML = '<option value="">Day</option>' +
+      Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
+    // Years from this year backwards to 1930 — covers the user-base
+    // bracket the existing min/max attributes were enforcing.
+    const thisYear = new Date().getFullYear();
+    const yearOptions = [];
+    for (let y = thisYear; y >= 1930; y--) yearOptions.push(`<option value="${y}">${y}</option>`);
+    yearSel.innerHTML = '<option value="">Year</option>' + yearOptions.join("");
+
+    const onChange = () => {
+      _syncBdayPickerToHidden(hiddenInputId);
+      // Adjust day options when month/year changes so February only
+      // shows 28/29 days etc. Preserve current day if still valid.
+      const m = parseInt(monthSel.value, 10);
+      const y = parseInt(yearSel.value, 10);
+      if (m && y) {
+        const daysInMonth = new Date(y, m, 0).getDate();
+        const currentDay = parseInt(daySel.value, 10);
+        daySel.innerHTML = '<option value="">Day</option>' +
+          Array.from({ length: daysInMonth }, (_, i) => `<option value="${i + 1}"${currentDay === i + 1 ? " selected" : ""}>${i + 1}</option>`).join("");
+        // If the current day is no longer valid (e.g. switched to Feb
+        // with a 31 selected), the select clears — re-sync the hidden
+        // input to reflect that.
+        _syncBdayPickerToHidden(hiddenInputId);
+      }
+    };
+    monthSel.addEventListener("change", onChange);
+    daySel.addEventListener("change", onChange);
+    yearSel.addEventListener("change", onChange);
+  }
+
+  function _syncBdayPickerToHidden(hiddenInputId) {
+    const monthSel = document.getElementById(hiddenInputId + "-month");
+    const daySel   = document.getElementById(hiddenInputId + "-day");
+    const yearSel  = document.getElementById(hiddenInputId + "-year");
+    const hidden   = document.getElementById(hiddenInputId);
+    if (!monthSel || !daySel || !yearSel || !hidden) return;
+    const m = parseInt(monthSel.value, 10);
+    const d = parseInt(daySel.value, 10);
+    const y = parseInt(yearSel.value, 10);
+    if (m && d && y) {
+      const mm = String(m).padStart(2, "0");
+      const dd = String(d).padStart(2, "0");
+      hidden.value = `${y}-${mm}-${dd}`;
+    } else {
+      hidden.value = "";
+    }
+    // Fire change event so any listeners (validation, age calculator)
+    // that were wired against the original date input keep working.
+    try { hidden.dispatchEvent(new Event("change", { bubbles: true })); } catch {}
+  }
+
+  function _setBdayPickerValue(hiddenInputId, isoDate) {
+    if (!isoDate) return;
+    const m = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return;
+    const monthSel = document.getElementById(hiddenInputId + "-month");
+    const daySel   = document.getElementById(hiddenInputId + "-day");
+    const yearSel  = document.getElementById(hiddenInputId + "-year");
+    const hidden   = document.getElementById(hiddenInputId);
+    if (!monthSel || !daySel || !yearSel || !hidden) return;
+    yearSel.value = String(parseInt(m[1], 10));
+    monthSel.value = String(parseInt(m[2], 10));
+    // Trigger month/year change handler so day list updates to the
+    // right number of days, then set the day.
+    monthSel.dispatchEvent(new Event("change", { bubbles: true }));
+    daySel.value = String(parseInt(m[3], 10));
+    hidden.value = isoDate;
+  }
+
+  // Expose so settings.js / profile UI can also use the same picker.
+  if (typeof window !== "undefined") {
+    window._initBdayPicker = _initBdayPicker;
+    window._setBdayPickerValue = _setBdayPickerValue;
+  }
+
   // ── Screen navigation ──────────────────────────────────────────────
 
   // goTo auto-detects which overlay the target screen lives in
@@ -592,8 +692,11 @@
     const p = _lsGet("profile", {}) || {};
     const name = document.getElementById("ob-v2-name");
     if (name && p.name) name.value = p.name;
-    const bday = document.getElementById("ob-v2-bday");
-    if (bday && p.birthday) bday.value = p.birthday;
+    // Birthday picker: three Month/Day/Year selects mirror to the
+    // hidden ob-v2-bday ISO input. _initBdayPicker fills in the
+    // option lists on first call (idempotent).
+    _initBdayPicker("ob-v2-bday");
+    if (p.birthday) _setBdayPickerValue("ob-v2-bday", p.birthday);
     const weight = document.getElementById("ob-v2-weight");
     if (weight && p.weight) weight.value = p.weight;
     const hFt = document.getElementById("ob-v2-height-ft");
