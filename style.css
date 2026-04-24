@@ -7927,6 +7927,33 @@ input.completion-ex-name:focus {
   font-size: 0.92rem;
   font-weight: 600;
 }
+
+/* Circuit builder drag-and-drop (Bug 1). The .drag-handle was already
+   visible but inert; these classes are toggled by the drag handlers
+   in circuit-builder.js to highlight the drop target zone. */
+.builder-step.cb-dragging {
+  opacity: 0.4;
+}
+.builder-step.cb-drop-above {
+  box-shadow: 0 -3px 0 0 var(--color-accent);
+}
+.builder-step.cb-drop-below {
+  box-shadow: 0 3px 0 0 var(--color-accent);
+}
+.builder-step.cb-drop-group {
+  outline: 2px dashed var(--color-accent);
+  outline-offset: -2px;
+  background: var(--color-accent-glow, rgba(0, 0, 0, 0.06));
+}
+.builder-step .drag-handle {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.builder-step .drag-handle:active {
+  cursor: grabbing;
+}
 .ch-lb-rank { width: 28px; text-align: right; color: var(--color-text-muted); font-size: 0.78rem; }
 .ch-lb-name { flex: 1; }
 .ch-lb-pct { font-weight: 600; }

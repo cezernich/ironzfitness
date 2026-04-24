@@ -232,6 +232,204 @@
   //
   // Simple rule-based generator. Produces a title + step tree from
   // intensity/duration/focus, randomized so Regenerate yields variation.
+  // ── Circuit template library (Bug 15) ────────────────────────────
+  //
+  // Seed bank of varied circuit shapes covering the four formats
+  // (For Time / AMRAP / EMOM / Standard). Each template declares the
+  // formats it's appropriate for, a focus tag, and a `build(opts)`
+  // function that returns { name, goal, goal_value, steps, ... }.
+  // The generator picks a template via day-of-year rotation
+  // (_circuitVariantIndex) so consecutive generations don't repeat.
+  //
+  // TODO: Chase to provide more circuit templates. This seed proves
+  // the rotation engine works; expand the library when content is
+  // ready. Current bench: 7 public-domain benchmark + structure
+  // templates spanning all four formats.
+  function _circuitVariantIndex() {
+    const doy = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+    return doy;
+  }
+
+  const _CIRCUIT_TEMPLATES = [
+    // 1. Cindy — classic AMRAP bodyweight benchmark.
+    {
+      id: "cindy",
+      name: "Cindy",
+      formats: ["amrap"],
+      focuses: ["bodyweight", "mixed"],
+      minDuration: 15,
+      build: (opts) => ({
+        name: "Cindy",
+        goal: "amrap",
+        goal_value: opts.duration || 20,
+        description: `AMRAP ${opts.duration || 20} min · 5 / 10 / 15`,
+        steps: [{
+          kind: "repeat",
+          count: 999,
+          children: [
+            { kind: "exercise", name: "Pull-ups", reps: 5 },
+            { kind: "exercise", name: "Push-ups", reps: 10 },
+            { kind: "exercise", name: "Air Squats", reps: 15 },
+          ],
+        }],
+      }),
+    },
+    // 2. Helen — short For-Time triplet with running.
+    {
+      id: "helen",
+      name: "Helen",
+      formats: ["for_time"],
+      focuses: ["mixed", "kb"],
+      minDuration: 10,
+      build: (opts) => ({
+        name: "Helen",
+        goal: "for_time",
+        goal_value: null,
+        description: "3 rounds for time",
+        steps: [{
+          kind: "repeat",
+          count: 3,
+          children: [
+            { kind: "cardio", name: "Run", distance_m: 400, distance_display: "400m" },
+            { kind: "exercise", name: "Kettlebell Swings", reps: 21, weight: opts.intensity === "intense" ? 53 : 35, weight_unit: "lbs" },
+            { kind: "exercise", name: "Pull-ups", reps: 12 },
+          ],
+        }],
+      }),
+    },
+    // 3. Fran — classic short, sharp barbell + pull-up couplet.
+    {
+      id: "fran",
+      name: "Fran",
+      formats: ["for_time"],
+      focuses: ["barbell", "mixed"],
+      minDuration: 5,
+      build: (opts) => ({
+        name: "Fran",
+        goal: "for_time",
+        goal_value: null,
+        description: "21-15-9 thrusters + pull-ups",
+        steps: [
+          { kind: "exercise", name: "Thrusters", reps: 21, weight: opts.intensity === "intense" ? 95 : 65, weight_unit: "lbs" },
+          { kind: "exercise", name: "Pull-ups", reps: 21 },
+          { kind: "exercise", name: "Thrusters", reps: 15, weight: opts.intensity === "intense" ? 95 : 65, weight_unit: "lbs" },
+          { kind: "exercise", name: "Pull-ups", reps: 15 },
+          { kind: "exercise", name: "Thrusters", reps: 9, weight: opts.intensity === "intense" ? 95 : 65, weight_unit: "lbs" },
+          { kind: "exercise", name: "Pull-ups", reps: 9 },
+        ],
+      }),
+    },
+    // 4. EMOM 20 row + wall balls — minute-on-minute alternation.
+    {
+      id: "emom-row-wb",
+      name: "Row/Wall Ball EMOM",
+      formats: ["emom"],
+      focuses: ["mixed", "barbell"],
+      minDuration: 15,
+      build: (opts) => ({
+        name: "Row / Wall Ball EMOM",
+        goal: "emom",
+        goal_value: 1,
+        description: `EMOM ${opts.duration || 20} min · row / wall balls`,
+        steps: [{
+          kind: "repeat",
+          count: opts.duration || 20,
+          interval_min: 1,
+          children: [
+            { kind: "cardio", name: "Row", distance_m: 200, distance_display: "12 cal row" },
+            { kind: "exercise", name: "Wall Balls", reps: 10, weight: 14, weight_unit: "lbs" },
+          ],
+        }],
+      }),
+    },
+    // 5. Chipper — descending reps across many movements, For Time.
+    {
+      id: "chipper",
+      name: "Chipper",
+      formats: ["for_time"],
+      focuses: ["mixed", "barbell"],
+      minDuration: 20,
+      build: (opts) => ({
+        name: "Chipper",
+        goal: "for_time",
+        goal_value: null,
+        description: "Chip through, no rounds",
+        steps: [
+          { kind: "exercise", name: "Dumbbell Snatches", reps: 50, weight: 35, weight_unit: "lbs", per_side: true },
+          { kind: "exercise", name: "Box Jumps", reps: 40 },
+          { kind: "exercise", name: "Toes-to-Bar", reps: 30 },
+          { kind: "exercise", name: "Push-ups", reps: 20 },
+          { kind: "exercise", name: "Deadlifts", reps: 10, weight: opts.intensity === "intense" ? 225 : 155, weight_unit: "lbs" },
+        ],
+      }),
+    },
+    // 6. Rowing 2K + descending burpees — For Time, cardio-heavy.
+    {
+      id: "row-2k-burpees",
+      name: "Row + Burpees",
+      formats: ["for_time"],
+      focuses: ["mixed", "bodyweight"],
+      minDuration: 15,
+      build: (opts) => ({
+        name: "Row + Burpees For Time",
+        goal: "for_time",
+        goal_value: null,
+        description: "2K row → 20 burpees, then 1K row → 10 burpees",
+        steps: [
+          { kind: "cardio", name: "Row", distance_m: 2000, distance_display: "2000m row" },
+          { kind: "exercise", name: "Burpees", reps: 20 },
+          { kind: "cardio", name: "Row", distance_m: 1000, distance_display: "1000m row" },
+          { kind: "exercise", name: "Burpees", reps: 10 },
+        ],
+      }),
+    },
+    // 7. Standard rounds — generic 5×5 strength circuit (legacy shape).
+    {
+      id: "standard-5x5",
+      name: "Standard 5×5",
+      formats: ["standard"],
+      focuses: ["bodyweight", "barbell", "kb", "mixed"],
+      minDuration: 10,
+      build: (opts) => {
+        const pool = (opts.poolByFocus[opts.focus] || opts.poolByFocus.bodyweight).slice();
+        // Shuffle deterministically using day-of-year so consecutive
+        // gens still rotate.
+        const seed = _circuitVariantIndex();
+        for (let i = pool.length - 1; i > 0; i--) {
+          const j = (seed + i) % (i + 1);
+          [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+        const rounds = Math.max(3, Math.min(6, Math.round((opts.duration - 4) / 3)));
+        return {
+          name: opts.namePicker(),
+          goal: "standard",
+          goal_value: null,
+          description: `${rounds} rounds · ~${opts.duration} min`,
+          steps: [{
+            kind: "repeat",
+            count: rounds,
+            children: pool.slice(0, 4).map(p => ({ kind: "exercise", ...p })),
+          }],
+        };
+      },
+    },
+  ];
+
+  // Pick a template appropriate for the user's intensity / duration /
+  // focus, rotating across the bank by day-of-year so the same user
+  // running the generator on consecutive days gets fresh shapes.
+  function _pickCircuitTemplate(intensity, duration, focus, preferredFormat) {
+    const candidates = _CIRCUIT_TEMPLATES.filter(t => {
+      if (preferredFormat && t.formats.indexOf(preferredFormat) === -1) return false;
+      if (t.focuses.indexOf(focus) === -1 && t.focuses.indexOf("mixed") === -1) return false;
+      if (t.minDuration && duration < t.minDuration) return false;
+      return true;
+    });
+    if (!candidates.length) return null;
+    const idx = _circuitVariantIndex() % candidates.length;
+    return candidates[idx];
+  }
+
   function _generateCircuitLocal(intensity, duration, focus, notes) {
     const _pick = arr => arr[Math.floor(Math.random() * arr.length)];
 
@@ -283,6 +481,32 @@
       kb: kbExercises,
       mixed: mixedExercises,
     };
+
+    // Try the template library first (Bug 15). Falls back to the
+    // legacy random-pool shape if no template matches the requested
+    // format / focus / duration combination — this preserves
+    // generation when the user picks an unusual mix.
+    const tmpl = _pickCircuitTemplate(intensity, duration, focus, null);
+    if (tmpl) {
+      const namePicker = () => _pick(nameVariants[focus] || nameVariants.bodyweight);
+      const built = tmpl.build({ intensity, duration, focus, namePicker, poolByFocus });
+      return {
+        type: "circuit",
+        name: built.name || namePicker(),
+        goal: built.goal || "for_time",
+        goal_value: built.goal_value || null,
+        benchmark_id: tmpl.id,
+        description: built.description || `${intensity[0].toUpperCase() + intensity.slice(1)} · ~${duration} min`,
+        notes: notes || null,
+        steps: built.steps,
+        _intensity: intensity,
+        _duration: duration,
+        _focus: focus,
+      };
+    }
+
+    // Legacy fallback path: random-pool 4-exercise round with optional
+    // 400m run bookends.
     const pool = poolByFocus[focus] || bwExercises;
 
     // Decide shape: rounds × exercises
@@ -461,8 +685,16 @@
     const name = step.name || (step.kind === "cardio" ? "Cardio" : "Exercise");
     const icon = step.kind === "cardio" ? "🏃" : "";
     const detail = _stepDetailString(step);
+    // draggable + path data attribute let the drag handlers in
+    // _wireBuilderDragAndDrop reorder steps and group two steps into
+    // a new repeat block (Bug 1).
     return `
-      <div class="builder-step">
+      <div class="builder-step" draggable="true" data-cb-path="${idx}"
+           ondragstart="window.CircuitBuilder._dragStart(event)"
+           ondragend="window.CircuitBuilder._dragEnd(event)"
+           ondragover="window.CircuitBuilder._dragOver(event)"
+           ondragleave="window.CircuitBuilder._dragLeave(event)"
+           ondrop="window.CircuitBuilder._drop(event)">
         <span class="drag-handle">⠿</span>
         <div class="step-content" onclick="window.CircuitBuilder.editStep(${idx})">
           <div class="step-name">${icon ? icon + " " : ""}${_esc(name)}</div>
@@ -476,7 +708,12 @@
     const name = step.name || (step.kind === "cardio" ? "Cardio" : "Exercise");
     const detail = _stepDetailString(step);
     return `
-      <div class="builder-step builder-step--child">
+      <div class="builder-step builder-step--child" draggable="true" data-cb-path="${parentIdx}.${childIdx}"
+           ondragstart="window.CircuitBuilder._dragStart(event)"
+           ondragend="window.CircuitBuilder._dragEnd(event)"
+           ondragover="window.CircuitBuilder._dragOver(event)"
+           ondragleave="window.CircuitBuilder._dragLeave(event)"
+           ondrop="window.CircuitBuilder._drop(event)">
         <span class="drag-handle">⠿</span>
         <div class="step-content" onclick="window.CircuitBuilder.editChildStep(${parentIdx}, ${childIdx})">
           <div class="step-name">${_esc(name)}</div>
@@ -484,6 +721,155 @@
         </div>
         <button class="delete-btn" onclick="window.CircuitBuilder.deleteChildStep(${parentIdx}, ${childIdx})">✕</button>
       </div>`;
+  }
+
+  // ── Drag & drop (Bug 1) ───────────────────────────────────────────────
+  //
+  // data-cb-path encodes the step's location in _manualDraft.steps:
+  //   "3"     → top-level index 3
+  //   "3.1"   → child 1 inside repeat block at top-level 3
+  //
+  // Drop logic:
+  //   - Dropping in the middle 40% of a target step → group both into
+  //     a new repeat block (count: 2, children: [from, to]).
+  //   - Dropping in top 30% → insert before target.
+  //   - Dropping in bottom 30% → insert after target.
+  //
+  // Touch support: HTML5 drag events fire on iOS Safari for elements
+  // with `draggable="true"` IF the user uses a long-press (system
+  // gesture). We don't ship a fallback Touch shim here — the manual
+  // builder has + buttons that cover the same tasks for users who
+  // can't drag.
+  let _dragPath = null;
+  function _dragStart(ev) {
+    const el = ev.currentTarget;
+    if (!el) return;
+    _dragPath = el.getAttribute("data-cb-path");
+    try {
+      ev.dataTransfer.effectAllowed = "move";
+      ev.dataTransfer.setData("text/plain", _dragPath);
+    } catch {}
+    el.classList.add("cb-dragging");
+  }
+  function _dragEnd(ev) {
+    const el = ev.currentTarget;
+    if (el) el.classList.remove("cb-dragging");
+    document.querySelectorAll(".builder-step.cb-drop-above, .builder-step.cb-drop-below, .builder-step.cb-drop-group")
+      .forEach(d => d.classList.remove("cb-drop-above", "cb-drop-below", "cb-drop-group"));
+    _dragPath = null;
+  }
+  function _dragOver(ev) {
+    if (!_dragPath) return;
+    const el = ev.currentTarget;
+    if (!el || el.getAttribute("data-cb-path") === _dragPath) return;
+    ev.preventDefault();
+    try { ev.dataTransfer.dropEffect = "move"; } catch {}
+    const rect = el.getBoundingClientRect();
+    const pct = (ev.clientY - rect.top) / rect.height;
+    el.classList.remove("cb-drop-above", "cb-drop-below", "cb-drop-group");
+    if (pct > 0.3 && pct < 0.7) el.classList.add("cb-drop-group");
+    else el.classList.add(pct <= 0.3 ? "cb-drop-above" : "cb-drop-below");
+  }
+  function _dragLeave(ev) {
+    const el = ev.currentTarget;
+    if (el) el.classList.remove("cb-drop-above", "cb-drop-below", "cb-drop-group");
+  }
+  function _drop(ev) {
+    if (!_dragPath || !_manualDraft) return;
+    const el = ev.currentTarget;
+    if (!el) return;
+    const targetPath = el.getAttribute("data-cb-path");
+    if (!targetPath || targetPath === _dragPath) return;
+    ev.preventDefault();
+    const rect = el.getBoundingClientRect();
+    const pct = (ev.clientY - rect.top) / rect.height;
+    const mode = (pct > 0.3 && pct < 0.7) ? "group" : (pct <= 0.3 ? "above" : "below");
+    _applyDrop(_dragPath, targetPath, mode);
+    _dragPath = null;
+    _renderManualBuilder();
+  }
+
+  function _readPath(p) {
+    const parts = String(p).split(".").map(n => parseInt(n, 10));
+    if (parts.some(n => Number.isNaN(n))) return null;
+    return parts;
+  }
+  function _stepAtPath(parts) {
+    if (parts.length === 1) return _manualDraft.steps[parts[0]];
+    const parent = _manualDraft.steps[parts[0]];
+    if (!parent || !Array.isArray(parent.children)) return null;
+    return parent.children[parts[1]];
+  }
+  function _removeAtPath(parts) {
+    if (parts.length === 1) {
+      return _manualDraft.steps.splice(parts[0], 1)[0];
+    }
+    const parent = _manualDraft.steps[parts[0]];
+    if (!parent || !Array.isArray(parent.children)) return null;
+    return parent.children.splice(parts[1], 1)[0];
+  }
+  function _applyDrop(fromStr, toStr, mode) {
+    const fromPath = _readPath(fromStr);
+    const toPath = _readPath(toStr);
+    if (!fromPath || !toPath) return;
+    // Take a snapshot of the source step before mutating, so reordering
+    // doesn't shift indexes out from under the target lookup.
+    const srcStep = _stepAtPath(fromPath);
+    const dstStep = _stepAtPath(toPath);
+    if (!srcStep || !dstStep) return;
+
+    if (mode === "group") {
+      // Don't group into another repeat — circuit-workout doesn't support
+      // nested repeats. Treat drop-on-repeat as "insert into that repeat".
+      if (dstStep.kind === "repeat") {
+        _removeAtPath(fromPath);
+        // After removal, the target's path may have shifted if it was
+        // at a higher index in the same parent. Re-resolve.
+        const idx = _manualDraft.steps.indexOf(dstStep);
+        if (idx < 0) return;
+        if (!Array.isArray(_manualDraft.steps[idx].children)) _manualDraft.steps[idx].children = [];
+        _manualDraft.steps[idx].children.push(srcStep);
+        return;
+      }
+      // Group two non-repeat steps: build a new repeat at the target's
+      // location with both steps as children. Top-level only (children
+      // can't host nested repeats).
+      if (toPath.length !== 1 || fromPath.length !== 1) return;
+      const fromIdx = fromPath[0];
+      const toIdx = toPath[0];
+      // Pull both out — order matters so indexes don't shift.
+      const newRepeat = { kind: "repeat", count: 2, children: [] };
+      // Splice the larger index first.
+      const orderedIdxs = fromIdx > toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
+      const removed = orderedIdxs.map(i => _manualDraft.steps.splice(i, 1)[0]);
+      // removed[0] is the higher-index step. Children should be in the
+      // original visual order: [toStep, fromStep] when fromIdx > toIdx,
+      // or [fromStep, toStep] otherwise.
+      newRepeat.children = (fromIdx > toIdx) ? [removed[1], removed[0]] : [removed[0], removed[1]];
+      // Insert at the smaller of the two original indexes.
+      const insertAt = Math.min(fromIdx, toIdx);
+      _manualDraft.steps.splice(insertAt, 0, newRepeat);
+      return;
+    }
+
+    // Reorder (above / below). Top-level only for now to keep the data
+    // model simple; child reorder inside a repeat is a future bonus.
+    if (toPath.length !== 1) return;
+    if (fromPath.length === 1) {
+      const fromIdx = fromPath[0];
+      let toIdx = toPath[0];
+      const removed = _manualDraft.steps.splice(fromIdx, 1)[0];
+      // Adjust toIdx if removal shifted it left.
+      if (fromIdx < toIdx) toIdx--;
+      const insertAt = mode === "above" ? toIdx : toIdx + 1;
+      _manualDraft.steps.splice(insertAt, 0, removed);
+    } else {
+      // Lift child step out of its repeat into top-level at target.
+      const lifted = _removeAtPath(fromPath);
+      if (!lifted) return;
+      const insertAt = mode === "above" ? toPath[0] : toPath[0] + 1;
+      _manualDraft.steps.splice(insertAt, 0, lifted);
+    }
   }
 
   function _stepDetailString(step) {
@@ -1233,6 +1619,11 @@
     _backFromEntry,
     _updateDraftName,
     _updateDraftCap,
+    _dragStart,
+    _dragEnd,
+    _dragOver,
+    _dragLeave,
+    _drop,
   };
   if (typeof window !== "undefined") window.CircuitBuilder = api;
 })();
