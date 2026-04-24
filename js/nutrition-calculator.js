@@ -53,49 +53,84 @@ function calculateTDEE(profile) {
 }
 
 function getActivityMultiplier(profile) {
-  // Try to derive from trainingFrequency on classification, fall back to profile days
+  // Standard Mifflin-St Jeor activity multipliers (Bug 19). The
+  // previous custom midpoints (1.46 / 1.64 / 1.81) sat between two
+  // standard tiers and over-estimated TDEE — a 135-lb general-fitness
+  // user training 4–5 days a week was getting 2,600 kcal when the
+  // accepted maintenance for that profile is ~2,000.
+  //
+  // Standard tiers (Mifflin, ACSM, etc.):
+  //   Sedentary (little / no exercise)        → 1.2
+  //   Lightly active (1–3 days/week)          → 1.375
+  //   Moderately active (3–5 days/week)       → 1.55
+  //   Very active (6–7 days/week)             → 1.725
+  //   Extra active (2× per day, manual labor) → 1.9
+  //
+  // Reads `trainingFrequency` first (legacy classifier output), then
+  // falls back to numeric daysPerWeek. Defaults to 1.375 when the
+  // user has no day count set — better to under-estimate than to
+  // over-prescribe a calorie target.
   var freq = "";
   if (profile.trainingFrequency) {
     freq = String(profile.trainingFrequency);
   } else {
     var rawDays = profile.availableDaysPerWeek || profile.daysPerWeek;
-    if (rawDays) {
+    if (rawDays != null) {
       var days = parseInt(rawDays);
-      if (days <= 3) freq = "2-3";
-      else if (days <= 5) freq = "4-5";
-      else freq = "6-7";
+      if (isFinite(days)) {
+        if (days <= 0) freq = "0";
+        else if (days <= 3) freq = "1-3";
+        else if (days <= 5) freq = "4-5";
+        else freq = "6-7";
+      }
     }
   }
 
   switch (freq) {
-    case "2-3": return 1.46;   // avg of light (1.375) and moderate (1.55)
-    case "4-5": return 1.64;   // avg of moderate (1.55) and active (1.725)
-    case "6-7": return 1.81;   // avg of active (1.725) and very active (1.9)
-    default:    return 1.55;   // moderate default
+    case "0":          return 1.2;     // sedentary
+    case "1-3":
+    case "2-3":        return 1.375;   // lightly active
+    case "4-5":        return 1.55;    // moderately active
+    case "6-7":        return 1.725;   // very active
+    case "twice":      return 1.9;     // extra active
+    default:           return 1.375;   // safer default than 1.55 (was over-prescribing)
   }
 }
 
 // ─── Calorie Adjustment by Goal ─────────────────────────────────────
 
 function getCalorieAdjustment(primaryGoal) {
+  // Single source of truth for goal → calorie adjustment. Handles
+  // both legacy goal strings (muscle_gain, lose_weight, race) and
+  // the v1.4 internal enum (race_performance, speed_performance,
+  // endurance, general_fitness). Previously a duplicate of this
+  // function lived inside the NutritionCalculator IIFE — deleted
+  // 2026-04-24 (Bug 19) so there's only one place to change goal
+  // adjustments.
   var goal = (primaryGoal || "").toLowerCase();
   switch (goal) {
     case "muscle_gain":
     case "bulk":
-      return 0.15;             // 10-20% surplus
+      return 0.15;             // 10-20% surplus midpoint
     case "fat_loss":
     case "cut":
-      return -0.20;            // 15-25% deficit
+      return -0.20;            // 15-25% deficit midpoint
     case "lose_weight":
     case "weight_loss":
-      return -0.25;            // 20-30% deficit
+      return -0.25;            // 20-30% deficit midpoint
     case "general_health":
+    case "general_fitness":
     case "maintain":
     case "recomp":
-      return 0;
+      return 0;                // maintenance
     case "performance":
     case "race":
-      return 0.075;            // 5-10% surplus midpoint
+    case "race_performance":
+      return 0.05;             // maintenance / slight surplus
+    case "speed_performance":
+      return 0;                // maintenance — high-intensity recovery
+    case "endurance":
+      return 0.05;             // slight surplus to fuel volume
     case "return_to_training":
     case "return":
       return 0;
@@ -607,9 +642,14 @@ function calculateNutrition(classification, modules, profile) {
     return Math.round(bmr * mult);
   }
 
-  function getCalorieAdjustment(goal) {
-    return GOAL_CALORIE_ADJUSTMENT[normalizeGoal(goal)] ?? 0;
-  }
+  // The inner getCalorieAdjustment was deleted 2026-04-24 (Bug 19,
+  // doc note: "nuke the duplicate getCalorieAdjustment"). The outer
+  // top-level getCalorieAdjustment is now the single source of truth
+  // and is accessible bare-name from inside this IIFE — line 726's
+  // `getCalorieAdjustment(goal)` resolves to it via global scope.
+  // The outer switch now recognises the v1.4 enum (race_performance /
+  // speed_performance / endurance / general_fitness) so callers
+  // passing those values get the correct adjustment.
 
   function getProteinTarget(goal) {
     return GOAL_PROTEIN_G_PER_LB[normalizeGoal(goal)] ?? 0.7;
