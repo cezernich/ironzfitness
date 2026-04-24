@@ -242,6 +242,14 @@ function openPhotoMealLog() {
   document.getElementById("photo-ai-result").style.display = "none";
   document.getElementById("photo-ai-loading").style.display = "none";
   document.getElementById("photo-meal-msg").textContent = "";
+  // Hide the sticky save bar — it should only appear once a photo
+  // has been analyzed and the macro fields are populated.
+  const actions = document.getElementById("photo-meal-actions");
+  if (actions) actions.style.display = "none";
+  // Clear any stale photo input value so picking the same file twice
+  // re-triggers the change event.
+  const input = document.getElementById("meal-photo-input");
+  if (input) input.value = "";
   // survey-overlay needs both display:flex and .is-open to be visible —
   // same pattern as the barcode scanner. Previously this was an inline
   // div that hid the nutrition dashboard and tried to scroll the inline
@@ -527,6 +535,12 @@ async function handleMealPhoto(input) {
 
     // Store description for meal name
     document.getElementById("photo-meal-modal").dataset.description = result.description || "Photo-logged meal";
+
+    // Reveal the sticky save bar — only after the AI finished and we
+    // have macro values to save. Bug 5/6 had the save action buried
+    // inside the scroll content where the user couldn't find it.
+    const actions = document.getElementById("photo-meal-actions");
+    if (actions) actions.style.display = "";
 
   } catch (err) {
     loadingEl.style.display = "none";
