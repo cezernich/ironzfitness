@@ -24,7 +24,7 @@
     // work (sled/wall balls/burpees/etc.), simulations that chain stations
     // with running legs, and the easy aerobic base work hyrox athletes need
     // alongside their station intensity.
-    hyrox:    ["easy", "intervals", "stations", "race_simulation"],
+    hyrox:    ["easy", "mixed_intervals", "intervals", "stations", "race_simulation"],
     // Circuit / HIIT-style training — keeping HIIT formats as session types
     // so admins can curate each workout shape independently.
     circuit:  ["hiit", "amrap", "emom", "for_time", "metabolic"],

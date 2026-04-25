@@ -5548,18 +5548,15 @@ function saveHyroxWorkout() {
   setTimeout(() => closeQuickEntry(), 700);
 }
 
-// ── Hyrox auto-generate (Bug 16) ─────────────────────────────────────────────
+// ── Hyrox auto-generate ─────────────────────────────────────────────────────
 //
-// Quick-Add now offers four Hyrox session focuses on top of the
-// existing manual station picker:
+// Quick-Add Hyrox session focuses (BUGFIX 04-25 §9 added Mixed Intervals):
 //   easy_aerobic     — 45-60 min Z2 run
+//   mixed_intervals  — 4-8 rounds of 1K run + 1-2 stations (highest-frequency
+//                       Hyrox session, "compromised running" but UX-friendly name)
 //   run_intervals    — 6-10 × 1K @ threshold
 //   stations         — 3-4 rounds of 2-3 stations, no runs
 //   race_simulation  — full 8-station Hyrox (or scaled) at moderate pace
-//
-// TODO: Chase to provide more Hyrox templates. These four cover the
-// session buckets named in admin-workouts.js and arc-builder.js;
-// expand the bank when content is ready.
 function qeGenerateHyrox() {
   const msg = document.getElementById("hyrox-save-msg");
   const dateStr = _qeDateStr;
@@ -5577,6 +5574,57 @@ function qeGenerateHyrox() {
     exercises = [
       { name: "Run", sets: "1", reps: `${duration} min`, weight: "" },
     ];
+  } else if (focus === "mixed_intervals") {
+    // BUGFIX 04-25 §9. The bread-and-butter Hyrox session — short run
+    // intervals interleaved with 1-2 stations. Tier-aware:
+    //   beginner: 4 rounds of 800m + 50m sled push (light)
+    //   intermediate: 6 rounds of 1K + 50m sled push + 50m sled pull
+    //   advanced: 8 rounds of 1K + 1 station rotating through all 8
+    // We pick tier from the duration since we don't have an explicit
+    // level field on the auto-generate form yet: ≤45 → beginner,
+    // 46-65 → intermediate, ≥66 → advanced.
+    const tier = duration <= 45 ? "beginner"
+              : duration <= 65 ? "intermediate"
+              : "advanced";
+    const config = {
+      beginner:     { rounds: 4, runM: 800, runLabel: "800m", stationIds: ["sled-push"] },
+      intermediate: { rounds: 6, runM: 1000, runLabel: "1km", stationIds: ["sled-push", "sled-pull"] },
+      advanced:     { rounds: 8, runM: 1000, runLabel: "1km",
+                      // Rotate through all 8 stations, one per round so
+                      // the same station never appears back-to-back.
+                      stationIds: ["skierg", "sled-push", "sled-pull", "burpee-broad-jump",
+                                   "rowing", "farmers-carry", "sandbag-lunges", "wall-balls"] },
+    }[tier];
+    workoutName = `Hyrox · Mixed Intervals (${config.rounds} rounds)`;
+    exercises.push({ name: "Warmup", sets: "1", reps: "10 min easy", weight: "" });
+    for (let r = 1; r <= config.rounds; r++) {
+      exercises.push({
+        name: `Run ${r}`,
+        sets: "1",
+        reps: `${config.runLabel} @ moderate-hard`,
+        weight: "",
+      });
+      // Pick stations for this round. For advanced (8 rounds, 8 stations)
+      // it's stations[r-1]. For lower tiers we cycle through the small
+      // station list, with all stations from the round set appearing in
+      // each round.
+      const stationsThisRound = tier === "advanced"
+        ? [config.stationIds[(r - 1) % config.stationIds.length]]
+        : config.stationIds;
+      stationsThisRound.forEach(id => {
+        const station = allStations.find(s => s.id === id);
+        if (!station) return;
+        exercises.push({
+          name: `${station.name} (R${r})`,
+          sets: "1",
+          reps: `${station.defaultDistance || ""} ${station.unit || ""}`.trim() || "1 round",
+          weight: station.defaultWeight ? `${station.defaultWeight} lb` : "",
+        });
+      });
+      // Short rest between rounds, no rest after the last.
+      if (r < config.rounds) exercises.push({ name: "Rest", sets: "1", reps: "60 sec", weight: "" });
+    }
+    exercises.push({ name: "Cooldown", sets: "1", reps: "5 min easy", weight: "" });
   } else if (focus === "run_intervals") {
     const reps = duration <= 30 ? 6 : duration <= 45 ? 8 : 10;
     workoutName = `Hyrox · ${reps} × 1K Run Intervals`;
