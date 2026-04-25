@@ -4675,6 +4675,30 @@ input.completion-ex-name:focus {
   box-sizing: border-box;
 }
 
+/* Saved-strength / saved-circuit row alignment (BUGFIX 04-25 §3).
+   The grid columns on .qe-exercise-item / .completion-ex-row already
+   reserve a fixed slot for weight, but the cell contents could overflow
+   when the weight rendered as longer free text ("Bodyweight", "20 lbs
+   each"). Clamp width + add ellipsis so the trailing overflow icon
+   lines up vertically across all rows. "Bodyweight" naturally short-
+   forms to "BW" elsewhere; this rule just prevents the long form from
+   pushing the icon column off its axis. */
+.qe-exercise-detail,
+.completion-ex-row > span,
+.qe-exercise-item > .qe-weight-display,
+.qe-exercise-item > span:not(.drag-handle) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.qe-exercise-item > .qe-weight-display,
+.qe-exercise-item > .qe-weight-input {
+  width: 90px;
+  max-width: 90px;
+  flex-shrink: 0;
+}
+
 .qe-ai-error {
   background: rgba(185, 28, 28, 0.08);
   border: 1px solid rgba(185, 28, 28, 0.25);
@@ -16791,7 +16815,12 @@ body.auth-visible #bottom-nav { display: none !important; }
   border-radius: 20px 20px 0 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  /* Switch from `overflow: hidden` to `overflow-y: auto` so an input
+     inside the modal can scrollIntoView when the iOS keyboard opens.
+     Otherwise the modal clips the input rather than letting it scroll
+     up out of the keyboard's footprint. */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   font-family: inherit;
   transform: translateY(20px);
   transition: transform 0.2s ease;

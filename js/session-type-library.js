@@ -287,7 +287,7 @@
     "No hard session within 24 hours of a Long Run.",
     "Track Workout AND Speed Work in the same week is allowed only for advanced runners.",
     "Hills substitute for Track during a hill phase. Both in the same week is allowed only for advanced runners.",
-    "Long Run frequency is capped at 1 per week, full stop.",
+    "Two long runs in a week is hard on recovery — auto-generator caps at 1, manual additions warn but allow.",
   ];
 
   function getSessionTypeById(id) {

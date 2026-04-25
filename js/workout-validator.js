@@ -60,10 +60,14 @@
     if (ctx.candidate.type !== "long_run") return null;
     const existingLong = ctx.weekEntries.find(e => (e.type === "long_run") || (e.load === "long"));
     if (!existingLong) return null;
+    // Softened from "block" → "warning" per BUGFIX_2026-04-25 §1.
+    // Manual additions are the user explicitly knowing what they're doing
+    // — the auto-generator still respects the 1/week cap. Surface the
+    // recovery cost prominently but let them proceed.
     return {
       rule: "long_run_cap",
-      severity: "block",
-      message: `Long Run is capped at 1 per week, full stop. You already have a Long Run on ${existingLong.date}.`,
+      severity: "warning",
+      message: `Two long runs in a week is hard on recovery — you sure? You already have a Long Run on ${existingLong.date}.`,
       conflict_date: existingLong.date,
     };
   }

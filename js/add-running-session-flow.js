@@ -202,21 +202,25 @@
     // Fallback: minimal Long Run cap check so the UI doesn't crash if the
     // shared module hasn't loaded. Should never trigger in practice because
     // workout-validator.js loads before add-running-session-flow.js in index.html.
+    // Softened to a warning per BUGFIX_2026-04-25 §1 — manual additions are
+    // the athlete explicitly knowing what they're doing.
     const hardBlocks = [];
+    const warnings = [];
     if (candidate.type === "long_run") {
       const monday = _mondayOf(dateStr);
       const dates = new Set(Array.from({ length: 7 }, (_, i) => _addDays(monday, i)));
       const weekEntries = plan.concat(schedule).filter(e => dates.has(e.date));
       const existingLong = weekEntries.find(e => (e.type === "long_run") || (e.load === "long"));
       if (existingLong) {
-        hardBlocks.push({
+        warnings.push({
           rule: "long_run_cap",
-          severity: "block",
-          message: `Long Run is capped at 1 per week, full stop. You already have a Long Run on ${existingLong.date}.`,
+          severity: "warning",
+          message: `Two long runs in a week is hard on recovery — you sure? You already have a Long Run on ${existingLong.date}.`,
+          conflict_date: existingLong.date,
         });
       }
     }
-    return { hardBlocks, warnings: [] };
+    return { hardBlocks, warnings };
   }
 
   // ─── Save paths ──────────────────────────────────────────────────────────────
@@ -621,6 +625,13 @@
           const stress = activeWarnings.find(x => x.rule === "weekly_hard_count") || activeWarnings[0];
           _showStressCheckModal(stress, decision => {
             if (decision === "save_anyway") {
+              // Log the long-run override so we can track how often
+              // users push past the recovery warning. Other warning
+              // rules don't need their own event — the soft-warning
+              // pattern is shared.
+              if (stress && stress.rule === "long_run_cap" && typeof trackEvent === "function") {
+                try { trackEvent("long_run_cap_overridden", { date, conflict_date: stress.conflict_date }); } catch {}
+              }
               save(w, date, mode, notes);
               _close(id);
             } else if (decision === "pick_different_day") {

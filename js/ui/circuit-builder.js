@@ -37,6 +37,18 @@
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) _closeModal(id);
     });
+    // BUGFIX 04-25 §8: when an input inside the modal gains focus on iOS,
+    // the keyboard rises and covers it. scrollIntoView({block: "center"})
+    // pulls the input back into the visible region above the keyboard
+    // for any input/textarea inside the modal.
+    overlay.addEventListener("focusin", (e) => {
+      const t = e.target;
+      if (!t || (t.tagName !== "INPUT" && t.tagName !== "TEXTAREA")) return;
+      // Defer one frame so the keyboard has started rising before we scroll.
+      setTimeout(() => {
+        try { t.scrollIntoView({ block: "center", behavior: "smooth" }); } catch {}
+      }, 250);
+    });
     return overlay;
   }
 
