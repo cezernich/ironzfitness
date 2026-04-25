@@ -1888,6 +1888,18 @@ function saveZonesFromForm() {
     });
     saveTrainingZonesData("strength", data);
     renderZones();
+    // BUGFIX 04-25 §2: PR change → re-derive weights on every planned
+    // strength session from today onward. Only auto-generated weights
+    // get refreshed; user edits are preserved.
+    if (typeof window.recomputePlannedStrengthSessions === "function") {
+      try {
+        const touched = window.recomputePlannedStrengthSessions();
+        if (touched > 0 && msg) {
+          msg.style.color = "var(--color-success)";
+          msg.textContent = `Updated ${touched} upcoming session${touched === 1 ? "" : "s"} with your new max.`;
+        }
+      } catch (e) { console.warn("[IronZ] recompute strength sessions failed:", e && e.message); }
+    }
     return;
   }
 

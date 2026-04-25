@@ -724,7 +724,7 @@ function _personalizeWeights(exercises) {
     if (typeof _lookupLastLoggedFor === "function") {
       const last = _lookupLastLoggedFor(ex.name);
       if (last && last.weight && String(last.weight).trim()) {
-        return { ...ex, weight: last.weight };
+        return { ...ex, weight: last.weight, weightSource: "logged" };
       }
     }
 
@@ -759,7 +759,43 @@ function _personalizeWeights(exercises) {
           } else {
             weightStr = `${targetWeight} lbs`;
           }
-          return { ...ex, weight: weightStr };
+          return { ...ex, weight: weightStr, weightSource: "computed_from_pr" };
+        }
+      }
+    }
+
+    // Priority 2b (BUGFIX 04-25 §2): no PR for this lift. Compute a
+    // conservative estimate from bodyweight + the rep-count so the
+    // user doesn't get prescribed something aggressive. 1RM ≈ 0.5 ×
+    // bodyweight for compounds; downscaled for accessories. Mark as
+    // estimate so the UI can render "(est)" — Bench 275 / OHP unknown
+    // would now produce ~95–115 lb for an 8-rep set, not 185.
+    if (refKey) {
+      let bodyweight = 0;
+      try {
+        const profile = JSON.parse(localStorage.getItem("profile") || "{}");
+        bodyweight = parseFloat(profile.weight) || 0;
+      } catch {}
+      if (bodyweight > 0) {
+        const compoundEstOneRM = bodyweight * 0.5;          // conservative compound 1RM
+        let factor = 1.0;
+        const scaleRules = accessoryScale[refKey] || [];
+        for (const rule of scaleRules) {
+          if (rule.pattern.test(ex.name)) { factor = rule.factor; break; }
+        }
+        const isAccessory = factor !== 1.0 || /isolation|extension|curl|raise|fly|cross|fly\b|lateral/i.test(ex.name);
+        const baseRM = isAccessory ? compoundEstOneRM * 0.5 : compoundEstOneRM;
+        // Round DOWN to the nearest 5 (conservative bias) — easier to
+        // bump up than back off mid-set.
+        const rawWeight = workingWeight(baseRM * factor, ex.reps);
+        const targetWeight = Math.floor(rawWeight / 5) * 5;
+        if (targetWeight > 0) {
+          const isUnilateralStance = /single.?leg|split.?leg|single.?arm|bulgarian|split\s*squat/i.test(ex.name);
+          const isDumbbell = /dumbbell|2×|arnold|goblet/i.test(ex.name) || /2×/i.test(ex.weight || "") || isUnilateralStance;
+          const weightStr = isDumbbell
+            ? `2x${Math.floor(targetWeight / 2 / 5) * 5} lbs`
+            : `${targetWeight} lbs`;
+          return { ...ex, weight: weightStr, weightSource: "estimated", isEstimate: true };
         }
       }
     }
@@ -770,8 +806,66 @@ function _personalizeWeights(exercises) {
 
     // Priority 4: text default — "Bodyweight" for movements that
     // need no load, "Moderate" otherwise. Never renders blank.
-    return { ...ex, weight: _defaultWeight(ex.name) };
+    return { ...ex, weight: _defaultWeight(ex.name), weightSource: "default" };
   });
+}
+
+// BUGFIX 04-25 §2: when the user updates a strength PR via Settings →
+// Training Zones (or wherever saveTrainingZonesData("strength", ...)
+// fires), today's and all future planned strength sessions need to
+// re-derive their weights from the new PR. Existing user-edited
+// weights stay untouched — only entries flagged weightSource:
+// "computed_from_pr" or "estimated" get refreshed.
+function recomputePlannedStrengthSessions() {
+  if (typeof _personalizeWeights !== "function") return 0;
+  const today = (typeof getTodayString === "function") ? getTodayString() : new Date().toISOString().slice(0, 10);
+  let sched = [];
+  try { sched = JSON.parse(localStorage.getItem("workoutSchedule") || "[]") || []; } catch {}
+  let touched = 0;
+  for (const w of sched) {
+    if (!w || w.date < today) continue;
+    if (w.type !== "weightlifting" && w.type !== "strength" && w.type !== "bodyweight") continue;
+    if (!Array.isArray(w.exercises) || w.exercises.length === 0) continue;
+    // Only refresh the auto-derived weights — leave anything the user
+    // hand-edited alone. Anything without a weightSource flag is older
+    // data that we treat as user-owned to be safe.
+    const refreshable = w.exercises.map(ex => {
+      const src = ex && ex.weightSource;
+      const isAutoDerived = src === "computed_from_pr" || src === "estimated";
+      if (!isAutoDerived) return ex;
+      // Pass through with weight cleared so _personalizeWeights re-derives
+      // from the new PR. Reps stay the same.
+      return { ...ex, weight: "" };
+    });
+    const repersonalized = _personalizeWeights(refreshable);
+    // Only mark as touched if anything actually changed.
+    let changed = false;
+    for (let i = 0; i < repersonalized.length; i++) {
+      const before = w.exercises[i] && w.exercises[i].weight;
+      const after = repersonalized[i] && repersonalized[i].weight;
+      if (String(before || "") !== String(after || "")) { changed = true; break; }
+    }
+    if (changed) {
+      w.exercises = repersonalized;
+      touched++;
+    }
+  }
+  if (touched > 0) {
+    try {
+      localStorage.setItem("workoutSchedule", JSON.stringify(sched));
+      if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("workoutSchedule");
+    } catch {}
+    if (typeof renderCalendar === "function") {
+      try { renderCalendar(); } catch {}
+    }
+    if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
+      try { renderDayDetail(selectedDate); } catch {}
+    }
+  }
+  return touched;
+}
+if (typeof window !== "undefined") {
+  window.recomputePlannedStrengthSessions = recomputePlannedStrengthSessions;
 }
 
 // Expose on window so planner.js (loaded after) can pipe library-sourced
@@ -2414,7 +2508,7 @@ function _roundWeight(val) {
   return Math.round(val / 5) * 5 + " lbs";
 }
 
-function _normalizeWeightDisplay(raw, exerciseName) {
+function _normalizeWeightDisplay(raw, exerciseName, opts) {
   const w = String(raw || "").trim();
   // Bug 11 last-resort: never render a blank Weight cell. Use the
   // exercise name to pick "Bodyweight" or "Moderate" so the user
@@ -2429,15 +2523,15 @@ function _normalizeWeightDisplay(raw, exerciseName) {
   if (/bodyweight/i.test(w)) return "BW";
   if (/bar\s*\+\s*([\d.]+)/i.test(w)) {
     const m = w.match(/bar\s*\+\s*([\d.]+)/i);
-    return _formatWeightWithDbHint(_roundWeight(45 + parseFloat(m[1])), exerciseName);
+    return _formatWeightWithDbHint(_roundWeight(45 + parseFloat(m[1])), exerciseName, opts);
   }
   if (/^([\d.]+)\s*[x×]\s*([\d.]+)/i.test(w)) {
     const m = w.match(/^([\d.]+)\s*[x×]\s*([\d.]+)/i);
-    return _formatWeightWithDbHint(_roundWeight(parseFloat(m[2])), exerciseName);
+    return _formatWeightWithDbHint(_roundWeight(parseFloat(m[2])), exerciseName, opts);
   }
   // Try to extract a bare number with lbs/lb suffix
   const bareLbs = w.match(/^([\d.]+)\s*(?:lbs?)?$/i);
-  if (bareLbs) return _formatWeightWithDbHint(_roundWeight(parseFloat(bareLbs[1])), exerciseName);
+  if (bareLbs) return _formatWeightWithDbHint(_roundWeight(parseFloat(bareLbs[1])), exerciseName, opts);
   return w;
 }
 
@@ -2463,11 +2557,13 @@ function _formatRepsWithSide(reps, exerciseName) {
   return U ? U.formatRepsLabel(raw, exerciseName) : raw;
 }
 
-function _formatWeightWithDbHint(weightStr, exerciseName) {
+function _formatWeightWithDbHint(weightStr, exerciseName, opts) {
   if (!weightStr) return weightStr;
   const str = String(weightStr);
   // "BW" / "Bodyweight" stays as-is — can't halve that.
   if (/^(bw|bodyweight)$/i.test(str)) return str;
+  const isEstimate = !!(opts && opts.isEstimate);
+  const _markEst = (s) => isEstimate ? `${s} (est)` : s;
 
   // Unilateral exercises (Bulgarian split squat, lunges, single-leg RDL)
   // need the loading method shown so 175 lbs isn't confused for a single
@@ -2485,7 +2581,7 @@ function _formatWeightWithDbHint(weightStr, exerciseName) {
     const method = U.getLoadingMethod(exerciseName, str);
     const singleImplement = method === "single DB" || method === "single KB";
     if (uni || singleImplement) {
-      return U.formatWeightLabel(str, method);
+      return _markEst(U.formatWeightLabel(str, method));
     }
   }
 
@@ -2493,13 +2589,13 @@ function _formatWeightWithDbHint(weightStr, exerciseName) {
   // total weight and halve on display: "150 lbs" → "75 / hand". This
   // has been the app's convention for a while and is what the existing
   // data is keyed against.
-  if (!_isDumbbellExercise(exerciseName)) return str;
+  if (!_isDumbbellExercise(exerciseName)) return _markEst(str);
   const m = str.match(/^([\d.]+)/);
-  if (!m) return str;
+  if (!m) return _markEst(str);
   const total = parseFloat(m[1]);
-  if (!isFinite(total) || total <= 0) return str;
+  if (!isFinite(total) || total <= 0) return _markEst(str);
   const perHand = _roundWeight(total / 2);
-  return `${perHand} / hand`;
+  return _markEst(`${perHand} / hand`);
 }
 
 function buildExerciseTableHTML(exercises, opts) {
@@ -2553,7 +2649,7 @@ function buildExerciseTableHTML(exercises, opts) {
       const ssSets = seg.items[0]?.sets || "—";
       rows += `<tr class="superset-label-row"><td colspan="${cols}">Superset &mdash; ${ssSets} sets</td></tr>`;
       seg.items.forEach(e => {
-        rows += `<tr class="superset-ex-row"><td>${escHtml(e.name)}</td><td></td><td>${escHtml(_formatRepsWithSide(e.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name)||"—")}</td></tr>`;
+        rows += `<tr class="superset-ex-row"><td>${escHtml(e.name)}</td><td></td><td>${escHtml(_formatRepsWithSide(e.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate })||"—")}</td></tr>`;
         if (e.setDetails && e.setDetails.length) {
           e.setDetails.forEach((sd, si) => {
             rows += `<tr class="superset-ex-row set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${escHtml(_formatRepsWithSide(sd.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(sd.weight, e.name)||"—")}</td></tr>`;
@@ -2588,9 +2684,9 @@ function buildExerciseTableHTML(exercises, opts) {
         } else {
           repsDisplay = repsVal + " reps";
         }
-        rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(repsDisplay)}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name)||"—")}</td></tr>`;
+        rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(repsDisplay)}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate })||"—")}</td></tr>`;
       } else {
-        rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(String(e.sets||"—"))}</td><td>${escHtml(_formatRepsWithSide(e.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name)||"—")}</td></tr>`;
+        rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(String(e.sets||"—"))}</td><td>${escHtml(_formatRepsWithSide(e.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate })||"—")}</td></tr>`;
       }
       if (e.setDetails && e.setDetails.length) {
         e.setDetails.forEach((sd, si) => {
