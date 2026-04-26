@@ -2987,24 +2987,33 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   };
   workouts.unshift(completedWorkout);
   localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
-  if (typeof trackWorkoutLogged === "function") trackWorkoutLogged({ type, date: dateStr, source: "session_complete" });
-
-  // Push-to-Strava: auto-share silently OR prompt the user, per the
-  // Section 1 spec. Short-circuits if not connected / no write scope.
-  if (typeof promptStravaShareIfEligible === "function") {
-    promptStravaShareIfEligible(completedWorkout);
-  }
 
   // Mark session as completed
   const meta = loadCompletionMeta();
   meta[sessionId] = { workoutId, completedAt: new Date().toISOString() };
   localStorage.setItem("completedSessions", JSON.stringify(meta)); if (typeof DB !== 'undefined') DB.syncKey('completedSessions');
 
-  // Refresh views
-  renderCalendar();
-  renderDayDetail(dateStr);
-  if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
-  if (typeof renderStats          === "function") renderStats();
+  // BUGFIX 04-25 §5: shared post-commit pipeline. Both Mark-as-Complete
+  // and live-tracker commit go through finalizeWorkoutCompletion so
+  // Strava push, analytics, render refresh, rating modal, stretch
+  // suggestion, level-up, and hydration/nutrition recalc all run
+  // identically regardless of which path the user took.
+  if (typeof window !== "undefined" && typeof window.finalizeWorkoutCompletion === "function") {
+    window.finalizeWorkoutCompletion(completedWorkout, {
+      dateStr,
+      sessionId,
+      source: "mark_complete",
+    });
+  } else {
+    // Defensive fallback if workouts.js hasn't loaded the helper yet —
+    // re-run the previous inline render path.
+    if (typeof trackWorkoutLogged === "function") trackWorkoutLogged({ type, date: dateStr, source: "session_complete" });
+    if (typeof promptStravaShareIfEligible === "function") promptStravaShareIfEligible(completedWorkout);
+    renderCalendar();
+    renderDayDetail(dateStr);
+    if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
+    if (typeof renderStats === "function") renderStats();
+  }
 
   // Collapse the card after save and mark header with checkmark
   setTimeout(() => {
@@ -3018,12 +3027,13 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
     }
   }, 0);
 
-  // Show rating modal after completion
-  setTimeout(() => showRatingModal(String(workoutId), dateStr), 400);
+  // Rating modal + stretch suggestion are now triggered via
+  // finalizeWorkoutCompletion above — this used to be inline.
 
   // Threshold-week post-test modal — if this completed session was a fitness test,
   // immediately surface the result entry modal so zones get refreshed.
-  // Added 2026-04-09 (PHILOSOPHY_UPDATE_2026-04-09_threshold_weeks).
+  // Kept here (not in finalizeWorkoutCompletion) because it's
+  // calendar-specific and depends on the session id format.
   try {
     const _plan2 = typeof loadTrainingPlan === "function" ? loadTrainingPlan() : [];
     const _entry = _plan2.find(p => {
@@ -3035,20 +3045,6 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
     }
   } catch (e) {
     console.warn("[IronZ] post-test modal trigger failed:", e.message);
-  }
-
-  // Show stretch suggestion after completion
-  if (typeof renderStretchSuggestion === "function") {
-    const stretchContainer = document.getElementById(`stretch-${sessionId}`);
-    if (!stretchContainer) {
-      const card = document.getElementById(sessionId);
-      if (card) {
-        const div = document.createElement("div");
-        div.id = `stretch-${sessionId}`;
-        card.appendChild(div);
-        renderStretchSuggestion({ type, exercises }, div);
-      }
-    }
   }
 }
 

@@ -584,8 +584,65 @@ function _buildStrengthView() {
     }
   }
 
+  // BUGFIX 04-25 §6: tack-on exercise. Appended at the bottom (above
+  // Finish in the parent overlay) so users can add a finisher mid-
+  // workout — e.g. "I'll throw on pull-ups since I have time." Added
+  // exercises are saved into the completion record but do NOT modify
+  // the underlying planned workout — only today's actuals reflect the
+  // extra work.
+  html += `<button class="live-add-exercise-btn" onclick="_promptAddLiveExercise()">+ Add Exercise</button>`;
+
   return html;
 }
+
+// Add a free-text exercise to the live tracker. Uses the existing
+// swap-exercise sheet UI when available so the user gets the muscle-
+// matched library; falls back to a prompt() so the feature works
+// before the library is wired in.
+function _promptAddLiveExercise() {
+  if (!_liveTracker || !_liveTracker.isStrength) return;
+  const t = _liveTracker;
+  const _commit = (name) => {
+    const trimmed = String(name || "").trim();
+    if (!trimmed) return;
+    const newIdx = t.exercises.length;
+    t.exercises.push({
+      name: trimmed,
+      sets: "3",
+      reps: "10",
+      weight: "",
+      addedDuringWorkout: true,
+    });
+    // Pre-seed three blank sets so the user sees the standard scaffold.
+    t.sets[newIdx] = [
+      { reps: "10", weight: "", done: false },
+      { reps: "10", weight: "", done: false },
+      { reps: "10", weight: "", done: false },
+    ];
+    // Recompute groups since the ungrouped exercise list changed.
+    t._groups = null;
+    t.currentExercise = newIdx;
+    if (typeof _saveLiveState === "function") { try { _saveLiveState(); } catch {} }
+    const body = document.getElementById("live-tracker-body");
+    if (body) {
+      body.innerHTML = _buildStrengthView();
+      // Scroll the new card into view.
+      setTimeout(() => {
+        const card = document.getElementById("live-ex-" + newIdx);
+        if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 50);
+    }
+  };
+  // Prefer the rich swap sheet (search + recents); fall back to prompt
+  // so the feature works on platforms where the sheet isn't loaded.
+  if (typeof showSwapExerciseSheet === "function") {
+    showSwapExerciseSheet("", _commit);
+  } else {
+    const name = prompt("Exercise name:");
+    _commit(name);
+  }
+}
+if (typeof window !== "undefined") window._promptAddLiveExercise = _promptAddLiveExercise;
 
 function _buildLiveSingleExerciseCard(ei) {
   const t = _liveTracker;
@@ -633,9 +690,33 @@ function _buildLiveSingleExerciseCard(ei) {
             <button class="live-set-btn${s.done ? " live-set-btn--done" : ""}" onclick="_logLiveSet(${ei},${si})">${s.done ? "&#10003;" : "Log"}</button>
           </div>
         `).join("")}
+        <button class="live-add-set-btn" onclick="_addLiveSet(${ei})">+ Add Set</button>
       </div>
     </div>`;
 }
+
+// BUGFIX 04-25 §6: append a new unlogged set to an exercise. Pre-fills
+// reps/weight from the previous set so the user just taps Log without
+// re-entering numbers. Marks the set as not done so the Log button is
+// active. Snapshot fires inside _renderLiveTracker via _saveLiveState
+// (already wired) so the added set survives a refresh.
+function _addLiveSet(exIdx) {
+  if (!_liveTracker || !_liveTracker.isStrength) return;
+  if (!Array.isArray(_liveTracker.sets[exIdx])) _liveTracker.sets[exIdx] = [];
+  _captureLiveSetInputs();
+  const sets = _liveTracker.sets[exIdx];
+  const last = sets[sets.length - 1] || {};
+  const ex = _liveTracker.exercises[exIdx] || {};
+  sets.push({
+    reps: last.reps || ex.reps || "",
+    weight: last.weight || ex.weight || "",
+    done: false,
+  });
+  if (typeof _saveLiveState === "function") { try { _saveLiveState(); } catch {} }
+  const body = document.getElementById("live-tracker-body");
+  if (body) body.innerHTML = _buildStrengthView();
+}
+if (typeof window !== "undefined") window._addLiveSet = _addLiveSet;
 
 function _buildLiveSupersetCard(g) {
   const t = _liveTracker;
@@ -980,6 +1061,16 @@ function _finishLiveWorkout() {
   if (!_liveTracker) return;
   const t = _liveTracker;
 
+  // BUGFIX 04-25 §4: clear any leftover finish-modal overlays from a
+  // previous Finish tap that was dismissed via system back / swipe-down
+  // / X button without committing. Otherwise the modal stacks or the
+  // tracker enters a partial state and subsequent Finish taps no-op.
+  // Idempotent — safe to call when no stale overlay exists.
+  ["live-finish-choice", "live-endurance-finish", "live-hyrox-finish"].forEach(id => {
+    const stale = document.getElementById(id);
+    if (stale) stale.remove();
+  });
+
   if (t.isStrength) _captureLiveSetInputs();
 
   // Check if there are unlogged sets
@@ -1273,23 +1364,8 @@ async function _commitLiveWorkout(logAll) {
   // prompt the user to resume an already-completed session.
   _clearLiveState();
 
-  // Push-to-Strava: auto-share silently OR prompt the user, per the
-  // Section 1 spec. Short-circuits if not connected / no write scope.
-  if (typeof promptStravaShareIfEligible === "function") {
-    promptStravaShareIfEligible(completedWorkout);
-  }
-
-  if (typeof trackWorkoutLogged === "function") {
-    trackWorkoutLogged({
-      type: t.type,
-      source: "live_tracker",
-      exercise_count: Array.isArray(exercises) ? exercises.length : 0,
-      duration_min: durationMin,
-      date: t.dateStr,
-    });
-  }
-
-  // Mark session as completed
+  // Mark session as completed (persistent flag for the calendar's
+  // "is this session done?" check).
   const meta = typeof loadCompletionMeta === "function" ? loadCompletionMeta() : {};
   meta[t.sessionId] = { workoutId, completedAt: new Date().toISOString() };
   localStorage.setItem("completedSessions", JSON.stringify(meta));
@@ -1298,35 +1374,22 @@ async function _commitLiveWorkout(logAll) {
   }
 
   const dateStr = t.dateStr;
+  const sessionId = t.sessionId;
 
-  // Clean up
+  // Tear down the live overlay BEFORE the shared finalize runs so
+  // renderCalendar / renderDayDetail can rebuild the card cleanly.
   _closeLiveTracker();
 
-  // Refresh views
-  if (typeof renderCalendar === "function") renderCalendar();
-  if (typeof renderDayDetail === "function") renderDayDetail(dateStr);
-  if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
-  if (typeof renderStats === "function") renderStats();
-
-  // Show rating modal
-  if (typeof showRatingModal === "function") {
-    setTimeout(() => showRatingModal(String(workoutId), dateStr), 400);
-  }
-
-  // Check for level-up
-  if (typeof checkLevelUp === "function") checkLevelUp();
-
-  // Show stretch suggestion on the session card
-  if (typeof renderStretchSuggestion === "function") {
-    setTimeout(() => {
-      const card = document.getElementById(t.sessionId);
-      if (card && !document.getElementById(`stretch-${t.sessionId}`)) {
-        const div = document.createElement("div");
-        div.id = `stretch-${t.sessionId}`;
-        card.appendChild(div);
-        renderStretchSuggestion({ type: t.type, exercises }, div);
-      }
-    }, 600);
+  // BUGFIX 04-25 §5: shared post-commit pipeline. Same finalize call
+  // saveSessionCompletion uses → guarantees Strava push, analytics,
+  // render refresh, rating modal, stretch suggestion, level-up, and
+  // hydration/nutrition recalc all run identically.
+  if (typeof window !== "undefined" && typeof window.finalizeWorkoutCompletion === "function") {
+    window.finalizeWorkoutCompletion(completedWorkout, {
+      dateStr,
+      sessionId,
+      source: "live_tracker",
+    });
   }
 }
 

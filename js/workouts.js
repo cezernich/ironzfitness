@@ -875,6 +875,109 @@ if (typeof window !== "undefined") {
   window._personalizeWeights = _personalizeWeights;
 }
 
+// BUGFIX 04-25 §5: shared post-commit pipeline for any workout
+// completion. Both the live-tracker (_commitLiveWorkout) and the
+// calendar Mark-as-Complete (saveSessionCompletion) need to do the
+// same things AFTER the workout + completion records are persisted:
+//   - push to Strava (if connected and not already uploaded)
+//   - track analytics
+//   - refresh dependent renders (calendar, day detail, history, stats)
+//   - show the rating modal
+//   - show stretch suggestion
+//   - check for level-up
+//   - recompute hydration + nutrition (Bug 10 — wired in D5)
+// Previously the calendar path skipped a few steps and the bug was
+// reported as "Mark as Complete didn't push to Strava" — really the
+// pipelines had drifted.
+//
+// `record` is the persisted workout (already in localStorage.workouts).
+// `opts` lets each caller supply path-specific extras:
+//   - opts.dateStr — the date being finalized
+//   - opts.sessionId — the parent session id (e.g. "session-sw-12345")
+//   - opts.source — "live_tracker" | "mark_complete" (analytics flavor)
+//   - opts.skipStrava — true to suppress (used when the prompt was
+//                       already invoked by the live tracker, etc.)
+function finalizeWorkoutCompletion(record, opts) {
+  opts = opts || {};
+  const dateStr = opts.dateStr || (record && record.date) || "";
+  const source = opts.source || "mark_complete";
+
+  // 1. Strava push. Both call sites used to invoke this directly;
+  //    centralizing here means a future "Strava reconnect" branch only
+  //    needs one update.
+  if (!opts.skipStrava && typeof promptStravaShareIfEligible === "function") {
+    try { promptStravaShareIfEligible(record); } catch (e) { console.warn("[IronZ] Strava prompt failed:", e && e.message); }
+  }
+
+  // 2. Analytics.
+  if (typeof trackWorkoutLogged === "function") {
+    try {
+      trackWorkoutLogged({
+        type: record && record.type,
+        date: dateStr,
+        source,
+        exercise_count: Array.isArray(record && record.exercises) ? record.exercises.length : 0,
+        duration_min: record && record.duration ? parseFloat(record.duration) || 0 : 0,
+      });
+    } catch {}
+  }
+
+  // 3. Refresh dependent renders. The live tracker tearing down its
+  //    overlay AND the calendar collapsing the inline form both happen
+  //    BEFORE this function is called, so we just refresh the global
+  //    views here.
+  try {
+    if (typeof renderCalendar === "function") renderCalendar();
+    if (dateStr && typeof renderDayDetail === "function") renderDayDetail(dateStr);
+    if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
+    if (typeof renderStats === "function") renderStats();
+  } catch (e) { console.warn("[IronZ] post-commit render failed:", e && e.message); }
+
+  // 4. Recompute hydration + nutrition immediately so the day's
+  //    targets reflect what the athlete actually did, not just what
+  //    was planned. The recompute helpers no-op when the relevant
+  //    panels aren't on screen.
+  try {
+    if (typeof renderHydration === "function") renderHydration();
+  } catch {}
+  try {
+    if (typeof updateNutritionDashboard === "function") updateNutritionDashboard();
+  } catch {}
+
+  // 5. Rating modal — both paths show it 400ms after commit so the
+  //    user sees the calendar refresh first. Wrapped in setTimeout so
+  //    it doesn't block.
+  if (record && record.id != null && typeof showRatingModal === "function") {
+    setTimeout(() => {
+      try { showRatingModal(String(record.id), dateStr); } catch {}
+    }, 400);
+  }
+
+  // 6. Stretch suggestion — surfaces under the session card if it's
+  //    still in the DOM after the calendar refresh.
+  if (typeof renderStretchSuggestion === "function" && opts.sessionId) {
+    setTimeout(() => {
+      try {
+        const card = document.getElementById(opts.sessionId);
+        if (card && !document.getElementById(`stretch-${opts.sessionId}`)) {
+          const div = document.createElement("div");
+          div.id = `stretch-${opts.sessionId}`;
+          card.appendChild(div);
+          renderStretchSuggestion({ type: record && record.type, exercises: record && record.exercises }, div);
+        }
+      } catch {}
+    }, 600);
+  }
+
+  // 7. Level-up check (live tracker had this; Mark-as-Complete didn't).
+  if (typeof checkLevelUp === "function") {
+    try { checkLevelUp(); } catch {}
+  }
+}
+if (typeof window !== "undefined") {
+  window.finalizeWorkoutCompletion = finalizeWorkoutCompletion;
+}
+
 /* ── Training Preferences UI ─────────────────────────────────────────────── */
 
 function loadTrainingPreferences() {

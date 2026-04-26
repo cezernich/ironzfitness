@@ -12065,6 +12065,47 @@ input.completion-ex-name:focus {
   color: #fff;
 }
 
+/* BUGFIX 04-25 §6: + Add Set / + Add Exercise mid-workout buttons.
+   Sit beneath the last set row / last exercise card respectively. */
+.live-add-set-btn {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.live-add-set-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: rgba(232, 83, 14, 0.06);
+}
+.live-add-exercise-btn {
+  display: block;
+  width: 100%;
+  margin: 12px 0 4px;
+  padding: 12px;
+  border: 1.5px dashed var(--color-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.live-add-exercise-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: rgba(232, 83, 14, 0.06);
+}
+
 /* ── Superset group ── */
 
 .live-superset-group {
