@@ -434,6 +434,41 @@ function _hydrationResolveDurationMin(w) {
       }
     }
   } catch {}
+  // 5. BUGFIX 04-25 §10: distance → duration fallback. Users who log
+  //    a "10 mi run" without a duration field still need a hydration
+  //    bonus that scales with the actual work. Use type-specific
+  //    average paces (rough but better than the 16-oz floor):
+  //      - running: 9 min/mi (rec/intermediate)
+  //      - cycling: 3.5 min/mi (~17 mph)
+  //      - swimming: 2 min/100m
+  //      - rowing: 4 min/km
+  if (w.distance) {
+    const distStr = String(w.distance).toLowerCase();
+    const num = parseFloat(distStr.match(/[\d.]+/) || ["0"]);
+    if (num > 0) {
+      const t = String(w.type || w.discipline || "").toLowerCase();
+      const isMi = /mi/.test(distStr) || /\bmile/.test(distStr);
+      const isKm = /km/.test(distStr);
+      const isM  = /\bm\b/.test(distStr) && !isKm;
+      const isYd = /yd/.test(distStr);
+      let est = 0;
+      if (t === "run" || t === "running") {
+        const miles = isKm ? num * 0.621371 : num;
+        est = miles * 9; // 9 min/mi default
+      } else if (t === "bike" || t === "cycling") {
+        const miles = isKm ? num * 0.621371 : num;
+        est = miles * 3.5; // ~17 mph
+      } else if (t === "swim" || t === "swimming") {
+        // Swim distance usually in m or yd; 2:00 / 100m as the default pace.
+        const meters = isYd ? num * 0.9144 : (isKm ? num * 1000 : (isMi ? num * 1609.344 : num));
+        est = (meters / 100) * 2;
+      } else if (t === "row" || t === "rowing") {
+        const km = isMi ? num * 1.60934 : (isKm ? num : num / 1000);
+        est = km * 4; // ~4 min/km
+      }
+      if (est > 0) return Math.round(est);
+    }
+  }
   return 0;
 }
 
@@ -446,47 +481,139 @@ function getWorkoutInfoForDate(dateStr) {
     //                        Add Session (qeSaveGeneratedCardio etc.) which
     //                        writes to `workouts` not workoutSchedule
     // Hydration bonus applies to ANY of them — if the athlete trained or
-    // is about to train today, they need the volume adjustment. Previously
-    // this only read workoutSchedule, so a brick added via Add Session
-    // got no hydration bump.
-    const sources = [];
-    try { sources.push(...(JSON.parse(localStorage.getItem("workoutSchedule") || "[]") || [])); } catch {}
-    try { sources.push(...(JSON.parse(localStorage.getItem("trainingPlan") || "[]") || [])); } catch {}
-    try { sources.push(...(JSON.parse(localStorage.getItem("workouts") || "[]") || [])); } catch {}
-    const dayWorkouts = sources.filter(w => w && w.date === dateStr);
-    if (dayWorkouts.length === 0) return null;
-    // Athlete weight scales every bonus equally today — pull once here
-    // instead of re-reading profile for each workout in the loop.
+    // is about to train today, they need the volume adjustment.
+    //
+    // BUGFIX 04-25 §10: prefer completed workouts over their planned
+    // counterparts and SUM bonuses across distinct sessions on the same
+    // day (AM run + PM lift, both completed → both contribute). Previous
+    // behavior picked only the single highest-bonus session.
+    let schedule = [], plan = [], logged = [];
+    try { schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]") || []; } catch {}
+    try { plan     = JSON.parse(localStorage.getItem("trainingPlan")    || "[]") || []; } catch {}
+    try { logged   = JSON.parse(localStorage.getItem("workouts")        || "[]") || []; } catch {}
+
+    // Athlete weight scales every bonus equally today — pull once here.
     let weightLbs = 0;
     try {
       const profile = JSON.parse(localStorage.getItem("profile") || "{}");
       const w = parseFloat(profile.weight);
       if (isFinite(w) && w > 0) weightLbs = w;
     } catch {}
-    let bestBonus = 0;
-    let bestName = "";
-    let bestDurationMin = 0;
-    let bestType = "";
-    for (const w of dayWorkouts) {
-      // Skip rest-marker entries.
+
+    const isRest = (w) => {
+      const t = String((w && (w.type || w.discipline)) || "").toLowerCase();
+      return t === "rest" || (w && w.load === "rest");
+    };
+
+    const computeFor = (w) => {
+      if (!w || isRest(w)) return null;
       const t = String(w.type || w.discipline || "").toLowerCase();
-      if (t === "rest" || w.load === "rest") continue;
       const durationMin = _hydrationResolveDurationMin(w);
-      // Load / intensity signal. Plan + schedule entries carry `load`
-      // (easy / moderate / hard / long / tempo / threshold / vo2).
-      // Logged entries sometimes carry it on the session level. Falls
-      // back to "moderate" → 1.0× multiplier.
       const load = w.load || (w.session && w.session.load) || (w.aiSession && w.aiSession.load) || "";
       const bonus = computeWorkoutBonusOz(t, durationMin, { weightLbs, load });
-      if (bonus > bestBonus) {
-        bestBonus = bonus;
-        bestName = w.sessionName || w.name || w.type || w.discipline || "workout";
-        bestDurationMin = durationMin;
-        bestType = t;
+      return {
+        bonus,
+        durationMin,
+        type: t,
+        name: w.sessionName || w.name || w.type || w.discipline || "workout",
+      };
+    };
+
+    // Build the per-session bonus list with dedup. Completed workouts
+    // override their planned counterparts (matched via completedSessionId
+    // → schedule.id or plan-derived id) — but only when the completed
+    // bonus is ≥ the planned one. Spec sanity check: target shouldn't
+    // decrease if planned > actual.
+    const completedById = new Map();    // sessionId → completed entry
+    const completedFreestanding = [];   // workouts with no plan link
+    const dayLogged = logged.filter(w => w && w.date === dateStr);
+    for (const w of dayLogged) {
+      if (w.completedSessionId) {
+        completedById.set(String(w.completedSessionId), w);
+      } else {
+        completedFreestanding.push(w);
       }
     }
-    if (bestBonus === 0) return null;
-    return { bonusOz: bestBonus, sessionName: bestName, durationMin: bestDurationMin, type: bestType };
+
+    // Map a planned entry to its session-id form. workoutSchedule entries
+    // have a numeric `id`; trainingPlan entries don't, but the calendar
+    // synthesizes "session-plan-<date>-<raceId>" — use the same shape.
+    const _scheduleSessionId = (sw) => sw && sw.id != null ? `session-sw-${sw.id}` : null;
+    const _planSessionId = (p) => p && p.date && p.raceId != null ? `session-plan-${p.date}-${p.raceId}` : null;
+
+    const contributions = [];
+    let bestName = "", bestType = "", bestDurationMin = 0, bestBonus = 0;
+    const _trackBest = (info) => {
+      if (info && info.bonus > bestBonus) {
+        bestBonus = info.bonus;
+        bestName = info.name;
+        bestType = info.type;
+        bestDurationMin = info.durationMin;
+      }
+    };
+
+    // Planned entries — replace with completed if it exists, take the
+    // larger bonus to honor the "don't decrease" sanity check.
+    for (const sw of schedule) {
+      if (!sw || sw.date !== dateStr) continue;
+      const sid = _scheduleSessionId(sw);
+      const completed = sid ? completedById.get(sid) : null;
+      const plannedInfo = computeFor(sw);
+      const completedInfo = completed ? computeFor(completed) : null;
+      const winner = (completedInfo && plannedInfo)
+        ? (completedInfo.bonus >= plannedInfo.bonus ? completedInfo : plannedInfo)
+        : (completedInfo || plannedInfo);
+      if (winner && winner.bonus > 0) {
+        contributions.push(winner.bonus);
+        _trackBest(winner);
+      }
+      if (sid) completedById.delete(sid);
+    }
+    for (const p of plan) {
+      if (!p || p.date !== dateStr) continue;
+      const sid = _planSessionId(p);
+      const completed = sid ? completedById.get(sid) : null;
+      const plannedInfo = computeFor(p);
+      const completedInfo = completed ? computeFor(completed) : null;
+      const winner = (completedInfo && plannedInfo)
+        ? (completedInfo.bonus >= plannedInfo.bonus ? completedInfo : plannedInfo)
+        : (completedInfo || plannedInfo);
+      if (winner && winner.bonus > 0) {
+        contributions.push(winner.bonus);
+        _trackBest(winner);
+      }
+      if (sid) completedById.delete(sid);
+    }
+    // Any remaining completedById entries are completions whose plan
+    // counterpart wasn't found — count them.
+    for (const w of completedById.values()) {
+      const info = computeFor(w);
+      if (info && info.bonus > 0) {
+        contributions.push(info.bonus);
+        _trackBest(info);
+      }
+    }
+    // Freestanding completions (no completedSessionId — likely Add
+    // Session direct logs) contribute their full bonus.
+    for (const w of completedFreestanding) {
+      const info = computeFor(w);
+      if (info && info.bonus > 0) {
+        contributions.push(info.bonus);
+        _trackBest(info);
+      }
+    }
+
+    if (contributions.length === 0) return null;
+    const totalBonus = contributions.reduce((s, n) => s + n, 0);
+    return {
+      bonusOz: totalBonus,
+      sessionName: bestName,
+      durationMin: bestDurationMin,
+      type: bestType,
+      // Number of distinct sessions contributing — surfaced for the
+      // breakdown reason ("for your run + lift" when > 1).
+      sessionCount: contributions.length,
+    };
   } catch { return null; }
 }
 
