@@ -4741,13 +4741,16 @@
   // emphasis, core + single-leg from running.
   const _SPORT_STRENGTH_EXERCISES = {
     running: {
-      // Single-leg dominant + hip extension + ankle stiffness + core
+      // Single-leg dominant + hip extension + ankle stiffness + core.
+      // BUGFIX 04-27 §F1: stripped pull/core movements from `push` and core
+      // movements from `pull` — those leak into the wrong day. Anti-rotation
+      // / dead-bug work goes to upper/full where mixing is intentional.
       legs:  ["Bulgarian Split Squat", "Romanian Deadlift", "Hip Thrust", "Walking Lunges", "Standing Calf Raise"],
       lower: ["Bulgarian Split Squat", "Romanian Deadlift", "Step-up", "Walking Lunges", "Standing Calf Raise"],
       full:  ["Bulgarian Split Squat", "Hip Thrust", "Pallof Press", "Dead Bug", "Standing Calf Raise"],
       upper: ["Push-up", "Pull-up", "Pallof Press", "Dead Bug"],
-      push:  ["Push-up", "Overhead Press", "Pallof Press", "Dead Bug"],
-      pull:  ["Pull-up", "Face Pull", "Pallof Press", "Dead Bug"],
+      push:  ["Push-up", "Overhead Press", "Dumbbell Bench Press", "Tricep Pushdown"],
+      pull:  ["Pull-up", "Face Pull", "Barbell Row", "Pallof Press"],
     },
     cycling: {
       // Max force + hip extension + unilateral pedaling symmetry
@@ -4755,8 +4758,8 @@
       lower: ["Back Squat", "Leg Press", "Single-leg Deadlift", "Hip Thrust", "Glute Bridge"],
       full:  ["Back Squat", "Hip Thrust", "Plank", "Dead Bug", "Standing Calf Raise"],
       upper: ["Bench Press", "Barbell Row", "Plank", "Dead Bug"],
-      push:  ["Bench Press", "Overhead Press", "Plank", "Dead Bug"],
-      pull:  ["Barbell Row", "Face Pull", "Plank", "Dead Bug"],
+      push:  ["Bench Press", "Overhead Press", "Dumbbell Bench Press", "Tricep Pushdown"],
+      pull:  ["Barbell Row", "Face Pull", "Pull-up", "Lat Pulldown"],
     },
     swimming: {
       // Pull-dominant + shoulder stability + core anti-rotation
@@ -4764,7 +4767,7 @@
       lower: ["Back Squat", "Romanian Deadlift", "Walking Lunges", "Standing Calf Raise"],
       full:  ["Lat Pulldown", "Face Pull", "Pallof Press", "Back Squat", "Tricep Pushdown"],
       upper: ["Lat Pulldown", "Pull-up", "Face Pull", "Tricep Pushdown", "Pallof Press"],
-      push:  ["Overhead Press", "Tricep Pushdown", "Face Pull", "Pallof Press"],
+      push:  ["Overhead Press", "Tricep Pushdown", "Push-up", "Dumbbell Bench Press"],
       pull:  ["Lat Pulldown", "Pull-up", "Face Pull", "Barbell Row", "Pallof Press"],
     },
     triathlon: {
@@ -4773,8 +4776,8 @@
       lower: ["Back Squat", "Single-leg Deadlift", "Bulgarian Split Squat", "Hip Thrust", "Standing Calf Raise"],
       full:  ["Back Squat", "Lat Pulldown", "Hip Thrust", "Pallof Press", "Dead Bug"],
       upper: ["Lat Pulldown", "Pull-up", "Face Pull", "Pallof Press", "Dead Bug"],
-      push:  ["Overhead Press", "Push-up", "Face Pull", "Pallof Press", "Dead Bug"],
-      pull:  ["Lat Pulldown", "Pull-up", "Face Pull", "Pallof Press", "Dead Bug"],
+      push:  ["Overhead Press", "Push-up", "Dumbbell Bench Press", "Tricep Pushdown"],
+      pull:  ["Lat Pulldown", "Pull-up", "Face Pull", "Barbell Row", "Pallof Press"],
     },
   };
 
@@ -4789,7 +4792,10 @@
     lower: ["Glute Bridge", "Single-leg Deadlift", "Walking Lunges", "Standing Calf Raise", "Plank"],
     full:  ["Glute Bridge", "Push-up", "Band Row", "Pallof Press", "Dead Bug"],
     upper: ["Push-up", "Band Row", "Face Pull", "Pallof Press", "Dead Bug"],
-    push:  ["Push-up", "Band Row", "Face Pull", "Dead Bug"],
+    // BUGFIX 04-27 §F1: Band Row and Face Pull are pull patterns; do not
+    // surface them on push days. Push lifts here lean light/stability so
+    // the role intent (avoid heavy compound stress) is preserved.
+    push:  ["Push-up", "Overhead Press", "Tricep Pushdown", "Dumbbell Bench Press"],
     pull:  ["Band Row", "Face Pull", "Pallof Press", "Dead Bug"],
   };
   const _MINIMAL_EXERCISES = {
@@ -4797,8 +4803,11 @@
     lower: ["Bodyweight Squat", "Walking Lunges", "Glute Bridge", "Plank"],
     full:  ["Bodyweight Squat", "Push-up", "Inverted Row", "Plank"],
     upper: ["Push-up", "Inverted Row", "Pike Push-up", "Plank"],
-    push:  ["Push-up", "Pike Push-up", "Plank"],
-    pull:  ["Inverted Row", "Pull-up", "Plank"],
+    // BUGFIX 04-27 §F1: Plank is core, not a push/pull pattern. Replace
+    // with bodyweight pattern-appropriate movements; Plank stays on full
+    // and upper where mixing core is intentional.
+    push:  ["Push-up", "Pike Push-up", "Dip", "Diamond Push-up"],
+    pull:  ["Inverted Row", "Pull-up", "Chin-up"],
   };
 
   // Pick a single "sport bucket" for race_performance exercise overlay.
