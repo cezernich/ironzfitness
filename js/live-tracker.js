@@ -297,10 +297,37 @@ function _buildStepsFromSession(sessionId, type) {
 
 // ── Launch ───────────────────────────────────────────────────────────────────
 
+// BUGFIX 04-27 §F2: bring the live tracker's exercise shape into line with
+// what the home-screen card displays. Flattens rep ranges to the upper
+// bound (matches _formatRepsWithSide) and fills empty weights via the
+// shared _deriveAccessoryWeight helper from workouts.js when a PR-based
+// derivation is possible. Bodyweight exercises stay "BW" / unchanged.
+function _resolveExerciseForTracker(ex) {
+  if (!ex || typeof ex !== "object") return ex;
+  let reps = ex.reps;
+  if (reps != null) {
+    const rangeMatch = String(reps).match(/^(\d+)\s*[-\u2013]\s*(\d+)(.*)$/);
+    if (rangeMatch) reps = (rangeMatch[2] + rangeMatch[3]).trim();
+  }
+  let weight = ex.weight;
+  const isBlank = !weight || /^(moderate|light|heavy|—)$/i.test(String(weight).trim());
+  if (isBlank && typeof window !== "undefined" && typeof window._deriveAccessoryWeight === "function") {
+    const derived = window._deriveAccessoryWeight(ex.name, reps);
+    if (derived) weight = derived;
+  }
+  return { ...ex, reps, weight };
+}
+
 function startLiveWorkout(sessionId, dateStr, type, stepsJson, exercisesJson) {
   if (typeof trackEvent === "function") trackEvent("workout_started", { type, date: dateStr });
   let steps = stepsJson ? JSON.parse(stepsJson) : null;
-  const exercises = exercisesJson ? JSON.parse(exercisesJson) : null;
+  const rawExercises = exercisesJson ? JSON.parse(exercisesJson) : null;
+  // BUGFIX 04-27 §F2: the home-screen card resolves reps + weights via
+  // _formatRepsWithSide and _normalizeWeightDisplay at render time. The
+  // live tracker had been reading the un-resolved exercise objects so
+  // reps showed as "10-12" and weights blank. Apply the same resolution
+  // here so the tracker mirrors the card.
+  const exercises = rawExercises ? rawExercises.map(_resolveExerciseForTracker) : null;
 
   // Build steps on the fly for cardio/swim/circuit when the caller didn't
   // supply any. Before this, endurance workouts landed here with steps=null

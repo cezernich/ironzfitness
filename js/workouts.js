@@ -870,9 +870,11 @@ if (typeof window !== "undefined") {
 
 // Expose on window so planner.js (loaded after) can pipe library-sourced
 // strength exercises through the same 1RM-based weight personalization as
-// the rest of the app.
+// the rest of the app. _deriveAccessoryWeight is also exposed so the live
+// tracker can resolve empty weights at session-start time (BUGFIX 04-27 F2).
 if (typeof window !== "undefined") {
   window._personalizeWeights = _personalizeWeights;
+  window._deriveAccessoryWeight = _deriveAccessoryWeight;
 }
 
 // BUGFIX 04-25 §5: shared post-commit pipeline for any workout
