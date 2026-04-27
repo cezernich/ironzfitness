@@ -6102,7 +6102,9 @@ SWIM-SPECIFIC: For swim workouts, every main/tempo/interval phase MUST use struc
 - "4 × 400m @ CSS broken every 100m w/ 10s rest inside each 400"
 Also populate the reps, distance, and restDuration fields on interval objects (e.g. "reps": 6, "duration": "200m", "restDuration": "20s").
 
-Use "Bodyweight" for bodyweight exercises. Strength exercises must have specific weights in lbs rounded to the nearest 5 (e.g. 135, 185 — NEVER 137, 267). Use reference lifts if provided. Include 5-8 exercises or 3-5 intervals.`
+Use "Bodyweight" for bodyweight exercises. Strength exercises must have specific weights in lbs rounded to the nearest 5 (e.g. 135, 185 — NEVER 137, 267). Use reference lifts if provided. Include 5-8 exercises or 3-5 intervals.
+
+NEVER suggest regression / beginner-rehab variants when generating a workout for an athlete who has logged compound lifts. Specifically: do NOT include "Knee Push-Up", "Wall Push-Up", "Incline Push-Up (high)", "Modified Push-Up", "Assisted Dip", "Assisted Pull-Up (band)", "Box Squat (chair)", or any other regression for someone capable of the standard movement. If you want a bodyweight chest movement, use "Push-Up" or "Decline Push-Up" or "Diamond Push-Up". If you want a bodyweight pull movement, use "Pull-Up" or "Inverted Row". Choose harder variants for athletes with meaningful reference lifts.`
       }]
     });
 
@@ -6144,9 +6146,23 @@ Use "Bodyweight" for bodyweight exercises. Strength exercises must have specific
       // Personalize weights from the athlete's reference lifts. The AI
       // often hallucinated low weights — _personalizeWeights scales them
       // based on actual bench/squat/deadlift/ohp/row from trainingZones.
+      // Swap regression-tier bodyweight movements (Knee Push-Up, Wall
+      // Push-Up, etc.) for standard variants — a 275-lb bencher should
+      // not be prescribed knee push-ups even if the prompt lapses.
+      const _stripRegressions = (exs) => (exs || []).map(ex => {
+        const n = String(ex.name || "");
+        if (/\bknee\s*push[- ]?up/i.test(n))           return { ...ex, name: "Push-Up" };
+        if (/\bwall\s*push[- ]?up/i.test(n))           return { ...ex, name: "Push-Up" };
+        if (/\bmodified\s*push[- ]?up/i.test(n))       return { ...ex, name: "Push-Up" };
+        if (/\bincline\s*push[- ]?up.*\(high\)/i.test(n)) return { ...ex, name: "Push-Up" };
+        if (/\bassisted\s*dip/i.test(n))               return { ...ex, name: "Dip" };
+        if (/\bassisted\s*pull[- ]?up.*\(band\)?/i.test(n)) return { ...ex, name: "Pull-Up" };
+        if (/\bbox\s*squat\s*\(chair\)/i.test(n))      return { ...ex, name: "Box Squat" };
+        return ex;
+      });
       _qeGeneratedExercises = typeof _personalizeWeights === "function"
-        ? _personalizeWeights((workout.exercises || []).map(ex => ({ ...ex, weight: _roundExWeight(ex.weight) })))
-        : (workout.exercises || []).map(ex => ({ ...ex, weight: _roundExWeight(ex.weight) }));
+        ? _personalizeWeights(_stripRegressions(workout.exercises).map(ex => ({ ...ex, weight: _roundExWeight(ex.weight) })))
+        : _stripRegressions(workout.exercises).map(ex => ({ ...ex, weight: _roundExWeight(ex.weight) }));
       _qeEditingExerciseIndex = null;
       _qeSelectedType = "strength";
       resultEl.innerHTML = `<div class="qe-generated-workout">
