@@ -11997,6 +11997,60 @@ input.completion-ex-name:focus {
   color: var(--color-text-muted);
   font-style: italic;
 }
+
+/* Confetti celebration — BUGFIX 04-27 §F6.
+   Pointer-events:none so taps on the Finish button still land. Overlay
+   sits above content but below the modal layer (z 1000-2000 range). */
+.live-confetti-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1500;
+  overflow: hidden;
+}
+.live-confetti-piece {
+  position: absolute;
+  top: -20px;
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  opacity: 0;
+  animation: live-confetti-fall 1.5s ease-out forwards;
+  transform-origin: center;
+}
+@keyframes live-confetti-fall {
+  0% {
+    transform: translate(0, 0) rotate(var(--cf-rot, 0deg));
+    opacity: 0;
+  }
+  10% { opacity: 1; }
+  100% {
+    transform: translate(var(--cf-drift, 0px), 100vh) rotate(calc(var(--cf-rot, 0deg) + 720deg));
+    opacity: 0;
+  }
+}
+.live-confetti-badge {
+  position: absolute;
+  top: 28%;
+  left: 50%;
+  transform: translateX(-50%) scale(0.85);
+  padding: 10px 20px;
+  background: var(--color-success, #10b981);
+  color: #fff;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  animation: live-confetti-badge 1.5s ease-out forwards;
+}
+@keyframes live-confetti-badge {
+  0%   { opacity: 0; transform: translateX(-50%) scale(0.7); }
+  20%  { opacity: 1; transform: translateX(-50%) scale(1.05); }
+  35%  { transform: translateX(-50%) scale(1); }
+  85%  { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) scale(1); }
+}
 .live-done-check {
   color: var(--color-success);
   font-weight: 700;

@@ -1092,6 +1092,18 @@ function _logLiveSet(exIdx, setIdx) {
   // Re-render the body
   const body = document.getElementById("live-tracker-body");
   if (body) body.innerHTML = _buildStrengthView();
+
+  // BUGFIX 04-27 §F6: confetti when the user logs the final set of the
+  // final exercise. Plays exactly once per workout; un-logging and re-
+  // logging the same final set won't re-trigger.
+  if (set.done && !_liveTracker._celebrated) {
+    const allDone = _liveTracker.sets.every(exSets => exSets.every(s => s.done));
+    if (allDone) {
+      _liveTracker._celebrated = true;
+      _saveLiveState();
+      _celebrateWorkoutComplete();
+    }
+  }
 }
 
 function _liveStepNext() {
@@ -1117,6 +1129,50 @@ function _liveGoToStep(idx) {
   const body = document.getElementById("live-tracker-body");
   if (body) body.innerHTML = _buildEnduranceView();
 }
+
+// ── Celebrate ────────────────────────────────────────────────────────────────
+
+// BUGFIX 04-27 §F6: hand-rolled confetti. No external dep — a column of
+// 18 absolutely-positioned divs with randomised colour, x-offset, and
+// rotation, animated via the @keyframes `live-confetti-fall` rule in
+// style.css. Auto-removes after 1.6s. Doesn't block input — overlay sits
+// at z-index between the tracker body and the modal layer with
+// pointer-events:none.
+function _celebrateWorkoutComplete() {
+  // Guard against double-injection if the user un-logs and re-logs.
+  if (document.getElementById("live-confetti-overlay")) return;
+
+  const overlay = document.createElement("div");
+  overlay.id = "live-confetti-overlay";
+  overlay.className = "live-confetti-overlay";
+
+  const COLORS = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#a855f7", "#ec4899"];
+  const PIECE_COUNT = 24;
+  let html = "";
+  for (let i = 0; i < PIECE_COUNT; i++) {
+    const left = Math.random() * 100;
+    const delay = Math.random() * 0.25;
+    const rot = Math.random() * 360;
+    const drift = (Math.random() * 60 - 30).toFixed(1);
+    const color = COLORS[i % COLORS.length];
+    html += `<div class="live-confetti-piece" style="left:${left.toFixed(1)}%;background:${color};animation-delay:${delay.toFixed(2)}s;--cf-rot:${rot}deg;--cf-drift:${drift}px"></div>`;
+  }
+  // Success badge — small chip, fades with the confetti so the screen
+  // doesn't end up cluttered after the animation completes.
+  html += `<div class="live-confetti-badge">Workout complete!</div>`;
+  overlay.innerHTML = html;
+
+  document.body.appendChild(overlay);
+  setTimeout(() => {
+    overlay.remove();
+  }, 1600);
+
+  if (typeof trackEvent === "function") {
+    try { trackEvent("live_workout_celebrated"); } catch {}
+  }
+}
+
+if (typeof window !== "undefined") window._celebrateWorkoutComplete = _celebrateWorkoutComplete;
 
 // ── Finish ───────────────────────────────────────────────────────────────────
 
