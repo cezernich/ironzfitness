@@ -841,8 +841,12 @@
         </div>
       </div>
 
-      <!-- Manual Meal Log Modal -->
-      <div id="manual-meal-modal" class="survey-overlay" onclick="if(event.target===this) closeManualMealLog()">
+      <!-- Manual Meal Log Modal — uses the quick-entry-overlay shell so
+           it inherits the safe-area + bottom-nav padding fixes from Bug
+           1/2 (C1). Was on .survey-overlay which has neither, leaving
+           the modal off-center, partly behind the bottom nav, and
+           scroll-bound to the wrong element on iOS. -->
+      <div id="manual-meal-modal" class="quick-entry-overlay" onclick="if(event.target===this) closeManualMealLog()">
         <div class="quick-entry-modal" style="max-width:400px">
           <div class="quick-entry-header">
             <span class="qe-date-label">Log a Meal</span>
