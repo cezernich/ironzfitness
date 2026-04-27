@@ -979,16 +979,47 @@ function _captureLiveSetInputs() {
   }
 }
 
-// Rest duration based on the just-completed set's rep count. Not a cap —
-// user can always tap the rest timer to skip.
+// BUGFIX 04-27 §F3: rep count alone over-prescribes rest for low-load
+// movements. 5 pull-ups got 2:30 because the old logic assumed 5 reps =
+// heavy strength. Real answer depends on exercise type:
+//   - Heavy compound (squat, DL, bench, OHP): 2:30
+//   - Pulling compound (rows, pull-up, chin-up): 1:30
+//   - Bodyweight (push-up, dip, pull-up at low reps): 1:15
+//   - Accessory press (DB bench, incline DB): 1:30
+//   - Isolation (curl, kickback, lateral raise, fly, face pull): 0:45-1:00
+// Fall back to the rep-based heuristic for unknowns so this never returns
+// nothing.
+const REST_DEFAULTS_BY_PATTERN = [
+  { match: /\b(back\s*squat|front\s*squat|deadlift|barbell\s*bench|bench\s*press|overhead\s*press|military\s*press)\b/i, sec: 150 },
+  { match: /\b(pull[- ]?up|chin[- ]?up|barbell\s*row|pendlay\s*row|t.?bar\s*row|lat\s*pulldown|seated\s*row)\b/i, sec: 90 },
+  { match: /\b(dumbbell\s*bench|incline\s*press|push[- ]?up|dip)\b/i, sec: 75 },
+  { match: /\b(face\s*pull|cable\s*row|seated\s*cable)\b/i, sec: 60 },
+  { match: /\b(curl|kickback|lateral\s*raise|front\s*raise|reverse\s*fly|fly|tricep\s*pushdown|tricep\s*extension)\b/i, sec: 45 },
+];
+
+function _restSecForExercise(ex, repsHint) {
+  if (ex && typeof ex.rest_default_sec === "number" && ex.rest_default_sec > 0) {
+    return ex.rest_default_sec;
+  }
+  const name = String(ex?.name || "");
+  for (const rule of REST_DEFAULTS_BY_PATTERN) {
+    if (rule.match.test(name)) return rule.sec;
+  }
+  // Unknown — fall back to the existing rep-based heuristic.
+  const reps = parseInt(String(repsHint || "").match(/\d+/)?.[0]);
+  if (!reps || Number.isNaN(reps)) return 90;
+  if (reps <= 5)  return 150;
+  if (reps <= 8)  return 120;
+  if (reps <= 12) return 90;
+  return 60;
+}
+
+// Rest duration based on exercise type + just-completed set's rep count.
+// Not a cap — user can always tap the rest timer to skip.
 function _liveRestForSet(exIdx, setIdx) {
   const set = _liveTracker?.sets?.[exIdx]?.[setIdx];
-  const reps = parseInt(String(set?.reps || "").match(/\d+/)?.[0]);
-  if (!reps || Number.isNaN(reps)) return 90000;
-  if (reps <= 5)  return 150000; // 2:30 — heavy strength
-  if (reps <= 8)  return 120000; // 2:00
-  if (reps <= 12) return 90000;  // 1:30 — hypertrophy
-  return 60000;                  // 1:00 — endurance
+  const ex = _liveTracker?.exercises?.[exIdx];
+  return _restSecForExercise(ex, set?.reps) * 1000;
 }
 
 // oninput handler for the live set reps/weight fields. Flushes the DOM
