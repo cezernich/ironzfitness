@@ -1908,13 +1908,23 @@ function buildStepsList(session, discipline) {
       if (!perRepSec && typeof step.duration === "number" && step.duration > 0) {
         perRepSec = step.duration * 60;
       }
+      // Compact "Xm" / "Xs" formatter for the swim meta line so the row
+      // fits on a single line on iPhone widths. Bug surfaced 2026-04-27:
+      // SET 6 (no rest text) was the only one fitting on one line; SETs
+      // 1-5 wrapped because "3 min · 1 min rest" overflowed. Trims to
+      // "3m · 1m rest".
+      const _fmtSwimDur = (minOrSec) => {
+        const n = Number(minOrSec) || 0;
+        if (n > 0 && n < 1) return Math.max(5, Math.round(n * 60)) + "s";
+        return Math.max(1, Math.round(n)) + "m";
+      };
       const distLabel = perRepSec > 0
-        ? _fmtDur(perRepSec / 60)
-        : (step.distance ? `${step.distance}m` : (typeof step.duration === "number" ? `${_fmtDur(step.duration)}` : `${step.duration}`));
+        ? _fmtSwimDur(perRepSec / 60)
+        : (step.distance ? `${step.distance}m` : (typeof step.duration === "number" ? `${_fmtSwimDur(step.duration)}` : `${step.duration}`));
       let html = "";
       for (let r = 0; r < repCount; r++) {
         const isLast = r === repCount - 1;
-        const restText = (!isLast && restPerRep) ? ` · ${_fmtDur(restPerRep)} rest` : "";
+        const restText = (!isLast && restPerRep) ? ` · ${_fmtSwimDur(restPerRep)} rest` : "";
         html += `
       <div class="session-step ${stepCls} session-step--swim-rep" data-set-index="${r + 1}">
         <div class="session-step-meta">
@@ -2107,7 +2117,20 @@ function buildAiIntervalsList(session, type) {
     const isSwimIv = type === "swim" || type === "swimming"
                   || iv.sport === "swim" || iv.sport === "swimming";
     if (isSwimIv && reps > 1 && !isTransition && !isRestWalk) {
-      const rest = _restLabel || null;
+      // Compact rest label — collapse "1 min" → "1m" / "30 sec" → "30s"
+      // so the meta fits on one line at iPhone widths (matches the
+      // template-path renderer above).
+      const _compactRest = (s) => {
+        const str = String(s || "");
+        const m = str.match(/(\d+)\s*(min|minutes|m)\b/i);
+        if (m) return m[1] + "m";
+        const sm = str.match(/(\d+)\s*(sec|seconds|s)\b/i);
+        if (sm) return sm[1] + "s";
+        return str;
+      };
+      const rest = _restLabel ? _compactRest(_restLabel) : null;
+      // Compact perRepDur the same way so "3 min" → "3m".
+      const perRepDurCompact = _compactRest(perRepDur) || perRepDur;
       let html = "";
       for (let r = 0; r < reps; r++) {
         const isLast = r === reps - 1;
@@ -2116,7 +2139,7 @@ function buildAiIntervalsList(session, type) {
       <div class="session-step ${stepCls} session-step--swim-rep" data-set-index="${r + 1}">
         <div class="session-step-meta">
           <span class="session-step-type">SET ${r + 1}</span>
-          <span class="session-step-duration">${perRepDur}${restText}</span>
+          <span class="session-step-duration">${perRepDurCompact}${restText}</span>
         </div>
         <div class="session-step-zone-row"><span class="session-step-zone">${zoneBadge}</span></div>
         ${iv.details ? `<div class="session-step-label">${escHtml(iv.details)}</div>` : ""}
