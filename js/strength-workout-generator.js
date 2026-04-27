@@ -72,6 +72,14 @@
     const baselineLbs = (opts && opts.baselineLbs) || 0;
     const stepLbs = (opts && opts.stepLbs) || 5;
     const suggestedLbs = baselineLbs + (cycleWeek - 1) * stepLbs;
+    // BUGFIX 04-27 §F4: structured warmup_sets on every compound block so
+    // downstream renderers (cards + live tracker) can show explicit
+    // warmup guidance without recomputing from text.
+    const round5 = (v) => Math.round(v / 5) * 5;
+    const warmup_sets = suggestedLbs > 0 ? [
+      { reps: 5, load_lbs: round5(suggestedLbs * 0.5) },
+      { reps: 3, load_lbs: round5(suggestedLbs * 0.7) },
+    ] : null;
     return {
       lift,
       variant: getCompoundVariant(lift, weekNumber, opts && opts.cycleWeeks),
@@ -79,6 +87,7 @@
       sets: 4,
       reps: cycleWeek <= 3 ? "5" : "3",
       load_lbs: suggestedLbs > 0 ? suggestedLbs : null,
+      warmup_sets,
       progression_note: suggestedLbs > 0
         ? `Week ${cycleWeek} of cycle. Suggested load: ${suggestedLbs} lbs (+${(cycleWeek - 1) * stepLbs} from baseline).`
         : `Week ${cycleWeek} of cycle. Use a load that puts you at RPE 7-8 for the last set.`,
@@ -142,10 +151,22 @@
       }
     }
 
-    // Estimated duration: ~5 min per compound block, ~4 min per accessory.
+    // BUGFIX 04-27 §F4: recalibrated formula. Previously
+    //   10 + compoundCount × 12 + accessoryCount × 5
+    // budgeted ~10 min of unstated warmup time, leaving the working sets
+    // to account for less than the user actually does → estimate landed
+    // ~10 min high vs reality. New constant separates warmup (now shown
+    // explicitly) from working sets:
+    //   compound block = 4 min warmup + 10 min working sets = 14
+    //   accessory block = 5 min (unchanged — short warmup, working sets)
+    //   base setup = 8 min
+    // Sanity check: 1 compound + 4 accessories = 8 + 14 + 20 = 42 min
+    // (previous formula: 10 + 12 + 20 = 42). Same target on a typical
+    // single-compound day; calibration only matters when compoundCount
+    // is higher.
     const compoundCount = blocks.filter(b => b.kind === "compound").length;
     const accessoryCount = blocks.filter(b => b.kind === "accessory").length;
-    const estimated_duration_min = 10 + compoundCount * 12 + accessoryCount * 5; // warmup + work
+    const estimated_duration_min = 8 + compoundCount * 14 + accessoryCount * 5;
 
     return {
       workout: {

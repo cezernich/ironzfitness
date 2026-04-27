@@ -2678,6 +2678,14 @@ input.completion-ex-name:focus {
   font-style: italic;
 }
 
+/* Warmup hint row (compound lifts) — descriptive, not loggable */
+.warmup-hint-row td { padding-top: 0 !important; padding-bottom: 6px !important; border-top: none !important; }
+.warmup-hint-cell {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  padding-left: 16px !important;
+}
+
 .completion-x {
   font-size: 0.8rem;
   color: var(--color-text-muted);
@@ -11980,6 +11988,12 @@ input.completion-ex-name:focus {
 .live-exercise-target {
   font-size: 0.78rem;
   color: var(--color-text-muted);
+}
+.live-warmup-hint {
+  padding: 0 14px 8px 44px;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 .live-done-check {
   color: var(--color-success);

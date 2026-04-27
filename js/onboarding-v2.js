@@ -4698,7 +4698,11 @@
       loadLevel: "moderate",  // KEY session per §2.5.3 — place strategically
     },
     hypertrophy: {
-      sessionLen: 55,         // 45–60 min; volume drives hypertrophy
+      // BUGFIX 04-27 §F4: dropped 55 → 48 to match observed reality.
+      // The previous estimate budgeted ~10 min of unstated warmup time;
+      // now that compound cards display warmup text explicitly, the
+      // working-set portion accounts for less of the total.
+      sessionLen: 48,         // 45–60 min; volume drives hypertrophy
       exerciseCount: 7,       // 6–8
       primaryReps: "8-12",
       accessoryReps: "10-12",

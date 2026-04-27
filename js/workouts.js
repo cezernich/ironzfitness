@@ -2763,6 +2763,62 @@ function _formatRepsWithSide(reps, exerciseName) {
   return U ? U.formatRepsLabel(raw, exerciseName) : raw;
 }
 
+// BUGFIX 04-27 §F4: descriptive warmup text for compound lifts.
+// Returns a string like "5 @ 110 · 3 @ 150" for loaded compounds, or
+// "1 set easy · 1 set 5 reps" for bodyweight compounds, or "" when the
+// exercise doesn't qualify (not a compound or load below threshold).
+//
+// Compound list = Bench Press / Squat / Deadlift / Overhead Press /
+// Bent-over Row / Pull-up. Threshold = working weight must exceed
+// max(0.5 × bodyweight, 65 lbs) so light isolation work isn't given
+// useless warmup text.
+const _COMPOUND_LIFT_PATTERNS = [
+  /\b(?:barbell\s*)?bench\s*press\b/i,
+  /\b(?:back\s*|front\s*)?squat\b/i,
+  /\bdeadlift\b/i,
+  /\b(?:overhead|shoulder|military)\s*press\b/i,
+  /\b(?:bent[- ]?over\s*)?(?:barbell\s*|t.?bar\s*|pendlay\s*)?row\b/i,
+  /\bpull[- ]?up\b|\bchin[- ]?up\b/i,
+];
+
+function _isCompoundLift(name) {
+  if (!name) return false;
+  const n = String(name);
+  return _COMPOUND_LIFT_PATTERNS.some(p => p.test(n));
+}
+
+function _readBodyweightLbs() {
+  try {
+    const profile = JSON.parse(localStorage.getItem("profile") || "{}");
+    const w = parseFloat(profile.weight);
+    return w > 0 ? w : 0;
+  } catch { return 0; }
+}
+
+function _computeWarmupText(exerciseName, weightStr) {
+  if (!_isCompoundLift(exerciseName)) return "";
+  const isBodyweight = /pull[- ]?up|chin[- ]?up|dip|push[- ]?up/i.test(exerciseName)
+                       && (!weightStr || /^(bw|bodyweight)$/i.test(String(weightStr).trim()));
+  if (isBodyweight) return "Warmup: 1 set easy \u00b7 1 set 5 reps";
+  // Need a numeric weight to compute warmup percentages.
+  const m = String(weightStr || "").match(/([\d.]+)/);
+  if (!m) return "";
+  const working = parseFloat(m[1]);
+  if (!isFinite(working) || working <= 0) return "";
+  const bw = _readBodyweightLbs();
+  const threshold = Math.max(0.5 * bw, 65);
+  if (working <= threshold) return "";
+  const round5 = (v) => Math.round(v / 5) * 5;
+  const w50 = round5(working * 0.5);
+  const w70 = round5(working * 0.7);
+  if (w50 <= 0 || w70 <= 0) return "";
+  return `Warmup: 5 @ ${w50} \u00b7 3 @ ${w70}`;
+}
+
+if (typeof window !== "undefined") {
+  window._computeWarmupText = _computeWarmupText;
+}
+
 function _formatWeightWithDbHint(weightStr, exerciseName, opts) {
   if (!weightStr) return weightStr;
   const str = String(weightStr);
@@ -2896,7 +2952,14 @@ function buildExerciseTableHTML(exercises, opts) {
         }
         rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(repsDisplay)}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate })||"—")}</td></tr>`;
       } else {
-        rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(String(e.sets||"—"))}</td><td>${escHtml(_formatRepsWithSide(e.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate, reps: e.reps })||"—")}</td></tr>`;
+        const _weightCell = _normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate, reps: e.reps }) || "—";
+        rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(String(e.sets||"—"))}</td><td>${escHtml(_formatRepsWithSide(e.reps, e.name))}</td><td>${escHtml(_weightCell)}</td></tr>`;
+        // BUGFIX 04-27 §F4: descriptive warmup row for compound lifts.
+        // Muted secondary line below the working set; not loggable.
+        const _warmup = _computeWarmupText(e.name, _weightCell);
+        if (_warmup) {
+          rows += `<tr class="warmup-hint-row"><td colspan="4" class="warmup-hint-cell">${escHtml(_warmup)}</td></tr>`;
+        }
       }
       if (e.setDetails && e.setDetails.length) {
         e.setDetails.forEach((sd, si) => {

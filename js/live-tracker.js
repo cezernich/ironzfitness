@@ -694,6 +694,10 @@ function _buildLiveSingleExerciseCard(ei) {
   const repsWithSide = U ? U.formatRepsLabel(ex.reps || "", ex.name) : (ex.reps || "");
   const perLabel = U && isUni ? U._perLabel(ex.name) : "";
 
+  // BUGFIX 04-27 §F4: descriptive warmup line for compound lifts.
+  const _warmupHint = (typeof window !== "undefined" && typeof window._computeWarmupText === "function")
+    ? window._computeWarmupText(ex.name, ex.weight)
+    : "";
   return `
     <div class="live-exercise${allDone ? " live-exercise--done" : ""}${ei === t.currentExercise ? " live-exercise--active" : ""}${isUni ? " live-exercise--unilateral" : ""}" id="live-ex-${ei}">
       <div class="live-exercise-header" onclick="_toggleLiveExercise(${ei})">
@@ -702,6 +706,7 @@ function _buildLiveSingleExerciseCard(ei) {
         ${allDone ? '<span class="live-done-check">&#10003;</span>' : ""}
         ${!allDone ? `<button class="live-swap-btn" onclick="_swapLiveExercise(${ei})" title="Swap exercise">&#8644;</button>` : ""}
       </div>
+      ${_warmupHint ? `<div class="live-warmup-hint">${_escLiveHtml(_warmupHint)}</div>` : ""}
       <div class="live-sets-grid" id="live-sets-${ei}">
         <div class="live-sets-header">
           <span>Set</span>
