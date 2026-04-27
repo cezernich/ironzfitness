@@ -12055,58 +12055,61 @@ input.completion-ex-name:focus {
   font-style: italic;
 }
 
-/* Confetti celebration — BUGFIX 04-27 §F6.
-   Pointer-events:none so taps on the Finish button still land. Overlay
-   sits above content but below the modal layer (z 1000-2000 range). */
-.live-confetti-overlay {
+/* Lightning-bolt celebration — BUGFIX 04-27 §F6.
+   Same polygon path as the splash screen / auth logo / header so the
+   strike reads as "IronZ stamp" not "generic celebration." Pointer-
+   events:none so taps on Finish still land. Overlay sits above content
+   but below the modal layer (z-index 1500). */
+.live-celebration-overlay {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 1500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
 }
-.live-confetti-piece {
-  position: absolute;
-  top: -20px;
-  width: 8px;
-  height: 14px;
-  border-radius: 2px;
+
+/* Bolt strikes in: scales up, fill rises from the bottom of the path
+   (matching the splash motif), then scales back down + fades. */
+.live-celebration-bolt {
+  display: block;
   opacity: 0;
-  animation: live-confetti-fall 1.5s ease-out forwards;
-  transform-origin: center;
+  transform: scale(0.4);
+  filter: drop-shadow(0 0 0 var(--color-accent));
+  animation: live-bolt-strike 1.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
-@keyframes live-confetti-fall {
-  0% {
-    transform: translate(0, 0) rotate(var(--cf-rot, 0deg));
-    opacity: 0;
-  }
-  10% { opacity: 1; }
-  100% {
-    transform: translate(var(--cf-drift, 0px), 100vh) rotate(calc(var(--cf-rot, 0deg) + 720deg));
-    opacity: 0;
-  }
+.live-celebration-bolt-fill {
+  animation: live-bolt-fill 0.45s ease-out 0.1s forwards;
 }
-.live-confetti-badge {
+@keyframes live-bolt-fill {
+  from { y: 24; height: 0; }
+  to   { y: 0;  height: 24; }
+}
+@keyframes live-bolt-strike {
+  0%   { opacity: 0; transform: scale(0.4); filter: drop-shadow(0 0 0 var(--color-accent)); }
+  18%  { opacity: 1; transform: scale(1.18); filter: drop-shadow(0 0 24px var(--color-accent)); }
+  35%  { transform: scale(1); filter: drop-shadow(0 0 16px var(--color-accent)); }
+  75%  { opacity: 1; filter: drop-shadow(0 0 12px var(--color-accent)); }
+  100% { opacity: 0; transform: scale(1.05); filter: drop-shadow(0 0 0 var(--color-accent)); }
+}
+
+/* Radial energy ring expanding from the strike point — adds the "impact"
+   read without extra particles. */
+.live-celebration-pulse {
   position: absolute;
-  top: 28%;
-  left: 50%;
-  transform: translateX(-50%) scale(0.85);
-  padding: 10px 20px;
-  background: var(--color-success, #10b981);
-  color: #fff;
-  border-radius: 999px;
-  font-weight: 700;
-  font-size: 0.95rem;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 3px solid var(--color-accent);
   opacity: 0;
-  animation: live-confetti-badge 1.5s ease-out forwards;
+  animation: live-bolt-pulse 1.1s cubic-bezier(0.22, 1, 0.36, 1) 0.05s forwards;
 }
-@keyframes live-confetti-badge {
-  0%   { opacity: 0; transform: translateX(-50%) scale(0.7); }
-  20%  { opacity: 1; transform: translateX(-50%) scale(1.05); }
-  35%  { transform: translateX(-50%) scale(1); }
-  85%  { opacity: 1; }
-  100% { opacity: 0; transform: translateX(-50%) scale(1); }
+@keyframes live-bolt-pulse {
+  0%   { opacity: 0.7; transform: scale(0.4); border-width: 4px; }
+  60%  { opacity: 0.5; }
+  100% { opacity: 0; transform: scale(3.2); border-width: 1px; }
 }
 .live-done-check {
   color: var(--color-success);
