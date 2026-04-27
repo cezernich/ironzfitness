@@ -4592,18 +4592,46 @@
   //   [{ name, sets, reps, weight }, ...]
   // Returns null when ExerciseDB isn't loaded OR when no slot can find a
   // matching exercise, so callers fall back to the legacy template.
+  // BUGFIX 04-27 §3: see session-assembler.js for the canonical version of
+  // this helper. This local copy keeps onboarding-v2 self-contained so the
+  // 3-day exclusion fires regardless of which generator path runs.
+  function _recentlyDoneExerciseIds() {
+    const E = (typeof window !== "undefined" && window.ExerciseDB) || null;
+    if (!E || typeof localStorage === "undefined") return [];
+    let workoutsArr = [];
+    try { workoutsArr = JSON.parse(localStorage.getItem("workouts") || "[]") || []; } catch { return []; }
+    if (!Array.isArray(workoutsArr) || !workoutsArr.length) return [];
+    const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
+    const ids = new Set();
+    for (const w of workoutsArr) {
+      const dateStr = w.date || w.timestamp;
+      if (!dateStr) continue;
+      const t = new Date(dateStr).getTime();
+      if (!isFinite(t) || t < cutoff) continue;
+      const exs = Array.isArray(w.exercises) ? w.exercises : [];
+      for (const ex of exs) {
+        if (!ex || !ex.name) continue;
+        const dbEx = E.getByName(ex.name);
+        if (dbEx && dbEx.id) ids.add(dbEx.id);
+      }
+    }
+    return Array.from(ids);
+  }
+
   function _fillSlotTemplate(focus, userEquip) {
     const tpl = _SLOT_TEMPLATES[focus];
     const E = (typeof window !== "undefined" && window.ExerciseDB) || null;
     if (!tpl || !E) return null;
     const pickedByRole = {};
     const out = [];
+    const recentIds = _recentlyDoneExerciseIds();
     for (const slot of tpl) {
       const filters = {
         ...(slot.pattern       ? { pattern: slot.pattern }             : {}),
         ...(slot.tier          ? { tier: slot.tier }                   : {}),
         ...(slot.specificGoal  ? { specificGoal: slot.specificGoal }   : {}),
         ...(Array.isArray(userEquip) && userEquip.length ? { equipment: userEquip } : {}),
+        ...(recentIds.length ? { excludeIds: recentIds } : {}),
       };
       const diverseFrom = (slot.diverseFrom || [])
         .map(role => pickedByRole[role])
@@ -5100,10 +5128,12 @@
         quads: "quads", hamstrings: "hamstrings", glutes: "glutes",
         calves: "calves", core: "core", fullbody: "full-body",
       };
+      const recentIds = _recentlyDoneExerciseIds();
       for (const m of muscles) {
         const cat = muscleMap[m] || m;
         const filters = { muscle: cat };
         if (equip) filters.equipment = equip;
+        if (recentIds.length) filters.excludeIds = recentIds;
         const picked = E.pick(filters, 2, { diverseFrom: out });
         for (const ex of picked) {
           if (seen.has(ex.name) || out.length >= 6) continue;

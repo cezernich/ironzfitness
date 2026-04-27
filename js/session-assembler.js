@@ -1335,17 +1335,58 @@
 
   // ── Exercise selection ───────────────────────────────────────────────────
 
+  // BUGFIX 04-27 §3: how recently is "too recent"? Per philosophy, two
+  // heavy compound sessions hitting the same lift inside 48h is poor
+  // recovery. We use a 3-day window so a Monday plan respects what the
+  // user did Friday/Saturday/Sunday but doesn't penalise a Tuesday lift
+  // that happened the prior week.
+  const RECENT_LIFT_WINDOW_DAYS = 3;
+
   function isExerciseDbAvailable() {
     return typeof window !== 'undefined' && window.ExerciseDB && typeof window.ExerciseDB.pick === 'function';
   }
 
+  // Reads the user's logged workouts (the `workouts` localStorage key —
+  // populated when a session is marked complete) and returns the set of
+  // ExerciseDB ids the user touched in the last RECENT_LIFT_WINDOW_DAYS.
+  // Used to exclude the same compound from being scheduled on a session
+  // less than 48-72h away. Only completed sessions count — a planned-
+  // but-skipped lift shouldn't block today's slot.
+  function _getRecentlyDoneExerciseIds() {
+    if (typeof localStorage === 'undefined') return [];
+    if (!isExerciseDbAvailable()) return [];
+    let workoutsArr = [];
+    try { workoutsArr = JSON.parse(localStorage.getItem('workouts') || '[]') || []; } catch { return []; }
+    if (!Array.isArray(workoutsArr) || !workoutsArr.length) return [];
+    const cutoff = Date.now() - RECENT_LIFT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+    const ids = new Set();
+    for (const w of workoutsArr) {
+      const dateStr = w.date || w.timestamp;
+      if (!dateStr) continue;
+      const t = new Date(dateStr).getTime();
+      if (!isFinite(t) || t < cutoff) continue;
+      const exs = Array.isArray(w.exercises) ? w.exercises : [];
+      for (const ex of exs) {
+        if (!ex || !ex.name) continue;
+        const dbEx = window.ExerciseDB.getByName(ex.name);
+        if (dbEx && dbEx.id) ids.add(dbEx.id);
+      }
+    }
+    return Array.from(ids);
+  }
+
   function pickSlot(slot, userEquip, picked) {
     if (!isExerciseDbAvailable()) return null;
+    // BUGFIX 04-27 §3: exclude lifts the user already completed in the
+    // last 3 days so Monday's Push Day doesn't reprise Saturday's OHP.
+    // If pickSlot returns null because every match was recent, the
+    // caller's `if (!ex) continue` drops the slot — no forced duplicate.
+    const recentIds = _getRecentlyDoneExerciseIds();
     const filters = {
       pattern: slot.pattern,
       tier: slot.tier,
       equipment: userEquip && userEquip.length ? userEquip : undefined,
-      excludeIds: picked.map(p => p.id),
+      excludeIds: [...picked.map(p => p.id), ...recentIds],
     };
     if (slot.specificGoal) filters.specificGoal = slot.specificGoal;
     const opts = {};
