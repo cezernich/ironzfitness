@@ -852,15 +852,15 @@
             <span class="qe-date-label">Log a Meal</span>
             <button class="qe-close-btn" onclick="closeManualMealLog()">&#10005;</button>
           </div>
-          <div style="padding:0 16px 16px">
+          <div class="manual-meal-body">
             <div class="form-row">
               <label for="meal-date">Date</label>
-              <input type="date" id="meal-date" />
+              <input type="date" id="meal-date" class="meal-input" />
             </div>
 
             <div class="form-row">
               <label for="meal-name">Food / Meal Name</label>
-              <input type="text" id="meal-name" placeholder="e.g. Chipotle bowl with chicken, rice, beans, cheese" />
+              <input type="text" id="meal-name" class="meal-input" placeholder="e.g. Chipotle bowl with chicken, rice, beans, cheese" />
             </div>
 
             <button type="button" class="btn-estimate-ai" id="btn-estimate-meal" onclick="estimateMealWithAI()">
@@ -872,23 +872,23 @@
             <div class="form-grid">
               <div class="form-row">
                 <label for="meal-calories">Calories</label>
-                <input type="number" id="meal-calories" placeholder="e.g. 450" min="0" />
+                <input type="number" id="meal-calories" class="meal-input" placeholder="e.g. 450" min="0" />
               </div>
               <div class="form-row">
                 <label for="meal-protein">Protein (g)</label>
-                <input type="number" id="meal-protein" placeholder="e.g. 40" min="0" />
+                <input type="number" id="meal-protein" class="meal-input" placeholder="e.g. 40" min="0" />
               </div>
               <div class="form-row">
                 <label for="meal-carbs">Carbs (g)</label>
-                <input type="number" id="meal-carbs" placeholder="e.g. 55" min="0" />
+                <input type="number" id="meal-carbs" class="meal-input" placeholder="e.g. 55" min="0" />
               </div>
               <div class="form-row">
                 <label for="meal-fat">Fat (g)</label>
-                <input type="number" id="meal-fat" placeholder="e.g. 12" min="0" />
+                <input type="number" id="meal-fat" class="meal-input" placeholder="e.g. 12" min="0" />
               </div>
             </div>
 
-            <button class="btn-primary" style="width:100%" onclick="saveMealAndClose()">Log Meal</button>
+            <button class="btn-primary manual-meal-save" onclick="saveMealAndClose()">Log Meal</button>
             <p id="meal-save-msg" class="save-msg"></p>
           </div>
         </div>

@@ -7953,6 +7953,35 @@ input.completion-ex-name:focus {
   padding: 6px 0;
 }
 
+/* Manual meal log layout — 16px horizontal padding on the body, plus
+   uniform input rendering so the date input matches the text/number
+   inputs (iOS native date renders slightly differently otherwise) and
+   a clear gap between the Fat field and the Log Meal button. */
+.manual-meal-body {
+  padding: 0 16px 16px;
+}
+.manual-meal-body .meal-input {
+  /* All inputs in this modal use the same height + padding so the
+     iOS date input doesn't render visually wider than the text /
+     number inputs around it. */
+  width: 100%;
+  height: 44px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  text-align: left;
+  -webkit-appearance: none;
+}
+.manual-meal-body input[type="date"].meal-input {
+  /* Restore native picker UI without letting iOS resize the input. */
+  -webkit-appearance: none;
+}
+.manual-meal-save {
+  width: 100%;
+  /* Bug: no breathing room between the last macro field and the
+     Log Meal button. 18px lifts the CTA off the input cleanly. */
+  margin-top: 18px;
+}
+
 /* Birthday picker — three Month/Day/Year selects (Bug 18). Replaces
    <input type="date"> on iOS where the wheel UI required a "tap out
    / tap back in" dance to set Day after Month and Year. */

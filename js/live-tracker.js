@@ -1132,40 +1132,39 @@ function _liveGoToStep(idx) {
 
 // ── Celebrate ────────────────────────────────────────────────────────────────
 
-// BUGFIX 04-27 §F6: hand-rolled confetti. No external dep — a column of
-// 18 absolutely-positioned divs with randomised colour, x-offset, and
-// rotation, animated via the @keyframes `live-confetti-fall` rule in
-// style.css. Auto-removes after 1.6s. Doesn't block input — overlay sits
-// at z-index between the tracker body and the modal layer with
-// pointer-events:none.
+// BUGFIX 04-27 §F6: lightning-bolt strike when the user logs the final
+// set. Uses the same polygon path as the splash screen + auth logo + top-
+// left header (index.html:51-62) so the celebration reads as "obviously
+// IronZ" — a quick brand stamp, not a generic confetti burst. The bolt
+// scales in, fills from bottom (matching the splash fill motif), flashes
+// a glow ring, then fades. ~1.5s, pointer-events:none so the Finish
+// button is still tappable.
 function _celebrateWorkoutComplete() {
-  // Guard against double-injection if the user un-logs and re-logs.
-  if (document.getElementById("live-confetti-overlay")) return;
+  if (document.getElementById("live-celebration-overlay")) return;
 
   const overlay = document.createElement("div");
-  overlay.id = "live-confetti-overlay";
-  overlay.className = "live-confetti-overlay";
-
-  const COLORS = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#a855f7", "#ec4899"];
-  const PIECE_COUNT = 24;
-  let html = "";
-  for (let i = 0; i < PIECE_COUNT; i++) {
-    const left = Math.random() * 100;
-    const delay = Math.random() * 0.25;
-    const rot = Math.random() * 360;
-    const drift = (Math.random() * 60 - 30).toFixed(1);
-    const color = COLORS[i % COLORS.length];
-    html += `<div class="live-confetti-piece" style="left:${left.toFixed(1)}%;background:${color};animation-delay:${delay.toFixed(2)}s;--cf-rot:${rot}deg;--cf-drift:${drift}px"></div>`;
-  }
-  // Success badge — small chip, fades with the confetti so the screen
-  // doesn't end up cluttered after the animation completes.
-  html += `<div class="live-confetti-badge">Workout complete!</div>`;
-  overlay.innerHTML = html;
+  overlay.id = "live-celebration-overlay";
+  overlay.className = "live-celebration-overlay";
+  // Same SVG path as .splash-bolt and the header logo. The clipPath id is
+  // namespaced (live-bolt-clip) so it doesn't collide with the splash
+  // screen's bolt-fill-clip if both ever render concurrently.
+  overlay.innerHTML = `
+    <div class="live-celebration-pulse"></div>
+    <svg class="live-celebration-bolt" viewBox="0 0 24 24" width="120" height="120" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <clipPath id="live-bolt-clip" clipPathUnits="userSpaceOnUse">
+          <rect x="0" y="24" width="24" height="24" class="live-celebration-bolt-fill"/>
+        </clipPath>
+      </defs>
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"
+        fill="none" stroke="var(--color-accent)" stroke-width="1.5"
+        stroke-linejoin="round" stroke-linecap="round"/>
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"
+        fill="var(--color-accent)" clip-path="url(#live-bolt-clip)"/>
+    </svg>`;
 
   document.body.appendChild(overlay);
-  setTimeout(() => {
-    overlay.remove();
-  }, 1600);
+  setTimeout(() => { overlay.remove(); }, 1600);
 
   if (typeof trackEvent === "function") {
     try { trackEvent("live_workout_celebrated"); } catch {}
