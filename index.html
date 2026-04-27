@@ -3262,14 +3262,16 @@
     </div>
   </div>
 
-  <!-- Barcode Scanner Modal -->
-  <div id="barcode-scanner-modal" class="survey-overlay" style="display:none" onclick="if(event.target===this) closeBarcodeScanner()">
-    <div class="survey-modal" style="max-width:440px">
-      <div class="qe-header">
+  <!-- Barcode Scanner Modal — uses quick-entry-overlay shell so it gets
+       the safe-area + bottom-nav padding fixes (Bug 1/2 commit) and the
+       title is centered cleanly instead of jammed in the corner. -->
+  <div id="barcode-scanner-modal" class="quick-entry-overlay" style="display:none" onclick="if(event.target===this) closeBarcodeScanner()">
+    <div class="quick-entry-modal" style="max-width:440px">
+      <div class="quick-entry-header">
         <span class="qe-date-label">Scan Barcode</span>
         <button class="qe-close-btn" onclick="closeBarcodeScanner()">&#10005;</button>
       </div>
-      <div style="padding:16px">
+      <div style="padding:0 4px 4px">
         <p id="barcode-status" class="hint" style="text-align:center;margin:0 0 12px"></p>
         <div id="barcode-camera-panel">
           <div id="barcode-reader" style="width:100%;border-radius:8px;overflow:hidden"></div>

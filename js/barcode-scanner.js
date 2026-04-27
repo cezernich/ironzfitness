@@ -182,10 +182,27 @@ function _startFallbackScan() {
         Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION,
       ]
     : undefined;
+  // qrbox sized as a percentage of the viewport so it scales with the
+  // modal width — the old fixed 250x150 was too small on iPhone Pro
+  // Max devices and clipped barcodes that visibly fit between the
+  // brackets. Higher fps gives more chances per second to lock onto
+  // a slightly-angled or moving barcode (the user reported scanning
+  // a barcode pointed straight at it that never resolved).
   const config = {
-    fps: 10,
-    qrbox: { width: 250, height: 150 },
-    aspectRatio: 1.5,
+    fps: 15,
+    qrbox: function (viewfinderWidth, viewfinderHeight) {
+      const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+      // 80% width × 50% height — wide rectangle for 1D barcodes.
+      return {
+        width: Math.floor(minEdge * 0.85),
+        height: Math.floor(minEdge * 0.55),
+      };
+    },
+    aspectRatio: 1.333,
+    // experimentalFeatures.useBarCodeDetectorIfSupported was off — turn
+    // it on for a faster path on devices where the native detector
+    // does work. Falls back to ZXing transparently if not available.
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true },
   };
   if (supportedFormats) config.formatsToSupport = supportedFormats;
   html5.start(
