@@ -58,6 +58,124 @@ function getProfileAge() {
   } catch { return 0; }
 }
 
+// ── Body scroll lock — freezes the page under any open modal ────────────────
+//
+// Without this, every modal (Log a Meal, Edit Workout, photo log, the
+// build-plan overlays, etc.) lets the user scroll the page underneath
+// because iOS treats the body's overflow chain as the scrollable
+// element. The "modal floats while page slides" effect is jarring.
+//
+// Strategy:
+//   - MutationObserver watches every known overlay element for class
+//     changes. When any overlay enters its open state (.is-open or
+//     .visible depending on the convention), we count up. When it
+//     leaves the open state we count down.
+//   - When the count is > 0 we set body { position: fixed; top:
+//     -scrollY }. iOS's touch-scroll chain hits the fixed body and
+//     stops there; the overlay's own scroll container still scrolls
+//     internally.
+//   - When the count returns to 0 we unlock and restore the saved
+//     scroll position.
+//
+// One gotcha on iOS: setting position: fixed snaps scrollTop to 0,
+// so we have to remember it via -top:Ypx and restore via
+// window.scrollTo on unlock. That's the standard "body-scroll-lock"
+// pattern and works in WKWebView.
+(function _wireBodyScrollLock() {
+  if (typeof document === "undefined") return;
+  // Selector → class that signals "open" on that overlay variant.
+  const OVERLAYS = [
+    { sel: ".quick-entry-overlay",         cls: "is-open" },
+    { sel: ".survey-overlay",              cls: "is-open" },
+    { sel: ".live-tracker-overlay",        cls: "visible" },
+    { sel: ".rating-modal-overlay",        cls: "visible" },
+    { sel: ".strava-share-prompt-overlay", cls: "is-open" },
+    { sel: ".swim-builder-overlay",        cls: "is-open" },
+    { sel: ".circuit-modal-overlay",       cls: "is-open" },
+    { sel: ".bp-v2-overlay",               cls: "is-open" },
+    { sel: ".share-action-sheet-overlay",  cls: "is-open" },
+    { sel: ".share-modal-overlay",         cls: "is-open" },
+    { sel: ".share-sheet-overlay",         cls: "is-open" },
+    { sel: ".gear-sheet-overlay",          cls: "is-open" },
+    { sel: ".send-modal-overlay",          cls: "is-open" },
+    { sel: ".premium-upsell-overlay",      cls: "is-open" },
+    { sel: ".move-session-modal-overlay",  cls: "is-open" },
+    { sel: ".sw-modal-overlay",            cls: "is-open" },
+  ];
+  let savedScrollY = 0;
+  let bodyLocked = false;
+
+  function _anyOverlayOpen() {
+    return OVERLAYS.some(o => {
+      const els = document.querySelectorAll(o.sel + "." + o.cls);
+      // .visible needs a display check — live-tracker-overlay starts
+      // hidden via display:none; .visible alone doesn't mean visible.
+      for (const el of els) {
+        const s = el.style;
+        if (s.display === "none") continue;
+        return true;
+      }
+      return false;
+    });
+  }
+
+  function _applyLock() {
+    if (bodyLocked) return;
+    savedScrollY = window.scrollY || window.pageYOffset || 0;
+    const body = document.body;
+    body.style.position = "fixed";
+    body.style.top = `-${savedScrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+    bodyLocked = true;
+  }
+
+  function _releaseLock() {
+    if (!bodyLocked) return;
+    const body = document.body;
+    body.style.position = "";
+    body.style.top = "";
+    body.style.left = "";
+    body.style.right = "";
+    body.style.width = "";
+    body.style.overflow = "";
+    window.scrollTo(0, savedScrollY);
+    bodyLocked = false;
+  }
+
+  function _sync() {
+    if (_anyOverlayOpen()) _applyLock();
+    else _releaseLock();
+  }
+
+  // Single global observer — class/style changes anywhere in the tree
+  // re-trigger _sync (rAF-throttled so the per-mutation cost is bounded
+  // even during heavy re-renders like calendar refreshes).
+  let _syncQueued = false;
+  function _scheduleSync() {
+    if (_syncQueued) return;
+    _syncQueued = true;
+    requestAnimationFrame(() => {
+      _syncQueued = false;
+      _sync();
+    });
+  }
+  const obs = new MutationObserver(_scheduleSync);
+  obs.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class", "style"],
+    subtree: true,
+  });
+  // Initial pass on load in case a modal is already open at script init.
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", _sync);
+  } else {
+    _sync();
+  }
+})();
+
 // ── PWA: Unregister stale service worker ────────────────────────────────────
 //
 // The old PWA cache was trapping users on stale JS across deploys — every
