@@ -1,6 +1,26 @@
 // hydration.js — Water tracking with visual bottle fill and smart daily targets
 
 /* =====================================================================
+   SAFETY CAPS
+   =====================================================================
+   BUGFIX 04-27 §F8: hydration target gets soft + hard caps so race-day or
+   sauna stacking can't recommend dangerous amounts.
+   - Soft cap (200 oz / ~5.9 L): hit when the day's combined target
+     crosses what most athletes can safely drink without electrolyte
+     replacement. We surface a note nudging sodium pairing but leave the
+     target as-is.
+   - Hard cap (300 oz / ~8.9 L): clamp ceiling. Beyond this, dilutional
+     hyponatremia risk is real and the recommendation needs medical
+     guidance — we cap and warn.
+   Rationale (research note in BUGFIX_2026-04-27_round4.md §8): healthy
+   adults handle 3-4 L without concern; endurance athletes with sodium
+   replacement go up to 5 L; >5 L without electrolyte balance starts
+   diluting blood sodium fast.
+*/
+const HYDRATION_SOFT_CAP_OZ = 200;
+const HYDRATION_HARD_CAP_OZ = 300;
+
+/* =====================================================================
    BEVERAGE TYPES & COEFFICIENTS
    ===================================================================== */
 
@@ -384,8 +404,19 @@ function _hydrationResolveDurationMin(w) {
     const n = parseFloat(v);
     return isFinite(n) && n > 0 ? n : 0;
   };
-  // 1. Explicit top-level field
+  // BUGFIX 04-27 §F5: align the duration source with the workout-card
+  // badge by checking the same fields in the same order as
+  // calendar.js _readWorkoutDurationMin: duration → durationMin →
+  // estimated_duration_min. The hydration math previously read 90 min for
+  // a swim that the card displayed as 60 min because session-assembler
+  // sessions store durationMin (not duration) and the workout went on to
+  // hit a stale path further down. Single source of truth.
+  // 1. Explicit top-level field — same as calendar.js card path.
   let d = parseStrMin(w.duration);
+  if (d > 0) return d;
+  d = parseStrMin(w.durationMin);
+  if (d > 0) return d;
+  d = parseStrMin(w.estimated_duration_min);
   if (d > 0) return d;
   // 2. aiSession: either .duration (number) or sum of .intervals[].duration
   if (w.aiSession) {
@@ -715,10 +746,23 @@ function getHydrationBreakdownForDate(dateStr) {
   }
 
   const totalBonus = workoutBonusOz + raceBonusOz + preloadBonusOz + saunaBonus;
+  const rawTotalOz = baseOz + totalBonus;
+  // BUGFIX 04-27 §F8: clamp at HYDRATION_HARD_CAP_OZ. Above the soft cap
+  // we pass through but flag for an electrolyte note.
+  let totalOz = rawTotalOz;
+  let softCapWarning = null;
+  let hardCapWarning = null;
+  if (rawTotalOz >= HYDRATION_HARD_CAP_OZ) {
+    totalOz = HYDRATION_HARD_CAP_OZ;
+    hardCapWarning = `Capped at ${HYDRATION_HARD_CAP_OZ} oz. Higher intake without medical guidance can dilute blood sodium dangerously.`;
+  } else if (rawTotalOz > HYDRATION_SOFT_CAP_OZ) {
+    softCapWarning = "This is a high target — pair every 16–20 oz with electrolytes and don't drink it all at once.";
+  }
   return {
     baseOz,
     bonusOz: totalBonus,
-    totalOz: baseOz + totalBonus,
+    totalOz,
+    rawTotalOz,
     reason,
     race,
     preload,
@@ -727,6 +771,8 @@ function getHydrationBreakdownForDate(dateStr) {
     raceBonusOz,
     preloadBonusOz,
     saunaBonus,
+    softCapWarning,
+    hardCapWarning,
   };
 }
 
@@ -997,6 +1043,13 @@ function renderHydrationContext(breakdown) {
   // (race day > ~2h, or T-1 preload).
   if (breakdown.sodiumGuidance) {
     html += `<span class="hydration-transparency-note hydration-sodium-note">${escHtml(breakdown.sodiumGuidance)}</span>`;
+  }
+
+  // BUGFIX 04-27 §F8: soft/hard cap warnings.
+  if (breakdown.hardCapWarning) {
+    html += `<span class="hydration-transparency-note hydration-cap-warning hydration-cap-warning--hard">${escHtml(breakdown.hardCapWarning)}</span>`;
+  } else if (breakdown.softCapWarning) {
+    html += `<span class="hydration-transparency-note hydration-cap-warning hydration-cap-warning--soft">${escHtml(breakdown.softCapWarning)}</span>`;
   }
 
   el.innerHTML = html;

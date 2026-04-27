@@ -7754,6 +7754,8 @@ input.completion-ex-name:focus {
   padding: 4px 0 2px;
 }
 .hydration-transparency-note .icon { width: 13px; height: 13px; vertical-align: -2px; margin-right: 3px; }
+.hydration-cap-warning--soft { color: var(--color-warning, #c97a00); }
+.hydration-cap-warning--hard { color: var(--color-danger, #b3261e); font-weight: 600; }
 
 /* ===== BARCODE SCANNER ===== */
 
