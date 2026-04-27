@@ -1860,13 +1860,57 @@ function buildStepsList(session, discipline) {
     const repCount = parseInt(step.reps) || 1;
     if (isSwim && repCount > 1) {
       const restPerRep = step.rest;
-      const distLabel = step.distance ? `${step.distance}m` : (typeof step.duration === "number" ? `${_fmtDur(step.duration)}` : `${step.duration}`);
       const paceFromLabel = step.label || "";
       // Try to extract a pace target ("@ 1:29/100m") from step.label so
       // each row repeats the pace target the user is aiming for.
       const paceMatch = paceFromLabel.match(/@\s*([0-9:]+\/100m)/);
       const paceStr = paceMatch ? `@ ${paceMatch[1]}` : (zoneLabel ? `@ ${zoneLabel}` : "");
       const cleanedLabel = paceFromLabel.replace(/^\d+\s*[×x]\s*[^—]+—\s*/i, "").trim();
+      // Per-set work time: prefer distance-derived (from the user's CSS
+      // pace) over the template's coarse `duration`. The template's
+      // duration is a static rule-of-thumb (~4 min for 200m); a faster
+      // swimmer does 200m at 1:30/100m in exactly 3 min, not 4. Bug
+      // surfaced 2026-04-26: card showed "4 min" for 200m at 1:29-1:31
+      // pace.
+      const distMatch = paceFromLabel.match(/(\d+)\s*m\b/i);
+      const repDistanceM = step.distance || (distMatch ? parseInt(distMatch[1], 10) : 0);
+      // Pace per 100m derived from the pace target on the label. Falls
+      // back to user CSS + zone offset, then to the template duration.
+      let perRepSec = 0;
+      if (paceMatch && repDistanceM > 0) {
+        const pm = paceMatch[1].match(/(\d+):(\d+)/);
+        if (pm) {
+          const secPer100 = parseInt(pm[1], 10) * 60 + parseInt(pm[2], 10);
+          perRepSec = Math.round((repDistanceM / 100) * secPer100);
+        }
+      }
+      if (!perRepSec && repDistanceM > 0) {
+        try {
+          const tz = JSON.parse(localStorage.getItem("trainingZones") || "{}");
+          const sw = tz.swimming || {};
+          let cssSec = null;
+          if (typeof sw.css === "number") cssSec = sw.css;
+          else if (typeof sw.cssPace === "number") cssSec = sw.cssPace;
+          else if (typeof sw.tPaceSec === "number") cssSec = sw.tPaceSec;
+          else if (typeof sw.css === "string") {
+            const m = sw.css.match(/(\d+):(\d+)/);
+            if (m) cssSec = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+          }
+          if (cssSec) {
+            // Zone offsets from CSS — same table _distToMin uses.
+            const cssOffset = { 1: 18, 2: 12, 3: 5, 4: 0, 5: -3, 6: -6 };
+            const off = cssOffset[step.zone] != null ? cssOffset[step.zone] : 0;
+            perRepSec = Math.round((repDistanceM / 100) * (cssSec + off));
+          }
+        } catch {}
+      }
+      // Final fallback — the template's static duration.
+      if (!perRepSec && typeof step.duration === "number" && step.duration > 0) {
+        perRepSec = step.duration * 60;
+      }
+      const distLabel = perRepSec > 0
+        ? _fmtDur(perRepSec / 60)
+        : (step.distance ? `${step.distance}m` : (typeof step.duration === "number" ? `${_fmtDur(step.duration)}` : `${step.duration}`));
       let html = "";
       for (let r = 0; r < repCount; r++) {
         const isLast = r === repCount - 1;
