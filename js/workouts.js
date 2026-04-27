@@ -2766,8 +2766,12 @@ function _formatWeightWithDbHint(weightStr, exerciseName, opts) {
   const str = String(weightStr);
   // "BW" / "Bodyweight" stays as-is — can't halve that.
   if (/^(bw|bodyweight)$/i.test(str)) return str;
-  const isEstimate = !!(opts && opts.isEstimate);
-  const _markEst = (s) => isEstimate ? `${s} (est)` : s;
+  // BUGFIX 04-27 §1: every weight in the app is technically derived from
+  // a 1RM calculation — flagging only the bench-fallback ones as "(est)"
+  // creates a false dichotomy. Keep `opts.isEstimate` flowing through the
+  // data layer (analytics, future "PR vs derived" surfacing) but render
+  // every weight identically.
+  const _markEst = (s) => s;
 
   // Unilateral exercises (Bulgarian split squat, lunges, single-leg RDL)
   // need the loading method shown so 175 lbs isn't confused for a single

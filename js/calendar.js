@@ -3125,11 +3125,30 @@ function _parseDurMin(str) {
   return /sec/.test(s) ? v / 60 : v;
 }
 
+// BUGFIX 04-27 §2: prefer the duration the generator stamped on the
+// workout (matches the card badge). Falls back to the exercises-based
+// re-estimate so legacy/imported entries without a duration still
+// contribute. Three field names cover every generator path that has
+// produced strength sessions historically.
+function _readWorkoutDurationMin(w) {
+  if (!w) return 0;
+  const candidates = [w.duration, w.durationMin, w.estimated_duration_min];
+  for (const c of candidates) {
+    if (c == null || c === "") continue;
+    const v = _parseDurMin(String(c));
+    if (v > 0) return v;
+  }
+  return 0;
+}
+
 // Estimate minutes for a weightlifting session from its exercises array.
-// Calibrated to match real-world session times: a typical 4-exercise push
-// day with 3–4 working sets runs 40–55 min including warmup sets, walking
-// to stations, and between-set recovery. The old heuristic of 3 min per
-// exercise reported 12 min for the same workout.
+// LEGACY FALLBACK ONLY — prefer w.duration / w.durationMin /
+// w.estimated_duration_min stamped by the generator (see
+// _readWorkoutDurationMin). Calibrated to match real-world session
+// times: a typical 4-exercise push day with 3–4 working sets runs
+// 40–55 min including warmup sets, walking to stations, and between-set
+// recovery. The old heuristic of 3 min per exercise reported 12 min for
+// the same workout.
 //
 // Per working set we budget 45s under the bar + the prescribed rest.
 // We add 1.5 "warmup" sets per exercise (the ramp to working weight) and
@@ -3242,10 +3261,15 @@ function getDayTotals(dateStr) {
     const actual = _parseDurMin(String(_getCompletionDuration(`session-sw-${w.id}`) || ""));
     if (actual > 0) { totalMin += actual; return; }
 
-    if (w.duration) {
-      const explicit = _parseDurMin(String(w.duration));
-      if (explicit > 0) { totalMin += explicit; return; }
-    }
+    // BUGFIX 04-27 §2: prefer the duration the workout-card badge uses so
+    // the day total reconciles with the literal sum of card minutes. Three
+    // possible field names depending on which generator produced the
+    // session (legacy `duration`, session-assembler `durationMin`, the
+    // strength generator's `estimated_duration_min`). Re-estimating from
+    // sets×rest produced ~30 min of phantom duration vs the card.
+    const explicitMin = _readWorkoutDurationMin(w);
+    if (explicitMin > 0) { totalMin += explicitMin; return; }
+
     if (w.discipline && w.load) {
       const session = (typeof getSessionTemplate === "function"
                         ? getSessionTemplate(w.discipline, w.load, w.weekNumber, w.date)
@@ -3299,12 +3323,16 @@ function getDayTotals(dateStr) {
       }
     } else if (w.generatedSession?.duration) {
       sessionMin = _parseDurMin(w.generatedSession.duration);
-    } else if (w.duration) {
-      sessionMin = _parseDurMin(String(w.duration));
-    } else if (Array.isArray(w.exercises) && w.exercises.length > 0) {
-      // Weightlifting / bodyweight logged with no explicit duration —
-      // estimate from the exercise list instead of reporting 0.
-      sessionMin = _estimateStrengthSessionMin(w.exercises);
+    } else {
+      // BUGFIX 04-27 §2: same source-unifying check as scheduledWorkouts.
+      const explicit = _readWorkoutDurationMin(w);
+      if (explicit > 0) {
+        sessionMin = explicit;
+      } else if (Array.isArray(w.exercises) && w.exercises.length > 0) {
+        // Weightlifting / bodyweight logged with no explicit duration —
+        // estimate from the exercise list instead of reporting 0.
+        sessionMin = _estimateStrengthSessionMin(w.exercises);
+      }
     }
 
     totalMin += (completionDur > 0 ? completionDur : sessionMin);
