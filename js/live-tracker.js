@@ -1493,6 +1493,18 @@ async function _commitLiveWorkout(logAll) {
   const dateStr = t.dateStr;
   const sessionId = t.sessionId;
 
+  // BUGFIX 04-27 §F6: every commit path runs the celebration if it
+  // hasn't already played from _logLiveSet. Covers cardio / circuit /
+  // Hyrox / endurance Finish — those paths don't go through Log-set so
+  // the in-line trigger never fired for them. The overlay is fixed +
+  // pointer-events:none so it survives _closeLiveTracker tearing down
+  // the live view; the bolt animates over the calendar as the user
+  // exits.
+  if (!t._celebrated) {
+    t._celebrated = true;
+    _celebrateWorkoutComplete();
+  }
+
   // Tear down the live overlay BEFORE the shared finalize runs so
   // renderCalendar / renderDayDetail can rebuild the card cleanly.
   _closeLiveTracker();

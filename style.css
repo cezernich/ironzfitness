@@ -12086,7 +12086,9 @@ input.completion-ex-name:focus {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 1500;
+  /* Live-tracker overlay is z-index 10000 — celebration must sit above it
+     so the bolt is visible while the user is still on the tracker view. */
+  z-index: 11000;
   display: flex;
   align-items: center;
   justify-content: center;
