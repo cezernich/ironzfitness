@@ -830,14 +830,18 @@
       </div>
 
       <!-- Quick Add Meal Modal -->
-      <div id="quick-add-meal-modal" class="survey-overlay" onclick="if(event.target===this) closeQuickAddMeal()">
+      <div id="quick-add-meal-modal" class="quick-entry-overlay" onclick="if(event.target===this) closeQuickAddMeal()">
         <div class="quick-entry-modal" style="max-width:400px">
           <div class="quick-entry-header">
             <span class="qe-date-label">Quick Add</span>
             <button class="qe-close-btn" onclick="closeQuickAddMeal()">&#10005;</button>
           </div>
           <p class="hint" style="padding:0 16px">Tap a recent meal to log it again.</p>
-          <div id="quick-add-meal-list" style="padding:8px 16px 16px"></div>
+          <div style="padding:0 16px 8px">
+            <input type="search" id="quick-add-meal-search" class="quick-add-meal-search"
+              placeholder="Search recent meals..." oninput="filterQuickAddMeals(this.value)" autocomplete="off" />
+          </div>
+          <div id="quick-add-meal-list" class="quick-add-meal-scroll"></div>
         </div>
       </div>
 

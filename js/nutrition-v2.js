@@ -394,7 +394,10 @@ async function estimateMealWithAI() {
 }
 
 function openQuickAddMeal() {
-  // Show recent meals as quick-add buttons
+  // Pull every distinct meal the user has logged. The modal scrolls so a
+  // long history is fine — searchable too. Cap at 50 to keep the DOM
+  // small for users with thousands of meals; the search box can find
+  // older entries by name match.
   const meals = loadMeals();
   const recent = [];
   const seen = new Set();
@@ -404,7 +407,7 @@ function openQuickAddMeal() {
       seen.add(key);
       recent.push(m);
     }
-    if (recent.length >= 10) break;
+    if (recent.length >= 50) break;
   }
 
   if (recent.length === 0) {
@@ -416,17 +419,41 @@ function openQuickAddMeal() {
   if (!modal) return;
   modal.classList.add("is-open");
 
+  // Reset search box every time the modal opens.
+  const searchInput = document.getElementById("quick-add-meal-search");
+  if (searchInput) searchInput.value = "";
+
+  // Store full list for filtering + safe selection.
+  window._quickAddMeals = recent;
+  _renderQuickAddMealList(recent);
+}
+
+function _renderQuickAddMealList(meals) {
   const list = document.getElementById("quick-add-meal-list");
-  if (list) {
-    list.innerHTML = recent.map((m, i) => `
+  if (!list) return;
+  if (!meals.length) {
+    list.innerHTML = `<p class="hint" style="padding:12px 4px">No meals match.</p>`;
+    return;
+  }
+  // The button uses the meal's index in the FULL stored list so the
+  // selection lookup remains stable even when the rendered list is
+  // filtered.
+  list.innerHTML = meals.map(m => {
+    const i = window._quickAddMeals.indexOf(m);
+    return `
       <button class="quick-add-meal-item" onclick="quickAddMealByIndex(${i})">
         <span class="quick-add-meal-name">${_nutEsc(m.name)}</span>
         <span class="quick-add-meal-macros">${Math.round(m.calories)} cal | P:${Math.round(m.protein)}g C:${Math.round(m.carbs)}g F:${Math.round(m.fat)}g</span>
-      </button>
-    `).join("");
-    // Store reference for safe selection
-    window._quickAddMeals = recent;
-  }
+      </button>`;
+  }).join("");
+}
+
+function filterQuickAddMeals(query) {
+  const all = window._quickAddMeals || [];
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) { _renderQuickAddMealList(all); return; }
+  const filtered = all.filter(m => m.name.toLowerCase().includes(q));
+  _renderQuickAddMealList(filtered);
 }
 
 function closeQuickAddMeal() {
