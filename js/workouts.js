@@ -2611,6 +2611,94 @@ function _roundWeight(val) {
   return Math.round(val / 5) * 5 + " lbs";
 }
 
+/**
+ * Compute an accessory's working weight from the user's compound PRs.
+ * Used by _normalizeWeightDisplay when the exercise has no stored weight
+ * — e.g. assembler-built sessions arrive without a weight, so OHP /
+ * Close-Grip Bench / Tricep Kickback / Face Pull would otherwise render
+ * "Moderate". Returns a string like "165 lbs" or null when the user has
+ * no relevant PRs to derive from.
+ */
+function _deriveAccessoryWeight(name, reps) {
+  if (!name) return null;
+  let zones;
+  try { zones = JSON.parse(localStorage.getItem("trainingZones") || "{}") || {}; } catch { return null; }
+  const refs = zones.strength;
+  if (!refs) return null;
+
+  function to1RM(ref) {
+    if (!ref || !ref.weight) return null;
+    const wgt = parseFloat(ref.weight);
+    if (!wgt || isNaN(wgt)) return null;
+    const t = (ref.type || "1rm").toLowerCase();
+    if (t === "1rm") return wgt;
+    if (t === "3rm") return wgt * 1.08;
+    if (t === "5rm") return wgt * 1.15;
+    if (t === "10rm") return wgt * 1.33;
+    return wgt;
+  }
+
+  const n = String(name).toLowerCase();
+  let key = null;
+  let factor = 1.0;
+
+  // Direct compound — uses its own ref at factor 1.0.
+  if (/\bbench\s*press\b/.test(n) && !/close[- ]?grip|incline|decline|dumbbell|\bdb\b/.test(n)) key = "bench";
+  else if (/\b(?:back\s*)?squat\b/.test(n) && !/front|goblet|split|pistol|box|hack|bulgarian/.test(n)) key = "squat";
+  else if (/\bdeadlift\b/.test(n) && !/romanian|rdl|stiff|sumo|trap/.test(n)) key = "deadlift";
+  else if (/\b(?:overhead|shoulder|military)\s*press\b|\bohp\b/.test(n) && !/dumbbell|landmine|seated/.test(n)) key = "ohp";
+  else if (/\brow\b/.test(n) && !/upright/.test(n)) key = "row";
+
+  // Accessory mappings — derive from a parent compound with a factor.
+  if (!key) {
+    if (/close[- ]?grip\s*bench/.test(n))                 { key = "bench";    factor = 0.85; }
+    else if (/incline.*(bench|press)/.test(n))             { key = "bench";    factor = 0.85; }
+    else if (/decline.*(bench|press)/.test(n))             { key = "bench";    factor = 0.95; }
+    else if (/dumbbell.*bench|\bdb\s*bench/.test(n))       { key = "bench";    factor = 0.80; }
+    else if (/dumbbell.*(overhead|shoulder)\s*press/.test(n)) { key = "ohp";   factor = 0.80; }
+    else if (/landmine|seated\s*shoulder/.test(n))         { key = "ohp";      factor = 0.85; }
+    else if (/tricep\s*kickback/.test(n))                  { key = "ohp";      factor = 0.15; }
+    else if (/tricep\s*pushdown|tricep\s*extension|skull\s*crusher|overhead\s*tricep/.test(n)) { key = "ohp"; factor = 0.30; }
+    else if (/face\s*pull/.test(n))                        { key = "row";      factor = 0.30; }
+    else if (/lateral\s*raise|side\s*raise/.test(n))       { key = "ohp";      factor = 0.20; }
+    else if (/front\s*raise/.test(n))                      { key = "ohp";      factor = 0.25; }
+    else if (/(rear[- ]?delt|reverse).*fly/.test(n))       { key = "ohp";      factor = 0.20; }
+    else if (/curl\b/.test(n) && !/leg\s*curl/.test(n))    { key = "row";      factor = 0.30; }
+    else if (/shrug/.test(n))                              { key = "deadlift"; factor = 0.50; }
+    else if (/hack\s*squat/.test(n))                       { key = "squat";    factor = 0.80; }
+    else if (/leg\s*press/.test(n))                        { key = "squat";    factor = 1.30; }
+    else if (/romanian|\brdl\b|stiff[- ]?leg/.test(n))     { key = "deadlift"; factor = 0.70; }
+    else if (/leg\s*curl|hamstring\s*curl/.test(n))        { key = "deadlift"; factor = 0.20; }
+    else if (/leg\s*extension|quad\s*extension/.test(n))   { key = "squat";    factor = 0.30; }
+    else if (/calf\s*raise/.test(n))                       { key = "squat";    factor = 0.35; }
+  }
+  if (!key) return null;
+
+  // Resolve 1RM with a bench-fallback chain when the user only set one PR.
+  let oneRM = to1RM(refs[key]);
+  if (!oneRM) {
+    const benchOneRM = to1RM(refs.bench);
+    if (!benchOneRM) return null;
+    const cross = key === "ohp" ? 0.65 : key === "row" ? 0.85 : key === "deadlift" ? 1.40 : key === "squat" ? 1.30 : 1.0;
+    oneRM = benchOneRM * cross;
+  }
+
+  // Use upper end of the rep range (matches _formatRepsWithSide flatten).
+  const repsStr = String(reps == null ? "10" : reps);
+  const rm = repsStr.match(/(\d+)(?:\s*[-\u2013]\s*(\d+))?/);
+  const r = rm ? parseInt(rm[2] || rm[1], 10) : 10;
+  const pct = (1 / (1 + r / 30)) * 0.95;
+  const targetWeight = Math.round((oneRM * factor * pct) / 5) * 5;
+  if (targetWeight <= 0) return null;
+
+  const isDumbbell = /dumbbell|\bdb\b|2[×x]/i.test(name);
+  if (isDumbbell) {
+    const perHand = Math.round(targetWeight / 2 / 5) * 5;
+    return perHand > 0 ? `2x${perHand} lbs` : null;
+  }
+  return `${targetWeight} lbs`;
+}
+
 function _normalizeWeightDisplay(raw, exerciseName, opts) {
   const w = String(raw || "").trim();
   // Bug 11 last-resort: never render a blank Weight cell. Use the
@@ -2618,10 +2706,22 @@ function _normalizeWeightDisplay(raw, exerciseName, opts) {
   // sees a sensible default instead of an empty column. Renders as
   // "Log your first set to set a baseline" via the title attribute
   // when the cell falls back to the dash.
-  if (!w || w === "—") {
+  if (!w || w === "—" || /^moderate$/i.test(w) || /^light$/i.test(w) || /^heavy$/i.test(w)) {
     const n = String(exerciseName || "").toLowerCase();
     if (/\b(pull[- ]?up|chin[- ]?up|push[- ]?up|dip|burpee|plank|hollow|bird[- ]?dog|superman|glute bridge|hip thrust|step[- ]?up|sit[- ]?up|crunch|mountain climber|jumping jack|air squat|lunge)\b/.test(n)) return "BW";
-    return "Moderate";
+    // Try accessory derivation from trainingZones.strength refs (or a
+    // bench-fallback chain) before giving up to the "Moderate" string.
+    // Only fires when the caller threaded e.reps through opts.
+    const derived = _deriveAccessoryWeight(exerciseName, opts && opts.reps);
+    if (derived) {
+      // Dumbbell prefix "2xN lbs" — keep the per-hand notation; let the
+      // db-hint formatter add the "DB each hand" hint where relevant.
+      if (/^2[×x]/.test(derived)) {
+        return _formatWeightWithDbHint(derived, exerciseName, { ...opts, isEstimate: true });
+      }
+      return _formatWeightWithDbHint(_roundWeight(parseFloat(derived)), exerciseName, { ...opts, isEstimate: true });
+    }
+    return w && /^(moderate|light|heavy)$/i.test(w) ? w : "Moderate";
   }
   if (/bodyweight/i.test(w)) return "BW";
   if (/bar\s*\+\s*([\d.]+)/i.test(w)) {
@@ -2652,7 +2752,8 @@ function _isDumbbellExercise(name) {
 }
 // Format reps with a "per leg" / "per arm" / "per side" suffix for
 // unilateral exercises. Bilateral exercises render unchanged. Keeps
-// the em-dash fallback for empty values.
+// the em-dash fallback for empty values. UnilateralDisplay.formatRepsLabel
+// also flattens "X-Y" ranges to the upper bound for consistency.
 function _formatRepsWithSide(reps, exerciseName) {
   const raw = String(reps == null ? "" : reps).trim();
   if (!raw) return "\u2014";
@@ -2752,7 +2853,7 @@ function buildExerciseTableHTML(exercises, opts) {
       const ssSets = seg.items[0]?.sets || "—";
       rows += `<tr class="superset-label-row"><td colspan="${cols}">Superset &mdash; ${ssSets} sets</td></tr>`;
       seg.items.forEach(e => {
-        rows += `<tr class="superset-ex-row"><td>${escHtml(e.name)}</td><td></td><td>${escHtml(_formatRepsWithSide(e.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate })||"—")}</td></tr>`;
+        rows += `<tr class="superset-ex-row"><td>${escHtml(e.name)}</td><td></td><td>${escHtml(_formatRepsWithSide(e.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate, reps: e.reps })||"—")}</td></tr>`;
         if (e.setDetails && e.setDetails.length) {
           e.setDetails.forEach((sd, si) => {
             rows += `<tr class="superset-ex-row set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${escHtml(_formatRepsWithSide(sd.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(sd.weight, e.name)||"—")}</td></tr>`;
@@ -2789,7 +2890,7 @@ function buildExerciseTableHTML(exercises, opts) {
         }
         rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(repsDisplay)}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate })||"—")}</td></tr>`;
       } else {
-        rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(String(e.sets||"—"))}</td><td>${escHtml(_formatRepsWithSide(e.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate })||"—")}</td></tr>`;
+        rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(String(e.sets||"—"))}</td><td>${escHtml(_formatRepsWithSide(e.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate, reps: e.reps })||"—")}</td></tr>`;
       }
       if (e.setDetails && e.setDetails.length) {
         e.setDetails.forEach((sd, si) => {

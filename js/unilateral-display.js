@@ -147,10 +147,17 @@
   // For unilateral exercises append " per leg"/" per arm". Non-unilateral
   // reps come back unchanged. Caller passes the raw reps string (e.g.
   // "12", "8-10") and the exercise name so we can decide the label.
+  // Rep RANGES like "8-12" are flattened to the upper bound — the user
+  // prefers a single concrete target, and the working-weight % is
+  // already calibrated to the upper end of the range.
   function formatRepsLabel(reps, name) {
-    const r = String(reps == null ? "" : reps).trim();
+    let r = String(reps == null ? "" : reps).trim();
     if (!r) return r;
+    const rangeMatch = r.match(/^(\d+)\s*[-\u2013]\s*(\d+)(.*)$/);
+    if (rangeMatch) r = (rangeMatch[2] + rangeMatch[3]).trim();
     if (!isUnilateral(name)) return r;
+    // Avoid double-suffixing if the raw value already had a "per leg/arm/side" hint.
+    if (/\b(per\s+(leg|arm|side|hand)|each\s+(side|leg|arm|hand)|\/\s*(leg|side|arm|hand))\b/i.test(r)) return r;
     return r + " " + _perLabel(name);
   }
 

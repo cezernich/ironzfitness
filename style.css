@@ -12871,11 +12871,19 @@ input.completion-ex-name:focus {
 [data-ux-level="advanced"] .session-step-pace { display: inline; }
 
 /* Beginner guidance text injected by JS */
+[data-ux-level="beginner"] .btn-complete-toggle {
+  flex-direction: column;
+  gap: 2px;
+  text-align: center;
+  line-height: 1.15;
+}
 [data-ux-level="beginner"] .btn-complete-toggle::after {
-  content: " (tap when done)";
+  content: "tap when done";
+  display: block;
   font-weight: 400;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   opacity: 0.7;
+  white-space: nowrap;
 }
 
 /* ===== EXPORT / SHARE WORKOUTS ===== */
