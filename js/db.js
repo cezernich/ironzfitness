@@ -119,15 +119,22 @@ const DB = (() => {
           return;
         }
         try {
-          // Map app field names to DB column names
+          // Map app field names to DB column names. Use the MERGED value
+          // for every column, not just profileData — a partial save (e.g.
+          // setPoolSize firing with {pool_size}) was previously writing
+          // NULL into weight_lbs / age / height_inches / gender because
+          // profileData didn't carry them. That meant a later fresh-
+          // device login pulled NULLs from the DB and the user saw an
+          // empty Athlete Profile form. Always prefer the merged value
+          // so a partial save never blows away an existing column.
           const row = {
             id: uid,
-            full_name: profileData.name || merged.name || null,
-            age: profileData.age ? parseInt(profileData.age) : null,
-            weight_lbs: profileData.weight ? parseFloat(profileData.weight) : null,
-            height_inches: profileData.height ? parseInt(profileData.height) : null,
-            gender: profileData.gender || null,
-            primary_goal: profileData.goal || merged.goal || null,
+            full_name:     merged.name   || null,
+            age:           merged.age    ? parseInt(merged.age)            : null,
+            weight_lbs:    merged.weight ? parseFloat(merged.weight)       : null,
+            height_inches: merged.height ? parseInt(merged.height)         : null,
+            gender:        merged.gender || null,
+            primary_goal:  merged.goal   || null,
             updated_at: new Date().toISOString(),
           };
           const { error } = await _client()
