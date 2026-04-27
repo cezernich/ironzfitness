@@ -1352,25 +1352,24 @@ async function _commitLiveWorkout(logAll) {
   };
   workouts.unshift(completedWorkout);
   localStorage.setItem("workouts", JSON.stringify(workouts));
-  // Flush workouts + completedSessions synchronously so a second device
-  // (or a refresh on this one) sees the completion without waiting on
-  // the 200ms debounce + network round-trip. Cross-device lag was a
-  // reported data-loss-flavored bug — user would complete on phone,
-  // open laptop, and see the session still looking undone.
-  if (typeof DB !== 'undefined' && DB.flushKey) {
-    try { await DB.flushKey('workouts'); } catch (e) { console.warn('[IronZ] workouts flush failed', e); }
-  }
-  // Finish succeeded → drop the mid-workout snapshot so we don't
-  // prompt the user to resume an already-completed session.
-  _clearLiveState();
-
   // Mark session as completed (persistent flag for the calendar's
   // "is this session done?" check).
   const meta = typeof loadCompletionMeta === "function" ? loadCompletionMeta() : {};
   meta[t.sessionId] = { workoutId, completedAt: new Date().toISOString() };
   localStorage.setItem("completedSessions", JSON.stringify(meta));
+  // Finish succeeded → drop the mid-workout snapshot so we don't
+  // prompt the user to resume an already-completed session.
+  _clearLiveState();
+
+  // Cross-device flush. Fire-and-forget — the pending-sync queue
+  // already guarantees correctness on next load (replayPendingSyncs
+  // upserts unsynced rows before refreshAllKeys), so we don't need
+  // to block the UI on a network round-trip. Awaiting here was
+  // hanging the Finish button when Supabase was slow or offline:
+  // _closeLiveTracker never ran and the user saw nothing happen.
   if (typeof DB !== 'undefined' && DB.flushKey) {
-    try { await DB.flushKey('completedSessions'); } catch (e) { console.warn('[IronZ] completedSessions flush failed', e); }
+    DB.flushKey('workouts').catch(e => console.warn('[IronZ] workouts flush failed', e && e.message));
+    DB.flushKey('completedSessions').catch(e => console.warn('[IronZ] completedSessions flush failed', e && e.message));
   }
 
   const dateStr = t.dateStr;
