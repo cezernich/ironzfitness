@@ -2499,10 +2499,13 @@ function _resolveEnduranceType(type) {
 }
 
 // Build the Distance input for the completion form. Swim uses meters or
-// yards (not miles/km), with a unit toggle defaulting to the user's pool
-// size setting. All other endurance types use the global mi/km setting.
+// yards (not miles/km) — the user request is explicit: a swim Distance
+// field must NEVER show "mi". Any swim-prefixed type or the resolved
+// "swimming" enum hits the m/yd toggle branch.
 function _buildDistanceField(sessionId, type, globalUnit) {
-  if (type === "swimming") {
+  const t = String(type || "").toLowerCase();
+  const isSwim = t === "swimming" || t === "swim" || t.startsWith("swim_");
+  if (isSwim) {
     let defaultUnit = "m";
     try {
       if (typeof SwimWorkout !== "undefined" && SwimWorkout.getUserPoolSize) {
@@ -2853,8 +2856,12 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   let duration = (!isNaN(_parsedDur) && _parsedDur > 0) ? String(_parsedDur) : "";
   const distance = document.getElementById(`cdist-${sessionId}`)?.value || "";
   // Swim uses its own unit toggle (m / yd); other endurance types use the
-  // global mi/km setting.
-  const swimDistUnit = type === "swimming"
+  // global mi/km setting. Match the same broadened check as
+  // _buildDistanceField so the unit is read correctly even when the
+  // type comes through as "swim" / "swim_css" / etc.
+  const _typeLowerSwimSave = String(type || "").toLowerCase();
+  const _isSwimSave = _typeLowerSwimSave === "swimming" || _typeLowerSwimSave === "swim" || _typeLowerSwimSave.startsWith("swim_");
+  const swimDistUnit = _isSwimSave
     ? (document.getElementById(`cdistunit-${sessionId}`)?.value || "m")
     : null;
 

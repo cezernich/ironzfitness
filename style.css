@@ -2277,6 +2277,34 @@ button:active {
   margin-left: auto;
 }
 
+/* Swim per-rep meta row — force single line. The default flex layout
+   was letting "SET 5", the Z4-with-pace zone label, and "3m · 1m rest"
+   each wrap inside their own column on 390-wide iPhones, producing
+   the multi-line "SET / 5", "Z4 / @ 1:29-1:31 / /100m" mess that
+   matched SET 6's single-line layout was supposed to fix. */
+.session-step--swim-rep .session-step-meta {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.session-step--swim-rep .session-step-meta > span {
+  white-space: nowrap;
+}
+.session-step--swim-rep .session-step-zone {
+  /* Zone + pace badge needs to expand a bit so the pace doesn't get
+     squeezed against "Z4". Limit the duration column instead. */
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.session-step--swim-rep .session-step-pace {
+  /* Inline with Z4 instead of getting bumped to a new visual line on
+     narrow widths. */
+  white-space: nowrap;
+}
+.session-step--swim-rep .session-step-duration {
+  flex: 0 0 auto;
+  font-size: 0.74rem;
+}
+
 .session-step-zone-row {
   margin-top: 3px;
   margin-bottom: 3px;
