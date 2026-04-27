@@ -1034,6 +1034,15 @@ function saveProfile() {
 }
 
 async function loadProfileIntoForm() {
+  // Populate the birthday Month/Day/Year option lists IMMEDIATELY,
+  // before any await — otherwise users tapping the selects during the
+  // (potentially slow) DB.profile.get() round-trip see iOS's "No
+  // Options" picker. _initBdayPicker is idempotent so repeated calls
+  // are safe; the value-set step below still runs after the profile
+  // arrives.
+  if (typeof window._initBdayPicker === "function") {
+    try { window._initBdayPicker("profile-birthday"); } catch {}
+  }
   try {
     // Try fetching from Supabase first (populates localStorage as cache)
     let profile = null;
