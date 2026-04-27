@@ -3832,7 +3832,14 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       const intensLabel = getIntensityLabel(effectLoad);
       const intensClass = getIntensityClass(effectLoad);
 
-      const _planCompType = DISCIPLINE_TO_WORKOUT_TYPE[p.discipline] || "general";
+      // DISCIPLINE_TO_WORKOUT_TYPE maps swim → "triathlon" for analytics
+      // bucketing, but the completion form needs a distance-unit signal
+      // — "triathlon" sends it down the mi/km branch and we render
+      // "Distance (mi)" for what's actually a swim. Override the swim
+      // case so the m/yd toggle fires.
+      const _planCompType = (p.discipline === "swim" || p.discipline === "swimming")
+        ? "swimming"
+        : (DISCIPLINE_TO_WORKOUT_TYPE[p.discipline] || "general");
       const _planSugDur   = session?.duration || null;
       const _planCompletion = buildCompletionSection(cardId, _planCompType, null, dateStr, _planSugDur, session?.steps);
       const _planIsComplete    = isSessionComplete(cardId);
@@ -3962,7 +3969,13 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         if (session) {
           const targetDuration = getRestrictedDuration(session.duration, w.load, data.restriction);
           const isReduced      = effectLoad !== w.load || targetDuration !== session.duration;
-          const _swCompletion = buildCompletionSection(cardId, DISCIPLINE_TO_WORKOUT_TYPE[w.discipline] || "running", null, dateStr, targetDuration, session?.steps);
+          // Override swim → "swimming" so _buildDistanceField hits the
+          // m/yd toggle instead of the discipline map's "triathlon"
+          // → mi/km fallback. See _planCompType comment above.
+          const _swCompType = (w.discipline === "swim" || w.discipline === "swimming")
+            ? "swimming"
+            : (DISCIPLINE_TO_WORKOUT_TYPE[w.discipline] || "running");
+          const _swCompletion = buildCompletionSection(cardId, _swCompType, null, dateStr, targetDuration, session?.steps);
           const _swMovePanel = buildSessionMovePanel(cardId, "scheduled", w.id, dateStr);
           const _swIsComplete    = isSessionComplete(cardId);
           const _swDoneIndicator = _swIsComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
