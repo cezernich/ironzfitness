@@ -49,20 +49,37 @@ async function callAI({ messages, model, max_tokens, system }) {
     throw new Error("Please sign in to use AI features");
   }
 
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/ask-ironz`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${session.access_token}`,
-      "apikey": SUPABASE_ANON_KEY,
-    },
-    body: JSON.stringify({
-      messages,
-      model: model || "claude-haiku-4-5-20251001",
-      max_tokens: max_tokens || 1024,
-      ...(system && { system }),
-    }),
-  });
+  // 45-second timeout so a hanging Edge Function doesn't strand the
+  // caller forever in their loading state. Anthropic typically
+  // responds in 1-5s for haiku-class requests; 45s is generous.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 45000);
+
+  let response;
+  try {
+    response = await fetch(`${SUPABASE_URL}/functions/v1/ask-ironz`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.access_token}`,
+        "apikey": SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({
+        messages,
+        model: model || "claude-haiku-4-5-20251001",
+        max_tokens: max_tokens || 1024,
+        ...(system && { system }),
+      }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error("AI is taking longer than usual — try again in a moment.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   const data = await response.json();
 
