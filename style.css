@@ -260,10 +260,10 @@ main {
   padding-left: calc(16px + env(safe-area-inset-left, 0px));
   padding-right: calc(16px + env(safe-area-inset-right, 0px));
   /* Leave room for the fixed bottom nav bar (56px) + safe-area home
-     indicator + visual breathing room. Bumped from 72px → 96px so the
-     last collapsible card on long tabs (Active Training Inputs on the
-     Training tab) doesn't sit flush against the nav. */
-  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+     indicator + visual breathing room. 96px still left the last card
+     pinned right above the nav on long tabs (Training); bumped to 128px
+     so there's a clear gap between the final collapsible and the bar. */
+  padding-bottom: calc(128px + env(safe-area-inset-bottom, 0px));
   /* Scroll padding so anchor / scrollIntoView calls don't park the
      last element behind the nav. */
   scroll-padding-bottom: calc(120px + env(safe-area-inset-bottom, 0px));
