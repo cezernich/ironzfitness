@@ -3960,10 +3960,39 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       // Rich rendering for sessions with discipline + load (running philosophy)
       if (w.discipline && w.load) {
         const effectLoad     = getEffectiveLoad(w.load, data.restriction);
-        const session        = (typeof getSessionTemplate === "function"
-                                 ? getSessionTemplate(w.discipline, effectLoad, w.weekNumber, dateStr)
-                                 : null)
-                            || (SESSION_DESCRIPTIONS[w.discipline] || {})[effectLoad];
+        // If the user edited this session in the workout editor, the saved
+        // aiSession.intervals are the source of truth — building from the
+        // template would overwrite their changes (e.g. Z3 → Z2 stuck
+        // on Z3 because the template still says Z3).
+        let session;
+        if (w.aiSession && Array.isArray(w.aiSession.intervals) && w.aiSession.intervals.length) {
+          const _ivs = w.aiSession.intervals;
+          const _steps = _ivs.map((iv, idx) => {
+            let zone = iv.effort || "Z2";
+            if (typeof zone === 'string' && zone.startsWith("Z")) zone = parseInt(zone.slice(1)) || 2;
+            const type = iv.type || (idx === 0 ? "warmup" : idx === _ivs.length - 1 ? "cooldown" : "main");
+            const step = { type, label: iv.name || "", duration: parseInt(iv.duration) || 0, zone };
+            // Recover the brick T1 marker from the interval name — the
+            // editor seed doesn't preserve `note`, so detect it from the
+            // "T1 …" label so buildStepsList still tags transitions.
+            if (/^\s*T1\b/i.test(step.label)) step.note = "T1";
+            if (iv.reps && iv.reps > 1) step.reps = iv.reps;
+            if (iv.restDuration) step.rest = parseInt(iv.restDuration) || 0;
+            return step;
+          });
+          const _totalMin = _steps.reduce((s, st) => s + (st.duration * (st.reps || 1)) + ((st.rest || 0) * Math.max(0, (st.reps || 1) - 1)), 0);
+          session = {
+            name: w.aiSession.title || w.sessionName || "",
+            duration: _totalMin,
+            steps: _steps,
+            _fromEdit: true,
+          };
+        } else {
+          session = (typeof getSessionTemplate === "function"
+                      ? getSessionTemplate(w.discipline, effectLoad, w.weekNumber, dateStr)
+                      : null)
+                 || (SESSION_DESCRIPTIONS[w.discipline] || {})[effectLoad];
+        }
         const intensLabel    = getIntensityLabel(effectLoad);
         const intensClass    = getIntensityClass(effectLoad);
         if (session) {
