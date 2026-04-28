@@ -1585,7 +1585,7 @@ const SESSION_VARIANTS = {
         { type: "warmup",   duration: 10, zone: 1, label: "Easy spin — settle in" },
         { type: "main",     duration: 25, zone: 3, label: "Sweet spot on bike — 88% FTP, aero, steady", reps: 2, rest: 5 },
         { type: "main",     duration: 3,  zone: 1, label: "T1 — practice transition", note: "T1" },
-        { type: "main",     duration: 25, zone: 2, label: "Brick run — Z2 off the bike, find run legs, cadence 85+" },
+        { type: "main",     duration: 25, zone: 2, label: "Brick run — Z2 off the bike, find run legs, cadence 170+ spm" },
         { type: "cooldown", duration: 7,  zone: 1, label: "Easy jog + stretch" },
       ]},
       { name: "Negative Split Brick", steps: [
