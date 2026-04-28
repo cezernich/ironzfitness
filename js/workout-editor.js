@@ -976,12 +976,20 @@ async function saveEditedWorkout() {
     } catch (e) { console.warn('[IronZ] edit save flush failed', e); }
   }
 
-  if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
-  if (typeof renderCalendar       === "function") renderCalendar();
-  if (typeof selectedDate !== "undefined" && selectedDate) {
-    if (typeof renderDayDetail === "function") renderDayDetail(selectedDate);
-  }
-  if (typeof renderStats === "function") renderStats();
+  // BUGFIX: post-save renders are best-effort. A throw inside any of
+  // these (e.g. renderStats hitting unexpected exercise shape after a
+  // superset edit) used to abort the function before the "Saved!"
+  // confirmation, so the modal stayed open and the user thought save
+  // was broken — even though localStorage had already persisted the
+  // change. Wrap each in try/catch so the save always completes.
+  try { if (typeof renderWorkoutHistory === "function") renderWorkoutHistory(); } catch (e) { console.warn('[IronZ] renderWorkoutHistory after edit failed', e); }
+  try { if (typeof renderCalendar       === "function") renderCalendar();       } catch (e) { console.warn('[IronZ] renderCalendar after edit failed', e); }
+  try {
+    if (typeof selectedDate !== "undefined" && selectedDate) {
+      if (typeof renderDayDetail === "function") renderDayDetail(selectedDate);
+    }
+  } catch (e) { console.warn('[IronZ] renderDayDetail after edit failed', e); }
+  try { if (typeof renderStats === "function") renderStats(); } catch (e) { console.warn('[IronZ] renderStats after edit failed', e); }
 
   msg.style.color = "var(--color-success)";
   msg.textContent = "Saved!";
