@@ -857,6 +857,10 @@ input[type="date"] {
   min-width: 0;
   box-sizing: border-box;
   cursor: pointer;
+  /* iOS centers the date value by default, which makes the box visually
+     mismatch the left-aligned placeholders in adjacent text inputs. Force
+     left-align so a stack of (text → date → select) all read consistently. */
+  text-align: left;
 }
 
 /* Calendar icon: visible on light themes by default */
