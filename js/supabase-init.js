@@ -8,6 +8,9 @@ const SUPABASE_URL      = 'https://dagdpdcwqdlibxbitdgr.supabase.co';  // e.g. h
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRhZ2RwZGN3cWRsaWJ4Yml0ZGdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1Mjk4NjQsImV4cCI6MjA5MTEwNTg2NH0.vc-fvFgZNEvusGgc3yhCzMRmuKrXUHW5uxHHMx1JV44';     // starts with eyJ...
 
 window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Expose the URL so edge-function callers (e.g. coach-request-flow.js) can
+// build the function endpoint without poking at private client internals.
+window.SUPABASE_URL = SUPABASE_URL;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SQL to run once in the Supabase dashboard → SQL Editor:

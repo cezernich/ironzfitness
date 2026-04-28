@@ -1431,6 +1431,24 @@
         <button class="btn-primary" onclick="showTab('admin')">Open Admin Panel</button>
       </section>
 
+      <!-- Coach Portal entry point (visible only when profile.is_coach=true).
+           Phase 1: markup present, visibility wired in Phase 2 by coach-portal.js.
+           Spec: new features/COACHING_FEATURE_SPEC_2026-04-28.md -->
+      <section class="card" id="section-coach-entry" style="display:none">
+        <h2 style="color:var(--color-coach,#534AB7)">Coach Portal</h2>
+        <p class="hint" id="coach-entry-summary">Manage your clients, assign workouts, and track their training.</p>
+        <button class="btn-primary" id="coach-entry-open-btn" disabled style="opacity:0.6">Open Coach Portal (Phase 2)</button>
+      </section>
+
+      <!-- Request a Coach entry — visible to all users.
+           Tap → 4-question form modal → submit → edge function writes
+           coach_requests row + emails ironzsupport@gmail.com. -->
+      <section class="card" id="section-coach-request">
+        <h2>Want a coach?</h2>
+        <p class="hint">Get matched with an IronZ coach to write your training and review your week. Free and Premium athletes both eligible.</p>
+        <button class="btn-secondary" onclick="openCoachRequestForm()">Request a Coach</button>
+      </section>
+
       <!-- Athlete Profile -->
       <section class="card collapsible is-collapsed" id="section-profile">
         <div class="card-toggle" onclick="toggleSection('section-profile')">
@@ -2373,6 +2391,81 @@
     </div><!-- end #tab-admin -->
 
   </main>
+
+  <!-- Request a Coach modal — Phase 1E.
+       4-question form → POST to send-coach-request-email edge function. -->
+  <div id="coach-request-overlay" class="quick-entry-overlay" onclick="if(event.target===this) closeCoachRequestForm()">
+    <div class="quick-entry-modal" style="max-width:480px">
+      <div class="quick-entry-header">
+        <span class="qe-date-label">Request a Coach</span>
+        <button class="qe-close-btn" onclick="closeCoachRequestForm()">✕</button>
+      </div>
+      <div class="quick-entry-body" style="padding:0 16px 16px">
+        <p class="hint" style="margin:8px 0 16px">Tell us a bit about your training so we can match you with the right coach. Takes ~30 seconds.</p>
+
+        <div class="form-row">
+          <label>Primary sport / focus</label>
+          <select id="coach-req-sport" class="input">
+            <option value="">— Pick one —</option>
+            <option value="running">Running</option>
+            <option value="cycling">Cycling</option>
+            <option value="swimming">Swimming</option>
+            <option value="triathlon">Triathlon</option>
+            <option value="strength">Strength training</option>
+            <option value="hyrox">Hyrox</option>
+            <option value="general_fitness">General fitness</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label>Primary goal</label>
+          <select id="coach-req-goal" class="input">
+            <option value="">— Pick one —</option>
+            <option value="race">Train for a specific race</option>
+            <option value="general_fitness">Build general fitness</option>
+            <option value="body_comp">Body composition (lose fat / gain muscle)</option>
+            <option value="performance">Performance / hit a benchmark</option>
+            <option value="injury_return">Return from injury</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label>Experience level</label>
+          <select id="coach-req-experience" class="input">
+            <option value="">— Pick one —</option>
+            <option value="beginner">Beginner — getting started</option>
+            <option value="intermediate">Intermediate — training consistently</option>
+            <option value="advanced">Advanced — racing or peaking</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label>Anything else? <span class="optional-tag">optional · 500 char max</span></label>
+          <textarea id="coach-req-notes" rows="4" maxlength="500"
+            placeholder="e.g. specific race date, equipment, injury history, schedule constraints"
+            style="width:100%;box-sizing:border-box;padding:8px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface);color:var(--color-text);font-size:0.92rem;font-family:inherit"></textarea>
+          <div id="coach-req-notes-count" class="hint" style="text-align:right;font-size:0.72rem;margin-top:2px">0 / 500</div>
+        </div>
+
+        <p id="coach-req-error" class="hint" style="color:var(--color-danger);min-height:1em;margin:6px 0 0"></p>
+
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="btn-secondary" style="flex:1" onclick="closeCoachRequestForm()">Cancel</button>
+          <button class="btn-primary" id="coach-req-send-btn" style="flex:1" onclick="submitCoachRequest()">Send</button>
+        </div>
+      </div>
+
+      <!-- Confirmation panel — swapped in on success. -->
+      <div id="coach-req-confirm" style="display:none;padding:24px 16px;text-align:center">
+        <div style="font-size:2rem;margin-bottom:8px">✓</div>
+        <h3 style="margin:0 0 8px">Request sent</h3>
+        <p class="hint">We'll review your request and match you with a coach within 48 hours. You'll get an email at the address on your account.</p>
+        <button class="btn-primary" style="margin-top:16px" onclick="closeCoachRequestForm()">Done</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Quick Entry Modal — Multi-step Wizard -->
   <div id="quick-entry-overlay" class="quick-entry-overlay" onclick="if(event.target===this) closeQuickEntry()">
@@ -3491,6 +3584,7 @@
   <script src="js/admin-workouts.js"></script>
   <script src="js/admin-questions.js"></script>
   <script src="js/admin-coaches.js"></script>
+  <script src="js/coach-request-flow.js"></script>
   <script src="js/analytics.js"></script>
   <script src="js/push.js"></script>
   <!-- auth.js last — overrides window.onload to gate app behind login -->
