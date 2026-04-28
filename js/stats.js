@@ -2202,19 +2202,29 @@ function _getAllExerciseHistory() {
 
 function _detectPlateaus(history) {
   const plateaus = [];
+  // Bodyweight movements have weight === 0 by design — "plateau at 0 lbs"
+  // is nonsense for them, and "Try 5 lbs next time" reads as a bug.
+  const _isBodyweightLike = (n) => /\b(pull[- ]?up|chin[- ]?up|push[- ]?up|dip|plank|hanging|sit[- ]?up|crunch|burpee|mountain climber|jumping jack|air squat)\b/i.test(n);
   for (const [name, entries] of Object.entries(history)) {
     if (entries.length < 3) continue;
     const recent = entries.slice(-5);
+    const last = recent[recent.length - 1];
+    // BUGFIX: phantom 0-lb entries (mark-as-complete with weight unfilled,
+    // saved-workout templates auto-logged on Finish) were tripping a
+    // plateau alert that read "Reverse-grip barbell row, 0 lbs x 10 for
+    // 3 sessions, try 5 lbs next time" for exercises the user never did.
+    // Skip when the most recent weight is 0 unless this is a recognised
+    // bodyweight movement (pull-up etc.) where 0 is the right value.
+    if (last.weight <= 0 && !_isBodyweightLike(name)) continue;
     // Check if last 3+ entries have same weight and reps
     let plateauCount = 1;
     for (let i = recent.length - 2; i >= 0; i--) {
-      if (recent[i].weight === recent[recent.length - 1].weight &&
-          recent[i].reps === recent[recent.length - 1].reps) {
+      if (recent[i].weight === last.weight &&
+          recent[i].reps === last.reps) {
         plateauCount++;
       } else break;
     }
     if (plateauCount >= 3) {
-      const last = recent[recent.length - 1];
       plateaus.push({
         name,
         displayName: entries[0] ? (name.charAt(0).toUpperCase() + name.slice(1)) : name,
