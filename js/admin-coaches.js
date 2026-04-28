@@ -189,10 +189,20 @@
   }
 
   function adminPromoteCoachFilter(q) {
-    const candidates = (window._adminProfiles || []).filter(p => !p.is_coach);
+    const candidates = (window._adminProfiles || []).filter(_isPromoteEligible);
     const filtered = _filterByQuery(candidates, q);
     const el = document.getElementById("admin-coach-promote-candidates");
     if (el) el.innerHTML = _renderPromoteCandidates(filtered);
+  }
+
+  // Active-account predicate: not a coach already, has an email (auth-bound)
+  // and a full_name (completed signup). Keeps half-onboarded ghost rows out
+  // of the candidate list.
+  function _isPromoteEligible(p) {
+    if (!p || p.is_coach) return false;
+    if (!p.email || !String(p.email).trim()) return false;
+    if (!p.full_name || !String(p.full_name).trim()) return false;
+    return true;
   }
 
   function _renderPromoteCandidates(list) {
