@@ -3967,38 +3967,61 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       // Rich rendering for sessions with discipline + load (running philosophy)
       if (w.discipline && w.load) {
         const effectLoad     = getEffectiveLoad(w.load, data.restriction);
+        // Always look up the template — used as the source of truth for the
+        // session's intended total duration (the badge), and as a fallback
+        // for any rest period the legacy editor seed silently dropped.
+        const _tpl = (typeof getSessionTemplate === "function"
+                       ? getSessionTemplate(w.discipline, effectLoad, w.weekNumber, dateStr)
+                       : null)
+                  || (SESSION_DESCRIPTIONS[w.discipline] || {})[effectLoad];
         // If the user edited this session in the workout editor, the saved
-        // aiSession.intervals are the source of truth — building from the
-        // template would overwrite their changes (e.g. Z3 → Z2 stuck
-        // on Z3 because the template still says Z3).
+        // aiSession.intervals are the source of truth for *zone* and *label*
+        // — but we still keep the template's duration so the badge stays at
+        // the planner's intended target instead of dropping to whatever the
+        // edited steps happen to sum to.
         let session;
         if (w.aiSession && Array.isArray(w.aiSession.intervals) && w.aiSession.intervals.length) {
           const _ivs = w.aiSession.intervals;
+          const _tplSteps = (_tpl && Array.isArray(_tpl.steps)) ? _tpl.steps : [];
           const _steps = _ivs.map((iv, idx) => {
             let zone = iv.effort || "Z2";
             if (typeof zone === 'string' && zone.startsWith("Z")) zone = parseInt(zone.slice(1)) || 2;
             const type = iv.type || (idx === 0 ? "warmup" : idx === _ivs.length - 1 ? "cooldown" : "main");
-            const step = { type, label: iv.name || "", duration: parseInt(iv.duration) || 0, zone };
+            // Render-time migration of stale brick-run labels: an earlier
+            // version of the moderate-brick template had "cadence 85+"
+            // (cycling RPM mistakenly carbon-copied onto the run leg).
+            // Edits saved against that template froze the wrong text into
+            // aiSession.intervals; rewrite it here so the card displays
+            // the corrected running-cadence target.
+            const _label = (iv.name || "").replace(/cadence\s+85\+?(?!\s*spm)/g, "cadence 170+ spm");
+            const step = { type, label: _label, duration: parseInt(iv.duration) || 0, zone };
             // Recover the brick T1 marker from the interval name — the
             // editor seed doesn't preserve `note`, so detect it from the
             // "T1 …" label so buildStepsList still tags transitions.
             if (/^\s*T1\b/i.test(step.label)) step.note = "T1";
             if (iv.reps && iv.reps > 1) step.reps = iv.reps;
-            if (iv.restDuration) step.rest = parseInt(iv.restDuration) || 0;
+            if (iv.restDuration) {
+              step.rest = parseInt(iv.restDuration) || 0;
+            } else if (step.reps && step.reps > 1 && _tplSteps[idx] && typeof _tplSteps[idx].rest === "number") {
+              // Self-heal: the legacy editor seed dropped step.rest because
+              // it read step.restDuration (which doesn't exist on templates).
+              // Fall back to the template's rest so the bike main set still
+              // renders "2 × 25 min (5 min rest)" instead of swallowing the
+              // rest period.
+              step.rest = _tplSteps[idx].rest;
+            }
             return step;
           });
           const _totalMin = _steps.reduce((s, st) => s + (st.duration * (st.reps || 1)) + ((st.rest || 0) * Math.max(0, (st.reps || 1) - 1)), 0);
+          const _tplDur = _tpl && typeof _tpl.duration === "number" ? _tpl.duration : null;
           session = {
             name: w.aiSession.title || w.sessionName || "",
-            duration: _totalMin,
+            duration: _tplDur != null ? _tplDur : _totalMin,
             steps: _steps,
             _fromEdit: true,
           };
         } else {
-          session = (typeof getSessionTemplate === "function"
-                      ? getSessionTemplate(w.discipline, effectLoad, w.weekNumber, dateStr)
-                      : null)
-                 || (SESSION_DESCRIPTIONS[w.discipline] || {})[effectLoad];
+          session = _tpl;
         }
         const intensLabel    = getIntensityLabel(effectLoad);
         const intensClass    = getIntensityClass(effectLoad);
