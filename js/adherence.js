@@ -341,9 +341,9 @@ function buildConsistencyBadge() {
   if (currentStreak >= 7) {
     streakText = `${currentStreak}-day streak!`;
   } else if (streak.activeDays >= 5) {
-    streakText = `${streak.activeDays}/7 days active this week`;
+    streakText = `${streak.activeDays}/7 days active (last 7 days)`;
   } else if (streak.activeDays > 0) {
-    streakText = `${streak.activeDays}/7 days active`;
+    streakText = `${streak.activeDays}/7 days active (last 7 days)`;
   } else {
     return "";
   }
