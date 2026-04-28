@@ -21,6 +21,7 @@
   --color-brand:        #d63031;
   --color-danger:       #b91c1c;
   --color-success:      #15803d;
+  --color-coach:        #534AB7;
   --color-text:         #111111;
   --color-text-muted:   #6b7280;
 
@@ -13501,6 +13502,130 @@ input.completion-ex-name:focus {
 }
 .admin-mini-chart {
   min-height: 120px;
+}
+
+/* ─── Admin Coaches sub-tab — Phase 1C/D ───────────────────────────────
+   Spec: new features/COACHING_FEATURE_SPEC_2026-04-28.md */
+
+/* Inner Roster / Requests tabs (live INSIDE the Coaches outer sub-tab). */
+.admin-coach-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 12px 0 8px;
+  overflow-x: auto;
+}
+.admin-coach-tab {
+  padding: 6px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.admin-coach-tab.active {
+  background: var(--color-coach, #534AB7);
+  color: #fff;
+  border-color: var(--color-coach, #534AB7);
+}
+
+/* Coach card — one card per coach in the roster. */
+.admin-coach-card {
+  margin-bottom: 10px;
+}
+.admin-coach-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.admin-coach-card-title {
+  font-weight: 700;
+  font-size: 1rem;
+}
+.admin-coach-card-sub {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+.admin-coach-card-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.admin-coach-clients {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 4px;
+  border-left: 2px solid var(--color-coach, #534AB7);
+  margin-left: 4px;
+  padding-left: 12px;
+}
+.admin-coach-client-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 0.88rem;
+}
+.admin-coach-client-name {
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.admin-coach-client-meta {
+  flex: 1;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+/* Candidate row — used by Promote-to-coach + Assign-client pickers. */
+.admin-coach-candidate-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--color-border);
+}
+.admin-coach-candidate-row:last-child {
+  border-bottom: none;
+}
+
+/* Coach request rows in the Requests sub-tab. */
+.admin-coach-request-row {
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--color-border);
+}
+.admin-coach-request-row:last-child {
+  border-bottom: none;
+}
+.admin-coach-request-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.admin-coach-request-notes {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: var(--color-surface-2);
+  border-left: 2px solid var(--color-coach, #534AB7);
+  font-size: 0.85rem;
+  color: var(--color-text);
+  font-style: italic;
+}
+.admin-coach-request-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 @media (max-width: 520px) {

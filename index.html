@@ -1842,6 +1842,7 @@
         <button class="admin-subtab" data-subtab="admin-gaps" onclick="showAdminSubtab('admin-gaps')">Gaps</button>
         <button class="admin-subtab" data-subtab="admin-questions" onclick="showAdminSubtab('admin-questions')">Questions</button>
         <button class="admin-subtab" data-subtab="admin-analytics" onclick="showAdminSubtab('admin-analytics')">Analytics</button>
+        <button class="admin-subtab" data-subtab="admin-coaches" onclick="showAdminSubtab('admin-coaches')">Coaches</button>
       </div>
 
       <!-- ── SUB-TAB: Users ──────────────────────────────────────── -->
@@ -2327,6 +2328,45 @@
         <div class="card">
           <h3 style="margin:0 0 12px">Recent Plans</h3>
           <div id="admin-recent-plans" style="color:var(--color-text-muted)">Loading...</div>
+        </div>
+      </div>
+
+      <!-- ── SUB-TAB: Coaches ────────────────────────────────────── -->
+      <!-- Spec: new features/COACHING_FEATURE_SPEC_2026-04-28.md -->
+      <div id="admin-coaches" class="admin-subtab-content" style="display:none">
+        <div class="admin-stats-row">
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-coaches-total">--</div>
+            <div class="admin-stat-label">Total Coaches</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-coaches-active">--</div>
+            <div class="admin-stat-label">Active Assignments</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="admin-coaches-pending-requests">--</div>
+            <div class="admin-stat-label">Pending Requests</div>
+          </div>
+        </div>
+
+        <!-- Inner sub-tabs: Roster / Requests -->
+        <div class="admin-coach-tabs">
+          <button class="admin-coach-tab active" data-coach-tab="coach-roster" onclick="showCoachInnerTab('coach-roster')">Roster</button>
+          <button class="admin-coach-tab" data-coach-tab="coach-requests" onclick="showCoachInnerTab('coach-requests')">Requests<span id="admin-coach-requests-badge"></span></button>
+        </div>
+
+        <!-- Roster -->
+        <div id="coach-roster" class="admin-coach-tab-content">
+          <div class="card" style="display:flex;justify-content:flex-end">
+            <button class="btn-primary btn-sm" onclick="adminPromoteCoachOpen()">+ Promote user to coach</button>
+          </div>
+          <div id="admin-coach-promote-editor" class="card" style="display:none"></div>
+          <div id="admin-coach-roster-list">Loading…</div>
+        </div>
+
+        <!-- Requests -->
+        <div id="coach-requests" class="admin-coach-tab-content" style="display:none">
+          <div id="admin-coach-requests-list">Loading…</div>
         </div>
       </div>
 
@@ -3450,6 +3490,7 @@
   <script src="js/admin.js"></script>
   <script src="js/admin-workouts.js"></script>
   <script src="js/admin-questions.js"></script>
+  <script src="js/admin-coaches.js"></script>
   <script src="js/analytics.js"></script>
   <script src="js/push.js"></script>
   <!-- auth.js last — overrides window.onload to gate app behind login -->

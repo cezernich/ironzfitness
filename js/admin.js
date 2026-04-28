@@ -336,6 +336,7 @@ function showAdminSubtab(id) {
   if (id === 'admin-exercises') loadAdminExercises();
   if (id === 'admin-gaps') loadAdminGaps();
   if (id === 'admin-analytics') loadAdminAnalytics();
+  if (id === 'admin-coaches' && typeof loadAdminCoaches === 'function') loadAdminCoaches();
 }
 
 // ── Philosophy Modules ──────────────────────────────────────────────────────
