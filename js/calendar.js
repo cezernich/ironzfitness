@@ -3248,14 +3248,21 @@ function getDayTotals(dateStr) {
     if (actual > 0) {
       totalMin += actual;
     } else {
+      // BUGFIX: card badge reads getRestrictedDuration(session.duration, ...)
+      // where session is the looked-up template. Day total used to read
+      // p.duration directly — a brick template with session.duration:120
+      // and p.duration:117 (sessionLen × 1.3) split the badge from the
+      // total. Use the template's duration as the basis when it's set so
+      // the two stay in sync.
       const effectLoad    = getEffectiveLoad(p.load, restriction);
-      const targetDur     = getRestrictedDuration(p.duration, p.load, restriction);
       const rawSession    = (typeof getSessionTemplate === "function"
                               ? (getSessionTemplate(p.discipline, effectLoad, p.weekNumber, dateStr)
                                  || getSessionTemplate(p.discipline, p.load, p.weekNumber, dateStr))
                               : null)
                          || (SESSION_DESCRIPTIONS[p.discipline] || {})[effectLoad]
                          || (SESSION_DESCRIPTIONS[p.discipline] || {})[p.load];
+      const baseDur       = (rawSession && rawSession.duration) || p.duration;
+      const targetDur     = getRestrictedDuration(baseDur, p.load, restriction);
       const scaledSession = rawSession ? scaleSessionDuration(rawSession, targetDur) : rawSession;
       if (scaledSession?.duration) totalMin += _parseDurMin(scaledSession.duration);
       else if (targetDur)          totalMin += _parseDurMin(targetDur);
