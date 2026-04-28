@@ -134,8 +134,62 @@
     }
   }
 
+  // ── Visibility ───────────────────────────────────────────────────────
+  //
+  // Toggles two cards on the Profile screen based on the current user's
+  // coaching context:
+  //   • #section-coach-entry  — shown when the user has profile.is_coach=true
+  //     (Phase 1 lands the markup; the Open button is wired in Phase 2 by
+  //     coach-portal.js).
+  //   • #section-coach-request — shown UNLESS the user already has an
+  //     active coaching_assignments row as the client. A coached athlete
+  //     doesn't need to ask for a coach again. Spec: "Where it lives"
+  //     update — hide for users who already have an active assignment as
+  //     a client.
+  //
+  // Called from auth.js after window._userRole is set, alongside
+  // initAdminVisibility(). Re-runnable — safe on re-auth / role refresh.
+  async function initCoachVisibility() {
+    const entryCard   = document.getElementById("section-coach-entry");
+    const requestCard = document.getElementById("section-coach-request");
+    const client      = window.supabaseClient;
+    if (!client) {
+      // No client yet — leave both hidden. Will be retried on next auth tick.
+      if (entryCard)   entryCard.style.display = "none";
+      if (requestCard) requestCard.style.display = "none";
+      return;
+    }
+
+    // Resolve the current user. getSession is the cheap path; getUser is
+    // the authoritative one. We read the session so we don't burn a
+    // network round-trip when one isn't needed.
+    const { data: sessRes } = await client.auth.getSession();
+    const userId = sessRes?.session?.user?.id;
+    if (!userId) {
+      if (entryCard)   entryCard.style.display = "none";
+      if (requestCard) requestCard.style.display = "none";
+      return;
+    }
+
+    // Two parallel reads.
+    const [profileRes, assignRes] = await Promise.all([
+      client.from("profiles").select("is_coach").eq("id", userId).maybeSingle(),
+      client.from("coaching_assignments")
+        .select("id", { count: "exact", head: true })
+        .eq("client_id", userId)
+        .eq("active", true),
+    ]);
+
+    const isCoach           = !!profileRes?.data?.is_coach;
+    const hasActiveAsClient = (assignRes?.count ?? 0) > 0;
+
+    if (entryCard)   entryCard.style.display   = isCoach ? "" : "none";
+    if (requestCard) requestCard.style.display = hasActiveAsClient ? "none" : "";
+  }
+
   // Public surface — inline onclick handlers in index.html call these.
   window.openCoachRequestForm  = openCoachRequestForm;
   window.closeCoachRequestForm = closeCoachRequestForm;
   window.submitCoachRequest    = submitCoachRequest;
+  window.initCoachVisibility   = initCoachVisibility;
 })();

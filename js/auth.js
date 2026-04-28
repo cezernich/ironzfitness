@@ -536,6 +536,10 @@ async function ensureProfile(user) {
 
   window._userRole = role;
   if (typeof initAdminVisibility === 'function') initAdminVisibility();
+  // Coach visibility — flips both #section-coach-entry (when is_coach
+  // is true) and #section-coach-request (hidden when the user already
+  // has an active coaching_assignments row as a client).
+  if (typeof initCoachVisibility === 'function') initCoachVisibility().catch(e => console.warn('Auth: initCoachVisibility error', e));
 }
 
 // ── Boot sequence ──────────────────────────────────────────────────────────────
