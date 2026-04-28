@@ -32,6 +32,14 @@ if (typeof showTab === 'function') {
 
 async function loadAdminData() {
   const client = window.supabaseClient;
+  console.log("[Admin] loadAdminData start, role:", window._userRole, "client:", !!client);
+
+  // Show "…" as a loading state so users can tell the call is in flight
+  // (rather than the static "--" placeholder which reads as "broken").
+  setText("admin-total-users", "…");
+  setText("admin-new-7d", "…");
+  setText("admin-premium-count", "…");
+  setText("admin-admin-count", "…");
 
   // Dev bypass with placeholder credentials — show mock data
   if (typeof DEV_BYPASS_AUTH !== "undefined" && DEV_BYPASS_AUTH) {
@@ -48,26 +56,47 @@ async function loadAdminData() {
   // visible instead of guessable.
   if (!client) {
     _showAdminError("Supabase client not available — check connection.");
+    setText("admin-total-users", "—");
+    setText("admin-new-7d", "—");
+    setText("admin-premium-count", "—");
+    setText("admin-admin-count", "—");
     return;
   }
 
   try {
-    const { data, error } = await client
+    // Race the query against a 15s timeout — Supabase rarely takes more
+    // than 1-2s for a flat profile select; anything beyond that is a
+    // hung request (auth-lock, network) and needs to surface as an error
+    // rather than leaving the user staring at "…" forever.
+    const queryPromise = client
       .from("profiles")
       .select("*")
       .order("created_at", { ascending: false });
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Query timed out after 15s")), 15000)
+    );
+    const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
 
     if (error) {
-      console.warn("Admin: failed to load profiles", error.message);
-      _showAdminError(`Failed to load profiles: ${error.message}`);
+      console.warn("[Admin] query error:", error);
+      _showAdminError(`Failed to load profiles: ${error.message || error.code || "unknown error"}`);
+      setText("admin-total-users", "—");
+      setText("admin-new-7d", "—");
+      setText("admin-premium-count", "—");
+      setText("admin-admin-count", "—");
       return;
     }
     _adminProfiles = data || [];
+    console.log("[Admin] loaded", _adminProfiles.length, "profiles");
     _hideAdminError();
   } catch (e) {
-    console.warn("Admin: supabase error", e);
+    console.warn("[Admin] exception:", e);
     _adminProfiles = [];
-    _showAdminError(`Network error: ${e && e.message ? e.message : "unknown"}`);
+    _showAdminError(`Failed to load: ${e && e.message ? e.message : "unknown"}`);
+    setText("admin-total-users", "—");
+    setText("admin-new-7d", "—");
+    setText("admin-premium-count", "—");
+    setText("admin-admin-count", "—");
     return;
   }
 
