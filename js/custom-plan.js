@@ -1212,9 +1212,11 @@ function cpManualAddExRow(prefill) {
     if (prefill?.groupSets) div.dataset.groupSets = String(prefill.groupSets);
   }
 
+  const _cpDragSvg = '<span class="drag-handle" title="Drag to reorder · drop on a row to superset">⠿</span>';
   if (isHiit) {
     div.innerHTML = `
       <div class="ex-row-header">
+        ${_cpDragSvg}
         <input type="text" id="cp-mex-${id}" class="ex-row-name" placeholder="e.g. Burpees, Row 500m" value="${_cpEsc(pName)}" />
         <button type="button" class="ex-row-delete" onclick="cpManualRemoveRow(${id})" title="Remove">×</button>
       </div>
@@ -1235,6 +1237,7 @@ function cpManualAddExRow(prefill) {
     const startExpanded = !!(pPerSet && pPerSet.length);
     div.innerHTML = `
       <div class="ex-row-header">
+        ${_cpDragSvg}
         <input type="text" id="cp-mex-${id}" class="ex-row-name" placeholder="${exPlaceholder}" value="${_cpEsc(pName)}" />
         <button type="button" class="ex-row-delete" onclick="cpManualRemoveRow(${id})" title="Remove">×</button>
       </div>
@@ -1248,7 +1251,7 @@ function cpManualAddExRow(prefill) {
           <input type="text" id="cp-mreps-${id}" placeholder="10" value="${_cpEsc(pReps)}" data-pyr-field="cp:default:${id}" />
         </div>
         <div class="ex-row-field">
-          <label>Weight (lbs)</label>
+          <label>Weight</label>
           <input type="text" id="cp-mwt-${id}" placeholder="${wtPlaceholder}" value="${_cpEsc(wtValue)}"${isBW ? ' readonly' : ''} data-pyr-field="cp:default:${id}" />
         </div>
       </div>

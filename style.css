@@ -15104,13 +15104,24 @@ body.auth-visible #bottom-nav { display: none !important; }
 .ex-row .remove-exercise-btn { position: static; }
 /* Drag handle (if any leaked through) is no longer shown */
 .ex-row .drag-handle { display: none !important; }
-/* …except in the workout editor, where rows are reorderable */
-.ex-row.edit-exercise-row .drag-handle {
+/* …except in the workout editor + custom-plan manual builder, where
+   rows are reorderable and droppable into supersets. */
+.ex-row.edit-exercise-row .drag-handle,
+#cp-manual-exercise-rows .ex-row .drag-handle {
   display: flex !important;
+  align-items: center;
+  justify-content: center;
   position: static;
   width: 28px;
   min-width: 28px;
+  height: 36px;
   transform: none;
+  color: var(--color-text-muted);
+  cursor: grab;
+  font-size: 18px;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
 }
 
 .ex-row-header {
