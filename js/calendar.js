@@ -6721,16 +6721,11 @@ function qeGoManual() {
     qeGoManualHIIT();
     return;
   }
-  if (_qeSelectedMuscles.size === 0) {
-    alert("Please select at least one muscle group.");
-    return;
-  }
-  const duration = document.getElementById("qe-strength-duration")?.value;
-  if (!duration) {
-    alert("Please choose a session length.");
-    document.getElementById("qe-strength-duration")?.focus();
-    return;
-  }
+  // Manual entry doesn't need muscle pre-selection — the user types
+  // exercise names by hand. The muscle picker is only required for AI
+  // generation (qeGenerateStrength), which still validates separately.
+  // The duration is also optional here; if blank the manual builder will
+  // accept whatever rows the user enters.
   qeShowStep(2, "manual");
 }
 
