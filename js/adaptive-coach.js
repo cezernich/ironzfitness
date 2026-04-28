@@ -118,22 +118,50 @@ function analyzeNutritionEngagement() {
 
   // Meal.date is usually "YYYY-MM-DD" but some code paths may store a full
   // ISO timestamp. Slice to 10 chars so either shape counts.
-  const daysLogged = new Set(
-    meals
-      .map(m => String((m && m.date) || "").slice(0, 10))
-      .filter(d => recentDays.has(d))
-  ).size;
+  const allMealDates = meals
+    .map(m => String((m && m.date) || "").slice(0, 10))
+    .filter(d => d.length === 10);
+  const daysLogged = new Set(allMealDates.filter(d => recentDays.has(d))).size;
 
-  if (daysLogged <= 2) {
+  // BUGFIX: scale the denominator to how long the user has actually been
+  // tracking. A user who logged Mon + Tue is at 2/2 days, not 2/7 — the
+  // old "you've logged on 2/7 days, every bit counts" nag was firing on
+  // perfect attendance. Tracking-window logic:
+  //   - Find earliest meal date (or fall back to today if none).
+  //   - daysTracking = min(7, calendar days from earliest meal through today).
+  //   - If daysTracking < 3, suppress — too early to judge engagement.
+  //   - Otherwise, fire "not engaged" only when ratio is genuinely low
+  //     (<= 30% of available days).
+  const earliestMealDate = allMealDates.length
+    ? allMealDates.reduce((min, d) => (d < min ? d : min))
+    : null;
+
+  let daysTracking = 7;
+  if (earliestMealDate) {
+    const earliest = new Date(earliestMealDate + "T00:00:00");
+    const todayLocal = new Date(_localDateStr(today) + "T00:00:00");
+    const diffDays = Math.floor((todayLocal - earliest) / (1000 * 60 * 60 * 24)) + 1;
+    daysTracking = Math.min(7, Math.max(1, diffDays));
+  }
+
+  if (daysTracking < 3) {
+    // Too early to call disengagement — the user might just have started
+    // tracking this week.
+    return { engaged: true, daysLogged, daysTracking };
+  }
+
+  const ratio = daysLogged / daysTracking;
+  if (ratio <= 0.3 && daysLogged <= 2) {
     return {
       engaged: false,
       daysLogged,
-      message: `You've logged meals on ${daysLogged}/7 days. Try just logging one meal per day — every bit counts.`,
+      daysTracking,
+      message: `You've logged meals on ${daysLogged}/${daysTracking} days. Try just logging one meal per day — every bit counts.`,
       suggestion: "simplify",
     };
   }
 
-  return { engaged: true, daysLogged };
+  return { engaged: true, daysLogged, daysTracking };
 }
 
 /* =====================================================================
