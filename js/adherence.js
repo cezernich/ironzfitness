@@ -146,6 +146,8 @@ function getCurrentStreak() {
  * Returns { type, title, message, actions } or null if not applicable.
  */
 function getAdherencePrompt() {
+  if (isAdherenceDismissedToday()) return null;
+
   const daysSince = getDaysSinceLastActivity();
   const missed = detectMissedDays(7);
 
@@ -178,9 +180,14 @@ function getAdherencePrompt() {
     };
   }
 
-  // Single missed day — gentle nudge
+  // Single missed day — gentle nudge, but only for *yesterday's* miss.
+  // Anything older is stale; we don't want to nag about a Sunday session on Tuesday.
   if (missed.length === 1) {
     const m = missed[0];
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().slice(0, 10);
+    if (m.date !== yesterdayStr) return null;
     return {
       type: "missed-single",
       title: "Pick Up Where You Left Off",
