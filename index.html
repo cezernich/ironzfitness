@@ -1444,10 +1444,15 @@
            entry card styling). Hidden for users who already have an
            active coaching assignment as a client; initCoachVisibility()
            in js/coach-request-flow.js flips display after auth ready. -->
-      <section class="card" id="section-coach-request" style="display:none">
-        <h2 style="color:var(--color-coach,#534AB7)">Want a coach?</h2>
-        <p class="hint">Get matched with an IronZ coach to write your training and review your week. Free and Premium athletes both eligible.</p>
-        <button class="btn-primary" onclick="openCoachRequestForm()">Request a Coach</button>
+      <section class="card collapsible is-collapsed" id="section-coach-request" style="display:none">
+        <div class="card-toggle" onclick="toggleSection('section-coach-request')">
+          <h2 style="color:var(--color-coach,#534AB7);margin:0">Want a coach?</h2>
+          <span class="card-chevron">▾</span>
+        </div>
+        <div class="card-body">
+          <p class="hint">Get matched with an IronZ coach to write your training and review your week. Free and Premium athletes both eligible.</p>
+          <button class="btn-primary" onclick="openCoachRequestForm()">Request a Coach</button>
+        </div>
       </section>
 
       <!-- Athlete Profile -->
