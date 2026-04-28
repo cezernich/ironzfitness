@@ -141,7 +141,10 @@
             </div>
             <div class="admin-coach-card-actions">
               <button class="btn-secondary btn-sm" onclick="adminAssignClientOpen('${coach.id}')">+ Assign client</button>
-              <button class="admin-action-btn" title="Demote (revoke coach status)" onclick="adminDemoteCoach('${coach.id}')">⤓</button>
+              <button class="btn-secondary btn-sm" aria-label="Revoke coach status"
+                title="Revoke coach status (also deactivates active client assignments)"
+                onclick="adminDemoteCoach('${coach.id}')"
+                style="color:var(--color-danger,#b91c1c)">Demote</button>
             </div>
           </div>
           <div class="admin-coach-clients">${clientRows}</div>
