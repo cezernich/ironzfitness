@@ -224,8 +224,24 @@ function updateTrainingContext() {
   }
 
   contextEl.style.display = "";
-  const type = workout.type || workout.discipline || "workout";
-  const title = workout.title || workout.name || type;
+  // BUGFIX: brick sessions store type:"triathlon" with discipline:"brick"
+  // — the old fallback printed "triathlon scheduled today" because neither
+  // title nor name was set. Prefer sessionName (what the card displays),
+  // fall back to a friendly type-label map, then to the raw type.
+  const _NUT_TYPE_LABEL = {
+    brick: "Brick", triathlon: "Brick",
+    weightlifting: "Strength", strength: "Strength",
+    hiit: "HIIT", hyrox: "Hyrox",
+    running: "Run", run: "Run",
+    cycling: "Ride", bike: "Ride",
+    swimming: "Swim", swim: "Swim",
+    yoga: "Yoga", bodyweight: "Bodyweight",
+    general: "Workout", wellness: "Wellness",
+    walking: "Walk", hiking: "Hike", rowing: "Row",
+  };
+  const key = String(workout.discipline || workout.type || "").toLowerCase();
+  const labelFromType = _NUT_TYPE_LABEL[key] || workout.type || "Workout";
+  const title = workout.sessionName || workout.title || workout.name || labelFromType;
   textEl.textContent = `${title} scheduled today — prioritize protein and stay hydrated.`;
 }
 
