@@ -1438,6 +1438,12 @@ function _cpRefreshSsBadges() {
     const g = row.dataset.supersetGroup;
     // Remove any stale badge / sets control
     row.querySelectorAll(".cp-ss-badge, .cp-ss-sets-wrap").forEach(el => el.remove());
+    // BUGFIX: a superset has ONE shared sets count (the group's groupSets),
+    // not per-exercise sets. Tag the row so CSS can hide the per-row Sets
+    // field and its label — otherwise the user sees two competing sets
+    // controls with no way to know which one wins. Untagged rows show the
+    // standard Sets / Reps / Weight columns.
+    row.classList.toggle("ex-row--in-superset", !!g);
     if (!g) return;
     counts[g] = (counts[g] || 0) + 1;
 
@@ -1870,11 +1876,18 @@ function customPlanSaveManual() {
         reps: document.getElementById(`cp-mreps-${id}`)?.value.trim() || "",
         weight: document.getElementById(`cp-mwt-${id}`)?.value.trim() || "",
       };
-      if (!isHiit) ex.sets = document.getElementById(`cp-msets-${id}`)?.value.trim() || "";
-
       // Superset group from drag-to-group dataset
       ex.supersetGroup = row.dataset.supersetGroup || null;
       if (row.dataset.groupSets) ex.groupSets = parseInt(row.dataset.groupSets) || 3;
+      // BUGFIX: for grouped rows the per-row sets input is hidden — the
+      // group's groupSets is the source of truth. Use it for ex.sets so
+      // downstream consumers that don't know about supersets see the
+      // right number.
+      if (!isHiit) {
+        ex.sets = ex.supersetGroup
+          ? String(ex.groupSets || 3)
+          : (document.getElementById(`cp-msets-${id}`)?.value.trim() || "");
+      }
 
       // Collect per-set details only if the panel is expanded AND values differ
       // from the defaults — otherwise save as a flat sets/reps/weight entry.

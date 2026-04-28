@@ -15206,6 +15206,20 @@ body.auth-visible #bottom-nav { display: none !important; }
 .ex-row-defaults--bw {
   grid-template-columns: 1fr 1fr;
 }
+
+/* Superset rows share ONE sets count via the group's sets control at the
+   top of the group. Hide the per-row Sets column so users don't end up
+   typing 2 in one row and 4 in the next and then wondering which wins.
+   The group's `[ A | 3 sets | × ]` control is the only sets editor for
+   members of the group. HIIT rows don't have a Sets column to hide
+   (the first field is Reps/Time/Distance) so the :not() guard skips
+   them. */
+.qe-manual-row.ex-row--in-superset .ex-row-defaults:not(.ex-row-defaults--hiit) {
+  grid-template-columns: 1fr 1fr;
+}
+.qe-manual-row.ex-row--in-superset .ex-row-defaults:not(.ex-row-defaults--hiit) > .ex-row-field:first-child {
+  display: none;
+}
 .ex-pyramid-detail--bw .ex-pyr-header,
 .ex-pyramid-detail--bw .ex-pyr-row {
   grid-template-columns: 56px 1fr;
