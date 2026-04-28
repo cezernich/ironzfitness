@@ -805,6 +805,7 @@ input[type="number"],
 input[type="date"],
 input[type="email"],
 input[type="password"],
+input[type="search"],
 select {
   padding: 10px 12px;
   border: 1.5px solid var(--color-border);
@@ -831,6 +832,7 @@ input[type="number"]:focus,
 input[type="date"]:focus,
 input[type="email"]:focus,
 input[type="password"]:focus,
+input[type="search"]:focus,
 select:focus {
   outline: none;
   border-color: var(--color-accent);
@@ -13639,6 +13641,18 @@ input.completion-ex-name:focus {
   display: flex;
   gap: 6px;
   margin-top: 8px;
+}
+.admin-coach-req-notes-toggle {
+  background: none;
+  border: none;
+  padding: 0 0 0 6px;
+  color: var(--color-coach, #534AB7);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.admin-coach-req-notes-toggle:hover {
+  text-decoration: underline;
 }
 
 @media (max-width: 520px) {

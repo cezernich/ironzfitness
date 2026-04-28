@@ -17,6 +17,7 @@
   let _coaches = [];               // profiles with is_coach=true
   let _assignments = [];            // active coaching_assignments
   let _coachRequests = [];          // coach_requests rows (all statuses)
+  let _profilesById = {};           // id → profile, populated on load
   let _coachInnerTab = "coach-roster";
 
   // ── Entry point ────────────────────────────────────────────────────────
@@ -34,9 +35,14 @@
     _setText("admin-coaches-active", "…");
     _setText("admin-coaches-pending-requests", "…");
 
-    // Three queries in parallel — all needed for the headline stats.
+    // Four queries in parallel. The profiles fetch is independent of
+    // window._adminProfiles so the Coaches tab works even when the admin
+    // hasn't opened the Users tab yet — earlier the UUID-prefix fallback
+    // showed up in archived request rows because _profileMap() had nothing
+    // to look up against.
     try {
-      const [coachesRes, assignRes, reqRes] = await Promise.all([
+      const [profilesRes, coachesRes, assignRes, reqRes] = await Promise.all([
+        client.from("profiles").select("id, full_name, email, subscription_status, role, is_coach, created_at"),
         client.from("profiles").select("*").eq("is_coach", true).order("full_name"),
         client.from("coaching_assignments").select("*").eq("active", true).order("assigned_at", { ascending: false }),
         client.from("coach_requests").select("*").order("created_at", { ascending: false }),
@@ -46,9 +52,17 @@
       _assignments  = assignRes.data || [];
       _coachRequests = reqRes.data || [];
 
-      if (coachesRes.error) console.warn("[AdminCoaches] coaches query:", coachesRes.error);
-      if (assignRes.error)  console.warn("[AdminCoaches] assignments query:", assignRes.error);
-      if (reqRes.error)     console.warn("[AdminCoaches] requests query:", reqRes.error);
+      _profilesById = {};
+      for (const p of (profilesRes.data || [])) _profilesById[p.id] = p;
+      // Also populate the shared cache so Roster modals don't re-fetch.
+      if (profilesRes.data && profilesRes.data.length) {
+        window._adminProfiles = profilesRes.data;
+      }
+
+      if (profilesRes.error) console.warn("[AdminCoaches] profiles query:", profilesRes.error);
+      if (coachesRes.error)  console.warn("[AdminCoaches] coaches query:", coachesRes.error);
+      if (assignRes.error)   console.warn("[AdminCoaches] assignments query:", assignRes.error);
+      if (reqRes.error)      console.warn("[AdminCoaches] requests query:", reqRes.error);
     } catch (e) {
       console.warn("[AdminCoaches] load failed:", e);
     }
@@ -137,10 +151,12 @@
   }
 
   function _profileMap() {
-    const map = {};
+    // Prefer the local _profilesById fetched at loadAdminCoaches time —
+    // that's the freshest. Fall back to window._adminProfiles cached by
+    // the Users tab. Always fold coaches in case a coach is also a client.
+    const map = { ..._profilesById };
     const profiles = window._adminProfiles || [];
-    for (const p of profiles) map[p.id] = p;
-    // Also fold in coaches in case a coach is also a client of another.
+    for (const p of profiles) if (!map[p.id]) map[p.id] = p;
     for (const c of _coaches) if (!map[c.id]) map[c.id] = c;
     return map;
   }
@@ -154,8 +170,10 @@
       editor.style.display = "none";
       return;
     }
-    // Filter: non-coach users only.
-    const candidates = (window._adminProfiles || []).filter(p => !p.is_coach);
+    // Filter: non-coach users with an active account — has both an email
+    // (auth bound) and a full_name (completed signup), so the dropdown
+    // doesn't surface ghost rows from incomplete signups.
+    const candidates = (window._adminProfiles || []).filter(_isPromoteEligible);
     editor.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <h3 style="margin:0">Promote user to coach</h3>
@@ -367,9 +385,9 @@
     const archived = _coachRequests.filter(r => r.status === "archived" || r.status === "declined");
 
     let html = "";
-    html += _renderRequestSection("PENDING", pending, true);
-    if (matched.length)  html += _renderRequestSection("MATCHED", matched, false);
-    if (archived.length) html += _renderRequestSection("ARCHIVED", archived, false);
+    html += _renderRequestSection("PENDING", pending, "pending");
+    if (matched.length)  html += _renderRequestSection("MATCHED", matched, "matched");
+    if (archived.length) html += _renderRequestSection("ARCHIVED", archived, "archived");
 
     if (!_coachRequests.length) {
       html = `<div class="card" style="color:var(--color-text-muted);text-align:center;padding:24px">
@@ -393,44 +411,77 @@
     beginner: "Beginner", intermediate: "Intermediate", advanced: "Advanced",
   };
 
-  function _renderRequestSection(title, rows, allowActions) {
+  function _renderRequestSection(title, rows, status) {
+    // status: "pending" | "matched" | "archived"
+    // Drives which actions render. Pending → Match + Archive. Matched +
+    // Archived → Delete (for cleanup).
     if (!rows.length) return "";
     const profileLookup = _profileMap();
     const items = rows.map(r => {
       const p = profileLookup[r.user_id];
-      const name = _esc(p?.full_name || p?.email || r.user_id.slice(0, 8));
-      const email = _esc(p?.email || "");
+      // Header: prefer "Full Name · email". Fall back gracefully when
+      // either is missing. The UUID prefix is now a last-resort sentinel
+      // (e.g. profile somehow not loaded).
+      const fullName = (p?.full_name || "").trim();
+      const email    = (p?.email || "").trim();
+      let nameLine;
+      if (fullName && email)        nameLine = `${_esc(fullName)} <span style="color:var(--color-text-muted);font-weight:400">· ${_esc(email)}</span>`;
+      else if (fullName)            nameLine = _esc(fullName);
+      else if (email)               nameLine = _esc(email);
+      else                          nameLine = `<span style="color:var(--color-text-muted);font-weight:400">${_esc(r.user_id.slice(0, 8))}</span>`;
+
+      // Plan badge — current subscription_status from the profile, NOT
+      // the snapshot at request time. Admin wants to know what the user
+      // has right now when triaging.
+      const isPremium = p?.subscription_status === "premium";
+      const planBadge = isPremium
+        ? `<span class="admin-badge admin-badge-premium" style="margin-left:6px">Premium</span>`
+        : `<span class="admin-badge admin-badge-free" style="margin-left:6px">Free</span>`;
+
       const ago = r.created_at ? _relativeTime(r.created_at) : "";
       const sport = _SPORT_LABEL[r.sport] || r.sport;
-      const goal = _GOAL_LABEL[r.goal] || r.goal;
-      const exp = _EXP_LABEL[r.experience] || r.experience;
-      const notes = r.notes ? _esc(r.notes) : "";
-      const premium = r.premium_at_request ? `<span class="admin-badge admin-badge-premium" style="margin-left:6px">Premium</span>` : "";
+      const goal  = _GOAL_LABEL[r.goal]   || r.goal;
+      const exp   = _EXP_LABEL[r.experience] || r.experience;
+
+      const notesBlock = _renderNotesBlock(r.id, r.notes || "");
+
       const matched = r.matched_coach_id
         ? (() => {
             const mc = profileLookup[r.matched_coach_id];
-            return `<div style="font-size:0.78rem;color:var(--color-text-muted);margin-top:4px">Matched to ${_esc(mc?.full_name || mc?.email || r.matched_coach_id)}${r.matched_at ? " · " + new Date(r.matched_at).toLocaleDateString() : ""}</div>`;
+            const mcLabel = _esc(mc?.full_name || mc?.email || r.matched_coach_id.slice(0, 8));
+            const mcDate  = r.matched_at ? " · " + new Date(r.matched_at).toLocaleDateString() : "";
+            return `<div style="font-size:0.78rem;color:var(--color-text-muted);margin-top:4px">Matched to ${mcLabel}${mcDate}</div>`;
           })()
         : "";
 
-      const actions = allowActions ? `
-        <div class="admin-coach-request-actions">
-          <button class="btn-secondary btn-sm" onclick="adminCoachRequestMatch('${r.id}')">Match to coach</button>
-          <button class="admin-action-btn" title="Archive" onclick="adminCoachRequestArchive('${r.id}')">📁</button>
-        </div>
-        <div id="admin-coach-request-match-${r.id}" style="display:none"></div>` : "";
+      let actions = "";
+      if (status === "pending") {
+        actions = `
+          <div class="admin-coach-request-actions">
+            <button class="btn-secondary btn-sm" onclick="adminCoachRequestMatch('${r.id}')">Match to coach</button>
+            <button class="btn-secondary btn-sm" aria-label="Archive request" title="Archive request"
+              onclick="adminCoachRequestArchive('${r.id}')">Archive</button>
+          </div>
+          <div id="admin-coach-request-match-${r.id}" style="display:none"></div>`;
+      } else if (status === "matched" || status === "archived") {
+        actions = `
+          <div class="admin-coach-request-actions">
+            <button class="btn-secondary btn-sm" aria-label="Delete request" title="Delete request"
+              onclick="adminCoachRequestDelete('${r.id}')" style="color:var(--color-danger,#b91c1c)">Delete</button>
+          </div>`;
+      }
 
       return `<div class="admin-coach-request-row">
         <div class="admin-coach-request-header">
-          <div>
-            <div style="font-weight:600">${name}${premium}</div>
-            <div style="font-size:0.78rem;color:var(--color-text-muted)">${email} · ${ago}</div>
+          <div style="min-width:0;flex:1">
+            <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis">${nameLine}${planBadge}</div>
+            <div style="font-size:0.78rem;color:var(--color-text-muted);margin-top:2px">${ago}</div>
           </div>
-          <div style="font-size:0.78rem;color:var(--color-text-muted);text-align:right">
+          <div style="font-size:0.78rem;color:var(--color-text-muted);text-align:right;flex-shrink:0">
             ${_esc(sport)} · ${_esc(goal)} · ${_esc(exp)}
           </div>
         </div>
-        ${notes ? `<div class="admin-coach-request-notes">"${notes}"</div>` : ""}
+        ${notesBlock}
         ${matched}
         ${actions}
       </div>`;
@@ -440,6 +491,71 @@
       <div style="font-size:0.78rem;font-weight:700;letter-spacing:0.06em;color:var(--color-text-muted);margin-bottom:8px">${title} (${rows.length})</div>
       ${items}
     </div>`;
+  }
+
+  // Long notes get a "Show more / Show less" toggle so the row stays
+  // scannable at a glance. Threshold tuned so single-line notes never
+  // need expansion but a paragraph does. Full text is stored on a
+  // data-full attribute (HTML-escaped via _esc) — safer than embedding
+  // it in an inline onclick payload, which breaks on quoted notes.
+  const NOTES_PREVIEW_CHARS = 140;
+  function _renderNotesBlock(requestId, raw) {
+    if (!raw) return "";
+    const text = String(raw);
+    if (text.length <= NOTES_PREVIEW_CHARS) {
+      return `<div class="admin-coach-request-notes">"${_esc(text)}"</div>`;
+    }
+    const preview = text.slice(0, NOTES_PREVIEW_CHARS).replace(/\s+\S*$/, "") + "…";
+    return `
+      <div class="admin-coach-request-notes" id="admin-coach-req-notes-${requestId}"
+           data-expanded="0" data-full="${_esc(text)}" data-preview="${_esc(preview)}">
+        <span class="admin-coach-req-notes-text">"${_esc(preview)}"</span>
+        <button class="admin-coach-req-notes-toggle"
+          aria-expanded="false"
+          onclick="adminCoachRequestToggleNotes('${requestId}')">
+          Show more
+        </button>
+      </div>`;
+  }
+
+  function adminCoachRequestToggleNotes(requestId) {
+    const wrap = document.getElementById(`admin-coach-req-notes-${requestId}`);
+    if (!wrap) return;
+    const textEl = wrap.querySelector(".admin-coach-req-notes-text");
+    const btn    = wrap.querySelector(".admin-coach-req-notes-toggle");
+    if (!textEl || !btn) return;
+    const expanded = wrap.dataset.expanded === "1";
+    if (expanded) {
+      textEl.textContent = `"${wrap.dataset.preview || ""}"`;
+      btn.textContent = "Show more";
+      btn.setAttribute("aria-expanded", "false");
+      wrap.dataset.expanded = "0";
+    } else {
+      textEl.textContent = `"${wrap.dataset.full || ""}"`;
+      btn.textContent = "Show less";
+      btn.setAttribute("aria-expanded", "true");
+      wrap.dataset.expanded = "1";
+    }
+  }
+
+  async function adminCoachRequestDelete(requestId) {
+    const r = _coachRequests.find(x => x.id === requestId);
+    if (!r) return;
+    const profileLookup = _profileMap();
+    const p = profileLookup[r.user_id];
+    const label = (p?.full_name || p?.email || r.user_id.slice(0, 8));
+    if (!confirm(`Delete this request from ${label}? This is permanent — the row is removed from the database.`)) return;
+
+    const { error } = await window.supabaseClient
+      .from("coach_requests")
+      .delete()
+      .eq("id", requestId);
+
+    if (error) {
+      alert("Failed to delete: " + error.message);
+      return;
+    }
+    await loadAdminCoaches();
   }
 
   function adminCoachRequestMatch(requestId) {
@@ -540,10 +656,14 @@
   function _relativeTime(iso) {
     try {
       const ms = Date.now() - new Date(iso).getTime();
-      const days = Math.floor(ms / (1000 * 60 * 60 * 24));
-      if (days <= 0) return "today";
-      if (days === 1) return "1 day ago";
-      if (days < 30) return `${days} days ago`;
+      if (ms < 60 * 1000)             return "just now";
+      const minutes = Math.floor(ms / (60 * 1000));
+      if (minutes < 60)               return minutes === 1 ? "1m ago" : `${minutes}m ago`;
+      const hours = Math.floor(ms / (60 * 60 * 1000));
+      if (hours < 24)                 return hours === 1 ? "1h ago" : `${hours}h ago`;
+      const days = Math.floor(ms / (24 * 60 * 60 * 1000));
+      if (days === 1)                 return "1 day ago";
+      if (days < 30)                  return `${days} days ago`;
       const months = Math.floor(days / 30);
       return months === 1 ? "1 month ago" : `${months} months ago`;
     } catch { return ""; }
@@ -563,4 +683,6 @@
   window.adminCoachRequestMatch         = adminCoachRequestMatch;
   window.adminCoachRequestMatchConfirm  = adminCoachRequestMatchConfirm;
   window.adminCoachRequestArchive       = adminCoachRequestArchive;
+  window.adminCoachRequestDelete        = adminCoachRequestDelete;
+  window.adminCoachRequestToggleNotes   = adminCoachRequestToggleNotes;
 })();
