@@ -2660,7 +2660,7 @@ function _deriveAccessoryWeight(name, reps) {
     else if (/dumbbell.*(overhead|shoulder)\s*press/.test(n)) { key = "ohp";   factor = 0.80; }
     else if (/landmine|seated\s*shoulder/.test(n))         { key = "ohp";      factor = 0.85; }
     else if (/tricep\s*kickback/.test(n))                  { key = "ohp";      factor = 0.15; }
-    else if (/tricep\s*pushdown|tricep\s*extension|skull\s*crusher|overhead\s*tricep/.test(n)) { key = "ohp"; factor = 0.30; }
+    else if (/tricep\s*push[- ]?down|tricep\s*extension|skull\s*crusher|overhead\s*tricep|rope\s*push[- ]?down|cable\s*push[- ]?down/.test(n)) { key = "ohp"; factor = 0.30; }
     else if (/face\s*pull/.test(n))                        { key = "row";      factor = 0.30; }
     else if (/lateral\s*raise|side\s*raise/.test(n))       { key = "ohp";      factor = 0.20; }
     else if (/front\s*raise/.test(n))                      { key = "ohp";      factor = 0.25; }
