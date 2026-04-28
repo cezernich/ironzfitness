@@ -254,7 +254,7 @@ function renderAdminUsers() {
     return `<tr>
       <td class="admin-td-name">${name}</td>
       <td class="admin-td-email">${email}</td>
-      <td>${roleBadge}${coachBadge}</td>
+      <td style="white-space:nowrap">${roleBadge}${coachBadge}</td>
       <td>${subBadge}</td>
       <td>${joined}</td>
       <td class="admin-td-actions">
