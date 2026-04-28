@@ -674,6 +674,16 @@ function _swimStepsForWorkout(w) {
 
 function _swimTotalDistanceM(w) {
   if (!w) return 0;
+  // BUGFIX: a completed swim that explicitly tagged distance_unit:"yd"
+  // (user picked the yd toggle on Mark as Complete) wins over any
+  // total_distance_m carried forward from the source template — the
+  // template was authored in meters and would otherwise mis-display the
+  // logged yardage as meters in the Strava preview.
+  if (w.distance != null && _swimPoolUnit(w) === "yd") {
+    const s = String(w.distance).trim();
+    const num = parseFloat(s.replace(/,/g, ""));
+    if (num > 0) return Math.round(num * 0.9144); // yd → m
+  }
   const explicit = w.total_distance_m ?? w.aiSession?.total_distance_m;
   if (explicit && explicit > 0) return explicit;
   const steps = _swimStepsForWorkout(w);
@@ -697,8 +707,15 @@ function _formatSwimDistance(m, poolUnit) {
   return `${val.toLocaleString()}${unit}`;
 }
 
+// BUGFIX: prefer a completion's explicit distance_unit ("yd") over the
+// source template's pool_unit ("m"). Logging a swim with the yd toggle
+// otherwise stayed mis-labeled because the source CSS Swim template
+// carried forward pool_unit:"m" via _carryForward in saveSessionCompletion.
 function _swimPoolUnit(w) {
-  return (w?.aiSession?.pool_unit || w?.pool_unit || "m") === "yd" ? "yd" : "m";
+  if (!w) return "m";
+  if (w.distance_unit === "yd") return "yd";
+  if (w.distance_unit === "m") return "m";
+  return (w.aiSession?.pool_unit || w.pool_unit || "m") === "yd" ? "yd" : "m";
 }
 
 // Format an arbitrary distance value for the "Distance:" description line.
