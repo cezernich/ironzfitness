@@ -1103,7 +1103,7 @@ function _renderBottleButtons() {
       remainingLabel = "Goal met";
     } else if (size > 0) {
       const need = Math.ceil(remainingOz / size);
-      remainingLabel = `${need} more to hit goal`;
+      remainingLabel = `${need} more to goal`;
     } else {
       remainingLabel = "";
     }

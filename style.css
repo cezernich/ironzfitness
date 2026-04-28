@@ -8285,18 +8285,23 @@ input.completion-ex-name:focus {
   width: 100%; margin-top: 10px;
   padding: 12px 16px; font-size: 0.95rem;
 }
-/* Named-bottle buttons — one per user-saved bottle */
+/* Named-bottle buttons — one per user-saved bottle. Compact cells so
+   three typical bottles fit in one row on phone widths instead of
+   leaving a half-empty second row. */
 .hydration-bottle-buttons {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px;
-  margin-top: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 6px;
+  margin-top: 8px;
 }
 .hydration-bottle-btn {
-  padding: 12px 14px;
-  font-size: 0.9rem;
+  padding: 8px 6px;
+  font-size: 0.78rem;
   font-weight: 700;
   width: 100%;
+  line-height: 1.2;
+  white-space: normal;
+  word-break: keep-all;
 }
 /* Bottle editor rows in the settings modal */
 .hydration-bottles-list {
@@ -8338,14 +8343,15 @@ input.completion-ex-name:focus {
 .hydration-bottle-cell {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   align-items: center;
 }
 .hydration-bottle-remaining {
-  font-size: 0.72rem;
+  font-size: 0.62rem;
   font-weight: 600;
   color: var(--color-text-muted);
   text-align: center;
+  line-height: 1.2;
 }
 .hydration-secondary-row {
   display: flex; justify-content: center; gap: 16px; margin-top: 6px;
