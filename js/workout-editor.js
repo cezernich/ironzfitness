@@ -102,13 +102,19 @@ function openEditPlanSession(dateStr, raceId, discipline, load) {
           var zone = step.zone || step.effort || "Z2";
           if (typeof zone === 'number') zone = "Z" + zone;
           if (typeof zone === 'string' && /^\d+$/.test(zone)) zone = "Z" + zone;
+          // Templates store between-rep rest as `step.rest` (number, minutes).
+          // The legacy seed read `step.restDuration` / `step.restEffort` which
+          // don't exist on templates, so first-time edits silently lost the
+          // rest period (5 min rest → empty field → saved as no rest).
+          const _restMin = (typeof step.rest === "number" ? step.rest : null);
           return {
             name: step.label || step.name || "",
             duration: (step.duration || "") + " min",
             effort: zone,
             reps: step.reps || 1,
-            restDuration: step.restDuration ? (step.restDuration + " min") : "",
-            restEffort: step.restEffort ? ("Z" + step.restEffort) : "",
+            restDuration: _restMin != null ? `${_restMin} min` : "",
+            restEffort: "RW",
+            ...(step.note ? { note: step.note } : {}),
           };
         })
       };
@@ -148,13 +154,19 @@ function openEditScheduledWorkout(id) {
           var zone = step.zone || step.effort || "Z2";
           if (typeof zone === 'number') zone = "Z" + zone;
           if (typeof zone === 'string' && /^\d+$/.test(zone)) zone = "Z" + zone;
+          // Templates store between-rep rest as `step.rest` (number, minutes).
+          // The legacy seed read `step.restDuration` / `step.restEffort` which
+          // don't exist on templates, so first-time edits silently lost the
+          // rest period (5 min rest → empty field → saved as no rest).
+          const _restMin = (typeof step.rest === "number" ? step.rest : null);
           return {
             name: step.label || step.name || "",
             duration: (step.duration || "") + " min",
             effort: zone,
             reps: step.reps || 1,
-            restDuration: step.restDuration ? (step.restDuration + " min") : "",
-            restEffort: step.restEffort ? ("Z" + step.restEffort) : "",
+            restDuration: _restMin != null ? `${_restMin} min` : "",
+            restEffort: "RW",
+            ...(step.note ? { note: step.note } : {}),
           };
         })
       };

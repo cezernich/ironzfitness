@@ -4,7 +4,7 @@
 // Cache version: bump this string any time you want to force every client
 // to drop the old cache and re-fetch everything from the network. The
 // activate handler deletes any cache whose name doesn't match CACHE_NAME.
-const CACHE_NAME = "ironz-v6";
+const CACHE_NAME = "ironz-v7";
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html",
