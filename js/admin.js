@@ -239,6 +239,11 @@ function renderAdminUsers() {
     const roleBadge = p.role === "admin"
       ? `<span class="admin-badge admin-badge-admin">Admin</span>`
       : `<span class="admin-badge admin-badge-user">User</span>`;
+    // Surface profiles.is_coach so the Users list reflects coaching
+    // status without forcing the admin into the Coaches sub-tab.
+    const coachBadge = p.is_coach
+      ? `<span class="admin-badge admin-badge-coach" style="margin-left:4px">Coach</span>`
+      : "";
     const subBadge = p.subscription_status === "premium"
       ? `<span class="admin-badge admin-badge-premium">Premium</span>`
       : `<span class="admin-badge admin-badge-free">Free</span>`;
@@ -249,7 +254,7 @@ function renderAdminUsers() {
     return `<tr>
       <td class="admin-td-name">${name}</td>
       <td class="admin-td-email">${email}</td>
-      <td>${roleBadge}</td>
+      <td>${roleBadge}${coachBadge}</td>
       <td>${subBadge}</td>
       <td>${joined}</td>
       <td class="admin-td-actions">

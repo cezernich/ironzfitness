@@ -13388,6 +13388,13 @@ input.completion-ex-name:focus {
   color: var(--color-text-muted);
 }
 
+.admin-badge-coach {
+  /* Matches --color-coach (#534AB7) — same purple used by the Coach
+     Portal entry card and FROM-coach attribution. */
+  background: rgba(83, 74, 183, 0.15);
+  color: var(--color-coach, #534AB7);
+}
+
 /* ── Responsive ── */
 
 @media (max-width: 520px) {
