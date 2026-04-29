@@ -399,9 +399,29 @@
                         || (below && below.dataset.supersetGroup === g);
       if (!stillInGroup) delete row.dataset.supersetGroup;
     });
-    // Toggle the visual stripe on grouped rows.
-    rows.forEach(row => {
-      row.classList.toggle("coach-assign-ex-row--ss", !!row.dataset.supersetGroup);
+
+    // Tag each grouped row with its position in the group (first / middle /
+    // last) so CSS can render the left stripe as a bracket — top corner
+    // rounded on first, bottom corner rounded on last, straight in the
+    // middle. The bracket visually fuses the rows of one group and breaks
+    // cleanly between adjacent groups.
+    rows.forEach((row, i) => {
+      const g = row.dataset.supersetGroup;
+      row.classList.toggle("coach-assign-ex-row--ss", !!g);
+      if (!g) {
+        delete row.dataset.ssPos;
+        return;
+      }
+      const above = rows[i - 1];
+      const below = rows[i + 1];
+      const aboveSame = above && above.dataset.supersetGroup === g;
+      const belowSame = below && below.dataset.supersetGroup === g;
+      let pos;
+      if      (!aboveSame && !belowSame) pos = "only";   // pruned out earlier, but defensive.
+      else if (!aboveSame)                pos = "first";
+      else if (!belowSame)                pos = "last";
+      else                                 pos = "middle";
+      row.dataset.ssPos = pos;
     });
   }
 
@@ -420,6 +440,13 @@
   // Mirrors custom-plan.js's cpManualAddCardioRow shape (phase, dist/time
   // toggle, zone, details, optional brick discipline) so the workout JSON
   // round-trips through the existing client renderer without translation.
+  // Drag handle on the top row + middle-drop grouping mirrors the
+  // run/bike repeat-block UI elsewhere — drop a row on the middle of
+  // another to chain them as a "Repeat Nx" block; drop top/bottom to
+  // reorder. Saved as { repeatGroup, groupSets } per interval.
+  let _cardioDragId = null;
+  let _cardioRepCounter = 0;
+
   function _addCardioRow(prefill) {
     _cardioRowCount++;
     const id = _cardioRowCount;
@@ -448,8 +475,12 @@
     row.className = "coach-assign-cardio-row";
     row.id = `coach-assign-crow-${id}`;
     row.dataset.durMode = mode;
+    row.draggable = true;
+    if (prefill?.repeatGroup) row.dataset.repeatGroup = prefill.repeatGroup;
+    if (prefill?.groupSets)   row.dataset.groupSets   = prefill.groupSets;
     row.innerHTML = `
       <div class="coach-assign-crow-top">
+        <span class="drag-handle" title="Drag to reorder · drop on a row to repeat together">⠿</span>
         <select class="input coach-assign-cdisc" style="display:${isBrick ? "" : "none"};max-width:84px;flex:0 0 auto">
           ${dopt("bike","Bike")}${dopt("transition","T")}${dopt("run","Run")}
         </select>
@@ -476,7 +507,192 @@
         </select>
       </div>
       <input type="text" class="input coach-assign-cdetails" placeholder="e.g. 5:30/km, keep HR under 145" value="${_esc(prefill?.details || "")}" />`;
+
+    // Native HTML5 DnD — desktop. Same drop-zone math as the strength
+    // rows: middle 40% = group as repeat block, top 30% = insert above,
+    // bottom 30% = insert below.
+    row.addEventListener("dragstart", (e) => {
+      _cardioDragId = id;
+      row.classList.add("drag-active");
+      try { e.dataTransfer.effectAllowed = "move"; } catch {}
+    });
+    row.addEventListener("dragend", () => {
+      row.classList.remove("drag-active");
+      _cardioDragId = null;
+      _clearCardioDragHints();
+    });
+    row.addEventListener("dragover", (e) => {
+      if (_cardioDragId == null || _cardioDragId === id) return;
+      e.preventDefault();
+      const rect = row.getBoundingClientRect();
+      const pct  = (e.clientY - rect.top) / rect.height;
+      row.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target");
+      if (pct > 0.3 && pct < 0.7) row.classList.add("drag-ss-target");
+      else                         row.classList.add(pct <= 0.3 ? "drag-insert-above" : "drag-insert-below");
+    });
+    row.addEventListener("dragleave", () => {
+      row.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target");
+    });
+    row.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const rect = row.getBoundingClientRect();
+      const pct  = (e.clientY - rect.top) / rect.height;
+      _clearCardioDragHints();
+      if (pct > 0.3 && pct < 0.7) _groupCardioRepeat(_cardioDragId, id);
+      else                         _reorderCardioRow(_cardioDragId, id, pct <= 0.3);
+      _cardioDragId = null;
+    });
+
+    // Touch — same TouchDrag helper the rest of the app already uses.
+    if (typeof TouchDrag !== "undefined" && TouchDrag.attach) {
+      TouchDrag.attach(row, rows, {
+        hintClasses: ["drag-insert-above", "drag-insert-below", "drag-ss-target"],
+        rowSelector: ".coach-assign-cardio-row",
+        handleSelector: ".drag-handle",
+        onDrop(dragEl, targetEl, clientY) {
+          const rect = targetEl.getBoundingClientRect();
+          const pct  = (clientY - rect.top) / rect.height;
+          _clearCardioDragHints();
+          const fromId = parseInt(dragEl.id.replace("coach-assign-crow-", ""), 10);
+          const toId   = parseInt(targetEl.id.replace("coach-assign-crow-", ""), 10);
+          if (pct > 0.3 && pct < 0.7) _groupCardioRepeat(fromId, toId);
+          else                         _reorderCardioRow(fromId, toId, pct <= 0.3);
+        }
+      });
+    }
+
     rows.appendChild(row);
+    _refreshCardioBracket();
+  }
+
+  function _clearCardioDragHints() {
+    document.querySelectorAll("#coach-assign-cardio-rows .coach-assign-cardio-row").forEach(el => {
+      el.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target", "drag-active");
+    });
+  }
+
+  function _reorderCardioRow(fromId, toId, insertAbove) {
+    const fromEl = document.getElementById(`coach-assign-crow-${fromId}`);
+    const toEl   = document.getElementById(`coach-assign-crow-${toId}`);
+    if (!fromEl || !toEl || fromEl === toEl) return;
+    const container = toEl.parentNode;
+    if (insertAbove) container.insertBefore(fromEl, toEl);
+    else             toEl.after(fromEl);
+    // A reorder may break a repeat chain — drop the moving row out of any
+    // group it was in unless its new neighbour is in the same group.
+    const above = fromEl.previousElementSibling;
+    const below = fromEl.nextElementSibling;
+    const g = fromEl.dataset.repeatGroup;
+    if (g) {
+      const stillTouching = (above && above.dataset.repeatGroup === g)
+                         || (below && below.dataset.repeatGroup === g);
+      if (!stillTouching) {
+        delete fromEl.dataset.repeatGroup;
+        delete fromEl.dataset.groupSets;
+      }
+    }
+    _refreshCardioBracket();
+  }
+
+  function _groupCardioRepeat(fromId, toId) {
+    const fromEl = document.getElementById(`coach-assign-crow-${fromId}`);
+    const toEl   = document.getElementById(`coach-assign-crow-${toId}`);
+    if (!fromEl || !toEl || fromEl === toEl) return;
+    // Park the source row immediately after the target so they're adjacent.
+    toEl.after(fromEl);
+    let gid = toEl.dataset.repeatGroup || fromEl.dataset.repeatGroup;
+    if (!gid) {
+      _cardioRepCounter++;
+      gid = `rep-${_cardioRepCounter}`;
+    }
+    toEl.dataset.repeatGroup   = gid;
+    fromEl.dataset.repeatGroup = gid;
+    // Default to 3 rounds when forming a new group; preserve any existing
+    // groupSets value if either row already had one.
+    const existingSets = toEl.dataset.groupSets || fromEl.dataset.groupSets || "3";
+    toEl.dataset.groupSets   = existingSets;
+    fromEl.dataset.groupSets = existingSets;
+    _refreshCardioBracket();
+  }
+
+  // Tag each grouped cardio row with data-rep-pos="first|middle|last" so
+  // the bracket CSS knows where to round corners, and render a small
+  // "Repeat N×" pill on the first row of each group with an editable
+  // rounds input + ungroup button. Mirrors _refreshSupersetBadges for
+  // the strength rows.
+  function _refreshCardioBracket() {
+    const container = document.getElementById("coach-assign-cardio-rows");
+    if (!container) return;
+    const rows = Array.from(container.querySelectorAll(".coach-assign-cardio-row"));
+    // Prune one-row groups (a reorder can isolate a row).
+    rows.forEach((row, i) => {
+      const g = row.dataset.repeatGroup;
+      if (!g) return;
+      const above = rows[i - 1];
+      const below = rows[i + 1];
+      const stillInGroup = (above && above.dataset.repeatGroup === g)
+                        || (below && below.dataset.repeatGroup === g);
+      if (!stillInGroup) {
+        delete row.dataset.repeatGroup;
+        delete row.dataset.groupSets;
+      }
+    });
+    rows.forEach((row, i) => {
+      // Always strip the previous pill so we re-render cleanly.
+      const oldPill = row.querySelector(".coach-assign-rep-pill");
+      if (oldPill) oldPill.remove();
+
+      const g = row.dataset.repeatGroup;
+      row.classList.toggle("coach-assign-cardio-row--rep", !!g);
+      if (!g) {
+        delete row.dataset.repPos;
+        return;
+      }
+      const above = rows[i - 1];
+      const below = rows[i + 1];
+      const aboveSame = above && above.dataset.repeatGroup === g;
+      const belowSame = below && below.dataset.repeatGroup === g;
+      let pos;
+      if      (!aboveSame && !belowSame) pos = "only";
+      else if (!aboveSame)                pos = "first";
+      else if (!belowSame)                pos = "last";
+      else                                 pos = "middle";
+      row.dataset.repPos = pos;
+
+      // First row of the group hosts the editable rounds input + an
+      // ungroup button. Drop it into the top header so it sits next to
+      // the trash button.
+      if (pos === "first" || pos === "only") {
+        const header = row.querySelector(".coach-assign-crow-top");
+        if (!header) return;
+        const sets = row.dataset.groupSets || "3";
+        const pill = document.createElement("span");
+        pill.className = "coach-assign-rep-pill";
+        pill.innerHTML =
+          `<span class="coach-assign-rep-label">Repeat</span>` +
+          `<input type="number" class="coach-assign-rep-rounds" min="1" max="20" value="${_esc(sets)}" title="Rounds" />` +
+          `<span class="coach-assign-rep-x">×</span>` +
+          `<button type="button" class="coach-assign-rep-ungroup" title="Ungroup">×</button>`;
+        const input = pill.querySelector(".coach-assign-rep-rounds");
+        input.addEventListener("change", function () {
+          const v = parseInt(this.value, 10);
+          const newVal = (isNaN(v) || v < 1) ? "3" : String(Math.min(v, 20));
+          this.value = newVal;
+          rows.filter(r => r.dataset.repeatGroup === g).forEach(r => r.dataset.groupSets = newVal);
+        });
+        pill.querySelector(".coach-assign-rep-ungroup").addEventListener("click", () => {
+          rows.filter(r => r.dataset.repeatGroup === g).forEach(r => {
+            delete r.dataset.repeatGroup;
+            delete r.dataset.groupSets;
+          });
+          _refreshCardioBracket();
+        });
+        // Insert before the trash button so the pill sits to its left.
+        const trash = header.querySelector(".admin-action-btn");
+        if (trash) header.insertBefore(pill, trash);
+        else header.appendChild(pill);
+      }
+    });
   }
 
   function coachAssignSetCardioMode(id, mode) {
@@ -497,6 +713,7 @@
     if (row) row.remove();
     const rows = document.getElementById("coach-assign-cardio-rows");
     if (rows && !rows.querySelector(".coach-assign-cardio-row")) _addCardioRow();
+    _refreshCardioBracket();
   }
 
   // Walk every cardio row, format duration into the "<n> <unit>" / "<n> min"
@@ -525,6 +742,13 @@
       if (type === "brick") {
         const d = row.querySelector(".coach-assign-cdisc")?.value;
         if (d) iv.discipline = d;
+      }
+      // Repeat-block grouping — same shape as custom-plan.js writes so the
+      // existing renderer treats coach-authored repeat sets identically.
+      if (row.dataset.repeatGroup) {
+        iv.repeatGroup = row.dataset.repeatGroup;
+        const gs = parseInt(row.dataset.groupSets, 10);
+        iv.groupSets = isNaN(gs) ? 3 : gs;
       }
       intervals.push(iv);
     });

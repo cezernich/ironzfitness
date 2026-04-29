@@ -13987,12 +13987,43 @@ input.completion-ex-name:focus {
 .coach-assign-ex-row.drag-insert-above::before { top: -1px; }
 .coach-assign-ex-row.drag-insert-below::after  { bottom: -1px; }
 
-/* Grouped (superset) rows get a left purple stripe so a chain is
-   visually scannable. */
-.coach-assign-ex-row--ss {
-  border-left: 2px solid var(--color-coach, #534AB7);
-  padding-left: 6px;
-  margin-left: -6px;
+/* Grouped (superset) rows are wrapped in a single bracket-shaped stripe
+   on the left. The stripe is rendered via a ::before pseudo so we can
+   round only its top edge on the first row of a group and only its
+   bottom edge on the last row — straight in between. Rows in the same
+   group sit tighter (2px) so the stripe reads as one continuous bracket;
+   adjacent groups break cleanly because the row above or below has no
+   stripe (or its own bracket terminates). */
+.coach-assign-ex-row--ss::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--color-coach, #534AB7);
+}
+.coach-assign-ex-row[data-ss-pos="first"]::before,
+.coach-assign-ex-row[data-ss-pos="only"]::before {
+  top: 4px;
+  border-top-left-radius: 3px;
+  border-top-right-radius: 3px;
+}
+.coach-assign-ex-row[data-ss-pos="last"]::before,
+.coach-assign-ex-row[data-ss-pos="only"]::before {
+  bottom: 4px;
+  border-bottom-left-radius: 3px;
+  border-bottom-right-radius: 3px;
+}
+/* Tighten vertical rhythm inside a group so the stripe reads as one
+   bracket. The list switches from flex-gap (uniform between every row)
+   to per-row margin so we can vary the spacing. */
+.coach-assign-ex-list { gap: 0; }
+.coach-assign-ex-list .coach-assign-ex-row { margin-top: 8px; }
+.coach-assign-ex-list .coach-assign-ex-row:first-child { margin-top: 0; }
+.coach-assign-ex-list .coach-assign-ex-row[data-ss-pos="middle"],
+.coach-assign-ex-list .coach-assign-ex-row[data-ss-pos="last"] {
+  margin-top: 2px;
 }
 
 @media (max-width: 480px) {
@@ -14028,8 +14059,99 @@ input.completion-ex-name:focus {
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: var(--color-surface);
+  position: relative;
 }
+.coach-assign-cardio-row.drag-active     { opacity: 0.5; }
+.coach-assign-cardio-row.drag-ss-target  { outline: 2px dashed var(--color-coach, #534AB7); outline-offset: -2px; }
+.coach-assign-cardio-row.drag-insert-above { box-shadow: 0 -2px 0 0 var(--color-coach, #534AB7); }
+.coach-assign-cardio-row.drag-insert-below { box-shadow: 0 2px 0 0 var(--color-coach, #534AB7); }
 .coach-assign-cardio-row .input { padding: 6px 8px; font-size: 0.85rem; }
+.coach-assign-cardio-row .drag-handle {
+  cursor: grab;
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+  user-select: none;
+  -webkit-user-select: none;
+  flex: 0 0 auto;
+}
+.coach-assign-cardio-row .drag-handle:active { cursor: grabbing; }
+
+/* Repeat-block bracket — same approach as the strength supersets:
+   one ::before stripe per row, rounded only at the first row's top
+   and the last row's bottom so adjacent groups read as separate
+   brackets sharing the same color. */
+.coach-assign-cardio-row--rep::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--color-coach, #534AB7);
+}
+.coach-assign-cardio-row[data-rep-pos="first"]::before,
+.coach-assign-cardio-row[data-rep-pos="only"]::before {
+  top: 4px;
+  border-top-left-radius: 3px;
+  border-top-right-radius: 3px;
+}
+.coach-assign-cardio-row[data-rep-pos="last"]::before,
+.coach-assign-cardio-row[data-rep-pos="only"]::before {
+  bottom: 4px;
+  border-bottom-left-radius: 3px;
+  border-bottom-right-radius: 3px;
+}
+/* Tighten spacing inside a group so the bracket reads continuous.
+   Cardio list uses gap: 10px by default; override via margin so we
+   can vary it per row. */
+.coach-assign-cardio-list { gap: 0; }
+.coach-assign-cardio-list .coach-assign-cardio-row { margin-top: 10px; }
+.coach-assign-cardio-list .coach-assign-cardio-row:first-child { margin-top: 0; }
+.coach-assign-cardio-list .coach-assign-cardio-row[data-rep-pos="middle"],
+.coach-assign-cardio-list .coach-assign-cardio-row[data-rep-pos="last"] {
+  margin-top: 2px;
+}
+
+/* "Repeat 3×" pill on the first row of each repeat group — editable
+   rounds input + ungroup button. Sits in the row's top header next to
+   the trash icon. */
+.coach-assign-rep-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--color-coach, #534AB7);
+  border-radius: 14px;
+  background: rgba(83, 74, 183, 0.08);
+  color: var(--color-coach, #534AB7);
+  font-size: 0.72rem;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+.coach-assign-rep-rounds {
+  width: 36px;
+  border: 0;
+  background: transparent;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: inherit;
+  text-align: center;
+  padding: 0;
+}
+.coach-assign-rep-rounds:focus { outline: none; }
+.coach-assign-rep-x { font-weight: 700; }
+.coach-assign-rep-ungroup {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 0.95rem;
+  line-height: 1;
+  opacity: 0.65;
+}
+.coach-assign-rep-ungroup:hover { opacity: 1; }
+
 .coach-assign-crow-top {
   display: flex;
   align-items: center;
