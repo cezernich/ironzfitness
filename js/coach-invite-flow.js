@@ -363,6 +363,18 @@
     }
   }
 
+  // Race a supabase call against a timeout so a hung RPC surfaces an
+  // error instead of leaving the modal stuck on "Connecting…" with no
+  // way out. 8s is generous for a single RPC call.
+  function _withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${label || "Request"} timed out — please try again.`)), ms)
+      ),
+    ]);
+  }
+
   // ── Accept / Dismiss ─────────────────────────────────────────────────
   async function inviteAcceptConfirm() {
     if (!_activeInvite) { _closeModal(); return; }
@@ -376,7 +388,11 @@
     const rpc = mode === "switch" ? "switch_coach" : "pair_with_coach";
 
     try {
-      const { error } = await sb.rpc(rpc, { p_invite_link_id: invite_link_id });
+      const { error } = await _withTimeout(
+        sb.rpc(rpc, { p_invite_link_id: invite_link_id }),
+        8000,
+        "Connect"
+      );
 
       if (error) {
         // Custom SQLSTATEs (IRO01..IRO04) can land in different supabase-js
@@ -443,22 +459,29 @@
     const sb = window.supabaseClient;
     const { invite_link_id, coach } = _activeInvite;
 
-    _setModalBusy(true);
-
-    // Mark dismissed locally first (fast path) so the cooldown sticks
-    // even if the server call fails. We'll retry on next auth — the
-    // Postgres function is idempotent.
+    // Close + clear immediately. Dismiss is local-first by design — the
+    // server call is just bookkeeping. Closing first means the X always
+    // works even if the dismiss RPC hangs, and a stuck "Connecting…"
+    // state from a previous Accept attempt can't trap the user.
     _markLocallyDismissed(invite_link_id);
-
-    try {
-      if (sb) await sb.rpc("dismiss_invite", { p_invite_link_id: invite_link_id });
-    } catch (e) {
-      console.warn("[coach-invite-flow] dismiss_invite rpc failed:", e);
-    }
-
-    _toast(`Saved for later — we won't ask again for 7 days.`);
     _activeInvite = null;
     _closeModal();
+    _toast(`Saved for later — we won't ask again for 7 days.`);
+
+    // Fire-and-forget the server-side dismiss with a short timeout so it
+    // doesn't pile up dangling promises. The local cooldown already
+    // prevents re-prompting; this just keeps the server in sync.
+    if (sb) {
+      try {
+        await _withTimeout(
+          sb.rpc("dismiss_invite", { p_invite_link_id: invite_link_id }),
+          5000,
+          "Dismiss"
+        );
+      } catch (e) {
+        console.warn("[coach-invite-flow] dismiss_invite rpc failed:", e);
+      }
+    }
   }
 
   async function _onSuccess(sb, invite_link_id, paired) {
