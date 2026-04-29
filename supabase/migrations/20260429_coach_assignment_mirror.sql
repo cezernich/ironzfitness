@@ -41,7 +41,11 @@ BEGIN;
 -- same JSONB. Lets the INSERT and UPDATE triggers share the same
 -- shape logic without duplication.
 
-CREATE OR REPLACE FUNCTION public._coach_assignment_to_schedule_entry(row public.coach_assigned_workouts)
+-- Note on the parameter name: PostgreSQL's `row` is a reserved word in
+-- function parameter contexts (it conflicts with the row-type construct).
+-- Using `assignment` avoids the parser bug — the original deployment had
+-- to be patched locally before the trigger would compile.
+CREATE OR REPLACE FUNCTION public._coach_assignment_to_schedule_entry(assignment public.coach_assigned_workouts)
 RETURNS JSONB
 LANGUAGE SQL
 IMMUTABLE
@@ -51,15 +55,15 @@ AS $$
     -- expected to populate type / sessionName / exercises / duration
     -- so the existing renderer picks the entry up natively. Keys we
     -- mirror below win via the right-hand spread (|| precedence).
-    COALESCE(row.workout, '{}'::jsonb)
+    COALESCE(assignment.workout, '{}'::jsonb)
     || jsonb_build_object(
-         'id',                'coach-' || row.id::text,
-         'date',              row.date::text,
+         'id',                'coach-' || assignment.id::text,
+         'date',              assignment.date::text,
          'source',            'coach_assigned',
-         'coachId',           row.coach_id::text,
-         'coachAssignmentId', row.id::text,
-         'coachNote',         row.coach_note,
-         'assignedAt',        to_jsonb(row.created_at)
+         'coachId',           assignment.coach_id::text,
+         'coachAssignmentId', assignment.id::text,
+         'coachNote',         assignment.coach_note,
+         'assignedAt',        to_jsonb(assignment.created_at)
        );
 $$;
 
