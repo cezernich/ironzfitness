@@ -399,6 +399,27 @@ function showTab(name) {
   }
 }
 
+// Every bottom-nav tap lands at the top of the destination screen —
+// matches iOS's "tap a tab again to scroll up" pattern. Delegated at
+// document level so all six nav buttons (and any future ones) get it
+// without per-button wiring; capture phase so it runs alongside the
+// inline `onclick="showTab(...)"`. RAF defer lets showTab swap the
+// .active tab-content first so we scroll the new tab, not the old one.
+if (typeof document !== "undefined" && !document.__bottomNavScrollWired) {
+  document.__bottomNavScrollWired = true;
+  document.addEventListener("click", (e) => {
+    const btn = e.target && e.target.closest && e.target.closest(".bottom-nav-tab");
+    if (!btn) return;
+    requestAnimationFrame(() => {
+      try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { window.scrollTo(0, 0); }
+      const active = document.querySelector(".tab-content.active");
+      if (active && active !== document.body) {
+        try { active.scrollTo({ top: 0, behavior: "smooth" }); } catch { active.scrollTop = 0; }
+      }
+    });
+  }, true);
+}
+
 /* =====================================================================
    STATS TAB VIEW SWITCHER
    ===================================================================== */
