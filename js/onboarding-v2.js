@@ -5259,6 +5259,22 @@
       if (typeof renderCalendar === "function") renderCalendar();
     } catch {}
     if (typeof showTab === "function") showTab("home");
+    // Coach invite link Phase B — fire after the home tab renders so
+    // the Accept modal opens cleanly on top of the calendar instead of
+    // racing the bp overlay close transition. Safe no-op when there's
+    // no pending invite.
+    //
+    // We pick this hook (and not _writeScheduleSessions exit) because
+    // every onboarding completion path funnels through goTo("bp-v2-done")
+    // → user taps "Go to Home" → _goToHomeTab(). Firing earlier would
+    // interrupt the "You're Ready" celebration screen. The defensive
+    // fallback for any path that skips this (app kill, crash) is the
+    // auth.js post-init checkPendingInvite() call, which fires on the
+    // NEXT sign-in. checkPendingInvite is idempotent so duplicate calls
+    // are safe.
+    if (typeof window.checkPendingInvite === "function") {
+      try { window.checkPendingInvite(); } catch (e) { console.warn("OnboardingV2: checkPendingInvite error", e); }
+    }
   }
 
   if (typeof window !== "undefined" && window.OnboardingV2) {

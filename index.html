@@ -2653,6 +2653,56 @@
     </div>
   </div>
 
+  <!-- Accept Coaching modal — invite-link Phase B.
+       Opens when a signed-in user has a pending invite. Two variants —
+       "first coach" (Accept / Not now) and "switch" (Switch / Keep
+       current). Body fields are populated by coach-invite-flow.js's
+       openAcceptCoachingModal().
+
+       Per the spec, this modal is the v1 location for what becomes the
+       paid-checkout step in v2. Layout intentionally leaves room for a
+       price line above the CTA when subscriptions ship. -->
+  <div id="invite-accept-overlay" class="quick-entry-overlay" style="z-index:11000" onclick="if(event.target===this) inviteAcceptDismiss()">
+    <div class="quick-entry-modal" style="max-width:460px">
+      <div class="quick-entry-header">
+        <span class="qe-date-label" id="invite-accept-eyebrow">Coach invite</span>
+        <button class="qe-close-btn" onclick="inviteAcceptDismiss()" aria-label="Close">&#10005;</button>
+      </div>
+      <div class="quick-entry-body invite-accept-body" style="padding:0 16px 16px">
+        <h3 id="invite-accept-title" style="margin:8px 0 4px">Accept coaching?</h3>
+        <p class="hint" id="invite-accept-conflict" style="margin:0 0 14px;display:none"></p>
+
+        <div class="invite-accept-coach">
+          <div class="invite-accept-avatar" id="invite-accept-avatar">?</div>
+          <div class="invite-accept-coach-meta">
+            <div class="invite-accept-coach-name" id="invite-accept-coach-name">Your coach</div>
+            <div class="invite-accept-coach-tag">IronZ Coach</div>
+          </div>
+        </div>
+
+        <p id="invite-accept-bio" class="invite-accept-bio" style="display:none"></p>
+
+        <div class="invite-accept-perks">
+          <div class="invite-accept-perks-label">What you get</div>
+          <ul>
+            <li>Custom training plans</li>
+            <li>Daily check-ins</li>
+            <li>In-app messaging (coming soon)</li>
+          </ul>
+        </div>
+
+        <p class="invite-accept-disclaimer">Free for now &mdash; paid coaching coming in 2026.</p>
+
+        <p id="invite-accept-error" class="hint" style="color:var(--color-danger,#b91c1c);min-height:1em;margin:0 0 6px"></p>
+
+        <div class="invite-accept-actions">
+          <button class="btn-primary" id="invite-accept-primary-btn" onclick="inviteAcceptConfirm()">Accept</button>
+          <button class="btn-secondary" id="invite-accept-secondary-btn" onclick="inviteAcceptDismiss()">Not now</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Request a Coach modal — Phase 1E.
        4-question form → POST to send-coach-request-email edge function. -->
   <div id="coach-request-overlay" class="quick-entry-overlay" onclick="if(event.target===this) closeCoachRequestForm()">
@@ -3888,6 +3938,7 @@
   <script src="js/coach-library.js"></script>
   <script src="js/coach-programs.js"></script>
   <script src="js/coach-invite-panel.js"></script>
+  <script src="js/coach-invite-flow.js"></script>
   <script src="js/client-plan-freeze.js"></script>
   <script src="js/client-coaching.js"></script>
   <script src="js/analytics.js"></script>

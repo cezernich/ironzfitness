@@ -681,6 +681,12 @@ async function authBoot() {
     if (typeof initUniversalLinks === 'function') {
       try { initUniversalLinks(); } catch (e) { console.warn('Auth: universal links init error', e); }
     }
+    // Coach invite link Phase B — fire after init() so the home tab is
+    // rendered before the modal opens. Defers so async work doesn't
+    // block app startup. Safe no-op when there's no pending invite.
+    if (typeof window.checkPendingInvite === 'function') {
+      try { window.checkPendingInvite(); } catch (e) { console.warn('Auth: checkPendingInvite error', e); }
+    }
   } else {
     showAuthScreen();
   }
@@ -716,6 +722,12 @@ async function authBoot() {
       }
       if (typeof initPushNotifications === 'function') {
         try { await initPushNotifications(); } catch (e) { console.warn('Auth: push init error', e); }
+      }
+      // Coach invite link Phase B — same hook as the initial-getSession
+      // path above. Fires for fresh sign-ins (sign-up confirmations
+      // also land here once email confirmation is auto-enabled).
+      if (typeof window.checkPendingInvite === 'function') {
+        try { window.checkPendingInvite(); } catch (e) { console.warn('Auth: checkPendingInvite error', e); }
       }
     } else if (event === 'PASSWORD_RECOVERY') {
       showNewPasswordPanel();

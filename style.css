@@ -13692,6 +13692,86 @@ input.completion-ex-name:focus {
 
 .coach-section { margin-bottom: 14px; }
 
+/* Accept Coaching modal (invite-link Phase B). Shape anticipates the
+   v2 paid-checkout layout: avatar + name on top, perks list, then
+   primary CTA. The empty space above the CTA is where the price line
+   lands when subscriptions ship — no DOM changes needed at that point,
+   only a new node above .invite-accept-actions. */
+.invite-accept-body { padding: 0 16px 16px; }
+.invite-accept-coach {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.invite-accept-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-coach, #534AB7) 0%, #8b7fdc 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: 600;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.invite-accept-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.invite-accept-coach-meta { flex: 1; min-width: 0; }
+.invite-accept-coach-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.invite-accept-coach-tag {
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+.invite-accept-bio {
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--color-text);
+  margin: 0 0 14px;
+  white-space: pre-wrap;
+}
+.invite-accept-perks {
+  background: var(--color-bg, #f4f1ec);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.invite-accept-perks-label {
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+}
+.invite-accept-perks ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+.invite-accept-disclaimer {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin: 0 0 14px;
+  text-align: center;
+  font-style: italic;
+}
+.invite-accept-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.invite-accept-actions button { width: 100%; }
+
 /* Invite tab — Phase A minimal panel. URL box renders the full share URL
    inside a monospace pill with a Copy button on the right. Wraps on
    narrow viewports so the URL never clips.
