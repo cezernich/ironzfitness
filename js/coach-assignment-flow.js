@@ -158,18 +158,60 @@
     const row = document.createElement("div");
     row.className = "coach-assign-ex-row";
     row.id = `coach-assign-row-${id}`;
+    if (prefill?.supersetGroup) row.dataset.linkedAbove = "1";
+    // .ex-row-name picks up the shared exercise-autocomplete dropdown
+    // (js/ui/exercise-autocomplete.js attaches to that selector via
+    // document-level event delegation, so dynamically-added inputs
+    // work without rewiring).
     row.innerHTML = `
-      <input type="text" class="input coach-assign-ex-name" id="coach-assign-ex-name-${id}"
-        placeholder="Exercise (e.g. Bench Press)" value="${_esc(prefill?.name || "")}" />
+      <input type="text" class="input ex-row-name coach-assign-ex-name" id="coach-assign-ex-name-${id}"
+        placeholder="Exercise (e.g. Bench Press)" value="${_esc(prefill?.name || "")}" autocomplete="off" />
       <input type="number" class="input coach-assign-ex-sets" id="coach-assign-ex-sets-${id}"
         placeholder="Sets" min="1" max="20" value="${_esc(prefill?.sets || "")}" />
       <input type="text" class="input coach-assign-ex-reps" id="coach-assign-ex-reps-${id}"
         placeholder="Reps" value="${_esc(prefill?.reps || "")}" />
       <input type="text" class="input coach-assign-ex-weight" id="coach-assign-ex-weight-${id}"
         placeholder="Weight" value="${_esc(prefill?.weight || "")}" />
+      <button class="coach-assign-ss-btn" aria-label="Superset with row above"
+        title="Toggle superset with the row above"
+        onclick="coachAssignToggleSuperset(${id})">⛓</button>
       <button class="admin-action-btn" aria-label="Remove exercise" title="Remove"
         onclick="coachAssignRemoveExRow(${id})">×</button>`;
     rows.appendChild(row);
+    _refreshSupersetVisuals();
+  }
+
+  function coachAssignToggleSuperset(id) {
+    const row = document.getElementById(`coach-assign-row-${id}`);
+    if (!row) return;
+    // First row can never link upward — there's nothing above. The
+    // visual refresh hides its button anyway, but defend in code too.
+    const prev = row.previousElementSibling;
+    if (!prev || !prev.classList.contains("coach-assign-ex-row")) return;
+    if (row.dataset.linkedAbove === "1") {
+      delete row.dataset.linkedAbove;
+    } else {
+      row.dataset.linkedAbove = "1";
+    }
+    _refreshSupersetVisuals();
+  }
+
+  function _refreshSupersetVisuals() {
+    const rows = Array.from(document.querySelectorAll("#coach-assign-ex-rows .coach-assign-ex-row"));
+    rows.forEach((row, idx) => {
+      const isFirst = idx === 0;
+      const linked = row.dataset.linkedAbove === "1" && !isFirst;
+      // Hide the link button on the first row — there's nothing to
+      // link to. Toggle a class so the linked state is visually
+      // distinguishable.
+      const btn = row.querySelector(".coach-assign-ss-btn");
+      if (btn) {
+        btn.style.visibility = isFirst ? "hidden" : "";
+        btn.classList.toggle("is-active", linked);
+        btn.title = linked ? "Linked with row above (tap to unlink)" : "Toggle superset with the row above";
+      }
+      row.classList.toggle("coach-assign-ex-row--linked", linked);
+    });
   }
 
   function coachAssignRemoveExRow(id) {
@@ -200,18 +242,73 @@
     if (!date)        return setErr("Pick a date.");
 
     // Collect exercise rows. Empty-name rows are skipped (the +Add Row
-    // button can leave blanks in the buffer).
+    // button can leave blanks in the buffer). Walk in order and assign
+    // a supersetGroup id to consecutive rows where row.dataset.linkedAbove
+    // is set — that's the simple version of the drag-to-group flow
+    // (custom-plan.js cpManualAddExRow). Renderer (workouts.js
+    // buildExerciseTableHTML) reads supersetGroup as the segment key.
     const exercises = [];
     const rowEls = document.querySelectorAll("#coach-assign-ex-rows .coach-assign-ex-row");
-    rowEls.forEach(r => {
+    let currentSsId = null;
+    let ssCounter = 0;
+    rowEls.forEach((r, idx) => {
       const id = r.id.replace("coach-assign-row-", "");
       const name = document.getElementById(`coach-assign-ex-name-${id}`)?.value.trim();
-      if (!name) return;
+      if (!name) {
+        // A blank row breaks any in-progress superset chain.
+        currentSsId = null;
+        return;
+      }
       const sets   = document.getElementById(`coach-assign-ex-sets-${id}`)?.value.trim();
       const reps   = document.getElementById(`coach-assign-ex-reps-${id}`)?.value.trim();
       const weight = document.getElementById(`coach-assign-ex-weight-${id}`)?.value.trim();
-      exercises.push({ name, sets: sets || "3", reps: reps || "", weight: weight || "" });
+      const linked = r.dataset.linkedAbove === "1" && idx > 0;
+
+      let supersetGroup = null;
+      if (linked) {
+        // If the previous emitted exercise has no group yet, mint one
+        // and back-fill it. From there, every linked row downstream
+        // gets the same id.
+        if (!currentSsId) {
+          ssCounter++;
+          currentSsId = `ss-${ssCounter}`;
+          if (exercises.length) exercises[exercises.length - 1].supersetGroup = currentSsId;
+        }
+        supersetGroup = currentSsId;
+      } else {
+        currentSsId = null;
+      }
+
+      const exObj = { name, sets: sets || "3", reps: reps || "", weight: weight || "" };
+      if (supersetGroup) {
+        exObj.supersetGroup = supersetGroup;
+        // Renderer / live-tracker expect groupSets — share the first
+        // member's sets count so the superset displays one round
+        // count (matches custom-plan.js semantics).
+        const groupHead = exercises.find(e => e.supersetGroup === supersetGroup) || exObj;
+        const headSets = parseInt(groupHead.sets, 10);
+        exObj.groupSets = isNaN(headSets) ? 3 : headSets;
+      }
+      exercises.push(exObj);
     });
+
+    // Propagate groupSets to every member of each group (including the
+    // anchor we back-filled above) so the workout renderer reads a
+    // consistent count regardless of which member it inspects first.
+    {
+      const headSetsByGroup = {};
+      for (const e of exercises) {
+        if (e.supersetGroup && headSetsByGroup[e.supersetGroup] == null) {
+          headSetsByGroup[e.supersetGroup] = e.sets;
+        }
+      }
+      for (const e of exercises) {
+        if (e.supersetGroup) {
+          const v = parseInt(headSetsByGroup[e.supersetGroup], 10);
+          e.groupSets = isNaN(v) ? (e.groupSets || 3) : v;
+        }
+      }
+    }
 
     if (!exercises.length && type === "weightlifting") {
       return setErr("Add at least one exercise (or change the type to a cardio workout).");
@@ -456,10 +553,12 @@
   }
 
   // ── Public surface ─────────────────────────────────────────────────────
-  window.openAssignWorkoutModal   = openAssignWorkoutModal;
-  window.closeAssignWorkoutModal  = closeAssignWorkoutModal;
-  window.submitAssignWorkout      = submitAssignWorkout;
-  window.coachAssignAddExRow      = coachAssignAddExRow;
-  window.coachAssignRemoveExRow   = coachAssignRemoveExRow;
-  window.coachAssignConflict      = coachAssignConflict;
+  window.openAssignWorkoutModal             = openAssignWorkoutModal;
+  window.openAssignWorkoutModalForLibrary   = openAssignWorkoutModalForLibrary;
+  window.closeAssignWorkoutModal            = closeAssignWorkoutModal;
+  window.submitAssignWorkout                = submitAssignWorkout;
+  window.coachAssignAddExRow                = coachAssignAddExRow;
+  window.coachAssignRemoveExRow             = coachAssignRemoveExRow;
+  window.coachAssignConflict                = coachAssignConflict;
+  window.coachAssignToggleSuperset          = coachAssignToggleSuperset;
 })();
