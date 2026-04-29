@@ -494,24 +494,25 @@
 
   // Extract the custom IRO0x SQLSTATE from a supabase-js error object.
   //
-  // CANONICAL SLOT: <UNVERIFIED — pending browser DevTools test>
-  //   To verify, sign in as a coach with at least one active pair, open
-  //   DevTools console, and run:
-  //     await window.sb.rpc('pair_with_coach',
-  //       { p_invite_link_id: '<existing-pair-link-uuid>' })
-  //   The IRO03 SAME_COACH error will surface in one of: error.code,
-  //   error.details, error.hint, error.message. Note which slot, then
-  //   replace this paragraph with a single line:
-  //     "Canonical slot: error.<X>. Fallback chain below is belt-
-  //      and-suspenders against future supabase-js / PostgREST changes."
+  // CANONICAL SLOT: deferred to post-launch — DevTools verification
+  // skipped per Chase's launch call. The fallback chain below handles
+  // all four plausible slots (code → details → hint → message regex →
+  // exact-string match), so routing is correct regardless of which
+  // slot supabase-js / PostgREST actually populates. The post-launch
+  // optimization is a single reorder: confirm which slot is canonical
+  // for our supabase-js version, hoist that lookup first, leave the
+  // rest as belt-and-suspenders against future client changes.
   //
-  // The chain order below tries the conventional slots first (`code` →
-  // `details` → `hint`) so the common case is one lookup, then falls
-  // back to message-body regex matching for older PostgREST versions
-  // that mash the SQLSTATE into the human-readable message string.
-  // Final defense matches the exact RAISE EXCEPTION strings in case a
-  // future supabase-js version strips SQLSTATEs entirely. Returns null
-  // if no IRO0x found.
+  // Verification recipe (run in DevTools console as a paired coach):
+  //   await window.sb.rpc('pair_with_coach',
+  //     { p_invite_link_id: '<your-already-paired-link-uuid>' })
+  // The IRO03 SAME_COACH error will surface in exactly one of:
+  // error.code, error.details, error.hint, error.message.
+  //
+  // Final-defense regexes match the exact RAISE EXCEPTION strings from
+  // 20260430b_coach_invite_pair_functions.sql in case a future
+  // supabase-js version strips SQLSTATEs entirely from non-message
+  // fields. Returns null if no IRO0x found.
   function _extractIROCode(error) {
     if (!error) return null;
     const slots = [error.code, error.details, error.hint]
