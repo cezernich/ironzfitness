@@ -1217,6 +1217,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
       _ovflEditItem(w.id) +
       _ovflMoveItem(cardId, "logged", w.id, dateStr) +
       _ovflShareItem(w) +
+      _ovflSaveToLibraryItem(w) +
       _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
 
     return `
@@ -1366,6 +1367,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
       _ovflEditItem(w.id) +
       _ovflMoveItem(cardId, "logged", w.id, dateStr) +
       _ovflShareItem(w) +
+      _ovflSaveToLibraryItem(w) +
       _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
     return `
       <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
@@ -1406,6 +1408,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
     const _genOverflow = _buildOverflowMenu(cardId,
       _ovflEditItem(w.id) +
       _ovflShareItem(w) +
+      _ovflSaveToLibraryItem(w) +
       _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
     return `
       <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
@@ -1472,6 +1475,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
       _ovflEditItem(w.id) +
       _ovflMoveItem(cardId, "logged", w.id, dateStr) +
       _ovflShareItem(w) +
+      _ovflSaveToLibraryItem(w) +
       _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
     const _exBadgeDur = _getCompletionDuration(cardId) || _exEstDur || w.duration;
     const _exDurationBadge = _exBadgeDur
@@ -1504,6 +1508,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
   const _minOverflow = _buildOverflowMenu(cardId,
     _ovflEditItem(w.id) +
     _ovflShareItem(w) +
+    _ovflSaveToLibraryItem(w) +
     _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
   return `
     <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
@@ -2368,6 +2373,97 @@ function _ovflShareItem(entry) {
     console.warn("[IronZ] share overflow item render skipped:", e.message);
     return "";
   }
+}
+
+// Save-to-Library item — stashes the workout entry in the same fallback
+// cache as Share (to avoid stringifying complex objects into onclick) and
+// returns a menu item that, on click, routes through
+// SavedWorkoutsLibrary.saveCustom so the workout lands in the user's
+// Saved Workouts tab. Available on every workout card type so coaches +
+// users can both stash plans they want to reuse.
+function _ovflSaveToLibraryItem(entry) {
+  if (!entry) return "";
+  try {
+    const cacheKey = "cal" + (++_calShareSeq);
+    _calShareFallbackCache[cacheKey] = entry;
+    if (typeof window !== "undefined") window.__calShareFallbackCache = _calShareFallbackCache;
+    return `<button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();_invokeSaveToLibrary('${cacheKey}')">Save to Library</button>`;
+  } catch (e) {
+    console.warn("[IronZ] save-to-library overflow item render skipped:", e.message);
+    return "";
+  }
+}
+
+// Direct save-to-library handler — reads the entry from the calendar's
+// fallback cache, maps workout fields onto SavedWorkoutsLibrary.saveCustom's
+// expected shape, fires the save, and surfaces a toast.
+if (typeof window !== "undefined") {
+  window._invokeSaveToLibrary = async function (cacheKey) {
+    const entry = (window.__calShareFallbackCache || {})[cacheKey];
+    if (!entry) { console.warn("[IronZ] save-to-library: entry not found for", cacheKey); return; }
+    const Saved = window.SavedWorkoutsLibrary;
+    if (!Saved || typeof Saved.saveCustom !== "function") {
+      console.warn("[IronZ] save-to-library: SavedWorkoutsLibrary not loaded");
+      return;
+    }
+    // Map workout type → sport_id (matches the inbox-direct adapter so a
+    // saved card carries the right discipline icon downstream).
+    const type = entry.type || entry.discipline || "general";
+    const sportMap = {
+      run: "run", running: "run",
+      bike: "bike", cycling: "bike",
+      swim: "swim", swimming: "swim",
+      brick: "run",
+      weightlifting: "strength", bodyweight: "strength",
+      strength: "strength", hiit: "strength", hyrox: "strength",
+      yoga: "strength",
+    };
+    const sportId = sportMap[type] || null;
+
+    // Cardio interval data lives in entry.aiSession.intervals on the
+    // home renderer. Map to the segments shape SavedWorkoutsLibrary
+    // already understands (same path inbox-direct uses for shared
+    // workouts) so the saved card renders correctly later.
+    let segments = null;
+    const intervals = (entry.aiSession && entry.aiSession.intervals) || entry.intervals || null;
+    if (Array.isArray(intervals) && intervals.length) {
+      segments = intervals.map(iv => ({
+        name: iv.name || "Interval",
+        duration: iv.duration || "",
+        effort: iv.effort || iv.intensity || "Z2",
+        details: iv.details || "",
+      }));
+    }
+
+    const name = entry.sessionName || entry.name || entry.title || "Workout";
+    try {
+      const row = await Saved.saveCustom({
+        name,
+        workout_kind: type,
+        sport_id: sportId,
+        exercises: Array.isArray(entry.exercises) ? entry.exercises : null,
+        segments,
+        hiitMeta: entry.hiitMeta || null,
+        notes: entry.notes || null,
+        duration: entry.duration || null,
+      });
+      if (row && row.error === "LIMIT_REACHED") {
+        if (typeof window._showShareToast === "function") {
+          window._showShareToast("Saved Workouts library is full — remove one first.");
+        }
+        return;
+      }
+      if (row && row.error) {
+        console.warn("[IronZ] save-to-library failed:", row.error);
+        return;
+      }
+      if (typeof window._showShareToast === "function") {
+        window._showShareToast(`Saved "${name}" to your library.`);
+      }
+    } catch (e) {
+      console.warn("[IronZ] save-to-library exception:", e);
+    }
+  };
 }
 
 // Direct share invocation — reads the entry from the calendar's local
@@ -3991,6 +4087,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       const _planOverflow = _buildOverflowMenu(cardId,
         _planEditItem +
         _ovflShareItem(p) +
+        _ovflSaveToLibraryItem(p) +
         _ovflDeleteItem(`deletePlanEntry('${p.raceId}','${p.discipline}','${dateStr}')`));
       if (session) {
         html += `
@@ -4180,6 +4277,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
             _swEditItem +
             _ovflMoveItem(cardId, "scheduled", w.id, dateStr) +
             _ovflShareItem(w) +
+            _ovflSaveToLibraryItem(w) +
             _ovflDeleteItem(`deleteScheduledWorkout('${w.id}','${dateStr}')`));
           const _bRacePill = w.isBRace
             ? ` <span class="b-race-pill b-race-pill--day">B RACE</span>`
@@ -4232,6 +4330,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
           _swcEditItem +
           _ovflMoveItem(cardId, "scheduled", w.id, dateStr) +
           _ovflShareItem(w) +
+          _ovflSaveToLibraryItem(w) +
           _ovflDeleteItem(`deleteScheduledWorkout('${w.id}','${dateStr}')`));
         html += `
           <div class="session-card collapsible${_swcIsComplete ? " session-card--completed is-collapsed" : ""}" id="${cardId}">
@@ -4497,6 +4596,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         _swGenEditItem +
         _ovflMoveItem(cardId, "scheduled", w.id, dateStr) +
         _ovflShareItem(w) +
+        _ovflSaveToLibraryItem(w) +
         _ovflDeleteItem(`deleteScheduledWorkout('${w.id}','${dateStr}')`));
       html += `
         <div class="session-card collapsible${_swGenCompleted ? " session-card--completed is-collapsed" : ""}${_swGenUserAddedCls}${_coachAttribClass}" id="${cardId}">

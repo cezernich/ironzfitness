@@ -78,15 +78,135 @@
   function renderCoachLibraryView(coachState) {
     return `
       <div class="card coach-section">
-        <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
           <div class="coach-section-title">Workout Library</div>
-          <button class="btn-primary btn-sm" onclick="openCoachLibraryNew()">+ New Workout</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn-secondary btn-sm" onclick="openImportFromSavedPicker()">+ Import from Saved</button>
+            <button class="btn-primary btn-sm" onclick="openCoachLibraryNew()">+ New Workout</button>
+          </div>
         </div>
         <div class="coach-section-summary" id="coach-library-summary">
           ${_items.length === 0 ? "No saved workouts yet." : `${_items.length} saved workout${_items.length === 1 ? "" : "s"}`}
         </div>
         <div id="coach-library-list">${_renderItems()}</div>
       </div>`;
+  }
+
+  // ── Import from Saved Workouts ───────────────────────────────────────
+  // Lets the coach pull from their personal SavedWorkoutsLibrary into the
+  // coach Library. Bridges the two stores: anything saved on a workout
+  // card via the overflow "Save to Library" item shows up here, which
+  // the coach can then assign to clients.
+  async function openImportFromSavedPicker() {
+    const Saved = window.SavedWorkoutsLibrary;
+    if (!Saved || typeof Saved.listSaved !== "function") {
+      alert("Saved workouts library not available.");
+      return;
+    }
+    let saved = [];
+    try { saved = await Saved.listSaved({ source: "custom" }); } catch (e) { console.warn(e); }
+    saved = (saved || []).slice().sort((a, b) => String(b.saved_at || "").localeCompare(String(a.saved_at || "")));
+
+    const id = "coach-import-saved-overlay";
+    const old = document.getElementById(id);
+    if (old) old.remove();
+    const overlay = document.createElement("div");
+    overlay.id = id;
+    overlay.className = "rating-modal-overlay";
+    const close = () => {
+      overlay.classList.remove("visible");
+      setTimeout(() => overlay.remove(), 200);
+    };
+    overlay.onclick = (e) => { if (e.target === overlay) close(); };
+
+    const rows = saved.length
+      ? saved.map(s => {
+          const p = s.payload || {};
+          const exCount = Array.isArray(p.exercises) ? p.exercises.length : 0;
+          const segCount = Array.isArray(p.segments) ? p.segments.length : 0;
+          const meta = [
+            s.workout_kind ? _typeLabel(s.workout_kind) : null,
+            p.duration ? `${p.duration} min` : null,
+            exCount ? `${exCount} exercise${exCount === 1 ? "" : "s"}` : null,
+            segCount ? `${segCount} interval${segCount === 1 ? "" : "s"}` : null,
+          ].filter(Boolean).join(" · ");
+          return `<div class="coach-lib-picker-row" data-saved-id="${_esc(s.id)}" tabindex="0"
+                       onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+            <div class="coach-lib-picker-row-name">${_esc(s.custom_name || "Untitled")}</div>
+            <div class="coach-lib-picker-row-meta">${_esc(meta || "—")}</div>
+          </div>`;
+        }).join("")
+      : `<div class="coach-lib-picker-empty">
+          You don't have any custom saved workouts yet. Tap "Save to Library" on any workout card to send it here.
+        </div>`;
+
+    overlay.innerHTML = `
+      <div class="rating-modal" style="max-width:480px;max-height:80vh;display:flex;flex-direction:column">
+        <div class="rating-modal-title">Import from Saved Workouts</div>
+        <div style="overflow-y:auto;flex:1;margin:0 -8px">${rows}</div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="btn-secondary" id="coach-import-cancel" style="flex:1;min-height:38px">Close</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add("visible"));
+    overlay.querySelector("#coach-import-cancel").onclick = close;
+    overlay.querySelectorAll(".coach-lib-picker-row[data-saved-id]").forEach(el => {
+      el.onclick = async () => {
+        const sid = el.getAttribute("data-saved-id");
+        const s = saved.find(x => x.id === sid);
+        if (!s) return;
+        close();
+        await _importSavedIntoCoachLibrary(s);
+      };
+    });
+  }
+
+  // Map a SavedWorkoutsLibrary row into a coach_workout_library row and
+  // insert it. The coach library schema mirrors what the assignment form
+  // emits (sessionName + type + exercises | aiSession.intervals + duration),
+  // so we shape the payload to match.
+  async function _importSavedIntoCoachLibrary(saved) {
+    const sb = window.supabaseClient;
+    if (!sb || !_coachUid) {
+      alert("Not signed in.");
+      return;
+    }
+    const p = saved.payload || {};
+    const type = saved.workout_kind || saved.sport_id || "weightlifting";
+    const intervals = Array.isArray(p.segments) && p.segments.length
+      ? p.segments.map(seg => ({
+          name: seg.name || "Interval",
+          duration: seg.duration || "",
+          effort: seg.effort || "Z2",
+          details: seg.details || "",
+        }))
+      : null;
+    const sessionName = saved.custom_name || "Imported workout";
+    const workoutJson = {
+      sessionName,
+      type,
+      ...(intervals && intervals.length ? { aiSession: { title: sessionName, intervals } } : {}),
+      ...(Array.isArray(p.exercises) && p.exercises.length ? { exercises: p.exercises } : {}),
+      ...(p.hiitMeta ? { hiitMeta: p.hiitMeta } : {}),
+      ...(type === "hyrox" ? { isHyrox: true } : {}),
+      ...(p.duration ? { duration: p.duration } : {}),
+      level: "intermediate",
+    };
+    const { error } = await sb.from("coach_workout_library").insert({
+      coach_id: _coachUid,
+      name:     sessionName,
+      workout:  workoutJson,
+      notes:    p.notes || null,
+    });
+    if (error) {
+      alert("Couldn't import: " + error.message);
+      return;
+    }
+    if (typeof window._showShareToast === "function") {
+      window._showShareToast(`Imported "${sessionName}" into your Library.`);
+    }
+    await loadCoachLibrary();
   }
 
   function _renderLibraryList() {
@@ -342,10 +462,11 @@
     const coachName = (window._coachNameCache && window._coachNameCache[coachId]) || _coachName || "Your coach";
     const workoutJson = { ...(item.workout || {}), coachName };
 
-    // Build N rows: one per (client, date) pair. conflict_mode='replace'
-    // by default — bulk assigns are typically meant to overwrite the AI
-    // plan for those days. Coach can use the per-workout flow if they
-    // need stack/freeze semantics.
+    // Build N rows: one per (client, date) pair. Conflict mode is
+    // chosen by the coach below — used to silently default to replace
+    // and overwrote unsynced client workouts (user feedback 2026-04-29:
+    // "an assigned workout shouldn't delete any of the existing
+    // workouts. The coach should have to do that.").
     const rows = [];
     for (const cid of _assignSelection.clientIds) {
       for (const d of _assignSelection.dates) {
@@ -353,12 +474,23 @@
           client_id: cid,
           coach_id:  coachId,
           date:      d,
-          conflict_mode: "replace",
+          // conflict_mode set after the loop, once the coach confirms.
           coach_note: note,
           workout:   workoutJson,
         });
       }
     }
+
+    const wantReplace = window.confirm(
+      `Assigning ${rows.length} workout${rows.length === 1 ? "" : "s"} ` +
+      `(${_assignSelection.clientIds.size} client${_assignSelection.clientIds.size === 1 ? "" : "s"} × ` +
+      `${_assignSelection.dates.size} date${_assignSelection.dates.size === 1 ? "" : "s"}).\n\n` +
+      `Replace any existing workouts on those dates?\n\n` +
+      `OK — Replace existing (will be deleted)\n` +
+      `Cancel — Add alongside existing (keep current plan)`
+    );
+    const mode = wantReplace ? "replace" : "stack";
+    for (const r of rows) r.conflict_mode = mode;
 
     const { error } = await sb.from("coach_assigned_workouts").insert(rows);
     if (error) { setErr("Couldn't assign: " + error.message); return; }
@@ -393,6 +525,7 @@
   window.renderCoachLibraryView   = renderCoachLibraryView;
   window.openCoachLibraryNew      = openCoachLibraryNew;
   window.openCoachLibraryEdit     = openCoachLibraryEdit;
+  window.openImportFromSavedPicker = openImportFromSavedPicker;
   window.duplicateCoachLibraryItem= duplicateCoachLibraryItem;
   window.deleteCoachLibraryItem   = deleteCoachLibraryItem;
   window.openCoachLibraryAssign   = openCoachLibraryAssign;
