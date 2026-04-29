@@ -399,6 +399,30 @@ CREATE POLICY "Admins see all assignment history"
 -- History inserts happen via Phase B's pair_with_coach() / switch_coach()
 -- SECURITY DEFINER functions — no client INSERT policy here.
 
+-- ──────────────────────────────────────────────────────────────────────
+-- 9. Drop coaching_unique_active_pair (over-restrictive)
+-- ──────────────────────────────────────────────────────────────────────
+-- The original coaching schema (20260428_coaching_schema.sql) defined a
+-- partial unique index on (client_id, coach_id) WHERE active = TRUE
+-- with the intent of preventing a duplicate active pair. In practice
+-- it blocks the legitimate switch-back-to-previous-coach flow that the
+-- invite-link Accept modal exposes (Coach A → Coach B → Coach A again):
+-- the second pair-with-A insert collides with the original (A, FALSE)
+-- row in a way the partial index ends up rejecting.
+--
+-- The real "one active primary per client" guarantee is enforced by the
+-- separate `coaching_one_primary_per_client` partial unique index
+-- (still in place) — that one keys on client_id alone with WHERE
+-- role='primary' AND active=TRUE. Sub-coaches are unconstrained-pair
+-- by design (a client can have multiple sub-coaches at once).
+--
+-- Caught during Phase B smoke test #3 (switch_coach happy path) by
+-- Chase. Index already dropped on the deployed DB; this DROP is here so
+-- fresh deploys (which run 20260428 → 20260430 in order) end up with
+-- the same final state instead of inheriting the bug.
+
+DROP INDEX IF EXISTS public.coaching_unique_active_pair;
+
 COMMIT;
 
 -- ══════════════════════════════════════════════════════════════════════
