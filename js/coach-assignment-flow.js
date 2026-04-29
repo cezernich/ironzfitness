@@ -936,6 +936,18 @@
     }
   }
 
+  // Rest-day placeholders aren't workouts — assigning over them shouldn't
+  // trigger the "already a workout on this day" prompt. Mirrors the
+  // calendar's _calV2IsRestEntry rule (load/discipline/type/name).
+  function _isRestEntry(e) {
+    if (!e) return false;
+    const load = String(e.load || "").toLowerCase();
+    const disc = String(e.discipline || "").toLowerCase();
+    const type = String(e.type || "").toLowerCase();
+    const name = String(e.sessionName || e.name || "").toLowerCase();
+    return load === "rest" || disc === "rest" || type === "rest" || /^\s*rest\s*$/.test(name);
+  }
+
   async function _hasDateConflict(clientId, date) {
     const sb = window.supabaseClient;
     if (!sb) return { found: false };
@@ -945,7 +957,7 @@
         .eq("user_id", clientId).eq("data_key", "workoutSchedule")
         .maybeSingle();
       const arr = Array.isArray(data?.data_value) ? data.data_value : [];
-      const hits = arr.filter(e => e && e.date === date);
+      const hits = arr.filter(e => e && e.date === date && !_isRestEntry(e));
       if (!hits.length) return { found: false };
       const first = hits[0];
       const summary = first.sessionName || _typeLabel(first.type) || "Workout";
