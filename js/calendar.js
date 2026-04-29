@@ -2156,8 +2156,15 @@ function buildAiIntervalsList(session, type) {
 
 // ─── Workout completion ───────────────────────────────────────────────────────
 
+// Discipline (what the user did) → workout type (analytics bucket).
+// Swim and brick used to fold into "triathlon" because the tri-plan
+// flow stamped them that way; the breakdown then showed Swimming AND
+// Triathlon as separate categories that meant the same thing. Now:
+//   swim  → swimming  (matches direct-logged + Strava swims)
+//   brick → brick     (own bucket; meaningful tri-build signal)
+//   race  → triathlon (only tri races stay in this bucket)
 const DISCIPLINE_TO_WORKOUT_TYPE = {
-  swim: "triathlon", bike: "cycling", run: "running", brick: "triathlon", race: "triathlon",
+  swim: "swimming", bike: "cycling", run: "running", brick: "brick", race: "triathlon",
   weightlifting: "weightlifting", cycling: "cycling", running: "running",
   triathlon: "triathlon", general: "general", yoga: "general",
   stairstepper: "stairstepper",

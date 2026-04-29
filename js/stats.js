@@ -445,6 +445,7 @@ function buildStatsBreakdown(byType, total) {
     running:       { label:"Running",        icon:ICONS.run,      color:"var(--color-amber)"  },
     swimming:      { label:"Swimming",       icon:ICONS.swim,     color:"var(--color-cyan)"   },
     cycling:       { label:"Cycling",        icon:ICONS.bike,     color:"var(--color-teal)"   },
+    brick:         { label:"Brick",          icon:ICONS.bike,     color:"var(--color-accent)" },
     triathlon:     { label:"Triathlon",      icon:ICONS.swim,     color:"var(--color-cyan)"   },
     stairstepper:  { label:"Stair Stepper",  icon:ICONS.run,      color:"var(--color-amber)"  },
     hyrox:         { label:"Hyrox",          icon:ICONS.flame,    color:"var(--color-danger)" },
