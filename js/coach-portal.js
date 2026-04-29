@@ -176,7 +176,7 @@
     if (!btn) return;
     btn.disabled = false;
     btn.style.opacity = "";
-    btn.textContent = "Open Coach Portal";
+    btn.textContent = "Open";
     btn.onclick = (ev) => {
       ev.preventDefault();
       openCoachPortal();
