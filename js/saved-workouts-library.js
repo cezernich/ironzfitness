@@ -8,8 +8,17 @@
 
   const LOCAL_KEY = "ironz_saved_workouts_v1";
   const MIGRATION_FLAG = "savedWorkoutsSupabaseMigrated";
-  const MAX_SAVED = 50;
+  const MAX_SAVED_USER  = 50;
+  const MAX_SAVED_COACH = 200;
   const TABLE = "saved_workouts";
+
+  // Coaches use the saved library as their writing surface, so they need
+  // headroom — 200 vs 50. Profile.is_coach is fetched at auth and cached
+  // on window._isCoach by client-coaching.js / coach-request-flow.js.
+  function _maxSaved() {
+    return (typeof window !== "undefined" && window._isCoach) ? MAX_SAVED_COACH : MAX_SAVED_USER;
+  }
+  const MAX_SAVED = MAX_SAVED_USER; // legacy export — readers should call _maxSaved()
 
   // Tombstone list for deletes. Deleted saved-workout rows get added here
   // so _refreshFromSupabase won't resurrect them, even if the remote
@@ -271,7 +280,7 @@
     const list = _readLocal();
     const existing = _findExisting(list, opts.variantId, "library");
     const now = new Date().toISOString();
-    if (!existing && list.length >= MAX_SAVED) return { error: "LIMIT_REACHED" };
+    if (!existing && list.length >= _maxSaved()) return { error: "LIMIT_REACHED" };
     if (existing) {
       existing.saved_at = now;
       // Backfill payload on re-save if it's missing (for entries saved
@@ -479,7 +488,7 @@
     const list = _readLocal();
     const existing = _findExisting(list, opts.variantId, "shared");
     const now = new Date().toISOString();
-    if (!existing && list.length >= MAX_SAVED) return { error: "LIMIT_REACHED" };
+    if (!existing && list.length >= _maxSaved()) return { error: "LIMIT_REACHED" };
     if (existing) {
       existing.saved_at = now;
       existing.share_token = opts.shareToken;
@@ -713,7 +722,7 @@
   async function saveCustom(opts) {
     if (!opts || !opts.name || !opts.workout_kind) return { error: "INVALID_INPUT" };
     const list = _readLocal();
-    if (list.length >= MAX_SAVED) return { error: "LIMIT_REACHED" };
+    if (list.length >= _maxSaved()) return { error: "LIMIT_REACHED" };
     const now = new Date().toISOString();
     const row = {
       id: _genId(),
@@ -778,7 +787,7 @@
     const existingIds = new Set(list.filter(s => s._legacyId).map(s => s._legacyId));
     let count = 0;
     for (const sw of old) {
-      if (list.length >= MAX_SAVED) break;
+      if (list.length >= _maxSaved()) break;
       if (existingIds.has(sw.id)) continue;
       const row = {
         id: _genId(),
@@ -934,7 +943,7 @@
         .select("*")
         .eq("user_id", uid)
         .order("saved_at", { ascending: false })
-        .limit(MAX_SAVED);
+        .limit(_maxSaved());
       if (error) {
         console.warn("[SavedWorkouts] refresh fetch failed:", error.message);
         return;

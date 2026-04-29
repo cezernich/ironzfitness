@@ -14461,6 +14461,24 @@ input.completion-ex-name:focus {
   font-size: 0.9rem;
 }
 
+/* Import-from-Saved modal: scrollable list capped at ~3 rows so a 50-row
+   library doesn't blow the modal off the viewport. Inner gap matches the
+   coach-bulk-client-list pattern. */
+.coach-import-modal {
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+}
+.coach-import-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;       /* ~3 rows tall */
+  overflow-y: auto;
+  padding-right: 4px;       /* room for the scrollbar */
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Assign Workout modal — exercise rows */
 .coach-assign-ex-list {
   display: flex;

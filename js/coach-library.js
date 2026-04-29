@@ -103,8 +103,13 @@
       alert("Saved workouts library not available.");
       return;
     }
+    // Pull EVERY saved workout regardless of source — `custom` covers
+    // anything saved from a workout card; `library` covers items the user
+    // bookmarked from the built-in variants; `shared` covers inbox
+    // accepts. All three are valid imports for a coach building their
+    // library.
     let saved = [];
-    try { saved = await Saved.listSaved({ source: "custom" }); } catch (e) { console.warn(e); }
+    try { saved = await Saved.listSaved(); } catch (e) { console.warn(e); }
     saved = (saved || []).slice().sort((a, b) => String(b.saved_at || "").localeCompare(String(a.saved_at || "")));
 
     const id = "coach-import-saved-overlay";
@@ -119,31 +124,39 @@
     };
     overlay.onclick = (e) => { if (e.target === overlay) close(); };
 
-    const rows = saved.length
-      ? saved.map(s => {
-          const p = s.payload || {};
-          const exCount = Array.isArray(p.exercises) ? p.exercises.length : 0;
-          const segCount = Array.isArray(p.segments) ? p.segments.length : 0;
-          const meta = [
-            s.workout_kind ? _typeLabel(s.workout_kind) : null,
-            p.duration ? `${p.duration} min` : null,
-            exCount ? `${exCount} exercise${exCount === 1 ? "" : "s"}` : null,
-            segCount ? `${segCount} interval${segCount === 1 ? "" : "s"}` : null,
-          ].filter(Boolean).join(" · ");
-          return `<div class="coach-lib-picker-row" data-saved-id="${_esc(s.id)}" tabindex="0"
-                       onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-            <div class="coach-lib-picker-row-name">${_esc(s.custom_name || "Untitled")}</div>
-            <div class="coach-lib-picker-row-meta">${_esc(meta || "—")}</div>
-          </div>`;
-        }).join("")
-      : `<div class="coach-lib-picker-empty">
-          You don't have any custom saved workouts yet. Tap "Save to Library" on any workout card to send it here.
-        </div>`;
+    function _rowHtml(s) {
+      const p = s.payload || {};
+      const exCount = Array.isArray(p.exercises) ? p.exercises.length : 0;
+      const segCount = Array.isArray(p.segments) ? p.segments.length : 0;
+      const meta = [
+        s.workout_kind ? _typeLabel(s.workout_kind) : null,
+        p.duration ? `${p.duration} min` : null,
+        exCount ? `${exCount} exercise${exCount === 1 ? "" : "s"}` : null,
+        segCount ? `${segCount} interval${segCount === 1 ? "" : "s"}` : null,
+      ].filter(Boolean).join(" · ");
+      const name = s.custom_name || s.variant_id || "Untitled";
+      return `<div class="coach-lib-picker-row" data-saved-id="${_esc(s.id)}" tabindex="0"
+                   onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+        <div class="coach-lib-picker-row-name">${_esc(name)}</div>
+        <div class="coach-lib-picker-row-meta">${_esc(meta || "—")}</div>
+      </div>`;
+    }
 
+    const emptyHtml = `<div class="coach-lib-picker-empty">
+        You don't have any saved workouts yet. Tap "Save to Library" on any workout card to send it here.
+      </div>`;
+
+    // List body sized to ~3 rows so long lists don't blow out the modal —
+    // the inner div scrolls. Search box live-filters on each keystroke.
     overlay.innerHTML = `
-      <div class="rating-modal" style="max-width:480px;max-height:80vh;display:flex;flex-direction:column">
+      <div class="rating-modal coach-import-modal">
         <div class="rating-modal-title">Import from Saved Workouts</div>
-        <div style="overflow-y:auto;flex:1;margin:0 -8px">${rows}</div>
+        <input type="search" id="coach-import-search" class="input"
+          placeholder="Search by name…"
+          style="width:100%;margin-bottom:10px;padding:8px 12px;font-size:0.95rem" />
+        <div id="coach-import-list" class="coach-import-list">
+          ${saved.length ? saved.map(_rowHtml).join("") : emptyHtml}
+        </div>
         <div style="display:flex;gap:8px;margin-top:14px">
           <button class="btn-secondary" id="coach-import-cancel" style="flex:1;min-height:38px">Close</button>
         </div>
@@ -151,15 +164,43 @@
     document.body.appendChild(overlay);
     requestAnimationFrame(() => overlay.classList.add("visible"));
     overlay.querySelector("#coach-import-cancel").onclick = close;
-    overlay.querySelectorAll(".coach-lib-picker-row[data-saved-id]").forEach(el => {
-      el.onclick = async () => {
-        const sid = el.getAttribute("data-saved-id");
-        const s = saved.find(x => x.id === sid);
-        if (!s) return;
-        close();
-        await _importSavedIntoCoachLibrary(s);
+
+    function _wireRows() {
+      overlay.querySelectorAll(".coach-lib-picker-row[data-saved-id]").forEach(el => {
+        el.onclick = async () => {
+          const sid = el.getAttribute("data-saved-id");
+          const s = saved.find(x => x.id === sid);
+          if (!s) return;
+          close();
+          await _importSavedIntoCoachLibrary(s);
+        };
+      });
+    }
+    _wireRows();
+
+    const searchInput = overlay.querySelector("#coach-import-search");
+    const listEl = overlay.querySelector("#coach-import-list");
+    if (searchInput && listEl) {
+      searchInput.oninput = () => {
+        const q = String(searchInput.value || "").toLowerCase().trim();
+        const filtered = q
+          ? saved.filter(s => {
+              const name = String(s.custom_name || s.variant_id || "").toLowerCase();
+              const kind = String(s.workout_kind || "").toLowerCase();
+              return name.includes(q) || kind.includes(q);
+            })
+          : saved;
+        listEl.innerHTML = filtered.length ? filtered.map(_rowHtml).join("") : `<div class="coach-lib-picker-empty">No matches.</div>`;
+        _wireRows();
       };
-    });
+      // Autofocus the search input on desktop only — autofocus on mobile
+      // pops the keyboard immediately, which feels intrusive.
+      try {
+        if (window.matchMedia && !window.matchMedia("(pointer: coarse)").matches) {
+          setTimeout(() => searchInput.focus(), 50);
+        }
+      } catch {}
+    }
   }
 
   // Map a SavedWorkoutsLibrary row into a coach_workout_library row and

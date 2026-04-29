@@ -182,6 +182,9 @@
 
     const isCoach           = !!profileRes?.data?.is_coach;
     const hasActiveAsClient = (assignRes?.count ?? 0) > 0;
+    // Stash for any module that needs to know the user wears a coach hat
+    // (e.g. saved-workouts-library uses it to bump the personal save limit).
+    if (typeof window !== "undefined") window._isCoach = isCoach;
 
     if (entryCard)   entryCard.style.display   = isCoach ? "" : "none";
     if (requestCard) requestCard.style.display = hasActiveAsClient ? "none" : "";
