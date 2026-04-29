@@ -52,6 +52,8 @@
     let body;
     if (tab === "library" && typeof window.renderCoachLibraryView === "function") {
       body = window.renderCoachLibraryView(state);
+    } else if (tab === "programs" && typeof window.renderCoachProgramsView === "function") {
+      body = window.renderCoachProgramsView(state);
     } else {
       body = `
         ${_renderTodayQueue(clients, todayCompletions)}
@@ -76,6 +78,7 @@
     return `<div class="coach-dash-tabs">
       ${tab("clients", `Clients${clientCount ? " (" + clientCount + ")" : ""}`)}
       ${tab("library", "Library")}
+      ${tab("programs", "Programs")}
     </div>`;
   }
 

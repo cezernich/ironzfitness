@@ -41,6 +41,9 @@
       // lazily on first tab open, refresh on every subsequent open.
       loadCoachLibrary();
     }
+    if (name === "programs" && typeof window.loadCoachPrograms === "function") {
+      window.loadCoachPrograms();
+    }
   }
 
   function getCoachDashboardTab() { return _activeTab; }

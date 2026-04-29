@@ -2477,6 +2477,45 @@
     </div>
   </div>
 
+  <!-- Coach Program Builder modal — Phase 3D.
+       Build a multi-week template; each day picks an item from the
+       coach's library or "Rest". Apply later via the Apply modal. -->
+  <div id="coach-program-builder-overlay" class="quick-entry-overlay" onclick="if(event.target===this) closeCoachProgramBuilder()">
+    <div class="quick-entry-modal" style="max-width:560px">
+      <div class="quick-entry-header">
+        <span class="qe-date-label" style="color:var(--color-coach,#534AB7)">Program Builder</span>
+        <button class="qe-close-btn" onclick="closeCoachProgramBuilder()">✕</button>
+      </div>
+      <div class="quick-entry-body" style="padding:0 16px 16px">
+        <div id="coach-program-builder-body"></div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="btn-secondary" style="flex:1" onclick="closeCoachProgramBuilder()">Cancel</button>
+          <button class="btn-primary" style="flex:1" onclick="saveCoachProgram()">Save Program</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Coach Program Apply modal — Phase 3D.
+       Pick client + start date, see race-truncation warning if applicable,
+       confirm. Bulk-inserts coach_assigned_workouts for each (week, day)
+       slot in the template. Trigger from 3A.1 mirrors each. -->
+  <div id="coach-program-apply-overlay" class="quick-entry-overlay" onclick="if(event.target===this) closeCoachProgramApply()">
+    <div class="quick-entry-modal" style="max-width:480px">
+      <div class="quick-entry-header">
+        <span class="qe-date-label" style="color:var(--color-coach,#534AB7)">Apply Program</span>
+        <button class="qe-close-btn" onclick="closeCoachProgramApply()">✕</button>
+      </div>
+      <div class="quick-entry-body" style="padding:0 16px 16px">
+        <div id="coach-program-apply-body"></div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="btn-secondary" style="flex:1" onclick="closeCoachProgramApply()">Cancel</button>
+          <button class="btn-primary" style="flex:1" onclick="confirmCoachProgramApply()">Apply</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Coach Bulk Assign modal — Phase 3C.
        Pick a library workout, multi-select clients + dates, confirm.
        Each (client, date) pair becomes one coach_assigned_workouts row.
@@ -3728,6 +3767,7 @@
   <script src="js/coach-client-detail.js"></script>
   <script src="js/coach-assignment-flow.js"></script>
   <script src="js/coach-library.js"></script>
+  <script src="js/coach-programs.js"></script>
   <script src="js/analytics.js"></script>
   <script src="js/push.js"></script>
   <!-- auth.js last — overrides window.onload to gate app behind login -->

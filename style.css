@@ -14149,6 +14149,59 @@ input.completion-ex-name:focus {
   font-size: 0.82rem;
   font-weight: 600;
 }
+/* Phase 3D: program builder per-day rows + truncation warning */
+.coach-program-week {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.coach-program-day-row {
+  display: grid;
+  grid-template-columns: 50px 1fr 220px;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.coach-program-day-row:last-child { border-bottom: none; }
+.coach-program-day-label {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+.coach-program-day-name { font-weight: 600; }
+.coach-program-day-empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-size: 0.85rem;
+}
+.coach-program-day-pick {
+  padding: 4px 6px;
+  font-size: 0.85rem;
+}
+@media (max-width: 480px) {
+  .coach-program-day-row {
+    grid-template-columns: 40px 1fr;
+    grid-template-areas:
+      "label content"
+      "label pick";
+    row-gap: 4px;
+  }
+  .coach-program-day-label   { grid-area: label; }
+  .coach-program-day-content { grid-area: content; }
+  .coach-program-day-pick    { grid-area: pick; }
+}
+
+.coach-program-warning {
+  margin: 12px 0;
+  padding: 10px 12px;
+  background: rgba(201, 122, 0, 0.08);
+  border-left: 3px solid var(--color-warning, #c97a00);
+  border-radius: 4px;
+  color: var(--color-warning, #c97a00);
+}
+.coach-program-warning strong { display: block; }
+
 .coach-bulk-date-pill button {
   background: none;
   border: none;
