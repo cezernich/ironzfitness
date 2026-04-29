@@ -13377,9 +13377,12 @@ input.completion-ex-name:focus {
   white-space: nowrap;
 }
 
+/* Admin = red (elevated permissions, "be careful here"). Coach is purple
+   (rule below). Plain user stays neutral gray. The three are now clearly
+   distinct at a glance — previously admin and coach were both purple. */
 .admin-badge-admin {
-  background: rgba(99, 102, 241, 0.15);
-  color: var(--color-accent);
+  background: rgba(220, 38, 38, 0.12);
+  color: var(--color-danger, #b91c1c);
 }
 
 .admin-badge-user {
