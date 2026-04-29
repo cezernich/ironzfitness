@@ -3199,21 +3199,24 @@ function _readWorkoutDurationMin(w) {
 // chalking up, loading plates, etc.
 function _estimateStrengthSessionMin(exercises) {
   if (!Array.isArray(exercises) || !exercises.length) return 0;
-  const SETUP_SEC = 120;
-  const WARMUP_SET_BOOST = 1.5;
+  // Coach explicitly declared the set count; don't tack on imaginary
+  // warmup sets. Setup overhead is a quick walk + plate change between
+  // exercises — 60s, not 2 min.
+  const SETUP_SEC = 60;
+  const WARMUP_SET_BOOST = 0;
   // Per-rep tempo defaults (concentric + eccentric + brief reset). Matches
   // observed pacing for unbroken sets. Finishers add breath-catching time
   // via the threshold path below.
   const PER_REP_SEC_DEFAULT = 5;
-  const PER_REP_SEC_BW_PULL = 8;   // pull-ups, chin-ups, dips — slower per rep
+  const PER_REP_SEC_BW_PULL = 6;   // pull-ups, chin-ups, dips — under the bar fast, eccentric brief
   const PER_REP_SEC_CURL    = 3.5; // curls, lateral raises, light cable — faster
   // Assumed reps when neither ex.reps nor a leading number on ex.name gives
-  // one. 8 is the default in the coach-assign / quick-entry forms.
-  const ASSUMED_REPS = 8;
-  // Below this baseline a "set" is dominated by setup/bar-touch time, not
-  // by the reps themselves — keep a 45s floor so a 5-rep top set doesn't
-  // shrink into a 25s blip.
-  const WORK_FLOOR_SEC = 45;
+  // one. Blank reps usually means "athlete picks the rep count" or the
+  // coach left it implicit — assume a moderate working set.
+  const ASSUMED_REPS = 5;
+  // Floor on a single working set's bar time. A real set of pull-ups runs
+  // about 30s end-to-end; lower than that reads as a setup-only blip.
+  const WORK_FLOOR_SEC = 30;
   // Above this rep count the entry behaves like a finisher: the rep count
   // already encodes a single "as fast as possible" effort, so the sets
   // multiplier and warmup ramp don't apply (the coach typed sets=3 as a
@@ -3249,8 +3252,10 @@ function _estimateStrengthSessionMin(exercises) {
     const finisherMult = isFinisher ? 1.25 : 1;
     const workSec = Math.max(WORK_FLOOR_SEC, reps * perRepSec * finisherMult);
 
-    // rest is usually a string like "90s" or "2 min" — parse to seconds
-    let restSec = 90;
+    // rest is usually a string like "60s" or "2 min" — parse to seconds.
+    // Default of 60s matches typical accessory rest; heavy compounds where
+    // the coach types "2 min" override this.
+    let restSec = 60;
     const r = String(ex.rest || "").toLowerCase();
     const m = r.match(/([\d.]+)/);
     if (m) {
@@ -3260,7 +3265,7 @@ function _estimateStrengthSessionMin(exercises) {
     // Finishers don't get the warmup-ramp inflation OR the inter-set rest
     // padding — the rep count already represents one big effort.
     const effectiveSets = isFinisher ? 1 : (workingSets + WARMUP_SET_BOOST);
-    const restPad = isFinisher ? 0 : (effectiveSets - 1) * restSec;
+    const restPad = isFinisher ? 0 : Math.max(0, effectiveSets - 1) * restSec;
     const perEx = effectiveSets * workSec + restPad + SETUP_SEC;
     totalSec += perEx;
   });
