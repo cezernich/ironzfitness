@@ -2532,6 +2532,21 @@
     </div>
   </div>
 
+  <!-- Coach Library Picker — pick a saved workout to prefill the
+       Add-a-Workout modal. Opened from the Calendar tab toolbar. -->
+  <div id="coach-lib-picker-overlay" class="quick-entry-overlay" onclick="if(event.target===this) closeCoachLibraryPicker()">
+    <div class="quick-entry-modal" style="max-width:480px">
+      <div class="quick-entry-header">
+        <span class="qe-date-label" style="color:var(--color-coach,#534AB7)">Add from Library</span>
+        <button class="qe-close-btn" onclick="closeCoachLibraryPicker()">✕</button>
+      </div>
+      <div class="quick-entry-body" style="padding:0 16px 16px">
+        <p class="hint" style="margin:8px 0">Pick a saved workout — you can tweak the date and details before saving.</p>
+        <div id="coach-lib-picker-list" class="coach-lib-picker-list"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Coach Program Builder modal — Phase 3D.
        Build a multi-week template; each day picks an item from the
        coach's library or "Rest". Apply later via the Apply modal. -->

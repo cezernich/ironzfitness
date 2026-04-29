@@ -13956,7 +13956,55 @@ input.completion-ex-name:focus {
 .coach-cal-toolbar {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
   margin-bottom: 10px;
+}
+.coach-cal-weeknav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  flex-wrap: wrap;
+}
+.coach-cal-weeknav-label {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--color-text);
+  min-width: 160px;
+}
+.coach-cal-weeknav .btn-secondary {
+  padding: 4px 10px;
+  font-size: 0.85rem;
+}
+.coach-lib-picker-list {
+  max-height: 60vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+.coach-lib-picker-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 8px;
+  cursor: pointer;
+  background: var(--color-card-bg, #fff);
+  transition: background 0.12s;
+}
+.coach-lib-picker-row:hover { background: var(--color-bg-soft, #f5f4ef); }
+.coach-lib-picker-row-name { font-weight: 600; font-size: 0.95rem; }
+.coach-lib-picker-row-meta { font-size: 0.82rem; color: var(--color-text-muted); }
+.coach-lib-picker-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
 }
 
 /* Assign Workout modal — exercise rows */

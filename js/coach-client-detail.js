@@ -31,6 +31,9 @@
   // Edit handler can resolve back to the schedule entry without
   // string-encoding the JSON into the markup.
   let _calIndex = [];
+  // Week offset from the current week (0 = this week, -1 = last, +1 = next).
+  // Lets coaches plan ahead beyond the seven days that show by default.
+  let _calWeekOffset = 0;
   let _data = {
     schedule: [],          // workoutSchedule (planned)
     completed: [],         // workouts (logged)
@@ -245,29 +248,50 @@
     return Math.max(0, Math.round((d - t) / (1000 * 60 * 60 * 24)));
   }
 
-  // ── Tab: Calendar (this week, planned vs completed) ───────────────────
+  // ── Tab: Calendar (week-by-week planned vs completed) ─────────────────
   function _renderCalendar() {
     const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
     const monday = new Date(today);
-    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7) + (_calWeekOffset * 7));
     const days = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
       return d.toISOString().slice(0, 10);
     });
-    const todayStr = today.toISOString().slice(0, 10);
 
-    // Phase 3A.2: "+ Assign Workout" CTA at the top of the calendar.
+    const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+    const fmt = (d) => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const weekLabel = _calWeekOffset === 0
+      ? `This week · ${fmt(monday)} – ${fmt(sunday)}`
+      : `${fmt(monday)} – ${fmt(sunday)}`;
+
+    const weekNav = `
+      <div class="coach-cal-weeknav">
+        <button class="btn-secondary btn-sm" onclick="setCoachCalWeekDelta(-1)" aria-label="Previous week">‹ Prev</button>
+        <span class="coach-cal-weeknav-label">${_esc(weekLabel)}</span>
+        ${_calWeekOffset !== 0 ? `<button class="btn-secondary btn-sm" onclick="setCoachCalWeekDelta(0)">Today</button>` : ""}
+        <button class="btn-secondary btn-sm" onclick="setCoachCalWeekDelta(1)" aria-label="Next week">Next ›</button>
+      </div>`;
+
+    // Phase 3A.2: "+ Add a Workout" CTA at the top of the calendar.
     // Opens the build-from-scratch flow with the client's id + name
     // pre-filled. The trigger from 3A.1 mirrors any insert into the
     // user's workoutSchedule, so loadCoachClientDetail will refresh
-    // and the new entry shows up below.
+    // and the new entry shows up below. "+ Add from Library" opens a
+    // picker that prefills the same modal with a saved workout.
     const _clientName = _client.full_name || _client.email || "Client";
     // Pass clientId via dataset rather than embedding the name in the
     // onclick string — saves us from quoting headaches when names
     // contain apostrophes or quotes.
     const assignBar = `
       <div class="coach-cal-toolbar">
+        <button class="btn-secondary btn-sm"
+                data-client-id="${_esc(_client.id)}"
+                data-client-name="${_esc(_clientName)}"
+                onclick="openCoachLibraryPicker(this.dataset.clientId, this.dataset.clientName)">
+          + Add from Library
+        </button>
         <button class="btn-primary btn-sm"
                 data-client-id="${_esc(_client.id)}"
                 data-client-name="${_esc(_clientName)}"
@@ -339,7 +363,14 @@
       </div>`;
     }).join("");
 
-    return `${assignBar}<div class="card">${rows}</div>`;
+    return `${assignBar}${weekNav}<div class="card">${rows}</div>`;
+  }
+
+  function setCoachCalWeekDelta(delta) {
+    if (delta === 0) _calWeekOffset = 0;
+    else             _calWeekOffset += delta;
+    const wrap = document.querySelector(".coach-client-tab-content");
+    if (wrap && _activeTab === "calendar") wrap.innerHTML = _renderCalendar();
   }
 
   function _typeLabel(t) {
@@ -886,9 +917,91 @@
     window.openAssignWorkoutModal(_client.id, _clientName, prefill);
   }
 
+  // ── Library picker — pick a saved workout, prefill the assign modal ───
+  // Fetches the coach's library on demand so a stale dashboard cache
+  // doesn't shadow newly-saved items. Picking an item closes the picker
+  // and opens the existing Add-a-Workout modal in prefill mode.
+  async function openCoachLibraryPicker(clientId, clientName) {
+    const overlay = document.getElementById("coach-lib-picker-overlay");
+    const list = document.getElementById("coach-lib-picker-list");
+    if (!overlay || !list) return;
+    list.dataset.clientId = clientId;
+    list.dataset.clientName = clientName || "";
+    list.innerHTML = `<div class="coach-lib-picker-empty">Loading…</div>`;
+    overlay.classList.add("is-open");
+
+    const sb = window.supabaseClient;
+    if (!sb) { list.innerHTML = `<div class="coach-lib-picker-empty">Auth client not available.</div>`; return; }
+    const sess = (await sb.auth.getSession())?.data?.session;
+    const coachId = sess?.user?.id;
+    if (!coachId) { list.innerHTML = `<div class="coach-lib-picker-empty">Not signed in.</div>`; return; }
+
+    const { data, error } = await sb.from("coach_workout_library")
+      .select("id, name, notes, workout, created_at")
+      .eq("coach_id", coachId)
+      .order("created_at", { ascending: false });
+    if (error) { list.innerHTML = `<div class="coach-lib-picker-empty">Couldn't load library: ${_esc(error.message)}</div>`; return; }
+    if (!data || !data.length) {
+      list.innerHTML = `<div class="coach-lib-picker-empty">
+        No saved workouts yet. Save one via the Library tab → New Workout.
+      </div>`;
+      return;
+    }
+
+    list.innerHTML = data.map(item => {
+      const w = item.workout || {};
+      const exCount = Array.isArray(w.exercises) ? w.exercises.length : 0;
+      const ivCount = Array.isArray(w.intervals) ? w.intervals.length : 0;
+      const meta = [
+        w.type ? _typeLabel(w.type) : null,
+        w.duration ? `${w.duration} min` : null,
+        exCount ? `${exCount} exercise${exCount === 1 ? "" : "s"}` : null,
+        ivCount ? `${ivCount} interval${ivCount === 1 ? "" : "s"}` : null,
+      ].filter(Boolean).join(" · ");
+      return `<div class="coach-lib-picker-row" onclick="pickCoachLibraryForAssign('${_esc(item.id)}')" tabindex="0"
+                   onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();pickCoachLibraryForAssign('${_esc(item.id)}')}">
+        <div class="coach-lib-picker-row-name">${_esc(item.name || w.sessionName || "Untitled")}</div>
+        <div class="coach-lib-picker-row-meta">${_esc(meta || "—")}</div>
+      </div>`;
+    }).join("");
+
+    // Cache so pickCoachLibraryForAssign can resolve without another fetch.
+    window._coachLibPickerCache = data;
+  }
+
+  function closeCoachLibraryPicker() {
+    const overlay = document.getElementById("coach-lib-picker-overlay");
+    if (overlay) overlay.classList.remove("is-open");
+  }
+
+  function pickCoachLibraryForAssign(itemId) {
+    const list = document.getElementById("coach-lib-picker-list");
+    const cache = window._coachLibPickerCache || [];
+    const item = cache.find(x => x.id === itemId);
+    if (!item || !list) return;
+    const clientId = list.dataset.clientId;
+    const clientName = list.dataset.clientName || "";
+    const w = item.workout || {};
+    const prefill = {
+      sessionName: w.sessionName || item.name || "",
+      type:        w.type || "weightlifting",
+      duration:    w.duration || "",
+      coachNote:   item.notes || "",
+      exercises:   Array.isArray(w.exercises) ? w.exercises : [],
+      intervals:   Array.isArray(w.intervals) ? w.intervals : [],
+      hiitMeta:    w.hiitMeta || null,
+      details:     w.details || "",
+    };
+    closeCoachLibraryPicker();
+    if (typeof window.openAssignWorkoutModal === "function") {
+      window.openAssignWorkoutModal(clientId, clientName, prefill);
+    }
+  }
+
   // ── Public surface ─────────────────────────────────────────────────────
   window.loadCoachClientDetail   = loadCoachClientDetail;
   window.setCoachClientTab       = setCoachClientTab;
+  window.setCoachCalWeekDelta    = setCoachCalWeekDelta;
   window.coachStartFeatureEdit   = coachStartFeatureEdit;
   window.coachCancelFeatureEdit  = coachCancelFeatureEdit;
   window.coachSaveFeatureEdit    = coachSaveFeatureEdit;
@@ -897,4 +1010,7 @@
   window.coachCancelDayCarbOverlay = coachCancelDayCarbOverlay;
   window.coachSaveDayCarbOverlay   = coachSaveDayCarbOverlay;
   window.coachClearDayCarbOverlay  = coachClearDayCarbOverlay;
+  window.openCoachLibraryPicker  = openCoachLibraryPicker;
+  window.closeCoachLibraryPicker = closeCoachLibraryPicker;
+  window.pickCoachLibraryForAssign = pickCoachLibraryForAssign;
 })();
