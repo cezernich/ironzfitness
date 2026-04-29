@@ -151,20 +151,84 @@
     while (_recentByRow[rowId].length > 5) _recentByRow[rowId].shift();
   }
 
+  // Pick a starter exercise when the row is blank. Reads the names of any
+  // sibling rows in the editor, infers their primary muscles, and picks a
+  // random EXERCISE_DB row that matches at least one. Falls back to a
+  // random non-duplicate exercise when no siblings give us a hint.
+  function _pickForEmptyRow(rowId) {
+    const db = global.EXERCISE_DB;
+    if (!Array.isArray(db) || db.length === 0) return null;
+
+    const siblingRows = document.querySelectorAll(".edit-exercise-row");
+    const siblingNames = [];
+    siblingRows.forEach(r => {
+      if (r.id === "edit-row-" + rowId) return;
+      const inp = r.querySelector(".ex-row-name");
+      const v = inp && inp.value && inp.value.trim();
+      if (v) siblingNames.push(v);
+    });
+
+    const usedSet = new Set(siblingNames.map(n => n.toLowerCase()));
+    const muscles = new Set();
+    siblingNames.forEach(n => {
+      const ex = findByName(n);
+      if (!ex) return;
+      parseMuscles(ex.primaryMuscles).forEach(m => muscles.add(m));
+    });
+
+    let pool;
+    if (muscles.size > 0) {
+      pool = db.filter(e => {
+        if (usedSet.has(String(e.name).toLowerCase())) return false;
+        return parseMuscles(e.primaryMuscles).some(m => muscles.has(m));
+      });
+    }
+    if (!pool || !pool.length) {
+      // No sibling muscle hint — use a generic pool. Tier 2 (workhorse
+      // accessory) movements are the most useful default.
+      pool = db.filter(e => {
+        if (usedSet.has(String(e.name).toLowerCase())) return false;
+        return e.tier === 2 || e.tier === 1;
+      });
+    }
+    if (!pool.length) pool = db.filter(e => !usedSet.has(String(e.name).toLowerCase()));
+    if (!pool.length) return null;
+
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    const reasonMuscles = parseMuscles(pick.primaryMuscles);
+    return {
+      name: pick.name,
+      reason: reasonMuscles.length ? `picked: ${reasonMuscles.join(", ")}` : "picked starter exercise",
+      exercise: pick,
+    };
+  }
+
   // In-place swap handler for the workout editor. Reads the row's name
   // input, regenerates, updates the name + weight, flashes a toast hint.
   function regenerateEditRow(rowId) {
     const nameInput = document.getElementById("edit-ex-" + rowId);
     if (!nameInput) return;
     const currentName = (nameInput.value || "").trim();
-    if (!currentName) return;
 
-    // Build exclude list: current name + prior swaps from this row.
-    const exclude = [currentName].concat(_recentByRow[rowId] || []);
-    const result = regenerate(currentName, { exclude });
-    if (!result) {
-      _flashRowMessage(rowId, "No alternatives found for that exercise.");
-      return;
+    // Empty row → suggest a starter exercise based on the workout's muscle
+    // theme. Previously this was a silent no-op, so the user got no
+    // feedback after pressing the regen button on a fresh "Add Exercise"
+    // row.
+    let result;
+    if (!currentName) {
+      result = _pickForEmptyRow(rowId);
+      if (!result) {
+        _flashRowMessage(rowId, "Type an exercise to swap, or add a few rows first.");
+        return;
+      }
+    } else {
+      // Build exclude list: current name + prior swaps from this row.
+      const exclude = [currentName].concat(_recentByRow[rowId] || []);
+      result = regenerate(currentName, { exclude });
+      if (!result) {
+        _flashRowMessage(rowId, "No alternatives found for that exercise.");
+        return;
+      }
     }
     nameInput.value = result.name;
 

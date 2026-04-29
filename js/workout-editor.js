@@ -21,6 +21,48 @@ function openEditWorkout(id, source) {
   const w = workouts.find(x => String(x.id) === String(id));
   if (!w) return;
 
+  // Circuits live under a step tree (w.circuit.steps), NOT under aiSession
+  // intervals or a flat exercises[] list. The generic editor below would
+  // collapse the step tree into a single round + free-text details, losing
+  // the per-exercise structure the user built in CircuitBuilder. Hand off
+  // to CircuitBuilder's manual editor in edit mode so the same UI that
+  // created the workout edits it too.
+  if ((w.type === "circuit" || w.circuit) && typeof window !== "undefined" && window.CircuitBuilder) {
+    window.CircuitBuilder.openEntryFlow(w.date, {
+      existing: w,
+      context: _editSource === "workoutSchedule" ? "calendar" : "calendar",
+      onSave: (workout) => {
+        // Replace the existing row in localStorage[_editSource]. We rewrite
+        // the same row id so the calendar card swaps in place rather than
+        // appending a duplicate.
+        const list = JSON.parse(localStorage.getItem(_editSource) || "[]");
+        const idx = list.findIndex(x => String(x.id) === String(id));
+        if (idx === -1) return;
+        const s = workout.structure || {};
+        list[idx] = {
+          ...list[idx],
+          name: workout.name || list[idx].name,
+          notes: workout.notes || list[idx].notes,
+          circuit: {
+            name: workout.name || "",
+            goal: s.goal || "standard",
+            goal_value: s.goal_value || null,
+            benchmark_id: s.benchmark_id || null,
+            steps: s.steps || [],
+          },
+        };
+        localStorage.setItem(_editSource, JSON.stringify(list));
+        if (typeof DB !== "undefined") {
+          if (_editSource === "workoutSchedule") DB.syncSchedule?.();
+          else DB.syncWorkouts?.();
+        }
+        if (typeof renderCalendar === "function") renderCalendar();
+        if (typeof renderDayDetail === "function" && w.date) renderDayDetail(w.date);
+      },
+    });
+    return;
+  }
+
   _editWorkoutId     = id;
   _editRowCount      = 0;
   _editIntervalCount = 0;
