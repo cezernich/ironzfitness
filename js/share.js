@@ -466,6 +466,8 @@ function _wirePerSetToggleDelegator() {
       window.cpTogglePerSet(rowId);
     } else if (scope === "edit" && typeof window.editTogglePerSet === "function") {
       window.editTogglePerSet(rowId);
+    } else if (scope === "ca" && typeof window.coachAssignTogglePerSet === "function") {
+      window.coachAssignTogglePerSet(rowId);
     } else if (typeof window.exTogglePerSet === "function") {
       // workouts.js path — pass the button element
       window.exTogglePerSet(btn);
@@ -491,6 +493,9 @@ function _wirePerSetToggleDelegator() {
     } else if (scope === "edit") {
       if (kind === "sets" && typeof window.editSetCountChanged === "function") window.editSetCountChanged(rowId);
       else if (kind === "default" && typeof window.editDefaultsChanged === "function") window.editDefaultsChanged(rowId);
+    } else if (scope === "ca") {
+      if (kind === "sets" && typeof window.coachAssignSetCountChanged === "function") window.coachAssignSetCountChanged(rowId);
+      else if (kind === "default" && typeof window.coachAssignDefaultsChanged === "function") window.coachAssignDefaultsChanged(rowId);
     } else if (scope === "ex") {
       if (kind === "sets" && typeof window.exPyramidSetsChanged === "function") window.exPyramidSetsChanged(inp);
       else if (kind === "default" && typeof window.exPyramidDefaultsChanged === "function") window.exPyramidDefaultsChanged(inp);

@@ -14413,12 +14413,17 @@ input.completion-ex-name:focus {
   margin-top: 4px;
 }
 .coach-assign-ex-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+  padding: 2px 0;
+}
+.coach-assign-ex-row-main {
   display: grid;
   grid-template-columns: 22px 2fr 60px 60px 1fr 28px;
   gap: 6px;
   align-items: center;
-  position: relative;
-  padding: 2px 0;
 }
 .coach-assign-ex-row .input { padding: 6px 8px; font-size: 0.85rem; }
 .coach-assign-ex-row .drag-handle {

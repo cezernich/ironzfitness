@@ -292,18 +292,34 @@
     // (js/ui/exercise-autocomplete.js attaches to that selector via
     // document-level event delegation, so dynamically-added inputs
     // work without rewiring).
+    // Per-set prefill: accept either canonical perSet[] or legacy
+    // setDetails[] shape (workout-editor and custom-plan both write the
+    // latter for backward compat). When present, the panel auto-expands
+    // so the coach sees the values they're editing.
+    const existingPerSet = (Array.isArray(prefill?.perSet) && prefill.perSet.length)
+      ? prefill.perSet
+      : (Array.isArray(prefill?.setDetails) && prefill.setDetails.length ? prefill.setDetails : null);
+    const startExpanded = !!existingPerSet;
+
     row.innerHTML = `
-      <span class="drag-handle" title="Drag to reorder · drop on a row to superset">⠿</span>
-      <input type="text" class="input ex-row-name coach-assign-ex-name" id="coach-assign-ex-name-${id}"
-        placeholder="Exercise (e.g. Bench Press)" value="${_esc(prefill?.name || "")}" autocomplete="off" />
-      <input type="number" class="input coach-assign-ex-sets" id="coach-assign-ex-sets-${id}"
-        placeholder="Sets" min="1" max="20" value="${_esc(prefill?.sets || "")}" />
-      <input type="text" class="input coach-assign-ex-reps" id="coach-assign-ex-reps-${id}"
-        placeholder="Reps" value="${_esc(prefill?.reps || "")}" />
-      <input type="text" class="input coach-assign-ex-weight" id="coach-assign-ex-weight-${id}"
-        placeholder="Weight" value="${_esc(prefill?.weight || "")}" />
-      <button class="admin-action-btn" aria-label="Remove exercise" title="Remove"
-        onclick="coachAssignRemoveExRow(${id})">×</button>`;
+      <div class="coach-assign-ex-row-main">
+        <span class="drag-handle" title="Drag to reorder · drop on a row to superset">⠿</span>
+        <input type="text" class="input ex-row-name coach-assign-ex-name" id="coach-assign-ex-name-${id}"
+          placeholder="Exercise (e.g. Bench Press)" value="${_esc(prefill?.name || "")}" autocomplete="off" />
+        <input type="number" class="input coach-assign-ex-sets" id="coach-assign-ex-sets-${id}"
+          placeholder="Sets" min="1" max="20" value="${_esc(prefill?.sets || "")}" data-pyr-field="ca:sets:${id}" />
+        <input type="text" class="input coach-assign-ex-reps" id="coach-assign-ex-reps-${id}"
+          placeholder="Reps" value="${_esc(prefill?.reps || "")}" data-pyr-field="ca:default:${id}" />
+        <input type="text" class="input coach-assign-ex-weight" id="coach-assign-ex-weight-${id}"
+          placeholder="Weight" value="${_esc(prefill?.weight || "")}" data-pyr-field="ca:default:${id}" />
+        <button class="admin-action-btn" aria-label="Remove exercise" title="Remove"
+          onclick="coachAssignRemoveExRow(${id})">×</button>
+      </div>
+      <button type="button" class="ex-row-customize-toggle" id="coach-assign-pyr-toggle-${id}" data-pyr-toggle="ca:${id}">${startExpanded ? "Collapse ▴" : "Customize per set ▾"}</button>
+      <div class="ex-pyramid-detail coach-assign-set-details" id="coach-assign-sd-${id}" style="display:${startExpanded ? "block" : "none"}"></div>`;
+    if (startExpanded) {
+      row.dataset.pendingSetDetails = JSON.stringify(existingPerSet);
+    }
 
     // Native HTML5 DnD — desktop. Same drop-zone math as workout-editor.js
     // (middle 40% = superset, top 30% = insert above, bottom 30% = below).
@@ -373,7 +389,115 @@
     }
 
     rows.appendChild(row);
+    if (row.dataset.pendingSetDetails) {
+      try {
+        const pending = JSON.parse(row.dataset.pendingSetDetails);
+        if (Array.isArray(pending) && pending.length) {
+          _coachAssignRenderSetDetails(id, pending);
+        }
+      } catch {}
+      delete row.dataset.pendingSetDetails;
+    }
     _refreshSupersetBadges();
+  }
+
+  // ── Per-set customize panel (mirrors workout-editor.js) ────────────────
+  // The "Customize per set ▾" toggle, set-count rebuilds, default
+  // propagation, and read-back on submit all share the same pattern as
+  // the regular workout editor — rebuilt under "ca" scope with
+  // coach-assign-* DOM ids.
+
+  function coachAssignTogglePerSet(rowId) {
+    const detailsEl = document.getElementById(`coach-assign-sd-${rowId}`);
+    const toggle = document.getElementById(`coach-assign-pyr-toggle-${rowId}`);
+    if (!detailsEl || !toggle) return;
+    const isHidden = detailsEl.style.display === "none";
+    if (isHidden) {
+      detailsEl.style.display = "block";
+      toggle.textContent = "Collapse ▴";
+      if (!detailsEl.querySelector(".coach-assign-set-row")) {
+        coachAssignSetCountChanged(rowId);
+      }
+    } else {
+      detailsEl.style.display = "none";
+      toggle.textContent = "Customize per set ▾";
+    }
+  }
+
+  function _coachAssignRenderSetDetails(rowId, details) {
+    const el = document.getElementById(`coach-assign-sd-${rowId}`);
+    if (!el) return;
+    let html = `<div class="ex-pyr-header"><span></span><span>Reps</span><span>Weight</span></div>`;
+    details.forEach((d, s) => {
+      html += `<div class="coach-assign-set-row ex-pyr-row" id="coach-assign-sr-${rowId}-${s}">
+        <span class="ex-pyr-label">Set ${s + 1}</span>
+        <input class="ex-pyr-reps" id="coach-assign-sd-reps-${rowId}-${s}" value="${_esc(d.reps || "")}" placeholder="reps" />
+        <input class="ex-pyr-weight" id="coach-assign-sd-wt-${rowId}-${s}" value="${_esc(d.weight || "")}" placeholder="lbs" />
+      </div>`;
+    });
+    el.innerHTML = html;
+  }
+
+  function coachAssignSetCountChanged(rowId) {
+    const detailsEl = document.getElementById(`coach-assign-sd-${rowId}`);
+    if (!detailsEl || detailsEl.style.display === "none") return;
+    const setsInput = document.getElementById(`coach-assign-ex-sets-${rowId}`);
+    let numSets = parseInt(setsInput?.value) || 0;
+    if (numSets < 1) {
+      numSets = parseInt(setsInput?.placeholder) || 3;
+      if (setsInput && !setsInput.value) setsInput.value = String(numSets);
+    }
+    const defaultReps = document.getElementById(`coach-assign-ex-reps-${rowId}`)?.value || "";
+    const defaultWeight = document.getElementById(`coach-assign-ex-weight-${rowId}`)?.value || "";
+    // Preserve any values already entered in existing per-set rows.
+    const existing = [];
+    for (let s = 0; ; s++) {
+      const r = document.getElementById(`coach-assign-sd-reps-${rowId}-${s}`);
+      if (!r) break;
+      existing.push({
+        reps:   r.value,
+        weight: document.getElementById(`coach-assign-sd-wt-${rowId}-${s}`)?.value || "",
+      });
+    }
+    const details = [];
+    for (let s = 0; s < numSets; s++) {
+      details.push(existing[s] || { reps: defaultReps, weight: defaultWeight });
+    }
+    _coachAssignRenderSetDetails(rowId, details);
+  }
+
+  function coachAssignDefaultsChanged(rowId) {
+    const detailsEl = document.getElementById(`coach-assign-sd-${rowId}`);
+    if (!detailsEl || detailsEl.style.display === "none") return;
+    const defaultReps = document.getElementById(`coach-assign-ex-reps-${rowId}`)?.value || "";
+    const defaultWeight = document.getElementById(`coach-assign-ex-weight-${rowId}`)?.value || "";
+    for (let s = 0; ; s++) {
+      const rInp = document.getElementById(`coach-assign-sd-reps-${rowId}-${s}`);
+      if (!rInp) break;
+      const wInp = document.getElementById(`coach-assign-sd-wt-${rowId}-${s}`);
+      if (!rInp.value) rInp.value = defaultReps;
+      if (wInp && !wInp.value) wInp.value = defaultWeight;
+    }
+    if (!detailsEl.querySelector(".coach-assign-set-row")) coachAssignSetCountChanged(rowId);
+  }
+
+  function _coachAssignReadSetDetails(rowId) {
+    const detailsEl = document.getElementById(`coach-assign-sd-${rowId}`);
+    if (!detailsEl || detailsEl.style.display === "none") return null;
+    const defaultReps = (document.getElementById(`coach-assign-ex-reps-${rowId}`)?.value || "").trim();
+    const defaultWeight = (document.getElementById(`coach-assign-ex-weight-${rowId}`)?.value || "").trim();
+    const details = [];
+    let hasDiff = false;
+    for (let s = 0; ; s++) {
+      const r = document.getElementById(`coach-assign-sd-reps-${rowId}-${s}`);
+      if (!r) break;
+      const rv = (r.value || "").trim();
+      const wv = (document.getElementById(`coach-assign-sd-wt-${rowId}-${s}`)?.value || "").trim();
+      details.push({ reps: rv || defaultReps, weight: wv || defaultWeight });
+      if ((rv && rv !== defaultReps) || (wv && wv !== defaultWeight)) hasDiff = true;
+    }
+    if (!details.length || !hasDiff) return null;
+    return details;
   }
 
   function _clearDragHints() {
@@ -830,6 +954,11 @@
         const reps   = document.getElementById(`coach-assign-ex-reps-${id}`)?.value.trim();
         const weight = document.getElementById(`coach-assign-ex-weight-${id}`)?.value.trim();
         const exObj  = { name, sets: sets || "3", reps: reps || "", weight: weight || "" };
+        const perSet = _coachAssignReadSetDetails(id);
+        if (perSet) {
+          exObj.perSet = perSet;
+          exObj.setDetails = perSet; // legacy alias
+        }
         if (r.dataset.supersetGroup) {
           // buildExerciseTableHTML keys on supersetId; supersetGroup is the
           // canonical storage name. Set both so client-side rendering picks
@@ -1175,4 +1304,9 @@
   window.coachAssignOnTypeChange            = coachAssignOnTypeChange;
   window.coachAssignOnHiitFormatChange      = coachAssignOnHiitFormatChange;
   window.coachAssignConflict                = coachAssignConflict;
+  // Per-set toggle delegator (share.js _wirePerSetToggleDelegator under
+  // scope "ca") routes events to these globals.
+  window.coachAssignTogglePerSet            = coachAssignTogglePerSet;
+  window.coachAssignSetCountChanged         = coachAssignSetCountChanged;
+  window.coachAssignDefaultsChanged         = coachAssignDefaultsChanged;
 })();
