@@ -1118,6 +1118,18 @@
     if (modal) modal.classList.remove("is-open");
   }
 
+  // Race a supabase call against a timeout so a hung connection surfaces
+  // as an error instead of leaving the Save button stuck on "Saving…".
+  // Mirrors the admin-panel auth-prime + retry pattern.
+  function _withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${label || "Request"} timed out — please try again.`)), ms)
+      ),
+    ]);
+  }
+
   function coachAssignConflict(mode) {
     // mode: 'replace' | 'stack' | 'freeze'
     _closeConflictModal();
@@ -1132,7 +1144,14 @@
 
     const sb = window.supabaseClient;
     if (!sb) { setErr("Auth client not available."); if (btn) { btn.disabled = false; btn.textContent = "Add Workout"; } return; }
-    const session = (await sb.auth.getSession())?.data?.session;
+    let session;
+    try {
+      session = (await _withTimeout(sb.auth.getSession(), 3000, "Sign-in check"))?.data?.session;
+    } catch {
+      setErr("Couldn't verify your session — try again.");
+      if (btn) { btn.disabled = false; btn.textContent = "Add Workout"; }
+      return;
+    }
     const coachId = session?.user?.id;
     if (!coachId) { setErr("Not signed in."); if (btn) { btn.disabled = false; btn.textContent = "Add Workout"; } return; }
 
@@ -1156,25 +1175,24 @@
 
     try {
       let res;
-      if (opKind === "update") {
-        res = await sb.from("coach_assigned_workouts")
-          .update({
+      const writePromise = (opKind === "update")
+        ? sb.from("coach_assigned_workouts")
+            .update({
+              date:          _pendingPayload.date,
+              coach_note:    _pendingPayload.coach_note,
+              workout:       _pendingPayload.workout,
+              updated_at:    new Date().toISOString(),
+            })
+            .eq("id", _editingAssignmentId)
+        : sb.from("coach_assigned_workouts").insert({
+            client_id:     _pendingPayload.client_id,
+            coach_id:      coachId,
             date:          _pendingPayload.date,
+            conflict_mode: mode,
             coach_note:    _pendingPayload.coach_note,
             workout:       _pendingPayload.workout,
-            updated_at:    new Date().toISOString(),
-          })
-          .eq("id", _editingAssignmentId);
-      } else {
-        res = await sb.from("coach_assigned_workouts").insert({
-          client_id:     _pendingPayload.client_id,
-          coach_id:      coachId,
-          date:          _pendingPayload.date,
-          conflict_mode: mode,
-          coach_note:    _pendingPayload.coach_note,
-          workout:       _pendingPayload.workout,
-        });
-      }
+          });
+      res = await _withTimeout(writePromise, 12000, "Save");
 
       if (res?.error) throw new Error(res.error.message);
 
@@ -1228,8 +1246,15 @@
 
     const sb = window.supabaseClient;
     if (!sb) { setErr("Auth client not available."); resetBtn(); return; }
-    const sess = (await sb.auth.getSession())?.data?.session;
-    const coachId = sess?.user?.id;
+    let sess;
+    try {
+      sess = await _withTimeout(sb.auth.getSession(), 3000, "Sign-in check");
+    } catch {
+      setErr("Couldn't verify your session — try again.");
+      resetBtn();
+      return;
+    }
+    const coachId = sess?.data?.session?.user?.id;
     if (!coachId) { setErr("Not signed in."); resetBtn(); return; }
 
     const duration = durationRaw ? parseInt(durationRaw, 10) || null : null;
@@ -1251,19 +1276,17 @@
     };
 
     try {
-      let res;
-      if (_libraryEditId) {
-        res = await sb.from("coach_workout_library")
-          .update({ name: sessionName, workout: workoutJson, notes: coachNote || null })
-          .eq("id", _libraryEditId);
-      } else {
-        res = await sb.from("coach_workout_library").insert({
-          coach_id: coachId,
-          name:     sessionName,
-          workout:  workoutJson,
-          notes:    coachNote || null,
-        });
-      }
+      const writePromise = _libraryEditId
+        ? sb.from("coach_workout_library")
+            .update({ name: sessionName, workout: workoutJson, notes: coachNote || null })
+            .eq("id", _libraryEditId)
+        : sb.from("coach_workout_library").insert({
+            coach_id: coachId,
+            name:     sessionName,
+            workout:  workoutJson,
+            notes:    coachNote || null,
+          });
+      const res = await _withTimeout(writePromise, 12000, "Save");
       if (res?.error) throw new Error(res.error.message);
 
       closeAssignWorkoutModal();
