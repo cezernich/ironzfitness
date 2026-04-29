@@ -4495,11 +4495,68 @@ function isCarbLoadDay(dateStr) {
 // rest-day plan entry doesn't mask a manually-added brick.
 function _inferDayLoadFromAllSources(dateStr) {
   const RANK = { rest: 0, easy: 1, moderate: 2, hard: 3, long: 4, race: 5 };
+
+  let trainingPlan = [], workoutSchedule = [], logged = [];
+  try { trainingPlan    = JSON.parse(localStorage.getItem("trainingPlan")    || "[]") || []; } catch {}
+  try { workoutSchedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]") || []; } catch {}
+  try { logged          = JSON.parse(localStorage.getItem("workouts")        || "[]") || []; } catch {}
+
+  // Pair completion records with the planned/scheduled entry they came
+  // from. The card-id format is the contract:
+  //   session-plan-<YYYY-MM-DD>-<raceId>  ← trainingPlan entry
+  //   session-sw-<scheduleEntryId>        ← workoutSchedule entry
+  // Goal: when a completion exists for a planned session, we want the
+  // load to reflect what was *actually done*, not the planned target.
+  //   • Did 120 of planned 120 → no change (dur is identical).
+  //   • Did 50 of planned 120  → load drops because actual dur is now 50.
+  //   • Did 120 of planned 50  → load rises because actual dur is now 120.
+  // Manual workouts (no completedSessionId) count as additional load on
+  // top of whatever was planned for the day.
+  const completionByCardId = new Map();
+  const standaloneCompletions = [];
+  for (const w of logged) {
+    if (!w || w.date !== dateStr) continue;
+    if (w.completedSessionId) {
+      completionByCardId.set(w.completedSessionId, w);
+    } else if (w.isCompletion) {
+      // Stray completion record without a card-id link. Don't double-
+      // count it — assume it pairs with some plan/schedule entry on the
+      // same date. (Safer to under-count than to inflate.)
+    } else {
+      standaloneCompletions.push(w);
+    }
+  }
+
+  function _mergeCompletion(planEntry, completion) {
+    // Use the actual completion's duration / type / name to drive load
+    // derivation. Drop any planned `load` field so the duration rule
+    // can promote OR demote correctly. raceId etc. are preserved for
+    // race-day classification.
+    return {
+      date: dateStr,
+      raceId: planEntry.raceId,
+      type: completion.type || planEntry.type || planEntry.discipline,
+      sessionName: completion.name || planEntry.sessionName || planEntry.name,
+      duration: completion.duration,
+    };
+  }
+
   const sources = [];
-  try { sources.push(...(JSON.parse(localStorage.getItem("trainingPlan")    || "[]") || [])); } catch {}
-  try { sources.push(...(JSON.parse(localStorage.getItem("workoutSchedule") || "[]") || [])); } catch {}
-  try { sources.push(...(JSON.parse(localStorage.getItem("workouts")        || "[]") || [])); } catch {}
-  const dayOf = sources.filter(s => s && s.date === dateStr);
+  for (const p of trainingPlan) {
+    if (!p || p.date !== dateStr) continue;
+    const cardId = `session-plan-${dateStr}-${p.raceId}`;
+    const c = completionByCardId.get(cardId);
+    sources.push(c ? _mergeCompletion(p, c) : p);
+  }
+  for (const s of workoutSchedule) {
+    if (!s || s.date !== dateStr) continue;
+    const cardId = `session-sw-${s.id}`;
+    const c = completionByCardId.get(cardId);
+    sources.push(c ? _mergeCompletion(s, c) : s);
+  }
+  sources.push(...standaloneCompletions);
+
+  const dayOf = sources;
   if (dayOf.length === 0) return "rest";
 
   let best = "rest";
