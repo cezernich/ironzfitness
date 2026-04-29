@@ -446,21 +446,28 @@ function editDefaultsChanged(rowId) {
 // Read per-set values out of the DOM. Returns null if the panel is collapsed
 // or if all rows match the defaults (so the caller can save a flat entry).
 function _editReadSetDetails(rowId) {
+  // Don't gate on panel visibility — values stay in the DOM when the
+  // per-set panel is collapsed, and the previous gate silently dropped
+  // them on save. Same fix as `_coachAssignReadSetDetails` in
+  // coach-assignment-flow.js (user feedback 2026-04-29).
   const detailsEl = document.getElementById(`edit-sd-${rowId}`);
-  if (!detailsEl || detailsEl.style.display === "none") return null;
+  if (!detailsEl) return null;
   const defaultReps = (document.getElementById(`edit-reps-${rowId}`)?.value || "").trim();
   const defaultWeight = (document.getElementById(`edit-wt-${rowId}`)?.value || "").trim();
   const details = [];
   let hasDiff = false;
+  let hasAnyValue = false;
   for (let s = 0; ; s++) {
     const r = document.getElementById(`edit-sd-reps-${rowId}-${s}`);
     if (!r) break;
     const rv = (r.value || "").trim();
     const wv = (document.getElementById(`edit-sd-wt-${rowId}-${s}`)?.value || "").trim();
     details.push({ reps: rv || defaultReps, weight: wv || defaultWeight });
+    if (rv || wv) hasAnyValue = true;
     if ((rv && rv !== defaultReps) || (wv && wv !== defaultWeight)) hasDiff = true;
   }
-  if (!details.length || !hasDiff) return null;
+  if (!details.length) return null;
+  if (!hasAnyValue && !hasDiff) return null;
   return details;
 }
 
@@ -909,8 +916,22 @@ function applySwap(rowId, name, pickerEl) {
 // ── Save ──────────────────────────────────────────────────────────────────────
 
 async function saveEditedWorkout() {
+  // Loud diagnostic — earlier coach-assigned-workout edits silently
+  // returned because the failure paths only updated a hidden <p>
+  // message that's easy to miss below the modal fold. Logging at entry
+  // so we can confirm clicks land; surfacing both failure modes via
+  // alert() so the user sees them.
+  console.log("[edit] saveEditedWorkout fired —", { _editWorkoutId, _editSource });
   const msg   = document.getElementById("edit-workout-msg");
   const notes = document.getElementById("edit-workout-notes").value.trim();
+
+  if (!_editWorkoutId) {
+    const reason = "Editor lost track of which workout (the modal may have been reopened mid-edit). Close it and try again.";
+    console.warn("[edit] aborted — _editWorkoutId is null");
+    if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = reason; }
+    alert("Save failed: " + reason);
+    return;
+  }
 
   let workouts = [];
   try { workouts = JSON.parse(localStorage.getItem(_editSource)) || []; } catch {}
@@ -920,7 +941,17 @@ async function saveEditedWorkout() {
     const k = _editPlanKey;
     idx = workouts.findIndex(e => e.date === k.date && e.raceId === k.raceId && e.discipline === k.discipline && e.load === k.load);
   }
-  if (idx === -1) { if (msg) msg.textContent = "Workout not found."; return; }
+  if (idx === -1) {
+    // Most likely a realtime/sync round-trip overwrote workoutSchedule
+    // mid-edit, OR the trigger re-mirrored a coach-assigned entry under
+    // a different id. Tell the user instead of leaving the modal in
+    // limbo. Close+reopen typically fixes both.
+    const reason = `Couldn't find this workout in storage (id="${_editWorkoutId}", source="${_editSource}"). It may have been overwritten by a sync. Close and reopen the editor.`;
+    console.warn("[edit] workout not found —", { _editWorkoutId, _editSource, knownIds: workouts.map(w => w.id).slice(0, 10) });
+    if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = reason; }
+    alert("Save failed: " + reason);
+    return;
+  }
 
   if (_editIsCardio) {
     const intervals = [];
