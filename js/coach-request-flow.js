@@ -185,6 +185,7 @@
 
     if (entryCard)   entryCard.style.display   = isCoach ? "" : "none";
     if (requestCard) requestCard.style.display = hasActiveAsClient ? "none" : "";
+    if (typeof window.refreshToolsCardVisibility === "function") window.refreshToolsCardVisibility();
   }
 
   // Public surface — inline onclick handlers in index.html call these.

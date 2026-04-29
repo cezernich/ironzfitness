@@ -14,6 +14,7 @@ function initAdminVisibility() {
   // the bottom-nav refactor but the id is still checked by older builds)
   const btn = document.getElementById("admin-dropdown-btn");
   if (btn) btn.style.display = isAdmin ? "" : "none";
+  if (typeof window.refreshToolsCardVisibility === "function") window.refreshToolsCardVisibility();
 }
 
 // ── Patch showTab to load admin data ─────────────────────────────────────────

@@ -1417,27 +1417,34 @@
     ===================================================== -->
     <div id="tab-settings" class="tab-content">
 
+      <!-- Admin & Coaching tools — merged card. The inner row IDs match
+           the legacy section IDs so admin.js + coach-request-flow.js can
+           keep toggling row visibility without changes. The wrapping
+           card is hidden by refreshToolsCardVisibility() when both rows
+           are hidden (regular users see neither). -->
+      <section class="card" id="section-tools-entry" style="display:none">
+        <h2 style="margin-bottom:6px">Admin &amp; Coaching</h2>
+        <div class="tools-row" id="section-admin-entry" style="display:none">
+          <div class="tools-row-info">
+            <strong>Admin Panel</strong>
+            <span class="hint">Users, philosophy modules, exercises, and analytics.</span>
+          </div>
+          <button class="btn-primary btn-sm" onclick="showTab('admin')">Open</button>
+        </div>
+        <div class="tools-row" id="section-coach-entry" style="display:none">
+          <div class="tools-row-info">
+            <strong style="color:var(--color-coach,#534AB7)">Coach Portal</strong>
+            <span class="hint" id="coach-entry-summary">Manage your clients, assign workouts, and track their training.</span>
+          </div>
+          <button class="btn-primary btn-sm" id="coach-entry-open-btn" disabled style="opacity:0.6">Open</button>
+        </div>
+      </section>
+
       <!-- My Workouts -->
       <section class="card" id="section-my-workouts">
         <h2>My Workouts</h2>
         <p class="hint">Bookmarks from the library, workouts shared with you, and your custom sessions.</p>
         <button class="btn-primary" onclick="showTab('saved-library')">Open Saved Library</button>
-      </section>
-
-      <!-- Admin Panel entry point (visible only for role=admin, toggled by admin.js) -->
-      <section class="card" id="section-admin-entry" style="display:none">
-        <h2>Admin Panel</h2>
-        <p class="hint">Manage users, philosophy modules, exercises, and analytics.</p>
-        <button class="btn-primary" onclick="showTab('admin')">Open Admin Panel</button>
-      </section>
-
-      <!-- Coach Portal entry point (visible only when profile.is_coach=true).
-           Phase 1: markup present, visibility wired in Phase 2 by coach-portal.js.
-           Spec: new features/COACHING_FEATURE_SPEC_2026-04-28.md -->
-      <section class="card" id="section-coach-entry" style="display:none">
-        <h2 style="color:var(--color-coach,#534AB7)">Coach Portal</h2>
-        <p class="hint" id="coach-entry-summary">Manage your clients, assign workouts, and track their training.</p>
-        <button class="btn-primary" id="coach-entry-open-btn" disabled style="opacity:0.6">Open Coach Portal (Phase 2)</button>
       </section>
 
       <!-- Request a Coach entry — dedicated card (matches Coach Portal
@@ -3827,6 +3834,21 @@
        planner.js / philosophy-planner.js (loaded above) and before
        auth.js so init() can call OnboardingV2.maybeStart(). -->
   <script src="js/onboarding-v2.js"></script>
+  <!-- Hide the merged Admin & Coaching card when both rows are hidden,
+       so non-admin / non-coach users don't see an empty header. Called
+       from admin.js and coach-request-flow.js after they toggle row
+       visibility. -->
+  <script>
+    window.refreshToolsCardVisibility = function () {
+      const wrap = document.getElementById("section-tools-entry");
+      if (!wrap) return;
+      const adminRow = document.getElementById("section-admin-entry");
+      const coachRow = document.getElementById("section-coach-entry");
+      const adminVis = adminRow && adminRow.style.display !== "none";
+      const coachVis = coachRow && coachRow.style.display !== "none";
+      wrap.style.display = (adminVis || coachVis) ? "" : "none";
+    };
+  </script>
   <script src="js/admin.js"></script>
   <script src="js/admin-workouts.js"></script>
   <script src="js/admin-questions.js"></script>
