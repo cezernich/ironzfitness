@@ -44,6 +44,12 @@
     if (name === "programs" && typeof window.loadCoachPrograms === "function") {
       window.loadCoachPrograms();
     }
+    if (name === "invite" && typeof window.loadCoachInviteLink === "function") {
+      // Refresh the invite link on every tab open so a freshly-rotated
+      // code shows up without a full reload.
+      const coachUid = window._coachDashState?.coachUid || null;
+      window.loadCoachInviteLink(coachUid);
+    }
   }
 
   function getCoachDashboardTab() { return _activeTab; }

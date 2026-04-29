@@ -13691,6 +13691,35 @@ input.completion-ex-name:focus {
 .coach-error { color: var(--color-danger, #b91c1c); }
 
 .coach-section { margin-bottom: 14px; }
+
+/* Invite tab — Phase A minimal panel. URL box renders the full share URL
+   inside a monospace pill with a Copy button on the right. Wraps on
+   narrow viewports so the URL never clips.
+
+   The full URL is intentionally visible (no truncation) — coaches read it
+   over the phone or in person, so legibility wins over compactness. */
+.coach-invite-card .coach-invite-url-box {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  background: var(--color-bg, #f4f1ec);
+  border: 1px solid var(--color-border, #d4d0c8);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.coach-invite-card .coach-invite-url {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.88rem;
+  word-break: break-all;
+  align-self: center;
+  user-select: all;
+}
+.coach-invite-card .coach-invite-url-box button {
+  align-self: center;
+  white-space: nowrap;
+}
+
 .coach-section-title {
   font-size: 0.78rem;
   font-weight: 700;

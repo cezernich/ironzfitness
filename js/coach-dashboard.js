@@ -41,7 +41,7 @@
         <div class="card" style="text-align:center;padding:32px;color:var(--color-text-muted)">
           You don't have any active clients yet.
           <div style="font-size:0.85rem;margin-top:8px">
-            Admins assign clients via Admin Portal → Coaches → Roster.
+            Share your invite link below, or ask an admin to assign one.
           </div>
         </div>`;
       return;
@@ -54,6 +54,8 @@
       body = window.renderCoachLibraryView(state);
     } else if (tab === "programs" && typeof window.renderCoachProgramsView === "function") {
       body = window.renderCoachProgramsView(state);
+    } else if (tab === "invite" && typeof window.renderCoachInvitePanel === "function") {
+      body = window.renderCoachInvitePanel(state);
     } else {
       body = `
         ${_renderTodayQueue(clients, todayCompletions)}
@@ -79,6 +81,7 @@
       ${tab("clients", `Clients${clientCount ? " (" + clientCount + ")" : ""}`)}
       ${tab("library", "Library")}
       ${tab("programs", "Programs")}
+      ${tab("invite", "Invite")}
     </div>`;
   }
 

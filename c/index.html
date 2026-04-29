@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connect with your IronZ coach</title>
+
+<!-- Open Graph tags for iMessage / Slack / Twitter unfurls. Generic
+     because GitHub Pages can't server-render per-coach metadata — the
+     unfurl happens at fetch time, before JS runs. The coach card
+     renders client-side after fetch. -->
+<meta property="og:title" content="Join my IronZ coaching">
+<meta property="og:description" content="Tap to connect with your coach on IronZ — your training stack.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://ironz.fit/c">
+<meta property="og:image" content="https://ironz.fit/Logo/iron-logo.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Join my IronZ coaching">
+<meta name="twitter:description" content="Tap to connect with your coach on IronZ.">
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #f4f1ec;
+    color: #1a1a1a;
+    min-height: 100vh;
+    padding: 32px 20px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 480px; margin: 0 auto; }
+
+  .brand-row { text-align: center; margin-bottom: 24px; }
+  .brand-row img { height: 32px; opacity: 0.85; }
+
+  /* Loading */
+  .loading { text-align: center; padding: 80px 0; }
+  .loading .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid rgba(220, 38, 38, 0.18);
+    border-top-color: #dc2626;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading p { color: #666; font-size: 0.95rem; }
+
+  /* Coach card */
+  .coach-card {
+    background: #fff;
+    border-radius: 18px;
+    padding: 32px 24px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
+    text-align: center;
+  }
+  .avatar-circle {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    margin: 0 auto 16px;
+    background: linear-gradient(135deg, #dc2626 0%, #f87171 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 2.4rem;
+    font-weight: 600;
+    overflow: hidden;
+  }
+  .avatar-circle img { width: 100%; height: 100%; object-fit: cover; }
+  .coach-name {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .coach-tag {
+    font-size: 0.85rem;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 18px;
+  }
+  .coach-bio {
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #333;
+    margin-bottom: 28px;
+    white-space: pre-wrap;
+  }
+
+  .cta-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .btn {
+    display: block;
+    text-decoration: none;
+    text-align: center;
+    padding: 14px 16px;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: transform 0.05s ease, box-shadow 0.15s ease;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary {
+    background: #1a1a1a;
+    color: #fff;
+  }
+  .btn-secondary {
+    background: #f4f1ec;
+    color: #1a1a1a;
+    border: 1px solid #d4d0c8;
+  }
+  .secondary-prompt {
+    font-size: 0.85rem;
+    color: #666;
+    margin-top: 4px;
+    text-align: center;
+  }
+
+  .footer-note {
+    text-align: center;
+    margin-top: 32px;
+    font-size: 0.8rem;
+    color: #888;
+  }
+
+  /* Inactive / error */
+  .error-card {
+    background: #fff;
+    border-radius: 18px;
+    padding: 40px 24px;
+    text-align: center;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
+  }
+  .error-card h1 {
+    font-size: 1.3rem;
+    margin-bottom: 12px;
+  }
+  .error-card p {
+    color: #555;
+    line-height: 1.5;
+    margin-bottom: 24px;
+  }
+</style>
+</head>
+<body>
+<div class="container" id="app">
+  <div class="brand-row">
+    <strong style="color:#dc2626;font-size:1.1rem;letter-spacing:0.04em">IRONZ</strong>
+  </div>
+  <div class="loading" id="loading-state">
+    <div class="spinner"></div>
+    <p>Loading your coach...</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  // The coach-invite Edge Function is the data source. Mirrors the
+  // share-preview pattern: edge function records the click + returns
+  // JSON, this page renders. Supabase forces Content-Type: text/plain
+  // on --no-verify-jwt responses, so we parse via .text() + JSON.parse.
+  const EDGE_URL = "https://dagdpdcwqdlibxbitdgr.supabase.co/functions/v1/coach-invite";
+  const APP_URL = "https://ironz.fit";
+
+  // localStorage key used by the SPA after login to detect a pending
+  // invite. P0 fix: cap at 24 hours (was 30 days in spec) to limit
+  // shared-device leak window. After login, the SPA moves the value
+  // into profiles.pending_invite_link_id and clears localStorage.
+  const PENDING_KEY = "ironz_pending_invite";
+  const PENDING_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+  const app = document.getElementById("app");
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c];
+    });
+  }
+
+  // Extract code from ?code= primarily; fall back to /c/CODE path style
+  // so copy-pasted "ironz.fit/c/X7Q2K9" URLs work even though GitHub
+  // Pages serves them as /c/index.html.
+  function readCode() {
+    const params = new URLSearchParams(window.location.search);
+    let code = (params.get("code") || "").trim().toUpperCase();
+    if (!code) {
+      const m = window.location.pathname.match(/\/c\/([^\/?#]+)/i);
+      if (m) code = m[1].trim().toUpperCase();
+    }
+    return code;
+  }
+
+  const code = readCode();
+  const inviteHint = (new URLSearchParams(window.location.search).get("link") || "").trim();
+  const errorParam = new URLSearchParams(window.location.search).get("error");
+
+  if (errorParam === "inactive" || errorParam === "invalid") {
+    showInactive(errorParam === "invalid");
+    return;
+  }
+
+  // Code shape MUST match the DB CHECK: `^[2-9A-HJ-NP-Z]{6}$`. Anything
+  // else, render the inactive page (don't even bother fetching).
+  if (!code || !/^[2-9A-HJ-NP-Z]{6}$/.test(code)) {
+    showInactive(true);
+    return;
+  }
+
+  fetchCoach(code);
+
+  async function fetchCoach(code) {
+    try {
+      const url = EDGE_URL + "?format=json&code=" + encodeURIComponent(code);
+      const res = await fetch(url, { headers: { "Accept": "application/json" } });
+      const bodyText = await res.text();
+      let payload;
+      try {
+        payload = JSON.parse(bodyText);
+      } catch (e) {
+        console.error("[coach-invite] could not parse edge response:", bodyText.slice(0, 500));
+        showInactive(false);
+        return;
+      }
+      if (!payload || !payload.ok) {
+        showInactive(false);
+        return;
+      }
+      stashPendingInvite(payload.invite_link_id, code);
+      renderCoach(payload);
+    } catch (e) {
+      console.error("[coach-invite] fetch failed:", e);
+      showInactive(false);
+    }
+  }
+
+  // Stash the pending invite link id so the post-auth SPA can find it
+  // and run the Accept modal flow. Only stored for 24h to limit
+  // shared-device leak. The SPA also clears this on every successful
+  // login (Phase B logic) so a stale value can't cross-pollinate users.
+  function stashPendingInvite(linkId, code) {
+    try {
+      const value = JSON.stringify({
+        invite_link_id: linkId || inviteHint || null,
+        code: code,
+        set_at: Date.now(),
+        expires_at: Date.now() + PENDING_TTL_MS,
+      });
+      localStorage.setItem(PENDING_KEY, value);
+    } catch (e) {
+      // Private browsing / disabled storage. The user can still tap the
+      // CTAs — Phase B's post-auth handler will see no pending invite
+      // and just route them to home. That's a graceful degradation, not
+      // a hard failure.
+      console.warn("[coach-invite] localStorage write failed:", e);
+    }
+  }
+
+  function renderCoach(payload) {
+    const c = payload.coach || {};
+    const initial = (c.full_name || "?").trim().slice(0, 1).toUpperCase();
+    const avatar = c.avatar_url
+      ? '<img src="' + esc(c.avatar_url) + '" alt="">'
+      : esc(initial);
+
+    // Sign-in / Sign-up CTAs route into the SPA with ?invite=<code>.
+    // Phase B reads that param, completes auth, then triggers the
+    // Accept Coaching modal. For Phase A the param round-trip is in
+    // place; the modal isn't built yet — users tapping these will sign
+    // in normally.
+    const signInUrl = APP_URL + "/?invite=" + encodeURIComponent(payload.code);
+    const signUpUrl = APP_URL + "/?invite=" + encodeURIComponent(payload.code) + "&signup=1";
+
+    app.innerHTML =
+      '<div class="brand-row"><strong style="color:#dc2626;font-size:1.1rem;letter-spacing:0.04em">IRONZ</strong></div>' +
+      '<div class="coach-card">' +
+        '<div class="avatar-circle">' + avatar + '</div>' +
+        '<div class="coach-name">' + esc(c.full_name || "Your IronZ Coach") + '</div>' +
+        '<div class="coach-tag">IronZ Coach</div>' +
+        (c.coach_bio ? '<div class="coach-bio">' + esc(c.coach_bio) + '</div>' : '') +
+        '<div class="cta-stack">' +
+          '<a class="btn btn-primary" href="' + signInUrl + '">Sign in to connect</a>' +
+          '<a class="btn btn-secondary" href="' + signUpUrl + '">New to IronZ? Sign up</a>' +
+        '</div>' +
+      '</div>' +
+      '<div class="footer-note">Powered by IronZ — your training stack.</div>';
+  }
+
+  function showInactive(isMalformed) {
+    const title = isMalformed ? "This invite link looks off" : "This invite link is no longer active";
+    const body = isMalformed
+      ? "Double-check the link your coach sent you — there may be a typo."
+      : "The coach you're trying to connect with isn't accepting clients via this link right now. You can still find a coach inside the app.";
+    app.innerHTML =
+      '<div class="brand-row"><strong style="color:#dc2626;font-size:1.1rem;letter-spacing:0.04em">IRONZ</strong></div>' +
+      '<div class="error-card">' +
+        '<h1>' + esc(title) + '</h1>' +
+        '<p>' + esc(body) + '</p>' +
+        '<a class="btn btn-primary" href="' + APP_URL + '">Open IronZ</a>' +
+      '</div>';
+  }
+})();
+</script>
+</body>
+</html>
