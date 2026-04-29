@@ -171,11 +171,20 @@
     // so the right container is on screen.
     _renderForType(prefill.type || "weightlifting");
 
-    if (Array.isArray(prefill.intervals) && prefill.intervals.length) {
+    // Cardio intervals can arrive in either shape: top-level `intervals`
+    // (legacy library items, the early Phase-3A coach JSON) or wrapped
+    // inside `aiSession` (the current shape both the home renderer and
+    // custom-plan emit). Accept both so old assignments / library items
+    // pre-fill correctly.
+    const _prefillIntervals =
+      Array.isArray(prefill.aiSession?.intervals) ? prefill.aiSession.intervals
+      : Array.isArray(prefill.intervals)          ? prefill.intervals
+      : null;
+    if (_prefillIntervals && _prefillIntervals.length) {
       const cRows = document.getElementById("coach-assign-cardio-rows");
       if (cRows) cRows.innerHTML = "";
       _cardioRowCount = 0;
-      for (const iv of prefill.intervals) _addCardioRow(iv);
+      for (const iv of _prefillIntervals) _addCardioRow(iv);
     } else if (Array.isArray(prefill.exercises) && prefill.exercises.length) {
       const rows = document.getElementById("coach-assign-ex-rows");
       if (rows) rows.innerHTML = "";
@@ -846,12 +855,16 @@
 
     // Workout JSONB shape mirrors a normal workoutSchedule entry. Any
     // fields the existing renderer reads MUST be at this top level
-    // (sessionName, type, exercises | intervals, duration) — the trigger
-    // merges mirror-only fields (id, source, coachId, etc.) on top.
+    // (sessionName, type, exercises | aiSession.intervals, duration) — the
+    // trigger merges mirror-only fields (id, source, coachId, etc.) on top.
+    // Cardio types must wrap intervals inside `aiSession` because the home
+    // renderer's branch at calendar.js `if (w.aiSession)` is what drives
+    // the interval-card body + intensity strip — without it, the workout
+    // card loaded with no body at all (matches custom-plan.js:2076).
     const workoutJson = {
       sessionName,
       type,
-      ...(intervals.length ? { intervals } : {}),
+      ...(intervals.length ? { aiSession: { title: sessionName, intervals } } : {}),
       ...(exercises.length ? { exercises } : {}),
       ...(hiitMeta ? { hiitMeta } : {}),
       ...(type === "hyrox" ? { isHyrox: true } : {}),
@@ -1030,10 +1043,13 @@
 
     const duration = durationRaw ? parseInt(durationRaw, 10) || null : null;
     const isYoga = type === "yoga";
+    // Cardio intervals wrap into aiSession (same as the assign-to-client path)
+    // — the home renderer's `if (w.aiSession)` branch is what drives the
+    // interval-card body + intensity strip.
     const workoutJson = {
       sessionName,
       type,
-      ...(Array.isArray(intervals) && intervals.length ? { intervals } : {}),
+      ...(Array.isArray(intervals) && intervals.length ? { aiSession: { title: sessionName, intervals } } : {}),
       ...(Array.isArray(exercises) && exercises.length ? { exercises } : {}),
       ...(hiitMeta ? { hiitMeta } : {}),
       ...(type === "hyrox" ? { isHyrox: true } : {}),

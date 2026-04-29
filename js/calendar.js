@@ -1239,6 +1239,13 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
       </div>`;
   }
 
+  // Coach-assigned cardio workouts (and a handful of legacy entries) write
+  // intervals at the top level of the workout JSON instead of nesting them
+  // under aiSession. Synthesise the aiSession-shaped object here so the
+  // existing interval-card body + intensity strip render either shape.
+  if (!w.aiSession && Array.isArray(w.intervals) && w.intervals.length) {
+    w.aiSession = { title: w.sessionName || w.title, intervals: w.intervals };
+  }
   if (w.aiSession) {
     const s = w.aiSession;
     // Map effort label → zone CSS class (supports both old Easy/Moderate/Hard and new Z1-Z6)

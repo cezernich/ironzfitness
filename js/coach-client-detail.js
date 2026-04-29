@@ -937,12 +937,22 @@
     if (typeof window.openAssignWorkoutModal !== "function") return;
 
     const _clientName = _client.full_name || _client.email || "Client";
+    // Intervals can sit inside aiSession (current shape) or at the top
+    // level (legacy). Pass through either so the modal pre-fills cardio
+    // workouts on edit instead of opening with empty rows.
+    const _entryIntervals =
+      Array.isArray(entry.aiSession?.intervals) ? entry.aiSession.intervals
+      : Array.isArray(entry.intervals)          ? entry.intervals
+      : [];
     const prefill = {
       date:        entry.date,
       sessionName: entry.sessionName || "",
       type:        entry.type || "weightlifting",
       duration:    entry.duration || "",
       exercises:   Array.isArray(entry.exercises) ? entry.exercises : [],
+      intervals:   _entryIntervals,
+      hiitMeta:    entry.hiitMeta || null,
+      details:     entry.details || "",
       coachNote:   entry.coachNote || "",
     };
     if (entry.source === "coach_assigned" && entry.coachAssignmentId) {
