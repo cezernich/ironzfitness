@@ -455,7 +455,8 @@
           client_id: _applyState.clientId,
           coach_id:  coachId,
           date:      date.toISOString().slice(0, 10),
-          conflict_mode: "replace",
+          // conflict_mode set after the row list is built, once the
+          // coach has confirmed replace-vs-stack via the prompt below.
           workout:   workoutJson,
           program_id:  program.id,
           program_week: w + 1,
@@ -466,30 +467,81 @@
 
     if (!rows.length) return setErr("This program has no workout days inside the window.");
 
-    const { error } = await sb.from("coach_assigned_workouts").insert(rows);
-    if (error) return setErr("Couldn't apply: " + error.message);
+    // Coach picks the conflict behavior up front in an in-app modal.
+    // Remove → replace any existing workouts on those dates.
+    // Add    → stack alongside what's there.
+    // Cancel → close, no-op.
+    _openProgramConflictModeModal({
+      title: "Existing workouts on those dates?",
+      body: `Applying ${_pgEsc(rows.length + " workout" + (rows.length === 1 ? "" : "s"))} from "${_pgEsc(program.name || "this program")}".<br><br><strong>Remove</strong> deletes any current workouts on those dates and replaces them.<br><strong>Add</strong> keeps the current plan and adds yours alongside.`,
+      onChoose: async (mode) => {
+        if (!mode) return;
+        for (const r of rows) r.conflict_mode = mode;
 
-    closeCoachProgramApply();
-    if (typeof window.showCoachToast === "function") {
-      window.showCoachToast(`Applied — ${rows.length} workout${rows.length === 1 ? "" : "s"} added`);
-    } else {
-      const el = document.createElement("div");
-      el.className = "coach-toast is-visible";
-      el.textContent = `Applied — ${rows.length} workouts added`;
-      document.body.appendChild(el);
-      setTimeout(() => el.remove(), 1800);
-    }
+        const { error } = await sb.from("coach_assigned_workouts").insert(rows);
+        if (error) return setErr("Couldn't apply: " + error.message);
 
-    if (typeof trackEvent === "function") {
-      try {
-        trackEvent("coach_program_applied", {
-          programId: program.id,
-          weeks: program.duration_weeks,
-          rows: rows.length,
-          truncated: !!truncateAt,
-        });
-      } catch {}
-    }
+        closeCoachProgramApply();
+        if (typeof window.showCoachToast === "function") {
+          window.showCoachToast(`Applied — ${rows.length} workout${rows.length === 1 ? "" : "s"} added`);
+        } else {
+          const el = document.createElement("div");
+          el.className = "coach-toast is-visible";
+          el.textContent = `Applied — ${rows.length} workouts added`;
+          document.body.appendChild(el);
+          setTimeout(() => el.remove(), 1800);
+        }
+
+        if (typeof trackEvent === "function") {
+          try {
+            trackEvent("coach_program_applied", {
+              programId: program.id,
+              weeks: program.duration_weeks,
+              rows: rows.length,
+              truncated: !!truncateAt,
+              mode,
+            });
+          } catch {}
+        }
+      },
+    });
+  }
+
+  // Local copy of the in-app conflict-mode modal used by coach-library.js.
+  // Programs and the per-workout assign flow share the same Remove / Add /
+  // Cancel UX, so the styling stays in sync across the two entry points.
+  function _pgEsc(s) {
+    const div = document.createElement("div");
+    div.textContent = s == null ? "" : String(s);
+    return div.innerHTML;
+  }
+  function _openProgramConflictModeModal({ title, body, onChoose }) {
+    const id = "coach-program-conflict-mode-overlay";
+    const old = document.getElementById(id);
+    if (old) old.remove();
+    const overlay = document.createElement("div");
+    overlay.id = id;
+    overlay.className = "rating-modal-overlay";
+    const close = () => {
+      overlay.classList.remove("visible");
+      setTimeout(() => overlay.remove(), 200);
+    };
+    overlay.onclick = (e) => { if (e.target === overlay) close(); };
+    overlay.innerHTML = `
+      <div class="rating-modal" style="max-width:400px">
+        <div class="rating-modal-title">${_pgEsc(title || "Existing workouts on those dates")}</div>
+        ${body ? `<div style="text-align:center;color:var(--color-text-muted);font-size:0.9rem;margin-bottom:14px;line-height:1.45">${body}</div>` : ""}
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button class="btn-danger"    id="cpcm-remove" style="min-height:42px">Remove existing &amp; replace</button>
+          <button class="btn-primary"   id="cpcm-add"    style="min-height:42px">Add alongside existing</button>
+          <button class="btn-secondary" id="cpcm-cancel" style="min-height:38px">Cancel</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add("visible"));
+    overlay.querySelector("#cpcm-remove").onclick = (e) => { e.stopPropagation(); close(); onChoose && onChoose("replace"); };
+    overlay.querySelector("#cpcm-add").onclick    = (e) => { e.stopPropagation(); close(); onChoose && onChoose("stack"); };
+    overlay.querySelector("#cpcm-cancel").onclick = (e) => { e.stopPropagation(); close(); onChoose && onChoose(null); };
   }
 
   // ── Public surface ─────────────────────────────────────────────────────

@@ -481,6 +481,41 @@
     _renderBulkAssignModal();
   }
 
+  // In-app 3-button confirm. Themed like the rest of IronZ (reuses the
+  // .rating-modal-overlay shell). Buttons = Remove / Add / Cancel:
+  //   • Remove — replace any existing workouts on those dates
+  //   • Add    — assign on top of whatever is already there
+  //   • Cancel — close, no-op
+  // Returns "replace" | "stack" | null via the callback.
+  function _openConflictModeModal({ title, body, onChoose }) {
+    const id = "coach-conflict-mode-overlay";
+    const old = document.getElementById(id);
+    if (old) old.remove();
+    const overlay = document.createElement("div");
+    overlay.id = id;
+    overlay.className = "rating-modal-overlay";
+    const close = () => {
+      overlay.classList.remove("visible");
+      setTimeout(() => overlay.remove(), 200);
+    };
+    overlay.onclick = (e) => { if (e.target === overlay) close(); };
+    overlay.innerHTML = `
+      <div class="rating-modal" style="max-width:400px">
+        <div class="rating-modal-title">${_esc(title || "Existing workouts on those dates")}</div>
+        ${body ? `<div style="text-align:center;color:var(--color-text-muted);font-size:0.9rem;margin-bottom:14px;line-height:1.45">${body}</div>` : ""}
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button class="btn-danger"    id="ccm-remove" style="min-height:42px">Remove existing &amp; replace</button>
+          <button class="btn-primary"   id="ccm-add"    style="min-height:42px">Add alongside existing</button>
+          <button class="btn-secondary" id="ccm-cancel" style="min-height:38px">Cancel</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add("visible"));
+    overlay.querySelector("#ccm-remove").onclick = (e) => { e.stopPropagation(); close(); onChoose && onChoose("replace"); };
+    overlay.querySelector("#ccm-add").onclick    = (e) => { e.stopPropagation(); close(); onChoose && onChoose("stack"); };
+    overlay.querySelector("#ccm-cancel").onclick = (e) => { e.stopPropagation(); close(); onChoose && onChoose(null); };
+  }
+
   async function confirmCoachBulkAssign() {
     const errEl = document.getElementById("coach-bulk-error");
     const setErr = (m) => { if (errEl) errEl.textContent = m || ""; };
@@ -522,41 +557,43 @@
       }
     }
 
-    const wantReplace = window.confirm(
-      `Assigning ${rows.length} workout${rows.length === 1 ? "" : "s"} ` +
-      `(${_assignSelection.clientIds.size} client${_assignSelection.clientIds.size === 1 ? "" : "s"} × ` +
-      `${_assignSelection.dates.size} date${_assignSelection.dates.size === 1 ? "" : "s"}).\n\n` +
-      `Replace any existing workouts on those dates?\n\n` +
-      `OK — Replace existing (will be deleted)\n` +
-      `Cancel — Add alongside existing (keep current plan)`
-    );
-    const mode = wantReplace ? "replace" : "stack";
-    for (const r of rows) r.conflict_mode = mode;
+    const summary = `Assigning ${rows.length} workout${rows.length === 1 ? "" : "s"} `
+      + `(${_assignSelection.clientIds.size} client${_assignSelection.clientIds.size === 1 ? "" : "s"} × `
+      + `${_assignSelection.dates.size} date${_assignSelection.dates.size === 1 ? "" : "s"}).`;
 
-    const { error } = await sb.from("coach_assigned_workouts").insert(rows);
-    if (error) { setErr("Couldn't assign: " + error.message); return; }
+    _openConflictModeModal({
+      title: "Existing workouts on those dates?",
+      body: `${_esc(summary)}<br><br><strong>Remove</strong> deletes any current workouts on those dates and replaces them.<br><strong>Add</strong> keeps the current plan and adds yours alongside.`,
+      onChoose: async (mode) => {
+        if (!mode) return;             // user cancelled
+        for (const r of rows) r.conflict_mode = mode;
 
-    closeCoachLibraryAssign();
-    if (typeof window.showCoachToast === "function") {
-      window.showCoachToast(`Assigned ${rows.length} workout${rows.length === 1 ? "" : "s"}`);
-    } else {
-      // Fallback: piggyback on the toast helper coach-assignment-flow added.
-      const el = document.createElement("div");
-      el.className = "coach-toast is-visible";
-      el.textContent = `Assigned ${rows.length} workout${rows.length === 1 ? "" : "s"}`;
-      document.body.appendChild(el);
-      setTimeout(() => el.remove(), 1800);
-    }
+        const { error } = await sb.from("coach_assigned_workouts").insert(rows);
+        if (error) { setErr("Couldn't assign: " + error.message); return; }
 
-    if (typeof trackEvent === "function") {
-      try {
-        trackEvent("coach_bulk_assigned", {
-          clients: _assignSelection.clientIds.size,
-          dates: _assignSelection.dates.size,
-          rows: rows.length,
-        });
-      } catch {}
-    }
+        closeCoachLibraryAssign();
+        if (typeof window.showCoachToast === "function") {
+          window.showCoachToast(`Assigned ${rows.length} workout${rows.length === 1 ? "" : "s"}`);
+        } else {
+          const el = document.createElement("div");
+          el.className = "coach-toast is-visible";
+          el.textContent = `Assigned ${rows.length} workout${rows.length === 1 ? "" : "s"}`;
+          document.body.appendChild(el);
+          setTimeout(() => el.remove(), 1800);
+        }
+
+        if (typeof trackEvent === "function") {
+          try {
+            trackEvent("coach_bulk_assigned", {
+              clients: _assignSelection.clientIds.size,
+              dates: _assignSelection.dates.size,
+              rows: rows.length,
+              mode,
+            });
+          } catch {}
+        }
+      },
+    });
   }
 
   // ── Public surface ─────────────────────────────────────────────────────
