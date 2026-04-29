@@ -11811,7 +11811,15 @@ input.completion-ex-name:focus {
   display: flex;
   gap: 8px;
 }
-.session-complete-btns .btn-complete-toggle { flex: 0 0 auto; }
+/* Each button shares the row equally so the pair fills the section's
+   full width — keeps the action area visually balanced and avoids the
+   stranded gap to the right of two narrow inline buttons. */
+.session-complete-btns > .btn-complete-toggle,
+.session-complete-btns > .btn-live-start {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+}
 
 .btn-live-start {
   display: inline-flex;
@@ -13037,21 +13045,9 @@ input.completion-ex-name:focus {
 /* Advanced: show extra metrics */
 [data-ux-level="advanced"] .session-step-pace { display: inline; }
 
-/* Beginner guidance text injected by JS */
-[data-ux-level="beginner"] .btn-complete-toggle {
-  flex-direction: column;
-  gap: 2px;
-  text-align: center;
-  line-height: 1.15;
-}
-[data-ux-level="beginner"] .btn-complete-toggle::after {
-  content: "tap when done";
-  display: block;
-  font-weight: 400;
-  font-size: 0.68rem;
-  opacity: 0.7;
-  white-space: nowrap;
-}
+/* Beginner mode used to stack a "tap when done" subtitle under the
+   button label — bulky on web and confusing once users had figured out
+   the action. The button label alone reads cleanly at every level. */
 
 /* ===== EXPORT / SHARE WORKOUTS ===== */
 
@@ -13811,6 +13807,31 @@ input.completion-ex-name:focus {
 .coach-cal-meta          { font-size: 0.78rem; color: var(--color-text-muted); }
 .coach-cal-status        { font-size: 0.78rem; font-weight: 600; }
 .coach-cal-status--planned { color: var(--color-text-muted); }
+
+/* Per-day coach nutrition overlay row (Calendar tab). */
+.coach-cal-nutrition {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  margin-top: 4px;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+.coach-cal-nutrition--editing { flex-wrap: wrap; }
+.coach-cal-nutrition-label { font-weight: 600; color: var(--color-text); }
+.coach-cal-nutrition-unit  { color: var(--color-text-muted); margin-left: -4px; }
+.coach-cal-nutrition-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #92400e;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
 
 /* Phase 3B: clickable calendar items + edit affordance */
 .coach-cal-item[role="button"] {
