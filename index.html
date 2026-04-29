@@ -1440,6 +1440,27 @@
         </div>
       </section>
 
+      <!-- My Coach — Phase 5C.
+           Visible only when the user has an active primary coaching
+           assignment as a client. Surfaces the relationship in a place
+           the user can find it (settings tab) and gives them a way to
+           leave the coach without admin intervention. Hidden by default
+           and toggled on by client-coach-card.js after auth ready. -->
+      <section class="card" id="section-my-coach" style="display:none">
+        <h2 style="color:var(--color-coach,#534AB7);margin-bottom:8px">My Coach</h2>
+        <div class="my-coach-row">
+          <div class="my-coach-avatar" id="my-coach-avatar">?</div>
+          <div class="my-coach-meta">
+            <div class="my-coach-name" id="my-coach-name">Your coach</div>
+            <div class="my-coach-tag">IronZ Coach</div>
+          </div>
+        </div>
+        <p class="hint" id="my-coach-bio" style="margin:10px 0 0;display:none"></p>
+        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+          <button class="btn-secondary btn-sm" onclick="leaveCoach()">Leave coach</button>
+        </div>
+      </section>
+
       <!-- My Workouts -->
       <section class="card" id="section-my-workouts">
         <h2>My Workouts</h2>
@@ -3941,6 +3962,7 @@
   <script src="js/coach-invite-flow.js"></script>
   <script src="js/client-plan-freeze.js"></script>
   <script src="js/client-coaching.js"></script>
+  <script src="js/client-coach-card.js"></script>
   <script src="js/analytics.js"></script>
   <script src="js/push.js"></script>
   <!-- auth.js last — overrides window.onload to gate app behind login -->

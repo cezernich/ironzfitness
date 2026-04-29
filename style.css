@@ -13743,6 +13743,41 @@ input.completion-ex-name:focus {
   color: var(--color-text-muted);
   margin-top: 2px;
 }
+
+/* Settings → My Coach card. Reuses the same avatar gradient + name/tag
+   typography as the invite modal so the coach identity reads
+   consistently across the two entry points. */
+.my-coach-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.my-coach-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-coach, #534AB7) 0%, #8b7fdc 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+.my-coach-meta { flex: 1; min-width: 0; }
+.my-coach-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.my-coach-tag {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
 .invite-accept-bio {
   font-size: 0.92rem;
   line-height: 1.45;

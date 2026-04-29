@@ -549,6 +549,8 @@ async function ensureProfile(user) {
   if (typeof fetchActiveCoachIds === 'function') fetchActiveCoachIds().catch(e => console.warn('Auth: fetchActiveCoachIds error', e));
   // Live-pick up new coach assignments without a hard refresh.
   if (typeof subscribeCoachAssignments === 'function') subscribeCoachAssignments().catch(e => console.warn('Auth: subscribeCoachAssignments error', e));
+  // Phase 5C: surface the active coach on the Settings tab.
+  if (typeof refreshMyCoachCard === 'function') refreshMyCoachCard().catch(e => console.warn('Auth: refreshMyCoachCard error', e));
 }
 
 // ── Boot sequence ──────────────────────────────────────────────────────────────
