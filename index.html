@@ -2477,6 +2477,26 @@
     </div>
   </div>
 
+  <!-- Coach Bulk Assign modal — Phase 3C.
+       Pick a library workout, multi-select clients + dates, confirm.
+       Each (client, date) pair becomes one coach_assigned_workouts row.
+       Trigger from 3A.1 mirrors each into the client's workoutSchedule. -->
+  <div id="coach-bulk-assign-overlay" class="quick-entry-overlay" onclick="if(event.target===this) closeCoachLibraryAssign()">
+    <div class="quick-entry-modal" style="max-width:520px">
+      <div class="quick-entry-header">
+        <span class="qe-date-label" style="color:var(--color-coach,#534AB7)">Bulk Assign</span>
+        <button class="qe-close-btn" onclick="closeCoachLibraryAssign()">✕</button>
+      </div>
+      <div class="quick-entry-body" style="padding:0 16px 16px">
+        <div id="coach-bulk-assign-body"></div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="btn-secondary" style="flex:1" onclick="closeCoachLibraryAssign()">Cancel</button>
+          <button class="btn-primary" style="flex:1" onclick="confirmCoachBulkAssign()">Assign</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Coach conflict-resolution modal — Phase 3A.2.
        Fires when the target date already has a workout. Three modes:
        replace / stack / freeze. Each calls coachAssignConflict('mode')
@@ -3707,6 +3727,7 @@
   <script src="js/coach-dashboard.js"></script>
   <script src="js/coach-client-detail.js"></script>
   <script src="js/coach-assignment-flow.js"></script>
+  <script src="js/coach-library.js"></script>
   <script src="js/analytics.js"></script>
   <script src="js/push.js"></script>
   <!-- auth.js last — overrides window.onload to gate app behind login -->

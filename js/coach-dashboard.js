@@ -22,14 +22,22 @@
     const root = document.getElementById("coach-dashboard");
     if (!root) return;
 
-    const { clients, assignments, todayCompletions } = state;
+    // Stash the loaded state so coach-library / coach-programs can pull
+    // clients + profilesById without re-fetching on every tab switch.
+    window._coachDashState = state;
 
-    if (!clients.length) {
+    const { clients, assignments, todayCompletions } = state;
+    const tab = (typeof window.getCoachDashboardTab === "function")
+      ? window.getCoachDashboardTab()
+      : "clients";
+
+    if (!clients.length && tab === "clients") {
       root.innerHTML = `
         <div class="coach-portal-header">
           <h2>Coach Portal</h2>
           <button class="btn-secondary btn-sm" onclick="exitCoachPortal()">× Exit</button>
         </div>
+        ${_renderDashTabStrip(tab, 0)}
         <div class="card" style="text-align:center;padding:32px;color:var(--color-text-muted)">
           You don't have any active clients yet.
           <div style="font-size:0.85rem;margin-top:8px">
@@ -41,15 +49,34 @@
 
     const todayStr = new Date().toISOString().slice(0, 10);
 
+    let body;
+    if (tab === "library" && typeof window.renderCoachLibraryView === "function") {
+      body = window.renderCoachLibraryView(state);
+    } else {
+      body = `
+        ${_renderTodayQueue(clients, todayCompletions)}
+        ${_renderClientList(clients, assignments, todayCompletions, todayStr)}`;
+    }
+
     root.innerHTML = `
       <div class="coach-portal-header">
         <h2>Coach Portal</h2>
         <button class="btn-secondary btn-sm" onclick="exitCoachPortal()" aria-label="Exit Coach Portal" title="Exit Coach Portal">× Exit</button>
       </div>
-
-      ${_renderTodayQueue(clients, todayCompletions)}
-      ${_renderClientList(clients, assignments, todayCompletions, todayStr)}
+      ${_renderDashTabStrip(tab, clients.length)}
+      ${body}
     `;
+  }
+
+  function _renderDashTabStrip(active, clientCount) {
+    const tab = (id, label) => {
+      const cls = active === id ? " active" : "";
+      return `<button class="coach-dash-tab${cls}" onclick="setCoachDashboardTab('${id}')">${label}</button>`;
+    };
+    return `<div class="coach-dash-tabs">
+      ${tab("clients", `Clients${clientCount ? " (" + clientCount + ")" : ""}`)}
+      ${tab("library", "Library")}
+    </div>`;
   }
 
   // ── TODAY'S QUEUE ────────────────────────────────────────────────────

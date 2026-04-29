@@ -22,6 +22,10 @@
   let _exRowCount = 0;
   let _editingAssignmentId = null;  // 3B: present when editing an existing
                                      // coach assignment instead of inserting.
+  let _libraryMode = false;          // 3C: when true, submit writes to
+                                     // coach_workout_library instead of
+                                     // coach_assigned_workouts.
+  let _libraryEditId = null;         // 3C edit existing library item.
   // Buffer used by the conflict modal so the user's filled form doesn't
   // get re-fetched after they pick replace/stack/freeze.
   let _pendingPayload = null;
@@ -58,7 +62,43 @@
     overlay.classList.remove("is-open");
     _closeConflictModal();
     _editingAssignmentId = null;
+    _libraryMode = false;
+    _libraryEditId = null;
     _pendingPayload = null;
+  }
+
+  // Phase 3C entry point: re-uses the assignment modal in "save to
+  // library" mode. Hides the date picker (library items aren't
+  // date-bound), changes the save button to "Save to Library", and
+  // writes to coach_workout_library on submit.
+  function openAssignWorkoutModalForLibrary(prefill) {
+    _clientId = null;
+    _clientName = "";
+    _libraryMode = true;
+    _libraryEditId = (prefill && prefill.libraryId) || null;
+    _editingAssignmentId = null;
+
+    const overlay = document.getElementById("coach-assign-overlay");
+    if (!overlay) return;
+
+    _resetForm();
+    _populatePrefill(prefill || {});
+
+    // Hide date + duration fields (irrelevant for library entries).
+    const dateRow = document.getElementById("coach-assign-date")?.closest(".form-row");
+    if (dateRow) dateRow.style.display = "none";
+    const subtitle = document.getElementById("coach-assign-subtitle");
+    if (subtitle) subtitle.textContent = "Save to your library — assign later from the Library tab.";
+
+    const submitBtn = document.getElementById("coach-assign-save-btn");
+    if (submitBtn) submitBtn.textContent = _libraryEditId ? "Update Library" : "Save to Library";
+
+    // Coach note field is still visible — used as the library notes
+    // field. Re-label it.
+    const noteLabel = document.querySelector('label[for="coach-assign-note"]');
+    if (noteLabel) noteLabel.firstChild.textContent = "Library notes ";
+
+    overlay.classList.add("is-open");
   }
 
   function _resetForm() {
@@ -175,6 +215,12 @@
 
     if (!exercises.length && type === "weightlifting") {
       return setErr("Add at least one exercise (or change the type to a cardio workout).");
+    }
+
+    // Phase 3C: save-to-library path bypasses date / conflict /
+    // assignments tables entirely.
+    if (_libraryMode) {
+      return _saveLibraryItem({ sessionName, type, exercises, durationRaw, coachNote });
     }
 
     const duration = durationRaw ? parseInt(durationRaw, 10) || null : null;
@@ -343,6 +389,53 @@
     } catch (e) {
       setErr((e && e.message) || "Couldn't save the workout — try again.");
       if (btn) { btn.disabled = false; btn.textContent = _editingAssignmentId ? "Update Workout" : "Assign Workout"; }
+    }
+  }
+
+  // ── Phase 3C: save-to-library helper ──────────────────────────────────
+  async function _saveLibraryItem({ sessionName, type, exercises, durationRaw, coachNote }) {
+    const errEl = document.getElementById("coach-assign-error");
+    const setErr = (m) => { if (errEl) errEl.textContent = m || ""; };
+    const btn = document.getElementById("coach-assign-save-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+
+    const sb = window.supabaseClient;
+    if (!sb) { setErr("Auth client not available."); if (btn) { btn.disabled = false; btn.textContent = _libraryEditId ? "Update Library" : "Save to Library"; } return; }
+    const sess = (await sb.auth.getSession())?.data?.session;
+    const coachId = sess?.user?.id;
+    if (!coachId) { setErr("Not signed in."); if (btn) { btn.disabled = false; btn.textContent = _libraryEditId ? "Update Library" : "Save to Library"; } return; }
+
+    const duration = durationRaw ? parseInt(durationRaw, 10) || null : null;
+    const workoutJson = {
+      sessionName,
+      type,
+      exercises: exercises.length ? exercises : undefined,
+      ...(duration ? { duration } : {}),
+      level: "intermediate",
+    };
+
+    try {
+      let res;
+      if (_libraryEditId) {
+        res = await sb.from("coach_workout_library")
+          .update({ name: sessionName, workout: workoutJson, notes: coachNote || null })
+          .eq("id", _libraryEditId);
+      } else {
+        res = await sb.from("coach_workout_library").insert({
+          coach_id: coachId,
+          name:     sessionName,
+          workout:  workoutJson,
+          notes:    coachNote || null,
+        });
+      }
+      if (res?.error) throw new Error(res.error.message);
+
+      closeAssignWorkoutModal();
+      _showCoachToast(_libraryEditId ? "Library updated" : "Saved to library");
+      if (typeof window.loadCoachLibrary === "function") await window.loadCoachLibrary();
+    } catch (e) {
+      setErr((e && e.message) || "Couldn't save — try again.");
+      if (btn) { btn.disabled = false; btn.textContent = _libraryEditId ? "Update Library" : "Save to Library"; }
     }
   }
 
