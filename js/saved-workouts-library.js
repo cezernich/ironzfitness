@@ -576,9 +576,16 @@
       }
     }
 
-    // Fetch exercise data to attach as aiSession.intervals so the calendar
-    // renders the full colored bar + step list (same as built-in workouts).
+    // Strength workouts have a different shape — exercises with sets/reps/weight,
+    // not timed intervals at zone X. We attach them as entry.exercises so the
+    // home renderer uses buildExerciseTableHTML (sets × reps @ weight) instead
+    // of buildAiIntervalsList (which would coerce every exercise into a Z2
+    // running interval and render each at the user's running pace).
+    const _isStrength = e.sport_id === "strength" || e.sport_id === "weightlifting"
+                       || e.session_type_id === "strength" || e.session_type_id === "weightlifting";
+
     let intervals = [];
+    let strengthExercises = [];
 
     // Source 1: training_sessions via Supabase — only for shared workouts,
     // whose variant_id is a real row UUID. Library variants use local IDs
@@ -594,32 +601,56 @@
         if (ts && ts.exercises) {
           let exArr = ts.exercises;
           if (typeof exArr === "string") { try { exArr = JSON.parse(exArr); } catch { exArr = []; } }
-          intervals = exArr.map(ex => ({
-            name: ex.name || "Interval",
-            duration: ex.duration || "",
-            effort: ex.intensity || ex.effort || "Z2",
-            details: ex.details || "",
-            reps: ex.reps || null,
-            repeatGroup: ex.repeatGroup || ex.supersetGroup || null,
-            groupSets: ex.groupSets || null,
-          }));
+          if (_isStrength) {
+            strengthExercises = exArr.map(ex => ({
+              name: ex.name || "Exercise",
+              sets: ex.sets || null,
+              reps: ex.reps || null,
+              weight: ex.weight || null,
+              rest: ex.rest || null,
+              supersetGroup: ex.supersetGroup || ex.repeatGroup || null,
+              notes: ex.notes || ex.details || null,
+            }));
+          } else {
+            intervals = exArr.map(ex => ({
+              name: ex.name || "Interval",
+              duration: ex.duration || "",
+              effort: ex.intensity || ex.effort || "Z2",
+              details: ex.details || "",
+              reps: ex.reps || null,
+              repeatGroup: ex.repeatGroup || ex.supersetGroup || null,
+              groupSets: ex.groupSets || null,
+            }));
+          }
         }
       } catch (err) { console.warn("[IronZ] training_sessions lookup failed:", err); }
     }
 
     // Source 2: local payload (custom workouts)
-    if (!intervals.length && e.payload) {
+    if (!intervals.length && !strengthExercises.length && e.payload) {
       const p = e.payload;
       const src = p.segments || p.exercises || p.intervals || [];
-      intervals = src.map(s => ({
-        name: s.name || s.type || "Step",
-        duration: s.duration || "",
-        effort: s.effort || s.intensity || s.zone || "Z2",
-        details: s.details || "",
-        reps: s.reps || null,
-        repeatGroup: s.repeatGroup || s.supersetGroup || null,
-        groupSets: s.groupSets || null,
-      }));
+      if (_isStrength) {
+        strengthExercises = src.map(s => ({
+          name: s.name || "Exercise",
+          sets: s.sets || null,
+          reps: s.reps || null,
+          weight: s.weight || null,
+          rest: s.rest || null,
+          supersetGroup: s.supersetGroup || s.repeatGroup || null,
+          notes: s.notes || s.details || null,
+        }));
+      } else {
+        intervals = src.map(s => ({
+          name: s.name || s.type || "Step",
+          duration: s.duration || "",
+          effort: s.effort || s.intensity || s.zone || "Z2",
+          details: s.details || "",
+          reps: s.reps || null,
+          repeatGroup: s.repeatGroup || s.supersetGroup || null,
+          groupSets: s.groupSets || null,
+        }));
+      }
     }
 
     // Insert into workoutSchedule
@@ -629,16 +660,22 @@
     const entry = {
       id: "saved-" + savedId + "-" + Date.now(),
       date: targetDate,
-      type: e.session_type_id || e.workout_kind || "general",
+      // Strength workouts must surface as type "weightlifting" so the
+      // home renderer's `w.type === "weightlifting"` branches (equipment
+      // restrictions, exercise table) match. Non-strength uses the
+      // original session_type_id.
+      type: _isStrength ? "weightlifting" : (e.session_type_id || e.workout_kind || "general"),
       sessionName: e.custom_name || e.variant_id || "Custom Workout",
       variant_id: e.variant_id || null,
       sport_id: e.sport_id,
       source: "user_added",
       saved_workout_id: e.id,
     };
-    // Attach exercise data as aiSession so the calendar renders the full
-    // colored intensity strip + step list — same as built-in plan workouts.
-    if (intervals.length) {
+    if (_isStrength && strengthExercises.length) {
+      // Strength path — buildExerciseTableHTML reads w.exercises.
+      entry.exercises = strengthExercises;
+    } else if (intervals.length) {
+      // Endurance path — buildAiIntervalsList reads w.aiSession.intervals.
       entry.aiSession = {
         title: entry.sessionName,
         intervals,

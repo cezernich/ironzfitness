@@ -1981,13 +1981,20 @@ function buildAiIntervalsList(session, type) {
     // zone tag (e.g., "Z2") with no numeric pace.
     if (type === "walking" || ivSport === "walking") return null;
     if (type === "rowing"  || ivSport === "rowing" || ivSport === "row") return null;
+    // Strength / weightlifting / HIIT don't have pace zones. Show no pace
+    // numbers when the sport doesn't match an endurance discipline — better
+    // than borrowing the user's running paces and labeling lateral raises
+    // as "Z2 8:08–8:58 /mi".
+    if (type === "strength" || type === "weightlifting" || type === "hiit") return null;
+    if (ivSport === "strength" || ivSport === "weightlifting" || ivSport === "hiit") return null;
     const key = ivSport === "bike" || ivSport === "cycling" ? "biking"
               : ivSport === "run" || ivSport === "running" ? "running"
               : ivSport === "swim" || ivSport === "swimming" ? "swimming"
               : type === "bike" || type === "cycling" || type === "brick" ? "biking"
               : type === "swim" || type === "swimming" ? "swimming"
-              : "running";
-    return (allZones[key] || {}).zones || null;
+              : type === "run" || type === "running" ? "running"
+              : null;
+    return key ? ((allZones[key] || {}).zones || null) : null;
   }
 
   const ivs = session.intervals || [];
@@ -2497,6 +2504,12 @@ function _resolveEnduranceType(type) {
 // yards (not miles/km) — the user request is explicit: a swim Distance
 // field must NEVER show "mi". Any swim-prefixed type or the resolved
 // "swimming" enum hits the m/yd toggle branch.
+//
+// Brick / triathlon workouts get TWO inputs (Bike + Run) instead of one
+// — a single "Distance" was ambiguous when the session contains both a
+// bike main set and a brick run. Each leg is labeled and saved
+// separately as bike_distance / run_distance, with the legacy `distance`
+// field receiving the sum so existing analytics keep working.
 function _buildDistanceField(sessionId, type, globalUnit) {
   const t = String(type || "").toLowerCase();
   const isSwim = t === "swimming" || t === "swim" || t.startsWith("swim_");
@@ -2523,6 +2536,19 @@ function _buildDistanceField(sessionId, type, globalUnit) {
         </div>
       </div>`;
   }
+  if (t === "triathlon" || t === "brick") {
+    return `
+      <div class="completion-dur-row">
+        <label class="completion-field-label">Bike distance (${globalUnit})</label>
+        <input type="number" id="cdist-bike-${sessionId}" class="completion-dur-input"
+          placeholder="e.g. 12" min="0" step="0.1" />
+      </div>
+      <div class="completion-dur-row">
+        <label class="completion-field-label">Run distance (${globalUnit})</label>
+        <input type="number" id="cdist-run-${sessionId}" class="completion-dur-input"
+          placeholder="e.g. 3.1" min="0" step="0.1" />
+      </div>`;
+  }
   return `
     <div class="completion-dur-row">
       <label class="completion-field-label">Distance (${globalUnit})</label>
@@ -2545,7 +2571,14 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
         if (_cW) {
           const _parts = [];
           if (_cW.duration) _parts.push(`${_cW.duration} min`);
-          if (_cW.distance) {
+          if (_cW.bike_distance || _cW.run_distance) {
+            // Brick — show bike + run separately rather than the summed total,
+            // which is what a coach actually wants to see.
+            const _u = _cW.distance_unit
+              || (typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi");
+            if (_cW.bike_distance) _parts.push(`${_cW.bike_distance} ${_u} bike`);
+            if (_cW.run_distance)  _parts.push(`${_cW.run_distance} ${_u} run`);
+          } else if (_cW.distance) {
             // Swim records carry their own distance_unit (m or yd); other
             // sports use the global mi/km setting.
             const _u = _cW.distance_unit
@@ -2849,7 +2882,26 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   const notes    = (document.getElementById(`cnotes-${sessionId}`)?.value || "").trim();
   const _parsedDur = _readDurationMinSec(sessionId);
   let duration = (!isNaN(_parsedDur) && _parsedDur > 0) ? String(_parsedDur) : "";
-  const distance = document.getElementById(`cdist-${sessionId}`)?.value || "";
+  // Brick workouts have separate bike + run inputs. Read each one and
+  // sum them into the legacy single-distance field so existing stats
+  // and Strava plumbing keep working unchanged.
+  const _typeForDistRead = String(type || "").toLowerCase();
+  const _isBrickRead = _typeForDistRead === "triathlon" || _typeForDistRead === "brick";
+  const bikeDistance = _isBrickRead
+    ? (document.getElementById(`cdist-bike-${sessionId}`)?.value || "")
+    : "";
+  const runDistance = _isBrickRead
+    ? (document.getElementById(`cdist-run-${sessionId}`)?.value || "")
+    : "";
+  let distance;
+  if (_isBrickRead) {
+    const bNum = parseFloat(bikeDistance);
+    const rNum = parseFloat(runDistance);
+    const total = (isFinite(bNum) ? bNum : 0) + (isFinite(rNum) ? rNum : 0);
+    distance = total > 0 ? String(total) : "";
+  } else {
+    distance = document.getElementById(`cdist-${sessionId}`)?.value || "";
+  }
   // Swim uses its own unit toggle (m / yd); other endurance types use the
   // global mi/km setting. Match the same broadened check as
   // _buildDistanceField so the unit is read correctly even when the
@@ -2860,9 +2912,11 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
     ? (document.getElementById(`cdistunit-${sessionId}`)?.value || "m")
     : null;
 
-  // Pace sanity check for endurance types (sport-specific thresholds)
+  // Pace sanity check for endurance types (sport-specific thresholds).
+  // Skip for brick / triathlon — total_duration ÷ (bike + run) blends two
+  // speeds and can't be compared against any single sport threshold.
   const _paceType = _resolveEnduranceType(type);
-  if (duration && distance && _ENDURANCE_TYPES.has(_paceType)) {
+  if (duration && distance && _ENDURANCE_TYPES.has(_paceType) && !_isBrickRead) {
     const durMin = parseFloat(duration);
     const distVal = parseFloat(distance);
     if (durMin > 0 && distVal > 0) {
@@ -3048,6 +3102,8 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
     duration:           duration || null,
     distance:           distance || null,
     ...(_cardioDistUnit && distance ? { distance_unit: _cardioDistUnit } : {}),
+    ...(_isBrickRead && bikeDistance ? { bike_distance: bikeDistance } : {}),
+    ...(_isBrickRead && runDistance  ? { run_distance:  runDistance  } : {}),
     ...(wattsVal && { avgWatts: wattsVal }),
     ..._carryForward,
     completedSessionId: sessionId,
@@ -5178,8 +5234,16 @@ function handleMacroSlider(event, dateStr, key, suffix) {
 function saveNutritionAdjustment(dateStr, key, value) {
   let adjustments = {};
   try { adjustments = JSON.parse(localStorage.getItem("nutritionAdjustments")) || {}; } catch {}
-  if (!adjustments[dateStr]) {
-    adjustments[dateStr] = { ...getBaseNutritionTarget(dateStr) };
+  const existing = adjustments[dateStr];
+  // Seed with base targets only when the macro snapshot is missing — but
+  // preserve any pre-existing _coachOverlay (per-day bumps written by a
+  // coach) so the slider edit doesn't silently drop the coach's
+  // adjustment.
+  const lacksMacros = !existing
+    || (existing.calories == null && existing.protein == null
+        && existing.carbs == null && existing.fat == null);
+  if (lacksMacros) {
+    adjustments[dateStr] = { ...(existing || {}), ...getBaseNutritionTarget(dateStr) };
   }
   adjustments[dateStr][key] = value;
   localStorage.setItem("nutritionAdjustments", JSON.stringify(adjustments)); if (typeof DB !== 'undefined') DB.syncKey('nutritionAdjustments');

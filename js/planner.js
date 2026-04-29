@@ -4721,11 +4721,37 @@ if (typeof window !== "undefined") {
  * @returns {Object} { calories, protein, carbs, fat }
  */
 function getDailyNutritionTarget(dateStr) {
+  let adj = null;
   try {
     const adjustments = JSON.parse(localStorage.getItem("nutritionAdjustments")) || {};
-    if (adjustments[dateStr]) return adjustments[dateStr];
+    adj = adjustments[dateStr] || null;
   } catch { /* ignore */ }
-  return getBaseNutritionTarget(dateStr);
+
+  // The athlete's slider system seeds adj with the full {calories, protein,
+  // carbs, fat} shape. Coach per-day overlays (set from coach-client-detail)
+  // attach a separate _coachOverlay sub-field that is additive. We treat
+  // adj as the override base only when it actually carries macro fields —
+  // otherwise (coach overlay only, no slider edit) we fall back to base
+  // targets so the rest of the app doesn't see undefined macros.
+  let result;
+  if (adj && (adj.calories != null || adj.protein != null || adj.carbs != null || adj.fat != null)) {
+    result = { calories: adj.calories, protein: adj.protein, carbs: adj.carbs, fat: adj.fat };
+  } else {
+    result = getBaseNutritionTarget(dateStr);
+  }
+
+  const overlay = adj && adj._coachOverlay;
+  if (overlay) {
+    if (overlay.carbs_add_g)   result.carbs   = (result.carbs   || 0) + overlay.carbs_add_g;
+    if (overlay.protein_add_g) result.protein = (result.protein || 0) + overlay.protein_add_g;
+    if (overlay.fat_add_g)     result.fat     = (result.fat     || 0) + overlay.fat_add_g;
+    const macroDelta = (overlay.carbs_add_g || 0) * 4
+                     + (overlay.protein_add_g || 0) * 4
+                     + (overlay.fat_add_g || 0) * 9;
+    if (overlay.calories_add != null) result.calories = (result.calories || 0) + overlay.calories_add;
+    else if (macroDelta)              result.calories = (result.calories || 0) + macroDelta;
+  }
+  return result;
 }
 
 // ─── Edit state ──────────────────────────────────────────────────────────────

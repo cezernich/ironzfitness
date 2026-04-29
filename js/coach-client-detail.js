@@ -326,9 +326,16 @@
         items.push(`<div class="coach-cal-item coach-cal-item--rest">Rest</div>`);
       }
 
+      // Per-day nutrition overlay control. Only rendered when the client
+      // has nutrition turned on — Phase 2A flag respects their privacy.
+      const carbBumpRow = _data.flags.nutritionEnabled
+        ? _renderCoachCarbOverlayRow(date)
+        : "";
+
       return `<div class="coach-cal-day${isToday ? " coach-cal-day--today" : ""}">
         <div class="coach-cal-day-header">${_esc(dayLabel)}${isToday ? " · Today" : ""}</div>
         ${items.join("")}
+        ${carbBumpRow}
       </div>`;
     }).join("");
 
@@ -707,6 +714,144 @@
     </div>`;
   }
 
+  // ── Per-day coach carb overlay ────────────────────────────────────────
+  // Sits in the calendar day cell next to a date's planned/done items.
+  // Writes go into nutritionAdjustments[date]._coachOverlay (additive on
+  // top of the athlete's base target) so the existing slider workflow
+  // and the Phase 2A RLS policy on `nutritionAdjustments` both keep
+  // working unchanged.
+  let _editingOverlayDate = null;
+
+  function _getOverlay(date) {
+    const all = _data.settings.nutritionAdjustments || {};
+    const day = all && typeof all === "object" ? all[date] : null;
+    return (day && day._coachOverlay) || null;
+  }
+
+  function _renderCoachCarbOverlayRow(date) {
+    const overlay = _getOverlay(date);
+    const isEditing = _editingOverlayDate === date;
+
+    if (isEditing) {
+      const current = overlay && overlay.carbs_add_g != null ? overlay.carbs_add_g : "";
+      return `<div class="coach-cal-nutrition coach-cal-nutrition--editing" data-date="${_esc(date)}">
+        <span class="coach-cal-nutrition-label">Carbs adjustment</span>
+        <input type="number" id="coach-overlay-input-${_esc(date)}" class="input"
+               value="${_esc(current)}" placeholder="+ grams" step="5"
+               style="padding:4px 6px;font-size:0.85rem;width:90px" />
+        <span class="coach-cal-nutrition-unit">g</span>
+        <button class="btn-primary btn-sm" onclick="coachSaveDayCarbOverlay('${_esc(date)}')" style="padding:4px 10px;font-size:0.8rem">Save</button>
+        <button class="btn-secondary btn-sm" onclick="coachCancelDayCarbOverlay()" style="padding:4px 10px;font-size:0.8rem">Cancel</button>
+        ${overlay && overlay.carbs_add_g != null
+          ? `<button class="btn-ghost btn-sm" onclick="coachClearDayCarbOverlay('${_esc(date)}')" style="padding:4px 10px;font-size:0.8rem">Clear</button>`
+          : ""}
+      </div>`;
+    }
+
+    if (overlay && overlay.carbs_add_g) {
+      const sign = overlay.carbs_add_g > 0 ? "+" : "";
+      return `<div class="coach-cal-nutrition">
+        <span class="coach-cal-nutrition-pill">🍞 ${sign}${_esc(overlay.carbs_add_g)} g carbs</span>
+        <button class="coach-feature-edit-btn" onclick="coachStartDayCarbOverlay('${_esc(date)}')">✎ edit</button>
+      </div>`;
+    }
+
+    return `<div class="coach-cal-nutrition">
+      <button class="coach-feature-edit-btn" onclick="coachStartDayCarbOverlay('${_esc(date)}')">+ Adjust carbs</button>
+    </div>`;
+  }
+
+  function coachStartDayCarbOverlay(date) {
+    _editingOverlayDate = date;
+    const wrap = document.querySelector(".coach-client-tab-content");
+    if (wrap) wrap.innerHTML = _renderActiveTab();
+    setTimeout(() => {
+      const inp = document.getElementById(`coach-overlay-input-${date}`);
+      if (inp) { inp.focus(); if (inp.select) inp.select(); }
+    }, 0);
+  }
+
+  function coachCancelDayCarbOverlay() {
+    _editingOverlayDate = null;
+    const wrap = document.querySelector(".coach-client-tab-content");
+    if (wrap) wrap.innerHTML = _renderActiveTab();
+  }
+
+  async function _writeOverlayForDate(date, nextOverlay) {
+    const sb = window.supabaseClient;
+    if (!sb || !_client?.id) return { error: "no_client" };
+    const sess = (await sb.auth.getSession())?.data?.session;
+    const coachId = sess?.user?.id;
+    if (!coachId) return { error: "no_session" };
+
+    const all = (_data.settings.nutritionAdjustments && typeof _data.settings.nutritionAdjustments === "object")
+      ? { ..._data.settings.nutritionAdjustments }
+      : {};
+    const dayExisting = (all[date] && typeof all[date] === "object") ? { ...all[date] } : {};
+    if (nextOverlay == null) {
+      delete dayExisting._coachOverlay;
+    } else {
+      dayExisting._coachOverlay = {
+        ...(dayExisting._coachOverlay || {}),
+        ...nextOverlay,
+        by: coachId,
+        at: new Date().toISOString(),
+      };
+    }
+    // If the day row is now empty (no slider macros, no overlay), drop it
+    // entirely so we don't litter the JSON with `{}`.
+    const dayHasContent = Object.keys(dayExisting).some(k =>
+      k === "_coachOverlay" ? dayExisting._coachOverlay
+      : dayExisting[k] != null);
+    if (dayHasContent) all[date] = dayExisting;
+    else delete all[date];
+
+    const { error } = await sb.from("user_data").upsert({
+      user_id: _client.id,
+      data_key: "nutritionAdjustments",
+      data_value: all,
+      last_edited_by: coachId,
+      last_edited_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id,data_key" });
+
+    if (error) return { error: error.message };
+
+    _data.settings.nutritionAdjustments = all;
+    _audit["nutritionAdjustments"] = { by: coachId, at: new Date().toISOString() };
+    return { ok: true };
+  }
+
+  async function coachSaveDayCarbOverlay(date) {
+    const inp = document.getElementById(`coach-overlay-input-${date}`);
+    if (!inp) return;
+    const raw = inp.value;
+    if (raw === "" || raw == null) {
+      // Empty input → clear the overlay entirely.
+      const res = await _writeOverlayForDate(date, null);
+      if (res.error) { alert("Couldn't save: " + res.error); return; }
+    } else {
+      const grams = parseFloat(raw);
+      if (!isFinite(grams)) { alert("Enter a number of grams (e.g. 50)."); return; }
+      const res = await _writeOverlayForDate(date, { carbs_add_g: grams });
+      if (res.error) { alert("Couldn't save: " + res.error); return; }
+    }
+    _editingOverlayDate = null;
+    const wrap = document.querySelector(".coach-client-tab-content");
+    if (wrap) wrap.innerHTML = _renderActiveTab();
+    if (typeof trackEvent === "function") {
+      try { trackEvent("coach_day_carb_overlay_saved", { date }); } catch {}
+    }
+  }
+
+  async function coachClearDayCarbOverlay(date) {
+    const res = await _writeOverlayForDate(date, null);
+    if (res.error) { alert("Couldn't clear: " + res.error); return; }
+    _editingOverlayDate = null;
+    const wrap = document.querySelector(".coach-client-tab-content");
+    if (wrap) wrap.innerHTML = _renderActiveTab();
+  }
+
   // ── Phase 3B: edit-existing-workout handler ───────────────────────────
   // Tap any planned calendar item → opens the Assign Workout modal
   // pre-filled with the entry's content. Two paths:
@@ -748,4 +893,8 @@
   window.coachCancelFeatureEdit  = coachCancelFeatureEdit;
   window.coachSaveFeatureEdit    = coachSaveFeatureEdit;
   window.coachEditCalItem        = coachEditCalItem;
+  window.coachStartDayCarbOverlay  = coachStartDayCarbOverlay;
+  window.coachCancelDayCarbOverlay = coachCancelDayCarbOverlay;
+  window.coachSaveDayCarbOverlay   = coachSaveDayCarbOverlay;
+  window.coachClearDayCarbOverlay  = coachClearDayCarbOverlay;
 })();
