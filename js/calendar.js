@@ -1351,7 +1351,10 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
       const tip    = `${seg.name || seg.effort}${zLabel ? ` · ${zLabel}` : ""}`;
       return `<div class="intensity-seg ${seg.cls}" style="width:${pct}%" title="${tip}"></div>`;
     }).join("");
-    const strip = stripSegs ? `<div class="session-intensity-strip" onclick="event.stopPropagation();toggleSection('${cardId}')">${stripSegs}</div>` : "";
+    // Mobility / yoga sessions don't have meaningful pace zones — skip the
+    // strip so a stretching flow doesn't render as a uniform Z2 cyan bar.
+    const _logIsMobility = w.type === "yoga" || w.type === "mobility";
+    const strip = (stripSegs && !_logIsMobility) ? `<div class="session-intensity-strip" onclick="event.stopPropagation();toggleSection('${cardId}')">${stripSegs}</div>` : "";
 
     const totalDurMin = Math.round(totalDur) || null;
     const isReduced   = restriction && restriction.action === "reduce";
@@ -1950,8 +1953,8 @@ function buildAiIntervalsList(session, type) {
     // numbers when the sport doesn't match an endurance discipline — better
     // than borrowing the user's running paces and labeling lateral raises
     // as "Z2 8:08–8:58 /mi".
-    if (type === "strength" || type === "weightlifting" || type === "hiit") return null;
-    if (ivSport === "strength" || ivSport === "weightlifting" || ivSport === "hiit") return null;
+    if (type === "strength" || type === "weightlifting" || type === "hiit" || type === "yoga" || type === "mobility") return null;
+    if (ivSport === "strength" || ivSport === "weightlifting" || ivSport === "hiit" || ivSport === "yoga" || ivSport === "mobility") return null;
     const key = ivSport === "bike" || ivSport === "cycling" ? "biking"
               : ivSport === "run" || ivSport === "running" ? "running"
               : ivSport === "swim" || ivSport === "swimming" ? "swimming"
@@ -1983,7 +1986,13 @@ function buildAiIntervalsList(session, type) {
   function _renderIv(iv) {
     const isTransition = iv.effort === "T1";
     const isRestWalk   = iv.effort === "RW";
-    const zone  = (isTransition || isRestWalk) ? null : (effortToZone[iv.effort] || 2);
+    // Mobility / yoga intervals carry no effort field — keep zone null so
+    // the badge and pace overlay are suppressed (a "Z2" tag on Pigeon Pose
+    // makes no sense).
+    const hasEffort = !!iv.effort;
+    const zone  = !hasEffort ? null
+                : (isTransition || isRestWalk) ? null
+                : (effortToZone[iv.effort] || 2);
     const zones = _getIntervalZones(iv.sport);
     const zData = zone && zones ? zones[`z${zone}`] : null;
     const zoneLabel = zData ? (zData.paceRange || zData.wattRange || null) : null;
@@ -2077,8 +2086,14 @@ function buildAiIntervalsList(session, type) {
                     : /cool/i.test(nameLow) ? "COOLDOWN"
                     : /recov/i.test(effectiveNameLow) ? "RECOVERY"
                     : effectiveName ? effectiveName.toUpperCase() : "INTERVAL";
-    const stepCls   = isTransition ? "session-step--transition" : isRestWalk ? "session-step--rw" : `session-step--z${zone}`;
-    const zoneBadge = isTransition ? "T1" : isRestWalk ? "RW" : `Z${zone}${zoneLabel ? `<span class="session-step-pace">${zoneLabel}</span>` : ""}`;
+    const stepCls   = isTransition ? "session-step--transition"
+                    : isRestWalk    ? "session-step--rw"
+                    : zone           ? `session-step--z${zone}`
+                                     : "session-step--neutral";
+    const zoneBadge = isTransition ? "T1"
+                    : isRestWalk    ? "RW"
+                    : zone           ? `Z${zone}${zoneLabel ? `<span class="session-step-pace">${zoneLabel}</span>` : ""}`
+                                     : "";
     // Swim: collapse repeated sets into one card with distance-based
     // duration ("4 × 100m (1m rest)") — distance reads better than time
     // for swim sets. Earlier behavior unfolded one row per rep; too noisy.
@@ -2109,7 +2124,7 @@ function buildAiIntervalsList(session, type) {
           <span class="session-step-type">${sportTag}${typeLabel}</span>
           <span class="session-step-duration">${durText}</span>
         </div>
-        <div class="session-step-zone-row"><span class="session-step-zone">${zoneBadge}</span></div>
+        ${zoneBadge ? `<div class="session-step-zone-row"><span class="session-step-zone">${zoneBadge}</span></div>` : ""}
         ${cleanedDetails ? `<div class="session-step-label">${escHtml(cleanedDetails)}</div>` : ""}
       </div>`;
     }
@@ -2122,7 +2137,7 @@ function buildAiIntervalsList(session, type) {
           <span class="session-step-type">${sportTag}${typeLabel}</span>
           <span class="session-step-duration">${durText}</span>
         </div>
-        <div class="session-step-zone-row"><span class="session-step-zone">${zoneBadge}</span></div>
+        ${zoneBadge ? `<div class="session-step-zone-row"><span class="session-step-zone">${zoneBadge}</span></div>` : ""}
         ${iv.details ? `<div class="session-step-label">${escHtml(iv.details)}</div>` : ""}
       </div>`;
   }
@@ -4245,6 +4260,10 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       // when the actual exercise list points to ~70.
       const _swStrengthEst = _strengthDisplayDurationMin(w);
       let _swGenDurMin = _swStrengthEst || w.duration || null;
+      // Mobility / yoga sessions have no effort/zones — the strip + per-step
+      // zone badges are meaningless for stretches, so they're suppressed
+      // below (search _swIsMobility).
+      const _swIsMobility = w.type === "yoga" || w.type === "mobility";
       if (w.aiSession && w.aiSession.intervals && w.aiSession.intervals.length) {
         const _effortToZone = { RW:"rw",Z1:"z1",Z2:"z2",Z3:"z3",Z4:"z4",Z5:"z5",Z6:"z6", Easy:"z2",Moderate:"z3",Hard:"z4",Max:"z5",T1:"z-transition" };
         const _paceMap = { RW:8, Z1:7, Z2:6.2, Z3:5.5, Z4:5, Z5:4.5, Z6:4 };
@@ -4369,7 +4388,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
           const tip = `${seg.name || seg.effort}${zLabel ? ` \u00b7 ${zLabel}` : ""}`;
           return `<div class="intensity-seg ${seg.cls}" style="width:${pct}%" title="${tip}"></div>`;
         }).join("");
-        if (_stripSegs) _swGenStrip = `<div class="session-intensity-strip" onclick="event.stopPropagation();toggleSection('${cardId}')">${_stripSegs}</div>`;
+        if (_stripSegs && !_swIsMobility) _swGenStrip = `<div class="session-intensity-strip" onclick="event.stopPropagation();toggleSection('${cardId}')">${_stripSegs}</div>`;
         if (!body) {
           // Swim: if the session has the canonical step tree, render the
           // Garmin-style swim card. Falls through to the flat interval
@@ -8115,6 +8134,68 @@ function _generateStructuredSwimMain(mainMin, intensity, cssSec, iz) {
 //   duration:  total minutes as number or numeric string
 //   bikeDur:   brick bike duration in minutes (brick only)
 //   runDur:    brick run duration in minutes (brick only)
+// Pulls a balanced full-body sequence from STRETCHES_BY_MUSCLE (defined in
+// exercise-library.js) and pads with breath/flow blocks to fit the requested
+// duration. Each segment carries a duration string + cue text but NO `effort`
+// field — the day-detail renderer keys off that absence to skip pace zones.
+function _qeBuildMobilityWorkout(type, durMin) {
+  const lib = (typeof STRETCHES_BY_MUSCLE !== "undefined" && STRETCHES_BY_MUSCLE) || {};
+  const groups = ["hip flexors", "hamstrings", "glutes", "quads", "back",
+                  "shoulders", "chest", "core", "calves"];
+  // ~90s per movement is a reasonable default for held stretches with both
+  // sides. Caller picks duration; we scale movement count to fit.
+  const perMovementMin = 1.5;
+  const warmMin = Math.max(3, Math.round(durMin * 0.15));
+  const cooldownMin = Math.max(2, Math.round(durMin * 0.1));
+  const mainMin = Math.max(perMovementMin, durMin - warmMin - cooldownMin);
+  const moveCount = Math.max(3, Math.min(10, Math.round(mainMin / perMovementMin)));
+
+  const picked = [];
+  const seen = new Set();
+  for (const g of groups) {
+    const opts = (lib[g] || []);
+    for (const s of opts) {
+      if (picked.length >= moveCount) break;
+      if (seen.has(s.name)) continue;
+      seen.add(s.name);
+      picked.push({
+        name:    s.name,
+        duration: s.duration || "45s",
+        details: s.desc || "",
+      });
+    }
+    if (picked.length >= moveCount) break;
+  }
+
+  const intervals = [];
+  if (warmMin > 0) {
+    intervals.push({
+      name: type === "yoga" ? "Centering & Breath" : "Dynamic Warm-Up",
+      duration: warmMin + " min",
+      details: type === "yoga"
+        ? "Seated breath work, cat-cow, gentle spinal waves"
+        : "Hip circles, leg swings, arm circles, cat-cow",
+    });
+  }
+  intervals.push(...picked);
+  if (cooldownMin > 0) {
+    intervals.push({
+      name: type === "yoga" ? "Savasana" : "Cool-Down Breathing",
+      duration: cooldownMin + " min",
+      details: type === "yoga"
+        ? "Lie flat, soften every muscle, slow breaths"
+        : "Slow nasal breathing, body scan, fully relaxed",
+    });
+  }
+
+  const titleType = type === "yoga" ? "Yoga Flow" : "Mobility Flow";
+  return {
+    title: `${titleType} — ${durMin} min`,
+    sport: type,
+    intervals,
+  };
+}
+
 function _qeBuildCardioWorkout(opts) {
   const type      = opts.type;
   // Map Add Session's intensity labels to the internal intensity keys
@@ -8125,6 +8206,14 @@ function _qeBuildCardioWorkout(opts) {
   const bikeDur   = isBrick ? (opts.bikeDur || 45) : null;
   const runDur    = isBrick ? (opts.runDur  || 20) : null;
   const duration  = isBrick ? (parseInt(bikeDur) + parseInt(runDur)) : (parseInt(opts.duration) || 45);
+
+  // Mobility / yoga: NOT a cardio workout. The previous fall-through baked
+  // running pace zones (Z1/Z2/Z3) into the output, which made no sense for
+  // stretches. Emit a stretch-based flow with no effort/zone tags so the
+  // renderer skips the intensity strip and pace overlay.
+  if (type === "mobility" || type === "yoga") {
+    return _qeBuildMobilityWorkout(type, parseInt(duration) || 30);
+  }
 
   let profile = {};
   try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}

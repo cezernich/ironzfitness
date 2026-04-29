@@ -285,7 +285,7 @@ function renderAdminUsers() {
       <td>${subBadge}</td>
       <td style="white-space:nowrap">${joined}</td>
       <td class="admin-td-actions">
-        <button class="admin-action-btn" onclick="adminToggleRole('${p.id}')" ${isMock ? "" : ""} title="Cycle role: user → coach → admin">
+        <button class="admin-action-btn" onclick="adminToggleRole('${p.id}')" ${isMock ? "" : ""} title="Set role: User / Coach / Admin">
           ${ICONS.settings || "Role"}
         </button>
         <button class="admin-action-btn" onclick="adminToggleSub('${p.id}', '${p.subscription_status}')" title="Toggle plan">
@@ -304,48 +304,120 @@ function escAdmin(s) {
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 
+// Lightweight in-app confirm/picker modal. Reuses the `.rating-modal-overlay`
+// shell so it lands inside the app's design system instead of the native
+// browser confirm() (which renders as an OS-styled alert with no theming).
+// `actions` is an array of { label, kind, onClick }. Returns nothing — the
+// chosen button's onClick handler drives the next step.
+function _adminOpenModal({ title, body, actions }) {
+  const id = "admin-modal-overlay";
+  const old = document.getElementById(id);
+  if (old) old.remove();
+  const overlay = document.createElement("div");
+  overlay.id = id;
+  overlay.className = "rating-modal-overlay";
+  const close = () => {
+    overlay.classList.remove("visible");
+    setTimeout(() => overlay.remove(), 200);
+  };
+  overlay.onclick = (e) => { if (e.target === overlay) close(); };
+  const btnHtml = (actions || []).map((a, i) => {
+    const cls =
+      a.kind === "primary" ? "btn-primary" :
+      a.kind === "danger"  ? "btn-danger"  :
+      a.kind === "active"  ? "btn-primary" :
+                             "btn-secondary";
+    const disabled = a.disabled ? " disabled" : "";
+    return `<button class="${cls}" data-action-idx="${i}" style="flex:1;min-height:38px"${disabled}>${escAdmin(a.label)}</button>`;
+  }).join("");
+  overlay.innerHTML = `
+    <div class="rating-modal" style="max-width:380px">
+      <div class="rating-modal-title">${escAdmin(title || "Confirm")}</div>
+      ${body ? `<div style="text-align:center;color:var(--color-text-muted);font-size:0.9rem;margin-bottom:14px">${body}</div>` : ""}
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${btnHtml}</div>
+    </div>`;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("visible"));
+  overlay.querySelectorAll("button[data-action-idx]").forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.getAttribute("data-action-idx"), 10);
+      const a = actions[idx];
+      close();
+      if (a && typeof a.onClick === "function") a.onClick();
+    };
+  });
+}
+
 async function adminToggleRole(userId) {
   // Three-tier UI on top of the two-column data model:
   //   user  → role=user,  is_coach=false
   //   coach → role=user,  is_coach=true
   //   admin → role=admin, is_coach=false
-  // Cycles in that order so a single click is always a one-step move,
-  // and a third click returns the user to "user".
   const p = _adminProfiles.find(x => x.id === userId);
   if (!p) return;
   const current = p.role === "admin" ? "admin" : (p.is_coach ? "coach" : "user");
-  const next = current === "user" ? "coach" : current === "coach" ? "admin" : "user";
-  if (!confirm(`Change role from "${current}" to "${next}"?`)) return;
 
-  const updates =
-    next === "admin" ? { role: "admin", is_coach: false } :
-    next === "coach" ? { role: "user",  is_coach: true  } :
-                       { role: "user",  is_coach: false };
+  const apply = async (next) => {
+    if (next === current) return;
+    const updates =
+      next === "admin" ? { role: "admin", is_coach: false } :
+      next === "coach" ? { role: "user",  is_coach: true  } :
+                         { role: "user",  is_coach: false };
 
-  // Mock mode
-  if (String(userId).startsWith("mock-")) {
-    Object.assign(p, updates);
-    renderAdminStats();
-    renderAdminUsers();
-    return;
-  }
+    if (String(userId).startsWith("mock-")) {
+      Object.assign(p, updates);
+      renderAdminStats();
+      renderAdminUsers();
+      return;
+    }
 
-  const { error } = await window.supabaseClient
-    .from("profiles")
-    .update(updates)
-    .eq("id", userId);
+    const { error } = await window.supabaseClient
+      .from("profiles")
+      .update(updates)
+      .eq("id", userId);
 
-  if (error) {
-    alert("Failed to update role: " + error.message);
-    return;
-  }
-  await loadAdminData();
+    if (error) {
+      _adminOpenModal({
+        title: "Couldn't update role",
+        body: error.message,
+        actions: [{ label: "OK", kind: "primary", onClick: () => {} }],
+      });
+      return;
+    }
+    await loadAdminData();
+  };
+
+  const subjectName = p.full_name || p.email || "this user";
+  _adminOpenModal({
+    title: `Set role for ${subjectName}`,
+    body: `Currently: <strong>${current}</strong>`,
+    actions: [
+      { label: "User",   kind: current === "user"  ? "active" : "secondary", onClick: () => apply("user") },
+      { label: "Coach",  kind: current === "coach" ? "active" : "secondary", onClick: () => apply("coach") },
+      { label: "Admin",  kind: current === "admin" ? "active" : "secondary", onClick: () => apply("admin") },
+      { label: "Cancel", kind: "secondary", onClick: () => {} },
+    ],
+  });
 }
 
 async function adminToggleSub(userId, currentSub) {
   const newSub = currentSub === "premium" ? "free" : "premium";
-  if (!confirm(`Change subscription to "${newSub}"?`)) return;
+  const p = _adminProfiles.find(x => x.id === userId);
+  const subjectName = p?.full_name || p?.email || "this user";
+  return new Promise((resolve) => {
+    _adminOpenModal({
+      title: `Change plan for ${subjectName}`,
+      body: `Switch to <strong>${newSub}</strong>?`,
+      actions: [
+        { label: "Cancel", kind: "secondary", onClick: () => resolve(false) },
+        { label: `Set ${newSub}`, kind: "primary", onClick: () => { _adminApplySub(userId, newSub); resolve(true); } },
+      ],
+    });
+  });
+}
 
+async function _adminApplySub(userId, newSub) {
   // Mock mode
   if (String(userId).startsWith("mock-")) {
     const p = _adminProfiles.find(x => x.id === userId);
@@ -361,7 +433,11 @@ async function adminToggleSub(userId, currentSub) {
     .eq("id", userId);
 
   if (error) {
-    alert("Failed to update subscription: " + error.message);
+    _adminOpenModal({
+      title: "Couldn't update plan",
+      body: error.message,
+      actions: [{ label: "OK", kind: "primary", onClick: () => {} }],
+    });
     return;
   }
   await loadAdminData();
