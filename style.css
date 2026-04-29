@@ -14555,19 +14555,27 @@ input.completion-ex-name:focus {
 }
 
 @media (max-width: 480px) {
-  .coach-assign-ex-row {
+  /* Targets the INNER grid (.coach-assign-ex-row-main), not the outer
+     flex-column wrapper (.coach-assign-ex-row). The split landed when
+     we added the per-set "Customize" toggle below the row main; the
+     media query was missed during that restructure and kept targeting
+     the flex parent — which silently dropped grid-template-* and made
+     the 6-col desktop grid try to fit on a 360px phone. Result on
+     mobile: name input collapsed to zero width, weight wrapped to its
+     own line, X button floated alone. */
+  .coach-assign-ex-row-main {
     grid-template-columns: 22px 1fr 1fr 28px;
     grid-template-areas:
-      "drag name name   remove"
-      "drag sets reps   remove"
+      "drag name   name   remove"
+      "drag sets   reps   remove"
       "drag weight weight remove";
     gap: 4px;
   }
-  .coach-assign-ex-row .drag-handle             { grid-area: drag; align-self: center; }
-  .coach-assign-ex-row .coach-assign-ex-name    { grid-area: name; }
-  .coach-assign-ex-row .coach-assign-ex-sets    { grid-area: sets; }
-  .coach-assign-ex-row .coach-assign-ex-reps    { grid-area: reps; }
-  .coach-assign-ex-row .coach-assign-ex-weight  { grid-area: weight; }
+  .coach-assign-ex-row-main .drag-handle             { grid-area: drag; align-self: center; }
+  .coach-assign-ex-row-main .coach-assign-ex-name    { grid-area: name; min-width: 0; }
+  .coach-assign-ex-row-main .coach-assign-ex-sets    { grid-area: sets; }
+  .coach-assign-ex-row-main .coach-assign-ex-reps    { grid-area: reps; }
+  .coach-assign-ex-row-main .coach-assign-ex-weight  { grid-area: weight; }
 }
 
 /* Assign Workout modal — cardio interval rows. Mirrors the look of the
