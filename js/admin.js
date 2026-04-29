@@ -263,14 +263,16 @@ function renderAdminUsers() {
   tbody.innerHTML = filtered.map(p => {
     const name = escAdmin(p.full_name || "—");
     const email = escAdmin(p.email || "—");
-    const roleBadge = p.role === "admin"
-      ? `<span class="admin-badge admin-badge-admin">Admin</span>`
-      : `<span class="admin-badge admin-badge-user">User</span>`;
-    // Surface profiles.is_coach so the Users list reflects coaching
-    // status without forcing the admin into the Coaches sub-tab.
-    const coachBadge = p.is_coach
-      ? `<span class="admin-badge admin-badge-coach" style="margin-left:4px">Coach</span>`
-      : "";
+    // Effective role is exclusive — admin > coach > user — to match the
+    // role picker (which is also single-select). Even though the schema
+    // splits role + is_coach, surfacing both as separate badges read as
+    // "this user is two things at once," which confused admins.
+    const effectiveRole = p.role === "admin" ? "admin" : (p.is_coach ? "coach" : "user");
+    const roleBadge =
+      effectiveRole === "admin" ? `<span class="admin-badge admin-badge-admin">Admin</span>`
+    : effectiveRole === "coach" ? `<span class="admin-badge admin-badge-coach">Coach</span>`
+                                : `<span class="admin-badge admin-badge-user">User</span>`;
+    const coachBadge = "";
     const subBadge = p.subscription_status === "premium"
       ? `<span class="admin-badge admin-badge-premium">Premium</span>`
       : `<span class="admin-badge admin-badge-free">Free</span>`;
