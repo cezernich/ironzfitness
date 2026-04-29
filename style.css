@@ -13878,6 +13878,119 @@ input.completion-ex-name:focus {
   font-style: italic;
 }
 
+/* Calendar tab toolbar — Phase 3A.2 */
+.coach-cal-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+/* Assign Workout modal — exercise rows */
+.coach-assign-ex-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+.coach-assign-ex-row {
+  display: grid;
+  grid-template-columns: 2fr 60px 60px 1fr 32px;
+  gap: 6px;
+  align-items: center;
+}
+.coach-assign-ex-row .input { padding: 6px 8px; font-size: 0.85rem; }
+@media (max-width: 480px) {
+  .coach-assign-ex-row {
+    grid-template-columns: 1fr 1fr 32px;
+    grid-template-areas:
+      "name name remove"
+      "sets reps remove"
+      "weight weight remove";
+    gap: 4px;
+  }
+  .coach-assign-ex-row .coach-assign-ex-name { grid-area: name; }
+  .coach-assign-ex-row .coach-assign-ex-sets { grid-area: sets; }
+  .coach-assign-ex-row .coach-assign-ex-reps { grid-area: reps; }
+  .coach-assign-ex-row .coach-assign-ex-weight { grid-area: weight; }
+}
+
+/* Conflict modal options — three vertically-stacked buttons */
+.coach-conflict-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.coach-conflict-btn {
+  text-align: left;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.05s;
+}
+.coach-conflict-btn:hover { border-color: var(--color-coach, #534AB7); }
+.coach-conflict-btn:active { transform: scale(0.99); }
+.coach-conflict-btn-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--color-coach, #534AB7);
+  margin-bottom: 4px;
+}
+.coach-conflict-btn-desc {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+/* Tiny toast */
+.coach-toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  padding: 10px 18px;
+  background: var(--color-coach, #534AB7);
+  color: #fff;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 12000;
+  transition: opacity 0.18s, transform 0.18s;
+}
+.coach-toast.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Phase 3A.3: FROM-coach attribution on the client's workout cards */
+.session-card--coach-assigned {
+  border-left: 3px solid var(--color-coach, #534AB7);
+}
+.coach-attribution {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  background: rgba(83, 74, 183, 0.08);
+  border-left: 3px solid var(--color-coach, #534AB7);
+  border-radius: 4px;
+}
+.coach-attribution-from {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--color-coach, #534AB7);
+}
+.coach-attribution-note {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  font-style: italic;
+}
+
 @media (max-width: 520px) {
   .admin-activity-row {
     grid-template-columns: 90px 1fr;

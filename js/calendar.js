@@ -4324,6 +4324,20 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       const _swGenDoneInd    = _swGenCompleted ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
       const _swGenUndoBtn    = _buildUndoHeaderBtn(cardId, dateStr);
       const _swGenUserAddedCls = w.source === "user_added" ? " session-card--user-added" : "";
+      // Phase 3A.3: coach attribution. When the schedule entry was
+      // mirrored from a coach assignment (source = 'coach_assigned' set
+      // by the trigger), prepend a purple FROM badge + coach note in
+      // the card body. coachName is stamped onto the workout JSONB at
+      // assignment time (coach-assignment-flow.js) so we render it
+      // synchronously here — no async profile fetch on every render.
+      const _isCoachAssigned = w.source === "coach_assigned";
+      const _coachAttribClass = _isCoachAssigned ? " session-card--coach-assigned" : "";
+      const _coachAttrib = _isCoachAssigned
+        ? `<div class="coach-attribution">
+             <span class="coach-attribution-from">FROM ${escHtml((w.coachName || "your coach").toUpperCase())}</span>
+             ${w.coachNote ? `<div class="coach-attribution-note">${escHtml(w.coachNote)}</div>` : ""}
+           </div>`
+        : "";
       const _swGenEditItem = `<button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();openEditScheduledWorkout('${w.id}')">Edit</button>`;
       const _swGenOverflow = _buildOverflowMenu(cardId,
         _swGenEditItem +
@@ -4331,7 +4345,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         _ovflShareItem(w) +
         _ovflDeleteItem(`deleteScheduledWorkout('${w.id}','${dateStr}')`));
       html += `
-        <div class="session-card collapsible${_swGenCompleted ? " session-card--completed is-collapsed" : ""}${_swGenUserAddedCls}" id="${cardId}">
+        <div class="session-card collapsible${_swGenCompleted ? " session-card--completed is-collapsed" : ""}${_swGenUserAddedCls}${_coachAttribClass}" id="${cardId}">
           <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
             <span class="session-icon" style="color:${color}">${icon}</span>
             <div class="session-meta">
@@ -4341,7 +4355,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
             <div class="session-header-right">${(_getCompletionDuration(cardId) || _swGenDurMin) ? `<span class="session-duration-badge">${_fmtBadgeMin(_getCompletionDuration(cardId) || _swGenDurMin)} min</span>` : ""}${_swGenUndoBtn}${_swGenOverflow}<span class="card-chevron">▾</span></div>
           </div>
           ${_swGenStrip}
-          <div class="card-body">${body}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(w.duration || _swGenDurMin, w.sessionName, { load: w.load || "moderate", discipline: w.discipline || w.type }) : ""}${buildWorkoutExplanation(null, dateStr, w.discipline || w.type, w.load || "moderate", w.sessionName, w)}${_swGenEditPanel}${_swGenMovePanel}${_swGenCompletion}</div>
+          <div class="card-body">${_coachAttrib}${body}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(w.duration || _swGenDurMin, w.sessionName, { load: w.load || "moderate", discipline: w.discipline || w.type }) : ""}${buildWorkoutExplanation(null, dateStr, w.discipline || w.type, w.load || "moderate", w.sessionName, w)}${_swGenEditPanel}${_swGenMovePanel}${_swGenCompletion}</div>
         </div>`;
     });
 

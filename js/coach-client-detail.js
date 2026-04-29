@@ -223,6 +223,25 @@
     });
     const todayStr = today.toISOString().slice(0, 10);
 
+    // Phase 3A.2: "+ Assign Workout" CTA at the top of the calendar.
+    // Opens the build-from-scratch flow with the client's id + name
+    // pre-filled. The trigger from 3A.1 mirrors any insert into the
+    // user's workoutSchedule, so loadCoachClientDetail will refresh
+    // and the new entry shows up below.
+    const _clientName = _client.full_name || _client.email || "Client";
+    // Pass clientId via dataset rather than embedding the name in the
+    // onclick string — saves us from quoting headaches when names
+    // contain apostrophes or quotes.
+    const assignBar = `
+      <div class="coach-cal-toolbar">
+        <button class="btn-primary btn-sm"
+                data-client-id="${_esc(_client.id)}"
+                data-client-name="${_esc(_clientName)}"
+                onclick="openAssignWorkoutModal(this.dataset.clientId, this.dataset.clientName)">
+          + Assign Workout
+        </button>
+      </div>`;
+
     const rows = days.map(date => {
       const planned = (_data.schedule || []).filter(w => w?.date === date);
       const done = (_data.completed || []).filter(w => w?.date === date);
@@ -261,7 +280,7 @@
       </div>`;
     }).join("");
 
-    return `<div class="card">${rows}</div>`;
+    return `${assignBar}<div class="card">${rows}</div>`;
   }
 
   function _typeLabel(t) {

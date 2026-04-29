@@ -2410,6 +2410,106 @@
 
   </main>
 
+  <!-- Coach Assign Workout modal — Phase 3A.2.
+       Build-from-scratch session form. Save inserts into
+       coach_assigned_workouts; the trigger from 20260429_coach_assignment_mirror
+       handles the user_data.workoutSchedule mirror. -->
+  <div id="coach-assign-overlay" class="quick-entry-overlay" onclick="if(event.target===this) closeAssignWorkoutModal()">
+    <div class="quick-entry-modal" style="max-width:540px">
+      <div class="quick-entry-header">
+        <span class="qe-date-label" style="color:var(--color-coach,#534AB7)">Assign Workout</span>
+        <button class="qe-close-btn" onclick="closeAssignWorkoutModal()">✕</button>
+      </div>
+      <div class="quick-entry-body" style="padding:0 16px 16px">
+        <p class="hint" id="coach-assign-subtitle" style="margin:8px 0"></p>
+
+        <div class="form-row">
+          <label for="coach-assign-name">Workout name</label>
+          <input type="text" id="coach-assign-name" class="input" placeholder="e.g. Push Day, Tempo Run" />
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="form-row" style="flex:1;min-width:140px">
+            <label for="coach-assign-type">Type</label>
+            <select id="coach-assign-type" class="input">
+              <option value="weightlifting">Strength</option>
+              <option value="running">Run</option>
+              <option value="cycling">Ride</option>
+              <option value="swimming">Swim</option>
+              <option value="hiit">HIIT</option>
+              <option value="hyrox">Hyrox</option>
+              <option value="brick">Brick</option>
+              <option value="bodyweight">Bodyweight</option>
+              <option value="yoga">Yoga / Mobility</option>
+              <option value="general">General</option>
+            </select>
+          </div>
+          <div class="form-row" style="flex:1;min-width:140px">
+            <label for="coach-assign-date">Date</label>
+            <input type="date" id="coach-assign-date" class="input" />
+          </div>
+          <div class="form-row" style="flex:1;min-width:120px">
+            <label for="coach-assign-duration">Duration (min)</label>
+            <input type="number" id="coach-assign-duration" class="input" min="1" max="999" placeholder="optional" />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Exercises</label>
+          <div id="coach-assign-ex-rows" class="coach-assign-ex-list"></div>
+          <button type="button" class="btn-secondary btn-sm" onclick="coachAssignAddExRow()" style="margin-top:6px">+ Add Exercise</button>
+        </div>
+
+        <div class="form-row">
+          <label for="coach-assign-note">Coach note <span class="optional-tag">optional · shown to client on the workout card</span></label>
+          <textarea id="coach-assign-note" rows="2" class="input"
+            placeholder="e.g. Focus on the second half — negative split."
+            style="font-family:inherit"></textarea>
+        </div>
+
+        <p id="coach-assign-error" class="hint" style="color:var(--color-danger);min-height:1em;margin:6px 0 0"></p>
+
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="btn-secondary" style="flex:1" onclick="closeAssignWorkoutModal()">Cancel</button>
+          <button class="btn-primary" id="coach-assign-save-btn" style="flex:1" onclick="submitAssignWorkout()">Assign Workout</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Coach conflict-resolution modal — Phase 3A.2.
+       Fires when the target date already has a workout. Three modes:
+       replace / stack / freeze. Each calls coachAssignConflict('mode')
+       which closes this modal and writes the assignment with that
+       conflict_mode. -->
+  <div id="coach-conflict-overlay" class="quick-entry-overlay" style="z-index:11000" onclick="if(event.target===this){this.classList.remove('is-open')}">
+    <div class="quick-entry-modal" style="max-width:460px">
+      <div class="quick-entry-header">
+        <span class="qe-date-label" style="color:var(--color-coach,#534AB7)">Conflict</span>
+      </div>
+      <div class="quick-entry-body" style="padding:0 16px 16px">
+        <p class="hint" id="coach-conflict-summary" style="margin:8px 0 14px"></p>
+        <div class="coach-conflict-options">
+          <button class="coach-conflict-btn" onclick="coachAssignConflict('replace')">
+            <div class="coach-conflict-btn-title">Replace</div>
+            <div class="coach-conflict-btn-desc">Your workout replaces the existing one for that day.</div>
+          </button>
+          <button class="coach-conflict-btn" onclick="coachAssignConflict('stack')">
+            <div class="coach-conflict-btn-title">Stack</div>
+            <div class="coach-conflict-btn-desc">Both workouts on the same day — AM/PM split. Make sure that's intended.</div>
+          </button>
+          <button class="coach-conflict-btn" onclick="coachAssignConflict('freeze')">
+            <div class="coach-conflict-btn-title">Freeze AI plan from this date forward</div>
+            <div class="coach-conflict-btn-desc">AI stops generating future workouts. You own the calendar from here.</div>
+          </button>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:10px">
+          <button class="btn-secondary btn-sm" onclick="document.getElementById('coach-conflict-overlay').classList.remove('is-open')">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Request a Coach modal — Phase 1E.
        4-question form → POST to send-coach-request-email edge function. -->
   <div id="coach-request-overlay" class="quick-entry-overlay" onclick="if(event.target===this) closeCoachRequestForm()">
@@ -3606,6 +3706,7 @@
   <script src="js/coach-portal.js"></script>
   <script src="js/coach-dashboard.js"></script>
   <script src="js/coach-client-detail.js"></script>
+  <script src="js/coach-assignment-flow.js"></script>
   <script src="js/analytics.js"></script>
   <script src="js/push.js"></script>
   <!-- auth.js last — overrides window.onload to gate app behind login -->
