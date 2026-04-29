@@ -13818,9 +13818,56 @@ input.completion-ex-name:focus {
   font-size: 0.82rem;
   color: var(--color-text-muted);
 }
-.coach-cal-nutrition--editing { flex-wrap: wrap; }
+.coach-cal-nutrition--editing {
+  flex-direction: column;
+  align-items: stretch;
+  background: var(--color-bg-soft, #f5f4ef);
+  border-radius: 8px;
+  padding: 10px;
+}
 .coach-cal-nutrition-label { font-weight: 600; color: var(--color-text); }
 .coach-cal-nutrition-unit  { color: var(--color-text-muted); margin-left: -4px; }
+.coach-overlay-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+@media (min-width: 600px) {
+  .coach-overlay-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.coach-overlay-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+.coach-overlay-field-label { font-weight: 600; color: var(--color-text); }
+.coach-overlay-field-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.coach-overlay-input {
+  padding: 4px 6px;
+  font-size: 0.85rem;
+  width: 100%;
+  min-width: 0;
+}
+.coach-overlay-field-unit { font-size: 0.75rem; color: var(--color-text-muted); }
+.coach-overlay-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.coach-overlay-actions .btn-primary,
+.coach-overlay-actions .btn-secondary,
+.coach-overlay-actions .btn-ghost {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+}
 .coach-cal-nutrition-pill {
   display: inline-flex;
   align-items: center;

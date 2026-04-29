@@ -759,36 +759,67 @@
     return (day && day._coachOverlay) || null;
   }
 
+  // Per-day macro overlay — coach can nudge calories, carbs, protein, or
+  // fat for a single date. Stored on nutritionAdjustments[date]._coachOverlay
+  // as { calories_add, carbs_add_g, protein_add_g, fat_add_g }. Each is
+  // optional; renderer skips null/0 values when summarising.
+  const _OVERLAY_FIELDS = [
+    { key: "calories_add",   label: "Calories",  unit: "kcal", short: "kcal", emoji: "🔥" },
+    { key: "carbs_add_g",    label: "Carbs",     unit: "g",    short: "g carbs",   emoji: "🍞" },
+    { key: "protein_add_g",  label: "Protein",   unit: "g",    short: "g protein", emoji: "🥩" },
+    { key: "fat_add_g",      label: "Fat",       unit: "g",    short: "g fat",     emoji: "🥑" },
+  ];
+
+  function _hasOverlayValue(overlay) {
+    if (!overlay) return false;
+    return _OVERLAY_FIELDS.some(f => overlay[f.key] != null && overlay[f.key] !== 0);
+  }
+
   function _renderCoachCarbOverlayRow(date) {
     const overlay = _getOverlay(date);
     const isEditing = _editingOverlayDate === date;
 
     if (isEditing) {
-      const current = overlay && overlay.carbs_add_g != null ? overlay.carbs_add_g : "";
+      const inputs = _OVERLAY_FIELDS.map(f => {
+        const v = overlay && overlay[f.key] != null ? overlay[f.key] : "";
+        return `<label class="coach-overlay-field">
+          <span class="coach-overlay-field-label">${_esc(f.label)}</span>
+          <span class="coach-overlay-field-input-wrap">
+            <input type="number" data-field="${f.key}" id="coach-overlay-input-${_esc(date)}-${f.key}"
+                   class="input coach-overlay-input"
+                   value="${_esc(v)}" placeholder="+/-" step="${f.key === "calories_add" ? "10" : "5"}" />
+            <span class="coach-overlay-field-unit">${_esc(f.unit)}</span>
+          </span>
+        </label>`;
+      }).join("");
       return `<div class="coach-cal-nutrition coach-cal-nutrition--editing" data-date="${_esc(date)}">
-        <span class="coach-cal-nutrition-label">Carbs adjustment</span>
-        <input type="number" id="coach-overlay-input-${_esc(date)}" class="input"
-               value="${_esc(current)}" placeholder="+ grams" step="5"
-               style="padding:4px 6px;font-size:0.85rem;width:90px" />
-        <span class="coach-cal-nutrition-unit">g</span>
-        <button class="btn-primary btn-sm" onclick="coachSaveDayCarbOverlay('${_esc(date)}')" style="padding:4px 10px;font-size:0.8rem">Save</button>
-        <button class="btn-secondary btn-sm" onclick="coachCancelDayCarbOverlay()" style="padding:4px 10px;font-size:0.8rem">Cancel</button>
-        ${overlay && overlay.carbs_add_g != null
-          ? `<button class="btn-ghost btn-sm" onclick="coachClearDayCarbOverlay('${_esc(date)}')" style="padding:4px 10px;font-size:0.8rem">Clear</button>`
-          : ""}
+        <div class="coach-overlay-grid">${inputs}</div>
+        <div class="coach-overlay-actions">
+          <button class="btn-primary btn-sm" onclick="coachSaveDayCarbOverlay('${_esc(date)}')">Save</button>
+          <button class="btn-secondary btn-sm" onclick="coachCancelDayCarbOverlay()">Cancel</button>
+          ${_hasOverlayValue(overlay)
+            ? `<button class="btn-ghost btn-sm" onclick="coachClearDayCarbOverlay('${_esc(date)}')">Clear</button>`
+            : ""}
+        </div>
       </div>`;
     }
 
-    if (overlay && overlay.carbs_add_g) {
-      const sign = overlay.carbs_add_g > 0 ? "+" : "";
+    if (_hasOverlayValue(overlay)) {
+      const pills = _OVERLAY_FIELDS
+        .filter(f => overlay[f.key] != null && overlay[f.key] !== 0)
+        .map(f => {
+          const v = overlay[f.key];
+          const sign = v > 0 ? "+" : "";
+          return `<span class="coach-cal-nutrition-pill">${f.emoji} ${sign}${_esc(v)} ${_esc(f.short)}</span>`;
+        }).join("");
       return `<div class="coach-cal-nutrition">
-        <span class="coach-cal-nutrition-pill">🍞 ${sign}${_esc(overlay.carbs_add_g)} g carbs</span>
+        ${pills}
         <button class="coach-feature-edit-btn" onclick="coachStartDayCarbOverlay('${_esc(date)}')">✎ edit</button>
       </div>`;
     }
 
     return `<div class="coach-cal-nutrition">
-      <button class="coach-feature-edit-btn" onclick="coachStartDayCarbOverlay('${_esc(date)}')">+ Adjust carbs</button>
+      <button class="coach-feature-edit-btn" onclick="coachStartDayCarbOverlay('${_esc(date)}')">+ Adjust nutrition</button>
     </div>`;
   }
 
@@ -854,24 +885,27 @@
   }
 
   async function coachSaveDayCarbOverlay(date) {
-    const inp = document.getElementById(`coach-overlay-input-${date}`);
-    if (!inp) return;
-    const raw = inp.value;
-    if (raw === "" || raw == null) {
-      // Empty input → clear the overlay entirely.
-      const res = await _writeOverlayForDate(date, null);
-      if (res.error) { alert("Couldn't save: " + res.error); return; }
-    } else {
-      const grams = parseFloat(raw);
-      if (!isFinite(grams)) { alert("Enter a number of grams (e.g. 50)."); return; }
-      const res = await _writeOverlayForDate(date, { carbs_add_g: grams });
-      if (res.error) { alert("Couldn't save: " + res.error); return; }
+    const next = {};
+    let hasAny = false;
+    for (const f of _OVERLAY_FIELDS) {
+      const inp = document.getElementById(`coach-overlay-input-${date}-${f.key}`);
+      if (!inp) continue;
+      const raw = inp.value;
+      if (raw === "" || raw == null) { next[f.key] = null; continue; }
+      const v = parseFloat(raw);
+      if (!isFinite(v)) { alert(`${f.label}: enter a number (e.g. 50) or leave blank.`); return; }
+      next[f.key] = v;
+      if (v !== 0) hasAny = true;
     }
+    // No values at all → clear the overlay so we don't store an empty
+    // _coachOverlay object on the day.
+    const res = await _writeOverlayForDate(date, hasAny ? next : null);
+    if (res.error) { alert("Couldn't save: " + res.error); return; }
     _editingOverlayDate = null;
     const wrap = document.querySelector(".coach-client-tab-content");
     if (wrap) wrap.innerHTML = _renderActiveTab();
     if (typeof trackEvent === "function") {
-      try { trackEvent("coach_day_carb_overlay_saved", { date }); } catch {}
+      try { trackEvent("coach_day_macro_overlay_saved", { date, fields: Object.keys(next).filter(k => next[k] != null && next[k] !== 0) }); } catch {}
     }
   }
 
