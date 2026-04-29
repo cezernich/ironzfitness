@@ -2164,7 +2164,7 @@ button:active {
   margin-bottom: 18px;
 }
 .session-intensity-strip:not(:has(.fuel-tick)) {
-  margin-bottom: 0;
+  margin-bottom: 8px;
 }
 
 .fuel-tick {
