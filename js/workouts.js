@@ -2916,16 +2916,21 @@ function buildExerciseTableHTML(exercises, opts) {
     }
   }
 
+  // Empty-weight fallback: coach-assigned cells render fully blank when
+  // the coach intentionally left the weight off ("athlete picks the load");
+  // every other path keeps the em-dash placeholder.
+  const _emptyWt = coachAssigned ? "" : "—";
+
   let rows = "";
   segments.forEach(seg => {
     if (seg.supersetId) {
       const ssSets = seg.items[0]?.sets || "—";
       rows += `<tr class="superset-label-row"><td colspan="${cols}">Superset &mdash; ${ssSets} sets</td></tr>`;
       seg.items.forEach(e => {
-        rows += `<tr class="superset-ex-row"><td>${escHtml(e.name)}</td><td></td><td>${escHtml(_formatRepsWithSide(e.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate, reps: e.reps, coachAssigned })||"—")}</td></tr>`;
+        rows += `<tr class="superset-ex-row"><td>${escHtml(e.name)}</td><td></td><td>${escHtml(_formatRepsWithSide(e.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate, reps: e.reps, coachAssigned })||_emptyWt)}</td></tr>`;
         if (e.setDetails && e.setDetails.length) {
           e.setDetails.forEach((sd, si) => {
-            rows += `<tr class="superset-ex-row set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${escHtml(_formatRepsWithSide(sd.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(sd.weight, e.name, { coachAssigned })||"—")}</td></tr>`;
+            rows += `<tr class="superset-ex-row set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${escHtml(_formatRepsWithSide(sd.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(sd.weight, e.name, { coachAssigned })||_emptyWt)}</td></tr>`;
           });
         }
       });
@@ -2957,9 +2962,9 @@ function buildExerciseTableHTML(exercises, opts) {
         } else {
           repsDisplay = repsVal + " reps";
         }
-        rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(repsDisplay)}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate, coachAssigned })||"—")}</td></tr>`;
+        rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(repsDisplay)}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate, coachAssigned })||_emptyWt)}</td></tr>`;
       } else {
-        const _weightCell = _normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate, reps: e.reps, coachAssigned }) || "—";
+        const _weightCell = _normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate, reps: e.reps, coachAssigned }) || _emptyWt;
         rows += `<tr><td>${escHtml(e.name)}</td><td>${escHtml(String(e.sets||"—"))}</td><td>${escHtml(_formatRepsWithSide(e.reps, e.name))}</td><td>${escHtml(_weightCell)}</td></tr>`;
         // BUGFIX 04-27 §F4: descriptive warmup row for compound lifts.
         // Muted secondary line below the working set; not loggable.
@@ -2970,7 +2975,7 @@ function buildExerciseTableHTML(exercises, opts) {
       }
       if (e.setDetails && e.setDetails.length) {
         e.setDetails.forEach((sd, si) => {
-          rows += `<tr class="set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${escHtml(_formatRepsWithSide(sd.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(sd.weight, e.name, { coachAssigned })||"—")}</td></tr>`;
+          rows += `<tr class="set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${escHtml(_formatRepsWithSide(sd.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(sd.weight, e.name, { coachAssigned })||_emptyWt)}</td></tr>`;
         });
       }
     }
