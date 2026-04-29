@@ -205,8 +205,80 @@ async function handleStravaReturn() {
     renderStravaStatus();
   } else if (val === "error") {
     const reason = params.get("reason") || "unknown";
-    _showStravaToast("Strava connect failed: " + reason);
+    _renderStravaConnectError(reason);
   }
+}
+
+// Map a Strava callback error reason to a user-facing message + UI
+// treatment. Quota exhaustion gets a dedicated modal because the
+// fallback message is long enough that a 3-second toast would clip it.
+// Everything else falls back to a brief toast with the raw reason —
+// good enough for ad-hoc Strava errors we haven't seen before.
+function _renderStravaConnectError(reason) {
+  // quota_exceeded — Strava's "limit of connected athletes exceeded".
+  // The default Strava API quota is 1 athlete; we sit on the higher
+  // tier once their review goes through. This message is the friendly
+  // fallback during the wait. Update copy when the quota lands.
+  if (reason === "quota_exceeded") {
+    if (typeof trackEvent === "function") {
+      try { trackEvent("strava_connect_quota_exceeded", {}); } catch {}
+    }
+    _showStravaConnectErrorModal({
+      title: "Strava connection temporarily unavailable",
+      body: "We've hit our temporary Strava API limit while we wait for an increase to land. " +
+            "We'll have this back online soon — your data will be there waiting when it does. " +
+            "No action needed on your end.",
+    });
+    return;
+  }
+  // access_denied — user tapped Cancel on Strava's authorize page.
+  // Don't blame anyone; just reassure them they can try again.
+  if (reason === "access_denied") {
+    _showStravaToast("Connect cancelled. Tap Connect Strava again any time.");
+    return;
+  }
+  // network_error / save_failed / token_exchange_failed — short toast.
+  if (reason === "network_error") {
+    _showStravaToast("Couldn't reach Strava. Check your connection and try again.");
+    return;
+  }
+  if (reason === "save_failed") {
+    _showStravaToast("Couldn't save your Strava connection. Try again, or contact support.");
+    return;
+  }
+  // Default: surface the raw reason for ad-hoc visibility.
+  _showStravaToast("Strava connect failed: " + reason);
+}
+
+// Modal for the quota-exceeded path — body text is too long for a
+// toast and the user benefits from a clear "OK got it" dismissal.
+// Built inline (no markup in index.html) so deploying this fix is a
+// single-file change. Re-uses the rating-modal-overlay class so the
+// look matches existing dialogs.
+function _showStravaConnectErrorModal(opts) {
+  opts = opts || {};
+  const id = "strava-connect-error-overlay";
+  const old = document.getElementById(id);
+  if (old) old.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = id;
+  overlay.className = "rating-modal-overlay";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(10,12,18,0.55);z-index:11500;display:flex;align-items:center;justify-content:center;padding:24px;";
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  const _esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+
+  overlay.innerHTML = `
+    <div style="background:#fff;color:#1a1a1a;border-radius:14px;max-width:420px;width:100%;padding:24px;box-shadow:0 12px 40px rgba(0,0,0,0.25)">
+      <h3 style="margin:0 0 12px;font-size:1.1rem">${_esc(opts.title || "Strava connection unavailable")}</h3>
+      <p style="margin:0 0 20px;font-size:0.95rem;line-height:1.5;color:#444">${_esc(opts.body || "")}</p>
+      <button class="btn-primary" style="width:100%"
+        onclick="document.getElementById('${id}').remove()">OK</button>
+    </div>`;
+  document.body.appendChild(overlay);
 }
 
 /* =====================================================================

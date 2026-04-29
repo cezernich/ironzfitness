@@ -50,8 +50,19 @@ serve(async (req: Request) => {
   const state = url.searchParams.get("state");
   const err   = url.searchParams.get("error");
 
+  // Helper: redirect back to the SPA with a normalized error reason the
+  // client maps to a friendly toast. Always the same shape so
+  // handleStravaReturn() can dispatch on `reason` alone.
+  const returnBase = STRAVA_RETURN_URL.split("?")[0];
+  const errorReturn = (reason: string) =>
+    redirect(`${returnBase}?strava=error&reason=${encodeURIComponent(reason)}`);
+
   if (err) {
-    return redirect(`${STRAVA_RETURN_URL.split("?")[0]}?strava=error&reason=${encodeURIComponent(err)}`);
+    // Strava redirected back with an error before we even saw a code.
+    // `access_denied` = user clicked Cancel on the authorize page.
+    // Anything else (`temporarily_unavailable`, server errors) we pass
+    // through as-is so the client can surface the raw reason.
+    return errorReturn(err);
   }
   if (!code || !state) {
     return errorHtml("Missing parameters", "The callback URL was malformed. Try connecting again from the app.");
@@ -94,10 +105,38 @@ serve(async (req: Request) => {
     });
     tokenData = await resp.json();
     if (!resp.ok || !tokenData.access_token) {
-      return errorHtml("Strava denied the request", tokenData.message || "Token exchange failed.");
+      // Detect Strava's "limit of connected athletes exceeded" — it
+      // surfaces as a 403 with a message containing "limit" and an
+      // errors[].code === "exceeded". Body shape (observed):
+      //   { "message": "Authorization Error",
+      //     "errors": [{ "resource": "Application",
+      //                  "field": "limit", "code": "exceeded" }] }
+      // When we hit it, redirect back to the SPA with a normalized
+      // reason so the client shows the friendly fallback copy instead
+      // of Strava's raw "Authorization Error" verbatim. Default API
+      // quota is 1, so this is the most common 403 we'll see in v1
+      // until the higher-tier app review goes through.
+      const msgText = String(tokenData?.message || "").toLowerCase();
+      const quotaSignal =
+        resp.status === 403 && (
+          msgText.includes("limit") ||
+          msgText.includes("exceeded") ||
+          (Array.isArray(tokenData?.errors) &&
+           tokenData.errors.some((e: any) =>
+             String(e?.code || "").toLowerCase() === "exceeded" ||
+             String(e?.field || "").toLowerCase() === "limit"
+           ))
+        );
+      if (quotaSignal) {
+        return errorReturn("quota_exceeded");
+      }
+      // Any other Strava denial — generic reason. Client toasts the
+      // raw message slot from tokenData if present, so we still need
+      // to pass something useful.
+      return errorReturn("token_exchange_failed");
     }
   } catch (e: any) {
-    return errorHtml("Network error", "Couldn't reach Strava. " + (e.message || ""));
+    return errorReturn("network_error");
   }
 
   const athlete = tokenData.athlete || {};
@@ -133,7 +172,7 @@ serve(async (req: Request) => {
     });
 
   if (upsertErr) {
-    return errorHtml("Database error", "Couldn't save your connection. " + upsertErr.message);
+    return errorReturn("save_failed");
   }
 
   // Redirect back to the app with a success flag.
