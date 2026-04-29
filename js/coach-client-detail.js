@@ -19,6 +19,13 @@
 
   let _client = null;
   let _activeTab = "calendar";
+  // Phase 3E: audit map + currently-editing field. _audit[data_key] =
+  // { by: uuid, at: iso-timestamp } when the user_data row was last
+  // edited by a coach. _editingFeature is the inline-edit cursor
+  // ("nutrition.calories", "hydration.target", "fueling.carbsPerHour"
+  // etc.) so only one field is open at a time.
+  let _audit = {};
+  let _editingFeature = null;
   let _data = {
     schedule: [],          // workoutSchedule (planned)
     completed: [],         // workouts (logged)
@@ -63,9 +70,11 @@
       _client = profileRes?.data || { id: clientId };
 
       // Pull every coach-readable data_key for this client in one go.
-      // RLS filters silently — we just take what comes back.
+      // RLS filters silently — we just take what comes back. Also pull
+      // the audit columns so Phase 3E can surface "edited by [coach]
+      // on [date]" under each value.
       const dataRes = await sb.from("user_data")
-        .select("data_key, data_value")
+        .select("data_key, data_value, last_edited_by, last_edited_at")
         .eq("user_id", clientId)
         .in("data_key", [
           "workoutSchedule", "trainingPlan",
@@ -77,7 +86,13 @@
           "fuelingPrefs",
         ]);
       const byKey = {};
-      for (const r of (dataRes.data || [])) byKey[r.data_key] = r.data_value;
+      _audit = {};
+      for (const r of (dataRes.data || [])) {
+        byKey[r.data_key] = r.data_value;
+        if (r.last_edited_by) {
+          _audit[r.data_key] = { by: r.last_edited_by, at: r.last_edited_at };
+        }
+      }
 
       // Logged workouts come from the dedicated table.
       const completedRes = await sb.from("workouts")
@@ -390,18 +405,20 @@
     if (!enabled) return _disabledCard("Nutrition", "nutrition");
 
     const adj = _data.settings.nutritionAdjustments || {};
-    const rows = [];
-    if (adj.calories != null) rows.push(_settingRow("Daily calorie target", `${adj.calories} kcal`));
-    if (adj.protein  != null) rows.push(_settingRow("Protein adjustment", `${adj.protein}x`));
-    if (adj.carbs    != null) rows.push(_settingRow("Carbs adjustment",   `${adj.carbs}x`));
-    if (adj.fat      != null) rows.push(_settingRow("Fat adjustment",     `${adj.fat}x`));
+    const rows = [
+      _editableRow("Daily calorie target", adj.calories, "kcal", "nutritionAdjustments", "calories", "number"),
+      _editableRow("Protein adjustment",   adj.protein,  "x",    "nutritionAdjustments", "protein",  "number"),
+      _editableRow("Carbs adjustment",     adj.carbs,    "x",    "nutritionAdjustments", "carbs",    "number"),
+      _editableRow("Fat adjustment",       adj.fat,      "x",    "nutritionAdjustments", "fat",      "number"),
+    ].join("");
 
     return `<div class="card coach-feature-card">
       <div class="coach-feature-header">
         <span class="coach-feature-name">Nutrition</span>
         <span class="coach-feature-status coach-feature-status--on">Enabled by client ✓</span>
       </div>
-      ${rows.length ? rows.join("") : `<div class="coach-feature-empty">Defaults — client hasn't customised any factors yet.</div>`}
+      ${rows}
+      ${_renderAuditFooter("nutritionAdjustments")}
     </div>`;
   }
 
@@ -411,17 +428,23 @@
 
     const settings = _data.settings.hydrationSettings || {};
     const target = _data.settings.hydrationDailyTargetOz;
-    const rows = [];
-    if (target != null) rows.push(_settingRow("Daily target", `${target} oz`));
-    if (settings.sweatRateOzPerHour != null) rows.push(_settingRow("Sweat rate", `${settings.sweatRateOzPerHour} oz/hr`));
-    if (settings.sodiumPref) rows.push(_settingRow("Sodium pref", String(settings.sodiumPref)));
+    const rows = [
+      _editableRow("Daily target",  target,                       "oz",     "hydrationDailyTargetOz", "_self",         "number"),
+      _editableRow("Sweat rate",    settings.sweatRateOzPerHour,  "oz/hr",  "hydrationSettings",     "sweatRateOzPerHour", "number"),
+      _editableRow("Sodium pref",   settings.sodiumPref,          "",       "hydrationSettings",     "sodiumPref",    "select", ["low", "medium", "high"]),
+    ].join("");
+
+    // Audit: hydration uses two distinct data_keys. Show whichever has
+    // the most recent edit.
+    const auditKey = _pickFresherAudit("hydrationSettings", "hydrationDailyTargetOz");
 
     return `<div class="card coach-feature-card">
       <div class="coach-feature-header">
         <span class="coach-feature-name">Hydration</span>
         <span class="coach-feature-status coach-feature-status--on">Enabled by client ✓</span>
       </div>
-      ${rows.length ? rows.join("") : `<div class="coach-feature-empty">Defaults — client hasn't customised any factors yet.</div>`}
+      ${rows}
+      ${_renderAuditFooter(auditKey)}
     </div>`;
   }
 
@@ -430,26 +453,211 @@
     if (!enabled) return _disabledCard("Fueling", "fueling");
 
     const prefs = _data.settings.fuelingPrefs || {};
-    const rows = [];
-    if (prefs.carbsPerHour != null) rows.push(_settingRow("Carbs per hour", `${prefs.carbsPerHour} g/hr`));
-    if (prefs.gelSize)              rows.push(_settingRow("Gel size", String(prefs.gelSize)));
-    if (Array.isArray(prefs.sources) && prefs.sources.length)
-      rows.push(_settingRow("Preferred sources", prefs.sources.join(", ")));
+    const rows = [
+      _editableRow("Carbs per hour", prefs.carbsPerHour, "g/hr", "fuelingPrefs", "carbsPerHour", "number"),
+      _editableRow("Gel size",       prefs.gelSize,      "",     "fuelingPrefs", "gelSize",      "text"),
+    ].join("");
 
     return `<div class="card coach-feature-card">
       <div class="coach-feature-header">
         <span class="coach-feature-name">Fueling</span>
         <span class="coach-feature-status coach-feature-status--on">Enabled by client ✓</span>
       </div>
-      ${rows.length ? rows.join("") : `<div class="coach-feature-empty">Defaults — client hasn't customised any factors yet.</div>`}
+      ${rows}
+      ${_renderAuditFooter("fuelingPrefs")}
     </div>`;
   }
 
-  function _settingRow(label, value) {
+  // ── Editable row + edit/save inline ───────────────────────────────────
+  // dataKey = the user_data row to upsert. fieldName = the sub-field key
+  // inside that JSONB object, OR "_self" for scalar data_keys like
+  // hydrationDailyTargetOz that store the value directly.
+  function _editableRow(label, value, unit, dataKey, fieldName, kind, options) {
+    const editingId = `${dataKey}.${fieldName}`;
+    const isEditing = _editingFeature === editingId;
+    const hasValue = value != null && value !== "";
+
+    if (isEditing) {
+      let inputHtml;
+      if (kind === "select" && Array.isArray(options)) {
+        inputHtml = `<select id="coach-edit-input" class="input" style="padding:4px 6px;font-size:0.85rem;width:auto">
+          ${options.map(o => `<option value="${_esc(o)}"${String(value) === o ? " selected" : ""}>${_esc(o)}</option>`).join("")}
+        </select>`;
+      } else if (kind === "number") {
+        inputHtml = `<input type="number" id="coach-edit-input" class="input" step="any"
+          value="${_esc(value ?? "")}" style="padding:4px 6px;font-size:0.85rem;width:90px" />`;
+      } else {
+        inputHtml = `<input type="text" id="coach-edit-input" class="input"
+          value="${_esc(value ?? "")}" style="padding:4px 6px;font-size:0.85rem;width:140px" />`;
+      }
+      return `<div class="coach-feature-row coach-feature-row--editing">
+        <span class="coach-feature-row-label">${_esc(label)}</span>
+        <span class="coach-feature-row-edit" data-key="${_esc(dataKey)}" data-field="${_esc(fieldName)}">
+          ${inputHtml}
+          <button class="btn-primary btn-sm" onclick="coachSaveFeatureEdit()" style="padding:4px 10px;font-size:0.8rem">Save</button>
+          <button class="btn-secondary btn-sm" onclick="coachCancelFeatureEdit()" style="padding:4px 10px;font-size:0.8rem">Cancel</button>
+        </span>
+      </div>`;
+    }
+
+    const valueDisplay = hasValue
+      ? `${_esc(value)}${unit ? " " + _esc(unit) : ""}`
+      : `<span style="color:var(--color-text-muted);font-style:italic">—</span>`;
+
     return `<div class="coach-feature-row">
       <span class="coach-feature-row-label">${_esc(label)}</span>
-      <span class="coach-feature-row-value">${_esc(value)}</span>
+      <span class="coach-feature-row-value">
+        ${valueDisplay}
+        <button class="coach-feature-edit-btn" aria-label="Edit ${_esc(label)}" title="Edit"
+          onclick="coachStartFeatureEdit('${_esc(dataKey)}', '${_esc(fieldName)}')">✎ edit</button>
+      </span>
     </div>`;
+  }
+
+  function _renderAuditFooter(dataKey) {
+    if (!dataKey) return "";
+    const a = _audit[dataKey];
+    if (!a || !a.by) return "";
+    const name = (window._coachNameCache && window._coachNameCache[a.by])
+              || (a.by === _client?.id ? "the client" : null);
+    if (!name) {
+      // Lazy-fetch the name. Re-render once we have it. Don't block.
+      _resolveAuditName(a.by);
+      return `<div class="coach-feature-audit">last edited ${_relTime(a.at)}</div>`;
+    }
+    return `<div class="coach-feature-audit">last edited by ${_esc(name)} ${_relTime(a.at)}</div>`;
+  }
+
+  function _pickFresherAudit(...keys) {
+    let bestKey = null, bestAt = "";
+    for (const k of keys) {
+      const a = _audit[k];
+      if (a && a.at && a.at > bestAt) { bestAt = a.at; bestKey = k; }
+    }
+    return bestKey;
+  }
+
+  async function _resolveAuditName(uid) {
+    if (!uid) return;
+    if (!window._coachNameCache) window._coachNameCache = {};
+    if (window._coachNameCache[uid]) return;
+    const sb = window.supabaseClient;
+    if (!sb) return;
+    try {
+      const { data } = await sb.from("profiles").select("full_name, email").eq("id", uid).maybeSingle();
+      window._coachNameCache[uid] = data?.full_name || data?.email || "a coach";
+      // Re-render the active tab so the name surfaces.
+      if (_activeTab === "nutrition") {
+        const wrap = document.querySelector(".coach-client-tab-content");
+        if (wrap) wrap.innerHTML = _renderActiveTab();
+      }
+    } catch {}
+  }
+
+  function _relTime(iso) {
+    if (!iso) return "";
+    try {
+      const ms = Date.now() - new Date(iso).getTime();
+      const minutes = Math.floor(ms / 60000);
+      if (minutes < 1)  return "just now";
+      if (minutes < 60) return minutes === 1 ? "1m ago" : `${minutes}m ago`;
+      const hours = Math.floor(ms / 3600000);
+      if (hours < 24)   return hours === 1 ? "1h ago" : `${hours}h ago`;
+      const days = Math.floor(ms / 86400000);
+      if (days < 30)    return days === 1 ? "1 day ago" : `${days} days ago`;
+      return new Date(iso).toLocaleDateString();
+    } catch { return ""; }
+  }
+
+  // ── Edit handlers (window-scoped for inline onclicks) ─────────────────
+  function coachStartFeatureEdit(dataKey, fieldName) {
+    _editingFeature = `${dataKey}.${fieldName}`;
+    const wrap = document.querySelector(".coach-client-tab-content");
+    if (wrap) wrap.innerHTML = _renderActiveTab();
+    // Focus the new input on next tick so it's mounted.
+    setTimeout(() => {
+      const inp = document.getElementById("coach-edit-input");
+      if (inp) { inp.focus(); if (inp.select) inp.select(); }
+    }, 0);
+  }
+
+  function coachCancelFeatureEdit() {
+    _editingFeature = null;
+    const wrap = document.querySelector(".coach-client-tab-content");
+    if (wrap) wrap.innerHTML = _renderActiveTab();
+  }
+
+  async function coachSaveFeatureEdit() {
+    const inp = document.getElementById("coach-edit-input");
+    if (!inp) return;
+    const editWrap = inp.closest("[data-key]");
+    const dataKey = editWrap?.dataset?.key;
+    const fieldName = editWrap?.dataset?.field;
+    if (!dataKey || !fieldName) return;
+
+    const sb = window.supabaseClient;
+    if (!sb) return;
+    const sess = (await sb.auth.getSession())?.data?.session;
+    const coachId = sess?.user?.id;
+    if (!coachId || !_client?.id) return;
+
+    // Coerce the new value into the right shape. Numbers parse, strings
+    // pass through trimmed. Empty input clears the field (writes an
+    // explicit null into the JSONB sub-field, or deletes the row when
+    // the data_key is _self scalar).
+    let raw = inp.value;
+    let val;
+    if (inp.type === "number") {
+      val = raw === "" ? null : parseFloat(raw);
+      if (val !== null && (isNaN(val) || !isFinite(val))) {
+        alert("Invalid number.");
+        return;
+      }
+    } else {
+      val = raw == null ? null : String(raw).trim();
+      if (val === "") val = null;
+    }
+
+    // Build the new JSONB value. For _self (scalar data_keys like
+    // hydrationDailyTargetOz), the row's data_value IS the value. For
+    // sub-fields, merge into the existing object.
+    let newDataValue;
+    if (fieldName === "_self") {
+      newDataValue = val;
+    } else {
+      const existing = _data.settings[dataKey] || {};
+      newDataValue = { ...existing, [fieldName]: val };
+    }
+
+    // Upsert via supabase. The Phase 2A INSERT + UPDATE policies gate
+    // this — if the client has the corresponding feature toggled off
+    // the write fails closed.
+    const { error } = await sb.from("user_data")
+      .upsert({
+        user_id: _client.id,
+        data_key: dataKey,
+        data_value: newDataValue,
+        last_edited_by: coachId,
+        last_edited_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id,data_key" });
+
+    if (error) {
+      alert("Couldn't save: " + error.message);
+      return;
+    }
+
+    // Update local state and re-render. No full reload — saves a round-
+    // trip and feels snappier on slow connections.
+    _data.settings[dataKey] = newDataValue;
+    _audit[dataKey] = { by: coachId, at: new Date().toISOString() };
+    _editingFeature = null;
+    const wrap = document.querySelector(".coach-client-tab-content");
+    if (wrap) wrap.innerHTML = _renderActiveTab();
+
+    if (typeof trackEvent === "function") {
+      try { trackEvent("coach_feature_edited", { dataKey, fieldName }); } catch {}
+    }
   }
 
   function _disabledCard(title, key) {
@@ -463,6 +671,9 @@
   }
 
   // ── Public surface ─────────────────────────────────────────────────────
-  window.loadCoachClientDetail = loadCoachClientDetail;
-  window.setCoachClientTab     = setCoachClientTab;
+  window.loadCoachClientDetail   = loadCoachClientDetail;
+  window.setCoachClientTab       = setCoachClientTab;
+  window.coachStartFeatureEdit   = coachStartFeatureEdit;
+  window.coachCancelFeatureEdit  = coachCancelFeatureEdit;
+  window.coachSaveFeatureEdit    = coachSaveFeatureEdit;
 })();

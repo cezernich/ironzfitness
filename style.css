@@ -13991,6 +13991,43 @@ input.completion-ex-name:focus {
   font-style: italic;
 }
 
+/* Phase 3E: editable feature rows + inline editor + audit footer */
+.coach-feature-edit-btn {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-coach, #534AB7);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.coach-feature-edit-btn:hover {
+  background: rgba(83, 74, 183, 0.08);
+  border-color: var(--color-coach, #534AB7);
+}
+.coach-feature-row--editing {
+  background: rgba(83, 74, 183, 0.06);
+  border-radius: 6px;
+  padding: 6px;
+  margin: 0 -6px;
+}
+.coach-feature-row-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.coach-feature-audit {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
 @media (max-width: 520px) {
   .admin-activity-row {
     grid-template-columns: 90px 1fr;
