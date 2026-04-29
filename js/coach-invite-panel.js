@@ -494,10 +494,17 @@
   async function shareCoachInviteLink() {
     if (!_link) return;
     const url = _shareUrlFor(_link.code);
-    const text = `Join my IronZ coaching: ${url}`;
     if (navigator.share) {
       try {
-        await navigator.share({ title: "Join my IronZ coaching", text, url });
+        // iOS Messages emits a rich-link bubble for the `url` field AND
+        // a second one for any URL it finds inside `text` — so passing
+        // both was producing duplicate bubbles in iMessage. Pass the
+        // URL exactly once via the dedicated `url` field; let `title`
+        // be the message subject. The recipient sees one rich preview
+        // with "Join my IronZ coaching" as the headline. share.js's
+        // workout-share flow uses the same shape and doesn't double-
+        // bubble.
+        await navigator.share({ title: "Join my IronZ coaching", url });
         return;
       } catch {
         // User cancelled OS sheet — fall through to clipboard.
