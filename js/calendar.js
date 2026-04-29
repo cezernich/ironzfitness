@@ -3199,12 +3199,56 @@ function _readWorkoutDurationMin(w) {
 // chalking up, loading plates, etc.
 function _estimateStrengthSessionMin(exercises) {
   if (!Array.isArray(exercises) || !exercises.length) return 0;
-  const WORK_SEC = 45;
   const SETUP_SEC = 120;
   const WARMUP_SET_BOOST = 1.5;
+  // Per-rep tempo defaults (concentric + eccentric + brief reset). Matches
+  // observed pacing for unbroken sets. Finishers add breath-catching time
+  // via the threshold path below.
+  const PER_REP_SEC_DEFAULT = 5;
+  const PER_REP_SEC_BW_PULL = 8;   // pull-ups, chin-ups, dips — slower per rep
+  const PER_REP_SEC_CURL    = 3.5; // curls, lateral raises, light cable — faster
+  // Assumed reps when neither ex.reps nor a leading number on ex.name gives
+  // one. 8 is the default in the coach-assign / quick-entry forms.
+  const ASSUMED_REPS = 8;
+  // Below this baseline a "set" is dominated by setup/bar-touch time, not
+  // by the reps themselves — keep a 45s floor so a 5-rep top set doesn't
+  // shrink into a 25s blip.
+  const WORK_FLOOR_SEC = 45;
+  // Above this rep count the entry behaves like a finisher: the rep count
+  // already encodes a single "as fast as possible" effort, so the sets
+  // multiplier and warmup ramp don't apply (the coach typed sets=3 as a
+  // form default rather than 3 attempts at 50 chins each). Bump the
+  // per-rep budget +25% to account for in-set mini-rests.
+  const FINISHER_THRESHOLD_REPS = 25;
+
+  function _perRepSecFor(name) {
+    const n = String(name || "").toLowerCase();
+    if (/\b(pull[- ]?up|chin[- ]?up|dip|push[- ]?up|muscle[- ]?up|burpee)\b/.test(n)) return PER_REP_SEC_BW_PULL;
+    if (/\b(curl|raise|fly|pull[- ]?apart|kickback|extension)\b/.test(n))             return PER_REP_SEC_CURL;
+    return PER_REP_SEC_DEFAULT;
+  }
+
+  function _firstNumber(s) {
+    const m = String(s == null ? "" : s).match(/(\d+)/);
+    return m ? parseInt(m[1], 10) : null;
+  }
+
   let totalSec = 0;
   exercises.forEach(ex => {
     const workingSets = Math.max(1, parseInt(ex.sets, 10) || 3);
+
+    // Reps: prefer the explicit field, fall back to the first number on the
+    // exercise name ("50 Chin Ups! ASAP" → 50). Coach-typed finishers often
+    // park the count in the name and leave the reps field blank.
+    const repsFromField = _firstNumber(ex.reps);
+    const repsFromName  = _firstNumber(ex.name);
+    const reps = repsFromField || repsFromName || ASSUMED_REPS;
+
+    const perRepSec = _perRepSecFor(ex.name);
+    const isFinisher = reps >= FINISHER_THRESHOLD_REPS;
+    const finisherMult = isFinisher ? 1.25 : 1;
+    const workSec = Math.max(WORK_FLOOR_SEC, reps * perRepSec * finisherMult);
+
     // rest is usually a string like "90s" or "2 min" — parse to seconds
     let restSec = 90;
     const r = String(ex.rest || "").toLowerCase();
@@ -3213,8 +3257,11 @@ function _estimateStrengthSessionMin(exercises) {
       const v = parseFloat(m[1]);
       restSec = /min/.test(r) ? v * 60 : v;
     }
-    const effectiveSets = workingSets + WARMUP_SET_BOOST;
-    const perEx = effectiveSets * WORK_SEC + (effectiveSets - 1) * restSec + SETUP_SEC;
+    // Finishers don't get the warmup-ramp inflation OR the inter-set rest
+    // padding — the rep count already represents one big effort.
+    const effectiveSets = isFinisher ? 1 : (workingSets + WARMUP_SET_BOOST);
+    const restPad = isFinisher ? 0 : (effectiveSets - 1) * restSec;
+    const perEx = effectiveSets * workSec + restPad + SETUP_SEC;
     totalSec += perEx;
   });
   return Math.round(totalSec / 60);
