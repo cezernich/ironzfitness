@@ -125,6 +125,23 @@ $$;
 -- 30-day windowed.
 --
 -- p_days = NULL → all-time window for the windowed counts. Default 30.
+--
+-- ROTATE-DURING-SIGNUP ATTRIBUTION (canonical behavior):
+-- When a coach rotates their code mid-flow — user clicked the OLD link,
+-- then signed in/up after rotation — the resulting pair is attributed
+-- to the OLD link, NOT the new one. The click row's invite_link_id
+-- references the old (now-inactive) row, and pair_with_coach stamps
+-- THAT row with paired_assignment_id. Funnel results follow:
+--
+--   • OLD link funnel: clicks=1, signups=1, accepted=1, active=1.
+--     (The link that drove the conversion gets the credit.)
+--   • NEW link funnel: clicks=0, signups=0, accepted=0, active=0
+--     (until that new link gets its own clicks).
+--
+-- Reassigning credit to the new link would misattribute — the old link
+-- did the work; only the URL changed. The user clicked because of THIS
+-- coach's link, not because of code-X-or-Y. Locked as canonical via
+-- the spec parking-lot question resolution.
 
 CREATE OR REPLACE FUNCTION public.get_invite_funnel(
   p_link_id UUID,

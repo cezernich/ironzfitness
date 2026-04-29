@@ -493,10 +493,25 @@
   // ── Helpers ──────────────────────────────────────────────────────────
 
   // Extract the custom IRO0x SQLSTATE from a supabase-js error object.
-  // The same SQLSTATE can land in `code`, `details`, `hint`, OR be
-  // embedded only in the message body, depending on the supabase-js /
-  // PostgREST version. Check every plausible slot before falling back
-  // to a regex over the message text. Returns null if no IRO0x found.
+  //
+  // CANONICAL SLOT: <UNVERIFIED — pending browser DevTools test>
+  //   To verify, sign in as a coach with at least one active pair, open
+  //   DevTools console, and run:
+  //     await window.sb.rpc('pair_with_coach',
+  //       { p_invite_link_id: '<existing-pair-link-uuid>' })
+  //   The IRO03 SAME_COACH error will surface in one of: error.code,
+  //   error.details, error.hint, error.message. Note which slot, then
+  //   replace this paragraph with a single line:
+  //     "Canonical slot: error.<X>. Fallback chain below is belt-
+  //      and-suspenders against future supabase-js / PostgREST changes."
+  //
+  // The chain order below tries the conventional slots first (`code` →
+  // `details` → `hint`) so the common case is one lookup, then falls
+  // back to message-body regex matching for older PostgREST versions
+  // that mash the SQLSTATE into the human-readable message string.
+  // Final defense matches the exact RAISE EXCEPTION strings in case a
+  // future supabase-js version strips SQLSTATEs entirely. Returns null
+  // if no IRO0x found.
   function _extractIROCode(error) {
     if (!error) return null;
     const slots = [error.code, error.details, error.hint]

@@ -20,8 +20,13 @@
 (function () {
   "use strict";
 
-  // ironz.fit/c is the static landing page; ironz.app/c/<code> is the
-  // future short URL once that domain points at the same redirect path.
+  // CANONICAL share URL for v1: ironz.fit/c?code=<X> (query style).
+  // The static landing page (c/index.html) handles both query AND path
+  // styles via readCode() so when the /c/<code> rewrite is wired later
+  // (DNS rule or GitHub Pages 404 redirect — post-launch polish), every
+  // existing shared link continues to resolve unchanged. Don't migrate
+  // the displayed URL away from query style without first confirming
+  // the rewrite is live in production.
   const SHARE_BASE = "https://ironz.fit/c";
   const QR_BASE = "https://api.qrserver.com/v1/create-qr-code/";
   const FUNNEL_DAYS = 30;
@@ -265,6 +270,10 @@
         </div>`;
     };
 
+    // Dismissed row is hidden at 0 by design — the dashboard surfaces
+    // only what's actionable, and "0 dismissed" is visual noise for
+    // every coach who hasn't been turned down yet. Confirmed canonical
+    // behavior (vs. spec mockup which always shows the row).
     const dismissedRow = f.dismissed > 0
       ? bar("Dismissed", f.dismissed, { tone: "muted", sub: "in 7-day cooldown" })
       : "";
