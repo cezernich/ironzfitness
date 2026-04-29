@@ -78,17 +78,26 @@
       for (const p of _clients) _profilesById[p.id] = p;
 
       // Today's completion picture for the "queue" + per-client status.
-      // We pull the last 24h of workouts with completed:true. Coach RLS
-      // grants read on workouts where user_id = an active client.
+      // The `workouts` table mirrors the localStorage `workouts` array,
+      // which holds BOTH planned-but-not-completed entries AND completion
+      // receipts (isCompletion=true). The canonical "this is a completed
+      // session" check used by calendar.js is:
+      //   isCompletion === true || source === "strava"
+      // — `completed` defaults to true on every shaped row, so it's not a
+      // useful filter on its own. We post-filter in JS rather than the
+      // SQL because isCompletion lives inside the JSONB `data` column and
+      // Strava imports are flagged via the top-level `source` column.
       const since = new Date();
       since.setHours(0, 0, 0, 0);
       const completionsRes = await client.from("workouts")
-        .select("id, user_id, name, type, date, completed, created_at")
+        .select("id, user_id, name, type, date, completed, source, data, created_at")
         .in("user_id", clientIds)
         .gte("date", since.toISOString().slice(0, 10));
 
       _todayCompletions = {};
       for (const w of (completionsRes.data || [])) {
+        const isCompletion = !!(w.data && w.data.isCompletion);
+        if (!isCompletion && w.source !== "strava") continue;
         if (!_todayCompletions[w.user_id]) _todayCompletions[w.user_id] = [];
         _todayCompletions[w.user_id].push(w);
       }
@@ -126,6 +135,11 @@
           const seenIds = new Set(_todayCompletions[cid].map(w => w && w.id).filter(Boolean));
           for (const w of wList) {
             if (!w || w.date !== todayStr) continue;
+            // Same gating as the structured-table loop above — only
+            // explicit completion receipts (isCompletion=true) and
+            // Strava imports count. Planned but un-completed entries
+            // share the `workouts` array but aren't training events.
+            if (w.isCompletion !== true && w.source !== "strava") continue;
             if (w.id && seenIds.has(w.id)) continue;
             _todayCompletions[cid].push({
               id: w.id || null,
@@ -133,7 +147,7 @@
               name: w.name || w.type || null,
               type: w.type || null,
               date: w.date,
-              completed: w.completed !== false,
+              completed: true,
               created_at: w.createdAt || w.created_at || null,
             });
           }
