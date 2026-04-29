@@ -1095,7 +1095,7 @@ const CP_TYPE_LABELS = {
   bodyweight: "Bodyweight", general: "General",
   brick: "Brick", mobility: "Mobility", walking: "Walking",
   rowing: "Rowing", hyrox: "Hyrox", circuit: "Circuit",
-  sauna: "Sauna / Steam", sport: "Sport",
+  sauna: "Sauna / Steam", other: "Other",
 };
 
 function cpManualSelectType(type) {
@@ -1137,7 +1137,7 @@ function cpManualSelectType(type) {
   // modal so plan-builder users can add any session type.
   const CARDIO_TYPES = new Set([
     "running", "cycling", "swimming", "brick", "walking", "rowing",
-    "mobility", "sauna", "sport",
+    "mobility", "sauna", "other",
   ]);
   const isCardio = CARDIO_TYPES.has(type);
   const nameInput = document.getElementById("cp-manual-name");

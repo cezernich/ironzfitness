@@ -3407,7 +3407,7 @@ function getDayTotals(dateStr) {
 
 // ─── Day detail panel ─────────────────────────────────────────────────────────
 
-const _WORKOUT_TYPE_LABELS = { hiit: "HIIT", hyrox: "Hyrox", weightlifting: "Weightlifting", running: "Running", cycling: "Cycling", swimming: "Swimming", yoga: "Yoga", general: "General Fitness", bodyweight: "Bodyweight", brick: "Brick (Bike + Run)", wellness: "Wellness", track_workout: "Track · Running", tempo_threshold: "Tempo · Running", speed_work: "Speed · Running", hills: "Hills · Running", long_run: "Long Run", endurance: "Endurance Run", easy_recovery: "Easy / Recovery", fun_social: "Fun Run" };
+const _WORKOUT_TYPE_LABELS = { hiit: "HIIT", hyrox: "Hyrox", weightlifting: "Weightlifting", running: "Running", cycling: "Cycling", swimming: "Swimming", yoga: "Yoga", general: "General Fitness", bodyweight: "Bodyweight", brick: "Brick (Bike + Run)", wellness: "Wellness", other: "Other", track_workout: "Track · Running", tempo_threshold: "Tempo · Running", speed_work: "Speed · Running", hills: "Hills · Running", long_run: "Long Run", endurance: "Endurance Run", easy_recovery: "Easy / Recovery", fun_social: "Fun Run" };
 function _wTypeLabel(type) { return _WORKOUT_TYPE_LABELS[type] || capitalize(type); }
 
 /**
@@ -5643,7 +5643,7 @@ function qeShowStep(step, subType) {
     hiit: "HIIT Session",         brick: "Brick Session",
     yoga: "Yoga Session",         mobility: "Mobility Session",
     walking: "Walking Session",   rowing: "Rowing Session",
-    sport: "Sport Session",
+    other: "Other Activity",
     hyrox: "Hyrox Session",
     sauna: "Sauna / Steam",
     restriction: "Rest / Restriction",
@@ -5667,6 +5667,7 @@ function qeShowStep(step, subType) {
     else if (subType === "sauna")        document.getElementById("qe-step-1-sauna").style.display       = "";
     else if (subType === "restriction")  document.getElementById("qe-step-1-restriction").style.display = "";
     else if (subType === "equipment")    document.getElementById("qe-step-1-equipment").style.display   = "";
+    else if (subType === "other")        document.getElementById("qe-step-1-other").style.display       = "";
     else {
       document.getElementById("qe-step-1-cardio").style.display = "";
       const isBrick = _qeSelectedType === "brick";
@@ -6040,6 +6041,53 @@ function saveSaunaSession() {
   setTimeout(() => closeQuickEntry(), 700);
 }
 
+// "Other" — catch-all bucket for activities the app doesn't model natively
+// (basketball, stair stepper, hike, pickleball, etc.). Just title + duration
+// so the time still shows up in the day's totals; no zones / intervals.
+function saveOtherSession() {
+  const msg = document.getElementById("other-save-msg");
+  const dateStr = _qeDateStr;
+  if (!dateStr) { if (msg) msg.textContent = "No date selected."; return; }
+
+  const name = (document.getElementById("other-name")?.value || "").trim();
+  const duration = parseInt(document.getElementById("other-duration")?.value);
+  const notes = (document.getElementById("other-notes")?.value || "").trim();
+
+  if (!name) {
+    if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = "Please enter an activity name."; }
+    document.getElementById("other-name")?.focus();
+    return;
+  }
+  if (!duration || duration < 1) {
+    if (msg) { msg.style.color = "var(--color-danger)"; msg.textContent = "Please enter a duration."; }
+    document.getElementById("other-duration")?.focus();
+    return;
+  }
+
+  let workouts = [];
+  try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
+  workouts.unshift({
+    id: Date.now(),
+    date: dateStr,
+    type: "other",
+    sessionName: name,
+    name,
+    // The minimal-card renderer pulls the title from w.fromSaved when it
+    // exists; reusing that field shows the user-typed activity name on the
+    // logged card instead of a generic "Other" label.
+    fromSaved: name,
+    duration: String(duration),
+    notes: notes || `${name} · ${duration} min`,
+  });
+  localStorage.setItem("workouts", JSON.stringify(workouts));
+  if (typeof DB !== "undefined") DB.syncWorkouts();
+
+  if (msg) { msg.style.color = "var(--color-success)"; msg.textContent = "Session saved!"; }
+  renderCalendar();
+  if (typeof renderDayDetail === "function") renderDayDetail(dateStr);
+  setTimeout(() => closeQuickEntry(), 700);
+}
+
 function toggleMoreTypes(btn, panelId) {
   const panel = document.getElementById(panelId || "qe-more-types");
   if (!panel) return;
@@ -6084,6 +6132,7 @@ async function qeSelectType(type) {
   else if (type === "bodyweight") qeShowStep(2, "manual");   // skip muscle picker, go straight to manual entry
   else if (type === "restriction") qeShowStep(1, "restriction");
   else if (type === "equipment")  qeShowStep(1, "equipment");
+  else if (type === "other")      qeShowStep(1, "other");    // simple title + duration form
   else                            qeShowStep(1, type);
 }
 
