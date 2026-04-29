@@ -13795,6 +13795,42 @@ input.completion-ex-name:focus {
 .coach-cal-status        { font-size: 0.78rem; font-weight: 600; }
 .coach-cal-status--planned { color: var(--color-text-muted); }
 
+/* Phase 3B: clickable calendar items + edit affordance */
+.coach-cal-item[role="button"] {
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+.coach-cal-item[role="button"]:hover {
+  background: rgba(83, 74, 183, 0.06);
+}
+.coach-cal-item--coach {
+  border-left: 2px solid var(--color-coach, #534AB7);
+  padding-left: 8px;
+}
+.coach-cal-edit {
+  margin-left: 6px;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.coach-cal-item:hover .coach-cal-edit {
+  opacity: 1;
+  color: var(--color-coach, #534AB7);
+}
+.coach-cal-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(83, 74, 183, 0.15);
+  color: var(--color-coach, #534AB7);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  vertical-align: middle;
+}
+
 .coach-bench-section-title {
   font-size: 0.78rem;
   font-weight: 700;

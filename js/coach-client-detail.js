@@ -26,6 +26,11 @@
   // etc.) so only one field is open at a time.
   let _audit = {};
   let _editingFeature = null;
+  // Phase 3B: lookup table for the Calendar tab. Each rendered planned
+  // item gets an index here; the inline onclick references it so the
+  // Edit handler can resolve back to the schedule entry without
+  // string-encoding the JSON into the markup.
+  let _calIndex = [];
   let _data = {
     schedule: [],          // workoutSchedule (planned)
     completed: [],         // workouts (logged)
@@ -257,6 +262,12 @@
         </button>
       </div>`;
 
+    // Index calendar entries so the Edit handler (Phase 3B) can look
+    // them up by stable index rather than re-walking _data on click.
+    // Cleared on every render so stale indices from a prior view don't
+    // collide with fresh ones.
+    _calIndex = [];
+
     const rows = days.map(date => {
       const planned = (_data.schedule || []).filter(w => w?.date === date);
       const done = (_data.completed || []).filter(w => w?.date === date);
@@ -268,10 +279,22 @@
       for (const p of planned) {
         const matchedDone = done.find(d => (d.name && p.sessionName && d.name.toLowerCase() === p.sessionName.toLowerCase())
                                       || (d.type === p.type));
-        items.push(`<div class="coach-cal-item${matchedDone ? " coach-cal-item--done" : ""}">
-          <span class="coach-cal-name">${_esc(p.sessionName || _typeLabel(p.type) || "Workout")}</span>
+        const idx = _calIndex.length;
+        _calIndex.push(p);
+        // Phase 3B: every planned item is editable. The Edit button
+        // opens the Assign Workout modal pre-filled with this entry's
+        // content. Tapping the item itself also opens the editor —
+        // makes the whole row a tap target.
+        const isCompleted = !!matchedDone;
+        items.push(`<div class="coach-cal-item${isCompleted ? " coach-cal-item--done" : ""}${p.source === "coach_assigned" ? " coach-cal-item--coach" : ""}"
+                          onclick="coachEditCalItem(${idx})"
+                          tabindex="0"
+                          role="button"
+                          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();coachEditCalItem(${idx})}">
+          <span class="coach-cal-name">${_esc(p.sessionName || _typeLabel(p.type) || "Workout")}${p.source === "coach_assigned" ? ' <span class="coach-cal-badge">FROM YOU</span>' : ""}</span>
           <span class="coach-cal-meta">${_esc(p.duration ? p.duration + " min" : "")}</span>
-          ${matchedDone ? `<span class="coach-cal-status">✓ done</span>` : `<span class="coach-cal-status coach-cal-status--planned">planned</span>`}
+          ${isCompleted ? `<span class="coach-cal-status">✓ done</span>` : `<span class="coach-cal-status coach-cal-status--planned">planned</span>`}
+          <span class="coach-cal-edit" aria-hidden="true">✎</span>
         </div>`);
       }
       // Completed-only rows (logged but not on the schedule).
@@ -670,10 +693,45 @@
     </div>`;
   }
 
+  // ── Phase 3B: edit-existing-workout handler ───────────────────────────
+  // Tap any planned calendar item → opens the Assign Workout modal
+  // pre-filled with the entry's content. Two paths:
+  //   • Coach-assigned (source === 'coach_assigned'): true edit. The
+  //     modal sets _editingAssignmentId from coachAssignmentId so the
+  //     submit fires UPDATE on coach_assigned_workouts. Trigger swaps
+  //     the mirrored entry in place — no conflict modal.
+  //   • AI-generated (any other source): there's no existing
+  //     coach_assigned_workouts row to UPDATE, so the modal opens as a
+  //     NEW assignment pre-filled with the AI content. The submit's
+  //     conflict check fires (date already has a workout); coach picks
+  //     replace → the trigger strips the AI entry from workoutSchedule
+  //     and inserts the coach version. Net effect: AI workout is
+  //     replaced by coach's edited version.
+  function coachEditCalItem(idx) {
+    const entry = _calIndex[idx];
+    if (!entry) return;
+    if (typeof window.openAssignWorkoutModal !== "function") return;
+
+    const _clientName = _client.full_name || _client.email || "Client";
+    const prefill = {
+      date:        entry.date,
+      sessionName: entry.sessionName || "",
+      type:        entry.type || "weightlifting",
+      duration:    entry.duration || "",
+      exercises:   Array.isArray(entry.exercises) ? entry.exercises : [],
+      coachNote:   entry.coachNote || "",
+    };
+    if (entry.source === "coach_assigned" && entry.coachAssignmentId) {
+      prefill.assignmentId = entry.coachAssignmentId;
+    }
+    window.openAssignWorkoutModal(_client.id, _clientName, prefill);
+  }
+
   // ── Public surface ─────────────────────────────────────────────────────
   window.loadCoachClientDetail   = loadCoachClientDetail;
   window.setCoachClientTab       = setCoachClientTab;
   window.coachStartFeatureEdit   = coachStartFeatureEdit;
   window.coachCancelFeatureEdit  = coachCancelFeatureEdit;
   window.coachSaveFeatureEdit    = coachSaveFeatureEdit;
+  window.coachEditCalItem        = coachEditCalItem;
 })();
