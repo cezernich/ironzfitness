@@ -20,6 +20,7 @@
   let _clientId = null;
   let _clientName = "";
   let _exRowCount = 0;
+  let _cardioRowCount = 0;
   let _editingAssignmentId = null;  // 3B: present when editing an existing
                                      // coach assignment instead of inserting.
   let _libraryMode = false;          // 3C: when true, submit writes to
@@ -29,6 +30,12 @@
   // Buffer used by the conflict modal so the user's filled form doesn't
   // get re-fetched after they pick replace/stack/freeze.
   let _pendingPayload = null;
+
+  // Cardio types take interval rows (phase / time-or-distance / zone /
+  // details) instead of strength's exercise rows — matches custom-plan.js's
+  // CARDIO_TYPES set + the brick session shape (per-interval discipline tag).
+  const _CARDIO_TYPES = new Set(["running", "cycling", "swimming", "brick"]);
+  function _isCardioType(t) { return _CARDIO_TYPES.has(t); }
 
   function _esc(s) {
     const div = document.createElement("div");
@@ -121,6 +128,20 @@
     if (rows) rows.innerHTML = "";
     _addExRow();
 
+    // Reset cardio rows + HIIT meta so a stale session's intervals don't
+    // bleed into the next open.
+    _cardioRowCount = 0;
+    const cRows = document.getElementById("coach-assign-cardio-rows");
+    if (cRows) cRows.innerHTML = "";
+    const setVal2 = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    setVal2("coach-assign-hiit-format", "circuit");
+    setVal2("coach-assign-hiit-rounds", "3");
+    setVal2("coach-assign-hiit-rest-ex", "");
+    setVal2("coach-assign-hiit-rest-rnd", "");
+
+    // Show the right block(s) for the default type ("weightlifting" → strength).
+    _renderForType("weightlifting");
+
     const subtitle = document.getElementById("coach-assign-subtitle");
     if (subtitle) {
       subtitle.textContent = _clientName ? `Client: ${_clientName}` : "";
@@ -150,6 +171,9 @@
   }
 
   // ── Exercise rows ──────────────────────────────────────────────────────
+  let _ssCounter = 0;
+  let _dragId = null;
+
   function _addExRow(prefill) {
     _exRowCount++;
     const id = _exRowCount;
@@ -158,12 +182,14 @@
     const row = document.createElement("div");
     row.className = "coach-assign-ex-row";
     row.id = `coach-assign-row-${id}`;
-    if (prefill?.supersetGroup) row.dataset.linkedAbove = "1";
+    if (prefill?.supersetGroup) row.dataset.supersetGroup = prefill.supersetGroup;
+    row.draggable = true;
     // .ex-row-name picks up the shared exercise-autocomplete dropdown
     // (js/ui/exercise-autocomplete.js attaches to that selector via
     // document-level event delegation, so dynamically-added inputs
     // work without rewiring).
     row.innerHTML = `
+      <span class="drag-handle" title="Drag to reorder · drop on a row to superset">⠿</span>
       <input type="text" class="input ex-row-name coach-assign-ex-name" id="coach-assign-ex-name-${id}"
         placeholder="Exercise (e.g. Bench Press)" value="${_esc(prefill?.name || "")}" autocomplete="off" />
       <input type="number" class="input coach-assign-ex-sets" id="coach-assign-ex-sets-${id}"
@@ -172,45 +198,139 @@
         placeholder="Reps" value="${_esc(prefill?.reps || "")}" />
       <input type="text" class="input coach-assign-ex-weight" id="coach-assign-ex-weight-${id}"
         placeholder="Weight" value="${_esc(prefill?.weight || "")}" />
-      <button class="coach-assign-ss-btn" aria-label="Superset with row above"
-        title="Toggle superset with the row above"
-        onclick="coachAssignToggleSuperset(${id})">⛓</button>
       <button class="admin-action-btn" aria-label="Remove exercise" title="Remove"
         onclick="coachAssignRemoveExRow(${id})">×</button>`;
-    rows.appendChild(row);
-    _refreshSupersetVisuals();
-  }
 
-  function coachAssignToggleSuperset(id) {
-    const row = document.getElementById(`coach-assign-row-${id}`);
-    if (!row) return;
-    // First row can never link upward — there's nothing above. The
-    // visual refresh hides its button anyway, but defend in code too.
-    const prev = row.previousElementSibling;
-    if (!prev || !prev.classList.contains("coach-assign-ex-row")) return;
-    if (row.dataset.linkedAbove === "1") {
-      delete row.dataset.linkedAbove;
-    } else {
-      row.dataset.linkedAbove = "1";
-    }
-    _refreshSupersetVisuals();
-  }
-
-  function _refreshSupersetVisuals() {
-    const rows = Array.from(document.querySelectorAll("#coach-assign-ex-rows .coach-assign-ex-row"));
-    rows.forEach((row, idx) => {
-      const isFirst = idx === 0;
-      const linked = row.dataset.linkedAbove === "1" && !isFirst;
-      // Hide the link button on the first row — there's nothing to
-      // link to. Toggle a class so the linked state is visually
-      // distinguishable.
-      const btn = row.querySelector(".coach-assign-ss-btn");
-      if (btn) {
-        btn.style.visibility = isFirst ? "hidden" : "";
-        btn.classList.toggle("is-active", linked);
-        btn.title = linked ? "Linked with row above (tap to unlink)" : "Toggle superset with the row above";
+    // Native HTML5 DnD — desktop. Same drop-zone math as workout-editor.js
+    // (middle 40% = superset, top 30% = insert above, bottom 30% = below).
+    let hoverTimer = null;
+    row.addEventListener("dragstart", (e) => {
+      _dragId = id;
+      row.classList.add("drag-active");
+      try { e.dataTransfer.effectAllowed = "move"; } catch {}
+    });
+    row.addEventListener("dragend", () => {
+      row.classList.remove("drag-active");
+      _dragId = null;
+      _clearDragHints();
+    });
+    row.addEventListener("dragover", (e) => {
+      if (_dragId == null || _dragId === id) return;
+      e.preventDefault();
+      const rect = row.getBoundingClientRect();
+      const pct  = (e.clientY - rect.top) / rect.height;
+      row.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target");
+      if (pct > 0.3 && pct < 0.7) {
+        row.classList.add("drag-ss-target");
+        if (!hoverTimer) hoverTimer = setTimeout(() => {}, 600);
+      } else {
+        clearTimeout(hoverTimer); hoverTimer = null;
+        row.classList.add(pct <= 0.3 ? "drag-insert-above" : "drag-insert-below");
       }
-      row.classList.toggle("coach-assign-ex-row--linked", linked);
+    });
+    row.addEventListener("dragleave", () => {
+      clearTimeout(hoverTimer); hoverTimer = null;
+      row.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target");
+    });
+    row.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const rect = row.getBoundingClientRect();
+      const pct  = (e.clientY - rect.top) / rect.height;
+      clearTimeout(hoverTimer); hoverTimer = null;
+      _clearDragHints();
+      if (pct > 0.3 && pct < 0.7) {
+        _groupSuperset(_dragId, id);
+      } else {
+        _reorderRow(_dragId, id, pct <= 0.3);
+      }
+      _dragId = null;
+    });
+
+    // Touch support for mobile — uses the existing TouchDrag helper
+    // that workout-editor.js + custom-plan.js both already wire.
+    if (typeof TouchDrag !== "undefined" && TouchDrag.attach) {
+      TouchDrag.attach(row, rows, {
+        hintClasses: ["drag-insert-above", "drag-insert-below", "drag-ss-target"],
+        rowSelector: ".coach-assign-ex-row",
+        handleSelector: ".drag-handle",
+        onDrop(dragEl, targetEl, clientY) {
+          const rect = targetEl.getBoundingClientRect();
+          const pct = (clientY - rect.top) / rect.height;
+          _clearDragHints();
+          const fromId = parseInt(dragEl.id.replace("coach-assign-row-", ""));
+          const toId   = parseInt(targetEl.id.replace("coach-assign-row-", ""));
+          if (pct > 0.3 && pct < 0.7) {
+            _groupSuperset(fromId, toId);
+          } else {
+            _reorderRow(fromId, toId, pct <= 0.3);
+          }
+        }
+      });
+    }
+
+    rows.appendChild(row);
+    _refreshSupersetBadges();
+  }
+
+  function _clearDragHints() {
+    document.querySelectorAll("#coach-assign-ex-rows .coach-assign-ex-row").forEach(el => {
+      el.classList.remove("drag-insert-above", "drag-insert-below", "drag-ss-target", "drag-active");
+    });
+  }
+
+  function _reorderRow(fromId, toId, insertAbove) {
+    const fromEl = document.getElementById(`coach-assign-row-${fromId}`);
+    const toEl   = document.getElementById(`coach-assign-row-${toId}`);
+    if (!fromEl || !toEl || fromEl === toEl) return;
+    const container = toEl.parentNode;
+    if (insertAbove) container.insertBefore(fromEl, toEl);
+    else             toEl.after(fromEl);
+    // Reorder may break a superset chain — drop the moving row out
+    // of any group it was in unless its new neighbour is in the same
+    // group (matches custom-plan.js semantics).
+    const above = fromEl.previousElementSibling;
+    const below = fromEl.nextElementSibling;
+    const g = fromEl.dataset.supersetGroup;
+    if (g) {
+      const stillTouching = (above && above.dataset.supersetGroup === g)
+                         || (below && below.dataset.supersetGroup === g);
+      if (!stillTouching) delete fromEl.dataset.supersetGroup;
+    }
+    _refreshSupersetBadges();
+  }
+
+  function _groupSuperset(fromId, toId) {
+    const fromEl = document.getElementById(`coach-assign-row-${fromId}`);
+    const toEl   = document.getElementById(`coach-assign-row-${toId}`);
+    if (!fromEl || !toEl || fromEl === toEl) return;
+    // Park the source row immediately after the target.
+    toEl.after(fromEl);
+    let gid = toEl.dataset.supersetGroup || fromEl.dataset.supersetGroup;
+    if (!gid) {
+      _ssCounter++;
+      gid = `ss-${_ssCounter}`;
+    }
+    toEl.dataset.supersetGroup = gid;
+    fromEl.dataset.supersetGroup = gid;
+    _refreshSupersetBadges();
+  }
+
+  function _refreshSupersetBadges() {
+    const rows = Array.from(document.querySelectorAll("#coach-assign-ex-rows .coach-assign-ex-row"));
+    // Strip any group whose only member is this row — happens when a
+    // reorder isolates the lone tail of a former group.
+    rows.forEach((row, i) => {
+      const g = row.dataset.supersetGroup;
+      if (!g) return;
+      const above = rows[i - 1];
+      const below = rows[i + 1];
+      const stillInGroup = (above && above.dataset.supersetGroup === g)
+                        || (below && below.dataset.supersetGroup === g);
+      if (!stillInGroup) delete row.dataset.supersetGroup;
+    });
+    // Toggle the visual stripe on grouped rows.
+    rows.forEach(row => {
+      row.classList.toggle("coach-assign-ex-row--ss", !!row.dataset.supersetGroup);
     });
   }
 
@@ -241,60 +361,28 @@
     if (!type)        return setErr("Pick a workout type.");
     if (!date)        return setErr("Pick a date.");
 
-    // Collect exercise rows. Empty-name rows are skipped (the +Add Row
-    // button can leave blanks in the buffer). Walk in order and assign
-    // a supersetGroup id to consecutive rows where row.dataset.linkedAbove
-    // is set — that's the simple version of the drag-to-group flow
-    // (custom-plan.js cpManualAddExRow). Renderer (workouts.js
-    // buildExerciseTableHTML) reads supersetGroup as the segment key.
+    // Collect exercise rows. Empty-name rows are skipped. Each row's
+    // supersetGroup is already set by the drag-to-group flow on
+    // row.dataset.supersetGroup — we just transcribe it. Renderer
+    // (workouts.js buildExerciseTableHTML) reads supersetGroup as the
+    // segment key.
     const exercises = [];
     const rowEls = document.querySelectorAll("#coach-assign-ex-rows .coach-assign-ex-row");
-    let currentSsId = null;
-    let ssCounter = 0;
-    rowEls.forEach((r, idx) => {
+    rowEls.forEach(r => {
       const id = r.id.replace("coach-assign-row-", "");
       const name = document.getElementById(`coach-assign-ex-name-${id}`)?.value.trim();
-      if (!name) {
-        // A blank row breaks any in-progress superset chain.
-        currentSsId = null;
-        return;
-      }
+      if (!name) return;
       const sets   = document.getElementById(`coach-assign-ex-sets-${id}`)?.value.trim();
       const reps   = document.getElementById(`coach-assign-ex-reps-${id}`)?.value.trim();
       const weight = document.getElementById(`coach-assign-ex-weight-${id}`)?.value.trim();
-      const linked = r.dataset.linkedAbove === "1" && idx > 0;
-
-      let supersetGroup = null;
-      if (linked) {
-        // If the previous emitted exercise has no group yet, mint one
-        // and back-fill it. From there, every linked row downstream
-        // gets the same id.
-        if (!currentSsId) {
-          ssCounter++;
-          currentSsId = `ss-${ssCounter}`;
-          if (exercises.length) exercises[exercises.length - 1].supersetGroup = currentSsId;
-        }
-        supersetGroup = currentSsId;
-      } else {
-        currentSsId = null;
-      }
-
-      const exObj = { name, sets: sets || "3", reps: reps || "", weight: weight || "" };
-      if (supersetGroup) {
-        exObj.supersetGroup = supersetGroup;
-        // Renderer / live-tracker expect groupSets — share the first
-        // member's sets count so the superset displays one round
-        // count (matches custom-plan.js semantics).
-        const groupHead = exercises.find(e => e.supersetGroup === supersetGroup) || exObj;
-        const headSets = parseInt(groupHead.sets, 10);
-        exObj.groupSets = isNaN(headSets) ? 3 : headSets;
-      }
+      const exObj  = { name, sets: sets || "3", reps: reps || "", weight: weight || "" };
+      if (r.dataset.supersetGroup) exObj.supersetGroup = r.dataset.supersetGroup;
       exercises.push(exObj);
     });
 
-    // Propagate groupSets to every member of each group (including the
-    // anchor we back-filled above) so the workout renderer reads a
-    // consistent count regardless of which member it inspects first.
+    // Propagate groupSets to every member of each group from the head
+    // row's sets count so the workout renderer reads a consistent
+    // count regardless of which member it inspects first.
     {
       const headSetsByGroup = {};
       for (const e of exercises) {
@@ -305,7 +393,7 @@
       for (const e of exercises) {
         if (e.supersetGroup) {
           const v = parseInt(headSetsByGroup[e.supersetGroup], 10);
-          e.groupSets = isNaN(v) ? (e.groupSets || 3) : v;
+          e.groupSets = isNaN(v) ? 3 : v;
         }
       }
     }
@@ -560,5 +648,4 @@
   window.coachAssignAddExRow                = coachAssignAddExRow;
   window.coachAssignRemoveExRow             = coachAssignRemoveExRow;
   window.coachAssignConflict                = coachAssignConflict;
-  window.coachAssignToggleSuperset          = coachAssignToggleSuperset;
 })();

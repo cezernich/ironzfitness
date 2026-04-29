@@ -13947,47 +13947,68 @@ input.completion-ex-name:focus {
 }
 .coach-assign-ex-row {
   display: grid;
-  grid-template-columns: 2fr 60px 60px 1fr 28px 28px;
+  grid-template-columns: 22px 2fr 60px 60px 1fr 28px;
   gap: 6px;
   align-items: center;
+  position: relative;
+  padding: 2px 0;
 }
 .coach-assign-ex-row .input { padding: 6px 8px; font-size: 0.85rem; }
-/* Linked superset state — left border + slight indent so a chain of
-   linked rows is visually scannable. */
-.coach-assign-ex-row--linked {
+.coach-assign-ex-row .drag-handle {
+  cursor: grab;
+  color: var(--color-text-muted);
+  text-align: center;
+  font-size: 0.95rem;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.coach-assign-ex-row .drag-handle:active { cursor: grabbing; }
+
+/* Drop-zone visual hints — same selectors used by workout-editor.js
+   so any global drag-hint CSS we already ship still applies. The
+   middle band is the superset zone; top/bottom are insert-above /
+   insert-below. */
+.coach-assign-ex-row.drag-active     { opacity: 0.5; }
+.coach-assign-ex-row.drag-ss-target {
+  outline: 2px dashed var(--color-coach, #534AB7);
+  outline-offset: -2px;
+  border-radius: 6px;
+  background: rgba(83, 74, 183, 0.06);
+}
+.coach-assign-ex-row.drag-insert-above::before,
+.coach-assign-ex-row.drag-insert-below::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--color-coach, #534AB7);
+}
+.coach-assign-ex-row.drag-insert-above::before { top: -1px; }
+.coach-assign-ex-row.drag-insert-below::after  { bottom: -1px; }
+
+/* Grouped (superset) rows get a left purple stripe so a chain is
+   visually scannable. */
+.coach-assign-ex-row--ss {
   border-left: 2px solid var(--color-coach, #534AB7);
   padding-left: 6px;
   margin-left: -6px;
 }
-.coach-assign-ss-btn {
-  background: transparent;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 4px 0;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  font-size: 0.95rem;
-  line-height: 1;
-}
-.coach-assign-ss-btn.is-active {
-  background: rgba(83, 74, 183, 0.12);
-  border-color: var(--color-coach, #534AB7);
-  color: var(--color-coach, #534AB7);
-}
+
 @media (max-width: 480px) {
   .coach-assign-ex-row {
-    grid-template-columns: 1fr 1fr 28px 28px;
+    grid-template-columns: 22px 1fr 1fr 28px;
     grid-template-areas:
-      "name name   ss remove"
-      "sets reps   ss remove"
-      "weight weight ss remove";
+      "drag name name   remove"
+      "drag sets reps   remove"
+      "drag weight weight remove";
     gap: 4px;
   }
-  .coach-assign-ex-row .coach-assign-ex-name   { grid-area: name; }
-  .coach-assign-ex-row .coach-assign-ex-sets   { grid-area: sets; }
-  .coach-assign-ex-row .coach-assign-ex-reps   { grid-area: reps; }
-  .coach-assign-ex-row .coach-assign-ex-weight { grid-area: weight; }
-  .coach-assign-ex-row .coach-assign-ss-btn    { grid-area: ss; }
+  .coach-assign-ex-row .drag-handle             { grid-area: drag; align-self: center; }
+  .coach-assign-ex-row .coach-assign-ex-name    { grid-area: name; }
+  .coach-assign-ex-row .coach-assign-ex-sets    { grid-area: sets; }
+  .coach-assign-ex-row .coach-assign-ex-reps    { grid-area: reps; }
+  .coach-assign-ex-row .coach-assign-ex-weight  { grid-area: weight; }
 }
 
 /* Conflict modal options — three vertically-stacked buttons */
