@@ -1463,7 +1463,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
         _nameFocus;
       _displayEx = getEquipmentAdjustedExercises(_displayEx, _focus, w.level || "intermediate", _logEqRestriction);
     }
-    const exTable    = hiitHeader + _hyroxSplit + buildExerciseTableHTML(_displayEx, { hiit: w.type === "hiit" || !!w.hiitMeta, hyrox: _isHyroxEx });
+    const exTable    = hiitHeader + _hyroxSplit + buildExerciseTableHTML(_displayEx, { hiit: w.type === "hiit" || !!w.hiitMeta, hyrox: _isHyroxEx, coachAssigned: w.source === "coach_assigned" });
     const _exEstDur = _strengthDisplayDurationMin(w);
     const _exDurForCompletion = _exEstDur || w.duration || null;
     const _completion = buildCompletionSection(cardId, w.type, _logCompEx || w.exercises, dateStr, _exDurForCompletion);
@@ -4255,7 +4255,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         const _swIsHyrox = w.type === "hyrox" || w.isHyrox;
         const _swCompRec = _swIsHyrox ? _getCompletionRecord(cardId) : null;
         const _swHyroxSplit = _swCompRec?.hyroxData ? _buildHyroxSplitSummary(_swCompRec.hyroxData) : "";
-        body = _liftRestrictNote + _swHiitHeader + _swHyroxSplit + buildExerciseTableHTML(displayExercises, { hiit: w.type === "hiit" || !!w.hiitMeta, hyrox: _swIsHyrox });
+        body = _liftRestrictNote + _swHiitHeader + _swHyroxSplit + buildExerciseTableHTML(displayExercises, { hiit: w.type === "hiit" || !!w.hiitMeta, hyrox: _swIsHyrox, coachAssigned: w.source === "coach_assigned" });
       } else if (w.details) {
         body = `<p class="session-details">${w.details}</p>`;
       }
