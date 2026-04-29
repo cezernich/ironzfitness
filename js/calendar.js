@@ -4331,13 +4331,24 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       // assignment time (coach-assignment-flow.js) so we render it
       // synchronously here — no async profile fetch on every render.
       const _isCoachAssigned = w.source === "coach_assigned";
+      // Phase 5B: when the assigning coach is no longer active for this
+      // user (admin removed them, soft-deactivated coaching_assignments),
+      // show "FROM FORMER COACH" without the name. Visual styling stays
+      // — workout was still legit coaching, just from a relationship
+      // that has since ended.
+      const _coachStillActive = _isCoachAssigned
+        && (typeof isCoachActive === "function" ? isCoachActive(w.coachId) : true);
       const _coachAttribClass = _isCoachAssigned ? " session-card--coach-assigned" : "";
-      const _coachAttrib = _isCoachAssigned
-        ? `<div class="coach-attribution">
-             <span class="coach-attribution-from">FROM ${escHtml((w.coachName || "your coach").toUpperCase())}</span>
+      let _coachAttrib = "";
+      if (_isCoachAssigned) {
+        const fromLabel = _coachStillActive
+          ? `FROM ${escHtml((w.coachName || "your coach").toUpperCase())}`
+          : `FROM FORMER COACH`;
+        _coachAttrib = `<div class="coach-attribution${_coachStillActive ? "" : " coach-attribution--former"}">
+             <span class="coach-attribution-from">${fromLabel}</span>
              ${w.coachNote ? `<div class="coach-attribution-note">${escHtml(w.coachNote)}</div>` : ""}
-           </div>`
-        : "";
+           </div>`;
+      }
       const _swGenEditItem = `<button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();openEditScheduledWorkout('${w.id}')">Edit</button>`;
       const _swGenOverflow = _buildOverflowMenu(cardId,
         _swGenEditItem +

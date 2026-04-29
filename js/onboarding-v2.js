@@ -4294,6 +4294,28 @@
   // Appends to the existing `workoutSchedule` array without touching
   // past entries.
   function _writeScheduleSessions(raceIdForPlan, planRace) {
+    // Phase 5A: respect coach-set plan freeze. When a coach picks
+    // "Freeze AI plan from this date forward", isPlanFrozen() reads
+    // true from the cache populated at auth-ready by
+    // refreshPlanFreezeState. Skip generation entirely — the coach
+    // owns the calendar from here.
+    //
+    // The user can override via Profile → "Take back plan control"
+    // which writes unfrozen_at on the row + flips the cache. They
+    // can then re-run Build Plan and it'll proceed.
+    if (typeof window.isPlanFrozen === "function" && window.isPlanFrozen()) {
+      const coachName = (() => {
+        try {
+          const meta = window.getPlanFrozenMeta && window.getPlanFrozenMeta();
+          if (meta?.by && window._coachNameCache?.[meta.by]) return window._coachNameCache[meta.by];
+        } catch {}
+        return "your coach";
+      })();
+      alert(`AI plan generation is paused — ${coachName} is managing your schedule. Open Profile → "Take back plan control" if you want the AI to resume.`);
+      console.log("[OnboardingV2] _writeScheduleSessions skipped — plan frozen");
+      return;
+    }
+
     // "indefinite" → materialize 12 weeks as a rolling window; numeric
     // strings like "11" or "12" parse cleanly; "custom" falls back to
     // customWeeks (set by the custom-weeks input).

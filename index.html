@@ -1455,6 +1455,18 @@
         </div>
       </section>
 
+      <!-- Plan Freeze status — Phase 5A.
+           Visible only when the client has an active plan freeze (set
+           by a coach via the conflict-resolution modal's "Freeze AI
+           plan" option). client-plan-freeze.js flips display + populates
+           the message line after auth ready. -->
+      <section class="card" id="section-plan-freeze" style="display:none">
+        <h2 style="color:var(--color-coach,#534AB7)">Plan paused by coach</h2>
+        <p class="hint" id="plan-freeze-msg">Your coach is managing your schedule.</p>
+        <p class="hint" style="font-size:0.78rem">If you want the AI to resume generating workouts, take control back below. Your coach's existing assignments stay on the calendar.</p>
+        <button class="btn-secondary" onclick="takeBackPlanControl()">Take back plan control</button>
+      </section>
+
       <!-- Athlete Profile -->
       <section class="card collapsible is-collapsed" id="section-profile">
         <div class="card-toggle" onclick="toggleSection('section-profile')">
@@ -3768,6 +3780,8 @@
   <script src="js/coach-assignment-flow.js"></script>
   <script src="js/coach-library.js"></script>
   <script src="js/coach-programs.js"></script>
+  <script src="js/client-plan-freeze.js"></script>
+  <script src="js/client-coaching.js"></script>
   <script src="js/analytics.js"></script>
   <script src="js/push.js"></script>
   <!-- auth.js last — overrides window.onload to gate app behind login -->

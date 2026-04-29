@@ -540,6 +540,13 @@ async function ensureProfile(user) {
   // is true) and #section-coach-request (hidden when the user already
   // has an active coaching_assignments row as a client).
   if (typeof initCoachVisibility === 'function') initCoachVisibility().catch(e => console.warn('Auth: initCoachVisibility error', e));
+  // Phase 5A: refresh client_plan_freeze state. Populates the
+  // localStorage cache that the AI plan generator reads synchronously,
+  // and toggles the Profile freeze card.
+  if (typeof refreshPlanFreezeState === 'function') refreshPlanFreezeState().catch(e => console.warn('Auth: refreshPlanFreezeState error', e));
+  // Phase 5B: fetch active coaches so calendar.js can label workouts
+  // from removed coaches as "FROM FORMER COACH".
+  if (typeof fetchActiveCoachIds === 'function') fetchActiveCoachIds().catch(e => console.warn('Auth: fetchActiveCoachIds error', e));
 }
 
 // ── Boot sequence ──────────────────────────────────────────────────────────────

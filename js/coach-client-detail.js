@@ -213,9 +213,23 @@
     if (_client.weight_lbs) bits.push(`${_esc(_client.weight_lbs)} lbs`);
     const upcoming = _findNextRace();
     if (upcoming) bits.push(`${_esc(upcoming.name || upcoming.type || "Race")} in ${_daysUntil(upcoming.date)} days`);
-    return bits.length
+
+    // Phase 5C: surface this coach's role for this client (primary vs
+    // sub-coach). _coachDashState holds the assignments fetched at
+    // dashboard load — find the row matching the current client.
+    let roleBadge = "";
+    const myAssignments = (window._coachDashState && window._coachDashState.assignments) || [];
+    const myAssignmentForClient = myAssignments.find(a => a.client_id === _client.id);
+    if (myAssignmentForClient) {
+      const r = myAssignmentForClient.role === "sub" ? "Sub-coach" : "Primary coach";
+      roleBadge = `<span class="coach-client-role-badge coach-client-role-badge--${myAssignmentForClient.role === "sub" ? "sub" : "primary"}">${r}</span>`;
+    }
+
+    const metaLine = bits.length
       ? `<div style="font-size:0.85rem;color:var(--color-text-muted)">${bits.join(" · ")}</div>`
       : `<div style="font-size:0.85rem;color:var(--color-text-muted)">No profile details on file.</div>`;
+
+    return `${roleBadge}${metaLine}`;
   }
 
   function _findNextRace() {

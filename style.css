@@ -13742,6 +13742,23 @@ input.completion-ex-name:focus {
 .coach-client-flag { color: var(--color-warning, #c97a00); font-size: 0.9rem; margin-left: 4px; }
 
 .coach-client-meta { margin-bottom: 10px; }
+.coach-client-role-badge {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.coach-client-role-badge--primary {
+  background: rgba(83, 74, 183, 0.15);
+  color: var(--color-coach, #534AB7);
+}
+.coach-client-role-badge--sub {
+  background: rgba(148, 163, 184, 0.18);
+  color: var(--color-text-muted);
+}
 .coach-client-tabs {
   display: flex;
   gap: 4px;
@@ -14024,6 +14041,16 @@ input.completion-ex-name:focus {
   margin-top: 4px;
   font-size: 0.85rem;
   color: var(--color-text);
+  font-style: italic;
+}
+/* Phase 5B: former-coach state — muted purple, italics, signals
+   "this is real but the relationship ended." */
+.coach-attribution--former {
+  background: rgba(148, 163, 184, 0.12);
+  border-left-color: var(--color-text-muted);
+}
+.coach-attribution--former .coach-attribution-from {
+  color: var(--color-text-muted);
   font-style: italic;
 }
 
