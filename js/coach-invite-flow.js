@@ -365,7 +365,7 @@
 
   // Race a supabase call against a timeout so a hung RPC surfaces an
   // error instead of leaving the modal stuck on "Connecting…" with no
-  // way out. 8s is generous for a single RPC call.
+  // way out. 10s is generous for a single RPC call.
   function _withTimeout(promise, ms, label) {
     return Promise.race([
       promise,
@@ -373,6 +373,33 @@
         setTimeout(() => reject(new Error(`${label || "Request"} timed out — please try again.`)), ms)
       ),
     ]);
+  }
+
+  // Drain any in-flight gotrue-js auth lock before firing an RPC.
+  //
+  // Bug observed in production (2026-04-30): clicking Accept / Switch
+  // fired switch_coach() during a token refresh window. supabase-js's
+  // gotrue-js lock ("lock:sb-<ref>-auth-token") was held by the refresh
+  // and the RPC queued behind it. The lock fired its 5s warning twice,
+  // self-recovered with "Forcefully acquiring the lock", but the
+  // in-flight RPC was already abandoned — the UI sat on "Connecting…"
+  // forever. Console:
+  //   @supabase/gotrue-js: Lock "lock:sb-...-auth-token" not released
+  //                        within 5000ms
+  //
+  // getSession() acquires + releases the lock cleanly. Awaiting it
+  // before any subsequent RPC guarantees the lock has been released
+  // by the time we hit the network. Keep this call right before any
+  // sb.rpc() in user-action handlers.
+  async function _drainAuthLock(sb) {
+    try {
+      await sb.auth.getSession();
+    } catch (e) {
+      // getSession failures don't block the RPC — the rpc call will
+      // surface its own auth error if needed. We're only waiting for
+      // the lock to release, not the session to be valid.
+      console.warn("[coach-invite-flow] getSession during drain threw:", e);
+    }
   }
 
   // ── Accept / Dismiss ─────────────────────────────────────────────────
@@ -388,9 +415,15 @@
     const rpc = mode === "switch" ? "switch_coach" : "pair_with_coach";
 
     try {
+      // Drain the gotrue auth lock before firing the RPC. Skipping this
+      // (the original bug) lets a token-refresh-in-flight serialize
+      // ahead of the RPC, which then queues behind the lock and never
+      // resolves — leaving the UI stuck on "Connecting…".
+      await _drainAuthLock(sb);
+
       const { error } = await _withTimeout(
         sb.rpc(rpc, { p_invite_link_id: invite_link_id }),
-        8000,
+        10000,
         "Connect"
       );
 
@@ -427,8 +460,15 @@
         if (errcode === "IRO04") {
           // switch_coach was called but the user has no active primary —
           // fall back to pair_with_coach. Rare race (admin removed the
-          // primary while the modal was open).
-          const { error: pairErr } = await sb.rpc("pair_with_coach", { p_invite_link_id: invite_link_id });
+          // primary while the modal was open). Same lock-drain +
+          // timeout treatment as the primary RPC since this can hang
+          // the same way.
+          await _drainAuthLock(sb);
+          const { error: pairErr } = await _withTimeout(
+            sb.rpc("pair_with_coach", { p_invite_link_id: invite_link_id }),
+            10000,
+            "Connect"
+          );
           if (pairErr) {
             console.warn("[coach-invite-flow] fallback pair failed:", pairErr);
             _setModalError("Couldn't connect with coach — try again.");
@@ -470,9 +510,12 @@
 
     // Fire-and-forget the server-side dismiss with a short timeout so it
     // doesn't pile up dangling promises. The local cooldown already
-    // prevents re-prompting; this just keeps the server in sync.
+    // prevents re-prompting; this just keeps the server in sync. Same
+    // auth-lock drain as the Accept path — the gotrue lock can be
+    // mid-refresh on dismiss too, just less visibly.
     if (sb) {
       try {
+        await _drainAuthLock(sb);
         await _withTimeout(
           sb.rpc("dismiss_invite", { p_invite_link_id: invite_link_id }),
           5000,
