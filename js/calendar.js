@@ -4583,12 +4583,14 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       const _coachAttribClass = _isCoachAssigned ? " session-card--coach-assigned" : "";
       let _coachAttrib = "";
       if (_isCoachAssigned) {
+        // Slim attribution strip rendered between the card header and the
+        // body. Hidden via CSS when the card is collapsed (`is-collapsed`)
+        // so the closed tile only carries the purple left-edge accent.
         const fromLabel = _coachStillActive
-          ? `FROM ${escHtml((w.coachName || "your coach").toUpperCase())}`
-          : `FROM FORMER COACH`;
+          ? `From <strong>${escHtml(w.coachName || "your coach")}</strong>`
+          : `From former coach`;
         _coachAttrib = `<div class="coach-attribution${_coachStillActive ? "" : " coach-attribution--former"}">
-             <span class="coach-attribution-from">${fromLabel}</span>
-             ${w.coachNote ? `<div class="coach-attribution-note">${escHtml(w.coachNote)}</div>` : ""}
+             <span class="coach-attribution-from">${fromLabel}</span>${w.coachNote ? `<span class="coach-attribution-note">${escHtml(w.coachNote)}</span>` : ""}
            </div>`;
       }
       const _swGenEditItem = `<button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();openEditScheduledWorkout('${w.id}')">Edit</button>`;
@@ -4608,8 +4610,9 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
             </div>
             <div class="session-header-right">${(_getCompletionDuration(cardId) || _swGenDurMin) ? `<span class="session-duration-badge">${_fmtBadgeMin(_getCompletionDuration(cardId) || _swGenDurMin)} min</span>` : ""}${_swGenUndoBtn}${_swGenOverflow}<span class="card-chevron">▾</span></div>
           </div>
+          ${_coachAttrib}
           ${_swGenStrip}
-          <div class="card-body">${_coachAttrib}${body}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(w.duration || _swGenDurMin, w.sessionName, { load: w.load || "moderate", discipline: w.discipline || w.type }) : ""}${buildWorkoutExplanation(null, dateStr, w.discipline || w.type, w.load || "moderate", w.sessionName, w)}${_swGenEditPanel}${_swGenMovePanel}${_swGenCompletion}</div>
+          <div class="card-body">${body}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(w.duration || _swGenDurMin, w.sessionName, { load: w.load || "moderate", discipline: w.discipline || w.type }) : ""}${buildWorkoutExplanation(null, dateStr, w.discipline || w.type, w.load || "moderate", w.sessionName, w)}${_swGenEditPanel}${_swGenMovePanel}${_swGenCompletion}</div>
         </div>`;
     });
 

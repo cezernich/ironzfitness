@@ -14805,35 +14805,49 @@ input.completion-ex-name:focus {
 .session-card--coach-assigned {
   border-left: 3px solid var(--color-coach, #534AB7);
 }
+/* Slim coach-attribution strip rendered between the card header and body.
+   Was previously a full banner inside the body; moved out to keep workout
+   content uncluttered. The card's purple left border still flags
+   "coach-assigned" at a glance, this just names them. Hidden on collapsed
+   cards so the closed tile reads as a clean row. */
 .coach-attribution {
-  margin: 0 0 10px;
-  padding: 8px 12px;
-  background: rgba(83, 74, 183, 0.08);
-  border-left: 3px solid var(--color-coach, #534AB7);
-  border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 4px 14px 6px;
+  font-size: 0.78rem;
+  color: var(--color-coach, #534AB7);
+  background: transparent;
 }
 .coach-attribution-from {
-  font-size: 0.72rem;
+  letter-spacing: 0.01em;
+  font-weight: 500;
+}
+.coach-attribution-from strong {
   font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--color-coach, #534AB7);
+}
+.coach-attribution-from::before {
+  content: "👤";
+  margin-right: 6px;
+  font-size: 0.85rem;
+  opacity: 0.85;
 }
 .coach-attribution-note {
-  margin-top: 4px;
-  font-size: 0.85rem;
-  color: var(--color-text);
+  color: var(--color-text-muted);
   font-style: italic;
+  font-size: 0.78rem;
 }
-/* Phase 5B: former-coach state — muted purple, italics, signals
+.coach-attribution-note::before { content: "· "; }
+/* Phase 5B: former-coach state — muted, signals
    "this is real but the relationship ended." */
-.coach-attribution--former {
-  background: rgba(148, 163, 184, 0.12);
-  border-left-color: var(--color-text-muted);
-}
 .coach-attribution--former .coach-attribution-from {
   color: var(--color-text-muted);
   font-style: italic;
 }
+/* Hide attribution when the card is collapsed — keeps the closed tile
+   clean, the purple left border still flags coach-assignment. */
+.session-card.is-collapsed .coach-attribution { display: none; }
 
 /* Phase 3E: editable feature rows + inline editor + audit footer */
 .coach-feature-edit-btn {
