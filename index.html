@@ -1854,6 +1854,18 @@
     <!-- ===================================================
          ADMIN PANEL (visible to role=admin only)
          =================================================== -->
+    <!-- ═══ Coach Portal (Phase 2B) ═════════════════════════════════════
+         Top-level tab — entered via the Coach Portal entry card on the
+         Profile screen (visibility gated by initCoachVisibility on
+         profiles.is_coach=true). Two child views: dashboard + client-
+         detail; coach-portal.js orchestrates which is visible. -->
+    <div id="tab-coach" class="tab-content">
+      <div id="coach-loading" class="coach-loading" style="display:none">Loading coach data…</div>
+      <div id="coach-error" class="coach-error" style="display:none"></div>
+      <div id="coach-dashboard"></div>
+      <div id="coach-client-detail" style="display:none"></div>
+    </div>
+
     <div id="tab-admin" class="tab-content">
       <h2 class="section-title">Admin Panel</h2>
 
@@ -3591,6 +3603,9 @@
   <script src="js/admin-questions.js"></script>
   <script src="js/admin-coaches.js"></script>
   <script src="js/coach-request-flow.js"></script>
+  <script src="js/coach-portal.js"></script>
+  <script src="js/coach-dashboard.js"></script>
+  <script src="js/coach-client-detail.js"></script>
   <script src="js/analytics.js"></script>
   <script src="js/push.js"></script>
   <!-- auth.js last — overrides window.onload to gate app behind login -->

@@ -310,6 +310,7 @@ function showTab(name) {
     "saved-library": "training",
     inbox: "community",
     admin: "settings",
+    coach: "settings",
   };
   const bottomTabName = navTabFor[name] || name;
   const bottomBtn = document.querySelector(`.bottom-nav-tab[data-tab="${bottomTabName}"]`);
