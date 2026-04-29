@@ -113,11 +113,29 @@
     const rect = input.getBoundingClientRect();
     const vv = window.visualViewport;
     const visualBottom = vv ? (vv.offsetTop + vv.height) : window.innerHeight;
+    const viewportWidth = (vv && vv.width) || window.innerWidth;
     const dropdown = _getDropdown();
 
     dropdown.style.position = "fixed";
-    dropdown.style.left  = rect.left + "px";
-    dropdown.style.width = rect.width + "px";
+
+    // Width: expand past the input when it's narrow (e.g., exercise-name
+    // column in a sets/reps/weight row is ~140px wide — too narrow for
+    // "Barbell Bench Press"; CSS overflow-wrap then broke each letter
+    // onto its own line). Aim for a readable 280px minimum, capped to
+    // viewport so the dropdown never spills off-screen.
+    const MIN_WIDTH = 280;
+    const VIEWPORT_PAD = 12;
+    const maxWidth = Math.max(MIN_WIDTH, viewportWidth - VIEWPORT_PAD * 2);
+    const width = Math.min(Math.max(rect.width, MIN_WIDTH), maxWidth);
+    dropdown.style.width = width + "px";
+
+    // Anchor under the input by default; shift left so the wider dropdown
+    // doesn't run off the right edge.
+    let left = rect.left;
+    if (left + width > viewportWidth - VIEWPORT_PAD) {
+      left = Math.max(VIEWPORT_PAD, viewportWidth - width - VIEWPORT_PAD);
+    }
+    dropdown.style.left = left + "px";
 
     const estHeight = Math.min(_currentResults.length, MAX_RESULTS) * ROW_HEIGHT + 4;
     const spaceBelow = Math.max(0, visualBottom - rect.bottom);

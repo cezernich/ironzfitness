@@ -60,8 +60,8 @@
 
     const Validator = (typeof window !== "undefined" && window.WorkoutImportValidator) || null;
 
-    // Build a 7-day window starting tomorrow.
-    const start = _addDays(_todayStr(), 1);
+    // Build a 7-day window starting today.
+    const start = _todayStr();
     const days = Array.from({ length: 7 }, (_, i) => _addDays(start, i));
 
     const planAndSchedule = _readPlan().concat(_readSchedule());

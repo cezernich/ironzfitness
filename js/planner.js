@@ -962,7 +962,7 @@ const SESSION_DESCRIPTIONS = {
       steps: [
         { type: "warmup",   duration: 5,  zone: 1, label: "Easy free swim — loosen shoulders, breathe every 3 strokes" },
         { type: "main",     duration: 20, zone: 2, label: "Steady continuous laps — focus on high-elbow catch and long pull" },
-        { type: "cooldown", duration: 5,  zone: 1, label: "Easy backstroke — slow the turnover, reset breathing" },
+        { type: "cooldown", duration: 5,  zone: 1, label: "Easy freestyle — slow the turnover, reset breathing" },
       ],
     },
     moderate: {
@@ -986,7 +986,7 @@ const SESSION_DESCRIPTIONS = {
       steps: [
         { type: "warmup",   duration: 10, zone: 1, label: "400m easy + drills: fingertip drag, single-arm" },
         { type: "main",     duration: 55, zone: 2, label: "Continuous aerobic swim at open-water pace — sight every 10 strokes" },
-        { type: "cooldown", duration: 10, zone: 1, label: "Easy 200m backstroke — stretch and breathe" },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy 200m freestyle — stretch and breathe" },
       ],
     },
     race_week_openers: {
@@ -994,7 +994,7 @@ const SESSION_DESCRIPTIONS = {
       steps: [
         { type: "warmup",   duration: 5,  zone: 1, label: "300m easy free — loosen shoulders, breathe deep" },
         { type: "main",     duration: 15, zone: 2, label: "Technique + feel: 8×50m smooth freestyle w/ 10s rest, crisp catch and rotation. Finish with 4×50m at race effort (not all-out)." },
-        { type: "cooldown", duration: 5,  zone: 1, label: "200m easy backstroke — reset breathing" },
+        { type: "cooldown", duration: 5,  zone: 1, label: "200m easy freestyle — reset breathing" },
       ],
     },
     race_week_shakeout: {
@@ -1528,7 +1528,7 @@ const SESSION_VARIANTS = {
       { name: "CSS 200s", steps: [
         { type: "warmup",   duration: 10, zone: 1, label: "300m easy + 6×50m build — find rhythm" },
         { type: "main",     duration: 4,  zone: 4, label: "200m at CSS pace — smooth, strong, consistent splits; RPE 8", reps: 6, rest: 1 },
-        { type: "cooldown", duration: 10, zone: 1, label: "Easy 300m backstroke — relax shoulders" },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy 300m freestyle — relax shoulders" },
       ]},
       { name: "Threshold Ladder", steps: [
         { type: "warmup",   duration: 10, zone: 1, label: "400m easy + drills" },
@@ -1546,7 +1546,7 @@ const SESSION_VARIANTS = {
         { type: "warmup",   duration: 8,  zone: 1, label: "200m easy + 4×50m drill (catch-up, 6-3-6)" },
         { type: "main",     duration: 3,  zone: 3, label: "100m pull (buoy+paddles) at threshold — engage lats, rotate fully", reps: 4, rest: 1 },
         { type: "main",     duration: 3,  zone: 3, label: "100m swim at threshold — transfer the feel from pull to full stroke", reps: 4, rest: 1 },
-        { type: "cooldown", duration: 8,  zone: 1, label: "Easy 200m backstroke" },
+        { type: "cooldown", duration: 8,  zone: 1, label: "Easy 200m freestyle" },
       ]},
       { name: "Aerobic Ladder", steps: [
         { type: "warmup",   duration: 8,  zone: 1, label: "200m easy + 100m drill + 4×25m build" },
@@ -1558,7 +1558,7 @@ const SESSION_VARIANTS = {
       { name: "Open Water Simulation", steps: [
         { type: "warmup",   duration: 10, zone: 1, label: "400m easy + drills: fingertip drag, single-arm" },
         { type: "main",     duration: 55, zone: 2, label: "Continuous aerobic swim at open-water pace — sight every 10 strokes" },
-        { type: "cooldown", duration: 10, zone: 1, label: "Easy 200m backstroke — stretch and breathe" },
+        { type: "cooldown", duration: 10, zone: 1, label: "Easy 200m freestyle — stretch and breathe" },
       ]},
       { name: "Long Pull Set", steps: [
         { type: "warmup",   duration: 10, zone: 1, label: "400m easy + 200m drill" },

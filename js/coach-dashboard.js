@@ -26,7 +26,7 @@
     // clients + profilesById without re-fetching on every tab switch.
     window._coachDashState = state;
 
-    const { clients, assignments, todayCompletions } = state;
+    const { clients, assignments, todayCompletions, planSummaryByClient } = state;
     const tab = (typeof window.getCoachDashboardTab === "function")
       ? window.getCoachDashboardTab()
       : "clients";
@@ -57,7 +57,7 @@
     } else {
       body = `
         ${_renderTodayQueue(clients, todayCompletions)}
-        ${_renderClientList(clients, assignments, todayCompletions, todayStr)}`;
+        ${_renderClientList(clients, assignments, todayCompletions, todayStr, planSummaryByClient || {})}`;
     }
 
     root.innerHTML = `
@@ -120,7 +120,7 @@
   }
 
   // ── CLIENT LIST ──────────────────────────────────────────────────────
-  function _renderClientList(clients, assignments, todayCompletions, todayStr) {
+  function _renderClientList(clients, assignments, todayCompletions, todayStr, planSummaryByClient) {
     const byClient = {};
     for (const a of assignments) byClient[a.client_id] = a;
 
@@ -137,6 +137,28 @@
 
       const flag = trainedToday ? "" : `<span class="coach-client-flag" title="No logged workout today">⚠</span>`;
 
+      // Plan + race summary line. Coach-mirrored and AI-generated workouts
+      // both land in workoutSchedule, so the day count works regardless
+      // of who owns the plan. Race lines only appear when there's an
+      // upcoming event; A-race fallback only when the next race is a B.
+      const summary = planSummaryByClient[c.id] || {};
+      const summaryParts = [];
+      if (typeof summary.daysLeft === "number") {
+        summaryParts.push(`Plan: ${summary.daysLeft} day${summary.daysLeft === 1 ? "" : "s"} left`);
+      }
+      if (summary.nextRace) {
+        const r = summary.nextRace;
+        const days = _daysUntil(todayStr, r.date);
+        summaryParts.push(`${r.priority} Race: ${_esc(r.name)} in ${days} day${days === 1 ? "" : "s"}`);
+        if (r.priority === "B" && summary.nextARace) {
+          const aDays = _daysUntil(todayStr, summary.nextARace.date);
+          summaryParts.push(`A Race: ${_esc(summary.nextARace.name)} in ${aDays} day${aDays === 1 ? "" : "s"}`);
+        }
+      }
+      const summaryLine = summaryParts.length
+        ? `<div class="coach-client-card-plan">${summaryParts.join(" · ")}</div>`
+        : "";
+
       return `
         <div class="coach-client-card" onclick="openClientDetail('${c.id}')" tabindex="0"
              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openClientDetail('${c.id}')}">
@@ -144,6 +166,7 @@
             <div class="coach-client-card-name">${_esc(_clientLabel(c))}${flag}</div>
             <div class="coach-client-card-meta">${_esc(c.email || "")} · ${role} since ${since}</div>
             <div class="coach-client-card-last">${lastSummary}</div>
+            ${summaryLine}
           </div>
           <div class="coach-client-card-action">›</div>
         </div>`;
@@ -172,6 +195,14 @@
   function _shortDate(iso) {
     try { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
     catch { return "—"; }
+  }
+
+  function _daysUntil(fromIso, toIso) {
+    try {
+      const a = new Date(fromIso + "T00:00:00");
+      const b = new Date(toIso + "T00:00:00");
+      return Math.round((b - a) / 86400000);
+    } catch { return 0; }
   }
 
   // ── Public surface ─────────────────────────────────────────────────────

@@ -547,6 +547,8 @@ async function ensureProfile(user) {
   // Phase 5B: fetch active coaches so calendar.js can label workouts
   // from removed coaches as "FROM FORMER COACH".
   if (typeof fetchActiveCoachIds === 'function') fetchActiveCoachIds().catch(e => console.warn('Auth: fetchActiveCoachIds error', e));
+  // Live-pick up new coach assignments without a hard refresh.
+  if (typeof subscribeCoachAssignments === 'function') subscribeCoachAssignments().catch(e => console.warn('Auth: subscribeCoachAssignments error', e));
 }
 
 // ── Boot sequence ──────────────────────────────────────────────────────────────
@@ -722,6 +724,9 @@ async function authBoot() {
       // don't get attributed to the previous account.
       if (typeof window.Sentry !== 'undefined' && window.Sentry.setUser) {
         try { window.Sentry.setUser(null); } catch {}
+      }
+      if (typeof unsubscribeCoachAssignments === 'function') {
+        try { unsubscribeCoachAssignments(); } catch {}
       }
       // Nuke every per-user key from localStorage so the next user to
       // sign in on this device starts clean. Without this the next user

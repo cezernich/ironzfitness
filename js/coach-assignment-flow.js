@@ -117,6 +117,7 @@
     setVal("coach-assign-date", tomorrow.toISOString().slice(0, 10));
     setVal("coach-assign-duration", "");
     setVal("coach-assign-note", "");
+    setVal("coach-assign-why", "");
     setVal("coach-assign-error", "");
     const errEl = document.getElementById("coach-assign-error");
     if (errEl) errEl.textContent = "";
@@ -161,6 +162,8 @@
     if (prefill.type)        setVal("coach-assign-type", prefill.type);
     if (prefill.duration)    setVal("coach-assign-duration", prefill.duration);
     if (prefill.coachNote)   setVal("coach-assign-note", prefill.coachNote);
+    const prefillWhy = prefill.whyText || prefill.why_text;
+    if (prefillWhy)          setVal("coach-assign-why", prefillWhy);
     // Yoga sessions store the coach's text in `details` (no rows). Surface
     // it in the coach-note field so the editing coach sees what they wrote.
     if (!prefill.coachNote && prefill.details && prefill.type === "yoga") {
@@ -198,6 +201,7 @@
       if (m.rounds) setVal("coach-assign-hiit-rounds", m.rounds);
       if (m.restBetweenExercises) setVal("coach-assign-hiit-rest-ex", m.restBetweenExercises);
       if (m.restBetweenRounds)    setVal("coach-assign-hiit-rest-rnd", m.restBetweenRounds);
+      coachAssignOnHiitFormatChange();
     }
   }
 
@@ -248,6 +252,26 @@
   function coachAssignOnTypeChange() {
     const type = document.getElementById("coach-assign-type")?.value || "weightlifting";
     _renderForType(type);
+    if (type === "hiit") coachAssignOnHiitFormatChange();
+  }
+
+  // Relabel "Rounds" and toggle "Rest b/w rounds" based on format. The same
+  // numeric input drives all of these — what changes is the meaning the user
+  // is supplying (count of rounds vs total minutes vs time cap).
+  function coachAssignOnHiitFormatChange() {
+    const fmt = document.getElementById("coach-assign-hiit-format")?.value || "circuit";
+    const lbl = document.getElementById("coach-assign-hiit-rounds-label");
+    const restRndWrap = document.getElementById("coach-assign-hiit-rest-rnd-wrap");
+    const labels = {
+      circuit: "Rounds",
+      tabata:  "Bouts",
+      emom:    "Total minutes",
+      amrap:   "Time cap (min)",
+    };
+    if (lbl) lbl.textContent = labels[fmt] || "Rounds";
+    // Rest b/w rounds is meaningless for AMRAP (no fixed rounds) and EMOM
+    // (rest is whatever's left of the minute) — hide instead of confusing.
+    if (restRndWrap) restRndWrap.style.display = (fmt === "amrap" || fmt === "emom") ? "none" : "";
   }
 
   // ── Exercise rows ──────────────────────────────────────────────────────
@@ -775,6 +799,7 @@
     const date        = document.getElementById("coach-assign-date")?.value;
     const durationRaw = document.getElementById("coach-assign-duration")?.value.trim();
     const coachNote   = document.getElementById("coach-assign-note")?.value.trim();
+    const whyText     = document.getElementById("coach-assign-why")?.value.trim();
 
     if (!sessionName) return setErr("Give the workout a name (e.g. \"Push Day\").");
     if (!type)        return setErr("Pick a workout type.");
@@ -805,7 +830,13 @@
         const reps   = document.getElementById(`coach-assign-ex-reps-${id}`)?.value.trim();
         const weight = document.getElementById(`coach-assign-ex-weight-${id}`)?.value.trim();
         const exObj  = { name, sets: sets || "3", reps: reps || "", weight: weight || "" };
-        if (r.dataset.supersetGroup) exObj.supersetGroup = r.dataset.supersetGroup;
+        if (r.dataset.supersetGroup) {
+          // buildExerciseTableHTML keys on supersetId; supersetGroup is the
+          // canonical storage name. Set both so client-side rendering picks
+          // up the grouping the coach built in the form.
+          exObj.supersetGroup = r.dataset.supersetGroup;
+          exObj.supersetId    = r.dataset.supersetGroup;
+        }
         exercises.push(exObj);
       });
 
@@ -848,7 +879,7 @@
     // Phase 3C: save-to-library path bypasses date / conflict /
     // assignments tables entirely.
     if (_libraryMode) {
-      return _saveLibraryItem({ sessionName, type, exercises, intervals, hiitMeta, durationRaw, coachNote });
+      return _saveLibraryItem({ sessionName, type, exercises, intervals, hiitMeta, durationRaw, coachNote, whyText });
     }
 
     const duration = durationRaw ? parseInt(durationRaw, 10) || null : null;
@@ -870,6 +901,7 @@
       ...(type === "hyrox" ? { isHyrox: true } : {}),
       ...(isYoga && coachNote ? { details: coachNote } : {}),
       ...(duration ? { duration } : {}),
+      ...(whyText ? { whyText } : {}),
       level: "intermediate",
       source: "coach_assigned",   // hint for any code that walks the
                                   // JSONB before the trigger merges its
@@ -1029,17 +1061,35 @@
   }
 
   // ── Phase 3C: save-to-library helper ──────────────────────────────────
-  async function _saveLibraryItem({ sessionName, type, exercises, intervals, hiitMeta, durationRaw, coachNote }) {
+  async function _saveLibraryItem({ sessionName, type, exercises, intervals, hiitMeta, durationRaw, coachNote, whyText }) {
     const errEl = document.getElementById("coach-assign-error");
     const setErr = (m) => { if (errEl) errEl.textContent = m || ""; };
     const btn = document.getElementById("coach-assign-save-btn");
+    const resetBtn = () => { if (btn) { btn.disabled = false; btn.textContent = _libraryEditId ? "Update Library" : "Save to Library"; } };
     if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
 
+    // Mirror the assign-flow validation: cardio types must have at least one
+    // interval. Without this, opening a saved running workout for editing and
+    // hitting Save (without re-typing intervals) silently nuked the body —
+    // every subsequent assignment of that library item then rendered blank.
+    const isCardioSave = _isCardioType(type);
+    const isYogaSave   = type === "yoga";
+    if (isCardioSave && (!Array.isArray(intervals) || !intervals.length)) {
+      setErr(`Add at least one interval for this ${_typeLabel(type)} session.`);
+      resetBtn();
+      return;
+    }
+    if (!isCardioSave && !isYogaSave && (!Array.isArray(exercises) || !exercises.length)) {
+      setErr("Add at least one exercise (or change the type).");
+      resetBtn();
+      return;
+    }
+
     const sb = window.supabaseClient;
-    if (!sb) { setErr("Auth client not available."); if (btn) { btn.disabled = false; btn.textContent = _libraryEditId ? "Update Library" : "Save to Library"; } return; }
+    if (!sb) { setErr("Auth client not available."); resetBtn(); return; }
     const sess = (await sb.auth.getSession())?.data?.session;
     const coachId = sess?.user?.id;
-    if (!coachId) { setErr("Not signed in."); if (btn) { btn.disabled = false; btn.textContent = _libraryEditId ? "Update Library" : "Save to Library"; } return; }
+    if (!coachId) { setErr("Not signed in."); resetBtn(); return; }
 
     const duration = durationRaw ? parseInt(durationRaw, 10) || null : null;
     const isYoga = type === "yoga";
@@ -1055,6 +1105,7 @@
       ...(type === "hyrox" ? { isHyrox: true } : {}),
       ...(isYoga && coachNote ? { details: coachNote } : {}),
       ...(duration ? { duration } : {}),
+      ...(whyText ? { whyText } : {}),
       level: "intermediate",
     };
 
@@ -1079,7 +1130,7 @@
       if (typeof window.loadCoachLibrary === "function") await window.loadCoachLibrary();
     } catch (e) {
       setErr((e && e.message) || "Couldn't save — try again.");
-      if (btn) { btn.disabled = false; btn.textContent = _libraryEditId ? "Update Library" : "Save to Library"; }
+      resetBtn();
     }
   }
 
@@ -1110,5 +1161,6 @@
   window.coachAssignRemoveCardioRow         = coachAssignRemoveCardioRow;
   window.coachAssignSetCardioMode           = coachAssignSetCardioMode;
   window.coachAssignOnTypeChange            = coachAssignOnTypeChange;
+  window.coachAssignOnHiitFormatChange      = coachAssignOnHiitFormatChange;
   window.coachAssignConflict                = coachAssignConflict;
 })();

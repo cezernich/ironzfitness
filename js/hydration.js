@@ -404,6 +404,45 @@ function _hydrationResolveDurationMin(w) {
     const n = parseFloat(v);
     return isFinite(n) && n > 0 ? n : 0;
   };
+  // BUGFIX 04-29: Plan entries (raceId + discipline + load) get rendered
+  // from getSessionTemplate or from libraryWorkout.main_set when its
+  // shape is renderable. The plan generator may also stamp w.duration
+  // from a matched library workout's duration_min — but if the
+  // renderer can't render that library (main_set shape unknown to
+  // _librarySessionSteps), the card falls back to SESSION_DESCRIPTIONS
+  // and the stamped duration is orphaned. Hydration was then claiming
+  // "your 90-min Easy Ride" while the card read 45 min.
+  // Mirror the renderer's resolution: try library steps first, fall
+  // back to template.
+  if (w.raceId && w.discipline && w.load) {
+    try {
+      const _libSteps = (typeof window !== "undefined" && typeof window._librarySessionSteps === "function")
+        ? window._librarySessionSteps(w.libraryWorkout)
+        : null;
+      if (_libSteps && _libSteps.duration > 0 && w.discipline !== "strength") {
+        return Math.round(_libSteps.duration);
+      }
+      if (typeof getSessionTemplate === "function") {
+        const tmpl = getSessionTemplate(w.discipline, w.load, w.weekNumber);
+        if (tmpl) {
+          if (Array.isArray(tmpl.steps)) {
+            let sum = 0;
+            for (const st of tmpl.steps) {
+              const n = parseStrMin(st && st.duration);
+              const reps = parseInt(st && st.reps) || 1;
+              if (n > 0) sum += n * reps;
+            }
+            if (sum > 0) return sum;
+          }
+          if (tmpl.duration) {
+            const td = parseStrMin(tmpl.duration);
+            if (td > 0) return td;
+          }
+        }
+      }
+    } catch {}
+  }
+
   // BUGFIX 04-27 §F5: align the duration source with the workout-card
   // badge by checking the same fields in the same order as
   // calendar.js _readWorkoutDurationMin: duration → durationMin →

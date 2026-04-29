@@ -954,6 +954,7 @@
       hiitMeta:    entry.hiitMeta || null,
       details:     entry.details || "",
       coachNote:   entry.coachNote || "",
+      whyText:     entry.whyText || entry.why_text || "",
     };
     if (entry.source === "coach_assigned" && entry.coachAssignmentId) {
       prefill.assignmentId = entry.coachAssignmentId;
@@ -995,7 +996,12 @@
     list.innerHTML = data.map(item => {
       const w = item.workout || {};
       const exCount = Array.isArray(w.exercises) ? w.exercises.length : 0;
-      const ivCount = Array.isArray(w.intervals) ? w.intervals.length : 0;
+      // Cardio workouts store intervals under aiSession.intervals; older /
+      // legacy items may have used a top-level `intervals`. Check both so
+      // the row meta shows the right count for either shape.
+      const ivCount = Array.isArray(w.aiSession?.intervals) ? w.aiSession.intervals.length
+                    : Array.isArray(w.intervals)            ? w.intervals.length
+                    : 0;
       const meta = [
         w.type ? _typeLabel(w.type) : null,
         w.duration ? `${w.duration} min` : null,
@@ -1026,15 +1032,24 @@
     const clientId = list.dataset.clientId;
     const clientName = list.dataset.clientName || "";
     const w = item.workout || {};
+    // Cardio intervals live under aiSession.intervals; reading w.intervals
+    // alone produced empty rows when picking a running/cycling/swim item
+    // from the library, and re-saving the assignment without re-typing
+    // them blanked out the workout body on the client's calendar.
+    const _intervals =
+      Array.isArray(w.aiSession?.intervals) ? w.aiSession.intervals
+      : Array.isArray(w.intervals)          ? w.intervals
+      : [];
     const prefill = {
       sessionName: w.sessionName || item.name || "",
       type:        w.type || "weightlifting",
       duration:    w.duration || "",
       coachNote:   item.notes || "",
       exercises:   Array.isArray(w.exercises) ? w.exercises : [],
-      intervals:   Array.isArray(w.intervals) ? w.intervals : [],
+      intervals:   _intervals,
       hiitMeta:    w.hiitMeta || null,
       details:     w.details || "",
+      whyText:     w.whyText || w.why_text || "",
     };
     closeCoachLibraryPicker();
     if (typeof window.openAssignWorkoutModal === "function") {

@@ -50,6 +50,72 @@
     `).join("");
   }
 
+  // Render the preview body for a list of strength/training exercises pulled
+  // from training_sessions. Groups consecutive items by superset id so the
+  // receiver sees the same structure the sender intended.
+  function _renderExerciseList(exercises) {
+    if (!Array.isArray(exercises) || exercises.length === 0) return "";
+    const _row = (e) => {
+      const parts = [];
+      if (e.sets && e.reps) parts.push(`${e.sets} × ${e.reps}`);
+      else if (e.reps) parts.push(`${e.reps} reps`);
+      else if (e.duration) parts.push(String(e.duration));
+      if (e.weight) parts.push(`@ ${e.weight}`);
+      else if (e.intensity) parts.push(String(e.intensity));
+      return `<div class="structure-row">
+        <span class="structure-label">${_esc(e.name || "Exercise")}</span>
+        <span class="structure-value">${_esc(parts.join(" · "))}</span>
+      </div>`;
+    };
+    let html = "";
+    let i = 0;
+    while (i < exercises.length) {
+      const ex = exercises[i];
+      const gid = ex.supersetId || ex.supersetGroup || ex.repeatGroup;
+      if (gid) {
+        const group = [];
+        while (i < exercises.length) {
+          const g = exercises[i];
+          if ((g.supersetId || g.supersetGroup || g.repeatGroup) === gid) {
+            group.push(g); i++;
+          } else break;
+        }
+        const sets = group[0].sets || group[0].groupSets || "";
+        html += `<div class="structure-row" style="font-weight:600">${sets ? sets + "× " : ""}Superset</div>`;
+        group.forEach(g => { html += _row(g); });
+      } else {
+        html += _row(ex);
+        i++;
+      }
+    }
+    return html;
+  }
+
+  // Lazy-load training_sessions row when the variant_id is a UUID. Shared
+  // strength workouts and custom shares use a real training_sessions row
+  // for the workout body — the validator's _scaleForReceiver doesn't have a
+  // strength path, so we hydrate here.
+  async function _hydrateExercisesFromTrainingSessions(variantId) {
+    const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!variantId || !_uuidRe.test(variantId)) return null;
+    const sb = (typeof window !== "undefined") ? window.supabaseClient : null;
+    if (!sb) return null;
+    try {
+      const { data } = await sb
+        .from("training_sessions")
+        .select("session_name, exercises")
+        .eq("id", variantId)
+        .maybeSingle();
+      if (!data) return null;
+      let ex = data.exercises || [];
+      if (typeof ex === "string") { try { ex = JSON.parse(ex); } catch { ex = []; } }
+      return { name: data.session_name || null, exercises: Array.isArray(ex) ? ex : [] };
+    } catch (e) {
+      console.warn("[IronZ] preview hydration failed:", e);
+      return null;
+    }
+  }
+
   /**
    * @param {Object} opts
    * @param {Object} opts.sharedWorkout — { shareToken, senderDisplayName, senderAvatarUrl,
@@ -57,7 +123,7 @@
    * @param {Function} [opts.onSave]
    * @param {Function} [opts.onSchedule]
    */
-  function open(opts) {
+  async function open(opts) {
     if (!opts || !opts.sharedWorkout) return;
     const sw = opts.sharedWorkout;
     const id = "shared-preview-overlay";
@@ -66,20 +132,35 @@
 
     // Validate to get the scaled workout in the receiver's zones.
     const Validator = (typeof window !== "undefined" && window.WorkoutImportValidator) || null;
-    let canImport = true;
     let canSave = true;
     let scaledWorkout = null;
     let validatorError = null;
     if (Validator && Validator.validateImport) {
       const result = Validator.validateImport({ sharedWorkout: sw, targetDate: null });
-      canImport = result.canImport;
       canSave = result.canSave;
       scaledWorkout = result.scaledWorkout;
       validatorError = result.error || null;
     }
 
-    const variantName = (scaledWorkout && scaledWorkout.variant_name) || sw.variantId || "Workout";
+    // For shared strength / custom workouts the validator's _scaleForReceiver
+    // can't fetch the body (no generator path), so hit training_sessions
+    // directly here. Failure leaves us with the validator's minimal scaled
+    // object and an empty body.
+    let hydratedExercises = null;
+    let hydratedName = null;
+    const hydration = await _hydrateExercisesFromTrainingSessions(sw.variantId || sw.variant_id);
+    if (hydration) {
+      hydratedExercises = hydration.exercises;
+      hydratedName = hydration.name;
+    }
+
+    const variantName = hydratedName
+      || (scaledWorkout && scaledWorkout.variant_name)
+      || sw.variantId || "Workout";
     const phasesHtml = scaledWorkout && scaledWorkout.phases ? _renderPhases(scaledWorkout.phases) : "";
+    const exercisesHtml = hydratedExercises && hydratedExercises.length
+      ? _renderExerciseList(hydratedExercises)
+      : "";
 
     const overlay = document.createElement("div");
     overlay.id = id;
@@ -138,7 +219,7 @@
           <div class="workout-subtitle">${_esc(sw.sportId || "")} · ${_esc(sw.sessionTypeId || "")}</div>
           ${ztcHtml}
           ${noteHtml}
-          <div class="workout-structure">${phasesHtml}</div>
+          <div class="workout-structure">${phasesHtml}${exercisesHtml}</div>
           <button class="btn-primary" id="shared-preview-schedule">Add to my plan</button>
           <button class="btn-secondary" id="shared-preview-save">Save to library</button>
           <button class="btn-ghost" id="shared-preview-cancel">Not now</button>
@@ -153,7 +234,11 @@
     const $cancel = overlay.querySelector("#shared-preview-cancel");
 
     if ($schedule) {
-      $schedule.disabled = !canImport;
+      // canImport from validateImport({targetDate: null}) is always false
+      // (it's only meaningful when a target date is supplied). The schedule
+      // action just opens the calendar for date selection, so use canSave —
+      // which reflects whether the workout is valid to import at all.
+      $schedule.disabled = !canSave;
       $schedule.onclick = () => {
         _close(id);
         if (typeof opts.onSchedule === "function") opts.onSchedule({ sharedWorkout: sw, scaledWorkout });

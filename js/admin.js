@@ -64,36 +64,59 @@ async function loadAdminData() {
     return;
   }
 
+  // Prime the auth context BEFORE the first PostgREST call. Without this
+  // the supabase-js client can hang indefinitely on the first query of
+  // the session — internally it tries to refresh the JWT lazily, and if
+  // the realtime websocket / another tab holds the auth lock the query
+  // stalls until the lock releases (which on this app reliably exceeded
+  // 15s, hence the timeout users were seeing on first admin-tab open).
+  // A refresh "fixed" it because the page reload re-primed everything.
   try {
-    // Race the query against a 15s timeout — Supabase rarely takes more
-    // than 1-2s for a flat profile select; anything beyond that is a
-    // hung request (auth-lock, network) and needs to surface as an error
-    // rather than leaving the user staring at "…" forever.
+    await Promise.race([
+      client.auth.getSession(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("auth getSession timeout")), 3000)),
+    ]);
+  } catch (e) {
+    console.warn("[Admin] session prime failed (continuing anyway):", e?.message);
+  }
+
+  // Fetch with a single retry on timeout. The first call after a long
+  // idle (or right after init) is the one that hangs; the second almost
+  // always succeeds because the session has now been primed.
+  const fetchProfiles = async (timeoutMs) => {
     const queryPromise = client
       .from("profiles")
       .select("*")
       .order("created_at", { ascending: false });
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Query timed out after 15s")), 15000)
+      setTimeout(() => reject(new Error(`Query timed out after ${timeoutMs / 1000}s`)), timeoutMs)
     );
-    const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+    return Promise.race([queryPromise, timeoutPromise]);
+  };
 
-    if (error) {
-      console.warn("[Admin] query error:", error);
-      _showAdminError(`Failed to load profiles: ${error.message || error.code || "unknown error"}`);
+  let result;
+  try {
+    result = await fetchProfiles(6000);
+  } catch (e) {
+    console.warn("[Admin] first attempt failed, retrying:", e?.message);
+    try {
+      result = await fetchProfiles(8000);
+    } catch (e2) {
+      console.warn("[Admin] retry failed:", e2);
+      _adminProfiles = [];
+      _showAdminError(`Failed to load: ${e2 && e2.message ? e2.message : "unknown"}`);
       setText("admin-total-users", "—");
       setText("admin-new-7d", "—");
       setText("admin-premium-count", "—");
       setText("admin-admin-count", "—");
       return;
     }
-    _adminProfiles = data || [];
-    console.log("[Admin] loaded", _adminProfiles.length, "profiles");
-    _hideAdminError();
-  } catch (e) {
-    console.warn("[Admin] exception:", e);
-    _adminProfiles = [];
-    _showAdminError(`Failed to load: ${e && e.message ? e.message : "unknown"}`);
+  }
+
+  const { data, error } = result || {};
+  if (error) {
+    console.warn("[Admin] query error:", error);
+    _showAdminError(`Failed to load profiles: ${error.message || error.code || "unknown error"}`);
     setText("admin-total-users", "—");
     setText("admin-new-7d", "—");
     setText("admin-premium-count", "—");
@@ -101,6 +124,9 @@ async function loadAdminData() {
     return;
   }
 
+  _adminProfiles = data || [];
+  console.log("[Admin] loaded", _adminProfiles.length, "profiles");
+  _hideAdminError();
   renderAdminStats();
   renderAdminUsers();
 }
@@ -254,12 +280,12 @@ function renderAdminUsers() {
 
     return `<tr>
       <td class="admin-td-name">${name}</td>
-      <td class="admin-td-email">${email}</td>
+      <td class="admin-td-email"><span class="admin-td-email-text" title="${email}">${email}</span></td>
       <td style="white-space:nowrap">${roleBadge}${coachBadge}</td>
       <td>${subBadge}</td>
-      <td>${joined}</td>
+      <td style="white-space:nowrap">${joined}</td>
       <td class="admin-td-actions">
-        <button class="admin-action-btn" onclick="adminToggleRole('${p.id}', '${p.role}')" ${isMock ? "" : ""} title="Toggle role">
+        <button class="admin-action-btn" onclick="adminToggleRole('${p.id}')" ${isMock ? "" : ""} title="Cycle role: user → coach → admin">
           ${ICONS.settings || "Role"}
         </button>
         <button class="admin-action-btn" onclick="adminToggleSub('${p.id}', '${p.subscription_status}')" title="Toggle plan">
@@ -278,14 +304,27 @@ function escAdmin(s) {
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 
-async function adminToggleRole(userId, currentRole) {
-  const newRole = currentRole === "admin" ? "user" : "admin";
-  if (!confirm(`Change role to "${newRole}"?`)) return;
+async function adminToggleRole(userId) {
+  // Three-tier UI on top of the two-column data model:
+  //   user  → role=user,  is_coach=false
+  //   coach → role=user,  is_coach=true
+  //   admin → role=admin, is_coach=false
+  // Cycles in that order so a single click is always a one-step move,
+  // and a third click returns the user to "user".
+  const p = _adminProfiles.find(x => x.id === userId);
+  if (!p) return;
+  const current = p.role === "admin" ? "admin" : (p.is_coach ? "coach" : "user");
+  const next = current === "user" ? "coach" : current === "coach" ? "admin" : "user";
+  if (!confirm(`Change role from "${current}" to "${next}"?`)) return;
+
+  const updates =
+    next === "admin" ? { role: "admin", is_coach: false } :
+    next === "coach" ? { role: "user",  is_coach: true  } :
+                       { role: "user",  is_coach: false };
 
   // Mock mode
   if (String(userId).startsWith("mock-")) {
-    const p = _adminProfiles.find(x => x.id === userId);
-    if (p) p.role = newRole;
+    Object.assign(p, updates);
     renderAdminStats();
     renderAdminUsers();
     return;
@@ -293,7 +332,7 @@ async function adminToggleRole(userId, currentRole) {
 
   const { error } = await window.supabaseClient
     .from("profiles")
-    .update({ role: newRole })
+    .update(updates)
     .eq("id", userId);
 
   if (error) {

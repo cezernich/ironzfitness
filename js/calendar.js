@@ -1461,15 +1461,18 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
       _displayEx = getEquipmentAdjustedExercises(_displayEx, _focus, w.level || "intermediate", _logEqRestriction);
     }
     const exTable    = hiitHeader + _hyroxSplit + buildExerciseTableHTML(_displayEx, { hiit: w.type === "hiit" || !!w.hiitMeta, hyrox: _isHyroxEx });
-    const _completion = buildCompletionSection(cardId, w.type, _logCompEx || w.exercises, dateStr, w.duration || null);
+    const _exEstDur = _strengthDisplayDurationMin(w);
+    const _exDurForCompletion = _exEstDur || w.duration || null;
+    const _completion = buildCompletionSection(cardId, w.type, _logCompEx || w.exercises, dateStr, _exDurForCompletion);
     const movePanel = buildSessionMovePanel(cardId, "logged", w.id, dateStr);
     const _exOverflow = _buildOverflowMenu(cardId,
       _ovflEditItem(w.id) +
       _ovflMoveItem(cardId, "logged", w.id, dateStr) +
       _ovflShareItem(w) +
       _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
-    const _exDurationBadge = w.duration
-      ? `<span class="session-duration-badge">${_fmtBadgeMin(_getCompletionDuration(cardId) || w.duration)} min</span>`
+    const _exBadgeDur = _getCompletionDuration(cardId) || _exEstDur || w.duration;
+    const _exDurationBadge = _exBadgeDur
+      ? `<span class="session-duration-badge">${_fmtBadgeMin(_exBadgeDur)} min</span>`
       : "";
     return `
       <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
@@ -1788,6 +1791,15 @@ function _librarySessionSteps(lib) {
   };
 }
 
+if (typeof window !== "undefined") {
+  // Exposed so hydration.js (and other modules) can mirror the calendar's
+  // session resolution: when a plan entry has a libraryWorkout whose
+  // main_set isn't renderable, this returns null and the renderer falls
+  // back to SESSION_DESCRIPTIONS — hydration needs to follow the same
+  // path so its tip text matches the card's duration badge.
+  window._librarySessionSteps = _librarySessionSteps;
+}
+
 function buildStepsList(session, discipline) {
   // Load zones for the relevant sport from the unified trainingZones key
   let zones = null;
@@ -1858,91 +1870,37 @@ function buildStepsList(session, discipline) {
       ? `<span class="seg-disc-tag seg-disc-${brickDisc}">${brickDisc === "bike" ? "Bike" : "Run"}</span> `
       : "";
 
-    // Swim: when a step has reps > 1 (e.g. "6 × 200m @ 1:29/100m
-    // w/ 1 min rest"), unfold each rep into its own row so the user
-    // can mentally tick them off mid-set instead of staring at one
-    // collapsed line. Bug 12 — flagged multiple times. Each set gets
-    // distance + pace + rest (last set drops the rest line).
+    // Swim: collapse repeated sets into a single card with distance-based
+    // duration ("4 × 100m (1m rest)") — distance is the natural unit for
+    // swim. Earlier behavior unfolded each rep into its own row; users
+    // found 4-8 near-identical cards visually noisy.
     const isSwim = discipline === "swim" || discipline === "swimming";
     const repCount = parseInt(step.reps) || 1;
     if (isSwim && repCount > 1) {
       const restPerRep = step.rest;
       const paceFromLabel = step.label || "";
-      // Try to extract a pace target ("@ 1:29/100m") from step.label so
-      // each row repeats the pace target the user is aiming for.
       const paceMatch = paceFromLabel.match(/@\s*([0-9:]+\/100m)/);
-      const paceStr = paceMatch ? `@ ${paceMatch[1]}` : (zoneLabel ? `@ ${zoneLabel}` : "");
+      const paceStr = paceMatch ? paceMatch[1] : (zoneLabel || "");
       const cleanedLabel = paceFromLabel.replace(/^\d+\s*[×x]\s*[^—]+—\s*/i, "").trim();
-      // Per-set work time: prefer distance-derived (from the user's CSS
-      // pace) over the template's coarse `duration`. The template's
-      // duration is a static rule-of-thumb (~4 min for 200m); a faster
-      // swimmer does 200m at 1:30/100m in exactly 3 min, not 4. Bug
-      // surfaced 2026-04-26: card showed "4 min" for 200m at 1:29-1:31
-      // pace.
       const distMatch = paceFromLabel.match(/(\d+)\s*m\b/i);
       const repDistanceM = step.distance || (distMatch ? parseInt(distMatch[1], 10) : 0);
-      // Pace per 100m derived from the pace target on the label. Falls
-      // back to user CSS + zone offset, then to the template duration.
-      let perRepSec = 0;
-      if (paceMatch && repDistanceM > 0) {
-        const pm = paceMatch[1].match(/(\d+):(\d+)/);
-        if (pm) {
-          const secPer100 = parseInt(pm[1], 10) * 60 + parseInt(pm[2], 10);
-          perRepSec = Math.round((repDistanceM / 100) * secPer100);
-        }
-      }
-      if (!perRepSec && repDistanceM > 0) {
-        try {
-          const tz = JSON.parse(localStorage.getItem("trainingZones") || "{}");
-          const sw = tz.swimming || {};
-          let cssSec = null;
-          if (typeof sw.css === "number") cssSec = sw.css;
-          else if (typeof sw.cssPace === "number") cssSec = sw.cssPace;
-          else if (typeof sw.tPaceSec === "number") cssSec = sw.tPaceSec;
-          else if (typeof sw.css === "string") {
-            const m = sw.css.match(/(\d+):(\d+)/);
-            if (m) cssSec = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
-          }
-          if (cssSec) {
-            // Zone offsets from CSS — same table _distToMin uses.
-            const cssOffset = { 1: 18, 2: 12, 3: 5, 4: 0, 5: -3, 6: -6 };
-            const off = cssOffset[step.zone] != null ? cssOffset[step.zone] : 0;
-            perRepSec = Math.round((repDistanceM / 100) * (cssSec + off));
-          }
-        } catch {}
-      }
-      // Final fallback — the template's static duration.
-      if (!perRepSec && typeof step.duration === "number" && step.duration > 0) {
-        perRepSec = step.duration * 60;
-      }
-      // Compact "Xm" / "Xs" formatter for the swim meta line so the row
-      // fits on a single line on iPhone widths. Bug surfaced 2026-04-27:
-      // SET 6 (no rest text) was the only one fitting on one line; SETs
-      // 1-5 wrapped because "3 min · 1 min rest" overflowed. Trims to
-      // "3m · 1m rest".
       const _fmtSwimDur = (minOrSec) => {
         const n = Number(minOrSec) || 0;
         if (n > 0 && n < 1) return Math.max(5, Math.round(n * 60)) + "s";
         return Math.max(1, Math.round(n)) + "m";
       };
-      const distLabel = perRepSec > 0
-        ? _fmtSwimDur(perRepSec / 60)
-        : (step.distance ? `${step.distance}m` : (typeof step.duration === "number" ? `${_fmtSwimDur(step.duration)}` : `${step.duration}`));
-      let html = "";
-      for (let r = 0; r < repCount; r++) {
-        const isLast = r === repCount - 1;
-        const restText = (!isLast && restPerRep) ? ` · ${_fmtSwimDur(restPerRep)} rest` : "";
-        html += `
-      <div class="session-step ${stepCls} session-step--swim-rep" data-set-index="${r + 1}">
+      const distPart = repDistanceM > 0 ? `${repDistanceM}m` : _fmtSwimDur(step.duration);
+      const restText = restPerRep ? ` (${_fmtSwimDur(restPerRep)} rest)` : "";
+      const swimDuration = `${repCount} × ${distPart}${restText}`;
+      return `
+      <div class="session-step ${stepCls}">
         <div class="session-step-meta">
-          <span class="session-step-type">SET ${r + 1}</span>
+          <span class="session-step-type">${discTag}${typeLabel}</span>
           <span class="session-step-zone">Z${step.zone}${paceStr ? `<span class="session-step-pace">${paceStr}</span>` : ""}</span>
-          <span class="session-step-duration">${distLabel}${restText}</span>
+          <span class="session-step-duration">${swimDuration}</span>
         </div>
         ${cleanedLabel ? `<div class="session-step-label">${cleanedLabel}</div>` : ""}
       </div>`;
-      }
-      return html;
     }
 
     return `
@@ -2121,19 +2079,12 @@ function buildAiIntervalsList(session, type) {
                     : effectiveName ? effectiveName.toUpperCase() : "INTERVAL";
     const stepCls   = isTransition ? "session-step--transition" : isRestWalk ? "session-step--rw" : `session-step--z${zone}`;
     const zoneBadge = isTransition ? "T1" : isRestWalk ? "RW" : `Z${zone}${zoneLabel ? `<span class="session-step-pace">${zoneLabel}</span>` : ""}`;
-    // Swim per-set unfold (Bug 12): instead of one collapsed
-    // "6 × 200m @ 1:29/100m w/ 1 min rest" row, emit one row per rep
-    // so the user can mentally tick them off mid-set. Detection
-    // matches both type-level swim sessions and per-interval sport=swim
-    // (used by mixed-modality bricks etc., though brick swims are rare
-    // in practice). Last set drops the rest line so the user knows the
-    // workout ends after that rep, not after another rest.
+    // Swim: collapse repeated sets into one card with distance-based
+    // duration ("4 × 100m (1m rest)") — distance reads better than time
+    // for swim sets. Earlier behavior unfolded one row per rep; too noisy.
     const isSwimIv = type === "swim" || type === "swimming"
                   || iv.sport === "swim" || iv.sport === "swimming";
     if (isSwimIv && reps > 1 && !isTransition && !isRestWalk) {
-      // Compact rest label — collapse "1 min" → "1m" / "30 sec" → "30s"
-      // so the meta fits on one line at iPhone widths (matches the
-      // template-path renderer above).
       const _compactRest = (s) => {
         const str = String(s || "");
         const m = str.match(/(\d+)\s*(min|minutes|m)\b/i);
@@ -2142,24 +2093,25 @@ function buildAiIntervalsList(session, type) {
         if (sm) return sm[1] + "s";
         return str;
       };
-      const rest = _restLabel ? _compactRest(_restLabel) : null;
-      // Compact perRepDur the same way so "3 min" → "3m".
-      const perRepDurCompact = _compactRest(perRepDur) || perRepDur;
-      let html = "";
-      for (let r = 0; r < reps; r++) {
-        const isLast = r === reps - 1;
-        const restText = (!isLast && rest) ? ` · ${rest} rest` : "";
-        html += `
-      <div class="session-step ${stepCls} session-step--swim-rep" data-set-index="${r + 1}">
+      const distMatch = String(iv.details || "").match(/(\d+)\s*[x×]\s*(\d+)\s*m\b/i);
+      const repDistanceM = distMatch ? parseInt(distMatch[2], 10) : 0;
+      if (repDistanceM > 0) {
+        durText = `${reps} × ${repDistanceM}m`;
+        if (_restLabel) durText += ` (${_compactRest(_restLabel)} rest)`;
+      }
+      // Strip "N × distM" prefix from details so it doesn't duplicate the duration.
+      const cleanedDetails = String(iv.details || "")
+        .replace(/^\d+\s*[×x]\s*\d+\s*m\s*(?:[—\-:]\s*)?/i, "")
+        .trim();
+      return `
+      <div class="session-step ${stepCls}">
         <div class="session-step-meta">
-          <span class="session-step-type">SET ${r + 1}</span>
-          <span class="session-step-duration">${perRepDurCompact}${restText}</span>
+          <span class="session-step-type">${sportTag}${typeLabel}</span>
+          <span class="session-step-duration">${durText}</span>
         </div>
         <div class="session-step-zone-row"><span class="session-step-zone">${zoneBadge}</span></div>
-        ${iv.details ? `<div class="session-step-label">${escHtml(iv.details)}</div>` : ""}
+        ${cleanedDetails ? `<div class="session-step-label">${escHtml(cleanedDetails)}</div>` : ""}
       </div>`;
-      }
-      return html;
     }
 
     // Top row: name on left, duration on right. Zone badge moves to its
@@ -2564,9 +2516,13 @@ function _buildDistanceField(sessionId, type, globalUnit) {
     </div>`;
 }
 
-function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDuration, steps) {
-  // No completion UI for future dates
-  if (dateStr > getTodayString()) return "";
+function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDuration, steps, opts) {
+  // No completion UI for future dates — except when the caller opts in
+  // (coach-assigned workouts: athletes need to be able to log the session
+  // even before its scheduled date, otherwise the card sits there with
+  // exercises but no way to mark it done).
+  const allowFuture = !!(opts && opts.allowFuture);
+  if (!allowFuture && dateStr > getTodayString()) return "";
 
   if (isSessionComplete(sessionId)) {
     // Pull duration/distance from the completion workout record
@@ -3242,6 +3198,19 @@ function _estimateStrengthSessionMin(exercises) {
   return Math.round(totalSec / 60);
 }
 
+// Returns the duration we should display for a strength card. Imported /
+// shared lifts often carry a sender-typed duration that's too generous
+// (e.g., "90 min" for a 6-exercise accessory session that realistically
+// takes ~70). When the workout is a strength type and has an exercise
+// list, prefer the computed estimate over whatever was stored.
+function _strengthDisplayDurationMin(w) {
+  if (!w) return null;
+  const isStrength = w.type === "weightlifting" || w.type === "bodyweight" || w.type === "strength";
+  if (!isStrength) return null;
+  if (!Array.isArray(w.exercises) || !w.exercises.length) return null;
+  return _estimateStrengthSessionMin(w.exercises);
+}
+
 function _parseDistKm(str) {
   const s = String(str || "");
   const val = parseFloat(s.match(/[\d.]+/)?.[0] || 0);
@@ -3626,39 +3595,66 @@ async function renderDayDetail(dateStr) {
 
   try {
     // Pre-hydrate shared workouts: fetch exercises from training_sessions
-    // for any workoutSchedule entry that has a UUID variant_id but no aiSession.
+    // for any workoutSchedule entry that has a UUID variant_id but no body.
     const data = getDataForDate(dateStr);
     const _uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const needFetch = data.scheduledWorkouts.filter(w =>
-      !w.aiSession && !w.discipline && w.variant_id && _uuidRe.test(w.variant_id)
-    );
+    const _isStrengthEntry = w =>
+      w.sport_id === "strength" || w.sport_id === "weightlifting"
+      || w.type === "weightlifting" || w.type === "strength" || w.discipline === "strength";
+    const needFetch = data.scheduledWorkouts.filter(w => {
+      if (!w.variant_id || !_uuidRe.test(w.variant_id)) return false;
+      if (_isStrengthEntry(w)) return !(w.exercises && w.exercises.length);
+      // Endurance: skip if aiSession or discipline already set.
+      return !w.aiSession && !w.discipline;
+    });
     if (needFetch.length && window.supabaseClient) {
       try {
         const ids = [...new Set(needFetch.map(w => w.variant_id))];
         const { data: tsRows } = await window.supabaseClient
           .from("training_sessions")
-          .select("id, session_name, exercises")
+          .select("id, session_name, exercises, data")
           .in("id", ids);
         if (tsRows) {
-          const cache = {};
+          const cardio = {};
+          const strength = {};
           tsRows.forEach(row => {
             let ex = row.exercises || [];
             if (typeof ex === "string") { try { ex = JSON.parse(ex); } catch { ex = []; } }
-            if (ex.length) {
-              cache[row.id] = ex.map(e => ({
-                name: e.name || "Interval",
-                duration: e.duration || "",
-                effort: e.intensity || e.effort || "Z2",
-                details: e.details || "",
+            if (!ex.length) return;
+            const rowSport = (row.data && row.data.sport_id) || null;
+            cardio[row.id] = ex.map(e => ({
+              name: e.name || "Interval",
+              duration: e.duration || "",
+              effort: e.intensity || e.effort || "Z2",
+              details: e.details || "",
+              reps: e.reps || null,
+              repeatGroup: e.repeatGroup || e.supersetGroup || null,
+              groupSets: e.groupSets || null,
+            }));
+            // Map to the exercise table shape buildExerciseTableHTML expects.
+            // supersetId is the field the renderer keys on; supersetGroup is
+            // the canonical storage name.
+            strength[row.id] = ex.map(e => {
+              const grp = e.supersetGroup || e.supersetId || e.repeatGroup || null;
+              return {
+                name: e.name || "Exercise",
+                sets: e.sets || null,
                 reps: e.reps || null,
-                repeatGroup: e.repeatGroup || e.supersetGroup || null,
-                groupSets: e.groupSets || null,
-              }));
-            }
+                weight: e.weight || null,
+                duration: e.duration || null,
+                rest: e.rest || null,
+                supersetGroup: grp,
+                supersetId: grp,
+                notes: e.notes || e.details || null,
+              };
+            });
+            strength[row.id]._sport = rowSport;
           });
           needFetch.forEach(w => {
-            if (cache[w.variant_id]) {
-              w.aiSession = { title: w.sessionName, intervals: cache[w.variant_id] };
+            if (_isStrengthEntry(w) && strength[w.variant_id]) {
+              w.exercises = strength[w.variant_id];
+            } else if (cardio[w.variant_id]) {
+              w.aiSession = { title: w.sessionName, intervals: cardio[w.variant_id] };
             }
           });
         }
@@ -4099,7 +4095,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
           const _swCompType = (w.discipline === "swim" || w.discipline === "swimming")
             ? "swimming"
             : (DISCIPLINE_TO_WORKOUT_TYPE[w.discipline] || "running");
-          const _swCompletion = buildCompletionSection(cardId, _swCompType, null, dateStr, targetDuration, session?.steps);
+          const _swCompletion = buildCompletionSection(cardId, _swCompType, null, dateStr, targetDuration, session?.steps, { allowFuture: w.source === "coach_assigned" });
           const _swMovePanel = buildSessionMovePanel(cardId, "scheduled", w.id, dateStr);
           const _swIsComplete    = isSessionComplete(cardId);
           const _swDoneIndicator = _swIsComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
@@ -4151,7 +4147,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         const _swcSubtitle = _swcGoalLabel ? `Circuit · ${_swcGoalLabel}` : "Circuit";
         let _swcBadge = "";
         if (w.duration) _swcBadge = `<span class="session-duration-badge">${w.duration} min</span>`;
-        const _swcCompletion = buildCompletionSection(cardId, "circuit", null, dateStr, w.duration || null);
+        const _swcCompletion = buildCompletionSection(cardId, "circuit", null, dateStr, w.duration || null, null, { allowFuture: w.source === "coach_assigned" });
         const _swcMovePanel  = buildSessionMovePanel(cardId, "scheduled", w.id, dateStr);
         const _swcIsComplete = isSessionComplete(cardId);
         const _swcDoneInd    = _swcIsComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
@@ -4244,7 +4240,11 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
 
       // Build zone strip + interval body for imported sessions with aiSession intervals
       let _swGenStrip = "";
-      let _swGenDurMin = w.duration || null;
+      // Strength sessions: prefer the computed estimate over the stored
+      // duration so imported lifts don't show inflated "90 min" badges
+      // when the actual exercise list points to ~70.
+      const _swStrengthEst = _strengthDisplayDurationMin(w);
+      let _swGenDurMin = _swStrengthEst || w.duration || null;
       if (w.aiSession && w.aiSession.intervals && w.aiSession.intervals.length) {
         const _effortToZone = { RW:"rw",Z1:"z1",Z2:"z2",Z3:"z3",Z4:"z4",Z5:"z5",Z6:"z6", Easy:"z2",Moderate:"z3",Hard:"z4",Max:"z5",T1:"z-transition" };
         const _paceMap = { RW:8, Z1:7, Z2:6.2, Z3:5.5, Z4:5, Z5:4.5, Z6:4 };
@@ -4382,7 +4382,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         }
       }
 
-      const _swGenCompletion = buildCompletionSection(cardId, w.type, w.exercises || null, dateStr, _swGenDurMin);
+      const _swGenCompletion = buildCompletionSection(cardId, w.type, w.exercises || null, dateStr, _swGenDurMin, null, { allowFuture: w.source === "coach_assigned" });
       const _swGenMovePanel  = buildSessionMovePanel(cardId, "scheduled", w.id, dateStr);
       const _swGenEditPanel  = "";
       const _swGenCompleted  = isSessionComplete(cardId);
@@ -4777,6 +4777,13 @@ function _generateWorkoutRationale(dateStr, discipline, load, sessionName, entry
   // Figure out where this workout came from. Priority: explicit source flag
   // → community → saved → manually added → plan-generated.
   const source = _detectWorkoutSource(entry);
+
+  // Coach-assigned: only the coach's hand-written rationale counts. If they
+  // didn't fill it in, the section stays hidden — auto-generated phase/load
+  // copy isn't appropriate for a workout the coach picked deliberately.
+  if (entry && entry.source === "coach_assigned") {
+    return String(entry.whyText || entry.why_text || "").trim();
+  }
 
   // Only AI- and plan-generated workouts get a "Why this workout?" — the
   // user didn't ask us to generate a manual or library entry, so we
@@ -6416,7 +6423,7 @@ async function qeSubmitModify() {
     // a swim workout.
     const swimSchemaHint = (_qeSelectedType === "swim") ? {
       swim_workout_schema: {
-        instructions: "This is a pool swim workout. When the user asks to modify it, return a ```action``` block with a `set_swim_workout` action whose `steps` array replaces the current steps. Every interval step MUST include distance_m rounded to whole pool lengths (pool_size_m = " + (_qeGeneratedCardioData?.pool_size_m || 25) + " m). Rest steps use duration_sec. Repeat blocks wrap children with a count. Strokes: freestyle, backstroke, breaststroke, butterfly, im, choice.",
+        instructions: "This is a pool swim workout. When the user asks to modify it, return a ```action``` block with a `set_swim_workout` action whose `steps` array replaces the current steps. Every interval step MUST include distance_m rounded to whole pool lengths (pool_size_m = " + (_qeGeneratedCardioData?.pool_size_m || 25) + " m). Rest steps use duration_sec. Repeat blocks wrap children with a count. Strokes: freestyle, breaststroke, butterfly, im, choice (do NOT use backstroke).",
         example_action: {
           actions: [{
             action: "set_swim_workout",
@@ -7789,7 +7796,7 @@ function _swimWarmupText(warmupMin, cssSec) {
 }
 
 function _swimCooldownText(cooldownMin, cssSec) {
-  return "200-300m easy, mix freestyle and backstroke, focus on breathing recovery.";
+  return "200-300m easy freestyle, focus on breathing recovery.";
 }
 
 // Estimate per-rep seconds for a given distance at a given pace offset

@@ -22,6 +22,7 @@
   let _assignments = [];
   let _profilesById = {};
   let _todayCompletions = {};   // client_id → array of completed workouts logged today
+  let _planSummaryByClient = {}; // client_id → { daysLeft, nextRace, nextARace }
   let _activeView = "dashboard"; // "dashboard" | "client-detail"
   let _activeClientId = null;
   let _coachUid = null;
@@ -92,6 +93,94 @@
         _todayCompletions[w.user_id].push(w);
       }
 
+      // Per-client plan + race summary, sourced from user_data. Plan end
+      // date comes from MAX(workoutSchedule[*].date) regardless of whether
+      // the schedule was AI-generated or coach-mirrored — the trigger
+      // funnels both into the same key, so this works for either coaching
+      // style. Race info reads both legacy `events` and `raceEvents` keys.
+      _planSummaryByClient = {};
+      for (const cid of clientIds) {
+        _planSummaryByClient[cid] = { daysLeft: null, nextRace: null, nextARace: null };
+      }
+      try {
+        const todayStr = since.toISOString().slice(0, 10);
+        const userDataRes = await client.from("user_data")
+          .select("user_id, data_key, data_value")
+          .in("user_id", clientIds)
+          .in("data_key", ["workoutSchedule", "events", "raceEvents", "workouts"]);
+        const byClient = {};
+        for (const r of (userDataRes.data || [])) {
+          if (!byClient[r.user_id]) byClient[r.user_id] = {};
+          byClient[r.user_id][r.data_key] = r.data_value;
+        }
+        // Fallback for Today's Queue: db.syncWorkouts() writes to user_data
+        // primarily and to the structured `workouts` table secondarily
+        // (debounced). When the structured query above returns nothing
+        // for a client — debounce lag, RLS, transient failure — pull
+        // today's logs from user_data so the coach isn't told "0 logged"
+        // when the client actually trained.
+        for (const cid of clientIds) {
+          const bag = byClient[cid] || {};
+          const wList = Array.isArray(bag.workouts) ? bag.workouts : [];
+          if (!_todayCompletions[cid]) _todayCompletions[cid] = [];
+          const seenIds = new Set(_todayCompletions[cid].map(w => w && w.id).filter(Boolean));
+          for (const w of wList) {
+            if (!w || w.date !== todayStr) continue;
+            if (w.id && seenIds.has(w.id)) continue;
+            _todayCompletions[cid].push({
+              id: w.id || null,
+              user_id: cid,
+              name: w.name || w.type || null,
+              type: w.type || null,
+              date: w.date,
+              completed: w.completed !== false,
+              created_at: w.createdAt || w.created_at || null,
+            });
+          }
+          if (_todayCompletions[cid].length === 0) delete _todayCompletions[cid];
+        }
+        for (const cid of clientIds) {
+          const bag = byClient[cid] || {};
+          const sched = Array.isArray(bag.workoutSchedule) ? bag.workoutSchedule : [];
+          let maxFutureDate = null;
+          for (const s of sched) {
+            if (s && s.date && s.date >= todayStr && (!maxFutureDate || s.date > maxFutureDate)) {
+              maxFutureDate = s.date;
+            }
+          }
+          if (maxFutureDate) {
+            const a = new Date(todayStr + "T00:00:00");
+            const b = new Date(maxFutureDate + "T00:00:00");
+            _planSummaryByClient[cid].daysLeft = Math.round((b - a) / 86400000);
+          }
+          const races = []
+            .concat(Array.isArray(bag.raceEvents) ? bag.raceEvents : [])
+            .concat(Array.isArray(bag.events)     ? bag.events     : [])
+            .filter(e => e && e.date && e.date >= todayStr)
+            .sort((x, y) => String(x.date).localeCompare(String(y.date)));
+          if (races.length) {
+            const next = races[0];
+            const nextPri = String(next.priority || "A").toUpperCase();
+            _planSummaryByClient[cid].nextRace = {
+              name: next.name || "Race",
+              date: next.date,
+              priority: nextPri,
+            };
+            if (nextPri === "B") {
+              const nextA = races.find(r => String(r.priority || "A").toUpperCase() === "A");
+              if (nextA) {
+                _planSummaryByClient[cid].nextARace = {
+                  name: nextA.name || "A Race",
+                  date: nextA.date,
+                };
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[CoachPortal] plan summary fetch failed:", e);
+      }
+
       _renderDashboard();
     } catch (e) {
       console.warn("[CoachPortal] load failed:", e);
@@ -138,6 +227,7 @@
         assignments: _assignments,
         profilesById: _profilesById,
         todayCompletions: _todayCompletions,
+        planSummaryByClient: _planSummaryByClient,
       });
     }
   }

@@ -148,6 +148,15 @@
     const item = _items.find(x => x.id === id);
     if (!item) return;
     const w = item.workout || {};
+    // Cardio intervals live in w.aiSession.intervals (current shape), not in
+    // w.intervals at the top level. Reading the wrong key meant editing a
+    // saved running/cycling/swim workout opened with no rows — re-saving
+    // then wiped the intervals from the library row, blanking out every
+    // future assignment.
+    const _intervals =
+      Array.isArray(w.aiSession?.intervals) ? w.aiSession.intervals
+      : Array.isArray(w.intervals)          ? w.intervals
+      : [];
     const prefill = {
       libraryId: id,
       libraryName: item.name,
@@ -156,6 +165,10 @@
       type:        w.type || "weightlifting",
       duration:    w.duration || "",
       exercises:   Array.isArray(w.exercises) ? w.exercises : [],
+      intervals:   _intervals,
+      hiitMeta:    w.hiitMeta || null,
+      details:     w.details || "",
+      whyText:     w.whyText || w.why_text || "",
     };
     if (typeof window.openAssignWorkoutModalForLibrary === "function") {
       window.openAssignWorkoutModalForLibrary(prefill);

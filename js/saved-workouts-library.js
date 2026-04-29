@@ -602,15 +602,21 @@
           let exArr = ts.exercises;
           if (typeof exArr === "string") { try { exArr = JSON.parse(exArr); } catch { exArr = []; } }
           if (_isStrength) {
-            strengthExercises = exArr.map(ex => ({
-              name: ex.name || "Exercise",
-              sets: ex.sets || null,
-              reps: ex.reps || null,
-              weight: ex.weight || null,
-              rest: ex.rest || null,
-              supersetGroup: ex.supersetGroup || ex.repeatGroup || null,
-              notes: ex.notes || ex.details || null,
-            }));
+            strengthExercises = exArr.map(ex => {
+              const grp = ex.supersetGroup || ex.supersetId || ex.repeatGroup || null;
+              return {
+                name: ex.name || "Exercise",
+                sets: ex.sets || null,
+                reps: ex.reps || null,
+                weight: ex.weight || null,
+                rest: ex.rest || null,
+                // Renderer keys on supersetId; keep supersetGroup as canonical
+                // storage so future code paths still find it.
+                supersetGroup: grp,
+                supersetId: grp,
+                notes: ex.notes || ex.details || null,
+              };
+            });
           } else {
             intervals = exArr.map(ex => ({
               name: ex.name || "Interval",
@@ -631,15 +637,19 @@
       const p = e.payload;
       const src = p.segments || p.exercises || p.intervals || [];
       if (_isStrength) {
-        strengthExercises = src.map(s => ({
-          name: s.name || "Exercise",
-          sets: s.sets || null,
-          reps: s.reps || null,
-          weight: s.weight || null,
-          rest: s.rest || null,
-          supersetGroup: s.supersetGroup || s.repeatGroup || null,
-          notes: s.notes || s.details || null,
-        }));
+        strengthExercises = src.map(s => {
+          const grp = s.supersetGroup || s.supersetId || s.repeatGroup || null;
+          return {
+            name: s.name || "Exercise",
+            sets: s.sets || null,
+            reps: s.reps || null,
+            weight: s.weight || null,
+            rest: s.rest || null,
+            supersetGroup: grp,
+            supersetId: grp,
+            notes: s.notes || s.details || null,
+          };
+        });
       } else {
         intervals = src.map(s => ({
           name: s.name || s.type || "Step",

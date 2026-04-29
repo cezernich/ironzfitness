@@ -2473,6 +2473,37 @@
           </div>
         </div>
 
+        <!-- HIIT meta — format / rounds / rest. Shown only when type=hiit.
+             Placed BEFORE the exercises block so the user picks the format
+             first (and therefore knows what "rounds" means in context). -->
+        <div class="form-row" id="coach-assign-hiit-block" style="display:none">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+            <div style="flex:1;min-width:120px;display:flex;flex-direction:column;gap:6px">
+              <label for="coach-assign-hiit-format">Format</label>
+              <select id="coach-assign-hiit-format" class="input" onchange="coachAssignOnHiitFormatChange()">
+                <option value="circuit">Circuit</option>
+                <option value="tabata">Tabata</option>
+                <option value="emom">EMOM</option>
+                <option value="amrap">AMRAP</option>
+              </select>
+            </div>
+            <div style="flex:0 1 140px;min-width:120px;display:flex;flex-direction:column;gap:6px">
+              <label for="coach-assign-hiit-rounds" id="coach-assign-hiit-rounds-label">Rounds</label>
+              <input type="number" id="coach-assign-hiit-rounds" class="input" min="1" value="3" />
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:flex-end">
+            <div style="flex:1;min-width:140px;display:flex;flex-direction:column;gap:6px">
+              <label for="coach-assign-hiit-rest-ex">Rest b/w exercises</label>
+              <input type="text" id="coach-assign-hiit-rest-ex" class="input" placeholder="optional, e.g. 20s" />
+            </div>
+            <div style="flex:1;min-width:140px;display:flex;flex-direction:column;gap:6px" id="coach-assign-hiit-rest-rnd-wrap">
+              <label for="coach-assign-hiit-rest-rnd">Rest b/w rounds</label>
+              <input type="text" id="coach-assign-hiit-rest-rnd" class="input" placeholder="optional, e.g. 60s" />
+            </div>
+          </div>
+        </div>
+
         <!-- Strength block — exercise rows (sets/reps/weight + supersets).
              Visible for: weightlifting, bodyweight, general, hiit, hyrox.
              Hidden for cardio types and yoga (see coachAssignOnTypeChange). -->
@@ -2491,41 +2522,17 @@
           <button type="button" class="btn-secondary btn-sm" onclick="coachAssignAddCardioRow()" style="margin-top:6px">+ Add Interval</button>
         </div>
 
-        <!-- HIIT meta — format / rounds / rest. Shown only when type=hiit,
-             stacked under the strength rows so the workout JSON gets the
-             same hiitMeta shape Add Session emits. -->
-        <div class="form-row" id="coach-assign-hiit-block" style="display:none">
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <div style="flex:1;min-width:120px">
-              <label for="coach-assign-hiit-format">Format</label>
-              <select id="coach-assign-hiit-format" class="input">
-                <option value="circuit">Circuit</option>
-                <option value="tabata">Tabata</option>
-                <option value="emom">EMOM</option>
-                <option value="amrap">AMRAP</option>
-              </select>
-            </div>
-            <div style="flex:0 1 100px;min-width:80px">
-              <label for="coach-assign-hiit-rounds">Rounds</label>
-              <input type="number" id="coach-assign-hiit-rounds" class="input" min="1" value="3" />
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
-            <div style="flex:1;min-width:140px">
-              <label for="coach-assign-hiit-rest-ex">Rest between exercises</label>
-              <input type="text" id="coach-assign-hiit-rest-ex" class="input" placeholder="optional, e.g. 20s" />
-            </div>
-            <div style="flex:1;min-width:140px">
-              <label for="coach-assign-hiit-rest-rnd">Rest between rounds</label>
-              <input type="text" id="coach-assign-hiit-rest-rnd" class="input" placeholder="optional, e.g. 60s" />
-            </div>
-          </div>
-        </div>
-
         <div class="form-row">
           <label for="coach-assign-note">Coach note <span class="optional-tag">optional · shown to client on the workout card</span></label>
           <textarea id="coach-assign-note" rows="2" class="input"
             placeholder="e.g. Focus on the second half — negative split."
+            style="font-family:inherit"></textarea>
+        </div>
+
+        <div class="form-row">
+          <label for="coach-assign-why">Why this workout? <span class="optional-tag">optional · shown to client under "Why this workout?"</span></label>
+          <textarea id="coach-assign-why" rows="2" class="input"
+            placeholder="e.g. Builds your VO2max ceiling — the workout that actually shifts your 5K time."
             style="font-family:inherit"></textarea>
         </div>
 

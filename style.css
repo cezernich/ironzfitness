@@ -13329,11 +13329,22 @@ input.completion-ex-name:focus {
 .admin-table tr.workout-row:hover td { background: rgba(37, 99, 235, 0.06); }
 
 .admin-td-name { font-weight: 600; white-space: nowrap; }
-.admin-td-email { color: var(--color-text-muted); }
+.admin-td-email { color: var(--color-text-muted); max-width: 0; }
+/* Truncates with ellipsis when the column doesn't have room. The full
+   address stays in the DOM (and in the title attribute), so users can
+   still copy by selecting the cell or hovering for the tooltip. */
+.admin-td-email-text {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .admin-td-actions {
   display: flex;
   gap: 6px;
+  white-space: nowrap;
 }
 
 .admin-action-btn {
@@ -13401,7 +13412,6 @@ input.completion-ex-name:focus {
   }
   .admin-table { font-size: 0.78rem; }
   .admin-table th, .admin-table td { padding: 8px 5px; }
-  .admin-td-email { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
 }
 
 /* ── Event analytics bar chart ── */
@@ -13734,6 +13744,12 @@ input.completion-ex-name:focus {
 }
 .coach-client-card-meta { font-size: 0.78rem; color: var(--color-text-muted); margin-top: 2px; }
 .coach-client-card-last { font-size: 0.82rem; margin-top: 4px; }
+.coach-client-card-plan {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+  line-height: 1.35;
+}
 .coach-client-card-action { font-size: 1.2rem; color: var(--color-text-muted); flex-shrink: 0; }
 .coach-client-flag { color: var(--color-warning, #c97a00); font-size: 0.9rem; margin-left: 4px; }
 
@@ -14561,7 +14577,14 @@ input.completion-ex-name:focus {
   font-size: 0.85rem;
   color: var(--color-text-muted);
 }
-.coach-program-day-name { font-weight: 600; }
+.coach-program-day-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .coach-program-day-empty {
   color: var(--color-text-muted);
   font-style: italic;

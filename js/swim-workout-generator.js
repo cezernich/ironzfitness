@@ -248,7 +248,7 @@
     switch (idx) {
       case 1:
         return [
-          _iv("Cool Down", _snap(150, pool), "backstroke", "easy"),
+          _iv("Cool Down", _snap(150, pool), "freestyle", "easy"),
           _rest(10),
           _iv("Easy", _snap(100, pool), "choice", "very easy"),
         ];
