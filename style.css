@@ -11249,7 +11249,18 @@ input.completion-ex-name:focus {
 
 @media (max-width: 430px) {
 
-  main { padding: 16px 10px 80px; }
+  /* Tighter horizontal padding on phones, but keep the same bottom
+     buffer as the global rule (calc(168px + safe-area)) so the last
+     card on Training (Active Training Inputs) doesn't end up behind
+     the fixed bottom nav + iPhone home indicator. The previous 80px
+     here was below 56px nav + 34px safe-area on modern iPhones — i.e.
+     literally negative space. */
+  main {
+    padding: 16px 10px;
+    padding-left: calc(10px + env(safe-area-inset-left, 0px));
+    padding-right: calc(10px + env(safe-area-inset-right, 0px));
+    padding-bottom: calc(168px + env(safe-area-inset-bottom, 0px));
+  }
 
   /* ── Exercise / segment rows: stack on mobile ── */
   .exercise-row,
@@ -13799,6 +13810,196 @@ input.completion-ex-name:focus {
   align-self: center;
   white-space: nowrap;
 }
+
+/* QR row — image left, caption right. Stacks on narrow viewports so
+   the QR doesn't squeeze the caption into one-word-per-line. */
+.coach-invite-qr-row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px dashed var(--color-border, #d4d0c8);
+  border-radius: 10px;
+}
+.coach-invite-qr {
+  flex: 0 0 auto;
+  width: 120px;
+  height: 120px;
+  border-radius: 6px;
+  background: #fff;
+}
+.coach-invite-qr-caption {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+.coach-invite-qr-caption strong {
+  display: block;
+  color: var(--color-text);
+  margin-bottom: 4px;
+}
+@media (max-width: 380px) {
+  .coach-invite-qr-row { flex-direction: column; align-items: flex-start; }
+  .coach-invite-qr { width: 160px; height: 160px; align-self: center; }
+}
+
+.coach-invite-card .coach-invite-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.coach-invite-card .coach-invite-actions button { flex: 1; }
+
+/* Funnel — 5 horizontal bar rows. Width is normalized to top-of-funnel
+   (clicks) so attrition shows visually. The "active" row is tinted
+   primary to draw the eye to the conversion endpoint; "dismissed" is
+   muted because it's a 7-day window and feels distinct from the rest. */
+.coach-invite-funnel {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border, #e6e2dc);
+}
+.coach-invite-funnel-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: 10px;
+}
+.coach-invite-funnel-loading {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  padding: 8px 0;
+}
+.coach-invite-funnel-row {
+  display: grid;
+  grid-template-columns: minmax(110px, max-content) 1fr 38px;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.coach-invite-funnel-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.coach-invite-funnel-sub {
+  font-weight: 400;
+  font-size: 0.74rem;
+  color: var(--color-text-muted);
+  display: block;
+  margin-top: 2px;
+}
+.coach-invite-funnel-bar {
+  background: var(--color-bg, #f4f1ec);
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.coach-invite-funnel-fill {
+  height: 100%;
+  background: var(--color-coach, #534AB7);
+  border-radius: 6px;
+  transition: width 0.35s ease;
+}
+.coach-invite-funnel-row--primary .coach-invite-funnel-fill {
+  background: var(--color-success, #16a34a);
+}
+.coach-invite-funnel-row--muted .coach-invite-funnel-fill {
+  background: var(--color-text-muted, #888);
+  opacity: 0.55;
+}
+.coach-invite-funnel-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+}
+
+/* Recent activity feed — anonymous timestamps. Verb on left, when on
+   right; chevron-style row separators kept light so the funnel is the
+   eye magnet. */
+.coach-invite-activity {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border, #e6e2dc);
+}
+.coach-invite-activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.coach-invite-activity-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 0.88rem;
+  border-bottom: 1px solid var(--color-border, #f0ece6);
+}
+.coach-invite-activity-list li:last-child { border-bottom: none; }
+.coach-invite-activity-verb { color: var(--color-text); }
+.coach-invite-activity-when {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+.coach-invite-activity-note {
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin: 8px 0 0;
+}
+
+/* Bio editor — lives between the share controls and the funnel. The
+   input itself is plain (no rich text) so the public landing page
+   renders exactly what the coach typed. 500-char cap is enforced by
+   the database CHECK and surfaced via a live counter. */
+.coach-invite-bio {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border, #e6e2dc);
+}
+.coach-invite-bio-input {
+  width: 100%;
+  min-height: 88px;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border, #d4d0c8);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--color-text);
+  box-sizing: border-box;
+}
+.coach-invite-bio-input:focus {
+  outline: none;
+  border-color: var(--color-coach, #534AB7);
+  box-shadow: 0 0 0 3px rgba(83, 74, 183, 0.15);
+}
+.coach-invite-bio-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.coach-invite-bio-count {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.coach-invite-bio-count--err { color: var(--color-danger, #b91c1c); }
+.coach-invite-bio-msg {
+  flex: 1;
+  font-size: 0.82rem;
+  color: var(--color-success, #16a34a);
+}
+.coach-invite-bio-msg--err { color: var(--color-danger, #b91c1c); }
+.coach-invite-bio-row button { margin-left: auto; }
 
 .coach-section-title {
   font-size: 0.78rem;
