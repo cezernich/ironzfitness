@@ -3333,15 +3333,13 @@ function getDayTotals(dateStr) {
     const actual = _parseDurMin(String(_getCompletionDuration(`session-sw-${w.id}`) || ""));
     if (actual > 0) { totalMin += actual; return; }
 
-    // BUGFIX 04-27 §2: prefer the duration the workout-card badge uses so
-    // the day total reconciles with the literal sum of card minutes. Three
-    // possible field names depending on which generator produced the
-    // session (legacy `duration`, session-assembler `durationMin`, the
-    // strength generator's `estimated_duration_min`). Re-estimating from
-    // sets×rest produced ~30 min of phantom duration vs the card.
-    const explicitMin = _readWorkoutDurationMin(w);
-    if (explicitMin > 0) { totalMin += explicitMin; return; }
-
+    // For sessions backed by a discipline+load template, the card badge
+    // reads the TEMPLATE's duration (e.g. brick.moderate → 120 min). The
+    // schedule entry's `w.duration` is a separate heuristic stamped at
+    // onboarding (sessionLen × 1.3 for brick, etc.) — using it here meant
+    // the day total disagreed with the badge by however much the
+    // heuristic missed. Mirror the planEntry path (above) and prefer the
+    // template's duration when one exists so badge + day total reconcile.
     if (w.discipline && w.load) {
       const session = (typeof getSessionTemplate === "function"
                         ? getSessionTemplate(w.discipline, w.load, w.weekNumber, w.date)
@@ -3349,6 +3347,15 @@ function getDayTotals(dateStr) {
                     || (SESSION_DESCRIPTIONS[w.discipline] || {})[w.load];
       if (session?.duration) { totalMin += _parseDurMin(session.duration); return; }
     }
+
+    // No template — fall back to the explicit duration the generator
+    // stamped on the entry. Three possible field names depending on
+    // which generator produced the session (legacy `duration`,
+    // session-assembler `durationMin`, strength generator's
+    // `estimated_duration_min`).
+    const explicitMin = _readWorkoutDurationMin(w);
+    if (explicitMin > 0) { totalMin += explicitMin; return; }
+
     if (w.exercises && w.exercises.length > 0) {
       totalMin += _estimateStrengthSessionMin(w.exercises);
     }
