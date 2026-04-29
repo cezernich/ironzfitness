@@ -366,7 +366,7 @@ async function estimateMealWithAI() {
       model: "claude-haiku-4-5-20251001",
       max_tokens: 300,
       system:
-        "You are a nutrition coach estimating typical macros for a meal from a short text description. Respond with ONLY a valid JSON object matching this shape: {\"calories\": number, \"protein_g\": number, \"carbs_g\": number, \"fat_g\": number}. Use whole numbers. Assume one standard serving unless the user specifies a quantity. Do not include any other text, comments, units, or formatting — just the JSON.",
+        "You are a nutrition coach estimating typical macros for a meal from a short text description. Respond with ONLY a valid JSON object matching this shape: {\"calories\": number, \"protein_g\": number, \"carbs_g\": number, \"fat_g\": number}. Use whole numbers. Default to one standard serving. If the description includes a quantity multiplier (\"x2\", \"x 3\", \"2x\", \"2 servings\", \"two\", \"three\", \"double\", \"half\", \"1.5\", etc.), multiply the per-serving macros by that exact factor — \"avocado toast x2\" should be 2× the calories/protein/carbs/fat of one avocado toast. Do not include any other text, comments, units, or formatting — just the JSON.",
       messages: [
         { role: "user", content: `Meal: ${description}` },
       ],
