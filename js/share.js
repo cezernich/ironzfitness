@@ -398,15 +398,9 @@ function _handleShareClick(e) {
   }
   if (!entry) { console.warn("[IronZ] share: entry not in cache for key", key); return; }
 
-  // Touch device with Web Share API → use the native share sheet directly.
-  // That's the right UX on iOS/Android — skip our custom sheet entirely.
-  // Desktop (no navigator.share, or no touch) → show our custom
-  // ShareActionSheet (Copy link + Send to friend).
-  const preferNative = !!(navigator.share && "ontouchstart" in window);
-  if (preferNative) {
-    shareWorkoutLinkDirect(entry, source, "native");
-    return;
-  }
+  // Always show our custom ShareActionSheet (Copy link + Send to friend +
+  // Share to Strava). The iOS native share sheet doesn't expose those
+  // app-specific options, so we route every device through our own UI.
   if (window.ShareActionSheet && window.ShareActionSheet.open) {
     window.ShareActionSheet.open(entry, source);
   } else {

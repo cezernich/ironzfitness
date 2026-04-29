@@ -340,7 +340,12 @@
     }
 
     if (exercises.length > 0) {
-      html += renderSegmentBar(exercises);
+      // Skip the zone-colored structure bar for strength workouts — exercises
+      // like "Dumbbell Shoulder Press" don't map to running zones, so the bar
+      // would just render as a flat block of the default orange.
+      const _isStrengthSport = sport === "strength" || sport === "weightlifting"
+        || sessionType === "strength" || sessionType === "weightlifting";
+      if (!_isStrengthSport) html += renderSegmentBar(exercises);
       html += renderExercises(exercises);
     } else {
       const structures = {

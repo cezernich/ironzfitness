@@ -824,37 +824,122 @@ async function _handleImportParam() {
     return;
   }
 
-  // Fetch the shared workout
-  const { data: rows, error } = await sb
-    .from("shared_workouts")
-    .select("*")
-    .eq("share_token", importToken)
-    .maybeSingle();
-
-  if (error || !rows) {
-    _showShareToast("Workout not found or link expired.");
-    return;
-  }
-  if (rows.revoked_at || (rows.expires_at && new Date(rows.expires_at) < new Date())) {
-    _showShareToast("This share link has expired.");
-    return;
-  }
-
-  // Save via SavedWorkoutsLibrary
-  const Saved = window.SavedWorkoutsLibrary;
-  if (Saved && Saved.saveFromShare) {
-    await Saved.saveFromShare({
-      shareToken: importToken,
-      variantId: rows.variant_id,
-      sportId: rows.sport_id,
-      sessionTypeId: rows.session_type_id,
-      senderUserId: rows.sender_user_id,
-    });
-    _showShareToast("Workout saved!");
-    // Switch to the Saved Library tab
-    if (typeof showTab === "function") showTab("saved-library");
+  // Resolve via WorkoutLinkService so we get the joined sender profile and
+  // the standard error classification (REVOKED / EXPIRED / NOT_FOUND).
+  const Link = window.WorkoutLinkService;
+  let resolved = null;
+  if (Link && Link.resolveToken) {
+    resolved = await Link.resolveToken(importToken);
   } else {
-    _showShareToast("Workout imported!");
+    // Fallback to a direct read if WorkoutLinkService isn't loaded.
+    const { data: row } = await sb
+      .from("shared_workouts")
+      .select("share_token, variant_id, sport_id, session_type_id, share_note, created_at, expires_at, revoked_at, sender_user_id")
+      .eq("share_token", importToken)
+      .maybeSingle();
+    if (!row) resolved = { error: "NOT_FOUND" };
+    else if (row.revoked_at) resolved = { error: "REVOKED" };
+    else if (row.expires_at && new Date(row.expires_at) < new Date()) resolved = { error: "EXPIRED" };
+    else resolved = {
+      shareToken: row.share_token, variantId: row.variant_id, sportId: row.sport_id,
+      sessionTypeId: row.session_type_id, shareNote: row.share_note,
+      createdAt: row.created_at, expiresAt: row.expires_at,
+      senderUserId: row.sender_user_id, senderDisplayName: null, senderAvatarUrl: null,
+    };
+  }
+
+  if (resolved.error) {
+    if (resolved.error === "REVOKED") _showShareToast("This share link was revoked.");
+    else if (resolved.error === "EXPIRED") _showShareToast("This share link has expired.");
+    else _showShareToast("Workout not found or link expired.");
+    return;
+  }
+
+  // Drop the share into the inbox so it survives if the user dismisses
+  // the modal without acting.
+  const Inbox = window.SharedWorkoutsInbox;
+  if (Inbox && Inbox.upsertEntry) {
+    try {
+      await Inbox.upsertEntry({
+        shareToken: resolved.shareToken,
+        senderUserId: resolved.senderUserId,
+        senderDisplayName: resolved.senderDisplayName,
+        senderAvatarUrl: resolved.senderAvatarUrl,
+        variantId: resolved.variantId,
+        sportId: resolved.sportId,
+        sessionTypeId: resolved.sessionTypeId,
+        shareNote: resolved.shareNote,
+        received_at: new Date().toISOString(),
+        status: "unread",
+      });
+    } catch (e) { console.warn("[IronZ] inbox upsert failed", e); }
+  }
+
+  // Open the preview modal with Save / Schedule actions wired up.
+  const PreviewModal = window.SharedWorkoutPreviewModal;
+  if (PreviewModal && PreviewModal.open) {
+    PreviewModal.open({
+      sharedWorkout: resolved,
+      onSave: async () => {
+        const Saved = window.SavedWorkoutsLibrary;
+        if (Saved && Saved.saveFromShare) {
+          await Saved.saveFromShare({
+            shareToken: resolved.shareToken,
+            variantId: resolved.variantId,
+            sportId: resolved.sportId,
+            sessionTypeId: resolved.sessionTypeId,
+            senderUserId: resolved.senderUserId,
+          });
+          if (Inbox && Inbox.markAsSaved) try { await Inbox.markAsSaved(resolved.shareToken); } catch {}
+          _showShareToast("Workout saved!");
+          if (typeof showTab === "function") showTab("saved-library");
+        }
+      },
+      onSchedule: async () => {
+        const ScheduleCalendar = window.ScheduleCalendarModal;
+        if (ScheduleCalendar && ScheduleCalendar.open) {
+          ScheduleCalendar.open({
+            sharedWorkout: resolved,
+            scaledWorkout: { sport_id: resolved.sportId, session_type_id: resolved.sessionTypeId, variant_id: resolved.variantId },
+            onPick: async ({ date }) => {
+              let schedule = [];
+              try { schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]"); } catch {}
+              schedule.push({
+                id: "shared-" + resolved.shareToken + "-" + Date.now(),
+                date,
+                type: resolved.sessionTypeId,
+                sessionName: resolved.variantId,
+                variant_id: resolved.variantId,
+                sport_id: resolved.sportId,
+                shared_from_token: resolved.shareToken,
+                source: "shared",
+              });
+              try {
+                localStorage.setItem("workoutSchedule", JSON.stringify(schedule));
+                if (typeof DB !== "undefined" && DB.syncSchedule) DB.syncSchedule();
+              } catch {}
+              if (Inbox && Inbox.markAsScheduled) try { await Inbox.markAsScheduled(resolved.shareToken, date); } catch {}
+              _showShareToast("Added to your plan!");
+              if (typeof renderCalendar === "function") renderCalendar();
+            },
+          });
+        }
+      },
+    });
+  } else {
+    // No modal available — fall back to silent save so behavior degrades gracefully.
+    const Saved = window.SavedWorkoutsLibrary;
+    if (Saved && Saved.saveFromShare) {
+      await Saved.saveFromShare({
+        shareToken: resolved.shareToken,
+        variantId: resolved.variantId,
+        sportId: resolved.sportId,
+        sessionTypeId: resolved.sessionTypeId,
+        senderUserId: resolved.senderUserId,
+      });
+      _showShareToast("Workout saved!");
+      if (typeof showTab === "function") showTab("saved-library");
+    }
   }
 }
 

@@ -272,7 +272,7 @@
                 data-client-id="${_esc(_client.id)}"
                 data-client-name="${_esc(_clientName)}"
                 onclick="openAssignWorkoutModal(this.dataset.clientId, this.dataset.clientName)">
-          + Assign Workout
+          + Add a Workout
         </button>
       </div>`;
 

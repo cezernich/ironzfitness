@@ -2391,11 +2391,6 @@ if (typeof window !== "undefined") {
     const entry = (window.__calShareFallbackCache || {})[cacheKey];
     if (!entry) { console.warn("[IronZ] overflow share: entry not found for", cacheKey); return; }
     const source = "calendar";
-    const preferNative = !!(navigator.share && "ontouchstart" in window);
-    if (preferNative && typeof window.shareWorkoutLinkDirect === "function") {
-      window.shareWorkoutLinkDirect(entry, source, "native");
-      return;
-    }
     if (window.ShareActionSheet && window.ShareActionSheet.open) {
       window.ShareActionSheet.open(entry, source);
     } else if (typeof window.shareWorkoutLinkDirect === "function") {

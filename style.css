@@ -14011,6 +14011,67 @@ input.completion-ex-name:focus {
   .coach-assign-ex-row .coach-assign-ex-weight  { grid-area: weight; }
 }
 
+/* Assign Workout modal — cardio interval rows. Mirrors the look of the
+   strength rows but laid out as three stacked groups (phase header /
+   duration + zone / details) so the time-or-distance toggle has room. */
+.coach-assign-cardio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+.coach-assign-cardio-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+.coach-assign-cardio-row .input { padding: 6px 8px; font-size: 0.85rem; }
+.coach-assign-crow-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.coach-assign-crow-top .coach-assign-cphase { flex: 1 1 auto; min-width: 0; }
+.coach-assign-crow-mid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.coach-assign-dur-toggle {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.coach-assign-dur-toggle .qe-dur-mode-btn {
+  background: transparent;
+  border: 0;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+.coach-assign-dur-toggle .qe-dur-mode-btn.active {
+  background: var(--color-coach, #534AB7);
+  color: #fff;
+}
+.coach-assign-dur-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.coach-assign-dur-input .input { width: 80px; }
+.coach-assign-unit {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+.coach-assign-cardio-row .coach-assign-ceffort { min-width: 140px; flex: 1 1 140px; }
+
 /* Conflict modal options — three vertically-stacked buttons */
 .coach-conflict-options {
   display: flex;

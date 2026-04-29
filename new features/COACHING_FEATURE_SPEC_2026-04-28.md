@@ -167,7 +167,9 @@ create table public.coach_digest_log (
 
 ## Row Level Security (RLS) policies
 
-The trickiest part of the build. Get this right or coaches read data they shouldn't.
+**Architecture context.** IronZ stores most user data in a generic key-value table `user_data` (keyed by `user_id` + `data_key`, with a JSONB `data_value`), not in dedicated per-table schemas. Examples: `meals`, `hydrationLog`, `personalRecords`, `completedSessions`, `workoutRatings`, `trainingZones` are all rows in `user_data` with the corresponding `data_key`. A few things ARE dedicated tables: `profiles`, `training_sessions` (the workout schedule), `workouts`, `fitness_history`, `subscriptions`, plus the new coach-feature tables defined above.
+
+**Why this matters for RLS.** Instead of writing per-table policies for nutrition / hydration / body comp / etc., we write ONE policy on `user_data` that filters by `data_key`. This gives us a precise allowlist of what coaches can see — anything NOT in the allowlist is invisible, full stop.
 
 ```sql
 -- Helper function: is this coach actively assigned to this client?
@@ -192,19 +194,51 @@ create policy "Coaches can view assigned clients' profiles"
     public.is_coaching(auth.uid(), id)
   );
 
--- training data: workoutSchedule, completedWorkouts, feedback, prs, training_zones
--- (each on their own table — replicate this pattern per table)
-create policy "Coaches can view assigned clients' training data"
-  on public.workout_schedule  -- or whatever the table name actually is
+-- user_data: coaches can read ONLY the training-relevant keys for assigned clients.
+-- Everything else (meals, hydrationLog, savedMealPlans, fuelingPrefs, etc.) stays
+-- private by default — they have no allowlist entry.
+create policy "Coaches can view training keys in clients' user_data"
+  on public.user_data
   for select
   using (
     public.is_coaching(auth.uid(), user_id)
+    AND data_key in (
+      'workoutSchedule',
+      'workouts',
+      'trainingPlan',
+      'completedSessions',
+      'workoutRatings',
+      'personalRecords',
+      'trainingZones',
+      'trainingZonesHistory',
+      'workoutEffortFeedback',
+      'calibrationSignals',
+      'fitnessGoals',
+      'raceEvents',
+      'strengthSetup',
+      'injuries'
+    )
   );
 
--- Same pattern for: completed_workouts, feedback, prs, training_zones, races
--- (NOT for: meals, hydration_log, body_comp, sleep, photos)
+-- training_sessions (dedicated table for workout schedule)
+create policy "Coaches can view assigned clients' training_sessions"
+  on public.training_sessions
+  for select
+  using (public.is_coaching(auth.uid(), user_id));
 
--- coach_assigned_workouts: only the assigned coach (or primary coach) can read/write
+-- workouts (dedicated table for generic workouts)
+create policy "Coaches can view assigned clients' workouts"
+  on public.workouts
+  for select
+  using (public.is_coaching(auth.uid(), user_id));
+
+-- fitness_history (training metrics over time — coach in scope)
+create policy "Coaches can view assigned clients' fitness_history"
+  on public.fitness_history
+  for select
+  using (public.is_coaching(auth.uid(), user_id));
+
+-- coach_assigned_workouts: only the assigned coach can read/write
 create policy "Coaches can manage their own assignments"
   on public.coach_assigned_workouts
   for all
@@ -250,7 +284,70 @@ create policy "Clients see their own assignments"
   using (client_id = auth.uid());
 ```
 
-**Critical sanity check:** verify that `meals`, `hydration_log`, `body_comp_logs`, `sleep_logs`, `photos` tables have **no policy** allowing coach access. The default-deny posture protects these — but explicitly add a regression test that confirms `select * from meals where user_id = <client>` as the coach role returns zero rows.
+**Allowlist policy decision.** The list of `data_key` values exposed to coaches is intentional. Review and lock these in:
+
+| Allowed (coaches see) | Blocked (coaches DO NOT see) |
+|---|---|
+| workoutSchedule | meals |
+| workouts | hydrationLog |
+| trainingPlan | hydrationSettings, hydrationDailyTargetOz |
+| completedSessions | savedMealPlans |
+| workoutRatings | currentWeekMealPlan |
+| personalRecords | fuelingPrefs |
+| trainingZones | foodPreferences |
+| trainingZonesHistory | nutritionAdjustments |
+| workoutEffortFeedback | profile (name/email visible via profiles table policy; private fields stay protected) |
+| calibrationSignals | dayRestrictions |
+| fitnessGoals | gear_checklists_v1 |
+| raceEvents | onboardingData |
+| strengthSetup | notifSettings, theme |
+| injuries | (anything not explicitly allowlisted) |
+
+If the coder thinks a key should be added/removed from the allowlist, ask Chase before deciding.
+
+**Critical sanity check (smoke test).** Before any UI is built, verify the policies are correct by running these queries in the Supabase SQL Editor as a non-superuser:
+
+```sql
+set role authenticated;
+set request.jwt.claim.sub = '<coach-uuid>';
+
+-- Should return 0 rows (meals NOT in coach allowlist)
+select * from public.user_data
+where user_id = '<client-uuid>' and data_key = 'meals';
+
+-- Should return 0 rows (hydration NOT in coach allowlist)
+select * from public.user_data
+where user_id = '<client-uuid>' and data_key = 'hydrationLog';
+
+-- Should return rows IF the client has any (workoutSchedule IS in coach allowlist)
+select * from public.user_data
+where user_id = '<client-uuid>' and data_key = 'workoutSchedule';
+
+-- Should return rows IF the client has any (training_sessions is a dedicated allowlisted table)
+select * from public.training_sessions
+where user_id = '<client-uuid>';
+
+-- Profile basics should be readable
+select id, full_name, email from public.profiles where id = '<client-uuid>';
+```
+
+If any of the "Should return 0 rows" queries returns data, the RLS is broken — stop and debug before building UI. If any of the "Should return rows" queries returns nothing despite the client having data, the policy is too restrictive — also stop and fix.
+
+**Reverse smoke test (does the client still see their own data?):**
+
+```sql
+set role authenticated;
+set request.jwt.claim.sub = '<client-uuid>';
+
+-- Client should see their own meals (existing user-only policy)
+select * from public.user_data
+where user_id = '<client-uuid>' and data_key = 'meals';
+
+-- Client should see their own everything
+select count(*) from public.user_data where user_id = '<client-uuid>';
+```
+
+This catches the case where adding a coach policy accidentally restricts existing user policies.
 
 ---
 
@@ -566,7 +663,7 @@ The full feature is ~3 weeks of work. Break it into 5 phases. Each phase is a sh
 **Outcome:** Admin can promote coaches, assign clients, and review coach requests. Users can submit a coach request. No coach UI yet — admin does everything via the Admin Portal.
 
 - Supabase migrations: profiles.is_coach, coaching_assignments, coach_requests, RLS policies, helper function.
-- Email service integration (Resend recommended — see Request a Coach section).
+- Email service integration: Gmail SMTP from `ironzsupport@gmail.com` (see Email service section for setup).
 - Admin Portal: Coaches tab with two sub-tabs:
   - **Roster** — promote-to-coach, assign-client, remove-assignment flows.
   - **Requests** — view pending requests, match-to-coach, archive.
@@ -621,33 +718,38 @@ The full feature is ~3 weeks of work. Break it into 5 phases. Each phase is a sh
 
 ## "Request a Coach" — lead-gen entry point
 
-Adds a button to the Profile / Settings screen that lets users request to be paired with a coach. Modeled on the existing **Get Support** button. Behavior: tap → 4-question form → submit → sends email to `ironzsupport@gmail.com` AND writes a row to a `coach_requests` table in Supabase (so you have a pending-requests view in the Admin Portal).
+Adds a **dedicated card** to the Profile screen that lets users request to be paired with a coach. Behavior: tap → 4-question form → submit → sends email to `ironzsupport@gmail.com` AND writes a row to a `coach_requests` table in Supabase (so you have a pending-requests view in the Admin Portal).
 
 ### Where it lives
 
-Profile screen, **dedicated card** above the About section, styled like the Coach Portal entry card (purple `--color-coach` heading, primary CTA button). Sits in the same vertical group as Admin Portal entry → Coach Portal entry → Request a Coach → Athlete Profile.
+**Dedicated card on the Profile screen, prominently placed.** This is a lead-gen / acquisition feature — burying it in inline links would kill discoverability. The existing "Email support" affordance lives as a small inline link inside the About card (`index.html` line 1783) and we leave that alone — that pattern is fine for utility actions like support emails, but Request a Coach needs more visual weight.
+
+Pattern (placed above the About card, below the Coach Portal/Admin Portal cards if visible):
 
 ```
 [ Profile screen ]
-  ┌── Admin Portal ──────────────────────────┐ (only if role=admin)
-  └──────────────────────────────────────────┘
-  ┌── Coach Portal ──────────────────────────┐ (only if is_coach=true)
-  └──────────────────────────────────────────┘
-  ┌── Want a coach? ─────────────────────────┐ (hidden when already coached)
-  │  Get matched with an IronZ coach ...     │
-  │  [ Request a Coach ]                     │
-  └──────────────────────────────────────────┘
-  ┌── Athlete Profile ───────────────────────┐
+  ...
+  ┌── Coach Portal ──────────────────────────┐ (only if is_coach)
+  ...
+  ┌── Admin Portal ──────────────────────────┐ (only if admin)
+  ...
+
+  ┌── Request a Coach ───────────────────────┐
+  │  Get matched with an IronZ coach for      │
+  │  personalized training and accountability.│
+  │                                  [Open ›] │
+  └───────────────────────────────────────────┘
+
+  ── About ──
+  Support & FAQ · Email support · Privacy · Terms
   ...
 ```
 
-**Visibility rules** (initCoachVisibility() in js/coach-request-flow.js, fired after auth ready alongside initAdminVisibility):
+**Hide the card** for users who already have an active `coaching_assignments` row as a client (i.e. they're already coached — re-requesting would be confusing). Replace it with a smaller "Coached by [name]" line per the existing client-experience spec.
 
-- **Coach Portal card**: shown when `profiles.is_coach = true` for the current user. Phase 1 ships the markup; the Open button is wired in Phase 2.
-- **Want a coach? card**: shown to all users EXCEPT those who already have an active coaching_assignments row as a client (`active=true AND client_id=auth.uid()`). A coached athlete doesn't need to ask for a coach again. The card stays hidden until the relationship is deactivated, at which point the next auth tick re-enables it.
-- Both cards default to `display:none` in markup so a slow initCoachVisibility doesn't flash them in for the wrong user.
+Visible to all OTHER users (free + premium, no current coach). Premium status surfaces in the email + DB row but doesn't gate access.
 
-Visible to all eligible users (free + premium). Premium status surfaces in the email + DB row but doesn't gate access.
+Card styling matches the existing Coach Portal / Admin Portal entry cards for consistency. Use the brand-neutral card style (white background, subtle border) — NOT the purple coach-attribution color, since this card is for non-coached users requesting a coach, not a coach indicator.
 
 ### The form (4 questions, ~30 seconds to fill)
 
@@ -817,12 +919,212 @@ Updated Phase 1 outcome: *"Admin can promote coaches and assign clients. Users c
 
 ### Email service
 
-You'll need to pick one. Options:
-- **Resend** (recommended) — 3K emails/mo free, dead-simple API, ~10 min to integrate.
-- **SendGrid** — incumbent, more complex, free tier available.
-- **Supabase + SMTP** — use a personal Gmail SMTP. Free but flaky and Gmail rate-limits aggressively.
+**Decision (locked):** Use **Gmail SMTP from `ironzsupport@gmail.com`** for v1. Chase wants this Gmail account to be the canonical IronZ email channel — both the inbox for incoming and the sender for outgoing.
 
-Recommend Resend. Sign up, get an API key, add to Supabase secrets, the edge function calls `resend.emails.send(...)` and we're done.
+Setup:
+1. Enable 2-factor auth on the `ironzsupport@gmail.com` Google account.
+2. Generate a Gmail **App Password** (Google Account → Security → 2-Step Verification → App passwords). Store as a Supabase secret named `GMAIL_APP_PASSWORD`.
+3. Edge function uses `nodemailer` (or any SMTP client) with:
+   - host: `smtp.gmail.com`
+   - port: 465 (SSL) or 587 (STARTTLS)
+   - auth: `{ user: 'ironzsupport@gmail.com', pass: <app password> }`
+4. Set `from` to `"IronZ Support" <ironzsupport@gmail.com>` for branded display.
+
+**Known constraints to monitor:**
+- Free Gmail caps outbound at ~500 emails/day. Volume far below that for v1.
+- Gmail SMTP can throttle or block if usage pattern looks bulk. Mitigate by spacing sends (>1 sec between emails) and avoiding identical-bulk content.
+- Without SPF/DKIM/DMARC tied to an `ironz.app` sender domain, deliverability to corporate inboxes (Outlook/Office365) may be lower. Monitor bounce/spam reports in the Gmail UI.
+
+**Migration path (when volume grows):** Switch to Resend or SendGrid sending from `noreply@ironz.app` with `Reply-To: ironzsupport@gmail.com` set on every email. Replies still land in the same inbox. v2 work, not v1.
+
+---
+
+## Coach control of nutrition & hydration settings
+
+**Decided 2026-04-28.** Coaches can view AND adjust the *settings* (targets, factors, prefs) for nutrition and hydration — **but only when the client has the corresponding feature enabled**, and **only the settings, never the logged data**. Meals, hydration logs, photos, meal plans — all stay private.
+
+### What's in scope vs. private
+
+| Coach can see/edit | Always private to user |
+|---|---|
+| `nutritionAdjustments` (calorie/macro factors) | `meals` |
+| `fuelingPrefs` (carbs/hr, gel size, sources) | `hydrationLog` (actual sips logged) |
+| `hydrationSettings` (sweat rate, sodium prefs) | `savedMealPlans` |
+| `hydrationDailyTargetOz` (the number) | `currentWeekMealPlan` |
+| Read of `nutritionEnabled` / `hydrationEnabled` / `fuelingEnabled` flags (to know if access is permitted) | Photo uploads |
+
+### The gate: user feature toggles
+
+Each user has three independent flags in `user_data`:
+- `nutritionEnabled` (gates access to `nutritionAdjustments`)
+- `hydrationEnabled` (gates access to `hydrationSettings`, `hydrationDailyTargetOz`)
+- `fuelingEnabled` (gates access to `fuelingPrefs`)
+
+When a flag is `false` (user has turned the feature off), coach sees nothing for that bucket — not even the current value. UI shows: *"Client has [nutrition / hydration / fueling] turned off. They control whether to enable it."*
+
+When a flag is `true`, coach sees current settings and can edit them.
+
+**Updates are silent** — no notification to client when coach changes a setting. Client sees the new value next time they open the relevant screen.
+
+### RLS implementation
+
+The current allowlist policy on `user_data` is binary: data_key in [list]. We need a more nuanced one for nutrition/hydration: allow if AND ONLY IF the corresponding feature toggle is true.
+
+```sql
+-- Helper: is a feature flag turned on for a user?
+create or replace function public.is_feature_enabled(uid uuid, flag_key text)
+returns boolean
+language sql
+stable
+as $$
+  select coalesce(
+    (select case
+       when jsonb_typeof(data_value) = 'boolean' then data_value::text::boolean
+       when jsonb_typeof(data_value) = 'object' then (data_value->>'enabled')::boolean
+       else true
+     end
+     from public.user_data
+     where user_id = uid and data_key = flag_key
+     limit 1),
+    true  -- default to enabled if no row exists (matches IronZ default-on behavior)
+  );
+$$;
+```
+
+Then the policy:
+
+```sql
+-- Drop the existing single-policy first if you want to consolidate, OR add
+-- a second policy that grants additional access on top.
+drop policy if exists "Coaches can view training keys in clients' user_data" on public.user_data;
+
+-- Replace with a single broader policy that handles all coach reads with conditional gating
+create policy "Coaches can view permitted client data"
+  on public.user_data
+  for select
+  using (
+    public.is_coaching(auth.uid(), user_id)
+    AND (
+      -- Always-allowed training keys
+      data_key in (
+        'workoutSchedule', 'workouts', 'trainingPlan',
+        'completedSessions', 'workoutRatings',
+        'personalRecords', 'trainingZones', 'trainingZonesHistory',
+        'workoutEffortFeedback', 'calibrationSignals',
+        'fitnessGoals', 'raceEvents', 'strengthSetup', 'injuries',
+        -- The feature flags themselves are always readable so we know what's gated
+        'nutritionEnabled', 'hydrationEnabled', 'fuelingEnabled'
+      )
+      OR
+      -- Nutrition keys: only if nutrition is enabled
+      (data_key = 'nutritionAdjustments' AND public.is_feature_enabled(user_id, 'nutritionEnabled'))
+      OR
+      -- Hydration keys: only if hydration is enabled
+      (data_key in ('hydrationSettings', 'hydrationDailyTargetOz')
+        AND public.is_feature_enabled(user_id, 'hydrationEnabled'))
+      OR
+      -- Fueling keys: only if fueling is enabled
+      (data_key = 'fuelingPrefs' AND public.is_feature_enabled(user_id, 'fuelingEnabled'))
+    )
+  );
+
+-- Coaches can also UPDATE the same conditional set (write access for Phase 3)
+create policy "Coaches can update permitted client settings"
+  on public.user_data
+  for update
+  using (
+    public.is_coaching(auth.uid(), user_id)
+    AND (
+      (data_key = 'nutritionAdjustments' AND public.is_feature_enabled(user_id, 'nutritionEnabled'))
+      OR
+      (data_key in ('hydrationSettings', 'hydrationDailyTargetOz')
+        AND public.is_feature_enabled(user_id, 'hydrationEnabled'))
+      OR
+      (data_key = 'fuelingPrefs' AND public.is_feature_enabled(user_id, 'fuelingEnabled'))
+    )
+  )
+  with check (
+    public.is_coaching(auth.uid(), user_id)
+    AND (
+      (data_key = 'nutritionAdjustments' AND public.is_feature_enabled(user_id, 'nutritionEnabled'))
+      OR
+      (data_key in ('hydrationSettings', 'hydrationDailyTargetOz')
+        AND public.is_feature_enabled(user_id, 'hydrationEnabled'))
+      OR
+      (data_key = 'fuelingPrefs' AND public.is_feature_enabled(user_id, 'fuelingEnabled'))
+    )
+  );
+```
+
+**The coder must verify the actual stored format of `nutritionEnabled` etc.** before deploying — the helper handles boolean and `{enabled: bool}` shapes, but if it's stored some other way (e.g., `"1"` / `"0"` strings) the helper needs adjustment. One quick query to check:
+
+```sql
+select data_key, data_value, jsonb_typeof(data_value)
+from public.user_data
+where data_key in ('nutritionEnabled', 'hydrationEnabled', 'fuelingEnabled')
+limit 5;
+```
+
+### UI on Coach Portal — client detail page
+
+Add a new tab or section: **Nutrition & Fueling**. Layout:
+
+```
+[ Coach Portal · Sarah Chen ]
+  [ Calendar ] [ Benchmarks ] [ Feedback ] [ Nutrition & Fueling ]
+                                            ─────────────────────
+
+  ── NUTRITION ──
+  Status: Enabled by client ✓
+  Daily calorie target:  2,400 kcal   [edit]
+  Carbs adjustment:      1.2x          [edit]
+  Protein adjustment:    1.0x          [edit]
+  Fat adjustment:        0.9x          [edit]
+
+  ── HYDRATION ──
+  Status: Enabled by client ✓
+  Daily target:           120 oz       [edit]
+  Sweat rate:             32 oz/hr    [edit]
+  Sodium pref:            high         [edit]
+
+  ── FUELING ──
+  Status: Disabled by client ✗
+  Client has fueling turned off. They control whether to enable it.
+```
+
+When a section is disabled by the client, show the message and HIDE the values — don't render placeholders that would imply the coach can see them. The toggle state itself is visible (necessary so the coach knows they can't act).
+
+### Edit flow
+
+Coach taps `[edit]` on a value → inline number/dropdown input → tap Save → writes to user_data via the conditional update policy. Silent — no notification fires.
+
+Add a **subtle audit trail** in client detail: a small line under each setting showing "last edited by [coach name] on [date]" so the client can later see if a change was made by their coach vs. themselves. This isn't intrusive but provides accountability.
+
+For the audit trail, add columns to `user_data` (one-time migration):
+
+```sql
+alter table public.user_data
+  add column if not exists last_edited_by uuid references auth.users(id),
+  add column if not exists last_edited_at timestamptz;
+```
+
+App-side write paths set these fields on every update (both client-side and coach-side writes).
+
+### Phase placement
+
+- **Phase 2 (read-only):** Coach Portal Nutrition & Fueling tab shows current values + disabled-by-client states. No edit buttons yet.
+- **Phase 3 (write):** Edit buttons + write policy + audit trail.
+
+Adds ~1 day to Phase 2 and ~2 days to Phase 3. Total feature scope grows by 3 days but value is meaningful — coaching nutrition is core to triathlon/endurance coaching.
+
+### Edge cases
+
+| Scenario | Handling |
+|---|---|
+| Client toggles nutrition OFF after coach edited it | Coach loses access immediately. Their previous edits remain in the DB but are invisible. If client re-enables, coach sees current state (which includes their old edits). |
+| Coach is removed mid-session edit | RLS check fires on each write — if `is_coaching()` returns false, write fails. UI handles error gracefully ("You no longer coach this client. Refresh."). |
+| Client has nutrition enabled but no `nutritionAdjustments` row exists yet | Coach sees defaults (calorie target from `nutrition-calculator.js`, factors all 1.0x). First edit creates the row. |
+| Two coaches (primary + sub) edit simultaneously | Last write wins. Audit trail shows last editor. Acceptable for v1; optimistic locking deferred. |
 
 ---
 

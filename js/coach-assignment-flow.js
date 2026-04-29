@@ -149,7 +149,7 @@
     const submitBtn = document.getElementById("coach-assign-save-btn");
     if (submitBtn) {
       submitBtn.disabled = false;
-      submitBtn.textContent = _editingAssignmentId ? "Update Workout" : "Assign Workout";
+      submitBtn.textContent = _editingAssignmentId ? "Update Workout" : "Add Workout";
     }
   }
 
@@ -161,13 +161,84 @@
     if (prefill.type)        setVal("coach-assign-type", prefill.type);
     if (prefill.duration)    setVal("coach-assign-duration", prefill.duration);
     if (prefill.coachNote)   setVal("coach-assign-note", prefill.coachNote);
+    // Yoga sessions store the coach's text in `details` (no rows). Surface
+    // it in the coach-note field so the editing coach sees what they wrote.
+    if (!prefill.coachNote && prefill.details && prefill.type === "yoga") {
+      setVal("coach-assign-note", prefill.details);
+    }
 
-    if (Array.isArray(prefill.exercises) && prefill.exercises.length) {
+    // Re-render visible blocks for the prefill's type before filling rows
+    // so the right container is on screen.
+    _renderForType(prefill.type || "weightlifting");
+
+    if (Array.isArray(prefill.intervals) && prefill.intervals.length) {
+      const cRows = document.getElementById("coach-assign-cardio-rows");
+      if (cRows) cRows.innerHTML = "";
+      _cardioRowCount = 0;
+      for (const iv of prefill.intervals) _addCardioRow(iv);
+    } else if (Array.isArray(prefill.exercises) && prefill.exercises.length) {
       const rows = document.getElementById("coach-assign-ex-rows");
       if (rows) rows.innerHTML = "";
       _exRowCount = 0;
       for (const ex of prefill.exercises) _addExRow(ex);
     }
+
+    if (prefill.hiitMeta && prefill.type === "hiit") {
+      const m = prefill.hiitMeta;
+      if (m.format) setVal("coach-assign-hiit-format", m.format);
+      if (m.rounds) setVal("coach-assign-hiit-rounds", m.rounds);
+      if (m.restBetweenExercises) setVal("coach-assign-hiit-rest-ex", m.restBetweenExercises);
+      if (m.restBetweenRounds)    setVal("coach-assign-hiit-rest-rnd", m.restBetweenRounds);
+    }
+  }
+
+  // ── Type-aware form rendering ──────────────────────────────────────────
+  // Toggles which input block is visible based on the selected workout type.
+  // Strength block (exercise rows) shows for weightlifting/bodyweight/general/
+  // hiit/hyrox. Cardio block (interval rows) shows for running/cycling/swimming/
+  // brick. HIIT meta block stacks under strength when type=hiit. Yoga hides
+  // both row blocks — it's just name + duration + coach note.
+  function _renderForType(type) {
+    type = type || "weightlifting";
+    const isCardio = _isCardioType(type);
+    const isYoga   = type === "yoga";
+    const strengthBlock = document.getElementById("coach-assign-strength-block");
+    const cardioBlock   = document.getElementById("coach-assign-cardio-block");
+    const hiitBlock     = document.getElementById("coach-assign-hiit-block");
+    if (strengthBlock) strengthBlock.style.display = (isCardio || isYoga) ? "none" : "";
+    if (cardioBlock)   cardioBlock.style.display   = isCardio ? "" : "none";
+    if (hiitBlock)     hiitBlock.style.display     = type === "hiit" ? "" : "none";
+
+    // Relabel the strength block per type so "Stations" reads naturally for
+    // Hyrox and the placeholder hint stays accurate.
+    const lbl = document.getElementById("coach-assign-strength-label");
+    if (lbl) lbl.textContent = type === "hyrox" ? "Stations" : "Exercises";
+    const addBtn = document.getElementById("coach-assign-add-ex-btn");
+    if (addBtn) addBtn.textContent = type === "hyrox" ? "+ Add Station" : "+ Add Exercise";
+
+    // Brick rows have a per-interval discipline select that's hidden for
+    // other cardio types. Toggle it on existing rows when the type flips.
+    document.querySelectorAll("#coach-assign-cardio-rows .coach-assign-cardio-row").forEach(row => {
+      const discEl = row.querySelector(".coach-assign-cdisc");
+      if (discEl) discEl.style.display = type === "brick" ? "" : "none";
+      const phaseInput = row.querySelector(".coach-assign-cphase");
+      if (phaseInput) phaseInput.placeholder = type === "brick" ? "e.g. Steady Ride" : "e.g. Warm-up";
+    });
+
+    // Make sure the visible row block has at least one starter row so the
+    // form doesn't look empty after a type switch.
+    if (isCardio) {
+      const cRows = document.getElementById("coach-assign-cardio-rows");
+      if (cRows && !cRows.querySelector(".coach-assign-cardio-row")) _addCardioRow();
+    } else if (!isYoga) {
+      const sRows = document.getElementById("coach-assign-ex-rows");
+      if (sRows && !sRows.querySelector(".coach-assign-ex-row")) _addExRow();
+    }
+  }
+
+  function coachAssignOnTypeChange() {
+    const type = document.getElementById("coach-assign-type")?.value || "weightlifting";
+    _renderForType(type);
   }
 
   // ── Exercise rows ──────────────────────────────────────────────────────
@@ -345,6 +416,121 @@
 
   function coachAssignAddExRow() { _addExRow(); }
 
+  // ── Cardio interval rows ───────────────────────────────────────────────
+  // Mirrors custom-plan.js's cpManualAddCardioRow shape (phase, dist/time
+  // toggle, zone, details, optional brick discipline) so the workout JSON
+  // round-trips through the existing client renderer without translation.
+  function _addCardioRow(prefill) {
+    _cardioRowCount++;
+    const id = _cardioRowCount;
+    const rows = document.getElementById("coach-assign-cardio-rows");
+    if (!rows) return;
+    const type = document.getElementById("coach-assign-type")?.value || "running";
+    const isBrick = type === "brick";
+    const unit = (typeof getDistanceUnit === "function") ? getDistanceUnit() : "mi";
+
+    // Parse a saved duration string back into mode + value so edits round-trip.
+    let mode = "time", dist = "", min = "";
+    const dur = prefill?.duration || "";
+    if (dur) {
+      const dm = String(dur).match(/^\s*([\d.]+)\s*(mi|km|m)\b/i);
+      const tm = String(dur).match(/^\s*([\d.]+)\s*min\b/i);
+      if (dm)      { mode = "distance"; dist = dm[1]; }
+      else if (tm) { mode = "time";     min  = tm[1]; }
+    }
+
+    const eff  = prefill?.effort || "Z2";
+    const eopt = (v, label) => `<option value="${v}"${eff === v ? " selected" : ""}>${label}</option>`;
+    const disc = prefill?.discipline || "bike";
+    const dopt = (v, label) => `<option value="${v}"${disc === v ? " selected" : ""}>${label}</option>`;
+
+    const row = document.createElement("div");
+    row.className = "coach-assign-cardio-row";
+    row.id = `coach-assign-crow-${id}`;
+    row.dataset.durMode = mode;
+    row.innerHTML = `
+      <div class="coach-assign-crow-top">
+        <select class="input coach-assign-cdisc" style="display:${isBrick ? "" : "none"};max-width:84px;flex:0 0 auto">
+          ${dopt("bike","Bike")}${dopt("transition","T")}${dopt("run","Run")}
+        </select>
+        <input type="text" class="input coach-assign-cphase" placeholder="${isBrick ? "e.g. Steady Ride" : "e.g. Warm-up"}" value="${_esc(prefill?.name || "")}" />
+        <button class="admin-action-btn" aria-label="Remove interval" title="Remove" onclick="coachAssignRemoveCardioRow(${id})">×</button>
+      </div>
+      <div class="coach-assign-crow-mid">
+        <div class="coach-assign-dur-toggle">
+          <button type="button" class="qe-dur-mode-btn${mode === "distance" ? " active" : ""}" data-mode="distance"
+            onclick="coachAssignSetCardioMode(${id},'distance')">Dist</button>
+          <button type="button" class="qe-dur-mode-btn${mode === "time" ? " active" : ""}" data-mode="time"
+            onclick="coachAssignSetCardioMode(${id},'time')">Time</button>
+        </div>
+        <div class="coach-assign-dur-input coach-assign-dur-dist" style="display:${mode === "distance" ? "" : "none"}">
+          <input type="number" class="input coach-assign-cdist" min="0" step="0.1" placeholder="5" value="${_esc(dist)}" />
+          <span class="coach-assign-unit">${_esc(unit)}</span>
+        </div>
+        <div class="coach-assign-dur-input coach-assign-dur-time" style="display:${mode === "time" ? "" : "none"}">
+          <input type="number" class="input coach-assign-cmin" min="0" placeholder="10" value="${_esc(min)}" />
+          <span class="coach-assign-unit">min</span>
+        </div>
+        <select class="input coach-assign-ceffort">
+          ${eopt("RW","Rest / Walk")}${eopt("Z1","Z1 Recovery")}${eopt("Z2","Z2 Aerobic")}${eopt("Z3","Z3 Tempo")}${eopt("Z4","Z4 Threshold")}${eopt("Z5","Z5 VO2 Max")}${eopt("Z6","Z6 Sprint")}
+        </select>
+      </div>
+      <input type="text" class="input coach-assign-cdetails" placeholder="e.g. 5:30/km, keep HR under 145" value="${_esc(prefill?.details || "")}" />`;
+    rows.appendChild(row);
+  }
+
+  function coachAssignSetCardioMode(id, mode) {
+    const row = document.getElementById(`coach-assign-crow-${id}`);
+    if (!row) return;
+    row.dataset.durMode = mode;
+    row.querySelectorAll(".qe-dur-mode-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
+    const distWrap = row.querySelector(".coach-assign-dur-dist");
+    const timeWrap = row.querySelector(".coach-assign-dur-time");
+    if (distWrap) distWrap.style.display = mode === "distance" ? "" : "none";
+    if (timeWrap) timeWrap.style.display = mode === "time"     ? "" : "none";
+  }
+
+  function coachAssignAddCardioRow() { _addCardioRow(); }
+
+  function coachAssignRemoveCardioRow(id) {
+    const row = document.getElementById(`coach-assign-crow-${id}`);
+    if (row) row.remove();
+    const rows = document.getElementById("coach-assign-cardio-rows");
+    if (rows && !rows.querySelector(".coach-assign-cardio-row")) _addCardioRow();
+  }
+
+  // Walk every cardio row, format duration into the "<n> <unit>" / "<n> min"
+  // string the rest of the app already understands, and emit the intervals[].
+  // Brick rows include a per-interval discipline tag.
+  function _collectCardioIntervals(type) {
+    const intervals = [];
+    const unit = (typeof getDistanceUnit === "function") ? getDistanceUnit() : "mi";
+    document.querySelectorAll("#coach-assign-cardio-rows .coach-assign-cardio-row").forEach(row => {
+      const mode = row.dataset.durMode || "time";
+      let duration = "";
+      if (mode === "distance") {
+        const v = row.querySelector(".coach-assign-cdist")?.value.trim();
+        if (v) duration = `${v} ${unit}`;
+      } else {
+        const v = row.querySelector(".coach-assign-cmin")?.value.trim();
+        if (v) duration = `${v} min`;
+      }
+      if (!duration) return;
+      const iv = {
+        name:    row.querySelector(".coach-assign-cphase")?.value.trim() || `Interval ${intervals.length + 1}`,
+        duration,
+        effort:  row.querySelector(".coach-assign-ceffort")?.value || "Z2",
+        details: row.querySelector(".coach-assign-cdetails")?.value.trim() || "",
+      };
+      if (type === "brick") {
+        const d = row.querySelector(".coach-assign-cdisc")?.value;
+        if (d) iv.discipline = d;
+      }
+      intervals.push(iv);
+    });
+    return intervals;
+  }
+
   // ── Submit + conflict resolution ───────────────────────────────────────
   async function submitAssignWorkout() {
     const errEl = document.getElementById("coach-assign-error");
@@ -361,29 +547,38 @@
     if (!type)        return setErr("Pick a workout type.");
     if (!date)        return setErr("Pick a date.");
 
-    // Collect exercise rows. Empty-name rows are skipped. Each row's
-    // supersetGroup is already set by the drag-to-group flow on
-    // row.dataset.supersetGroup — we just transcribe it. Renderer
-    // (workouts.js buildExerciseTableHTML) reads supersetGroup as the
-    // segment key.
-    const exercises = [];
-    const rowEls = document.querySelectorAll("#coach-assign-ex-rows .coach-assign-ex-row");
-    rowEls.forEach(r => {
-      const id = r.id.replace("coach-assign-row-", "");
-      const name = document.getElementById(`coach-assign-ex-name-${id}`)?.value.trim();
-      if (!name) return;
-      const sets   = document.getElementById(`coach-assign-ex-sets-${id}`)?.value.trim();
-      const reps   = document.getElementById(`coach-assign-ex-reps-${id}`)?.value.trim();
-      const weight = document.getElementById(`coach-assign-ex-weight-${id}`)?.value.trim();
-      const exObj  = { name, sets: sets || "3", reps: reps || "", weight: weight || "" };
-      if (r.dataset.supersetGroup) exObj.supersetGroup = r.dataset.supersetGroup;
-      exercises.push(exObj);
-    });
+    // Collect rows or intervals based on the selected type. Cardio types
+    // emit intervals[]; everything else (strength, hyrox, hiit, bodyweight,
+    // general) emits exercises[]. Yoga emits neither — just sessionName +
+    // duration + the coach note (carried as `details` for the renderer).
+    const isCardio = _isCardioType(type);
+    const isYoga   = type === "yoga";
 
-    // Propagate groupSets to every member of each group from the head
-    // row's sets count so the workout renderer reads a consistent
-    // count regardless of which member it inspects first.
-    {
+    let exercises = [];
+    let intervals = [];
+
+    if (isCardio) {
+      intervals = _collectCardioIntervals(type);
+      if (!intervals.length) {
+        return setErr(`Add at least one interval for this ${_typeLabel(type)} session.`);
+      }
+    } else if (!isYoga) {
+      const rowEls = document.querySelectorAll("#coach-assign-ex-rows .coach-assign-ex-row");
+      rowEls.forEach(r => {
+        const id = r.id.replace("coach-assign-row-", "");
+        const name = document.getElementById(`coach-assign-ex-name-${id}`)?.value.trim();
+        if (!name) return;
+        const sets   = document.getElementById(`coach-assign-ex-sets-${id}`)?.value.trim();
+        const reps   = document.getElementById(`coach-assign-ex-reps-${id}`)?.value.trim();
+        const weight = document.getElementById(`coach-assign-ex-weight-${id}`)?.value.trim();
+        const exObj  = { name, sets: sets || "3", reps: reps || "", weight: weight || "" };
+        if (r.dataset.supersetGroup) exObj.supersetGroup = r.dataset.supersetGroup;
+        exercises.push(exObj);
+      });
+
+      // Propagate groupSets to every member of each group from the head
+      // row's sets count so the workout renderer reads a consistent
+      // count regardless of which member it inspects first.
       const headSetsByGroup = {};
       for (const e of exercises) {
         if (e.supersetGroup && headSetsByGroup[e.supersetGroup] == null) {
@@ -396,28 +591,47 @@
           e.groupSets = isNaN(v) ? 3 : v;
         }
       }
+
+      if (!exercises.length && type === "weightlifting") {
+        return setErr("Add at least one exercise (or change the type to a cardio workout).");
+      }
     }
 
-    if (!exercises.length && type === "weightlifting") {
-      return setErr("Add at least one exercise (or change the type to a cardio workout).");
+    // HIIT meta (format / rounds / rest) — only collected for type=hiit so
+    // the JSON matches what Add Session emits.
+    let hiitMeta = null;
+    if (type === "hiit") {
+      const rounds = parseInt(document.getElementById("coach-assign-hiit-rounds")?.value, 10) || 1;
+      hiitMeta = {
+        format: document.getElementById("coach-assign-hiit-format")?.value || "circuit",
+        rounds,
+      };
+      const rex = document.getElementById("coach-assign-hiit-rest-ex")?.value.trim();
+      const rrd = document.getElementById("coach-assign-hiit-rest-rnd")?.value.trim();
+      if (rex) hiitMeta.restBetweenExercises = rex;
+      if (rrd) hiitMeta.restBetweenRounds = rrd;
     }
 
     // Phase 3C: save-to-library path bypasses date / conflict /
     // assignments tables entirely.
     if (_libraryMode) {
-      return _saveLibraryItem({ sessionName, type, exercises, durationRaw, coachNote });
+      return _saveLibraryItem({ sessionName, type, exercises, intervals, hiitMeta, durationRaw, coachNote });
     }
 
     const duration = durationRaw ? parseInt(durationRaw, 10) || null : null;
 
     // Workout JSONB shape mirrors a normal workoutSchedule entry. Any
     // fields the existing renderer reads MUST be at this top level
-    // (sessionName, type, exercises, duration) — the trigger merges
-    // mirror-only fields (id, source, coachId, etc.) on top.
+    // (sessionName, type, exercises | intervals, duration) — the trigger
+    // merges mirror-only fields (id, source, coachId, etc.) on top.
     const workoutJson = {
       sessionName,
       type,
-      exercises: exercises.length ? exercises : undefined,
+      ...(intervals.length ? { intervals } : {}),
+      ...(exercises.length ? { exercises } : {}),
+      ...(hiitMeta ? { hiitMeta } : {}),
+      ...(type === "hyrox" ? { isHyrox: true } : {}),
+      ...(isYoga && coachNote ? { details: coachNote } : {}),
       ...(duration ? { duration } : {}),
       level: "intermediate",
       source: "coach_assigned",   // hint for any code that walks the
@@ -507,10 +721,10 @@
     if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
 
     const sb = window.supabaseClient;
-    if (!sb) { setErr("Auth client not available."); if (btn) { btn.disabled = false; btn.textContent = "Assign Workout"; } return; }
+    if (!sb) { setErr("Auth client not available."); if (btn) { btn.disabled = false; btn.textContent = "Add Workout"; } return; }
     const session = (await sb.auth.getSession())?.data?.session;
     const coachId = session?.user?.id;
-    if (!coachId) { setErr("Not signed in."); if (btn) { btn.disabled = false; btn.textContent = "Assign Workout"; } return; }
+    if (!coachId) { setErr("Not signed in."); if (btn) { btn.disabled = false; btn.textContent = "Add Workout"; } return; }
 
     // Stamp the coach's display name onto the workout JSONB so the
     // client renders "FROM Mark" without a separate profile lookup.
@@ -573,12 +787,12 @@
       }
     } catch (e) {
       setErr((e && e.message) || "Couldn't save the workout — try again.");
-      if (btn) { btn.disabled = false; btn.textContent = _editingAssignmentId ? "Update Workout" : "Assign Workout"; }
+      if (btn) { btn.disabled = false; btn.textContent = _editingAssignmentId ? "Update Workout" : "Add Workout"; }
     }
   }
 
   // ── Phase 3C: save-to-library helper ──────────────────────────────────
-  async function _saveLibraryItem({ sessionName, type, exercises, durationRaw, coachNote }) {
+  async function _saveLibraryItem({ sessionName, type, exercises, intervals, hiitMeta, durationRaw, coachNote }) {
     const errEl = document.getElementById("coach-assign-error");
     const setErr = (m) => { if (errEl) errEl.textContent = m || ""; };
     const btn = document.getElementById("coach-assign-save-btn");
@@ -591,10 +805,15 @@
     if (!coachId) { setErr("Not signed in."); if (btn) { btn.disabled = false; btn.textContent = _libraryEditId ? "Update Library" : "Save to Library"; } return; }
 
     const duration = durationRaw ? parseInt(durationRaw, 10) || null : null;
+    const isYoga = type === "yoga";
     const workoutJson = {
       sessionName,
       type,
-      exercises: exercises.length ? exercises : undefined,
+      ...(Array.isArray(intervals) && intervals.length ? { intervals } : {}),
+      ...(Array.isArray(exercises) && exercises.length ? { exercises } : {}),
+      ...(hiitMeta ? { hiitMeta } : {}),
+      ...(type === "hyrox" ? { isHyrox: true } : {}),
+      ...(isYoga && coachNote ? { details: coachNote } : {}),
       ...(duration ? { duration } : {}),
       level: "intermediate",
     };
@@ -647,5 +866,9 @@
   window.submitAssignWorkout                = submitAssignWorkout;
   window.coachAssignAddExRow                = coachAssignAddExRow;
   window.coachAssignRemoveExRow             = coachAssignRemoveExRow;
+  window.coachAssignAddCardioRow            = coachAssignAddCardioRow;
+  window.coachAssignRemoveCardioRow         = coachAssignRemoveCardioRow;
+  window.coachAssignSetCardioMode           = coachAssignSetCardioMode;
+  window.coachAssignOnTypeChange            = coachAssignOnTypeChange;
   window.coachAssignConflict                = coachAssignConflict;
 })();

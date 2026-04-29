@@ -2429,7 +2429,7 @@
   <div id="coach-assign-overlay" class="quick-entry-overlay" onclick="if(event.target===this) closeAssignWorkoutModal()">
     <div class="quick-entry-modal" style="max-width:540px">
       <div class="quick-entry-header">
-        <span class="qe-date-label" style="color:var(--color-coach,#534AB7)">Assign Workout</span>
+        <span class="qe-date-label" style="color:var(--color-coach,#534AB7)">Add a Workout</span>
         <button class="qe-close-btn" onclick="closeAssignWorkoutModal()">✕</button>
       </div>
       <div class="quick-entry-body" style="padding:0 16px 16px">
@@ -2443,7 +2443,7 @@
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <div class="form-row" style="flex:1;min-width:140px">
             <label for="coach-assign-type">Type</label>
-            <select id="coach-assign-type" class="input">
+            <select id="coach-assign-type" class="input" onchange="coachAssignOnTypeChange()">
               <option value="weightlifting">Strength</option>
               <option value="running">Run</option>
               <option value="cycling">Ride</option>
@@ -2466,10 +2466,53 @@
           </div>
         </div>
 
-        <div class="form-row">
-          <label>Exercises</label>
+        <!-- Strength block — exercise rows (sets/reps/weight + supersets).
+             Visible for: weightlifting, bodyweight, general, hiit, hyrox.
+             Hidden for cardio types and yoga (see coachAssignOnTypeChange). -->
+        <div class="form-row" id="coach-assign-strength-block">
+          <label id="coach-assign-strength-label">Exercises</label>
           <div id="coach-assign-ex-rows" class="coach-assign-ex-list"></div>
-          <button type="button" class="btn-secondary btn-sm" onclick="coachAssignAddExRow()" style="margin-top:6px">+ Add Exercise</button>
+          <button type="button" class="btn-secondary btn-sm" onclick="coachAssignAddExRow()" style="margin-top:6px" id="coach-assign-add-ex-btn">+ Add Exercise</button>
+        </div>
+
+        <!-- Cardio block — interval rows (phase / time-or-distance / zone /
+             details, plus brick discipline). Visible for: running, cycling,
+             swimming, brick. Mirrors Add Session / custom-plan cardio rows. -->
+        <div class="form-row" id="coach-assign-cardio-block" style="display:none">
+          <label>Intervals</label>
+          <div id="coach-assign-cardio-rows" class="coach-assign-cardio-list"></div>
+          <button type="button" class="btn-secondary btn-sm" onclick="coachAssignAddCardioRow()" style="margin-top:6px">+ Add Interval</button>
+        </div>
+
+        <!-- HIIT meta — format / rounds / rest. Shown only when type=hiit,
+             stacked under the strength rows so the workout JSON gets the
+             same hiitMeta shape Add Session emits. -->
+        <div class="form-row" id="coach-assign-hiit-block" style="display:none">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <div style="flex:1;min-width:120px">
+              <label for="coach-assign-hiit-format">Format</label>
+              <select id="coach-assign-hiit-format" class="input">
+                <option value="circuit">Circuit</option>
+                <option value="tabata">Tabata</option>
+                <option value="emom">EMOM</option>
+                <option value="amrap">AMRAP</option>
+              </select>
+            </div>
+            <div style="flex:0 1 100px;min-width:80px">
+              <label for="coach-assign-hiit-rounds">Rounds</label>
+              <input type="number" id="coach-assign-hiit-rounds" class="input" min="1" value="3" />
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+            <div style="flex:1;min-width:140px">
+              <label for="coach-assign-hiit-rest-ex">Rest between exercises</label>
+              <input type="text" id="coach-assign-hiit-rest-ex" class="input" placeholder="optional, e.g. 20s" />
+            </div>
+            <div style="flex:1;min-width:140px">
+              <label for="coach-assign-hiit-rest-rnd">Rest between rounds</label>
+              <input type="text" id="coach-assign-hiit-rest-rnd" class="input" placeholder="optional, e.g. 60s" />
+            </div>
+          </div>
         </div>
 
         <div class="form-row">
@@ -2483,7 +2526,7 @@
 
         <div style="display:flex;gap:8px;margin-top:14px">
           <button class="btn-secondary" style="flex:1" onclick="closeAssignWorkoutModal()">Cancel</button>
-          <button class="btn-primary" id="coach-assign-save-btn" style="flex:1" onclick="submitAssignWorkout()">Assign Workout</button>
+          <button class="btn-primary" id="coach-assign-save-btn" style="flex:1" onclick="submitAssignWorkout()">Add Workout</button>
         </div>
       </div>
     </div>
