@@ -1228,7 +1228,7 @@ function renderHydrationTimingTip() {
     } else if (dur > 60) {
       electrolyteClause = `Add electrolytes during your ${dur}-min ${workoutInfo.sessionName}.`;
     } else if (dur > 0) {
-      electrolyteClause = `Water is fine for your ${dur}-min ${workoutInfo.sessionName} — no electrolytes needed.`;
+      electrolyteClause = `Water is fine for your ${dur}-min ${workoutInfo.sessionName} — electrolytes optional.`;
     } else {
       electrolyteClause = `Consider electrolytes during your ${workoutInfo.sessionName} if it's over 60 min.`;
     }
