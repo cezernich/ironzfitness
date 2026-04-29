@@ -10064,7 +10064,28 @@ input.completion-ex-name:focus {
 
   .meal-plan-slot { min-width: auto; }
 
-  .session-card-header { flex-wrap: wrap; }
+  /* Don't let the header wrap — when there's not enough room for the
+     right-side group (duration badge + intensity badge + buttons + chevron),
+     the meta column truncates the name with an ellipsis instead of pushing
+     the right group to a new line, which read as broken (the chevron and
+     overflow menu landed under the title). */
+  .session-card-header {
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+  .session-meta { min-width: 0; }
+  .session-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* Compress the intensity pill on mobile so it earns its space alongside
+     the duration badge + buttons. The intensity strip below the card
+     conveys the same info visually if the label gets cropped. */
+  .session-card-header .intensity-badge {
+    font-size: 0.62rem;
+    padding: 2px 6px;
+  }
 
   /* Week view on mobile: 7 equal columns, always fit viewport */
   .calendar-grid--week {
