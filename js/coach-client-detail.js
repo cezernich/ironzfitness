@@ -963,9 +963,101 @@
   }
 
   // ── Library picker — pick a saved workout, prefill the assign modal ───
-  // Fetches the coach's library on demand so a stale dashboard cache
-  // doesn't shadow newly-saved items. Picking an item closes the picker
-  // and opens the existing Add-a-Workout modal in prefill mode.
+  // Pulls from BOTH the coach's coaching-specific library
+  // (coach_workout_library) and the coach's personal Saved library
+  // (SavedWorkoutsLibrary). The two stores live separately by design —
+  // the coaching library is for templates the coach builds explicitly
+  // for clients; the personal library is whatever the user has bookmarked
+  // for their own training. This picker surfaces both with section
+  // headers + filter chips so a coach who is also an athlete can assign
+  // either source without juggling between tabs. (User feedback
+  // 2026-04-29: "i have one workout saved but now it's showing 4. doesn't
+  // make any sense." — root cause was the two libraries being invisible
+  // to each other.)
+  let _libPickerSection = "all"; // "all" | "coach" | "personal"
+
+  function _libPickerRowHtml(item, idx) {
+    const isCoach = item._source === "coach";
+    const w = isCoach ? (item.workout || {}) : (item.payload || {});
+    const exCount = Array.isArray(w.exercises) ? w.exercises.length : 0;
+    const ivCount = Array.isArray(w.aiSession?.intervals) ? w.aiSession.intervals.length
+                  : Array.isArray(w.intervals)            ? w.intervals.length
+                  : 0;
+    const segCount = Array.isArray(w.segments) ? w.segments.length : 0;
+    const typeLabelText = w.type ? _typeLabel(w.type) : (item.workout_kind ? _typeLabel(item.workout_kind) : null);
+    const meta = [
+      typeLabelText,
+      w.duration ? `${w.duration} min` : null,
+      exCount ? `${exCount} exercise${exCount === 1 ? "" : "s"}` : null,
+      ivCount ? `${ivCount} interval${ivCount === 1 ? "" : "s"}` : null,
+      (!exCount && !ivCount && segCount) ? `${segCount} segment${segCount === 1 ? "" : "s"}` : null,
+    ].filter(Boolean).join(" · ");
+    const name = isCoach
+      ? (item.name || w.sessionName || "Untitled")
+      : (item.custom_name || w.sessionName || item.variant_id || "Untitled");
+    return `<div class="coach-lib-picker-row" data-picker-idx="${idx}"
+                 onclick="pickCoachLibraryForAssign(${idx})"
+                 tabindex="0"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();pickCoachLibraryForAssign(${idx})}">
+      <div class="coach-lib-picker-row-name">${_esc(name)}</div>
+      <div class="coach-lib-picker-row-meta">${_esc(meta || "—")}</div>
+    </div>`;
+  }
+
+  function _renderLibPicker() {
+    const list = document.getElementById("coach-lib-picker-list");
+    if (!list) return;
+    const cache = window._coachLibPickerCache || [];
+    const coachItems    = [];
+    const personalItems = [];
+    cache.forEach((item, idx) => {
+      const html = _libPickerRowHtml(item, idx);
+      if (item._source === "coach") coachItems.push(html);
+      else                          personalItems.push(html);
+    });
+
+    const showCoach    = _libPickerSection !== "personal";
+    const showPersonal = _libPickerSection !== "coach";
+
+    const chipHtml = `
+      <div class="coach-lib-picker-chips">
+        <button class="coach-lib-picker-chip${_libPickerSection === "all" ? " is-active" : ""}"
+                onclick="setCoachLibPickerSection('all')">All <span class="coach-lib-picker-chip-count">${cache.length}</span></button>
+        <button class="coach-lib-picker-chip${_libPickerSection === "coach" ? " is-active" : ""}"
+                onclick="setCoachLibPickerSection('coach')">Coach Library <span class="coach-lib-picker-chip-count">${coachItems.length}</span></button>
+        <button class="coach-lib-picker-chip${_libPickerSection === "personal" ? " is-active" : ""}"
+                onclick="setCoachLibPickerSection('personal')">Personal Saved <span class="coach-lib-picker-chip-count">${personalItems.length}</span></button>
+      </div>`;
+
+    const sections = [];
+    if (showCoach && coachItems.length) {
+      sections.push(`<div class="coach-lib-picker-section-label">Coach Library</div>${coachItems.join("")}`);
+    }
+    if (showPersonal && personalItems.length) {
+      sections.push(`<div class="coach-lib-picker-section-label">Personal Saved</div>${personalItems.join("")}`);
+    }
+
+    let body;
+    if (sections.length) {
+      body = sections.join("");
+    } else if (cache.length) {
+      // Filter selected has no items in it; show a tailored empty state.
+      const which = _libPickerSection === "coach" ? "coach library" : "personal saved";
+      body = `<div class="coach-lib-picker-empty">Nothing in your ${which} yet.</div>`;
+    } else {
+      body = `<div class="coach-lib-picker-empty">
+        No saved workouts yet. Build one via the Library tab → New Workout, or save a workout from your own calendar.
+      </div>`;
+    }
+
+    list.innerHTML = chipHtml + body;
+  }
+
+  function setCoachLibPickerSection(section) {
+    _libPickerSection = section;
+    _renderLibPicker();
+  }
+
   async function openCoachLibraryPicker(clientId, clientName) {
     const overlay = document.getElementById("coach-lib-picker-overlay");
     const list = document.getElementById("coach-lib-picker-list");
@@ -974,6 +1066,7 @@
     list.dataset.clientName = clientName || "";
     list.innerHTML = `<div class="coach-lib-picker-empty">Loading…</div>`;
     overlay.classList.add("is-open");
+    _libPickerSection = "all";
 
     const sb = window.supabaseClient;
     if (!sb) { list.innerHTML = `<div class="coach-lib-picker-empty">Auth client not available.</div>`; return; }
@@ -981,42 +1074,28 @@
     const coachId = sess?.user?.id;
     if (!coachId) { list.innerHTML = `<div class="coach-lib-picker-empty">Not signed in.</div>`; return; }
 
-    const { data, error } = await sb.from("coach_workout_library")
+    // Fetch both stores in parallel. Personal saved is a localStorage-
+    // backed module, fast and offline-safe; coach library is a Supabase
+    // round-trip that can fail or time out without blocking the personal
+    // list from rendering.
+    const coachPromise = sb.from("coach_workout_library")
       .select("id, name, notes, workout, created_at")
       .eq("coach_id", coachId)
       .order("created_at", { ascending: false });
-    if (error) { list.innerHTML = `<div class="coach-lib-picker-empty">Couldn't load library: ${_esc(error.message)}</div>`; return; }
-    if (!data || !data.length) {
-      list.innerHTML = `<div class="coach-lib-picker-empty">
-        No saved workouts yet. Save one via the Library tab → New Workout.
-      </div>`;
-      return;
-    }
+    const personalPromise = (window.SavedWorkoutsLibrary && typeof window.SavedWorkoutsLibrary.listSaved === "function")
+      ? window.SavedWorkoutsLibrary.listSaved().catch(() => [])
+      : Promise.resolve([]);
 
-    list.innerHTML = data.map(item => {
-      const w = item.workout || {};
-      const exCount = Array.isArray(w.exercises) ? w.exercises.length : 0;
-      // Cardio workouts store intervals under aiSession.intervals; older /
-      // legacy items may have used a top-level `intervals`. Check both so
-      // the row meta shows the right count for either shape.
-      const ivCount = Array.isArray(w.aiSession?.intervals) ? w.aiSession.intervals.length
-                    : Array.isArray(w.intervals)            ? w.intervals.length
-                    : 0;
-      const meta = [
-        w.type ? _typeLabel(w.type) : null,
-        w.duration ? `${w.duration} min` : null,
-        exCount ? `${exCount} exercise${exCount === 1 ? "" : "s"}` : null,
-        ivCount ? `${ivCount} interval${ivCount === 1 ? "" : "s"}` : null,
-      ].filter(Boolean).join(" · ");
-      return `<div class="coach-lib-picker-row" onclick="pickCoachLibraryForAssign('${_esc(item.id)}')" tabindex="0"
-                   onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();pickCoachLibraryForAssign('${_esc(item.id)}')}">
-        <div class="coach-lib-picker-row-name">${_esc(item.name || w.sessionName || "Untitled")}</div>
-        <div class="coach-lib-picker-row-meta">${_esc(meta || "—")}</div>
-      </div>`;
-    }).join("");
+    const [coachRes, personal] = await Promise.all([coachPromise, personalPromise]);
+    const coachData = (coachRes && !coachRes.error && Array.isArray(coachRes.data)) ? coachRes.data : [];
 
-    // Cache so pickCoachLibraryForAssign can resolve without another fetch.
-    window._coachLibPickerCache = data;
+    // Tag each row with its source so the row renderer + click handler
+    // know which data shape they're working with.
+    const tagged = []
+      .concat(coachData.map(x => Object.assign({ _source: "coach" }, x)))
+      .concat((personal || []).map(x => Object.assign({ _source: "personal" }, x)));
+    window._coachLibPickerCache = tagged;
+    _renderLibPicker();
   }
 
   function closeCoachLibraryPicker() {
@@ -1024,14 +1103,22 @@
     if (overlay) overlay.classList.remove("is-open");
   }
 
-  function pickCoachLibraryForAssign(itemId) {
+  function pickCoachLibraryForAssign(idxOrId) {
     const list = document.getElementById("coach-lib-picker-list");
     const cache = window._coachLibPickerCache || [];
-    const item = cache.find(x => x.id === itemId);
+    // Accept either a numeric index (new sectioned picker) or a string
+    // id (legacy callers / direct id passing — defensive).
+    let item = null;
+    if (typeof idxOrId === "number") {
+      item = cache[idxOrId] || null;
+    } else {
+      item = cache.find(x => x.id === idxOrId) || null;
+    }
     if (!item || !list) return;
     const clientId = list.dataset.clientId;
     const clientName = list.dataset.clientName || "";
-    const w = item.workout || {};
+    const isCoach = item._source === "coach";
+    const w = isCoach ? (item.workout || {}) : (item.payload || {});
     // Cardio intervals live under aiSession.intervals; reading w.intervals
     // alone produced empty rows when picking a running/cycling/swim item
     // from the library, and re-saving the assignment without re-typing
@@ -1040,13 +1127,20 @@
       Array.isArray(w.aiSession?.intervals) ? w.aiSession.intervals
       : Array.isArray(w.intervals)          ? w.intervals
       : [];
+    const fallbackName = isCoach
+      ? (item.name || "")
+      : (item.custom_name || item.variant_id || "");
+    const fallbackType = isCoach
+      ? null
+      : item.workout_kind || item.sport_id || null;
     const prefill = {
-      sessionName: w.sessionName || item.name || "",
-      type:        w.type || "weightlifting",
+      sessionName: w.sessionName || fallbackName || "",
+      type:        w.type || fallbackType || "weightlifting",
       duration:    w.duration || "",
-      coachNote:   item.notes || "",
+      coachNote:   isCoach ? (item.notes || "") : "",
       exercises:   Array.isArray(w.exercises) ? w.exercises : [],
       intervals:   _intervals,
+      aiSession:   w.aiSession || null,
       hiitMeta:    w.hiitMeta || null,
       details:     w.details || "",
       whyText:     w.whyText || w.why_text || "",
@@ -1072,4 +1166,5 @@
   window.openCoachLibraryPicker  = openCoachLibraryPicker;
   window.closeCoachLibraryPicker = closeCoachLibraryPicker;
   window.pickCoachLibraryForAssign = pickCoachLibraryForAssign;
+  window.setCoachLibPickerSection = setCoachLibPickerSection;
 })();

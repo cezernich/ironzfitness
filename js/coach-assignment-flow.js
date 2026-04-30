@@ -67,16 +67,25 @@
     }
     if (_CANONICAL_TYPES.has(t)) return t;
     // Legacy session-flavored type strings — bucket by discipline keyword.
+    // Only `brick*` maps to brick; "triathlon" / bare "tri" don't, since
+    // those workouts can be a swim, a bike, a tempo run, or a true brick
+    // — there's no safe assumption (user feedback 2026-04-29: "not all
+    // triathlon and tri are brick workouts"). Anything ambiguous falls
+    // through to general at the bottom.
     if (/^(run|jog|tempo|threshold|track|speed|hill|endurance|long_run|easy_recovery|recovery_run|fun_social)/.test(t)) return "running";
     if (/^(bike|cycl|ride|spin)/.test(t))         return "cycling";
     if (/^(swim|pool)/.test(t))                   return "swimming";
-    if (/^(brick|tri$|triathlon)/.test(t))        return "brick";
+    if (/^brick/.test(t))                         return "brick";
     if (/^(lift|strength|weight)/.test(t))        return "weightlifting";
     if (/^(yoga|stretch|mobility)/.test(t))       return "yoga";
     if (/^(hiit|circuit|tabata|emom|amrap|crossfit)/.test(t)) return "hiit";
     if (/^hyrox/.test(t))                         return "hyrox";
     if (/^bodyweight/.test(t))                    return "bodyweight";
-    // Unknown: shape-sniff again before giving up.
+    // Unknown / ambiguous (includes "triathlon", "tri", and anything
+    // else not in the keyword list): land on general. The data shape is
+    // a soft tiebreaker — if there's a clear cardio shape (intervals)
+    // or strength shape (exercises), use that bucket so the form opens
+    // to the right block; otherwise general is the catch-all.
     if (prefill) {
       const ivs = prefill.aiSession?.intervals || prefill.intervals;
       if (Array.isArray(ivs) && ivs.length) return "running";
