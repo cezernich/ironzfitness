@@ -350,8 +350,9 @@ function shiftHydrationDate(offset) {
   d.setDate(d.getDate() + offset);
   const today = getTodayString();
   const newDate = d.toISOString().slice(0, 10);
-  // Don't allow future dates
-  if (newDate > today) return;
+  // Future dates are now allowed — the renderer locks logging on those
+  // days, so navigating to tomorrow shows the projected target without
+  // letting the user accidentally write forward-dated entries.
   setHydrationDate(newDate === today ? null : newDate);
 }
 
@@ -871,6 +872,13 @@ function logWater(beverageType) {
 function logWaterOz(oz) {
   const type = _selectedBeverage || "water";
   const dateStr = getHydrationDate();
+  // Future-date guard: the renderer disables the buttons that lead here,
+  // but the global functions are reachable from anywhere (admin / tests
+  // / a stale tab). Refuse the write rather than rely on UI state.
+  if (dateStr > getTodayString()) {
+    console.warn("[hydration] refused future-dated log:", dateStr);
+    return;
+  }
   _pushHydrationEntry(type, oz);
 
   renderHydration();
@@ -958,6 +966,7 @@ function renderHydration() {
   const dateStr = getHydrationDate();
   const today = getTodayString();
   const isToday = dateStr === today;
+  const isFuture = dateStr > today;
 
   const breakdown = getHydrationBreakdown();
   const targetOz = breakdown.totalOz;
@@ -983,8 +992,9 @@ function renderHydration() {
   _renderBottleButtons();
 
   // Undo button — visible whenever the current day has something to undo.
+  // Hidden on future days since there's nothing to undo.
   const undoBtn = document.getElementById("hydration-undo-btn");
-  if (undoBtn) undoBtn.style.display = effectiveOz > 0 ? "" : "none";
+  if (undoBtn) undoBtn.style.display = (!isFuture && effectiveOz > 0) ? "" : "none";
 
   // Fill animation — use effective oz ratio
   const pctForVisual = Math.min(effectiveOz / targetOz, 1);
@@ -1003,6 +1013,45 @@ function renderHydration() {
     const tipEl = document.getElementById("hydration-tip");
     if (tipEl) tipEl.style.display = "none";
   }
+
+  // Future-date lock: disable every log action and surface a notice so
+  // it's obvious the user is looking at a projected target, not a live
+  // log. We disable rather than hide so the layout doesn't reflow when
+  // the user steps from today to tomorrow and back. Beverage-type
+  // chips stay enabled — those don't write, just toggle a renderer
+  // preference.
+  _setHydrationFutureLock(isFuture);
+}
+
+function _setHydrationFutureLock(isFuture) {
+  const card = document.getElementById("hydration-card");
+  if (card) card.classList.toggle("hydration-card--future", isFuture);
+  const myBottle = document.getElementById("hydration-mybottle-btn");
+  if (myBottle) myBottle.disabled = isFuture;
+  const quickAddPanel = document.getElementById("hydration-quickadd");
+  if (quickAddPanel) quickAddPanel.querySelectorAll("button, input").forEach(el => { el.disabled = isFuture; });
+  const secondary = document.querySelector(".hydration-secondary-row");
+  if (secondary) {
+    secondary.querySelectorAll("button").forEach(b => {
+      // Quick Add link can stay tappable so the panel can still be
+      // collapsed/expanded, but inputs inside are gated above. Undo
+      // is hard-disabled since there's nothing to undo.
+      if (b.id === "hydration-undo-btn") b.disabled = isFuture;
+    });
+  }
+  // Per-bottle row buttons (rendered dynamically by _renderBottleButtons).
+  document.querySelectorAll(".hydration-bottle-btn").forEach(b => { b.disabled = isFuture; });
+  // Inline notice — added once, toggled visible.
+  let notice = document.getElementById("hydration-future-notice");
+  if (!notice && card) {
+    notice = document.createElement("div");
+    notice.id = "hydration-future-notice";
+    notice.className = "hydration-future-notice";
+    notice.textContent = "Projected target. Switch to today to log water.";
+    const bar = document.getElementById("hydration-bar-fill")?.parentElement;
+    if (bar && bar.parentElement) bar.parentElement.insertBefore(notice, bar.nextSibling);
+  }
+  if (notice) notice.style.display = isFuture ? "" : "none";
 }
 
 function _renderHydrationDateNav(dateStr, isToday) {

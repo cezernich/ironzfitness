@@ -885,18 +885,21 @@ function selectDay(dateStr) {
   } catch {}
   renderCalendar();
   renderDayDetail(dateStr);
-  // Follow the selected day in the hydration card too. Previously the
-  // hydration view had its own independent date state, so clicking Apr 17
-  // in the calendar left the hydration card on today — the two reads
-  // disagreed and users couldn't see historical hydration against a
-  // day's workouts in one place. Future days stay on today's log since
-  // there's no meaningful water data to show yet (and the log buttons
-  // would otherwise write forward-dated entries).
+  // Follow the selected day in the hydration card too — past, present,
+  // OR future. Previously the hydration view had its own independent
+  // date state, so clicking Apr 17 in the calendar left the hydration
+  // card on today — the two reads disagreed and users couldn't see
+  // historical hydration against a day's workouts in one place. Future
+  // days used to be clamped back to today (so the log buttons couldn't
+  // write forward-dated entries), but that meant workouts/nutrition
+  // would show 0 for tomorrow while hydration kept showing today's
+  // 147/139 — confusing (user feedback 2026-04-29: "i'm on tomorrow
+  // and everything changes but the hydration"). Now hydration follows
+  // the selected date too, and the renderer locks the write actions
+  // when the selected date is in the future so we still can't log
+  // ahead by accident.
   if (typeof setHydrationDate === "function") {
-    try {
-      const today = getTodayString();
-      setHydrationDate(dateStr > today ? null : dateStr);
-    } catch {}
+    try { setHydrationDate(dateStr); } catch {}
   }
 }
 
@@ -2653,12 +2656,16 @@ function _buildDistanceField(sessionId, type, globalUnit) {
 }
 
 function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDuration, steps, opts) {
-  // No completion UI for future dates — except when the caller opts in
-  // (coach-assigned workouts: athletes need to be able to log the session
-  // even before its scheduled date, otherwise the card sits there with
-  // exercises but no way to mark it done).
-  const allowFuture = !!(opts && opts.allowFuture);
-  if (!allowFuture && dateStr > getTodayString()) return "";
+  // No completion UI for future dates — uniformly. There used to be an
+  // `opts.allowFuture` opt-in for coach-assigned workouts (so an athlete
+  // could pre-mark one done if they trained ahead of schedule), but
+  // that's an edge case and the cleaner workflow is to either move the
+  // workout's date forward or log a fresh entry on today. (User
+  // feedback 2026-04-29: "not sure why they'd need to complete a
+  // workout in the future and couldn't move it to today.") The `opts`
+  // parameter is left in the signature for callers that still pass it;
+  // any allowFuture flag is now ignored.
+  if (dateStr > getTodayString()) return "";
 
   if (isSessionComplete(sessionId)) {
     // Pull duration/distance from the completion workout record
@@ -4295,7 +4302,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
           const _swCompType = (w.discipline === "swim" || w.discipline === "swimming")
             ? "swimming"
             : (DISCIPLINE_TO_WORKOUT_TYPE[w.discipline] || "running");
-          const _swCompletion = buildCompletionSection(cardId, _swCompType, null, dateStr, targetDuration, session?.steps, { allowFuture: w.source === "coach_assigned" });
+          const _swCompletion = buildCompletionSection(cardId, _swCompType, null, dateStr, targetDuration, session?.steps);
           const _swMovePanel = buildSessionMovePanel(cardId, "scheduled", w.id, dateStr);
           const _swIsComplete    = isSessionComplete(cardId);
           const _swDoneIndicator = _swIsComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
@@ -4348,7 +4355,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         const _swcSubtitle = _swcGoalLabel ? `Circuit · ${_swcGoalLabel}` : "Circuit";
         let _swcBadge = "";
         if (w.duration) _swcBadge = `<span class="session-duration-badge">${w.duration} min</span>`;
-        const _swcCompletion = buildCompletionSection(cardId, "circuit", null, dateStr, w.duration || null, null, { allowFuture: w.source === "coach_assigned" });
+        const _swcCompletion = buildCompletionSection(cardId, "circuit", null, dateStr, w.duration || null, null);
         const _swcMovePanel  = buildSessionMovePanel(cardId, "scheduled", w.id, dateStr);
         const _swcIsComplete = isSessionComplete(cardId);
         const _swcDoneInd    = _swcIsComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
@@ -4588,7 +4595,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         }
       }
 
-      const _swGenCompletion = buildCompletionSection(cardId, w.type, w.exercises || null, dateStr, _swGenDurMin, null, { allowFuture: w.source === "coach_assigned" });
+      const _swGenCompletion = buildCompletionSection(cardId, w.type, w.exercises || null, dateStr, _swGenDurMin, null);
       const _swGenMovePanel  = buildSessionMovePanel(cardId, "scheduled", w.id, dateStr);
       const _swGenEditPanel  = "";
       const _swGenCompleted  = isSessionComplete(cardId);
