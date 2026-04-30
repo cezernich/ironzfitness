@@ -7816,13 +7816,27 @@ input.completion-ex-name:focus {
   font-size: 1rem;
 }
 
-#barcode-reader video { border-radius: 8px; }
+#barcode-reader video {
+  border-radius: 8px;
+  /* Cover-crop instead of letterbox so capping the viewport height
+     (below) trims top/bottom of the feed rather than scaling the
+     whole image down. The scan area still gets full sensor pixels. */
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+}
 #barcode-reader,
 .barcode-reader {
   position: relative;
   background: #000;
   border-radius: 8px;
   min-height: 200px;
+  /* Keep the camera viewport roughly square — full-width, capped at
+     ~45% of the viewport height. Without this Html5Qrcode lets the
+     stream's aspect ratio drive height and the camera ate ~70% of
+     the modal, leaving the qrbox a thin band in the middle and
+     wasting vertical space top + bottom. */
+  max-height: 45vh;
   overflow: hidden;
 }
 
