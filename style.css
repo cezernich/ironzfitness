@@ -15161,11 +15161,17 @@ input.completion-ex-name:focus {
 }
 .coach-program-day-row {
   display: grid;
-  grid-template-columns: 50px 1fr 220px;
+  grid-template-columns: 50px 1fr;
   gap: 8px;
-  align-items: center;
-  padding: 6px 0;
+  align-items: start;
+  padding: 8px 0;
   border-bottom: 1px solid var(--color-border);
+}
+.coach-program-day-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 .coach-program-day-row:last-child { border-bottom: none; }
 .coach-program-day-label {
@@ -15188,56 +15194,47 @@ input.completion-ex-name:focus {
 }
 .coach-program-day-pills {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  align-items: center;
-  min-height: 22px;
+  flex-direction: column;
+  gap: 6px;
 }
+.coach-program-day-pills:empty { display: none; }
 .coach-program-day-pill {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px 2px 2px 8px;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 6px 8px 12px;
   background: var(--color-surface-alt, #eee);
   border: 1px solid var(--color-border);
-  border-radius: 12px;
-  font-size: 0.8rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
   font-weight: 500;
-  max-width: 100%;
+  width: 100%;
 }
 .coach-program-day-pill-name {
+  flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 160px;
 }
 .coach-program-day-pill-x {
   background: none;
   border: none;
-  font-size: 1.05rem;
+  font-size: 1.15rem;
   line-height: 1;
   color: var(--color-text-muted);
   cursor: pointer;
-  padding: 0 6px;
-  border-radius: 50%;
-  height: 18px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
 }
 .coach-program-day-pill-x:hover { color: var(--color-danger); }
 .coach-program-day-pick {
-  padding: 4px 6px;
-  font-size: 0.85rem;
+  width: 100%;
+  font-size: 0.9rem;
 }
 @media (max-width: 480px) {
-  .coach-program-day-row {
-    grid-template-columns: 40px 1fr;
-    grid-template-areas:
-      "label content"
-      "label pick";
-    row-gap: 4px;
-  }
-  .coach-program-day-label   { grid-area: label; }
-  .coach-program-day-content { grid-area: content; }
-  .coach-program-day-pick    { grid-area: pick; }
+  .coach-program-day-row { grid-template-columns: 40px 1fr; }
 }
 
 .coach-program-warning {

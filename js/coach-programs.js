@@ -197,13 +197,13 @@
         <span class="coach-program-day-label">${d.label}</span>
         <div class="coach-program-day-content">
           <div class="coach-program-day-pills">${pills}</div>
+          <select class="input coach-program-day-pick"
+            onchange="addCoachProgramDay('${d.key}', this.value); this.value='';">
+            <option value="">+ Add workout</option>
+            ${restOption}
+            ${libOptions}
+          </select>
         </div>
-        <select class="input coach-program-day-pick"
-          onchange="addCoachProgramDay('${d.key}', this.value); this.value='';">
-          <option value="">+ Add workout</option>
-          ${restOption}
-          ${libOptions}
-        </select>
       </div>`;
     }).join("");
 
