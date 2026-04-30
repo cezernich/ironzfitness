@@ -196,14 +196,24 @@ function _startFallbackScan() {
     // entry link.
     fps: 24,
     qrbox: function (viewfinderWidth, viewfinderHeight) {
+      // Wide-rectangle scan window matched to a 1D barcode's shape:
+      // width ≈ 88% of the viewfinder's narrower edge, height ≈ 38%.
+      // The narrower-than-before height makes the .qr-shaded-region
+      // dim band thicker top/bottom so the scan area pops visually.
       const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-      // 80% width × 50% height — wide rectangle for 1D barcodes.
       return {
-        width: Math.floor(minEdge * 0.85),
-        height: Math.floor(minEdge * 0.55),
+        width: Math.floor(minEdge * 0.88),
+        height: Math.floor(minEdge * 0.38),
       };
     },
-    aspectRatio: 1.333,
+    // 1.0 = square viewport. The previous 1.333 (4:3 landscape) gave
+    // iPhone Safari a tall portrait container because the camera
+    // stream is natively portrait — wasting ~⅔ of the modal vertically
+    // and parking the qrbox in a thin middle band that often missed
+    // the user's barcode entirely. Square fits the qrbox cleanly,
+    // makes the dim mask symmetric, and keeps the camera feed and
+    // scan region in the same coordinate space (no CSS crop hacks).
+    aspectRatio: 1.0,
     // Keep this off. iOS Safari exposes BarcodeDetector but its detect()
     // silently returns nothing on every frame (see _startNativeOrFallback
     // comment) — turning the flag on routes Html5Qrcode through that
