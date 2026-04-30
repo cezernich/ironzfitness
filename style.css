@@ -15186,6 +15186,43 @@ input.completion-ex-name:focus {
   font-style: italic;
   font-size: 0.85rem;
 }
+.coach-program-day-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  min-height: 22px;
+}
+.coach-program-day-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 2px 2px 8px;
+  background: var(--color-surface-alt, #eee);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  max-width: 100%;
+}
+.coach-program-day-pill-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+.coach-program-day-pill-x {
+  background: none;
+  border: none;
+  font-size: 1.05rem;
+  line-height: 1;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0 6px;
+  border-radius: 50%;
+  height: 18px;
+}
+.coach-program-day-pill-x:hover { color: var(--color-danger); }
 .coach-program-day-pick {
   padding: 4px 6px;
   font-size: 0.85rem;

@@ -20,7 +20,10 @@
   let _programs = [];
   let _libraryItems = [];   // mirrored from coach-library on demand
   let _editingProgram = null; // null OR an existing program object
-  let _draftTemplate = {};    // { mon: <libraryItemId>, tue: <id>, ... }
+  // weekly_template shape: { mon: [{library_id}, ...], tue: [...], ... }.
+  // Backward-compat: legacy programs stored a single { library_id } object
+  // per day. _slotsForDay normalizes both shapes to an array.
+  let _draftTemplate = {};
   let _draftName = "";
   let _draftWeeks = 4;
   let _applyState = null;     // { program, clientId, startDate }
@@ -107,8 +110,32 @@
     }).join("");
   }
 
+  // Normalize a day's slot value to an array of slot objects.
+  //   undefined / null         → []
+  //   { library_id: "..." }    → [{ library_id: "..." }]   (legacy single)
+  //   [{ library_id: "..." }]  → returned as-is             (new multi)
+  function _slotsForDay(template, dayKey) {
+    const v = template?.[dayKey];
+    if (v == null) return [];
+    if (Array.isArray(v)) return v;
+    return [v];
+  }
+
+  // Total workouts across the week (counts every slot, not days-with-any).
+  // The list view shows this as "N workouts/week".
   function _slotCount(template) {
-    return DAYS.filter(d => template[d.key]).length;
+    return DAYS.reduce((n, d) => n + _slotsForDay(template, d.key).length, 0);
+  }
+
+  // Strip a draft template down to the canonical array-form storage shape.
+  // Empty days are dropped so the JSONB stays compact.
+  function _normalizeTemplateForSave(t) {
+    const out = {};
+    for (const d of DAYS) {
+      const slots = _slotsForDay(t, d.key);
+      if (slots.length) out[d.key] = slots;
+    }
+    return out;
   }
 
   // ── Builder modal ─────────────────────────────────────────────────────
@@ -146,27 +173,36 @@
     const libOptions = _libraryItems.map(li => `<option value="${_esc(li.id)}">${_esc(li.name)}</option>`).join("");
 
     const dayRows = DAYS.map(d => {
-      const slot = _draftTemplate[d.key];
-      let display;
-      if (slot && typeof slot === "object" && slot.library_id) {
-        const lib = _libraryItems.find(x => x.id === slot.library_id);
-        display = lib ? `<span class="coach-program-day-name">${_esc(lib.name)}</span>` : `<span class="coach-program-day-empty">(library item gone)</span>`;
-      } else if (slot) {
-        // Legacy raw JSONB shape. Show its name or a placeholder.
-        display = `<span class="coach-program-day-name">${_esc(slot.sessionName || "Custom")}</span>`;
-      } else {
-        display = `<span class="coach-program-day-empty">Rest</span>`;
-      }
-      const selectedId = (slot && slot.library_id) || "";
+      const slots = _slotsForDay(_draftTemplate, d.key);
+      const pills = slots.length === 0
+        ? `<span class="coach-program-day-empty">Rest</span>`
+        : slots.map((slot, i) => {
+            let name;
+            if (slot && slot.library_id) {
+              const lib = _libraryItems.find(x => x.id === slot.library_id);
+              name = lib ? lib.name : "(library item gone)";
+            } else {
+              name = (slot && slot.sessionName) || "Custom";
+            }
+            return `<span class="coach-program-day-pill">
+              <span class="coach-program-day-pill-name">${_esc(name)}</span>
+              <button type="button" class="coach-program-day-pill-x" aria-label="Remove"
+                onclick="removeCoachProgramDay('${d.key}', ${i})">&times;</button>
+            </span>`;
+          }).join("");
+      const restOption = slots.length > 0
+        ? `<option value="__rest__">Set as Rest</option>`
+        : "";
       return `<div class="coach-program-day-row">
         <span class="coach-program-day-label">${d.label}</span>
-        <div class="coach-program-day-content">${display}</div>
-        <select class="input coach-program-day-pick" onchange="setCoachProgramDay('${d.key}', this.value)">
-          <option value="">— Pick —</option>
-          <option value="__rest__"${slot == null ? " selected" : ""}>Rest</option>
-          ${libOptions.replace(/<option value="(.*?)"/g, (m, v) => v === selectedId
-            ? `<option value="${v}" selected`
-            : m)}
+        <div class="coach-program-day-content">
+          <div class="coach-program-day-pills">${pills}</div>
+        </div>
+        <select class="input coach-program-day-pick"
+          onchange="addCoachProgramDay('${d.key}', this.value); this.value='';">
+          <option value="">+ Add workout</option>
+          ${restOption}
+          ${libOptions}
         </select>
       </div>`;
     }).join("");
@@ -186,7 +222,7 @@
       </div>
 
       <div class="form-row">
-        <label>Weekly template <span class="optional-tag">pick a library workout per day</span></label>
+        <label>Weekly template <span class="optional-tag">add one or more library workouts per day</span></label>
         <div class="coach-program-week">${dayRows}</div>
       </div>
 
@@ -200,12 +236,23 @@
     _draftWeeks = isNaN(n) || n < 1 ? 1 : (n > 52 ? 52 : n);
   }
 
-  function setCoachProgramDay(dayKey, libraryId) {
-    if (libraryId === "__rest__" || libraryId === "") {
+  function addCoachProgramDay(dayKey, libraryId) {
+    if (!libraryId) return; // empty placeholder option
+    if (libraryId === "__rest__") {
       delete _draftTemplate[dayKey];
-    } else {
-      _draftTemplate[dayKey] = { library_id: libraryId };
+      _renderBuilder();
+      return;
     }
+    const current = _slotsForDay(_draftTemplate, dayKey);
+    _draftTemplate[dayKey] = [...current, { library_id: libraryId }];
+    _renderBuilder();
+  }
+
+  function removeCoachProgramDay(dayKey, idx) {
+    const current = _slotsForDay(_draftTemplate, dayKey);
+    const next = current.filter((_, i) => i !== idx);
+    if (next.length === 0) delete _draftTemplate[dayKey];
+    else                   _draftTemplate[dayKey] = next;
     _renderBuilder();
   }
 
@@ -219,19 +266,20 @@
 
     const sb = window.supabaseClient;
     if (!sb) return;
+    const templateForSave = _normalizeTemplateForSave(_draftTemplate);
     let res;
     if (_editingProgram) {
       res = await sb.from("coach_programs").update({
         name: _draftName.trim(),
         duration_weeks: _draftWeeks,
-        weekly_template: _draftTemplate,
+        weekly_template: templateForSave,
       }).eq("id", _editingProgram.id);
     } else {
       res = await sb.from("coach_programs").insert({
         coach_id: _coachUid,
         name: _draftName.trim(),
         duration_weeks: _draftWeeks,
-        weekly_template: _draftTemplate,
+        weekly_template: templateForSave,
       });
     }
     if (res?.error) return setErr("Couldn't save: " + res.error.message);
@@ -432,36 +480,39 @@
     const rows = [];
     for (let w = 0; w < program.duration_weeks; w++) {
       for (const d of DAYS) {
-        const slot = template[d.key];
-        if (!slot) continue;
+        const slots = _slotsForDay(template, d.key);
+        if (!slots.length) continue;
 
         const date = new Date(startDate);
         date.setDate(startDate.getDate() + w * 7 + d.offset);
         if (truncateAt && date.getTime() > truncateAt) continue;
+        const dateIso = date.toISOString().slice(0, 10);
 
-        let workoutJson;
-        if (slot.library_id && libById[slot.library_id]) {
-          workoutJson = { ...(libById[slot.library_id].workout || {}), coachName };
-        } else if (slot.library_id) {
-          // Library item went missing between save and apply. Skip
-          // this day rather than dropping the whole apply.
-          continue;
-        } else {
-          // Legacy raw workout JSONB — pass through.
-          workoutJson = { ...slot, coachName };
+        for (const slot of slots) {
+          let workoutJson;
+          if (slot.library_id && libById[slot.library_id]) {
+            workoutJson = { ...(libById[slot.library_id].workout || {}), coachName };
+          } else if (slot.library_id) {
+            // Library item went missing between save and apply. Skip
+            // this slot rather than dropping the whole apply.
+            continue;
+          } else {
+            // Legacy raw workout JSONB — pass through.
+            workoutJson = { ...slot, coachName };
+          }
+
+          rows.push({
+            client_id: _applyState.clientId,
+            coach_id:  coachId,
+            date:      dateIso,
+            // conflict_mode set after the row list is built, once the
+            // coach has confirmed replace-vs-stack via the prompt below.
+            workout:   workoutJson,
+            program_id:  program.id,
+            program_week: w + 1,
+            program_day:  d.offset + 1,
+          });
         }
-
-        rows.push({
-          client_id: _applyState.clientId,
-          coach_id:  coachId,
-          date:      date.toISOString().slice(0, 10),
-          // conflict_mode set after the row list is built, once the
-          // coach has confirmed replace-vs-stack via the prompt below.
-          workout:   workoutJson,
-          program_id:  program.id,
-          program_week: w + 1,
-          program_day:  d.offset + 1,
-        });
       }
     }
 
@@ -476,7 +527,24 @@
       body: `Applying ${_pgEsc(rows.length + " workout" + (rows.length === 1 ? "" : "s"))} from "${_pgEsc(program.name || "this program")}".<br><br><strong>Remove</strong> deletes any current workouts on those dates and replaces them.<br><strong>Add</strong> keeps the current plan and adds yours alongside.`,
       onChoose: async (mode) => {
         if (!mode) return;
-        for (const r of rows) r.conflict_mode = mode;
+        // When multiple slots share a date in replace mode, only the
+        // first row gets conflict_mode='replace' — the trigger strips
+        // ALL entries on the date for every replace row, so additional
+        // replace rows on the same date would wipe the ones inserted
+        // just before them. Subsequent slots stack alongside.
+        const replacedDates = new Set();
+        for (const r of rows) {
+          if (mode === "replace") {
+            if (replacedDates.has(r.date)) {
+              r.conflict_mode = "stack";
+            } else {
+              r.conflict_mode = "replace";
+              replacedDates.add(r.date);
+            }
+          } else {
+            r.conflict_mode = mode;
+          }
+        }
 
         const { error } = await sb.from("coach_assigned_workouts").insert(rows);
         if (error) return setErr("Couldn't apply: " + error.message);
@@ -552,7 +620,8 @@
   window.closeCoachProgramBuilder      = closeCoachProgramBuilder;
   window.setCoachProgramName           = setCoachProgramName;
   window.setCoachProgramWeeks          = setCoachProgramWeeks;
-  window.setCoachProgramDay            = setCoachProgramDay;
+  window.addCoachProgramDay            = addCoachProgramDay;
+  window.removeCoachProgramDay         = removeCoachProgramDay;
   window.saveCoachProgram              = saveCoachProgram;
   window.deleteCoachProgram            = deleteCoachProgram;
   window.openCoachProgramApply         = openCoachProgramApply;
