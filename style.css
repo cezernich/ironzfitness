@@ -8330,6 +8330,25 @@ input.completion-ex-name:focus {
   white-space: normal;
   word-break: keep-all;
 }
+
+/* Future-date hydration view: card stays in the same place but the
+   write actions visibly de-emphasize so the user understands they're
+   looking at a projected target rather than a live log. */
+.hydration-card--future button:disabled,
+.hydration-card--future input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.hydration-future-notice {
+  margin: 8px 0 4px;
+  padding: 8px 12px;
+  background: var(--color-bg-soft, #f5f4ef);
+  border: 1px dashed var(--color-border, #e5e7eb);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}
 /* Bottle editor rows in the settings modal */
 .hydration-bottles-list {
   display: flex;
@@ -16086,6 +16105,17 @@ input.completion-ex-name:focus {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+/* .btn-primary has `align-self: flex-start` baked into the global rule
+   (style.css:910), so in a flex column it stays content-width while
+   .btn-secondary / .btn-ghost stretch. That made the primary "Move to
+   … (suggested)" button visibly shorter than the ghost/cancel buttons
+   below it — three stacked buttons of two widths reads as a glitch.
+   Force every direct-child button in this action stack to fill the
+   column so they line up. */
+.conflict-actions > button {
+  align-self: stretch;
+  width: 100%;
 }
 .conflict-footer-note {
   font-size: 11px;
