@@ -94,11 +94,27 @@ function deleteMeal(id) {
   // like "meal-l9k2jx-7d3f8a" but legacy entries from very old logs
   // may be numeric (Date.now()). Strict !== fails the cross-type case.
   const target = String(id);
+  // Capture the removed meal's date BEFORE the filter so we can refresh
+  // a calendar day-detail panel that may currently be showing it.
+  const removed = meals.find(m => String(m.id) === target);
   meals = meals.filter(m => String(m.id) !== target);
   localStorage.setItem("meals", JSON.stringify(meals)); if (typeof DB !== 'undefined') DB.syncKey('meals');
 
-  renderTodaysSummary();
-  renderNutritionHistory();
+  // Mirror the post-add fan-out from nutrition-v2.js's quickAddMealSelect
+  // (line ~503) so deletes refresh every surface that reads meals from
+  // localStorage. Without this the Today's Nutrition rings + progress bar
+  // at the top of the Nutrition tab stayed stale until the user reloaded.
+  if (typeof updateNutritionDashboard === "function") updateNutritionDashboard();
+  if (typeof renderTodaysSummary       === "function") renderTodaysSummary();
+  if (typeof renderNutritionHistory    === "function") renderNutritionHistory();
+
+  // If the deleted meal's date is the day currently open in the calendar
+  // day-detail panel, refresh it too — that re-runs renderMealPlan and
+  // renderNutritionProgressBars for that date.
+  if (removed && typeof selectedDate !== "undefined" && selectedDate === removed.date
+      && typeof renderDayDetail === "function") {
+    renderDayDetail(removed.date);
+  }
 }
 
 /** Clears ALL saved meals */
