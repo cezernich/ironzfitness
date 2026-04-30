@@ -189,7 +189,12 @@ function _startFallbackScan() {
   // a slightly-angled or moving barcode (the user reported scanning
   // a barcode pointed straight at it that never resolved).
   const config = {
-    fps: 15,
+    // 24 fps gives the scanner ~50% more chances per second to lock onto
+    // a slightly-angled or moving barcode without being so high that we
+    // burn battery for nothing — 15 fps was leaving real barcodes
+    // un-decoded long enough that users gave up and tapped the manual
+    // entry link.
+    fps: 24,
     qrbox: function (viewfinderWidth, viewfinderHeight) {
       const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
       // 80% width × 50% height — wide rectangle for 1D barcodes.
@@ -205,11 +210,30 @@ function _startFallbackScan() {
     experimentalFeatures: { useBarCodeDetectorIfSupported: true },
   };
   if (supportedFormats) config.formatsToSupport = supportedFormats;
+  // Detailed camera constraints — iPhones default to a low resolution
+  // unless asked for more, which leaves a barcode shot from arms-length
+  // (the only distance where the lens actually focuses) too few pixels
+  // to decode. Asking for 1920×1080 ideal pulls more detail through and
+  // continuous autofocus keeps a closely-held package from staying
+  // permanently blurry. Falls back gracefully if the device can't honor
+  // the constraint — `ideal` doesn't fail, just downgrades. (User
+  // feedback 2026-04-29: scanner couldn't lock — too blurry up close,
+  // too small from arms-length.)
+  const _camConstraints = {
+    facingMode: "environment",
+    width:  { ideal: 1920 },
+    height: { ideal: 1080 },
+    frameRate: { ideal: 30 },
+    advanced: [
+      { focusMode: "continuous" },
+      { focusDistance: { min: 0.05 } }, // hint that the user may be close
+    ],
+  };
   html5.start(
-    { facingMode: "environment" },
-    config,
+    _camConstraints,
     function (decodedText) {
       if (!_scanState || !_scanState.html5) return;
+      if (_scanState._hintTimer) { clearTimeout(_scanState._hintTimer); _scanState._hintTimer = null; }
       _scanState.html5.stop().catch(() => {});
       _scanState = null;
       _handleDetected(decodedText);
@@ -217,6 +241,17 @@ function _startFallbackScan() {
     function () { /* frame-level scan errors are ignored — normal until a code is found */ }
   ).then(function () {
     _setStatus("Point camera at a barcode");
+    // After 8 seconds with no successful decode, swap the status text
+    // to something the user can act on. iPhone main lenses don't focus
+    // closer than ~10cm, so the most common failure mode is "too close
+    // → blurry" — leading the user to back up usually unsticks it.
+    if (_scanState) {
+      _scanState._hintTimer = setTimeout(() => {
+        if (_scanState && _scanState.html5) {
+          _setStatus("Trouble locking? Hold ~6–10 in. away with steady hands.");
+        }
+      }, 8000);
+    }
   }).catch(function (err) {
     const msg = String(err || "");
     if (/permission|notallowed|denied/i.test(msg)) {
@@ -231,6 +266,9 @@ function _stopCameraStream() {
   if (!_scanState) return;
   if (_scanState.rafId) {
     try { cancelAnimationFrame(_scanState.rafId); } catch {}
+  }
+  if (_scanState._hintTimer) {
+    try { clearTimeout(_scanState._hintTimer); } catch {}
   }
   if (_scanState.stream && _scanState.stream.getTracks) {
     _scanState.stream.getTracks().forEach(t => { try { t.stop(); } catch {} });
