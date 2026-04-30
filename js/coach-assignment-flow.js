@@ -37,6 +37,54 @@
   const _CARDIO_TYPES = new Set(["running", "cycling", "swimming", "brick"]);
   function _isCardioType(t) { return _CARDIO_TYPES.has(t); }
 
+  // Saved workouts (personal library, coach library, legacy schedule
+  // entries) sometimes carry a session-flavored type string instead of
+  // the canonical bucket the assign form's <select> expects:
+  //   - easy_recovery / long_run / tempo_threshold / track_workout /
+  //     speed_work / hills / endurance / fun_social → running
+  //   - run/jog → running, bike/cycling → cycling, etc.
+  // The form has options for { weightlifting, running, cycling, swimming,
+  // hiit, hyrox, brick, bodyweight, yoga, general }; anything outside
+  // that set leaves the dropdown blank and the wrong block visible. Map
+  // back to the canonical bucket so the form pre-fills correctly.
+  // (User feedback 2026-04-29: "Easy_Recovery should be a running type.
+  // even if it's a light run it's still a run.")
+  const _CANONICAL_TYPES = new Set([
+    "weightlifting", "running", "cycling", "swimming", "brick",
+    "hiit", "hyrox", "bodyweight", "yoga", "general",
+  ]);
+  function _normalizeWorkoutType(rawType, prefill) {
+    const t = String(rawType || "").toLowerCase().trim();
+    if (!t) {
+      // Last-resort: shape-sniff. Intervals → cardio (default running);
+      // exercises → strength. Empty workouts default to weightlifting.
+      if (prefill) {
+        const ivs = prefill.aiSession?.intervals || prefill.intervals;
+        if (Array.isArray(ivs) && ivs.length) return "running";
+        if (Array.isArray(prefill.exercises) && prefill.exercises.length) return "weightlifting";
+      }
+      return "weightlifting";
+    }
+    if (_CANONICAL_TYPES.has(t)) return t;
+    // Legacy session-flavored type strings — bucket by discipline keyword.
+    if (/^(run|jog|tempo|threshold|track|speed|hill|endurance|long_run|easy_recovery|recovery_run|fun_social)/.test(t)) return "running";
+    if (/^(bike|cycl|ride|spin)/.test(t))         return "cycling";
+    if (/^(swim|pool)/.test(t))                   return "swimming";
+    if (/^(brick|tri$|triathlon)/.test(t))        return "brick";
+    if (/^(lift|strength|weight)/.test(t))        return "weightlifting";
+    if (/^(yoga|stretch|mobility)/.test(t))       return "yoga";
+    if (/^(hiit|circuit|tabata|emom|amrap|crossfit)/.test(t)) return "hiit";
+    if (/^hyrox/.test(t))                         return "hyrox";
+    if (/^bodyweight/.test(t))                    return "bodyweight";
+    // Unknown: shape-sniff again before giving up.
+    if (prefill) {
+      const ivs = prefill.aiSession?.intervals || prefill.intervals;
+      if (Array.isArray(ivs) && ivs.length) return "running";
+      if (Array.isArray(prefill.exercises) && prefill.exercises.length) return "weightlifting";
+    }
+    return "general";
+  }
+
   function _esc(s) {
     const div = document.createElement("div");
     div.textContent = s == null ? "" : String(s);
@@ -157,22 +205,27 @@
   function _populatePrefill(prefill) {
     if (!prefill) return;
     const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+    // Map any non-canonical type string (easy_recovery, tempo_threshold,
+    // long_run, etc.) onto the form's dropdown options so the <select>
+    // actually displays a value AND the right input block (cardio vs
+    // strength) shows up.
+    const normalizedType = _normalizeWorkoutType(prefill.type, prefill);
     if (prefill.date)        setVal("coach-assign-date", prefill.date);
     if (prefill.sessionName) setVal("coach-assign-name", prefill.sessionName);
-    if (prefill.type)        setVal("coach-assign-type", prefill.type);
+    setVal("coach-assign-type", normalizedType);
     if (prefill.duration)    setVal("coach-assign-duration", prefill.duration);
     if (prefill.coachNote)   setVal("coach-assign-note", prefill.coachNote);
     const prefillWhy = prefill.whyText || prefill.why_text;
     if (prefillWhy)          setVal("coach-assign-why", prefillWhy);
     // Yoga sessions store the coach's text in `details` (no rows). Surface
     // it in the coach-note field so the editing coach sees what they wrote.
-    if (!prefill.coachNote && prefill.details && prefill.type === "yoga") {
+    if (!prefill.coachNote && prefill.details && normalizedType === "yoga") {
       setVal("coach-assign-note", prefill.details);
     }
 
     // Re-render visible blocks for the prefill's type before filling rows
     // so the right container is on screen.
-    _renderForType(prefill.type || "weightlifting");
+    _renderForType(normalizedType);
 
     // Cardio intervals can arrive in either shape: top-level `intervals`
     // (legacy library items, the early Phase-3A coach JSON) or wrapped
@@ -482,21 +535,36 @@
   }
 
   function _coachAssignReadSetDetails(rowId) {
+    // Don't gate on panel visibility. The previous check returned null
+    // when the per-set panel was collapsed, which silently dropped any
+    // values the coach had typed in if they collapsed the panel before
+    // hitting Save. Fields stay in the DOM even when the panel is
+    // hidden, so we can read them either way. The empty-rows guard at
+    // the bottom (`!details.length`) still keeps unexpanded rows from
+    // emitting a phantom perSet array. (User feedback 2026-04-29:
+    // coach-set per-set reps/weights weren't reaching the client.)
     const detailsEl = document.getElementById(`coach-assign-sd-${rowId}`);
-    if (!detailsEl || detailsEl.style.display === "none") return null;
+    if (!detailsEl) return null;
     const defaultReps = (document.getElementById(`coach-assign-ex-reps-${rowId}`)?.value || "").trim();
     const defaultWeight = (document.getElementById(`coach-assign-ex-weight-${rowId}`)?.value || "").trim();
     const details = [];
     let hasDiff = false;
+    let hasAnyValue = false;
     for (let s = 0; ; s++) {
       const r = document.getElementById(`coach-assign-sd-reps-${rowId}-${s}`);
       if (!r) break;
       const rv = (r.value || "").trim();
       const wv = (document.getElementById(`coach-assign-sd-wt-${rowId}-${s}`)?.value || "").trim();
       details.push({ reps: rv || defaultReps, weight: wv || defaultWeight });
+      if (rv || wv) hasAnyValue = true;
       if ((rv && rv !== defaultReps) || (wv && wv !== defaultWeight)) hasDiff = true;
     }
-    if (!details.length || !hasDiff) return null;
+    if (!details.length) return null;
+    // Skip perSet only when there's literally nothing useful to send:
+    // no per-set values entered AND no diff vs the row defaults. If the
+    // coach typed per-set values that happen to match an empty default
+    // row, we still want to ship them — that's intent.
+    if (!hasAnyValue && !hasDiff) return null;
     return details;
   }
 
@@ -1055,13 +1123,20 @@
     // workoutSchedule via the user_data RLS policy (allowed for
     // assigned coaches). If anything's there, ask the coach how to
     // resolve.
+    //
+    // Default mode is `stack` (additive), NOT `replace`. The conflict
+    // check above reads Supabase, so a client-side workout that hasn't
+    // synced yet (200ms debounce + network) looks like an empty day —
+    // and `replace` would then silently strip it on the next refresh.
+    // User reported (2026-04-29): "when my coach added a workout to my
+    // day today it automatically deleted my workouts for today." The
+    // principle: assigning never auto-deletes existing entries; the
+    // coach must explicitly choose replace via the conflict modal.
     const conflict = await _hasDateConflict(_clientId, date);
     if (conflict.found) {
       _openConflictModal(conflict.summary);
     } else {
-      // No conflict — replace mode is the safe default (no-op when
-      // the date is empty).
-      return _doWriteAssignment("insert", "replace");
+      return _doWriteAssignment("insert", "stack");
     }
   }
 

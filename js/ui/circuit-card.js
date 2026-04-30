@@ -102,7 +102,12 @@
   // ── Repeat block ────────────────────────────────────────────────────────
   function _renderRepeat(step, workoutGoal, workoutGoalValue) {
     const children = (step.children || []).filter(c => c.kind !== "repeat");
-    const isAmrap = workoutGoal === "amrap" && step.count == null;
+    // AMRAP is determined by the workout goal, not the step count. Cindy-
+    // style templates set a sentinel (count: 999) so the runtime knows the
+    // repeat is unbounded; previously we keyed AMRAP off `step.count == null`
+    // and then rendered "999× ROUNDS" verbatim. The goal is the source of
+    // truth here — when the workout is AMRAP, the repeat is AMRAP.
+    const isAmrap = workoutGoal === "amrap";
     // Effective EMOM interval for this block: block override, then session
     // default when the session goal is EMOM. Null means untimed rounds.
     const interval = step.interval_min != null

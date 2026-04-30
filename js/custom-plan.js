@@ -1889,21 +1889,28 @@ function customPlanSaveManual() {
           : (document.getElementById(`cp-msets-${id}`)?.value.trim() || "");
       }
 
-      // Collect per-set details only if the panel is expanded AND values differ
-      // from the defaults — otherwise save as a flat sets/reps/weight entry.
+      // Collect per-set details whenever the rows exist in the DOM —
+      // values stay in the DOM even when the panel is collapsed, and
+      // gating on visibility silently dropped values typed by the user
+      // before they collapsed (same bug fixed 2026-04-29 in
+      // coach-assignment-flow.js / workout-editor.js).
       const pyrDetail = document.getElementById(`cp-pyr-${id}`);
-      if (pyrDetail && pyrDetail.style.display !== "none") {
+      if (pyrDetail) {
         const pyrRows = pyrDetail.querySelectorAll(".ex-pyr-row");
         if (pyrRows.length > 0) {
           const perSet = [];
           let hasDiff = false;
+          let hasAnyValue = false;
           pyrRows.forEach(pr => {
-            const r = pr.querySelector(".ex-pyr-reps")?.value.trim() || ex.reps;
-            const w = pr.querySelector(".ex-pyr-weight")?.value.trim() || ex.weight;
+            const rRaw = pr.querySelector(".ex-pyr-reps")?.value.trim() || "";
+            const wRaw = pr.querySelector(".ex-pyr-weight")?.value.trim() || "";
+            if (rRaw || wRaw) hasAnyValue = true;
+            const r = rRaw || ex.reps;
+            const w = wRaw || ex.weight;
             perSet.push({ reps: r, weight: w });
             if (r !== ex.reps || w !== ex.weight) hasDiff = true;
           });
-          if (hasDiff) {
+          if (hasDiff || hasAnyValue) {
             ex.perSet = perSet;
             ex.setDetails = perSet; // legacy alias for existing readers
           }

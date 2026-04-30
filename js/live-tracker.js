@@ -311,9 +311,19 @@ function _resolveExerciseForTracker(ex) {
   }
   let weight = ex.weight;
   const isBlank = !weight || /^(moderate|light|heavy|—)$/i.test(String(weight).trim());
-  if (isBlank && typeof window !== "undefined" && typeof window._deriveAccessoryWeight === "function") {
-    const derived = window._deriveAccessoryWeight(ex.name, reps);
-    if (derived) weight = derived;
+  if (isBlank) {
+    // Bodyweight movements: match the summary card's "BW" auto-fill so
+    // a Pull-Up with no explicit weight doesn't render "BW" on the card
+    // and a blank input in the tracker. Same regex as
+    // workouts.js _normalizeWeightDisplay (user feedback 2026-04-29:
+    // coach assigned Pull-Up at BW, summary showed BW, tracker empty).
+    const n = String(ex.name || "").toLowerCase();
+    if (/\b(pull[- ]?up|chin[- ]?up|push[- ]?up|dip|burpee|plank|hollow|bird[- ]?dog|superman|glute bridge|hip thrust|step[- ]?up|sit[- ]?up|crunch|mountain climber|jumping jack|air squat|lunge)\b/.test(n)) {
+      weight = "BW";
+    } else if (typeof window !== "undefined" && typeof window._deriveAccessoryWeight === "function") {
+      const derived = window._deriveAccessoryWeight(ex.name, reps);
+      if (derived) weight = derived;
+    }
   }
   return { ...ex, reps, weight };
 }
@@ -365,8 +375,18 @@ function startLiveWorkout(sessionId, dateStr, type, stepsJson, exercisesJson) {
                     : (ex.setDetails && ex.setDetails.length) ? ex.setDetails
                     : null;
       return Array.from({ length: numSets }, (_, si) => {
+        // Per-set entry can have empty fields (coach typed reps but
+        // skipped weight, or vice versa). Treat empty strings as "fall
+        // back to the row default" so the tracker doesn't blank out a
+        // value that the row-level ex.reps/ex.weight already provided.
         const sd = details && details[si];
-        return { done: false, reps: sd ? sd.reps : (ex.reps || ""), weight: sd ? sd.weight : (ex.weight || "") };
+        const sdReps   = sd && sd.reps   ? sd.reps   : "";
+        const sdWeight = sd && sd.weight ? sd.weight : "";
+        return {
+          done: false,
+          reps:   sdReps   || ex.reps   || "",
+          weight: sdWeight || ex.weight || "",
+        };
       });
     }) : [],
     // Cached superset groupings (computed once at start)

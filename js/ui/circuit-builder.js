@@ -200,6 +200,10 @@
 
   function regenerate() {
     if (!_currentEntryDraft) return;
+    // Bump the variant counter so the template picker shifts to a
+    // different candidate. Without this, the day-of-year-only seed
+    // returned the same template every time the user hit Regenerate.
+    _bumpRegenerateCounter();
     const { intensity, duration, focus, notes } = _currentEntryDraft;
     const circuit = _generateCircuitLocal(intensity, duration, focus, notes);
     _openPreview(circuit);
@@ -257,10 +261,17 @@
   // the rotation engine works; expand the library when content is
   // ready. Current bench: 7 public-domain benchmark + structure
   // templates spanning all four formats.
+  // Day-of-year base + a per-tab counter so consecutive Regenerate clicks
+  // actually shuffle to a different template instead of returning the
+  // same workout every time. Day part keeps things stable for stats /
+  // "I generated this on Tuesday" memory; counter part is the user's
+  // explicit "give me another" signal.
+  let _regenerateCounter = 0;
   function _circuitVariantIndex() {
     const doy = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
-    return doy;
+    return doy + _regenerateCounter;
   }
+  function _bumpRegenerateCounter() { _regenerateCounter++; }
 
   const _CIRCUIT_TEMPLATES = [
     // 1. Cindy — classic AMRAP bodyweight benchmark.
@@ -431,12 +442,26 @@
   // focus, rotating across the bank by day-of-year so the same user
   // running the generator on consecutive days gets fresh shapes.
   function _pickCircuitTemplate(intensity, duration, focus, preferredFormat) {
-    const candidates = _CIRCUIT_TEMPLATES.filter(t => {
-      if (preferredFormat && t.formats.indexOf(preferredFormat) === -1) return false;
-      if (t.focuses.indexOf(focus) === -1 && t.focuses.indexOf("mixed") === -1) return false;
-      if (t.minDuration && duration < t.minDuration) return false;
-      return true;
-    });
+    // Previous filter accepted any template tagged "mixed" as a stand-in
+    // for the requested focus. But every template in the bank has
+    // "mixed" in its focuses list, so the candidate set was identical
+    // for every focus choice — the focus chips were effectively a no-op
+    // and the user got Cindy regardless of whether they picked
+    // Bodyweight / Barbell / KB / Mixed (user feedback 2026-04-29).
+    // Fix: require an exact focus match. Only fall back to mixed-tagged
+    // templates when no template explicitly supports the requested focus
+    // — preserves graceful degradation for unusual focus values without
+    // collapsing every focus into the same pool.
+    const filterDuration = (t) => !t.minDuration || duration >= t.minDuration;
+    const filterFormat = (t) => !preferredFormat || t.formats.indexOf(preferredFormat) !== -1;
+    let candidates = _CIRCUIT_TEMPLATES.filter(t =>
+      t.focuses.indexOf(focus) !== -1 && filterDuration(t) && filterFormat(t)
+    );
+    if (!candidates.length) {
+      candidates = _CIRCUIT_TEMPLATES.filter(t =>
+        t.focuses.indexOf("mixed") !== -1 && filterDuration(t) && filterFormat(t)
+      );
+    }
     if (!candidates.length) return null;
     const idx = _circuitVariantIndex() % candidates.length;
     return candidates[idx];
@@ -669,13 +694,19 @@
           ? `<span class="repeat-interval-chip">EMOM · ${_esc(step.interval_min)} min/round</span>`
           : "";
         const intervalBtnLabel = step.interval_min ? "Interval ✓" : "Interval";
+        // AMRAP repeat blocks store a 999 sentinel for "unbounded"; show
+        // "AMRAP" instead of the literal count so the builder doesn't
+        // display "999× Rounds" on Cindy-style sessions.
+        const _isAmrap = _manualDraft.goal === "amrap";
+        const _badgeText = _isAmrap ? "AMRAP" : `${_esc(step.count || 1)}×`;
+        const _labelText = _isAmrap ? "" : "Rounds";
         return `
           <div class="builder-repeat">
             <div class="builder-repeat-header">
               <div class="left">
                 <span class="drag-handle builder-repeat-handle">⠿</span>
-                <span class="repeat-badge">${_esc(step.count || 1)}×</span>
-                <span class="builder-repeat-label">Rounds</span>
+                <span class="repeat-badge">${_badgeText}</span>
+                ${_labelText ? `<span class="builder-repeat-label">${_labelText}</span>` : ""}
                 <button class="repeat-count-btn" onclick="window.CircuitBuilder.editRepeatCount(${idx})">Edit count</button>
                 <button class="repeat-count-btn" onclick="window.CircuitBuilder.editRepeatInterval(${idx})">${intervalBtnLabel}</button>
                 ${intervalChip}
