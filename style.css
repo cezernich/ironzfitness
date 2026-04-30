@@ -8147,6 +8147,23 @@ input.completion-ex-name:focus {
 .mp-load-tag--endurance-easy { background: #fff3e0; color: #e65100; }
 .mp-load-tag--endurance-hard { background: #fce4ec; color: #c62828; }
 
+/* Wrapper for the day-summary load tag(s). Inline-flex keeps the
+   primary + secondary chips on one row with the "+" separator between
+   them, and lets them wrap as a unit on narrow phones. */
+.mp-load-tag-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.mp-load-tag-row .mp-load-tag { margin-top: 0; }
+.mp-load-tag-sep {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
 .mp-grocery-list { margin-bottom: 12px; }
 .mp-grocery-header {
   display: flex; align-items: center; justify-content: space-between;

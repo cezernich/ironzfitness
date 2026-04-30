@@ -198,9 +198,14 @@ function _pickMeal(slot, targetCalories, restrictions, prefs, usedNames) {
    CORE API
    ===================================================================== */
 
-// Classify a day's training sessions into a load category for nutrition adjustment
+// Classify a day's training sessions. Returns a primary load string for
+// macro multiplier lookup AND, when both endurance and strength signals
+// fire on the same day, a secondary tag for the UI to surface as a
+// combined chip ("Strength Day + Easy Cardio"). The macro split still
+// keys off the primary — combining macros for a doubles day is its own
+// bigger question. The secondary is purely a label hint.
 function _classifyDayLoad(sessions) {
-  if (!sessions || sessions.length === 0) return "rest";
+  if (!sessions || sessions.length === 0) return { primary: "rest", secondary: null };
   const types = sessions.map(s => (s.type || s.discipline || "").toLowerCase());
   const loads = sessions.map(s => (s.load || "").toLowerCase());
   const names = sessions.map(s => (s.sessionName || "").toLowerCase());
@@ -225,10 +230,19 @@ function _classifyDayLoad(sessions) {
   // because a day with a lift + easy run needs the higher-protein
   // strength macro split (35% protein vs. 25%) — without this, mixed
   // days got the easy-cardio split and underfueled the lift.
-  if (isEndurance && isHard) return "endurance-hard";
-  if (isStrength) return "strength";
-  if (isEndurance) return "endurance-easy";
-  return "light";
+  let primary, secondary = null;
+  if (isEndurance && isHard) {
+    primary = "endurance-hard";
+    if (isStrength) secondary = "strength";
+  } else if (isStrength) {
+    primary = "strength";
+    if (isEndurance) secondary = "endurance-easy";
+  } else if (isEndurance) {
+    primary = "endurance-easy";
+  } else {
+    primary = "light";
+  }
+  return { primary, secondary };
 }
 
 // Day-level calorie/macro multipliers based on training load
@@ -307,7 +321,7 @@ function generateWeekMealPlan(options) {
   for (let d = 0; d < 7; d++) {
     const dow = mpDowMap[d];
     const sessions = trainingByDow[dow] || [];
-    const load = _classifyDayLoad(sessions);
+    const loadInfo = _classifyDayLoad(sessions);
 
     // Find the next occurrence of this DOW from today to get the actual date
     const daysUntil = (dow - today.getDay() + 7) % 7;
@@ -331,7 +345,15 @@ function generateWeekMealPlan(options) {
       const meal = _pickMeal(slot, slotCal, restrictions, prefs, usedNames[slot]);
       dayMeals.push(meal);
     }
-    days.push({ dayIndex: d, label: MP_DAY_LABELS[d], meals: dayMeals, load, dayTargets, date: dateStr });
+    days.push({
+      dayIndex: d,
+      label: MP_DAY_LABELS[d],
+      meals: dayMeals,
+      load: loadInfo.primary,
+      loadSecondary: loadInfo.secondary,  // null unless a doubles day
+      dayTargets,
+      date: dateStr,
+    });
   }
 
   // baseTargets used to be a closure variable that was removed during the
@@ -579,11 +601,21 @@ function renderWeekMealPlanner() {
     ${dayTabsHtml}
     ${_groceryVisible ? groceryHtml : (() => {
       const _loadLabels = { rest: "Rest Day", light: "Light Activity", strength: "Strength Day", "endurance-easy": "Easy Cardio", "endurance-hard": "Hard / Long Session" };
-      const _loadTag = day.load ? `<span class="mp-load-tag mp-load-tag--${day.load}">${_loadLabels[day.load] || day.load}</span>` : "";
+      const _tagFor = (key) => key
+        ? `<span class="mp-load-tag mp-load-tag--${key}">${_loadLabels[key] || key}</span>`
+        : "";
+      // Combined tag — when a day has both endurance and strength
+      // sessions (set by _classifyDayLoad's secondary), render both
+      // chips with a "+" between them. Macro split still keys off the
+      // primary; secondary is a label hint so the user sees the full
+      // picture instead of one tag swallowing the other.
+      const _loadTag = day.loadSecondary
+        ? `${_tagFor(day.load)}<span class="mp-load-tag-sep">+</span>${_tagFor(day.loadSecondary)}`
+        : _tagFor(day.load);
       return `
     <div class="mp-day-summary">
       <div><strong>${esc(day.label)} Totals:</strong> ${dayTotals.calories} cal &middot; P:${dayTotals.protein}g &middot; C:${dayTotals.carbs}g &middot; F:${dayTotals.fat}g</div>
-      ${_loadTag}
+      <div class="mp-load-tag-row">${_loadTag}</div>
     </div>
     ${mealsHtml}`;
     })()}

@@ -3487,10 +3487,21 @@ function getDayTotals(dateStr) {
       if (session?.duration) { totalMin += _parseDurMin(session.duration); return; }
     }
 
-    // No template — fall back to the explicit duration the generator
-    // stamped on the entry. Three possible field names depending on
-    // which generator produced the session (legacy `duration`,
-    // session-assembler `durationMin`, strength generator's
+    // Strength sessions: the card badge prefers the computed estimate
+    // from the exercise list over a possibly-inflated coach-typed
+    // w.duration (see _strengthDisplayDurationMin in the renderer at
+    // line ~4419). The day total used to do the opposite — read
+    // w.duration first — so a coach-assigned "Leg Day" with a typed
+    // duration of 55 min that estimated to 28 min showed 28 min on the
+    // card badge but added 55 min to the day total. Reconcile by using
+    // the same estimate-first rule the badge uses.
+    const strengthEst = _strengthDisplayDurationMin(w);
+    if (strengthEst > 0) { totalMin += strengthEst; return; }
+
+    // No template, not a strength session — fall back to the explicit
+    // duration the generator stamped on the entry. Three possible field
+    // names depending on which generator produced the session (legacy
+    // `duration`, session-assembler `durationMin`, strength generator's
     // `estimated_duration_min`).
     const explicitMin = _readWorkoutDurationMin(w);
     if (explicitMin > 0) { totalMin += explicitMin; return; }
