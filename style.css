@@ -7816,22 +7816,37 @@ input.completion-ex-name:focus {
   font-size: 1rem;
 }
 
-#barcode-reader video { border-radius: 8px; }
+#barcode-reader video {
+  border-radius: 8px;
+  /* Force the video element to exactly fill the capped container.
+     object-fit:cover crops the natively-portrait iOS stream instead
+     of letterboxing, so the visible camera area equals the viewfinder
+     dimensions Html5Qrcode passes to the qrbox callback — keeping the
+     drawn brackets, the dim mask, and the actual scan region in one
+     coordinate space. */
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+}
 #barcode-reader,
 .barcode-reader {
   position: relative;
   background: #000;
   border-radius: 8px;
-  min-height: 200px;
+  /* Small camera viewport — the full-portrait iOS stream wasted ~⅔
+     of the modal and pushed the qrbox into a thin middle band. Capped
+     so the scan area is most of what the user sees. */
+  height: 320px;
+  max-height: 42vh;
   overflow: hidden;
 }
 
 /* Html5Qrcode generates four child divs inside .qr-shaded-region to
-   form a letterbox mask outside the qrbox. The default fill is
-   nearly transparent — bump opacity so the scan area visibly pops
-   while the camera feed around it is dimmed. */
+   form a letterbox mask outside the qrbox. The default fill is nearly
+   transparent — bump it to a noticeable but not-overpowering 35% so
+   the scan area visibly pops without big black bands top/bottom. */
 #barcode-reader .qr-shaded-region > div {
-  background: rgba(0, 0, 0, 0.55) !important;
+  background: rgba(0, 0, 0, 0.35) !important;
 }
 
 /* Animated scanning line inside the camera viewport */

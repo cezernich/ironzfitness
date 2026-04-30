@@ -169,19 +169,13 @@ function _startFallbackScan() {
   if (reader) reader.innerHTML = '<div class="barcode-scan-line" aria-hidden="true"></div>';
   const html5 = new Html5Qrcode("barcode-reader");
   _scanState = { native: false, html5 };
-  // Restrict to food-barcode formats. Html5Qrcode's default scan set
-  // includes QR + every 1D format, which makes the scanner slower and
-  // more prone to false-positive reads on grocery packaging. Food UPCs
-  // are overwhelmingly EAN-13 / UPC-A / EAN-8 / UPC-E.
-  const supportedFormats = (typeof Html5QrcodeSupportedFormats !== "undefined")
-    ? [
-        Html5QrcodeSupportedFormats.EAN_13,
-        Html5QrcodeSupportedFormats.EAN_8,
-        Html5QrcodeSupportedFormats.UPC_A,
-        Html5QrcodeSupportedFormats.UPC_E,
-        Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION,
-      ]
-    : undefined;
+  // Don't restrict formats. Earlier versions narrowed to EAN/UPC only
+  // because grocery barcodes are overwhelmingly those formats — but a
+  // sharp UPC-A perfectly framed in the qrbox was still failing to
+  // decode (see user reports 2026-04-30). Letting Html5Qrcode try the
+  // full format set gives ZXing more decoder paths to attempt and has
+  // not produced false-positive reads in testing.
+  const supportedFormats = undefined;
   // qrbox sized as a percentage of the viewport so it scales with the
   // modal width — the old fixed 250x150 was too small on iPhone Pro
   // Max devices and clipped barcodes that visibly fit between the
@@ -196,24 +190,19 @@ function _startFallbackScan() {
     // entry link.
     fps: 24,
     qrbox: function (viewfinderWidth, viewfinderHeight) {
-      // Wide-rectangle scan window matched to a 1D barcode's shape:
-      // width ≈ 88% of the viewfinder's narrower edge, height ≈ 38%.
-      // The narrower-than-before height makes the .qr-shaded-region
-      // dim band thicker top/bottom so the scan area pops visually.
-      const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+      // Wide rectangle that fills most of the visible viewfinder: 92%
+      // of the width, 70% of the height. The viewfinder is forced to
+      // a small fixed-height container via CSS (#barcode-reader has
+      // max-height + the video uses object-fit:cover), so this gives
+      // a thick scan area with only thin dim bands top/bottom.
       return {
-        width: Math.floor(minEdge * 0.88),
-        height: Math.floor(minEdge * 0.38),
+        width:  Math.floor(viewfinderWidth  * 0.92),
+        height: Math.floor(viewfinderHeight * 0.70),
       };
     },
-    // 1.0 = square viewport. The previous 1.333 (4:3 landscape) gave
-    // iPhone Safari a tall portrait container because the camera
-    // stream is natively portrait — wasting ~⅔ of the modal vertically
-    // and parking the qrbox in a thin middle band that often missed
-    // the user's barcode entirely. Square fits the qrbox cleanly,
-    // makes the dim mask symmetric, and keeps the camera feed and
-    // scan region in the same coordinate space (no CSS crop hacks).
-    aspectRatio: 1.0,
+    // aspectRatio is effectively a no-op on iOS Safari (the camera
+    // stream is natively portrait and Html5Qrcode can't rotate it),
+    // so size is controlled via CSS on #barcode-reader instead.
     // Keep this off. iOS Safari exposes BarcodeDetector but its detect()
     // silently returns nothing on every frame (see _startNativeOrFallback
     // comment) — turning the flag on routes Html5Qrcode through that
