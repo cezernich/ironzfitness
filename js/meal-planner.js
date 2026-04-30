@@ -219,9 +219,15 @@ function _classifyDayLoad(sessions) {
   const isHard = loads.some(l => l === "hard" || l === "long") ||
     names.some(n => /interval|tempo|threshold|long run|long ride|brick|race/i.test(n));
 
+  // Priority: hardest signal wins. Endurance-hard outranks strength (the
+  // hard cardio session demands big carb intake for aerobic recovery
+  // even with a lift in the mix). Strength outranks endurance-easy
+  // because a day with a lift + easy run needs the higher-protein
+  // strength macro split (35% protein vs. 25%) — without this, mixed
+  // days got the easy-cardio split and underfueled the lift.
   if (isEndurance && isHard) return "endurance-hard";
-  if (isEndurance) return "endurance-easy";
   if (isStrength) return "strength";
+  if (isEndurance) return "endurance-easy";
   return "light";
 }
 
@@ -235,7 +241,16 @@ const _DAY_LOAD_ADJUSTMENTS = {
 };
 
 function _getWeekTrainingByDow() {
-  // Map DOW (0=Sun..6=Sat) -> array of sessions for the upcoming week
+  // Map DOW (0=Sun..6=Sat) -> array of sessions for the upcoming week.
+  //
+  // Reads the same three localStorage keys getDataForDate() reads in
+  // calendar.js — workoutSchedule (planned), trainingPlan (race plans),
+  // AND workouts (logged + coach-assigned that landed in the log bucket).
+  // Without the third source the planner missed coach-assigned lifts
+  // that ended up in `workouts` instead of `workoutSchedule`, so a day
+  // with a real lift looked like a rest day in the meal planner.
+  // _classifyDayLoad picks the hardest discipline across all collected
+  // sessions, so any incidental overlap between buckets just no-ops.
   const byDow = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -244,23 +259,28 @@ function _getWeekTrainingByDow() {
   const todayStr = today.toISOString().slice(0, 10);
   const endStr = weekEnd.toISOString().slice(0, 10);
 
-  // Gather from workoutSchedule
+  const _bucket = (s) => {
+    if (!s || !s.date) return;
+    if (s.date < todayStr || s.date >= endStr) return;
+    const dow = new Date(s.date + "T00:00:00").getDay();
+    byDow[dow].push(s);
+  };
+
+  // Gather from workoutSchedule (planned + coach-mirror)
   const schedule = typeof loadWorkoutSchedule === "function" ? loadWorkoutSchedule() : [];
-  schedule.forEach(s => {
-    if (s.date >= todayStr && s.date < endStr) {
-      const dow = new Date(s.date + "T00:00:00").getDay();
-      byDow[dow].push(s);
-    }
-  });
+  schedule.forEach(_bucket);
 
   // Gather from trainingPlan (race plans)
   const plan = typeof loadTrainingPlan === "function" ? loadTrainingPlan() : [];
-  plan.forEach(s => {
-    if (s.date >= todayStr && s.date < endStr) {
-      const dow = new Date(s.date + "T00:00:00").getDay();
-      byDow[dow].push(s);
-    }
-  });
+  plan.forEach(_bucket);
+
+  // Gather from workouts (logged history + any coach-assigned entries
+  // that landed here rather than in workoutSchedule). Skip the
+  // isCompletion synthetic rows — those are completion records of
+  // already-counted scheduled sessions, not standalone training.
+  let logged = [];
+  try { logged = JSON.parse(localStorage.getItem("workouts") || "[]"); } catch {}
+  logged.forEach(w => { if (!w?.isCompletion) _bucket(w); });
 
   return byDow;
 }
