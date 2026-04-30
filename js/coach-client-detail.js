@@ -1133,11 +1133,34 @@
     const fallbackType = isCoach
       ? null
       : item.workout_kind || item.sport_id || null;
+    // Pull any embedded per-interval / per-exercise text into the coach
+    // note field if the coach hasn't already supplied one. Auto-generated
+    // workout descriptions ("55 min @ conversational, by feel.
+    // Conversational. Skip if you don't feel recovered.") used to live
+    // only on the interval row, where the coach couldn't easily edit
+    // them per-assignment. Surfacing them in the coach note gives the
+    // coach an obvious place to amend or delete the wording before
+    // assigning. (Library-level cleanup via the new "Clear" button on
+    // the library list is the longer-term answer; this prefill makes
+    // the per-assignment path bearable in the meantime.)
+    const _embeddedNotes = [];
+    for (const iv of _intervals) {
+      const t = String(iv?.details || "").trim();
+      if (t) _embeddedNotes.push(t);
+    }
+    if (Array.isArray(w.exercises)) {
+      for (const ex of w.exercises) {
+        const t = String(ex?.notes || "").trim();
+        if (t) _embeddedNotes.push(ex.name ? `${ex.name}: ${t}` : t);
+      }
+    }
+    const _libraryNote = isCoach ? (item.notes || "") : "";
+    const _coachNotePrefill = _libraryNote || (_embeddedNotes.length ? _embeddedNotes.join("\n") : "");
     const prefill = {
       sessionName: w.sessionName || fallbackName || "",
       type:        w.type || fallbackType || "weightlifting",
       duration:    w.duration || "",
-      coachNote:   isCoach ? (item.notes || "") : "",
+      coachNote:   _coachNotePrefill,
       exercises:   Array.isArray(w.exercises) ? w.exercises : [],
       intervals:   _intervals,
       aiSession:   w.aiSession || null,

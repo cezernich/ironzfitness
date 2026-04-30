@@ -259,6 +259,29 @@
       : `${_items.length} saved workout${_items.length === 1 ? "" : "s"}`;
   }
 
+  // Pull every per-interval / per-exercise text snippet out of a saved
+  // workout. Returns an array of strings — used for the library row's
+  // "Embedded notes" preview and the Clear-notes bulk strip below.
+  // Per-interval `details` carry generator-emitted text like "55 min @
+  // conversational, by feel. Conversational. Skip if you don't feel
+  // recovered." and per-exercise `notes` carry coach-typed instructions;
+  // both render on the client's workout card and were the source of the
+  // "I have to delete this comment on every assignment" pain point
+  // (user feedback 2026-04-29).
+  function _extractBodyNotesText(workout) {
+    const notes = [];
+    const ivs = (workout?.aiSession?.intervals) || workout?.intervals || [];
+    for (const iv of ivs) {
+      const t = String(iv?.details || "").trim();
+      if (t) notes.push(t);
+    }
+    for (const ex of (workout?.exercises || [])) {
+      const t = String(ex?.notes || "").trim();
+      if (t) notes.push(ex.name ? `${ex.name}: ${t}` : t);
+    }
+    return notes;
+  }
+
   function _renderItems() {
     if (!_items.length) {
       return `<div style="color:var(--color-text-muted);padding:16px;text-align:center;font-size:0.9rem">
@@ -273,11 +296,21 @@
         w.duration ? `${w.duration} min` : null,
         exCount ? `${exCount} exercise${exCount === 1 ? "" : "s"}` : null,
       ].filter(Boolean).join(" · ");
+      const bodyNotes = _extractBodyNotesText(w);
+      const _bodyPreview = bodyNotes.length
+        ? (bodyNotes[0].length > 90 ? bodyNotes[0].slice(0, 90) + "…" : bodyNotes[0])
+        : "";
+      const _bodyMore = bodyNotes.length > 1 ? ` (+${bodyNotes.length - 1} more)` : "";
       return `<div class="coach-library-row">
         <div class="coach-library-row-main">
           <div class="coach-library-row-name">${_esc(item.name || w.sessionName || "Untitled")}</div>
           <div class="coach-library-row-meta">${_esc(meta || "—")}</div>
           ${item.notes ? `<div class="coach-library-row-notes">${_esc(item.notes)}</div>` : ""}
+          ${bodyNotes.length ? `<div class="coach-library-row-body-notes">
+            <span class="coach-library-row-body-notes-label">Embedded:</span>
+            <span class="coach-library-row-body-notes-text">${_esc(_bodyPreview)}${_bodyMore}</span>
+            <button class="coach-library-row-body-notes-clear" onclick="event.stopPropagation();clearCoachLibraryBodyNotes('${item.id}')" title="Clear all embedded interval/exercise notes from this workout">Clear</button>
+          </div>` : ""}
         </div>
         <div class="coach-library-row-actions">
           <button class="btn-secondary btn-sm" onclick="openCoachLibraryAssign('${item.id}')">Assign</button>
@@ -291,6 +324,41 @@
         </div>
       </div>`;
     }).join("");
+  }
+
+  // One-click strip of every per-interval / per-exercise note from a
+  // library item. The structural data (zones, durations, reps, rest)
+  // stays — the workout still runs the same on the client; only the
+  // free-text guidance is removed. Coach can re-add a single coach
+  // note at assign time. (Counterpart to the "Embedded notes" preview
+  // above — the user wanted to be able to delete this stuff once at
+  // the source instead of per-assignment.)
+  async function clearCoachLibraryBodyNotes(id) {
+    const item = _items.find(x => x.id === id);
+    if (!item) return;
+    const bodyCount = _extractBodyNotesText(item.workout || {}).length;
+    if (!bodyCount) return;
+    const ok = window.confirm(
+      `Clear ${bodyCount} embedded note${bodyCount === 1 ? "" : "s"} from "${item.name}"?\n\n` +
+      `Workout structure (zones, durations, reps, rest) stays intact — only the free-text descriptions are removed.`
+    );
+    if (!ok) return;
+    const w = JSON.parse(JSON.stringify(item.workout || {}));
+    const stripIv = (iv) => Object.assign({}, iv, { details: "" });
+    if (Array.isArray(w.aiSession?.intervals)) {
+      w.aiSession = Object.assign({}, w.aiSession, { intervals: w.aiSession.intervals.map(stripIv) });
+    }
+    if (Array.isArray(w.intervals)) {
+      w.intervals = w.intervals.map(stripIv);
+    }
+    if (Array.isArray(w.exercises)) {
+      w.exercises = w.exercises.map(ex => Object.assign({}, ex, { notes: "" }));
+    }
+    const sb = window.supabaseClient;
+    if (!sb) { alert("Auth client not available."); return; }
+    const { error } = await sb.from("coach_workout_library").update({ workout: w }).eq("id", id);
+    if (error) { alert("Couldn't clear notes: " + error.message); return; }
+    await loadCoachLibrary();
   }
 
   function _typeLabel(t) {
@@ -606,6 +674,7 @@
   window.openImportFromSavedPicker = openImportFromSavedPicker;
   window.duplicateCoachLibraryItem= duplicateCoachLibraryItem;
   window.deleteCoachLibraryItem   = deleteCoachLibraryItem;
+  window.clearCoachLibraryBodyNotes = clearCoachLibraryBodyNotes;
   window.openCoachLibraryAssign   = openCoachLibraryAssign;
   window.closeCoachLibraryAssign  = closeCoachLibraryAssign;
   window.toggleCoachBulkClient    = toggleCoachBulkClient;

@@ -2099,6 +2099,21 @@ function buildAiIntervalsList(session, type) {
                     : isRestWalk    ? "RW"
                     : zone           ? `Z${zone}${zoneLabel ? `<span class="session-step-pace">${zoneLabel}</span>` : ""}`
                                      : "";
+    // Layout decision: short zone tags (T1, RW, bare Zn) fit inline with
+    // type + duration in session-step-meta and read better that way — the
+    // own-row layout was added because long zones with pace text would
+    // squeeze the duration off the right edge, but for plain "Z1" cards
+    // the separate row left a one-character orphan stranded under MAIN
+    // SET. Drop to its own row only when zoneLabel is set (pace text
+    // tagged onto the zone) — that's when the meta line genuinely runs
+    // out of room. (User feedback 2026-04-29.)
+    const _zoneInline = !zoneLabel || isTransition || isRestWalk;
+    const _zoneInlineHtml = (zoneBadge && _zoneInline)
+      ? `<span class="session-step-zone session-step-zone--inline">${zoneBadge}</span>`
+      : "";
+    const _zoneRowHtml = (zoneBadge && !_zoneInline)
+      ? `<div class="session-step-zone-row"><span class="session-step-zone">${zoneBadge}</span></div>`
+      : "";
     // Swim: collapse repeated sets into one card with distance-based
     // duration ("4 × 100m (1m rest)") — distance reads better than time
     // for swim sets. Earlier behavior unfolded one row per rep; too noisy.
@@ -2127,22 +2142,25 @@ function buildAiIntervalsList(session, type) {
       <div class="session-step ${stepCls}">
         <div class="session-step-meta">
           <span class="session-step-type">${sportTag}${typeLabel}</span>
+          ${_zoneInlineHtml}
           <span class="session-step-duration">${durText}</span>
         </div>
-        ${zoneBadge ? `<div class="session-step-zone-row"><span class="session-step-zone">${zoneBadge}</span></div>` : ""}
+        ${_zoneRowHtml}
         ${cleanedDetails ? `<div class="session-step-label">${escHtml(cleanedDetails)}</div>` : ""}
       </div>`;
     }
 
-    // Top row: name on left, duration on right. Zone badge moves to its
-    // own row underneath so it isn't squeezed between name and duration.
+    // Top row: name on left, duration on right. Short zone badges sit
+    // inline between them; long ones (Z3 with pace text) drop to their
+    // own row so the duration doesn't get pushed off-screen.
     return `
       <div class="session-step ${stepCls}">
         <div class="session-step-meta">
           <span class="session-step-type">${sportTag}${typeLabel}</span>
+          ${_zoneInlineHtml}
           <span class="session-step-duration">${durText}</span>
         </div>
-        ${zoneBadge ? `<div class="session-step-zone-row"><span class="session-step-zone">${zoneBadge}</span></div>` : ""}
+        ${_zoneRowHtml}
         ${iv.details ? `<div class="session-step-label">${escHtml(iv.details)}</div>` : ""}
       </div>`;
   }
