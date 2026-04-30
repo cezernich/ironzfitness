@@ -497,11 +497,16 @@ function setNutritionEnabled(enabled) {
 function applyNutritionToggle() {
   const enabled = isNutritionEnabled();
   const bottomNutritionBtn = document.getElementById("bottom-nav-nutrition");
-  const summarySection     = document.getElementById("section-todays-summary");
   const toggle             = document.getElementById("pref-nutrition-toggle");
   if (bottomNutritionBtn) bottomNutritionBtn.style.display = enabled ? "" : "none";
-  if (summarySection)     summarySection.style.display      = enabled ? "" : "none";
   if (toggle)             toggle.checked                    = enabled;
+  // The legacy #section-todays-summary card ("X meals logged today" +
+  // 4 macro boxes) is intentionally not unhidden anymore — the rich
+  // Today's Nutrition dashboard at the top of the page already shows
+  // these numbers in progress bars + macro rings, so the bottom card
+  // was duplicate visual noise. Markup left in place (display:none in
+  // index.html) so renderTodaysSummary() can keep writing to it as a
+  // dead target without throwing — see nutrition.js for the guard.
 }
 
 function getMeasurementSystem() {

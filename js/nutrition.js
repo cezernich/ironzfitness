@@ -117,6 +117,12 @@ function clearNutrition() {
 
 function renderTodaysSummary() {
   const container = document.getElementById("todays-summary");
+  // The legacy summary section is now permanently hidden (the rich
+  // Today's Nutrition dashboard at the top of the page replaces it).
+  // Markup may still exist in index.html for backwards compatibility;
+  // bail cleanly if it's been removed entirely so callers (which fire
+  // on every meal change) don't throw on a missing container.
+  if (!container) return;
 
   // Get today's date in YYYY-MM-DD format (what our date inputs use)
   const today = getTodayString();
