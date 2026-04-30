@@ -219,18 +219,21 @@ function _startFallbackScan() {
   // the constraint — `ideal` doesn't fail, just downgrades. (User
   // feedback 2026-04-29: scanner couldn't lock — too blurry up close,
   // too small from arms-length.)
-  const _camConstraints = {
+  // Html5Qrcode's first arg must be a string camera id OR a single-key
+  // object — the full MediaTrackConstraints goes in config.videoConstraints.
+  config.videoConstraints = {
     facingMode: "environment",
     width:  { ideal: 1920 },
     height: { ideal: 1080 },
     frameRate: { ideal: 30 },
     advanced: [
       { focusMode: "continuous" },
-      { focusDistance: { min: 0.05 } }, // hint that the user may be close
+      { focusDistance: { min: 0.05 } },
     ],
   };
   html5.start(
-    _camConstraints,
+    { facingMode: "environment" },
+    config,
     function (decodedText) {
       if (!_scanState || !_scanState.html5) return;
       if (_scanState._hintTimer) { clearTimeout(_scanState._hintTimer); _scanState._hintTimer = null; }

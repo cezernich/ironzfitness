@@ -14,9 +14,22 @@ const DB = (() => {
     try {
       const c = _client();
       if (!c) return null;
-      const { data: { session } } = await c.auth.getSession();
-      return session?.user?.id || null;
-    } catch { return null; }
+      // Race against a 4s timeout so a stuck gotrue-js auth-token lock
+      // doesn't strand pending syncs forever. When the lock hangs,
+      // _doSyncKey awaits _userId() forever → workouts never upsert
+      // → live-tracker finishes don't propagate cross-device. Same
+      // pattern config.js _getSessionWithTimeout uses for callAI.
+      const result = await Promise.race([
+        c.auth.getSession(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("auth_lock_timeout")), 4000)),
+      ]);
+      return result?.data?.session?.user?.id || null;
+    } catch (e) {
+      if (e && e.message === "auth_lock_timeout") {
+        console.warn("[DB] _userId getSession hung — sync deferred to next replay");
+      }
+      return null;
+    }
   }
 
   // Cross-tab write guard.

@@ -35,31 +35,61 @@ function _stravaClient() {
   return (typeof window !== "undefined" && window.supabaseClient) || null;
 }
 
-async function _stravaUserId() {
+// gotrue-js can deadlock its internal lock during a refresh, leaving
+// auth.getSession() pending forever. When that happens here, the live
+// tracker's post-finish Strava prompt and the share-sheet "Share to
+// Strava" button both hang silently — the await never resolves, no
+// upload, no toast, no modal. Race every getSession() call against a
+// short timeout so callers never block on a stuck lock. Same pattern
+// the callAI helper uses (config.js _getSessionWithTimeout); kept
+// inline here to avoid load-order coupling between scripts.
+async function _stravaGetSession(ms) {
   const sb = _stravaClient();
   if (!sb) return null;
   try {
-    const { data } = await sb.auth.getSession();
-    return data?.session?.user?.id || null;
-  } catch { return null; }
+    return await Promise.race([
+      sb.auth.getSession(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("auth_lock_timeout")), ms || 4000)),
+    ]);
+  } catch (e) {
+    if (e && e.message === "auth_lock_timeout") {
+      console.warn("[Strava] getSession hung — attempting refreshSession");
+      try {
+        return await Promise.race([
+          sb.auth.refreshSession(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("refresh_timeout")), 3000)),
+        ]);
+      } catch (refreshErr) {
+        console.warn("[Strava] refreshSession also hung:", refreshErr && refreshErr.message);
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+async function _stravaUserId() {
+  const result = await _stravaGetSession(4000);
+  return result?.data?.session?.user?.id || null;
 }
 
 async function _stravaAccessToken() {
   const sb = _stravaClient();
   if (!sb) return null;
-  try {
-    const { data } = await sb.auth.getSession();
-    let tok = data?.session?.access_token || null;
-    // If getSession() returned nothing (auth state still loading), fall
-    // back to refreshSession which forces a re-read from storage.
-    if (!tok && sb.auth.refreshSession) {
-      try {
-        const { data: r } = await sb.auth.refreshSession();
-        tok = r?.session?.access_token || null;
-      } catch {}
-    }
-    return tok;
-  } catch { return null; }
+  const result = await _stravaGetSession(4000);
+  let tok = result?.data?.session?.access_token || null;
+  // If the timed getSession() returned nothing, force a refresh once
+  // — also raced — to break a stuck lock and re-read from storage.
+  if (!tok && sb.auth.refreshSession) {
+    try {
+      const r = await Promise.race([
+        sb.auth.refreshSession(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("refresh_timeout")), 3000)),
+      ]);
+      tok = r?.data?.session?.access_token || null;
+    } catch {}
+  }
+  return tok;
 }
 
 /* =====================================================================

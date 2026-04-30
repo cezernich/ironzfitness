@@ -3764,6 +3764,9 @@ input.completion-ex-name:focus {
      the notch or the bottom nav. */
   max-height: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-x: contain;
+  touch-action: pan-y;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -11563,6 +11566,9 @@ input.completion-ex-name:focus {
   .rating-modal {
     max-height: 88vh;
     overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-x: contain;
+    touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
   }
   /* Survey modal handled separately — slides up as bottom sheet */

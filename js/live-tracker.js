@@ -1407,12 +1407,20 @@ async function _commitLiveWorkout(logAll) {
         }
         // Only save setDetails if values actually differ across sets
         const allSame = details.every(d => d.reps === details[0].reps && d.weight === details[0].weight);
+        // Carry the superset grouping forward so the completed-workout
+        // renderer (workouts.js buildExerciseTableHTML) can rebuild the
+        // "SUPERSET — N SETS" blocks. Without these, the completion view
+        // collapses into a flat list and the user can't tell what was
+        // supersetted with what.
         exercises.push({
           name: ex.name,
           sets: String(doneSets.length),
           reps: mainReps,
           weight: mainWeight,
           setDetails: (!allSame && details.length > 1) ? details : undefined,
+          ...(ex.supersetGroup ? { supersetGroup: ex.supersetGroup } : {}),
+          ...(ex.supersetId    ? { supersetId:    ex.supersetId    } : {}),
+          ...(ex.groupSets     ? { groupSets:     ex.groupSets     } : {}),
         });
       }
     });

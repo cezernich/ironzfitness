@@ -2214,7 +2214,42 @@ function _getCompletionExercises(sessionId) {
   try {
     const workouts = JSON.parse(localStorage.getItem("workouts")) || [];
     const rec = workouts.find(w => w.isCompletion && w.completedSessionId === sessionId);
-    return rec && rec.exercises && rec.exercises.length > 0 ? rec.exercises : null;
+    if (!rec || !rec.exercises || rec.exercises.length === 0) return null;
+    // Backfill superset grouping for completions saved before the fix
+    // landed (those records carry exercises but no supersetGroup /
+    // supersetId fields, so the renderer collapsed them into a flat
+    // list). When the source schedule entry's exercises align 1:1 by
+    // name, copy their supersetGroup forward — non-destructive.
+    const needsBackfill = !rec.exercises.some(e => e.supersetGroup || e.supersetId);
+    if (!needsBackfill) return rec.exercises;
+    let sourceExercises = null;
+    try {
+      if (sessionId.startsWith("session-sw-")) {
+        const rawId = sessionId.slice("session-sw-".length);
+        const sched = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
+        const sw = sched.find(s => String(s.id) === rawId);
+        sourceExercises = sw && Array.isArray(sw.exercises) ? sw.exercises : null;
+      } else if (sessionId.startsWith("session-plan-")) {
+        const rest = sessionId.slice("session-plan-".length);
+        const dashIdx = rest.indexOf("-", 11);
+        const planDate = dashIdx > 0 ? rest.slice(0, dashIdx) : rest;
+        const raceId   = dashIdx > 0 ? rest.slice(dashIdx + 1) : "";
+        const plan = JSON.parse(localStorage.getItem("trainingPlan") || "[]");
+        const pe = plan.find(p => p.date === planDate && String(p.raceId) === raceId);
+        sourceExercises = pe && Array.isArray(pe.exercises) ? pe.exercises : null;
+      }
+    } catch {}
+    if (!sourceExercises || sourceExercises.length !== rec.exercises.length) return rec.exercises;
+    const aligned = rec.exercises.every((e, i) => sourceExercises[i] && sourceExercises[i].name === e.name);
+    if (!aligned) return rec.exercises;
+    return rec.exercises.map((e, i) => {
+      const src = sourceExercises[i];
+      const extras = {};
+      if (src.supersetGroup) extras.supersetGroup = src.supersetGroup;
+      if (src.supersetId)    extras.supersetId    = src.supersetId;
+      if (src.groupSets)     extras.groupSets     = src.groupSets;
+      return Object.keys(extras).length ? { ...e, ...extras } : e;
+    });
   } catch { return null; }
 }
 
@@ -3065,6 +3100,14 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
         sets:   parseInt(document.getElementById(`cex-sets-${sessionId}-${i}`)?.value)   || ex.sets,
         reps:   document.getElementById(`cex-reps-${sessionId}-${i}`)?.value             || ex.reps   || "",
         weight: document.getElementById(`cex-weight-${sessionId}-${i}`)?.value           || ex.weight || "",
+        // Carry superset grouping forward — the completion-view renderer
+        // (workouts.js buildExerciseTableHTML) keys on supersetId /
+        // supersetGroup to rebuild the "SUPERSET — N SETS" blocks.
+        // Dropping these collapses a coach-built superset into a flat
+        // list and the user can't tell what was supersetted with what.
+        ...(ex.supersetGroup ? { supersetGroup: ex.supersetGroup } : {}),
+        ...(ex.supersetId    ? { supersetId:    ex.supersetId    } : {}),
+        ...(ex.groupSets     ? { groupSets:     ex.groupSets     } : {}),
       };
       const setDetails = _cexReadSetDetails(sessionId, i);
       if (setDetails) {
