@@ -204,10 +204,13 @@ function _startFallbackScan() {
       };
     },
     aspectRatio: 1.333,
-    // experimentalFeatures.useBarCodeDetectorIfSupported was off — turn
-    // it on for a faster path on devices where the native detector
-    // does work. Falls back to ZXing transparently if not available.
-    experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+    // Keep this off. iOS Safari exposes BarcodeDetector but its detect()
+    // silently returns nothing on every frame (see _startNativeOrFallback
+    // comment) — turning the flag on routes Html5Qrcode through that
+    // same broken native detector instead of ZXing, so a perfectly
+    // sharp, centered UPC never decodes. ZXing is slower but it
+    // actually works.
+    experimentalFeatures: { useBarCodeDetectorIfSupported: false },
   };
   if (supportedFormats) config.formatsToSupport = supportedFormats;
   // Detailed camera constraints — iPhones default to a low resolution
