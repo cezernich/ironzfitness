@@ -1214,6 +1214,27 @@
     ]);
   }
 
+  // gotrue-js can deadlock its internal lock during a token refresh,
+  // leaving auth.getSession() pending forever. When that happens here,
+  // both the Save-to-Library flow and the assign-to-client flow showed
+  // a "Couldn't verify your session" error and the coach had to refresh
+  // the page. Race getSession() against a short timeout, then on miss
+  // try refreshSession() — the same pattern strava-integration.js and
+  // db.js use after this bug bit us 3× in one day.
+  async function _safeGetSession() {
+    const sb = window.supabaseClient;
+    if (!sb) return null;
+    try {
+      return await _withTimeout(sb.auth.getSession(), 4000, "Sign-in check");
+    } catch (e) {
+      try {
+        return await _withTimeout(sb.auth.refreshSession(), 3000, "Refresh");
+      } catch {
+        return null;
+      }
+    }
+  }
+
   function coachAssignConflict(mode) {
     // mode: 'replace' | 'stack' | 'freeze'
     _closeConflictModal();
@@ -1228,16 +1249,14 @@
 
     const sb = window.supabaseClient;
     if (!sb) { setErr("Auth client not available."); if (btn) { btn.disabled = false; btn.textContent = "Add Workout"; } return; }
-    let session;
-    try {
-      session = (await _withTimeout(sb.auth.getSession(), 3000, "Sign-in check"))?.data?.session;
-    } catch {
-      setErr("Couldn't verify your session — try again.");
+    const sessRes = await _safeGetSession();
+    const session = sessRes?.data?.session;
+    const coachId = session?.user?.id;
+    if (!coachId) {
+      setErr(sessRes ? "Not signed in." : "Couldn't verify your session — try again.");
       if (btn) { btn.disabled = false; btn.textContent = "Add Workout"; }
       return;
     }
-    const coachId = session?.user?.id;
-    if (!coachId) { setErr("Not signed in."); if (btn) { btn.disabled = false; btn.textContent = "Add Workout"; } return; }
 
     // Stamp the coach's display name onto the workout JSONB so the
     // client renders "FROM Mark" without a separate profile lookup.
@@ -1330,16 +1349,13 @@
 
     const sb = window.supabaseClient;
     if (!sb) { setErr("Auth client not available."); resetBtn(); return; }
-    let sess;
-    try {
-      sess = await _withTimeout(sb.auth.getSession(), 3000, "Sign-in check");
-    } catch {
-      setErr("Couldn't verify your session — try again.");
+    const sess = await _safeGetSession();
+    const coachId = sess?.data?.session?.user?.id;
+    if (!coachId) {
+      setErr(sess ? "Not signed in." : "Couldn't verify your session — try again.");
       resetBtn();
       return;
     }
-    const coachId = sess?.data?.session?.user?.id;
-    if (!coachId) { setErr("Not signed in."); resetBtn(); return; }
 
     const duration = durationRaw ? parseInt(durationRaw, 10) || null : null;
     const isYoga = type === "yoga";
