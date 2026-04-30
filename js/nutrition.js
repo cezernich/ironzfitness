@@ -90,7 +90,11 @@ function deleteMeal(id) {
   if (!confirm("Delete this meal entry?")) return;
 
   let meals = loadMeals();
-  meals = meals.filter(m => m.id !== id);
+  // String-coerce both sides — meal IDs from generateId() are strings
+  // like "meal-l9k2jx-7d3f8a" but legacy entries from very old logs
+  // may be numeric (Date.now()). Strict !== fails the cross-type case.
+  const target = String(id);
+  meals = meals.filter(m => String(m.id) !== target);
   localStorage.setItem("meals", JSON.stringify(meals)); if (typeof DB !== 'undefined') DB.syncKey('meals');
 
   renderTodaysSummary();
@@ -257,7 +261,7 @@ function renderNutritionHistory() {
           <span>C: ${Math.round(m.carbs)}g</span>
           <span>F: ${Math.round(m.fat)}g</span>
         </div>
-        <button class="delete-btn" title="Delete" onclick="deleteMeal(${m.id})">🗑</button>
+        <button class="delete-btn" title="Delete" onclick="deleteMeal('${String(m.id).replace(/'/g, "\\'")}')">🗑</button>
       </div>
     `).join("");
 
