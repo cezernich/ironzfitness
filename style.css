@@ -1649,24 +1649,28 @@ button:active {
 }
 .stacked-day-badge .sd-badge-icon svg { width: 14px; height: 14px; }
 
-/* Stack streak pill — sits next to .consistency-badge in the greeting row. */
+/* Stack streak pill — sits next to .consistency-badge in the greeting
+   row. Visually matches .consistency-badge (same padding / radius /
+   font / icon size); the 1px border is offset by trimming a pixel from
+   the vertical padding so the two pills render identical height. */
 .stack-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  margin-left: 8px;
-  padding: 3px 10px;
+  gap: 5px;
+  margin-left: 10px;
+  padding: 2px 9px;
   border: 1px solid var(--color-border);
-  border-radius: 999px;
+  border-radius: 20px;
   background: transparent;
   color: var(--color-text);
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 700;
   cursor: pointer;
   font-family: inherit;
+  vertical-align: middle;
 }
 .stack-pill:hover { background: var(--color-bg-soft, rgba(0,0,0,0.04)); }
-.stack-pill svg { width: 12px; height: 12px; color: #dc2626; }
+.stack-pill svg { width: 14px; height: 14px; color: #dc2626; }
 
 /* 14-day stack history popover (inline expansion below greeting). */
 .stack-history-panel {
