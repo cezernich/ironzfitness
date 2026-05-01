@@ -364,7 +364,10 @@
         const partial = (state.workouts ? 1 : 0) + (state.hydration ? 1 : 0) + (state.nutrition ? 1 : 0);
         if (partial > 0) { cls = "sd-dot-partial"; label = `${partial}/3 pillars`; }
       }
-      dots.push(`<span class="sd-dot ${cls}" title="${d} — ${label}"></span>`);
+      const isToday = i === 0;
+      const todayCls = isToday ? " sd-dot-today" : "";
+      const todayLabel = isToday ? " (today)" : "";
+      dots.push(`<span class="sd-dot ${cls}${todayCls}" title="${d}${todayLabel} — ${label}"></span>`);
     }
     const streak = getStackStreak();
     let footer = "";

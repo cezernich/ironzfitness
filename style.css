@@ -1764,6 +1764,14 @@ button:active {
 .sd-dot-full    { background: var(--color-success, #22c55e); border-color: var(--color-success, #22c55e); }
 .sd-dot-partial { background: var(--color-accent, #6366f1); border-color: var(--color-accent, #6366f1); opacity: 0.55; }
 .sd-dot-empty   { background: transparent; }
+/* Brand-red ring around today's dot so the "rightmost = today"
+   anchor is unambiguous — without it the row reads as "what's the
+   white square to the right of yesterday's green for?" 2px outline
+   so it doesn't change the box size and shift sibling alignment. */
+.sd-dot-today {
+  outline: 2px solid #dc2626;
+  outline-offset: 1px;
+}
 .sd-history-legend {
   display: flex;
   gap: 12px;
