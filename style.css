@@ -5590,7 +5590,10 @@ input.completion-ex-name:focus {
 .survey-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  /* Above #bottom-nav (z-index 1000) — at z-index 1000 the nav was
+     rendering on top of the modal and hiding the sticky Save bar
+     (Photo Log save button was unreachable on iPhone). */
+  z-index: 1100;
   background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(6px);
   display: flex;

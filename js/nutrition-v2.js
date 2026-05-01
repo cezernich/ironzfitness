@@ -587,8 +587,21 @@ async function handleMealPhoto(input) {
 
   } catch (err) {
     loadingEl.style.display = "none";
-    document.getElementById("photo-meal-msg").textContent = "Error analyzing photo: " + err.message;
-    document.getElementById("photo-meal-msg").style.color = "var(--color-danger)";
+    const msg = document.getElementById("photo-meal-msg");
+    msg.style.color = "var(--color-danger)";
+    // When callAI hits the gotrue-js auth-lock deadlock, both
+    // getSession() and refreshSession() time out and the only reliable
+    // recovery is a page reload (the lock is held by a hung promise
+    // inside the supabase-js instance — nothing in client code can
+    // release it). iOS PWA mode has no pull-to-refresh, so the user
+    // ended up stuck. Surface a one-tap Reload button alongside the
+    // error so they don't have to dig through Settings.
+    const isAuthLock = /Couldn't reach IronZ/i.test(err.message || "");
+    if (isAuthLock) {
+      msg.innerHTML = `Error analyzing photo: ${escHtml(err.message)} <button class="btn-secondary btn-sm" style="margin-left:8px" onclick="window.location.reload()">Reload app</button>`;
+    } else {
+      msg.textContent = "Error analyzing photo: " + err.message;
+    }
   }
 }
 
