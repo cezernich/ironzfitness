@@ -246,9 +246,15 @@
     }).length;
 
     // Section 5 caps per role + phase. Kept in sync with the spec.
+    // "general" is the new neutral hybrid role (replaced "hypertrophy"
+    // in the Build Plan picker — see onboarding-v2.js _HYBRID_STRENGTH_ROLES).
+    // Programming is identical to the legacy hypertrophy caps; only
+    // the body-comp side effect was removed. Both keys live on for
+    // back-compat with existing users who still have role=hypertrophy.
     const caps = {
       race_performance: { base: 2, build: 1, peak: 1, taper: 0 },
       hypertrophy:      { base: 3, build: 2, peak: 2, taper: 0 },
+      general:          { base: 3, build: 2, peak: 2, taper: 0 },
       injury_prevention:{ base: 2, build: 2, peak: 2, taper: 0 },
       minimal:          { base: 1, build: 1, peak: 1, taper: 0 },
     };
@@ -499,6 +505,7 @@
       injury_prevention: "injury-prevention",
       race_performance:  "race-performance",
       hypertrophy:       "hypertrophy",
+      general:           "general-strength",
       minimal:           "minimal",
     };
     return map[r] || (r || "minimal");
