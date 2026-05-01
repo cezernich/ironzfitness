@@ -2913,28 +2913,27 @@ input.completion-ex-name:focus {
   border-color: rgba(34, 197, 94, 0.3);
 }
 
-/* Completed-card "Option B" layout: when collapsed, the card collapses
-   to a single-row review surface. Workouts in progress / planned keep
-   the full card UI (intensity strip + badges) — that preview info is
-   useful for upcoming sessions but noise on a finished one. The expanded
-   state (no .is-collapsed) restores the full body for tap-to-expand
-   review of intervals / exercises. */
-.session-card--completed.is-collapsed {
+/* Completed-card "Option B" layout: review-surface treatment applies
+   in BOTH collapsed and expanded states. The colored interval bar is
+   useful for previewing upcoming sessions but is noise on a finished
+   one — and crowding the header with duration/intensity/Undo + chevron
+   was overlapping the title. Tap-to-expand still reveals the full
+   warmup / main / cooldown body, just under the same clean header. */
+.session-card--completed {
   background: var(--color-card-bg, #fff);
   border-left: 3px solid var(--color-success);
 }
-.session-card--completed.is-collapsed .session-phase,
-.session-card--completed.is-collapsed .session-duration-badge,
-.session-card--completed.is-collapsed .intensity-badge,
-.session-card--completed.is-collapsed .undo-complete-btn-header,
-.session-card--completed.is-collapsed .session-intensity-strip,
-.session-card--completed.is-collapsed .session-complete-indicator {
+.session-card--completed .session-phase,
+.session-card--completed .session-duration-badge,
+.session-card--completed .intensity-badge,
+.session-card--completed .undo-complete-btn-header,
+.session-card--completed .session-intensity-strip,
+.session-card--completed .session-complete-indicator {
   display: none !important;
 }
-.session-card--completed.is-collapsed .session-name {
-  /* "Push Day" was truncating because duration / intensity / Undo ate
-     the row. With those hidden, let the title use the full width and
-     only ellipsis if it actually overflows the spec line. */
+.session-card--completed .session-name {
+  /* Title gets full row width once chips are gone; ellipsis only if
+     it would still overflow the spec line. */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2951,7 +2950,7 @@ input.completion-ex-name:focus {
   height: 16px;
   stroke-width: 2.5;
 }
-.session-card--completed.is-collapsed .session-card-leading-check {
+.session-card--completed .session-card-leading-check {
   display: inline-flex;
 }
 .session-spec-line {
@@ -2963,7 +2962,7 @@ input.completion-ex-name:focus {
   white-space: nowrap;
   margin-right: 4px;
 }
-.session-card--completed.is-collapsed .session-spec-line {
+.session-card--completed .session-spec-line {
   display: inline-flex;
   align-items: center;
 }
