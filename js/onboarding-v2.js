@@ -442,6 +442,19 @@
         // treat the re-open as "already touched" so long-day tweaks don't
         // wipe their prior composition.
         _state._scheduleTouched = true;
+        // Self-heal: the schedule picker (_openAddSlotPicker) offers
+        // "strength" regardless of selectedSports, but never syncs the
+        // pick back. If the persisted template has strength chips and
+        // selectedSports is missing "strength", _renderSchedule's filter
+        // would silently strip every strength chip on edit-open and the
+        // user sees their lifting days vanish. Reconcile before render.
+        const _hasStrInTpl = _BP_DAYS.some(d =>
+          (_state.schedule[d] || []).some(s => typeof s === "string" && s.indexOf("strength") === 0)
+        );
+        if (_hasStrInTpl && Array.isArray(_state.selectedSports) && !_state.selectedSports.includes("strength")) {
+          _state.selectedSports = _state.selectedSports.concat(["strength"]);
+          _lsSet("selectedSports", _state.selectedSports);
+        }
       }
     } catch {}
     _state.thresholds = _loadExistingThresholds();
@@ -3570,6 +3583,14 @@
   }
   function _pickAddSlot(day, sport) {
     _addSlotToDay(day, sport);
+    // The picker offers "strength" even when the user didn't pick it on
+    // the sport grid. Sync selectedSports so the render filter keeps the
+    // chip on subsequent re-renders (otherwise it gets silently stripped
+    // and the user's lift day disappears).
+    if (sport === "strength" && Array.isArray(_state.selectedSports) && !_state.selectedSports.includes("strength")) {
+      _state.selectedSports.push("strength");
+      _lsSet("selectedSports", _state.selectedSports);
+    }
     _markScheduleTouched();
     _closeAddSlotPicker();
     _renderSchedule();
