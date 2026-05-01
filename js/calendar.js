@@ -3990,7 +3990,11 @@ function renderDailyRings() {
     // rings keep the old "fill = green" rule.
     const isGoalAware = extra && extra.goalAware;
     const ringColor = isGoalAware ? color : (done ? "var(--color-success, #22c55e)" : color);
-    const showCheck = !isGoalAware && done;
+    // Show ✓ when the ring is in success state. For non-goal-aware rings
+    // that's `pct >= 1`. For goal-aware rings (nutrition) it's "color
+    // resolved to success" — i.e. on-target green, NOT fat_loss-over red.
+    const isSuccessColor = String(ringColor).indexOf("--color-success") !== -1;
+    const showCheck = isGoalAware ? isSuccessColor : done;
     const center = showCheck
       ? `<text x="50%" y="52%" text-anchor="middle" dominant-baseline="central" fill="var(--color-success, #22c55e)" font-size="22" font-weight="700">✓</text>`
       : `<text x="50%" y="48%" text-anchor="middle" dominant-baseline="central" fill="var(--color-text)" font-size="14" font-weight="700">${label}</text>`;
