@@ -1102,6 +1102,81 @@ const DB = (() => {
     });
   }
 
+  // ── Realtime cross-device sync ────────────────────────────────────────────
+  //
+  // Subscribes to postgres_changes on the user_data table filtered by the
+  // current user_id. When another device upserts a key (e.g. logs a meal
+  // on phone), this device receives the new row, updates the localStorage
+  // cache, and dispatches `ironz:data-refresh` with the changed keys so
+  // surfaces (rings, greeting, day detail, hydration, etc.) re-render
+  // without a tab refocus or page reload.
+  //
+  // Multiple changes within a 250ms window are coalesced into a single
+  // event so a burst of writes (e.g. an iOS workout finish that touches
+  // completedSessions + workouts + stackedDayHistory) doesn't fan out
+  // into N separate render cycles.
+  //
+  // Note: Supabase Realtime must be enabled on the user_data table in
+  // the dashboard (Database → Replication) for this to receive events.
+
+  let _realtimeChannel = null;
+  let _refreshTimer = null;
+  const _changedKeys = new Set();
+
+  async function initRealtime() {
+    const c = _client();
+    if (!c) return;
+    const uid = await _userId();
+    if (!uid) return;
+
+    // Tear down any prior channel before re-subscribing — handles the
+    // user-switch case where two sign-ins happen in the same tab.
+    if (_realtimeChannel) {
+      try { c.removeChannel(_realtimeChannel); } catch {}
+      _realtimeChannel = null;
+    }
+
+    _realtimeChannel = c
+      .channel(`user_data:${uid}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'user_data',
+        filter: `user_id=eq.${uid}`,
+      }, (payload) => {
+        const key = payload?.new?.data_key || payload?.old?.data_key;
+        if (!key) return;
+        if (payload.eventType === 'DELETE') {
+          try { localStorage.removeItem(key); } catch {}
+        } else if (payload.new && payload.new.data_value !== undefined) {
+          _lsSet(key, payload.new.data_value);
+        }
+        _changedKeys.add(key);
+        clearTimeout(_refreshTimer);
+        _refreshTimer = setTimeout(() => {
+          const keys = Array.from(_changedKeys);
+          _changedKeys.clear();
+          try {
+            document.dispatchEvent(new CustomEvent('ironz:data-refresh', { detail: { keys } }));
+          } catch (e) { console.warn('[Realtime] dispatch failed', e); }
+        }, 250);
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') console.log('[Realtime] user_data subscribed for', uid);
+        else if (status === 'CHANNEL_ERROR') console.warn('[Realtime] channel error — is replication enabled on user_data?');
+      });
+  }
+
+  function teardownRealtime() {
+    const c = _client();
+    if (c && _realtimeChannel) {
+      try { c.removeChannel(_realtimeChannel); } catch {}
+    }
+    _realtimeChannel = null;
+    _changedKeys.clear();
+    if (_refreshTimer) { clearTimeout(_refreshTimer); _refreshTimer = null; }
+  }
+
   // ── Public API ────────────────────────────────────────────────────────────
 
   return {
@@ -1135,6 +1210,8 @@ const DB = (() => {
     migrateLocalStorage,
     clearLocalUserData,
     handleUserContext,
+    initRealtime,
+    teardownRealtime,
     _isOnline,
     _userId,
   };

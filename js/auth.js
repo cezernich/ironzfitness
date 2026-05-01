@@ -185,6 +185,10 @@ async function handleNewPassword() {
           try { await DB.replayPendingSyncs(); } catch (e) { console.warn('Auth: replayPendingSyncs error', e); }
           try { await DB.refreshAllKeys(); } catch (e) { console.warn('Auth: refreshAllKeys error', e); }
           try { await DB.refreshAllTables(); } catch (e) { console.warn('Auth: refreshAllTables error', e); }
+          // Open the cross-device realtime channel after the initial
+          // pull completes — surfaces re-render via `ironz:data-refresh`
+          // when another device upserts user_data rows.
+          try { if (DB.initRealtime) DB.initRealtime(); } catch (e) { console.warn('Auth: initRealtime error', e); }
         }
       } catch (e) { console.warn('Auth: post-reset session-init failed', e); }
       hideAuthScreen();
@@ -666,6 +670,10 @@ async function authBoot() {
     // Pull all data from Supabase before initializing UI
     try { await DB.refreshAllKeys(); } catch (e) { console.warn('Auth: refreshAllKeys error', e); }
     try { await DB.refreshAllTables(); } catch (e) { console.warn('Auth: refreshAllTables error', e); }
+    // Open the cross-device realtime channel after the initial pull
+    // completes — surfaces re-render via `ironz:data-refresh` when
+    // another device upserts user_data rows.
+    try { if (DB.initRealtime) DB.initRealtime(); } catch (e) { console.warn('Auth: initRealtime error', e); }
     // Migrate legacy savedWorkouts into unified saved library
     if (window.SavedWorkoutsLibrary && window.SavedWorkoutsLibrary.migrateOldSavedWorkouts) {
       try { await window.SavedWorkoutsLibrary.migrateOldSavedWorkouts(); } catch (e) { console.warn('Auth: savedWorkouts migration error', e); }
@@ -708,6 +716,10 @@ async function authBoot() {
       try { await DB.replayPendingSyncs(); } catch (e) { console.warn('Auth: replayPendingSyncs error', e); }
       try { await DB.refreshAllKeys(); } catch (e) { console.warn('Auth: refreshAllKeys error', e); }
       try { await DB.refreshAllTables(); } catch (e) { console.warn('Auth: refreshAllTables error', e); }
+      // Open the cross-device realtime channel after the initial pull
+      // completes — surfaces re-render via `ironz:data-refresh` when
+      // another device upserts user_data rows.
+      try { if (DB.initRealtime) DB.initRealtime(); } catch (e) { console.warn('Auth: initRealtime error', e); }
       // Migrate legacy savedWorkouts into unified saved library
       if (window.SavedWorkoutsLibrary && window.SavedWorkoutsLibrary.migrateOldSavedWorkouts) {
         try { await window.SavedWorkoutsLibrary.migrateOldSavedWorkouts(); } catch (e) { console.warn('Auth: savedWorkouts migration error', e); }
@@ -741,6 +753,12 @@ async function authBoot() {
       }
       if (typeof unsubscribeCoachAssignments === 'function') {
         try { unsubscribeCoachAssignments(); } catch {}
+      }
+      // Drop the realtime channel so we don't keep receiving the
+      // previous user's row events after sign-out (and to free the
+      // slot before the next user signs in).
+      if (DB && DB.teardownRealtime) {
+        try { DB.teardownRealtime(); } catch {}
       }
       // Nuke every per-user key from localStorage so the next user to
       // sign in on this device starts clean. Without this the next user

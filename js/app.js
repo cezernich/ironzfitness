@@ -697,6 +697,41 @@ function init() {
       if (typeof renderGreeting === "function") renderGreeting();
     } catch (e) { console.warn("[IronZ] visibility refresh failed:", e); }
   });
+
+  // Cross-device realtime — db.js subscribes to user_data row changes
+  // and dispatches `ironz:data-refresh` with the changed keys (already
+  // written to localStorage by the realtime handler before this fires).
+  // Re-render the surfaces those keys feed; the renders read from
+  // localStorage so they pick up the new values immediately.
+  document.addEventListener("ironz:data-refresh", (e) => {
+    const keys = (e.detail && e.detail.keys) || [];
+    try {
+      if (typeof renderDailyRings === "function") renderDailyRings();
+      if (typeof renderGreeting === "function") renderGreeting();
+      if (keys.includes("meals")) {
+        if (typeof updateNutritionDashboard === "function") updateNutritionDashboard();
+        if (typeof renderTodaysSummary       === "function") renderTodaysSummary();
+        if (typeof renderNutritionHistory    === "function") renderNutritionHistory();
+      }
+      if (keys.includes("hydrationLog") && typeof renderHydration === "function") renderHydration();
+      if ((keys.includes("completedSessions") || keys.includes("workoutSchedule") || keys.includes("workouts"))
+          && typeof renderCalendar === "function") renderCalendar();
+      if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
+        renderDayDetail(selectedDate);
+      }
+      // Stack reconcile if any pillar key changed — covers the case
+      // where the other device deleted a meal that took today out of
+      // stack-eligibility.
+      const stackKeys = ["meals", "hydrationLog", "completedSessions", "stackedDayHistory"];
+      if (window.StackUX && keys.some(k => stackKeys.includes(k))) {
+        if (window.StackUX.reconcileStack) window.StackUX.reconcileStack();
+        if (window.StackUX.maybeFireStackCelebration) window.StackUX.maybeFireStackCelebration();
+      }
+    } catch (err) {
+      console.warn("[IronZ] data-refresh handler error:", err);
+    }
+  });
+
   // Keyboard-aware tab bar. iOS doesn't shrink window.innerHeight when
   // the keyboard appears, so `position: fixed; bottom: 0` on
   // #bottom-nav stays anchored to the BELOW-keyboard area — which from
