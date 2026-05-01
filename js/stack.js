@@ -206,29 +206,58 @@
   }
 
   function _runCelebrationAnimation() {
+    // Two surfaces: (1) toast at top of viewport that the user sees
+    // regardless of scroll position — primary signal since the rings
+    // live below the fold while the user is logging, and (2) in-place
+    // ring pulse + sweep for the case the user happens to be at top.
+    _runCelebrationToast();
+
     const container = document.getElementById("daily-rings");
-    if (!container) return;
-
-    container.classList.add("stack-pulse");
-
-    // Lightning sweep — a single SVG bolt traverses the rings row, brand
-    // red. Removed after the animation finishes so it doesn't pile up
-    // on subsequent invocations (defensive — celebration is gated, but
-    // a future re-trigger path shouldn't leak stale DOM).
-    const sweep = document.createElement("div");
-    sweep.className = "stack-sweep";
-    sweep.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="#dc2626" stroke="#dc2626" stroke-width="1" stroke-linejoin="round" aria-hidden="true">
-        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-      </svg>`;
-    container.appendChild(sweep);
-
-    setTimeout(() => {
-      container.classList.remove("stack-pulse");
-      try { sweep.remove(); } catch {}
-    }, 900);
+    if (container) {
+      container.classList.add("stack-pulse");
+      const sweep = document.createElement("div");
+      sweep.className = "stack-sweep";
+      sweep.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="#dc2626" stroke="#dc2626" stroke-width="1" stroke-linejoin="round" aria-hidden="true">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </svg>`;
+      container.appendChild(sweep);
+      setTimeout(() => {
+        container.classList.remove("stack-pulse");
+        try { sweep.remove(); } catch {}
+      }, 900);
+    }
 
     _haptic();
+  }
+
+  function _runCelebrationToast() {
+    // Self-cleaning fixed-position banner. Slides down from above the
+    // viewport, holds, slides back up. ~1.5s total — long enough to
+    // read "Stacked Day · Day N", short enough not to interrupt the
+    // logging flow that triggered it.
+    const existing = document.getElementById("stack-celebration-toast");
+    if (existing) try { existing.remove(); } catch {}
+
+    const streak = getStackStreak();
+    const dayN = streak.current || 1;
+    const zap = (typeof ICONS !== "undefined" && ICONS.zap) ? ICONS.zap : "⚡";
+
+    const toast = document.createElement("div");
+    toast.id = "stack-celebration-toast";
+    toast.className = "stack-toast";
+    toast.setAttribute("role", "status");
+    toast.setAttribute("aria-live", "polite");
+    toast.innerHTML = `
+      <span class="stack-toast-icon">${zap}</span>
+      <span class="stack-toast-text">
+        <span class="stack-toast-title">Stacked Day</span>
+        <span class="stack-toast-sub">Day ${dayN}</span>
+      </span>`;
+    document.body.appendChild(toast);
+
+    setTimeout(() => { toast.classList.add("stack-toast--out"); }, 1300);
+    setTimeout(() => { try { toast.remove(); } catch {} }, 1700);
   }
 
   function _renderStackedBadge() {
