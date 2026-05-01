@@ -14511,6 +14511,113 @@ input.completion-ex-name:focus {
   font-style: italic;
 }
 
+/* Sport sub-tabs inside the Benchmarks tab. Mirrors the client's
+   Training Zones surface — pill row, transparent inactive, filled
+   active with the coach-purple accent. */
+.coach-bench-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.coach-bench-tab {
+  padding: 6px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.coach-bench-tab:hover { color: var(--color-text); }
+.coach-bench-tab.is-active {
+  background: var(--color-text);
+  color: var(--color-surface);
+  border-color: var(--color-text);
+}
+
+.coach-bench-ref-line {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  margin-bottom: 10px;
+}
+
+.coach-zone-table {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.coach-zone-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.coach-zone-row:last-child { border-bottom: none; }
+.coach-zone-badge {
+  flex-shrink: 0;
+  width: 38px;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 4px 6px;
+  border-radius: 999px;
+}
+.coach-zone-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.coach-zone-name { font-weight: 600; font-size: 0.9rem; color: var(--color-text); }
+.coach-zone-desc { font-size: 0.75rem; color: var(--color-text-muted); }
+.coach-zone-val {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+/* Reuse the existing color tokens from the client's zone-N classes
+   for consistent badge coloring across both surfaces. */
+.coach-zone-badge.zone-1 { background: rgba(100, 116, 139, 0.25); color: #94a3b8; }
+.coach-zone-badge.zone-2 { background: rgba(52, 211, 153, 0.2);  color: var(--color-success, #34d399); }
+.coach-zone-badge.zone-3 { background: rgba(251, 191, 36, 0.2);  color: #fbbf24; }
+.coach-zone-badge.zone-4 { background: rgba(239, 68, 68, 0.2);   color: #ef4444; }
+.coach-zone-badge.zone-5 { background: rgba(167, 139, 250, 0.2); color: #a78bfa; }
+.coach-zone-badge.zone-6 { background: rgba(100, 116, 139, 0.18); color: #64748b; }
+
+.coach-bench-history-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.coach-bench-history-row:last-child { border-bottom: none; }
+.coach-bench-history-date {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+.coach-bench-history-detail {
+  text-align: right;
+  color: var(--color-text);
+  font-weight: 500;
+}
+.coach-bench-history-empty {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
 .coach-feedback-row {
   padding: 8px 0;
   border-bottom: 1px solid var(--color-border);

@@ -19,6 +19,9 @@
 
   let _client = null;
   let _activeTab = "calendar";
+  // Sport sub-tab inside Benchmarks. Mirrors the client's own zones
+  // surface (Running / Biking / Swimming / Strength).
+  let _activeBenchmarkSport = "running";
   // Phase 3E: audit map + currently-editing field. _audit[data_key] =
   // { by: uuid, at: iso-timestamp } when the user_data row was last
   // edited by a coach. _editingFeature is the inline-edit cursor
@@ -80,13 +83,16 @@
       // Pull every coach-readable data_key for this client in one go.
       // RLS filters silently — we just take what comes back. Also pull
       // the audit columns so Phase 3E can surface "edited by [coach]
-      // on [date]" under each value.
+      // on [date]" under each value. trainingZonesHistory is included
+      // so the Benchmarks tab can show zone-update history scoped to
+      // the coaching relationship.
       const dataRes = await sb.from("user_data")
         .select("data_key, data_value, last_edited_by, last_edited_at")
         .eq("user_id", clientId)
         .in("data_key", [
           "workoutSchedule", "trainingPlan",
-          "workoutRatings", "personalRecords", "trainingZones",
+          "workoutRatings", "personalRecords",
+          "trainingZones", "trainingZonesHistory",
           "raceEvents", "events",
           "nutritionEnabled", "hydrationEnabled", "fuelingEnabled",
           "nutritionAdjustments",
@@ -119,9 +125,28 @@
       _data.assignments = {};
       for (const r of (assignRes?.data || [])) _data.assignments[r.id] = r;
 
-      _data.schedule  = _coerceArray(byKey.workoutSchedule);
-      _data.ratings   = _coerceArray(byKey.workoutRatings);
-      _data.zones     = byKey.trainingZones || null;
+      // When did this coach take this client on? Used by the Benchmarks
+      // tab to scope the zones-update history to the relationship.
+      const sess = (await sb.auth.getSession())?.data?.session;
+      const coachUid = sess?.user?.id || null;
+      let coachAssignedAt = null;
+      if (coachUid) {
+        const relRes = await sb.from("coaching_assignments")
+          .select("assigned_at")
+          .eq("coach_id", coachUid)
+          .eq("client_id", clientId)
+          .eq("active", true)
+          .order("assigned_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        coachAssignedAt = relRes?.data?.assigned_at || null;
+      }
+
+      _data.schedule        = _coerceArray(byKey.workoutSchedule);
+      _data.ratings         = _coerceArray(byKey.workoutRatings);
+      _data.zones           = byKey.trainingZones || null;
+      _data.zoneHistory     = _coerceArray(byKey.trainingZonesHistory);
+      _data.coachAssignedAt = coachAssignedAt;
       _data.prs       = byKey.personalRecords || null;
       _data.races     = _coerceArray(byKey.raceEvents).concat(_coerceArray(byKey.events));
       _data.completed = completedRes.data || [];
@@ -415,49 +440,202 @@
   }
 
   // ── Tab: Benchmarks ──────────────────────────────────────────────────
-  function _renderBenchmarks() {
-    const z = _data.zones || {};
-    const strength = z.strength || {};
-    const running  = z.running  || {};
-    const swimming = z.swimming || {};
-    const hr       = z.heartRate || {};
+  // Mirrors the client's Training Zones & Strength Benchmarks surface:
+  // sport tabs (Running / Biking / Swimming / Strength) on top, then
+  // Z1-Zn rows for the active sport (or 1RMs for Strength), reference
+  // line, and a history list scoped to the coaching relationship.
+  //
+  // Previously this checked for legacy keys (running.easy, running.tempo,
+  // running.vo2max, swimming.css) that aren't part of the active schema —
+  // a client with VDOT-derived Z1-Z6 zones rendered as "no zones" on the
+  // coach side.
 
-    const liftRow = (label, key) => {
-      const v = strength[key];
-      if (!v || !v.weight) return "";
-      const t = v.type ? ` (${_esc(v.type)})` : "";
-      return `<div class="coach-bench-row"><span>${_esc(label)}</span><strong>${_esc(v.weight)} lbs${t}</strong></div>`;
-    };
+  const _ZONE_LABELS = {
+    running: [
+      { num: 1, name: "Recovery",   desc: "Warmup · Cooldown · Very easy miles" },
+      { num: 2, name: "Easy",       desc: "Base miles · Aerobic development" },
+      { num: 3, name: "Tempo",      desc: "Comfortably hard · RPE 6–7" },
+      { num: 4, name: "Threshold",  desc: "Hard intervals · RPE 8" },
+      { num: 5, name: "Speed",      desc: "Short reps · Race-specific" },
+      { num: 6, name: "Max Sprint", desc: "All-out sprints · Neuromuscular" },
+    ],
+    biking: [
+      { num: 1, name: "Recovery",   desc: "Active recovery · Easy spinning" },
+      { num: 2, name: "Endurance",  desc: "Aerobic base · All-day effort" },
+      { num: 3, name: "Tempo",      desc: "Sustained effort · RPE 6–7" },
+      { num: 4, name: "Threshold",  desc: "Near FTP · RPE 8" },
+      { num: 5, name: "VO₂ Max",    desc: "Hard intervals · RPE 9" },
+    ],
+    swimming: [
+      { num: 1, name: "Recovery",   desc: "Easy technical · Warm-up · Cool-down" },
+      { num: 2, name: "Endurance",  desc: "Comfortable aerobic effort" },
+      { num: 3, name: "Tempo",      desc: "Sustained effort · RPE 6–7" },
+      { num: 4, name: "Threshold",  desc: "Near CSS / T-Pace · RPE 8" },
+      { num: 5, name: "Race",       desc: "Race speed · High intensity" },
+    ],
+  };
 
-    let lifts = [
-      liftRow("Bench Press", "bench"),
-      liftRow("Back Squat",  "squat"),
-      liftRow("Deadlift",    "deadlift"),
-      liftRow("Overhead Press", "ohp"),
-      liftRow("Barbell Row", "row"),
-    ].filter(Boolean).join("") || `<div class="coach-bench-empty">No lifts logged.</div>`;
+  const _LIFTS = [
+    { key: "bench",    label: "Bench Press" },
+    { key: "squat",    label: "Back Squat" },
+    { key: "deadlift", label: "Deadlift" },
+    { key: "ohp",      label: "Overhead Press" },
+    { key: "row",      label: "Barbell Row" },
+  ];
 
-    let runRows = "";
-    if (running.easy)   runRows += `<div class="coach-bench-row"><span>Easy pace</span><strong>${_esc(running.easy)}</strong></div>`;
-    if (running.tempo)  runRows += `<div class="coach-bench-row"><span>Tempo / threshold</span><strong>${_esc(running.tempo)}</strong></div>`;
-    if (running.vo2max) runRows += `<div class="coach-bench-row"><span>VO₂ max</span><strong>${_esc(running.vo2max)}</strong></div>`;
+  function _benchmarkSportTabs() {
+    const sports = [
+      ["running",  "Running"],
+      ["biking",   "Biking"],
+      ["swimming", "Swimming"],
+      ["strength", "Strength"],
+    ];
+    return `<div class="coach-bench-tabs">${sports.map(([k, label]) => {
+      const active = _activeBenchmarkSport === k ? " is-active" : "";
+      return `<button class="coach-bench-tab${active}" onclick="window.coachClientDetail.setBenchmarkSport('${k}')">${_esc(label)}</button>`;
+    }).join("")}</div>`;
+  }
 
-    let swimRows = "";
-    if (swimming.css)   swimRows += `<div class="coach-bench-row"><span>CSS pace</span><strong>${_esc(swimming.css)}</strong></div>`;
+  function _renderZoneSport(sport) {
+    const zonesAll = _data.zones || {};
+    const stored = zonesAll[sport];
+    if (!stored) {
+      const emptyMsg = sport === "running"  ? "Client hasn't entered a running reference yet."
+                    : sport === "biking"   ? "Client hasn't entered an FTP yet."
+                    : "Client hasn't entered a swim reference yet.";
+      return `<div class="coach-bench-empty">${emptyMsg}</div>`;
+    }
+    let refLine = "";
+    if (sport === "running" && stored.referenceTime) {
+      refLine = `Based on ${_esc(stored.referenceDist || "")} in ${_esc(stored.referenceTime)}${stored.vdot ? " · VDOT " + _esc(stored.vdot) : ""}`;
+    } else if (sport === "biking" && stored.ftp) {
+      refLine = `FTP: ${_esc(stored.ftp)} W`;
+    } else if (sport === "swimming" && stored.tPaceStr) {
+      refLine = `T-Pace: ${_esc(stored.tPaceStr)} /100m${stored.referenceDist ? " (from " + _esc(stored.referenceDist) + ")" : ""}`;
+    }
+    const updatedAt = stored.lastUpdated || stored.calculatedAt || stored.updatedAt;
+    if (updatedAt) {
+      try {
+        const d = new Date(updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        refLine += (refLine ? " · " : "") + `Updated ${d}`;
+      } catch {}
+    }
 
-    let hrRows = "";
-    if (hr.max)     hrRows += `<div class="coach-bench-row"><span>Max HR</span><strong>${_esc(hr.max)} bpm</strong></div>`;
-    if (hr.resting) hrRows += `<div class="coach-bench-row"><span>Resting HR</span><strong>${_esc(hr.resting)} bpm</strong></div>`;
+    const labels = _ZONE_LABELS[sport] || [];
+    const rowsHtml = labels.map(z => {
+      const zd = (stored.zones || {})[`z${z.num}`] || {};
+      const val = zd.paceRange || zd.wattRange || "—";
+      return `<div class="coach-zone-row">
+        <span class="coach-zone-badge zone-${z.num}">Z${z.num}</span>
+        <div class="coach-zone-info">
+          <span class="coach-zone-name">${_esc(z.name)}</span>
+          <span class="coach-zone-desc">${_esc(z.desc)}</span>
+        </div>
+        <span class="coach-zone-val">${_esc(val)}</span>
+      </div>`;
+    }).join("");
 
     return `
-      <div class="card">
-        <div class="coach-bench-section-title">Strength 1RM / Working Refs</div>
-        ${lifts}
-      </div>
-      ${runRows  ? `<div class="card"><div class="coach-bench-section-title">Running Zones</div>${runRows}</div>` : ""}
-      ${swimRows ? `<div class="card"><div class="coach-bench-section-title">Swimming</div>${swimRows}</div>` : ""}
-      ${hrRows   ? `<div class="card"><div class="coach-bench-section-title">Heart Rate</div>${hrRows}</div>` : ""}
+      ${refLine ? `<div class="coach-bench-ref-line">${refLine}</div>` : ""}
+      <div class="coach-zone-table">${rowsHtml}</div>
     `;
+  }
+
+  function _renderStrengthBlock() {
+    const stored = (_data.zones || {}).strength || {};
+    const rows = _LIFTS.map(l => {
+      const d = stored[l.key];
+      if (!d || !d.weight) return "";
+      const typeLabel = d.type === "1rm" ? "1-rep max"
+                      : d.type === "5rm" ? "5-rep max"
+                      : d.type === "10rm" ? "10-rep max"
+                      : "";
+      return `<div class="coach-bench-row">
+        <span>${_esc(l.label)}</span>
+        <strong>${_esc(d.weight)} lbs${typeLabel ? " · " + typeLabel : ""}</strong>
+      </div>`;
+    }).filter(Boolean).join("");
+    if (!rows) return `<div class="coach-bench-empty">No lifts logged.</div>`;
+    const updatedAt = stored.lastUpdated || stored.updatedAt;
+    let dateLine = "";
+    if (updatedAt) {
+      try { dateLine = `<div class="coach-bench-ref-line">Updated ${new Date(updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>`; } catch {}
+    }
+    return dateLine + rows;
+  }
+
+  // History entries archived by saveTrainingZonesData each time the
+  // client updates a zone. Filter to the active sport, drop entries
+  // older than the coach-relationship start (assigned_at), and sort
+  // newest-first.
+  function _renderZoneHistory(sport) {
+    const all = Array.isArray(_data.zoneHistory) ? _data.zoneHistory : [];
+    const since = _data.coachAssignedAt ? new Date(_data.coachAssignedAt).getTime() : 0;
+    const entries = all
+      .filter(e => e && e.sport === sport && e.date)
+      .filter(e => {
+        if (!since) return true;
+        const t = new Date(e.date).getTime();
+        return Number.isFinite(t) && t >= since;
+      })
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    if (!entries.length) {
+      return `<div class="coach-bench-history-empty">No updates since this client joined you.</div>`;
+    }
+    const rows = entries.slice(0, 20).map(e => {
+      const dateStr = (() => {
+        try { return new Date(e.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
+        catch { return String(e.date).slice(0, 10); }
+      })();
+      const d = e.data || {};
+      let summary = "";
+      if (sport === "running")  summary = d.referenceTime ? `${_esc(d.referenceDist || "")} in ${_esc(d.referenceTime)}${d.vdot ? " · VDOT " + _esc(d.vdot) : ""}` : "";
+      else if (sport === "biking")   summary = d.ftp ? `FTP ${_esc(d.ftp)} W` : "";
+      else if (sport === "swimming") summary = d.tPaceStr ? `T-Pace ${_esc(d.tPaceStr)}/100m` : "";
+      else if (sport === "strength") {
+        summary = _LIFTS.map(l => d[l.key]?.weight ? `${l.label.split(" ")[0]} ${_esc(d[l.key].weight)}` : "")
+          .filter(Boolean).join(" · ");
+      }
+      return `<div class="coach-bench-history-row">
+        <span class="coach-bench-history-date">${dateStr}</span>
+        <span class="coach-bench-history-detail">${summary || "(no values)"}</span>
+      </div>`;
+    }).join("");
+    return rows;
+  }
+
+  function _renderBenchmarks() {
+    const sport = _activeBenchmarkSport;
+    const body = sport === "strength" ? _renderStrengthBlock() : _renderZoneSport(sport);
+    const sectionTitle = sport === "strength"
+      ? "Strength 1RM / Working Refs"
+      : `${sport.charAt(0).toUpperCase()}${sport.slice(1)} Zones`;
+
+    const sinceLabel = _data.coachAssignedAt
+      ? (() => {
+          try { return ` since ${new Date(_data.coachAssignedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`; }
+          catch { return ""; }
+        })()
+      : "";
+
+    return `
+      ${_benchmarkSportTabs()}
+      <div class="card">
+        <div class="coach-bench-section-title">${sectionTitle}</div>
+        ${body}
+      </div>
+      <div class="card">
+        <div class="coach-bench-section-title">Update History${sinceLabel}</div>
+        ${_renderZoneHistory(sport)}
+      </div>
+    `;
+  }
+
+  function setBenchmarkSport(sport) {
+    if (!["running","biking","swimming","strength"].includes(sport)) return;
+    _activeBenchmarkSport = sport;
+    const wrap = document.querySelector(".coach-client-tab-content");
+    if (wrap && _activeTab === "benchmarks") wrap.innerHTML = _renderBenchmarks();
   }
 
   // ── Tab: Feedback (recent ratings + notes) ────────────────────────────
@@ -1211,6 +1389,11 @@
   window.loadCoachClientDetail   = loadCoachClientDetail;
   window.setCoachClientTab       = setCoachClientTab;
   window.setCoachCalWeekDelta    = setCoachCalWeekDelta;
+  // Namespaced surface for the Benchmarks sport sub-tabs — keeps the
+  // bare-window namespace tidier than a fifth global.
+  window.coachClientDetail       = Object.assign(window.coachClientDetail || {}, {
+    setBenchmarkSport,
+  });
   window.coachStartFeatureEdit   = coachStartFeatureEdit;
   window.coachCancelFeatureEdit  = coachCancelFeatureEdit;
   window.coachSaveFeatureEdit    = coachSaveFeatureEdit;
