@@ -3341,6 +3341,18 @@ input.completion-ex-name:focus {
   border: 1px solid #a78bfa;
 }
 
+/* Coach plan tile — coach-purple accent matches the coach branding
+   used on coach-assigned workout cards (var(--color-coach, #534AB7)).
+   Read-only by design: no edit / delete buttons. */
+.ti-card--coach-plan {
+  border-left: 3px solid var(--color-coach, #534AB7);
+}
+.ti-card-badge--coach-plan {
+  background: rgba(83, 74, 183, 0.10);
+  color: var(--color-coach, #534AB7);
+  border: 1px solid var(--color-coach, #534AB7);
+}
+
 .ti-card--imported { padding: 10px 14px; gap: 2px; }
 .ti-card--imported .race-card-top { margin-bottom: 2px; }
 .ti-card--imported .race-card-name { font-size: 0.95rem; }

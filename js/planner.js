@@ -2036,6 +2036,41 @@ function _getBuildPlanInputs() {
   });
 }
 
+// Coach-applied programs surface as a read-only tile in Active Training
+// Inputs. Each coach-assigned workout that came from a program carries
+// a coachProgram = { id, name, weeks } stamp on its workout JSON
+// (set at apply time in coach-programs.js — coach_programs RLS prevents
+// the client from reading the table directly, so we carry it in-band).
+// Group by program id, collect upcoming-only counts and date range.
+function _getCoachProgramInputs() {
+  const schedule = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const groups = {};
+  schedule.forEach(e => {
+    if (!e || e.source !== "coach_assigned") return;
+    if (e.date < todayStr) return;
+    const cp = e.coachProgram;
+    if (!cp || !cp.id) return;
+    if (!groups[cp.id]) {
+      groups[cp.id] = {
+        programId:   cp.id,
+        programName: cp.name || "Coach Program",
+        weeks:       cp.weeks || null,
+        coachName:   e.coachName || "Your coach",
+        sessions:    0,
+        startDate:   e.date,
+        endDate:     e.date,
+      };
+    }
+    const g = groups[cp.id];
+    g.sessions++;
+    if (e.date < g.startDate) g.startDate = e.date;
+    if (e.date > g.endDate)   g.endDate   = e.date;
+    if (!g.coachName && e.coachName) g.coachName = e.coachName;
+  });
+  return Object.values(groups).sort((a, b) => a.startDate.localeCompare(b.startDate));
+}
+
 function _escapeHtml(str) {
   return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
@@ -2332,6 +2367,7 @@ function renderTrainingInputs() {
   const races     = loadEvents().filter(e => e.date > todayStr);
   const schedules = _getScheduleInputs();
   let buildPlans  = _getBuildPlanInputs();
+  const coachPlans = _getCoachProgramInputs();
   const notes     = loadTrainingNotes();
   const imported  = (() => { try { return JSON.parse(localStorage.getItem("importedPlans")) || []; } catch { return []; } })()
     .filter(p => p.sessions && p.sessions.some(s => s.date >= todayStr));
@@ -2388,7 +2424,7 @@ function renderTrainingInputs() {
     if (hidden.size) buildPlans = buildPlans.filter(bp => !hidden.has(bp.planId));
   }
 
-  if (races.length === 0 && schedules.length === 0 && buildPlans.length === 0 && notes.length === 0 && imported.length === 0) {
+  if (races.length === 0 && schedules.length === 0 && buildPlans.length === 0 && coachPlans.length === 0 && notes.length === 0 && imported.length === 0) {
     container.innerHTML = `<p class="empty-msg" style="margin-bottom:12px">No active training inputs yet. Add a race or generate a plan to see them here.</p>`;
     return;
   }
@@ -2449,6 +2485,26 @@ function renderTrainingInputs() {
         <div class="race-card-footer">
           <button class="race-date-badge race-date-badge--editable" onclick="editEvent('${race.id}')" title="Edit name / date">${formatDisplayDate(race.date)}</button>
           <span class="race-countdown">${label}</span>
+        </div>
+      </div>`;
+  });
+
+  // ── Coach plan cards ── read-only summary tile for each active
+  // coach-applied program. Coach assignments already render inline on
+  // the calendar with a FROM badge; this tile just gives the user a
+  // single-glance answer to "what's my coach got me on?". No edit /
+  // delete affordance — changing a program is a coach-only operation.
+  coachPlans.forEach(cp => {
+    html += `
+      <div class="ti-card ti-card--coach-plan">
+        <div class="race-card-top">
+          <span class="ti-card-badge ti-card-badge--coach-plan">COACH PLAN</span>
+        </div>
+        <div class="race-card-name">${_escapeHtml(cp.programName)}</div>
+        <div class="race-card-meta">from ${_escapeHtml(cp.coachName)}${cp.weeks ? ` · ${cp.weeks}-week program` : ""}</div>
+        <div class="race-card-footer">
+          <span class="race-date-badge">${cp.sessions} upcoming workout${cp.sessions === 1 ? "" : "s"}</span>
+          <span class="race-countdown">through ${formatDisplayDate(cp.endDate)}</span>
         </div>
       </div>`;
   });

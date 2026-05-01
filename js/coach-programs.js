@@ -488,17 +488,30 @@
         if (truncateAt && date.getTime() > truncateAt) continue;
         const dateIso = date.toISOString().slice(0, 10);
 
+        // Lightweight program tag stamped on the workout JSON so the
+        // client's Active Training Inputs surface can group these
+        // entries into a single "Coach Plan" tile (the program_id
+        // column on coach_assigned_workouts isn't mirrored through to
+        // user_data.workoutSchedule, and coach_programs RLS keeps the
+        // client from reading the table directly — so we carry the
+        // metadata in-band on the workout itself).
+        const coachProgram = {
+          id:    program.id,
+          name:  program.name,
+          weeks: program.duration_weeks,
+        };
+
         for (const slot of slots) {
           let workoutJson;
           if (slot.library_id && libById[slot.library_id]) {
-            workoutJson = { ...(libById[slot.library_id].workout || {}), coachName };
+            workoutJson = { ...(libById[slot.library_id].workout || {}), coachName, coachProgram };
           } else if (slot.library_id) {
             // Library item went missing between save and apply. Skip
             // this slot rather than dropping the whole apply.
             continue;
           } else {
             // Legacy raw workout JSONB — pass through.
-            workoutJson = { ...slot, coachName };
+            workoutJson = { ...slot, coachName, coachProgram };
           }
 
           rows.push({
