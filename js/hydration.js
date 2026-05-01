@@ -1456,4 +1456,27 @@ function adjustHydrationForSauna(dateStr, durationMinutes) {
 function initHydration() {
   applyHydrationToggle();
   if (isHydrationEnabled()) renderHydration();
+
+  // Pull fresh hydrationLog when the tab regains focus so a desktop
+  // user who's already got the page open sees additions made on
+  // their phone without needing to reload. visibilitychange fires
+  // when the user switches back to this tab/window. Throttled so
+  // rapid focus toggles don't hammer the API.
+  let _lastFocusRefresh = 0;
+  const _refreshOnFocus = async () => {
+    if (document.hidden) return;
+    if (!isHydrationEnabled()) return;
+    if (typeof DB === "undefined" || typeof DB.refreshKey !== "function") return;
+    const now = Date.now();
+    if (now - _lastFocusRefresh < 5000) return; // throttle to once per 5s
+    _lastFocusRefresh = now;
+    try {
+      const ok = await DB.refreshKey("hydrationLog");
+      if (ok) renderHydration();
+    } catch {}
+  };
+  document.addEventListener("visibilitychange", _refreshOnFocus);
+  // focus fires on desktop when the user clicks back into the tab
+  // even without visibility flipping; covers both bases.
+  window.addEventListener("focus", _refreshOnFocus);
 }

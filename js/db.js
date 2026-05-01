@@ -657,6 +657,26 @@ const DB = (() => {
     } catch {}
   }
 
+  // Single-key refresh — pulls one user_data row and writes it to
+  // localStorage. Used by surfaces that want to show fresh values
+  // when the tab regains focus (hydration, etc.) without re-pulling
+  // every key the way refreshAllKeys does.
+  async function refreshKey(lsKey) {
+    const uid = await _userId();
+    if (!uid) return false;
+    try {
+      const { data, error } = await _client()
+        .from('user_data')
+        .select('data_value')
+        .eq('user_id', uid)
+        .eq('data_key', lsKey)
+        .maybeSingle();
+      if (error || !data) return false;
+      _lsSet(lsKey, data.data_value);
+      return true;
+    } catch { return false; }
+  }
+
   // ── Instantiate table accessors ───────────────────────────────────────────
   //
   // Active training plans live in `generated_plans`, NOT `training_plans`.
@@ -1082,6 +1102,7 @@ const DB = (() => {
     flushKey,
     replayPendingSyncs,
     refreshAllKeys,
+    refreshKey,
     refreshAllTables,
     SYNCED_KEYS,
     migrateLocalStorage,

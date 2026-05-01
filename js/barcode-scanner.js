@@ -235,14 +235,17 @@ async function _startFallbackScan() {
     }
   }
 
-  // Build the ZXing reader. decodeFromVideoElement runs internal
-  // requestAnimationFrame loop, scans every frame, and fires the
-  // callback exactly once per decoded code (we stop ourselves on
-  // first hit). No format restriction — the multi-format reader
-  // tries every supported decoder, which on a UPC-A image lights
-  // up the UPC-A path immediately.
+  // Build the ZXing reader and hand it our already-running stream.
+  // @zxing/browser 0.1.5 doesn't expose decodeFromVideoElement — the
+  // continuous-scan entry points are decodeFromStream (we already
+  // have a MediaStream) and decodeFromConstraints (which would call
+  // getUserMedia again and duplicate the camera handle). Stream is
+  // the right one for our flow. The callback fires every frame:
+  // result populated when a barcode is found, error populated as
+  // NotFoundException on every frame until then — which we silently
+  // swallow.
   const reader2 = new window.ZXingBrowser.BrowserMultiFormatReader();
-  _scanState = { native: false, zxing: reader2, stream, video, _hintTimer: null };
+  _scanState = { native: false, zxing: reader2, stream, video, controls: null, _hintTimer: null };
   _setStatus("Point camera at a barcode");
 
   // After 8s with no decode, soften the message — iPhone main
@@ -254,27 +257,28 @@ async function _startFallbackScan() {
     }
   }, 8000);
 
-  reader2.decodeFromVideoElement(video, (result, err, controls) => {
-    if (!_scanState || !_scanState.zxing) return;
-    if (result) {
-      // Decoded. Tear down before handing off so the camera light
-      // turns off immediately.
-      if (_scanState._hintTimer) { clearTimeout(_scanState._hintTimer); _scanState._hintTimer = null; }
-      try { controls && controls.stop(); } catch {}
-      try { stream.getTracks().forEach(t => t.stop()); } catch {}
-      _scanState = null;
-      _handleDetected(result.getText());
-    }
-    // Frame-level decode errors are normal (NotFoundException every
-    // frame until the barcode is found) — swallow silently.
-  }).catch(err => {
+  let controls;
+  try {
+    controls = await reader2.decodeFromStream(stream, video, (result, err) => {
+      if (!_scanState || !_scanState.zxing) return;
+      if (result) {
+        if (_scanState._hintTimer) { clearTimeout(_scanState._hintTimer); _scanState._hintTimer = null; }
+        try { _scanState.controls && _scanState.controls.stop(); } catch {}
+        try { stream.getTracks().forEach(t => t.stop()); } catch {}
+        _scanState = null;
+        _handleDetected(result.getText());
+      }
+    });
+    if (_scanState) _scanState.controls = controls;
+  } catch (err) {
     const msg = String(err || "");
     if (/permission|notallowed|denied/i.test(msg)) {
       _showPermissionDenied();
     } else {
       _showCameraError(msg || "Camera unavailable");
     }
-  });
+    return;
+  }
 }
 
 function _stopCameraStream() {
@@ -285,10 +289,11 @@ function _stopCameraStream() {
   if (_scanState._hintTimer) {
     try { clearTimeout(_scanState._hintTimer); } catch {}
   }
-  if (_scanState.zxing) {
-    // BrowserMultiFormatReader exposes reset() to tear down its
-    // internal scan loop; safe to call regardless of state.
-    try { _scanState.zxing.reset(); } catch {}
+  if (_scanState.controls && typeof _scanState.controls.stop === "function") {
+    // decodeFromStream returns IScannerControls — stop() halts the
+    // internal scan loop. The older reset() method on the reader
+    // doesn't exist in @zxing/browser 0.1.5.
+    try { _scanState.controls.stop(); } catch {}
   }
   if (_scanState.stream && _scanState.stream.getTracks) {
     _scanState.stream.getTracks().forEach(t => { try { t.stop(); } catch {} });
