@@ -5084,7 +5084,7 @@ function renderNutritionProgressBars(dateStr) {
     // so multiple panels on the same screen don't collide.
     const noteId = `nutri-note-${dateStr}-${key}`;
     const noteBtn = noteText
-      ? `<button type="button" class="nutrition-progress-info" aria-label="Why is this over target?" aria-expanded="false" aria-controls="${noteId}" onclick="toggleNutritionNote('${noteId}', this)">!</button>`
+      ? `<button type="button" class="nutrition-progress-info" aria-label="Why is this over target?" aria-expanded="false" aria-controls="${noteId}" onclick="toggleNutritionNote('${noteId}', this)">i</button>`
       : "";
     const noteHtml = noteText
       ? `<div class="nutrition-progress-note" id="${noteId}" hidden>${escHtml(noteText)}</div>`
@@ -5101,7 +5101,13 @@ function renderNutritionProgressBars(dateStr) {
         ${noteHtml}
       </div>`;
   });
-  html += `<div class="nutrition-meal-list">`;
+  // "Today's Meals" caption sits inside the meal list so it only renders
+  // when there's something to label. Falls back to "Logged Meals" when
+  // the user is browsing a past/future day so the label doesn't lie.
+  const _isToday = (typeof getTodayString === "function") && dateStr === getTodayString();
+  const _mealHeading = _isToday ? "Today's Meals" : "Logged Meals";
+  html += `<div class="nutrition-meal-list">
+    <div class="nutrition-meal-list-heading">${_mealHeading}</div>`;
   loggedMeals.forEach(m => {
     html += `
       <div class="nutrition-meal-item">
