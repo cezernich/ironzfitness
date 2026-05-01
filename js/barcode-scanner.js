@@ -329,11 +329,23 @@ function _lookupBarcode(barcode) {
 
 /* ─── Result panel ─────────────────────────────────────────────────────── */
 
+// Open Food Facts often stores serving sizes as "113.39800 g" or
+// "1 portion (113.398g)" — overly-precise numbers read as noise on
+// the toggle button. Round any number with more than 1 decimal to 1.
+function _roundNumbersInText(s) {
+  if (!s) return s;
+  return String(s).replace(/(\d+\.\d{2,})/g, (_, num) => {
+    const n = parseFloat(num);
+    if (!Number.isFinite(n)) return num;
+    return (Math.round(n * 10) / 10).toString();
+  });
+}
+
 function showBarcodeResult(product, barcode) {
   const n = product.nutriments || {};
   const name = product.product_name || product.generic_name || "Unknown Product";
   const brand = product.brands || "";
-  const servingText = product.serving_size || "";
+  const servingText = _roundNumbersInText(product.serving_size || "");
   const displayName = brand ? name + " (" + brand + ")" : name;
 
   const per100 = {
@@ -355,17 +367,37 @@ function showBarcodeResult(product, barcode) {
     fat:     Math.round(n.fat_serving            || 0),
   } : null;
 
+  // "Whole package" mode — uses Open Food Facts' product_quantity
+  // (grams) scaled against the per-100g values. Different products
+  // have different package sizes (a 113g yogurt vs a 454g lb of
+  // ground beef), so this is a per-product convenience, not a
+  // one-size-fits-all button. Skip silently when the field is missing
+  // or zero so we don't render a misleading "0 g" pill.
+  const pkgGramsRaw = product.product_quantity != null ? parseFloat(product.product_quantity) : NaN;
+  const pkgGrams = Number.isFinite(pkgGramsRaw) && pkgGramsRaw > 0 ? pkgGramsRaw : null;
+  const perPackage = pkgGrams ? {
+    cal:     Math.round(per100.cal     * pkgGrams / 100),
+    protein: Math.round(per100.protein * pkgGrams / 100),
+    carbs:   Math.round(per100.carbs   * pkgGrams / 100),
+    fat:     Math.round(per100.fat     * pkgGrams / 100),
+  } : null;
+  const pkgLabel = pkgGrams ? Math.round(pkgGrams * 10) / 10 + " g" : "";
+
   const modeDefault = hasServing ? "serving" : "100g";
 
   document.getElementById("barcode-camera-panel").style.display = "none";
   document.getElementById("barcode-result-panel").style.display = "block";
   _setStatus("");
 
-  const modeToggleHtml = hasServing
-    ? '<div class="barcode-mode-toggle">' +
-        '<button type="button" class="barcode-mode-btn is-active" data-mode="serving" onclick="_setBarcodeMode(\'serving\')">Per serving (' + escHtml(servingText) + ')</button>' +
-        '<button type="button" class="barcode-mode-btn" data-mode="100g" onclick="_setBarcodeMode(\'100g\')">Per 100 g</button>' +
-      '</div>'
+  const servingBtn = hasServing
+    ? '<button type="button" class="barcode-mode-btn is-active" data-mode="serving" onclick="_setBarcodeMode(\'serving\')">Per serving (' + escHtml(servingText) + ')</button>'
+    : "";
+  const per100Btn = '<button type="button" class="barcode-mode-btn' + (hasServing ? "" : " is-active") + '" data-mode="100g" onclick="_setBarcodeMode(\'100g\')">Per 100 g</button>';
+  const pkgBtn = perPackage
+    ? '<button type="button" class="barcode-mode-btn" data-mode="package" onclick="_setBarcodeMode(\'package\')">Whole package (' + escHtml(pkgLabel) + ')</button>'
+    : "";
+  const modeToggleHtml = (hasServing || perPackage)
+    ? '<div class="barcode-mode-toggle">' + servingBtn + per100Btn + pkgBtn + '</div>'
     : '<p class="hint" style="margin:0 0 12px">Values per 100 g</p>';
 
   document.getElementById("barcode-result-panel").innerHTML =
@@ -389,6 +421,7 @@ function showBarcodeResult(product, barcode) {
   const panel = document.getElementById("barcode-result-panel");
   panel.dataset.per100 = JSON.stringify(per100);
   panel.dataset.perServing = perServing ? JSON.stringify(perServing) : "";
+  panel.dataset.perPackage = perPackage ? JSON.stringify(perPackage) : "";
   panel.dataset.mode = modeDefault;
   panel.dataset.barcode = barcode || "";
   panel.dataset.productName = displayName;
@@ -413,6 +446,8 @@ function updateBarcodeServings() {
   let base = null;
   if (mode === "serving" && panel.dataset.perServing) {
     try { base = JSON.parse(panel.dataset.perServing); } catch {}
+  } else if (mode === "package" && panel.dataset.perPackage) {
+    try { base = JSON.parse(panel.dataset.perPackage); } catch {}
   }
   if (!base) {
     try { base = JSON.parse(panel.dataset.per100 || "{}"); } catch { base = {}; }
