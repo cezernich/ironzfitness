@@ -109,6 +109,8 @@ const DB = (() => {
             if (data.height_inches) fromDb.height = String(data.height_inches);
             if (data.gender) fromDb.gender = data.gender;
             if (data.primary_goal) fromDb.goal = data.primary_goal;
+            if (data.birthday) fromDb.birthday = data.birthday;
+            if (data.body_comp_goal) fromDb.bodyCompGoal = data.body_comp_goal;
             // Merge: DB values win over localStorage, but don't blank out existing data
             const existing = _lsGet('profile') || {};
             const merged = { ...existing, ...fromDb };
@@ -148,6 +150,11 @@ const DB = (() => {
             height_inches: merged.height ? parseInt(merged.height)         : null,
             gender:        merged.gender || null,
             primary_goal:  merged.goal   || null,
+            // birthday stored as ISO YYYY-MM-DD text (see migration
+            // 20260430e). Empty string normalized to null so Postgres
+            // doesn't trip on a non-date input.
+            birthday:        merged.birthday      || null,
+            body_comp_goal:  merged.bodyCompGoal  || null,
             updated_at: new Date().toISOString(),
           };
           const { error } = await _client()
