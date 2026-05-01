@@ -629,6 +629,13 @@ function init() {
   if (typeof freezePastTargets === "function") {
     try { freezePastTargets(); } catch (e) { console.warn("[IronZ] target freeze:", e); }
   }
+  // Same Garmin-style snapshot for hydration. See hydration.js
+  // freezePastHydrationTargets for the rationale — also fixes the
+  // separate stats-panel bug where every historical day was held to
+  // today's hydration target.
+  if (typeof freezePastHydrationTargets === "function") {
+    try { freezePastHydrationTargets(); } catch (e) { console.warn("[IronZ] hydration freeze:", e); }
+  }
 
   // Load philosophy engine modules (non-blocking)
   if (typeof loadPhilosophyModules === 'function') {

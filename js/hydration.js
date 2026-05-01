@@ -264,6 +264,73 @@ function getHydrationLog() {
   } catch { return {}; }
 }
 
+// End-of-day target freeze — twin of nutrition's freezePastTargets().
+// Walks every day in hydrationLog that has logged consumption and is
+// older than today, computes the live breakdown (which still reflects
+// that date's workout / race context), and writes the totalOz into the
+// day's record as snapshotTargetOz. From then on,
+// getHydrationBreakdownForDate(d) reads the snapshot for past days, so
+// settings or weight changes can't drift historical adherence.
+//
+// Two bugs this addresses simultaneously:
+//   1. Drift: previously every read recomputed live, so a weight or
+//      base-target setting change moved every past day's "% of target".
+//   2. Single-target-for-all-days in stats.js: `getHydrationTarget()`
+//      returns today's number, and the stats panel was holding every
+//      historical day to that one bar. With per-day snapshots in place,
+//      stats.js can switch to per-day breakdown and adherence becomes
+//      honest (rest day held to rest-day target, long-run day held to
+//      long-run-day target).
+function freezePastHydrationTargets() {
+  let log = {};
+  try { log = JSON.parse(localStorage.getItem("hydrationLog") || "{}"); } catch {}
+  if (!log || typeof log !== "object") return;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
+
+  // Helper: does a day have logged consumption worth anchoring to?
+  const _dayHasIntake = (entry) => {
+    if (entry == null) return false;
+    if (typeof entry === "number") return entry > 0;
+    if (Array.isArray(entry.entries) && entry.entries.length > 0) return true;
+    if (entry.total > 0) return true;
+    return false;
+  };
+
+  let frozenCount = 0;
+  for (const date of Object.keys(log)) {
+    if (date >= todayStr) continue;             // today / future stays live
+    const day = log[date];
+    if (!_dayHasIntake(day)) continue;          // nothing to anchor
+    if (typeof day === "object" && day.snapshotTargetOz != null) continue; // already frozen
+    let breakdown;
+    try { breakdown = getHydrationBreakdownForDate(date); } catch { continue; }
+    if (!breakdown || !breakdown.totalOz) continue;
+    // Normalize legacy number-format entries into the object shape so
+    // we have a place to attach snapshotTargetOz.
+    let entry = day;
+    if (typeof entry !== "object") {
+      entry = { total: typeof day === "number" ? day : 0, beverages: [], entries: [] };
+    }
+    entry.snapshotTargetOz = breakdown.totalOz;
+    entry.snapshotAt = new Date().toISOString();
+    log[date] = entry;
+    frozenCount++;
+  }
+
+  if (frozenCount > 0) {
+    try { localStorage.setItem("hydrationLog", JSON.stringify(log)); } catch {}
+    if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("hydrationLog");
+    console.log("[IronZ] froze " + frozenCount + " past-day hydration target snapshot(s)");
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.freezePastHydrationTargets = freezePastHydrationTargets;
+}
+
 /** Normalize a day's log entry to the new format. Handles legacy number format. */
 function normalizeDayLog(entry) {
   if (entry == null) return { total: 0, beverages: [], entries: [] };
@@ -734,6 +801,44 @@ function computeRaceDayBonusOz(profile) {
  *  Sauna adds on top in all cases.
  */
 function getHydrationBreakdownForDate(dateStr) {
+  // Past-day snapshot path. Once freezePastHydrationTargets() has run,
+  // each historical day carries its own frozen target — read that
+  // instead of recomputing live, otherwise weight / settings changes
+  // retroactively warp historical adherence (same drift bug we fixed
+  // for nutrition). Today and future days always live-compute.
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
+    if (dateStr && dateStr < todayStr) {
+      const log = JSON.parse(localStorage.getItem("hydrationLog") || "{}");
+      const day = log[dateStr];
+      if (day && typeof day === "object" && day.snapshotTargetOz != null) {
+        // Frozen target wins. Other fields (reason / race / preload)
+        // are not snapshotted — they're display-only and would mostly
+        // be empty for past days anyway. Stats reads totalOz, which
+        // is the field that matters for adherence math.
+        return {
+          baseOz: day.snapshotTargetOz,
+          bonusOz: 0,
+          totalOz: day.snapshotTargetOz,
+          rawTotalOz: day.snapshotTargetOz,
+          reason: null,
+          race: null,
+          preload: null,
+          sodiumGuidance: null,
+          workoutBonusOz: 0,
+          raceBonusOz: 0,
+          preloadBonusOz: 0,
+          saunaBonus: 0,
+          softCapWarning: null,
+          hardCapWarning: null,
+          _fromSnapshot: true,
+        };
+      }
+    }
+  } catch {}
+
   const baseOz = getBaseHydrationTarget();
   const workoutInfo = getWorkoutInfoForDate(dateStr);
   const raceCtx = getRaceContextForDate(dateStr);

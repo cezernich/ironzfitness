@@ -1831,8 +1831,28 @@ function buildStatsHydration() {
 
   const log = (typeof getHydrationLog === "function") ? getHydrationLog() : {};
   const bottleSize = (typeof getBottleSize === "function") ? getBottleSize() : 12;
-  const targetOz = (typeof getHydrationTarget === "function") ? getHydrationTarget() : 96;
-  const targetBottles = Math.ceil(targetOz / bottleSize);
+  // Per-day target lookup. Each historical day has its own goalpost
+  // (set when that day's session+race context was current and frozen
+  // at boot via freezePastHydrationTargets). Without this lookup the
+  // stats panel held every day to TODAY's target — a long-run day's
+  // 130-oz target would brand every prior rest day as "missed", and
+  // a rest day's 80-oz target would inflate every prior long-run day's
+  // hit rate. Today still live-computes via getHydrationBreakdownForDate.
+  const todayKey = (typeof getTodayString === "function") ? getTodayString() : (new Date()).toISOString().slice(0, 10);
+  const _targetOzFor = (d) => {
+    if (typeof getHydrationBreakdownForDate === "function") {
+      try {
+        const b = getHydrationBreakdownForDate(d);
+        if (b && b.totalOz) return b.totalOz;
+      } catch {}
+    }
+    if (typeof getHydrationTarget === "function") return getHydrationTarget();
+    return 96;
+  };
+  const _targetBottlesFor = (d) => Math.ceil(_targetOzFor(d) / bottleSize);
+  // Today's target drives the chart-axis scaling + summary card label.
+  const targetOz = _targetOzFor(todayKey);
+  const targetBottles = _targetBottlesFor(todayKey);
 
   // Helper: extract bottle count from log entry (supports old number & new object format)
   const _hb = (entry) => (typeof getLogBottles === "function") ? getLogBottles(entry) : (typeof entry === "number" ? entry : (entry && entry.total) || 0);
@@ -1871,27 +1891,26 @@ function buildStatsHydration() {
   const totalOz = _roundOz(totalBottles * bottleSize);
   const avgOzPerDay = Math.round(totalOz / activeDays.length);
 
-  // Days that met target (out of all active days)
-  const metTargetDays = activeDays.filter(d => _hb(log[d]) >= targetBottles).length;
+  // Days that met target (out of all active days) — per-day goalpost.
+  const _metOn = (d) => _hb(log[d]) >= _targetBottlesFor(d);
+  const metTargetDays = activeDays.filter(_metOn).length;
   const hitRate = Math.round((metTargetDays / activeDays.length) * 100);
 
   // Current streak (consecutive days meeting target, ending today or yesterday)
   let currentStreak = 0;
   let checkDate = new Date(today + "T12:00:00");
-  // Allow starting from today or yesterday
-  const todayKey = today;
-  const hasToday = _hb(log[todayKey]) >= targetBottles;
+  const hasToday = _metOn(todayKey);
   if (!hasToday) {
     // Check if yesterday qualifies to start the streak
     checkDate.setDate(checkDate.getDate() - 1);
     const yKey = checkDate.toISOString().slice(0, 10);
-    if (_hb(log[yKey]) < targetBottles) {
+    if (!_metOn(yKey)) {
       currentStreak = 0;
     } else {
       // Count backwards from yesterday
       while (true) {
         const key = checkDate.toISOString().slice(0, 10);
-        if (_hb(log[key]) >= targetBottles) {
+        if (_metOn(key)) {
           currentStreak++;
           checkDate.setDate(checkDate.getDate() - 1);
         } else break;
@@ -1901,17 +1920,17 @@ function buildStatsHydration() {
     // Count backwards from today
     while (true) {
       const key = checkDate.toISOString().slice(0, 10);
-      if (_hb(log[key]) >= targetBottles) {
+      if (_metOn(key)) {
         currentStreak++;
         checkDate.setDate(checkDate.getDate() - 1);
       } else break;
     }
   }
 
-  // Best streak
+  // Best streak — same per-day goalpost.
   let bestStreak = 0, tempStreak = 0;
   for (const key of activeDays) {
-    if (_hb(log[key]) >= targetBottles) {
+    if (_metOn(key)) {
       tempStreak++;
       if (tempStreak > bestStreak) bestStreak = tempStreak;
     } else {
@@ -1929,7 +1948,7 @@ function buildStatsHydration() {
     const bottles = _hb(log[key]);
     const oz = _roundOz(bottles * bottleSize);
     const active = key >= firstLogDate; // day is within active tracking range
-    last7.push({ label: dayLabels[d.getDay()], oz, bottles, met: bottles >= targetBottles, active });
+    last7.push({ label: dayLabels[d.getDay()], oz, bottles, met: _metOn(key), active });
   }
   const maxOz = Math.max(targetOz, ...last7.map(d => d.oz));
 
