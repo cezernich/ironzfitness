@@ -1548,9 +1548,24 @@ button:active {
   font-size: 1.2rem;
   font-weight: 700;
   color: var(--color-text);
-  padding: 4px 4px 12px;
+  padding: 4px 4px 6px;
   letter-spacing: -0.01em;
 }
+
+/* Both adherence pills (days-active flame + stack streak) sit in their
+   own flex row below the greeting text — previously they wrapped
+   inline and the days-active pill ended up stuck mid-greeting on
+   narrow screens. Override the inline-margin both pills carry
+   (.consistency-badge.margin-left and .stack-pill.margin-left) so
+   they line up flush from the left and rely on `gap` for spacing. */
+.greeting-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.greeting-badges .consistency-badge,
+.greeting-badges .stack-pill { margin-left: 0; }
 
 
 /* ===== DAILY PROGRESS RINGS ===== */

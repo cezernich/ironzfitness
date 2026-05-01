@@ -348,7 +348,12 @@ function buildConsistencyBadge() {
   if (window.StackUX && typeof window.StackUX.buildStackPill === "function") {
     stackHtml = window.StackUX.buildStackPill();
   }
-  return flameHtml + stackHtml;
+  // Wrap both pills in a flex row so they sit on their own line
+  // beneath the greeting text instead of inline-wrapping into it.
+  // Render nothing if neither pill produced markup so the row doesn't
+  // add empty space on a brand-new account.
+  if (!flameHtml && !stackHtml) return "";
+  return `<div class="greeting-badges">${flameHtml}${stackHtml}</div>`;
 }
 
 /* =====================================================================
