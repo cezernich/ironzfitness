@@ -870,7 +870,12 @@ nav {
   font-size: 0.78rem;
   color: var(--color-text-muted);
 }
-.csi-dropzone-staged {
+/* :not([hidden]) so the [hidden] attribute's UA-stylesheet display:none
+   isn't overridden by this flex declaration. Without the guard, the
+   staged file row + remove button rendered through the .hidden
+   attribute on initial paint — visible as a stray empty-circle button
+   on the right of the idle dropzone. */
+.csi-dropzone-staged:not([hidden]) {
   display: flex;
   align-items: center;
   justify-content: space-between;
