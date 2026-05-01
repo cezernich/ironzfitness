@@ -109,6 +109,11 @@ function updateNutritionDashboard() {
   if (calFill) calFill.style.width = calPct + "%";
   if (calEaten) calEaten.textContent = Math.round(eaten.calories).toLocaleString();
   if (calTarget) calTarget.textContent = targets.calories.toLocaleString();
+  // Match the macro rings — they paint Math.round(pct*100)+"%" in the
+  // center (clamped to 100). Mirror that here so the calorie row reads
+  // "715 / 3,250 cal (22%)" and shares the same ceiling semantics.
+  const calPctLabel = document.getElementById("nutri-calories-pct");
+  if (calPctLabel) calPctLabel.textContent = "(" + calPct + "%)";
 
   // Over-budget warning
   if (calFill && eaten.calories > targets.calories) {
