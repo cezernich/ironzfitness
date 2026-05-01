@@ -613,6 +613,14 @@ function cleanupOrphanedCompletions() {
 }
 
 function init() {
+  // One-time migration: derive profile.bodyCompGoal from legacy signals
+  // (trainingGoals / strengthRole). Idempotent — no-op once set. This
+  // ensures every user has a body-comp value the new nutrition path
+  // can read without falling through to the legacy fallback branch.
+  if (typeof migrateBodyCompGoal === "function") {
+    try { migrateBodyCompGoal(); } catch (e) { console.warn("[IronZ] bodyCompGoal migration:", e); }
+  }
+
   // Load philosophy engine modules (non-blocking)
   if (typeof loadPhilosophyModules === 'function') {
     loadPhilosophyModules().catch(e => console.warn('[IronZ] Philosophy module load:', e.message));
@@ -1138,6 +1146,10 @@ function saveProfile() {
   if (typeof DB !== 'undefined') DB.profile.save(profile).catch(() => {});
   updateNavInitials();
   renderGreeting();
+  // Goal / weight changes feed into nutrition target math, which feeds
+  // the dashboard ring. Without this refresh the ring stayed pinned to
+  // the previous goal's percentage until the next page navigation.
+  if (typeof renderDailyRings === "function") renderDailyRings();
 
   const msg = document.getElementById("profile-save-msg");
   msg.style.color = "var(--color-success)";

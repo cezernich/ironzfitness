@@ -4663,11 +4663,48 @@ function _inferDayLoadFromAllSources(dateStr) {
   return best;
 }
 
-// Read body-composition goals from persisted onboarding state and derive
-// a calorie multiplier + protein target. Bulking mandates a surplus;
-// cutting mandates a deficit with elevated protein to preserve muscle.
+// Body-composition phase → calorie multiplier + protein target.
+// Five-tier ladder, severity increases outward from Maintain. Source of
+// truth is profile.bodyCompGoal, which the user picks in Athlete Profile.
+// Legacy onboarding state (trainingGoals / strengthRole) is the
+// migration fallback only — once migrateBodyCompGoal() runs (app boot),
+// every existing user has bodyCompGoal set and the fallback is dead code.
+// Multipliers chosen to be honest for an everyone-audience:
+//   cut       -20% / 1.1 g/lb  — bodybuilder phase, accept muscle loss for fat loss
+//   lose      -10% / 1.0 g/lb  — sustainable deficit, doesn't crash performance
+//   maintain    0% / 0.9 g/lb  — TDEE, focus on training
+//   build      +8% / 1.0 g/lb  — lean gain, compatible with endurance
+//   bulk      +15% / 1.1 g/lb  — bodybuilder phase, accept fat gain for muscle
 // Returns { calorieMult, proteinPerLb, isBulking, isCutting, bulkingTip }.
-function _nutritionGoalAdjustment() {
+const _BULK_TIP = "Bulking takes a daily caloric surplus. A 25–30 g whey protein shake (~160 cal) after training or between meals is the simplest way to close the gap without over-eating solid food.";
+const _BODY_COMP_PROFILES = {
+  cut:      { calorieMult: 0.80, proteinPerLb: 1.1, isBulking: false, isCutting: true,  bulkingTip: null },
+  lose:     { calorieMult: 0.90, proteinPerLb: 1.0, isBulking: false, isCutting: true,  bulkingTip: null },
+  maintain: { calorieMult: 1.00, proteinPerLb: 0.9, isBulking: false, isCutting: false, bulkingTip: null },
+  build:    { calorieMult: 1.08, proteinPerLb: 1.0, isBulking: true,  isCutting: false, bulkingTip: _BULK_TIP },
+  bulk:     { calorieMult: 1.15, proteinPerLb: 1.1, isBulking: true,  isCutting: false, bulkingTip: _BULK_TIP },
+};
+
+// Map any legacy / alternate spelling to one of the five canonical keys.
+// Returns null if no match — caller decides the fallback.
+function _normalizeBodyCompGoal(raw) {
+  const v = String(raw || "").toLowerCase();
+  if (!v) return null;
+  if (v === "cut" || v === "fat_loss") return "cut";
+  if (v === "lose" || v === "lose_weight" || v === "weight_loss" || v === "weight") return "lose";
+  if (v === "maintain" || v === "recomp" || v === "general_fitness" || v === "general_health") return "maintain";
+  if (v === "build" || v === "build_muscle" || v === "muscle_gain" || v === "stronger" || v === "hypertrophy") return "build";
+  if (v === "bulk") return "bulk";
+  return null;
+}
+
+// One-time migration: derive profile.bodyCompGoal from legacy signals
+// (trainingGoals array + strengthRole) and persist. Idempotent — runs
+// only if bodyCompGoal isn't already set. Called from app.js init().
+function migrateBodyCompGoal() {
+  let profile = {};
+  try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
+  if (profile.bodyCompGoal) return; // already migrated
   let trainingGoals = [];
   let strengthRole = null;
   try {
@@ -4686,48 +4723,61 @@ function _nutritionGoalAdjustment() {
     }
   } catch {}
 
-  // Bulking signals: "bulk" or "stronger" in trainingGoals (strength-only
-  // onboarding), or hybrid athletes who picked strengthRole=hypertrophy.
-  const isBulking = trainingGoals.includes("bulk")
-                 || trainingGoals.includes("stronger")
-                 || strengthRole === "hypertrophy";
-  // Cutting signals: "cut" in strength-only trainingGoals, or "weight"
-  // (lose-weight) in hybrid/endurance trainingGoals.
-  const isCutting = trainingGoals.includes("cut")
-                 || trainingGoals.includes("weight");
+  // Map legacy signals to a canonical bodyCompGoal. Bulk/cut win over
+  // softer signals (a user who explicitly picked "bulk" gets the +15%
+  // surplus, not +8%). Hypertrophy hybrid → build, since hybrids rarely
+  // mean a true bodybuilder bulk.
+  let goal = "maintain";
+  if (trainingGoals.includes("bulk")) goal = "bulk";
+  else if (trainingGoals.includes("cut")) goal = "cut";
+  else if (trainingGoals.includes("stronger") || strengthRole === "hypertrophy") goal = "build";
+  else if (trainingGoals.includes("weight")) goal = "lose";
 
-  // Conflicting signals (both bulk and cut chosen) → treat as maintain
-  // so we don't under- or over-shoot. Most real profiles have only one.
-  if (isBulking && isCutting) {
-    return { calorieMult: 1.0, proteinPerLb: 0.9, isBulking: false, isCutting: false, bulkingTip: null };
+  profile.bodyCompGoal = goal;
+  try { localStorage.setItem("profile", JSON.stringify(profile)); } catch {}
+  if (typeof DB !== "undefined" && DB.profile && DB.profile.save) {
+    DB.profile.save(profile).catch(() => {});
   }
-  if (isBulking) {
-    // ~12% surplus = 300–500 kcal/day for most adults. Protein bumped
-    // to 1.0 g/lb per Phillips et al. (2016) hypertrophy lit — above
-    // 1.0 g/lb the marginal muscle-protein-synthesis return flattens.
-    return {
-      calorieMult: 1.12,
-      proteinPerLb: 1.0,
-      isBulking: true,
-      isCutting: false,
-      // Bulking tip — protein shakes are the most research-supported
-      // practical tool for hitting surplus + protein targets without
-      // over-eating solid food.
-      bulkingTip: "Bulking takes a daily caloric surplus. A 25–30 g whey protein shake (~160 cal) after training or between meals is the simplest way to close the gap without over-eating solid food.",
-    };
-  }
-  if (isCutting) {
-    // ~18% deficit = 400–600 kcal/day. Protein UP to 1.1 g/lb to
-    // preserve lean mass in deficit (Helms 2014 / ISSN position stand).
-    return {
-      calorieMult: 0.82,
-      proteinPerLb: 1.1,
-      isBulking: false,
-      isCutting: true,
-      bulkingTip: null,
-    };
-  }
-  return { calorieMult: 1.0, proteinPerLb: 0.9, isBulking: false, isCutting: false, bulkingTip: null };
+  console.log("[IronZ] migrated bodyCompGoal →", goal);
+}
+
+if (typeof window !== "undefined") {
+  window.migrateBodyCompGoal = migrateBodyCompGoal;
+}
+
+function _nutritionGoalAdjustment() {
+  // Primary path: profile.bodyCompGoal (user-visible, source of truth).
+  let profile = {};
+  try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
+  const key = _normalizeBodyCompGoal(profile.bodyCompGoal);
+  if (key && _BODY_COMP_PROFILES[key]) return { ..._BODY_COMP_PROFILES[key] };
+
+  // Fallback: legacy signals from onboarding. Reaches this branch only
+  // for users who haven't been migrated yet (first boot since the
+  // migration shipped, or migration failed for some reason).
+  let trainingGoals = [];
+  let strengthRole = null;
+  try {
+    const raw = localStorage.getItem("trainingGoals");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) trainingGoals = parsed;
+    }
+  } catch {}
+  try {
+    const raw = localStorage.getItem("strengthRole");
+    if (raw) {
+      let parsed;
+      try { parsed = JSON.parse(raw); } catch { parsed = raw; }
+      strengthRole = typeof parsed === "string" ? parsed : (parsed && parsed.role) || null;
+    }
+  } catch {}
+
+  if (trainingGoals.includes("bulk")) return { ..._BODY_COMP_PROFILES.bulk };
+  if (trainingGoals.includes("cut")) return { ..._BODY_COMP_PROFILES.cut };
+  if (trainingGoals.includes("stronger") || strengthRole === "hypertrophy") return { ..._BODY_COMP_PROFILES.build };
+  if (trainingGoals.includes("weight")) return { ..._BODY_COMP_PROFILES.lose };
+  return { ..._BODY_COMP_PROFILES.maintain };
 }
 
 function getBaseNutritionTarget(dateStr) {
