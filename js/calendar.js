@@ -5009,8 +5009,12 @@ function _normalizeGoalForMacroBars(rawGoal) {
 function _macroBarColor(macro, consumed, target, goal) {
   const pct = target > 0 ? (consumed / target) * 100 : 0;
   if (macro !== "calories") {
+    // 50% as the amber threshold was too lenient — 56% of carbs reads
+    // as "neutral, working toward" even when calories are nearly hit,
+    // hiding the fact that the athlete is filling cals with protein /
+    // fat instead of fuel. 75% is a tighter "significantly under" line.
     if (pct >= 85) return "var(--color-success)";
-    if (pct >= 50) return "var(--color-accent)";
+    if (pct >= 75) return "var(--color-accent)";
     return "var(--color-amber)";
   }
   // Calories — goal-branched.
@@ -5038,6 +5042,19 @@ function toggleNutritionNote(noteId, btn) {
   if (opening) note.removeAttribute("hidden");
   else note.setAttribute("hidden", "");
   if (btn) btn.setAttribute("aria-expanded", opening ? "true" : "false");
+}
+
+// Under-target notes are scoped tightly: not every "you ate less than
+// target" is worth flagging. For race_performance specifically, low
+// carb intake while calories trend on-target means the athlete is
+// filling cals with protein/fat — that blunts glycogen replenishment
+// and the next training session. Worth surfacing. Other goals don't
+// get an under-target note today; we'll add cases as they earn one.
+function _macroUnderNote(macro, goal) {
+  if (macro === "carbs" && goal === "race_performance") {
+    return "Significantly under target — carbs are your main training fuel. Hitting calories with protein/fat instead can blunt glycogen replenishment and next-session quality.";
+  }
+  return "";
 }
 
 function _macroOverNote(macro, goal) {
@@ -5085,7 +5102,13 @@ function renderNutritionProgressBars(dateStr) {
     const rawPct = target > 0 ? Math.round(consumed / target * 100) : 0;
     const pct    = Math.min(rawPct, 100);
     const color  = _macroBarColor(key, consumed, target, goal);
-    const noteText = rawPct > 100 ? _macroOverNote(key, goal) : "";
+    // Note triggers in two directions:
+    //   - over-target (>100%) — explains why surplus is OK / not OK
+    //   - significantly under (<75%, matching the amber-color threshold)
+    //     — only surfaces for cases _macroUnderNote opts in to.
+    let noteText = "";
+    if (rawPct > 100) noteText = _macroOverNote(key, goal);
+    else if (rawPct < 75) noteText = _macroUnderNote(key, goal);
     // Over-target notes are surfaced via a small "!" affordance next to
     // the macro label rather than always-on body text — color alone has
     // no actionable context, but a wall of "Above target — fine" lines
