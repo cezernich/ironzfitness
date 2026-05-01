@@ -3712,6 +3712,13 @@ input.completion-ex-name:focus {
   transition: width 0.4s ease;
 }
 
+.nutrition-progress-note {
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
 .nutrition-meal-list {
   border-top: 1px solid var(--color-border);
   padding-top: 10px;

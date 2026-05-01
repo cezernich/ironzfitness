@@ -4988,6 +4988,58 @@ function _attachSessionDragSources(dateStr, data) {
 
 // ─── Nutrition progress bars (updates with sliders) ──────────────────────────
 
+// Goal-aware progress bar coloring + messaging.
+//
+// Old logic flagged any macro >120% of target as red. That's medically
+// wrong for protein/carbs/fat in healthy athletes — overshoot on those
+// macros isn't a health concern. Color was also the only signal: a red
+// bar gave the user no actionable context.
+//
+// New rules:
+//   - Protein/carbs/fat: never red. Green at ≥85%, neutral toward, amber
+//     for significantly under (the only useful "warning" on a macro).
+//   - Calories: branch on the athlete's goal. Red appears ONLY when the
+//     stated goal is fat_loss AND intake is meaningfully over (>120%).
+//     For muscle_gain / race_performance a surplus is intentional —
+//     color it green, not red. General fitness stays informational.
+//   - Any over-target bar gets a one-line goal-specific explainer below
+//     so users know what to do instead of guessing at the color.
+function _normalizeGoalForMacroBars(rawGoal) {
+  const g = String(rawGoal || "").toLowerCase();
+  if (g === "fat_loss" || g === "cut" || g === "lose_weight" || g === "weight_loss") return "fat_loss";
+  if (g === "muscle_gain" || g === "bulk") return "muscle_gain";
+  if (g === "performance" || g === "race" || g === "race_performance" || g === "speed_performance" || g === "endurance") return "race_performance";
+  return "general_fitness";
+}
+
+function _macroBarColor(macro, consumed, target, goal) {
+  const pct = target > 0 ? (consumed / target) * 100 : 0;
+  if (macro !== "calories") {
+    if (pct >= 85) return "var(--color-success)";
+    if (pct >= 50) return "var(--color-accent)";
+    return "var(--color-amber)";
+  }
+  // Calories — goal-branched.
+  if (pct < 70) return "var(--color-amber)";
+  if (pct >= 85 && pct <= 110) return "var(--color-success)";
+  if (goal === "fat_loss" && pct > 120) return "var(--color-danger)";
+  if (goal === "muscle_gain" || goal === "race_performance") return "var(--color-success)";
+  return "var(--color-accent)";
+}
+
+function _macroOverNote(macro, goal) {
+  if (macro === "protein") return "Above target — fine for athletes; supports muscle recovery.";
+  if (macro === "carbs")   return "Above target — extra fuel for training days.";
+  if (macro === "fat")     return "Above target — watch saturated fat specifically; total fat is fine.";
+  if (macro === "calories") {
+    if (goal === "fat_loss")        return "Above your goal — focus on hitting target most days. One day over isn't a setback; trends are.";
+    if (goal === "muscle_gain")     return "Above maintenance — good. Surplus drives muscle growth.";
+    if (goal === "race_performance") return "Higher intake on training days is expected.";
+    return "Slightly above your daily target.";
+  }
+  return "";
+}
+
 function renderNutritionProgressBars(dateStr) {
   const container = document.getElementById(`nutrition-progress-bars-${dateStr}`);
   if (!container) return;
@@ -4995,6 +5047,10 @@ function renderNutritionProgressBars(dateStr) {
   let loggedMeals = [];
   try { loggedMeals = (JSON.parse(localStorage.getItem("meals")) || []).filter(m => m.date === dateStr); } catch {}
   if (!loggedMeals.length) return;
+
+  let profile = {};
+  try { profile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
+  const goal = _normalizeGoalForMacroBars(profile.goal);
 
   const nutrition = getDailyNutritionTarget(dateStr);
   const totals    = loggedMeals.reduce((acc, m) => ({
@@ -5005,19 +5061,19 @@ function renderNutritionProgressBars(dateStr) {
   }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
   const macros = [
-    { label: "Calories", unit: "",  consumed: totals.calories, target: nutrition.calories },
-    { label: "Protein",  unit: "g", consumed: totals.protein,  target: nutrition.protein  },
-    { label: "Carbs",    unit: "g", consumed: totals.carbs,    target: nutrition.carbs    },
-    { label: "Fat",      unit: "g", consumed: totals.fat,      target: nutrition.fat      },
+    { key: "calories", label: "Calories", unit: "",  consumed: totals.calories, target: nutrition.calories },
+    { key: "protein",  label: "Protein",  unit: "g", consumed: totals.protein,  target: nutrition.protein  },
+    { key: "carbs",    label: "Carbs",    unit: "g", consumed: totals.carbs,    target: nutrition.carbs    },
+    { key: "fat",      label: "Fat",      unit: "g", consumed: totals.fat,      target: nutrition.fat      },
   ];
 
   let html = `<div class="nutrition-progress">`;
-  macros.forEach(({ label, unit, consumed, target }) => {
+  macros.forEach(({ key, label, unit, consumed, target }) => {
     const rawPct = target > 0 ? Math.round(consumed / target * 100) : 0;
     const pct    = Math.min(rawPct, 100);
-    const color  = rawPct > 120 ? "var(--color-danger)"
-                 : rawPct >= 85 ? "var(--color-success)"
-                 : "var(--color-accent)";
+    const color  = _macroBarColor(key, consumed, target, goal);
+    const noteText = rawPct > 100 ? _macroOverNote(key, goal) : "";
+    const noteHtml = noteText ? `<div class="nutrition-progress-note">${escHtml(noteText)}</div>` : "";
     html += `
       <div class="nutrition-progress-row">
         <div class="nutrition-progress-header">
@@ -5027,6 +5083,7 @@ function renderNutritionProgressBars(dateStr) {
         <div class="nutrition-progress-track">
           <div class="nutrition-progress-fill" style="width:${pct}%;background:${color}"></div>
         </div>
+        ${noteHtml}
       </div>`;
   });
   html += `<div class="nutrition-meal-list">`;
