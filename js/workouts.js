@@ -2921,6 +2921,27 @@ function buildExerciseTableHTML(exercises, opts) {
   // every other path keeps the em-dash placeholder.
   const _emptyWt = coachAssigned ? "" : "—";
 
+  // Suppress per-set rows that exactly match the parent exercise's
+  // header line (post-normalization). Coach-assigned exercises
+  // populate setDetails any time the coach typed into the per-set
+  // panel, even when the values match the row defaults — so
+  // workouts can land here with four identical "Set N" rows that
+  // duplicate the header. Renders nothing if every set matches
+  // (matches live-tracker's save-side allSame check); otherwise
+  // renders all rows so the user sees the variation in context.
+  // Comparing post-normalization also handles "B" vs "BW" data
+  // quirks where the stored strings differ but display the same.
+  const _setDetailsDiffer = (e) => {
+    if (!e.setDetails || !e.setDetails.length) return false;
+    const mainReps = _formatRepsWithSide(e.reps, e.name);
+    const mainWt   = _normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate, reps: e.reps, coachAssigned }) || "";
+    return e.setDetails.some(sd => {
+      const r = _formatRepsWithSide(sd.reps, e.name);
+      const w = _normalizeWeightDisplay(sd.weight, e.name, { coachAssigned }) || "";
+      return r !== mainReps || w !== mainWt;
+    });
+  };
+
   let rows = "";
   segments.forEach(seg => {
     if (seg.supersetId) {
@@ -2928,7 +2949,7 @@ function buildExerciseTableHTML(exercises, opts) {
       rows += `<tr class="superset-label-row"><td colspan="${cols}">Superset &mdash; ${ssSets} sets</td></tr>`;
       seg.items.forEach(e => {
         rows += `<tr class="superset-ex-row"><td>${escHtml(e.name)}</td><td></td><td>${escHtml(_formatRepsWithSide(e.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate, reps: e.reps, coachAssigned })||_emptyWt)}</td></tr>`;
-        if (e.setDetails && e.setDetails.length) {
+        if (e.setDetails && e.setDetails.length && _setDetailsDiffer(e)) {
           e.setDetails.forEach((sd, si) => {
             rows += `<tr class="superset-ex-row set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${escHtml(_formatRepsWithSide(sd.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(sd.weight, e.name, { coachAssigned })||_emptyWt)}</td></tr>`;
           });
@@ -2973,7 +2994,7 @@ function buildExerciseTableHTML(exercises, opts) {
           rows += `<tr class="warmup-hint-row"><td colspan="4" class="warmup-hint-cell">${escHtml(_warmup)}</td></tr>`;
         }
       }
-      if (e.setDetails && e.setDetails.length) {
+      if (e.setDetails && e.setDetails.length && _setDetailsDiffer(e)) {
         e.setDetails.forEach((sd, si) => {
           rows += `<tr class="set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${escHtml(_formatRepsWithSide(sd.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(sd.weight, e.name, { coachAssigned })||_emptyWt)}</td></tr>`;
         });
