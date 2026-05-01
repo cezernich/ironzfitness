@@ -1676,7 +1676,12 @@ button:active {
   background: linear-gradient(90deg, #dc2626, #b91c1c);
   color: #fff;
   box-shadow: 0 12px 28px rgba(220, 38, 38, 0.35), 0 2px 6px rgba(0, 0, 0, 0.15);
-  z-index: 9999;
+  /* Above the rating-modal overlay (9999), live-tracker overlay (10000),
+     and the existing "above modals" tier (10005) so the celebration
+     isn't covered by the modals that open ~400ms after a workout
+     completes. pointer-events:none below means it still doesn't
+     intercept taps on whatever's underneath. */
+  z-index: 10010;
   pointer-events: none;
   font-family: inherit;
   animation: stack-toast-in 360ms cubic-bezier(0.34, 1.4, 0.5, 1) forwards;

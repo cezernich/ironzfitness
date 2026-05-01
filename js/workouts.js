@@ -2197,6 +2197,16 @@ function saveWorkout() {
   if (typeof showRatingModal === "function") {
     setTimeout(() => showRatingModal(String(workout.id), date), 400);
   }
+
+  // Stacked-Day check — saveWorkout has its own inline finish flow
+  // (doesn't go through finalizeWorkoutCompletion), so the stack hook
+  // is wired here directly.
+  if (window.StackUX && date) {
+    try {
+      window.StackUX.recordStackIfHit(date);
+      window.StackUX.maybeFireStackCelebration(date);
+    } catch {}
+  }
 }
 
 /** Loads the saved workouts array from localStorage */
