@@ -1144,7 +1144,18 @@ function saveProfile() {
   };
 
   localStorage.setItem("profile", JSON.stringify(profile));
-  if (typeof DB !== 'undefined') DB.profile.save(profile).catch(() => {});
+  if (typeof DB !== 'undefined') {
+    // Two writes by design:
+    //   - profiles table (structured columns: name/age/weight/height/gender/goal)
+    //     — what other parts of the backend join against.
+    //   - user_data table via syncKey — carries the FULL profile JSON,
+    //     including fields the structured table has no column for (birthday,
+    //     bodyCompGoal). Without this second write those fields were
+    //     local-only and got blanked on cross-device login or any
+    //     refreshAllKeys race.
+    DB.profile.save(profile).catch(() => {});
+    if (typeof DB.syncKey === "function") DB.syncKey("profile");
+  }
   updateNavInitials();
   renderGreeting();
   // Goal / weight changes feed into nutrition target math, which feeds
