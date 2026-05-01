@@ -448,6 +448,11 @@ const DB = (() => {
     // which exercises ExerciseDB.query({ equipment }) returns for the
     // planner + workout builders.
     'equipmentProfile',
+    // Stacked-Day gamification (stack.js). History is the source of
+    // truth for the streak; celebratedFor gates the per-day animation
+    // so it doesn't double-fire when a second device finishes the
+    // pillars at roughly the same time.
+    'stackedDayHistory', 'stackCelebratedFor',
   ];
 
   const _keyTimers = {};
@@ -461,6 +466,11 @@ const DB = (() => {
     'workoutSchedule', 'workouts', 'trainingPlan', 'events', 'meals',
     'completedSessions', 'workoutRatings', 'coachingDismissed',
     'ironz_saved_workouts_v1', 'ironz_saved_workouts_pending_delete_v1',
+    // Stacked-Day: history must propagate fast so the second device
+    // sees the streak increment without waiting for the 2s debounce.
+    // celebratedFor is in here too so device A firing the celebration
+    // suppresses device B's redundant fire on the next focus refresh.
+    'stackedDayHistory', 'stackCelebratedFor',
     // Thresholds / 1RMs / CSS / FTP / VDOT — these drive pacing across
     // the generators, so losing the most recent edit to a refresh race
     // produces workouts that disagree with the values the user just

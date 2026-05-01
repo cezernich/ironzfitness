@@ -3932,34 +3932,36 @@ function renderDailyRings() {
 
   // Nutrition ring
   //
-  // Default: ring tracks adherence to the day's *adjusted* calorie target,
-  // and any overage is reflected in the label (eating 145% shows as "145%").
-  // The slider's 10%-down cap (see _floorMin in _renderDayDetailInner) keeps
-  // the goalpost honest on the downward side — users can't drag the target
-  // to 0 to fake 100%.
+  // Color is goal-aware (matches macro-bar logic in _macroBarColor): green
+  // when within the on-target band for the user's goal, red ONLY when a
+  // fat_loss athlete is meaningfully over (>120%). Surplus on muscle_gain
+  // / race_performance reads green — that's the desired state.
   //
-  // Weight-loss exception: for fat-loss profiles, eating MORE than the
-  // adjusted target is the opposite of the goal, so the ring caps at +10%
-  // above target (label maxes at 110%). Beyond that we don't keep "rewarding"
-  // overconsumption — the ring stops adjusting up, which both honours the
-  // user's stated goal and removes the over-target cheat path.
+  // Label shows true % (uncapped) so a 145%-eaten day reads "145%" with
+  // a red ring, not a clipped "110%". The old fat-loss cap is removed
+  // now that color carries the over-target signal.
   const nutritionEnabled = typeof isNutritionEnabled === "function" && isNutritionEnabled();
-  let calPct = 0, calLabel = "";
+  let calPct = 0, calLabel = "", calRingColor = "var(--color-accent, #6366f1)", proteinHit = false;
   if (nutritionEnabled) {
-    const nutrition = typeof getDailyNutritionTarget === "function" ? getDailyNutritionTarget(dateStr) : { calories: 2200 };
+    const nutrition = typeof getDailyNutritionTarget === "function" ? getDailyNutritionTarget(dateStr) : { calories: 2200, protein: 0 };
     let meals = [];
     try { meals = (JSON.parse(localStorage.getItem("meals")) || []).filter(m => m.date === dateStr); } catch {}
-    const eaten = meals.reduce((s, m) => s + (m.calories || 0), 0);
+    const eaten = meals.reduce((acc, m) => ({
+      calories: acc.calories + (m.calories || 0),
+      protein:  acc.protein  + (m.protein  || 0),
+    }), { calories: 0, protein: 0 });
     let _ringProfile = {};
     try { _ringProfile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
-    const _isFatLoss = (typeof _normalizeGoalForMacroBars === "function")
-      && _normalizeGoalForMacroBars(_ringProfile.goal) === "fat_loss";
-    const _capMultiplier = _isFatLoss ? 1.10 : Infinity;
-    const _effectiveEaten = nutrition.calories > 0
-      ? Math.min(eaten, nutrition.calories * _capMultiplier)
-      : eaten;
-    calPct = nutrition.calories > 0 ? Math.min(_effectiveEaten / nutrition.calories, 1) : 0;
-    calLabel = `${Math.round(_effectiveEaten / (nutrition.calories || 1) * 100)}%`;
+    const _goal = (typeof _normalizeGoalForMacroBars === "function")
+      ? _normalizeGoalForMacroBars(_ringProfile.goal)
+      : "general_fitness";
+    const rawPct = nutrition.calories > 0 ? (eaten.calories / nutrition.calories) * 100 : 0;
+    calPct = Math.min(rawPct / 100, 1);
+    calLabel = `${Math.round(rawPct)}%`;
+    if (typeof _macroBarColor === "function") {
+      calRingColor = _macroBarColor("calories", eaten.calories, nutrition.calories, _goal);
+    }
+    proteinHit = nutrition.protein > 0 && eaten.protein >= nutrition.protein;
   }
 
   // Hydration ring
@@ -3978,14 +3980,23 @@ function renderDailyRings() {
   const r = (ringSize - stroke) / 2;
   const circ = 2 * Math.PI * r;
 
-  function buildRing(pct, color, label, title, enabled) {
+  function buildRing(pct, color, label, title, enabled, extra) {
     if (!enabled) return "";
     const done = pct >= 1;
     const offset = circ * (1 - pct);
-    const ringColor = done ? "var(--color-success, #22c55e)" : color;
-    const center = done
+    // For the nutrition ring, color is already goal-aware (green = on
+    // target, red = fat_loss over). Don't override with success-green
+    // when pct >= 1 — overshoot on fat_loss should stay red. Other
+    // rings keep the old "fill = green" rule.
+    const isGoalAware = extra && extra.goalAware;
+    const ringColor = isGoalAware ? color : (done ? "var(--color-success, #22c55e)" : color);
+    const showCheck = !isGoalAware && done;
+    const center = showCheck
       ? `<text x="50%" y="52%" text-anchor="middle" dominant-baseline="central" fill="var(--color-success, #22c55e)" font-size="22" font-weight="700">✓</text>`
       : `<text x="50%" y="48%" text-anchor="middle" dominant-baseline="central" fill="var(--color-text)" font-size="14" font-weight="700">${label}</text>`;
+    const protein = (extra && extra.proteinHit !== undefined)
+      ? `<span class="dr-protein-flag${extra.proteinHit ? " dr-protein-flag--hit" : ""}" title="${extra.proteinHit ? "Protein target hit" : "Protein target not yet hit"}">✓P</span>`
+      : "";
     // Track uses its own CSS variable (--ring-track, defined per
     // theme) so the dim-but-visible track doesn't disappear on
     // pure-black or iron-navy backgrounds. The old version used
@@ -4001,12 +4012,13 @@ function renderDailyRings() {
           ${center}
         </svg>
         <span class="dr-ring-label">${title}</span>
+        ${protein}
       </div>`;
   }
 
   container.innerHTML = `<div class="dr-rings-row">
     ${buildRing(workoutPct, "var(--color-text)", workoutLabel, isRestDay ? "Rest Day" : "Workouts", true)}
-    ${buildRing(calPct, "var(--color-accent, #6366f1)", calLabel, "Nutrition", nutritionEnabled)}
+    ${buildRing(calPct, calRingColor, calLabel, "Nutrition", nutritionEnabled, { goalAware: true, proteinHit })}
     ${buildRing(hydPct, "#3b82f6", hydLabel, "Hydration", hydrationEnabled)}
   </div>`;
 }

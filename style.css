@@ -1577,6 +1577,143 @@ button:active {
   letter-spacing: 0.03em;
 }
 
+/* ✓P protein indicator under nutrition ring. Hit = filled brand-green
+   chip; not-hit = subtle outlined chip so the user sees the rule. */
+.dr-protein-flag {
+  margin-top: 2px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  background: transparent;
+  line-height: 1.4;
+}
+.dr-protein-flag--hit {
+  color: #fff;
+  background: var(--color-success, #22c55e);
+  border-color: var(--color-success, #22c55e);
+}
+
+/* Stacked-Day celebration. The pulse adds a brief green glow around the
+   whole ring row; the sweep is a single brand-red lightning bolt that
+   slides L→R across the row. Both are removed by stack.js after
+   ~900ms — defensive cleanup so a re-trigger can't stack DOM. */
+@keyframes stack-pulse-glow {
+  0%   { filter: drop-shadow(0 0 0 rgba(34, 197, 94, 0)); }
+  35%  { filter: drop-shadow(0 0 14px rgba(34, 197, 94, 0.55)); }
+  100% { filter: drop-shadow(0 0 0 rgba(34, 197, 94, 0)); }
+}
+.daily-rings.stack-pulse .dr-ring-wrap svg {
+  animation: stack-pulse-glow 600ms ease-out;
+}
+@keyframes stack-bolt-sweep {
+  0%   { transform: translateX(-30%) scale(0.8); opacity: 0; }
+  20%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translateX(130%) scale(1.1); opacity: 0; }
+}
+.daily-rings { position: relative; }
+.stack-sweep {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  animation: stack-bolt-sweep 800ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.stack-sweep svg { width: 32px; height: 32px; }
+
+/* Stacked-Day badge — slides in below the rings, persists for the day. */
+@keyframes stack-badge-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.stacked-day-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px auto 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #fff;
+  background: linear-gradient(90deg, #dc2626, #b91c1c);
+  width: fit-content;
+  animation: stack-badge-in 320ms ease-out both;
+}
+.stacked-day-badge .sd-badge-icon svg { width: 14px; height: 14px; }
+
+/* Stack streak pill — sits next to .consistency-badge in the greeting row. */
+.stack-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 3px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.stack-pill:hover { background: var(--color-bg-soft, rgba(0,0,0,0.04)); }
+.stack-pill svg { width: 12px; height: 12px; color: #dc2626; }
+
+/* 14-day stack history popover (inline expansion below greeting). */
+.stack-history-panel {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  background: var(--color-bg-soft, rgba(0,0,0,0.03));
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+.sd-history-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.sd-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+}
+.sd-dot-full    { background: var(--color-success, #22c55e); border-color: var(--color-success, #22c55e); }
+.sd-dot-partial { background: var(--color-accent, #6366f1); border-color: var(--color-accent, #6366f1); opacity: 0.55; }
+.sd-dot-empty   { background: transparent; }
+.sd-history-legend {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+.sd-history-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.sd-history-legend .sd-dot { width: 10px; height: 10px; }
+.sd-history-break {
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: var(--color-text);
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
 /* ===== 9. CALENDAR ===== */
 
 .calendar-header {
@@ -9008,6 +9145,7 @@ input.completion-ex-name:focus {
 
 .nutri-budget-bar {}
 .nutri-budget-label { font-size: 0.95rem; font-weight: 600; margin-bottom: 6px; text-align: center; }
+.nutri-calories-pct { color: var(--color-text-muted); font-weight: 500; margin-left: 4px; }
 .nutri-progress-track { height: 12px; background: var(--color-surface-alt, var(--color-surface-2)); border-radius: 6px; overflow: hidden; }
 .nutri-progress-fill { height: 100%; background: linear-gradient(90deg, var(--color-accent), var(--color-cyan, #22d3ee)); border-radius: 6px; transition: width 0.3s; }
 

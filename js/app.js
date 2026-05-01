@@ -685,6 +685,16 @@ function init() {
       // the new completion without a full relaunch.
       if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
       if (typeof renderStats === "function") renderStats();
+      // Cross-device stack: data may have arrived showing all three
+      // pillars hit. recordStackIfHit + maybeFireStackCelebration are
+      // idempotent and gate on stackCelebratedFor, so this is safe.
+      if (window.StackUX) {
+        try {
+          window.StackUX.recordStackIfHit();
+          window.StackUX.maybeFireStackCelebration();
+        } catch {}
+      }
+      if (typeof renderGreeting === "function") renderGreeting();
     } catch (e) { console.warn("[IronZ] visibility refresh failed:", e); }
   });
   // Keyboard-aware tab bar. iOS doesn't shrink window.innerHeight when

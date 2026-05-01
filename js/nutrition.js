@@ -78,6 +78,16 @@ function saveMeal() {
   if (typeof selectedDate !== "undefined" && selectedDate === date && typeof renderDayDetail === "function") {
     renderDayDetail(date);
   }
+
+  // Stacked-Day check — meal logging is one of three completion paths.
+  // recordStackIfHit is idempotent + retroactive: logging a meal for a
+  // past date that retroactively completes its stack adds it to history.
+  if (window.StackUX) {
+    try {
+      window.StackUX.recordStackIfHit(date);
+      window.StackUX.maybeFireStackCelebration(date);
+    } catch {}
+  }
 }
 
 /** Loads the saved meals array from localStorage */

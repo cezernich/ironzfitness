@@ -975,6 +975,14 @@ function finalizeWorkoutCompletion(record, opts) {
   if (typeof checkLevelUp === "function") {
     try { checkLevelUp(); } catch {}
   }
+
+  // 8. Stacked-Day check — completing a workout is one of three pillars.
+  if (window.StackUX && dateStr) {
+    try {
+      window.StackUX.recordStackIfHit(dateStr);
+      window.StackUX.maybeFireStackCelebration(dateStr);
+    } catch {}
+  }
 }
 if (typeof window !== "undefined") {
   window.finalizeWorkoutCompletion = finalizeWorkoutCompletion;

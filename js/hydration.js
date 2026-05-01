@@ -972,6 +972,14 @@ function logWater(beverageType) {
       playHydrationGoalAnimation();
     }
   }
+
+  // Stacked-Day check.
+  if (window.StackUX) {
+    try {
+      window.StackUX.recordStackIfHit(dateStr);
+      window.StackUX.maybeFireStackCelebration(dateStr);
+    } catch {}
+  }
 }
 
 function logWaterOz(oz) {
@@ -1000,6 +1008,14 @@ function logWaterOz(oz) {
     if (effectiveOz >= targetOz && prevOz < targetOz) {
       playHydrationGoalAnimation();
     }
+  }
+
+  // Stacked-Day check.
+  if (window.StackUX) {
+    try {
+      window.StackUX.recordStackIfHit(dateStr);
+      window.StackUX.maybeFireStackCelebration(dateStr);
+    } catch {}
   }
 
   // Close quick add panel

@@ -337,18 +337,18 @@ function buildConsistencyBadge() {
   const streak = getConsistencyStreak();
   const currentStreak = getCurrentStreak();
 
-  let streakText = "";
+  let flameHtml = "";
   if (currentStreak >= 7) {
-    streakText = `${currentStreak}-day streak!`;
-  } else if (streak.activeDays >= 5) {
-    streakText = `${streak.activeDays}/7 days active (last 7 days)`;
+    flameHtml = `<span class="consistency-badge">${ICONS.flame} ${currentStreak}-day streak!</span>`;
   } else if (streak.activeDays > 0) {
-    streakText = `${streak.activeDays}/7 days active (last 7 days)`;
-  } else {
-    return "";
+    flameHtml = `<span class="consistency-badge">${ICONS.flame} ${streak.activeDays}/7 days active (last 7 days)</span>`;
   }
 
-  return `<span class="consistency-badge">${ICONS.flame} ${streakText}</span>`;
+  let stackHtml = "";
+  if (window.StackUX && typeof window.StackUX.buildStackPill === "function") {
+    stackHtml = window.StackUX.buildStackPill();
+  }
+  return flameHtml + stackHtml;
 }
 
 /* =====================================================================
