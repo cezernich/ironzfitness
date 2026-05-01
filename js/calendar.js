@@ -3995,7 +3995,7 @@ function renderDailyRings() {
       ? `<text x="50%" y="52%" text-anchor="middle" dominant-baseline="central" fill="var(--color-success, #22c55e)" font-size="22" font-weight="700">✓</text>`
       : `<text x="50%" y="48%" text-anchor="middle" dominant-baseline="central" fill="var(--color-text)" font-size="14" font-weight="700">${label}</text>`;
     const protein = (extra && extra.proteinHit !== undefined)
-      ? `<span class="dr-protein-flag${extra.proteinHit ? " dr-protein-flag--hit" : ""}" title="${extra.proteinHit ? "Protein target hit" : "Protein target not yet hit"}">✓P</span>`
+      ? `<span class="dr-protein-flag${extra.proteinHit ? " dr-protein-flag--hit" : ""}" title="${extra.proteinHit ? "Protein target hit" : "Protein target not yet hit"}">✓ Protein</span>`
       : "";
     // Track uses its own CSS variable (--ring-track, defined per
     // theme) so the dim-but-visible track doesn't disappear on
