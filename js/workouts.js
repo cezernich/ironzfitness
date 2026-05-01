@@ -2274,6 +2274,16 @@ function deleteWorkout(id) {
     renderDayDetail(selectedDate);
   }
   if (typeof renderStats === "function") renderStats();
+
+  // Stacked-Day reconcile: deleting a completed workout can break the
+  // workouts pillar for that day. Revoke the stack-hit if the date no
+  // longer qualifies.
+  if (deleted?.date && window.StackUX) {
+    try {
+      window.StackUX.reconcileStack(deleted.date);
+      if (typeof renderGreeting === "function") renderGreeting();
+    } catch {}
+  }
 }
 
 /** Clears ALL saved workouts after confirmation */

@@ -2352,6 +2352,16 @@ function undoSessionCompletion(sessionId, dateStr) {
   renderCalendar();
   if (typeof selectedDate !== "undefined" && selectedDate) renderDayDetail(selectedDate);
   if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
+
+  // Stacked-Day reconcile: un-marking a session can drop the workouts
+  // pillar for that day. Revoke the stack-hit if the date no longer
+  // qualifies.
+  if (dateStr && window.StackUX) {
+    try {
+      window.StackUX.reconcileStack(dateStr);
+      if (typeof renderGreeting === "function") renderGreeting();
+    } catch {}
+  }
 }
 
 // ─── Overflow menu (Edit / Move / Delete) ────────────────────────────────

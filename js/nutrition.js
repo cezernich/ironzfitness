@@ -125,6 +125,17 @@ function deleteMeal(id) {
       && typeof renderDayDetail === "function") {
     renderDayDetail(removed.date);
   }
+
+  // Stacked-Day reconcile: deleting a meal can break the nutrition
+  // pillar for that day. If the date was previously in stackedDayHistory
+  // and no longer qualifies, revoke it (and clear the celebrated flag
+  // for today so re-completing later re-fires the toast).
+  if (removed && window.StackUX) {
+    try {
+      window.StackUX.reconcileStack(removed.date);
+      if (typeof renderGreeting === "function") renderGreeting();
+    } catch {}
+  }
 }
 
 /** Clears ALL saved meals */

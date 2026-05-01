@@ -1075,6 +1075,15 @@ function undoWater() {
   if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
     renderDayDetail(selectedDate);
   }
+
+  // Stacked-Day reconcile: undoing water can drop the hydration pillar
+  // below target. Revoke today's stack-hit if it no longer qualifies.
+  if (window.StackUX) {
+    try {
+      window.StackUX.reconcileStack(dateStr);
+      if (typeof renderGreeting === "function") renderGreeting();
+    } catch {}
+  }
 }
 
 /* =====================================================================

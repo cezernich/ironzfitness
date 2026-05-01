@@ -137,6 +137,42 @@
     return true;
   }
 
+  // Reconcile: keeps history in sync with the underlying data both
+  // ways. Add when hit, remove when previously-recorded but no longer
+  // hit (e.g. user deleted the meal/workout/water that completed the
+  // stack). When today is revoked, also clear the celebrated flag so
+  // re-completing later in the day fires the toast again.
+  function reconcileStack(dateStr) {
+    const date = dateStr || _today();
+    const history = _loadHistory();
+    const inHistory = history.includes(date);
+    const hit = isStackHit(date);
+
+    if (hit && !inHistory) {
+      history.push(date);
+      _saveHistory(history);
+      console.log("[Stack] reconcile: added", date, "(now hit)");
+      return "added";
+    }
+    if (!hit && inHistory) {
+      const next = history.filter(d => d !== date);
+      _saveHistory(next);
+      if (date === _today() && _alreadyCelebrated(date)) {
+        // Revoking today's stack — un-arm the celebration so it can
+        // fire again if the user re-completes later. Sync the cleared
+        // value to Supabase too.
+        localStorage.removeItem(CELEBRATED_KEY);
+        if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey(CELEBRATED_KEY);
+      }
+      // Tear down any persistent badge / pill rendered earlier today.
+      const badge = document.getElementById("stacked-day-badge");
+      if (badge) try { badge.remove(); } catch {}
+      console.log("[Stack] reconcile: revoked", date, "(no longer hit)");
+      return "removed";
+    }
+    return "unchanged";
+  }
+
   // Walks the history backward from today; tolerates a missed-but-not-yet
   // ended state (today not yet hit, but yesterday was → streak still alive).
   function getStackStreak() {
@@ -382,6 +418,7 @@
     getPillarState,
     isStackHit,
     recordStackIfHit,
+    reconcileStack,
     getStackStreak,
     getBestStackStreak,
     maybeFireStackCelebration,
