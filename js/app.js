@@ -621,6 +621,15 @@ function init() {
     try { migrateBodyCompGoal(); } catch (e) { console.warn("[IronZ] bodyCompGoal migration:", e); }
   }
 
+  // End-of-day target freeze: snapshot past-day nutrition targets so
+  // changing profile / bodyCompGoal / weight tomorrow doesn't warp
+  // yesterday's "% of target" display. Today stays live; only past
+  // dates with logged meals get locked. See planner.js freezePastTargets
+  // for the full rationale.
+  if (typeof freezePastTargets === "function") {
+    try { freezePastTargets(); } catch (e) { console.warn("[IronZ] target freeze:", e); }
+  }
+
   // Load philosophy engine modules (non-blocking)
   if (typeof loadPhilosophyModules === 'function') {
     loadPhilosophyModules().catch(e => console.warn('[IronZ] Philosophy module load:', e.message));

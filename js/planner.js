@@ -4876,6 +4876,77 @@ if (typeof window !== "undefined") {
   window.isCarbLoadDay = isCarbLoadDay;
 }
 
+// End-of-day target freeze (Garmin-style adherence durability).
+//
+// Without this, every nutrition target was computed live every read —
+// meaning a profile / bodyCompGoal change retroactively warped past
+// days' "% of target" displays. A user who hit 100% on April 15 against
+// a 175g protein target would later read 90% if they switched bulkComp
+// to "build" (target 195g). Past wins were not durable.
+//
+// Fix: at app boot, walk past dates that have logged meals but no
+// existing snapshot, compute the target with whatever inputs are
+// currently true, and write it into nutritionAdjustments[date] flagged
+// _autoSnapshot:true. From then on, getDailyNutritionTarget reads the
+// frozen value (the existing adj-wins-over-base path at line ~4880
+// handles this transparently — no changes needed there). Today's
+// target stays live until the next boot after midnight rolls.
+//
+// Skipped: dates that already have macros in nutritionAdjustments
+// (either a user slider override or a prior snapshot). Also skipped:
+// dates with no meals — there's nothing to anchor adherence to, so
+// no need to lock in a target.
+function freezePastTargets() {
+  let meals = [];
+  let adjustments = {};
+  try { meals = JSON.parse(localStorage.getItem("meals")) || []; } catch {}
+  try { adjustments = JSON.parse(localStorage.getItem("nutritionAdjustments")) || {}; } catch {}
+  if (!Array.isArray(meals) || !meals.length) return;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
+
+  // Unique past dates with logged meals.
+  const pastDates = new Set();
+  for (const m of meals) {
+    if (m && m.date && m.date < todayStr) pastDates.add(m.date);
+  }
+  if (!pastDates.size) return;
+
+  let frozenCount = 0;
+  for (const date of pastDates) {
+    const adj = adjustments[date];
+    // Already snapshotted or user-overridden — leave alone.
+    if (adj && (adj.calories != null || adj.protein != null || adj.carbs != null || adj.fat != null)) continue;
+    let target;
+    try { target = getBaseNutritionTarget(date); } catch { continue; }
+    if (!target || !target.calories) continue;
+    adjustments[date] = {
+      calories: target.calories,
+      protein:  target.protein,
+      carbs:    target.carbs,
+      fat:      target.fat,
+      _autoSnapshot:  true,
+      _snapshotAt:    new Date().toISOString(),
+      // Preserve any non-macro fields the slider may write later
+      // (notes, _coachOverlay) by spreading the existing adj last.
+      ...(adj || {}),
+    };
+    frozenCount++;
+  }
+
+  if (frozenCount > 0) {
+    try { localStorage.setItem("nutritionAdjustments", JSON.stringify(adjustments)); } catch {}
+    if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("nutritionAdjustments");
+    console.log("[IronZ] froze " + frozenCount + " past-day target snapshot(s) for adherence durability");
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.freezePastTargets = freezePastTargets;
+}
+
 /**
  * getDailyNutritionTarget(dateStr)
  * Returns macro targets for a date, applying any user slider adjustments first.
