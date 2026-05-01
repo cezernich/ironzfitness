@@ -53,13 +53,20 @@
       || (data.restriction && data.restriction.action === "remove");
     if (isRestDay) return true;
 
+    // Future-dated workouts can't count as complete — mirrors the
+    // guard in buildLoggedWorkoutCard / renderDailyRings so a stale
+    // completion record on a future date doesn't bogusly fill the
+    // workouts pillar for the day.
+    const _today = (typeof getTodayString === "function") ? getTodayString() : new Date().toISOString().slice(0, 10);
     let completed = 0;
-    if (data.planEntry && typeof isSessionComplete === "function"
+    if (data.planEntry && dateStr <= _today && typeof isSessionComplete === "function"
         && isSessionComplete(`session-plan-${dateStr}-${data.planEntry.raceId}`)) completed++;
     data.scheduledWorkouts.forEach(w => {
+      if ((w.date || dateStr) > _today) return;
       if (typeof isSessionComplete === "function" && isSessionComplete(`session-sw-${w.id}`)) completed++;
     });
     data.loggedWorkouts.forEach(w => {
+      if ((w.date || dateStr) > _today) return;
       if (w.fromSaved || (typeof isSessionComplete === "function" && isSessionComplete(`session-log-${w.id}`))) completed++;
     });
     return completed >= totalSessions;

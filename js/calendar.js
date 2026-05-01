@@ -1179,7 +1179,13 @@ function doDuplicateSession(cardId, sourceType, sourceId, _origDate, newDateOver
 function buildLoggedWorkoutCard(w, dateStr, restriction) {
   const { icon, color } = _resolveDiscipline(w);
   const cardId  = `session-log-${w.id}`;
-  const _logComplete = isSessionComplete(cardId);
+  // A future-dated workout can't be "complete" regardless of what
+  // completedSessions says. Stale entries from drag/move flows or old
+  // bugs would otherwise leave a green check + "Completed" subtitle on
+  // a date that hasn't happened yet. Defensive guard at the render
+  // boundary so the visual is always coherent with the date.
+  const _isFutureDate = (typeof getTodayString === "function") && (w.date || dateStr) > getTodayString();
+  const _logComplete = !_isFutureDate && isSessionComplete(cardId);
   const _logCompleteCls = _logComplete ? " session-card--completed" : "";
 
   // ── Circuit workout (CrossFit-style) ──────────────────────────────────────
@@ -3934,7 +3940,13 @@ function renderDailyRings() {
   let completedCount = 0;
   if (data.planEntry && isSessionComplete(`session-plan-${dateStr}-${data.planEntry.raceId}`)) completedCount++;
   data.scheduledWorkouts.forEach(w => { if (isSessionComplete(`session-sw-${w.id}`)) completedCount++; });
-  data.loggedWorkouts.forEach(w => { if (w.fromSaved || isSessionComplete(`session-log-${w.id}`)) completedCount++; });
+  // Future-dated logged workouts can't count as complete (mirrors
+  // buildLoggedWorkoutCard's defensive guard).
+  const _todayStrRing = (typeof getTodayString === "function") ? getTodayString() : new Date().toISOString().slice(0, 10);
+  data.loggedWorkouts.forEach(w => {
+    if ((w.date || dateStr) > _todayStrRing) return;
+    if (w.fromSaved || isSessionComplete(`session-log-${w.id}`)) completedCount++;
+  });
   const totalSessions = allSessions + loggedCount;
   const isRestDay = totalSessions === 0 || (data.restriction && data.restriction.action === "remove");
   const workoutPct = isRestDay ? 1 : (totalSessions > 0 ? Math.min(completedCount / totalSessions, 1) : 0);
