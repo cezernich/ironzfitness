@@ -1140,6 +1140,7 @@ function saveProfile() {
     height: String(totalInches || ""),
     gender: document.getElementById("profile-gender").value,
     goal:   document.getElementById("profile-goal").value,
+    bodyCompGoal: document.getElementById("profile-bodycomp")?.value || existing.bodyCompGoal || "maintain",
   };
 
   localStorage.setItem("profile", JSON.stringify(profile));
@@ -1205,6 +1206,8 @@ async function loadProfileIntoForm() {
     }
     if (profile.gender) document.getElementById("profile-gender").value = profile.gender;
     if (profile.goal)   document.getElementById("profile-goal").value   = profile.goal;
+    const bcEl = document.getElementById("profile-bodycomp");
+    if (bcEl) bcEl.value = profile.bodyCompGoal || "maintain";
   } catch { /* ignore */ }
 }
 

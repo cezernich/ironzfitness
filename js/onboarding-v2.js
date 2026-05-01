@@ -1126,11 +1126,15 @@
     goTo("bp-v2-2");
   }
 
-  // Goal catalog — split into three per TRAINING_PHILOSOPHY.md §2.5.
+  // Goal catalog — training intent only. Body-composition goals
+  // (bulk / cut / lose / build / maintain) used to live here too,
+  // which meant Build Plan silently rewrote the user's nutrition
+  // every plan cycle. Body comp now lives on profile.bodyCompGoal
+  // (Athlete Profile UI) — independent axis, single source of truth.
+  // Build Plan asks ONLY about training direction.
   //
   // §2.5.2: Endurance athletes (standalone endurance + hybrid) pick from
-  //   the endurance goal list. Bulk/Cut are gated off — you can't bulk
-  //   and train for a triathlon.
+  //   the endurance goal list.
   // §2.5.1: Standalone-strength athletes pick from the strength-only list.
   // §2.5.3: Hybrid athletes ALSO pick exactly one strength role below
   //   the endurance goals. Strength role drives rep ranges, session
@@ -1140,24 +1144,25 @@
     { id: "race",      icon: "flag",     text: "Train for a Race" },
     { id: "speed",     icon: "zap",      text: "Get Faster" },
     { id: "endurance", icon: "activity", text: "Build Endurance" },
-    { id: "weight",    icon: "scale",    text: "Lose Weight" },
     { id: "general",   icon: "target",   text: "General Fitness" },
   ];
 
   const _STRENGTH_ONLY_GOALS = [
     { id: "stronger",  icon: "trophy",   text: "Get Stronger" },
-    { id: "bulk",      icon: "weights",  text: "Bulk" },
-    { id: "cut",       icon: "flame",    text: "Cut" },
     { id: "general",   icon: "target",   text: "General Fitness" },
   ];
 
   // Strength roles for hybrid athletes (§2.5.3). Radio, not checkbox —
-  // the generator needs exactly one. Descriptions are short because the
-  // full rationale lives in the philosophy doc.
+  // the generator needs exactly one. Drives PROGRAMMING (rep ranges,
+  // exercise bias) only — does not feed nutrition. Hypertrophy used to
+  // live here as "Build Muscle" but it leaked into the body-comp math
+  // by silently flipping bulking on; replaced with a neutral
+  // "General Strength" option that programs the same balanced split
+  // without the nutrition side effect.
   const _HYBRID_STRENGTH_ROLES = [
     { id: "injury_prevention", icon: "shield",   text: "Injury Prevention", desc: "Keep joints durable, fix imbalances." },
     { id: "race_performance",  icon: "trophy",   text: "Race Performance",  desc: "Support your race with sport-specific power." },
-    { id: "hypertrophy",       icon: "weights",  text: "Build Muscle",      desc: "Add visible muscle alongside cardio." },
+    { id: "general",           icon: "weights",  text: "General Strength",  desc: "Balanced full-body strength alongside cardio." },
     { id: "minimal",           icon: "flame",    text: "Minimal",           desc: "Light maintenance only." },
   ];
 

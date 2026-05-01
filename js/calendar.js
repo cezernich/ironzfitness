@@ -3931,6 +3931,18 @@ function renderDailyRings() {
   const workoutLabel = isRestDay ? "Rest" : `${completedCount}/${totalSessions}`;
 
   // Nutrition ring
+  //
+  // Default: ring tracks adherence to the day's *adjusted* calorie target,
+  // and any overage is reflected in the label (eating 145% shows as "145%").
+  // The slider's 10%-down cap (see _floorMin in _renderDayDetailInner) keeps
+  // the goalpost honest on the downward side — users can't drag the target
+  // to 0 to fake 100%.
+  //
+  // Weight-loss exception: for fat-loss profiles, eating MORE than the
+  // adjusted target is the opposite of the goal, so the ring caps at +10%
+  // above target (label maxes at 110%). Beyond that we don't keep "rewarding"
+  // overconsumption — the ring stops adjusting up, which both honours the
+  // user's stated goal and removes the over-target cheat path.
   const nutritionEnabled = typeof isNutritionEnabled === "function" && isNutritionEnabled();
   let calPct = 0, calLabel = "";
   if (nutritionEnabled) {
@@ -3938,8 +3950,16 @@ function renderDailyRings() {
     let meals = [];
     try { meals = (JSON.parse(localStorage.getItem("meals")) || []).filter(m => m.date === dateStr); } catch {}
     const eaten = meals.reduce((s, m) => s + (m.calories || 0), 0);
-    calPct = nutrition.calories > 0 ? Math.min(eaten / nutrition.calories, 1) : 0;
-    calLabel = `${Math.round(eaten / (nutrition.calories || 1) * 100)}%`;
+    let _ringProfile = {};
+    try { _ringProfile = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
+    const _isFatLoss = (typeof _normalizeGoalForMacroBars === "function")
+      && _normalizeGoalForMacroBars(_ringProfile.goal) === "fat_loss";
+    const _capMultiplier = _isFatLoss ? 1.10 : Infinity;
+    const _effectiveEaten = nutrition.calories > 0
+      ? Math.min(eaten, nutrition.calories * _capMultiplier)
+      : eaten;
+    calPct = nutrition.calories > 0 ? Math.min(_effectiveEaten / nutrition.calories, 1) : 0;
+    calLabel = `${Math.round(_effectiveEaten / (nutrition.calories || 1) * 100)}%`;
   }
 
   // Hydration ring
@@ -4889,6 +4909,16 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
   // ── Nutrition sections (hidden when nutrition tracking is disabled) ────────
   if (typeof isNutritionEnabled === "function" && isNutritionEnabled()) {
     const nutritionTitle = isToday ? "Nutrition Targets Today" : "Nutrition Targets";
+    // Slider downward cap = 10% below the plan's base target. Lets the
+    // athlete take a "lighter eating day" without letting them drag the
+    // ring goalpost arbitrarily low to fake adherence. The static
+    // hardcoded floors (1200 cal / 50 g / 20 g) act as absolute safety
+    // limits — when 90% of plan is below those, the floor wins.
+    const _baseN = (typeof getBaseNutritionTarget === "function") ? getBaseNutritionTarget(dateStr) : nutrition;
+    const _floorMin = (key, abs) => {
+      const v = parseFloat(_baseN[key]);
+      return v > 0 ? Math.max(abs, Math.ceil(v * 0.9)) : abs;
+    };
     html += `
       <div class="nutrition-target-section">
         <div class="section-label">
@@ -4899,10 +4929,10 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         </div>
         <p class="nutrition-hint">Tap a target to adjust it with a slider.</p>
         <div class="macro-summary">
-          ${buildMacroBox("calories", "Calories", nutrition.calories, dateStr, 1200, 5000,  50, "")}
-          ${buildMacroBox("protein",  "Protein",  nutrition.protein,  dateStr,   50,  300,   5, "g")}
-          ${buildMacroBox("carbs",    "Carbs",    nutrition.carbs,    dateStr,   50,  600,  10, "g")}
-          ${buildMacroBox("fat",      "Fat",      nutrition.fat,      dateStr,   20,  200,   5, "g")}
+          ${buildMacroBox("calories", "Calories", nutrition.calories, dateStr, _floorMin("calories", 1200), 5000,  50, "")}
+          ${buildMacroBox("protein",  "Protein",  nutrition.protein,  dateStr, _floorMin("protein",   50),  300,   5, "g")}
+          ${buildMacroBox("carbs",    "Carbs",    nutrition.carbs,    dateStr, _floorMin("carbs",     50),  600,  10, "g")}
+          ${buildMacroBox("fat",      "Fat",      nutrition.fat,      dateStr, _floorMin("fat",       20),  200,   5, "g")}
         </div>
       </div>`;
 
@@ -5784,11 +5814,14 @@ function handleMacroSlider(event, dateStr, key, suffix) {
     resetBtn.style.display = differs ? "" : "none";
   }
 
-  // Debounce both meal plan and progress bars refresh
+  // Debounce both meal plan and progress bars refresh — and the daily
+  // ring, which tracks the same target and was going stale on slider
+  // moves before this was added.
   clearTimeout(_mealRefreshTimer);
   _mealRefreshTimer = setTimeout(() => {
     renderMealPlan(dateStr);
     renderNutritionProgressBars(dateStr);
+    if (typeof renderDailyRings === "function") renderDailyRings();
   }, 250);
 }
 

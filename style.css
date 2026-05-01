@@ -794,6 +794,13 @@ nav {
   letter-spacing: 0.06em;
 }
 
+.form-row-help {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin: 4px 0 0;
+  line-height: 1.35;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2937,6 +2944,20 @@ input.completion-ex-name:focus {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* The base `.session-card-header` uses align-items: flex-start because
+   the planned-card layout is two lines (name + phase). With the phase
+   hidden on completed cards the left column collapses to a single
+   line, so flex-start floats the icon + name to the top of the row
+   while the right group's chevron / overflow / spec line — taller as
+   a group — sit lower, producing the "the logo and name are floating"
+   misalignment. Recenter the row and zero the icon's nudge for this
+   case so everything sits on the same vertical midline. */
+.session-card--completed .session-card-header {
+  align-items: center;
+}
+.session-card--completed .session-icon {
+  margin-top: 0;
 }
 .session-card-leading-check {
   display: none;
