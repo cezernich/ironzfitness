@@ -4910,11 +4910,6 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       html += `<div class="section-label"><span>Nutrition Progress</span></div>
         <div id="nutrition-progress-bars-${dateStr}"></div>`;
     }
-
-    html += `
-      <div class="section-label"><span>Suggested Meals</span></div>
-      <div id="meal-plan-${dateStr}"></div>
-      ${typeof getAIDisclaimer === "function" ? getAIDisclaimer() : ""}`;
   }
 
   content.innerHTML = html;
@@ -4922,7 +4917,6 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
   // share.js — no per-render wiring needed here.
   _attachSessionDragSources(dateStr, data);
   if (typeof isNutritionEnabled === "function" && isNutritionEnabled()) {
-    renderMealPlan(dateStr);
     renderNutritionProgressBars(dateStr);
   }
   // Render NL input for today
@@ -5027,6 +5021,15 @@ function _macroBarColor(macro, consumed, target, goal) {
   return "var(--color-accent)";
 }
 
+function toggleNutritionNote(noteId, btn) {
+  const note = document.getElementById(noteId);
+  if (!note) return;
+  const opening = note.hasAttribute("hidden");
+  if (opening) note.removeAttribute("hidden");
+  else note.setAttribute("hidden", "");
+  if (btn) btn.setAttribute("aria-expanded", opening ? "true" : "false");
+}
+
 function _macroOverNote(macro, goal) {
   if (macro === "protein") return "Above target — fine for athletes; supports muscle recovery.";
   if (macro === "carbs")   return "Above target — extra fuel for training days.";
@@ -5073,11 +5076,23 @@ function renderNutritionProgressBars(dateStr) {
     const pct    = Math.min(rawPct, 100);
     const color  = _macroBarColor(key, consumed, target, goal);
     const noteText = rawPct > 100 ? _macroOverNote(key, goal) : "";
-    const noteHtml = noteText ? `<div class="nutrition-progress-note">${escHtml(noteText)}</div>` : "";
+    // Over-target notes are surfaced via a small "!" affordance next to
+    // the macro label rather than always-on body text — color alone has
+    // no actionable context, but a wall of "Above target — fine" lines
+    // crowds the panel when several macros run high. Tap reveals the
+    // explanation. The button + collapsible body share a date+macro id
+    // so multiple panels on the same screen don't collide.
+    const noteId = `nutri-note-${dateStr}-${key}`;
+    const noteBtn = noteText
+      ? `<button type="button" class="nutrition-progress-info" aria-label="Why is this over target?" aria-expanded="false" aria-controls="${noteId}" onclick="toggleNutritionNote('${noteId}', this)">!</button>`
+      : "";
+    const noteHtml = noteText
+      ? `<div class="nutrition-progress-note" id="${noteId}" hidden>${escHtml(noteText)}</div>`
+      : "";
     html += `
       <div class="nutrition-progress-row">
         <div class="nutrition-progress-header">
-          <span class="nutrition-progress-name">${label}</span>
+          <span class="nutrition-progress-name">${label}${noteBtn}</span>
           <span class="nutrition-progress-values">${Math.round(consumed)}${unit} <span class="nutrition-progress-sep">/ ${Math.round(target)}${unit}</span></span>
         </div>
         <div class="nutrition-progress-track">

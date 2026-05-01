@@ -3712,11 +3712,39 @@ input.completion-ex-name:focus {
   transition: width 0.4s ease;
 }
 
+.nutrition-progress-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.nutrition-progress-info:hover,
+.nutrition-progress-info[aria-expanded="true"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
 .nutrition-progress-note {
   font-size: 0.72rem;
   line-height: 1.35;
   color: var(--color-text-muted);
-  margin-top: 4px;
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: var(--color-surface);
+  border-radius: 6px;
 }
 
 .nutrition-meal-list {
