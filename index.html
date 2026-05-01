@@ -427,58 +427,117 @@
                 </div>
               </div>
 
-              <!-- Import a Plan -->
+              <!-- Import a Plan. Multi-step UI per COACH_SHEET_IMPORT_SPEC:
+                   step 0 = drop zone + paste textarea (both paths coexist),
+                   step 1 = sheet picker (skipped for single-sheet files),
+                   step 2 = date range picker, step 3 = review placeholder.
+                   Steps are hidden via [hidden] and toggled by
+                   coach-sheet-import.js's state machine. -->
               <div id="import-plan-body" style="display:none">
-                <!-- Coach-sheet upload (Phase A). Lives above the textarea per
-                     COACH_SHEET_IMPORT_SPEC §A1; both paths coexist. The
-                     drop zone and textarea soft-disable each other based on
-                     which has user input. -->
-                <div class="csi-dropzone" id="csi-dropzone" tabindex="0" role="button" aria-label="Upload coach sheet">
-                  <div class="csi-dropzone-idle">
-                    <svg class="csi-dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                      <polyline points="17 8 12 3 7 8"/>
-                      <line x1="12" y1="3" x2="12" y2="15"/>
-                    </svg>
-                    <div class="csi-dropzone-title">Drop your coach's sheet here, or click to browse</div>
-                    <div class="csi-dropzone-sub">Supported: Excel (.xlsx), CSV. Max 10 MB.</div>
-                  </div>
-                  <div class="csi-dropzone-staged" id="csi-dropzone-staged" hidden>
-                    <div class="csi-staged-info">
-                      <div class="csi-staged-name" id="csi-staged-name"></div>
-                      <div class="csi-staged-size" id="csi-staged-size"></div>
+
+                <!-- Step 0 — drop zone + paste textarea -->
+                <div class="csi-step" id="csi-step-0">
+                  <div class="csi-dropzone" id="csi-dropzone" tabindex="0" role="button" aria-label="Upload coach sheet">
+                    <div class="csi-dropzone-idle">
+                      <svg class="csi-dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                      </svg>
+                      <div class="csi-dropzone-title">Drop your coach's sheet here, or click to browse</div>
+                      <div class="csi-dropzone-sub">Supported: Excel (.xlsx), CSV. Max 10 MB.</div>
                     </div>
-                    <button type="button" class="csi-staged-remove" id="csi-staged-remove" aria-label="Remove file">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
+                    <div class="csi-dropzone-staged" id="csi-dropzone-staged" hidden>
+                      <div class="csi-staged-info">
+                        <div class="csi-staged-name" id="csi-staged-name"></div>
+                        <div class="csi-staged-size" id="csi-staged-size"></div>
+                      </div>
+                      <button type="button" class="csi-staged-remove" id="csi-staged-remove" aria-label="Remove file">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    </div>
+                    <input type="file" id="csi-file-input" accept=".xlsx,.csv" style="display:none" />
                   </div>
-                  <input type="file" id="csi-file-input" accept=".xlsx,.csv" style="display:none" />
-                </div>
-                <div id="csi-status" class="csi-status" hidden></div>
-                <div class="csi-divider"><span>or paste plan text</span></div>
-                <p class="hint">Paste a training plan from a coach, spreadsheet, email, or anywhere else.</p>
-                <div class="form-grid">
+                  <div id="csi-status" class="csi-status" hidden></div>
+                  <div class="csi-divider"><span>or paste plan text</span></div>
+                  <p class="hint">Paste a training plan from a coach, spreadsheet, email, or anywhere else.</p>
+                  <div class="form-grid">
+                    <div class="form-row">
+                      <label for="import-start-date">Start Date</label>
+                      <input type="date" id="import-start-date" />
+                    </div>
+                    <div class="form-row">
+                      <label for="import-repeat">Repeat</label>
+                      <select id="import-repeat">
+                        <option value="1">Once (no repeat)</option>
+                        <option value="2">2 cycles</option>
+                        <option value="4">4 cycles</option>
+                        <option value="8">8 cycles</option>
+                      </select>
+                    </div>
+                  </div>
                   <div class="form-row">
-                    <label for="import-start-date">Start Date</label>
-                    <input type="date" id="import-start-date" />
+                    <label for="import-plan-text">Training Plan</label>
+                    <textarea id="import-plan-text" rows="8" placeholder="Paste your training plan here...&#10;&#10;Example:&#10;Week 1&#10;Mon: 4mi easy run&#10;Tue: Bench 4x8 @ 155, Squat 4x6 @ 225&#10;Wed: Rest&#10;Thu: 6x800m intervals @ 5K pace&#10;Fri: Pull day - rows, pullups, curls&#10;Sat: Long run 8mi&#10;Sun: Rest" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>
                   </div>
-                  <div class="form-row">
-                    <label for="import-repeat">Repeat</label>
-                    <select id="import-repeat">
-                      <option value="1">Once (no repeat)</option>
-                      <option value="2">2 cycles</option>
-                      <option value="4">4 cycles</option>
-                      <option value="8">8 cycles</option>
-                    </select>
+                  <button class="btn-primary" style="width:100%" onclick="importTrainingPlan()">Import Plan</button>
+                  <p id="import-plan-msg" class="save-msg"></p>
+                  <div id="import-plan-preview" style="display:none"></div>
+                </div>
+
+                <!-- Step 1 — sheet picker (multi-sheet workbooks only) -->
+                <div class="csi-step" id="csi-step-1" hidden>
+                  <div class="csi-step-header">
+                    <div class="csi-step-title">Pick the sheets to import</div>
+                    <div class="csi-step-sub" id="csi-step-1-sub">We'll parse the calendar tab(s) you select.</div>
+                  </div>
+                  <div id="csi-sheet-picker"></div>
+                  <div class="csi-step-actions">
+                    <button type="button" class="btn-secondary" data-csi-back>Back</button>
+                    <button type="button" class="btn-primary" id="csi-step-1-continue">Continue</button>
                   </div>
                 </div>
-                <div class="form-row">
-                  <label for="import-plan-text">Training Plan</label>
-                  <textarea id="import-plan-text" rows="8" placeholder="Paste your training plan here...&#10;&#10;Example:&#10;Week 1&#10;Mon: 4mi easy run&#10;Tue: Bench 4x8 @ 155, Squat 4x6 @ 225&#10;Wed: Rest&#10;Thu: 6x800m intervals @ 5K pace&#10;Fri: Pull day - rows, pullups, curls&#10;Sat: Long run 8mi&#10;Sun: Rest" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>
+
+                <!-- Step 2 — date range picker -->
+                <div class="csi-step" id="csi-step-2" hidden>
+                  <div class="csi-step-header">
+                    <div class="csi-step-title">Pick your date range</div>
+                    <div class="csi-step-sub">We'll import workouts that fall inside this range. Default is the next 4 weeks.</div>
+                  </div>
+                  <div class="form-grid">
+                    <div class="form-row">
+                      <label for="csi-range-from">From</label>
+                      <input type="date" id="csi-range-from" />
+                    </div>
+                    <div class="form-row">
+                      <label for="csi-range-to">To</label>
+                      <input type="date" id="csi-range-to" />
+                    </div>
+                  </div>
+                  <div class="csi-range-preview" id="csi-range-preview"></div>
+                  <div class="csi-step-actions">
+                    <button type="button" class="btn-secondary" data-csi-back>Back</button>
+                    <button type="button" class="btn-primary" id="csi-step-2-continue">Continue to review</button>
+                  </div>
                 </div>
-                <button class="btn-primary" style="width:100%" onclick="importTrainingPlan()">Import Plan</button>
-                <p id="import-plan-msg" class="save-msg"></p>
-                <div id="import-plan-preview" style="display:none"></div>
+
+                <!-- Step 3 — review placeholder (Slice 3 ships the real screen) -->
+                <div class="csi-step" id="csi-step-3" hidden>
+                  <div class="csi-step-header">
+                    <div class="csi-step-title">Review your imported plan</div>
+                    <div class="csi-step-sub" id="csi-step-3-sub"></div>
+                  </div>
+                  <div class="csi-review-placeholder">
+                    <p><strong>Slice 3 ships the full review screen</strong> — per-workout list, conflict indicators, athlete-profile beta toggle, and the atomic "Import all" button.</p>
+                    <p>For Slice 2, this confirms the upload → sheet picker → date range pipe is working end-to-end. Selected metadata:</p>
+                    <pre id="csi-review-debug" class="csi-debug"></pre>
+                  </div>
+                  <div class="csi-step-actions">
+                    <button type="button" class="btn-secondary" data-csi-back>Back</button>
+                    <button type="button" class="btn-primary" id="csi-step-3-done">Done</button>
+                  </div>
+                </div>
+
               </div>
               <p id="custom-plan-msg" class="save-msg"></p>
             </div>

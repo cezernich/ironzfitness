@@ -77,6 +77,9 @@
         textarea.placeholder = textarea.dataset.csiOriginalPlaceholder || "";
       }
       _setStatus("");
+      // Clearing the staged file invalidates step 1+ state — bounce
+      // back to step 0 so the user sees the drop zone again.
+      if (_currentStep !== 0) _resetToStep0();
     }
   }
 
@@ -166,12 +169,15 @@
       filename: safeFilename,
       fileSize: file.size,
       response: parseData,
+      // Filled in by the picker / range steps as the user progresses.
+      selectedSheets: [],
+      dateRange: null,
     };
     window.__coachSheetImportLast = _lastImport; // surface for console smoke test
 
     const sheetCount = Array.isArray(parseData?.sheets) ? parseData.sheets.length : 0;
     _setStatus(
-      `File staged (${sheetCount} sheet${sheetCount === 1 ? "" : "s"} detected). Slice 2 ships the picker — see console for details.`,
+      `File staged (${sheetCount} sheet${sheetCount === 1 ? "" : "s"} detected).`,
       "success",
     );
     console.log("[CoachSheetImport] upload + parse-stub OK:", {
@@ -180,6 +186,17 @@
       sheets: parseData?.sheets,
       isStub: parseData?.is_stub,
     });
+
+    // Auto-advance: skip the picker when there's only one sheet (per
+    // spec §A2). Otherwise pre-select calendar + strength sheets and
+    // show the picker.
+    const sheets = Array.isArray(parseData?.sheets) ? parseData.sheets : [];
+    if (sheets.length <= 1) {
+      _lastImport.selectedSheets = sheets.map(s => s.name);
+      _goToStep(2);
+    } else {
+      _goToStep(1);
+    }
 
     return _lastImport;
   }
@@ -257,25 +274,340 @@
     });
   }
 
+  // ── Multi-step state machine ─────────────────────────────────────────────
+  //
+  // Steps in import-plan-body:
+  //   0 = drop zone + paste textarea
+  //   1 = sheet picker (multi-sheet workbooks only)
+  //   2 = date range picker
+  //   3 = review (Slice 3 builds the real screen; Slice 2 ships a placeholder)
+  //
+  // _currentStep tracks the visible one. Only one is visible at a time.
+  // _stepHistory enables Back navigation that respects the auto-skip
+  // (single-sheet files skip step 1 forward and back).
+
+  let _currentStep = 0;
+  const _stepHistory = [];
+
+  function _showStep(n) {
+    [0, 1, 2, 3].forEach(i => {
+      const el = $(`csi-step-${i}`);
+      if (!el) return;
+      if (i === n) el.removeAttribute("hidden");
+      else el.setAttribute("hidden", "");
+    });
+    _currentStep = n;
+  }
+
+  function _goToStep(n) {
+    if (_currentStep !== n) _stepHistory.push(_currentStep);
+    if (n === 1) _renderSheetPicker();
+    if (n === 2) _initRangeStep();
+    if (n === 3) _renderReviewPlaceholder();
+    _showStep(n);
+  }
+
+  function _goBack() {
+    const prev = _stepHistory.length ? _stepHistory.pop() : 0;
+    if (prev === 1) _renderSheetPicker();
+    if (prev === 2) _initRangeStep();
+    _showStep(prev);
+  }
+
+  function _resetToStep0() {
+    _stepHistory.length = 0;
+    _showStep(0);
+  }
+
+  // ── Step 1 — sheet picker ────────────────────────────────────────────────
+
+  function _renderSheetPicker() {
+    const host = $("csi-sheet-picker");
+    if (!host || !_lastImport) return;
+    const sheets = _lastImport.response?.sheets || [];
+
+    // Pre-selection rules (spec §A2):
+    //   - Calendar sheets that auto_detected → checked
+    //   - Strength library → checked (we extract it)
+    //   - Athlete profile / Resources → unchecked, beta tag
+    //   - Fueling → disabled "Coming soon"
+    if (!_lastImport.selectedSheets || !_lastImport.selectedSheets.length) {
+      _lastImport.selectedSheets = sheets
+        .filter(s => !s.disabled && (s.role === "calendar" || s.role === "strength_library") && s.auto_detected)
+        .map(s => s.name);
+    }
+    const selected = new Set(_lastImport.selectedSheets);
+
+    const calendarSheets = sheets.filter(s => s.role === "calendar");
+    const otherSheets    = sheets.filter(s => s.role !== "calendar");
+
+    const sub = $("csi-step-1-sub");
+    if (sub) {
+      sub.textContent = `We found ${sheets.length} sheets in your file. Calendar tabs are pre-selected.`;
+    }
+
+    const renderRow = (s) => {
+      const isChecked = selected.has(s.name);
+      const isDisabled = !!s.disabled;
+      const range = s.date_range
+        ? `${s.date_range.from} → ${s.date_range.to}${s.week_count ? ` · ${s.week_count} wk` : ""}`
+        : "";
+      const roleLabel = ({
+        calendar:         "Calendar",
+        strength_library: "Strength templates",
+        athlete_profile:  "Athlete profile (beta)",
+        fueling:          "Fueling",
+      })[s.role] || s.role;
+      const disabledNote = isDisabled
+        ? `<div class="csi-sheet-row-disabled-note">${_esc(s.disabled_reason || "Coming soon")}</div>`
+        : "";
+
+      return `
+        <label class="csi-sheet-row${isDisabled ? " csi-sheet-row--disabled" : ""}">
+          <input type="checkbox" data-csi-sheet="${_esc(s.name)}" ${isChecked && !isDisabled ? "checked" : ""} ${isDisabled ? "disabled" : ""} />
+          <div class="csi-sheet-row-meta">
+            <div class="csi-sheet-row-name">${_esc(s.name)}</div>
+            <div class="csi-sheet-row-role">${roleLabel}${range ? ` · ${range}` : ""}</div>
+            ${disabledNote}
+          </div>
+        </label>`;
+    };
+
+    host.innerHTML = `
+      ${calendarSheets.length ? `
+        <div class="csi-sheet-section-label">Calendar sheets</div>
+        ${calendarSheets.map(renderRow).join("")}
+      ` : ""}
+      ${otherSheets.length ? `
+        <div class="csi-sheet-section-label">Other sheets</div>
+        ${otherSheets.map(renderRow).join("")}
+      ` : ""}
+    `;
+
+    host.querySelectorAll('input[type="checkbox"][data-csi-sheet]').forEach(cb => {
+      cb.addEventListener("change", () => {
+        const name = cb.getAttribute("data-csi-sheet");
+        const set = new Set(_lastImport.selectedSheets || []);
+        if (cb.checked) set.add(name);
+        else set.delete(name);
+        _lastImport.selectedSheets = Array.from(set);
+        _updateContinueEnabled();
+      });
+    });
+    _updateContinueEnabled();
+  }
+
+  function _updateContinueEnabled() {
+    const btn = $("csi-step-1-continue");
+    if (!btn || !_lastImport) return;
+    btn.disabled = !(_lastImport.selectedSheets && _lastImport.selectedSheets.length);
+  }
+
+  // ── Step 2 — date range picker ────────────────────────────────────────────
+
+  function _todayISO() { return new Date().toISOString().slice(0, 10); }
+
+  function _addDays(dateStr, n) {
+    const d = new Date(dateStr + "T00:00:00");
+    d.setDate(d.getDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function _diffDays(a, b) {
+    const da = new Date(a + "T00:00:00");
+    const db = new Date(b + "T00:00:00");
+    return Math.round((db - da) / 86400000);
+  }
+
+  function _initRangeStep() {
+    const fromEl = $("csi-range-from");
+    const toEl   = $("csi-range-to");
+    if (!fromEl || !toEl || !_lastImport) return;
+
+    // Constrain pickers to dates that exist in the source file (per spec
+    // §A3) — union of selected calendar sheets' date_range bounds.
+    const sheets = _lastImport.response?.sheets || [];
+    const selectedCalendarRanges = sheets
+      .filter(s => (_lastImport.selectedSheets || []).includes(s.name) && s.date_range)
+      .map(s => s.date_range);
+
+    let fileMin = null, fileMax = null;
+    selectedCalendarRanges.forEach(r => {
+      if (!fileMin || r.from < fileMin) fileMin = r.from;
+      if (!fileMax || r.to > fileMax)   fileMax = r.to;
+    });
+
+    // Default range = today → today+28d, intersected with the file's
+    // bounds if the file doesn't cover today.
+    const today = _todayISO();
+    let defaultFrom = today;
+    let defaultTo   = _addDays(today, 28);
+    if (fileMin && fileMax) {
+      // If today is before the file starts, anchor to fileMin.
+      if (defaultFrom < fileMin) defaultFrom = fileMin;
+      // If 4-week window pushes past file end, clamp.
+      if (defaultTo > fileMax) defaultTo = fileMax;
+      if (defaultFrom > defaultTo) defaultFrom = fileMin;
+    }
+
+    if (!_lastImport.dateRange) {
+      _lastImport.dateRange = { from: defaultFrom, to: defaultTo };
+    }
+
+    fromEl.value = _lastImport.dateRange.from;
+    toEl.value   = _lastImport.dateRange.to;
+    if (fileMin) { fromEl.min = fileMin; toEl.min = fileMin; }
+    if (fileMax) { fromEl.max = fileMax; toEl.max = fileMax; }
+
+    // Wire change handlers idempotently — _initRangeStep can be called
+    // multiple times if the user backs out and returns.
+    if (!fromEl.dataset.csiBound) {
+      fromEl.addEventListener("change", _onRangeChange);
+      fromEl.dataset.csiBound = "1";
+    }
+    if (!toEl.dataset.csiBound) {
+      toEl.addEventListener("change", _onRangeChange);
+      toEl.dataset.csiBound = "1";
+    }
+    _renderRangePreview();
+  }
+
+  function _onRangeChange() {
+    const fromEl = $("csi-range-from");
+    const toEl   = $("csi-range-to");
+    if (!fromEl || !toEl || !_lastImport) return;
+    let from = fromEl.value;
+    let to   = toEl.value;
+    // If user dragged from past to, swap so the range is sane.
+    if (from && to && from > to) { const t = from; from = to; to = t; fromEl.value = from; toEl.value = to; }
+    _lastImport.dateRange = { from, to };
+    _renderRangePreview();
+  }
+
+  function _renderRangePreview() {
+    const host = $("csi-range-preview");
+    const continueBtn = $("csi-step-2-continue");
+    if (!host || !_lastImport) return;
+    const range = _lastImport.dateRange || {};
+    if (!range.from || !range.to) {
+      host.innerHTML = `<span class="csi-range-warn">Pick a start and end date.</span>`;
+      if (continueBtn) continueBtn.disabled = true;
+      return;
+    }
+    const days = _diffDays(range.from, range.to);
+    if (days < 0) {
+      host.innerHTML = `<span class="csi-range-warn">End date can't be before start.</span>`;
+      if (continueBtn) continueBtn.disabled = true;
+      return;
+    }
+    if (days > 365) {
+      host.innerHTML = `<span class="csi-range-warn">Plans longer than 12 months can't be imported in one go. Re-import to extend later.</span>`;
+      if (continueBtn) continueBtn.disabled = true;
+      return;
+    }
+
+    // Workout count estimate. Phase B does the real count via parser;
+    // Phase A estimates from sheet metadata (week_count for each
+    // selected calendar sheet whose date_range overlaps the user's
+    // range, scaled by overlap fraction × 5 workouts/week).
+    const sheets = _lastImport.response?.sheets || [];
+    const sel = new Set(_lastImport.selectedSheets || []);
+    let weekEstimate = 0;
+    sheets.forEach(s => {
+      if (!sel.has(s.name)) return;
+      if (s.role !== "calendar" || !s.date_range) return;
+      const overlapFrom = s.date_range.from > range.from ? s.date_range.from : range.from;
+      const overlapTo   = s.date_range.to   < range.to   ? s.date_range.to   : range.to;
+      const overlapDays = _diffDays(overlapFrom, overlapTo) + 1;
+      if (overlapDays <= 0) return;
+      const sheetDays = _diffDays(s.date_range.from, s.date_range.to) + 1;
+      const fraction = sheetDays > 0 ? Math.min(1, overlapDays / sheetDays) : 0;
+      weekEstimate += (s.week_count || 0) * fraction;
+    });
+    const workoutEstimate = Math.round(weekEstimate * 5);
+
+    const weeks = Math.ceil((days + 1) / 7);
+    host.innerHTML = `
+      <div class="csi-range-stats">
+        <div><strong>${weeks}</strong> week${weeks === 1 ? "" : "s"} selected</div>
+        <div>~<strong>${workoutEstimate || 0}</strong> workouts in range</div>
+      </div>
+      <div class="csi-range-note">Phase B will return the exact count when the parser ships.</div>`;
+    if (continueBtn) continueBtn.disabled = false;
+  }
+
+  // ── Step 3 — review placeholder (Slice 3 ships the full screen) ────────
+
+  function _renderReviewPlaceholder() {
+    if (!_lastImport) return;
+    const subEl = $("csi-step-3-sub");
+    if (subEl) {
+      const r = _lastImport.dateRange || {};
+      subEl.textContent = `From ${_lastImport.filename} · ${r.from || "?"} → ${r.to || "?"}`;
+    }
+    const debug = $("csi-review-debug");
+    if (debug) {
+      debug.textContent = JSON.stringify({
+        import_id: _lastImport.importId,
+        storage_path: _lastImport.storagePath,
+        selected_sheets: _lastImport.selectedSheets,
+        date_range: _lastImport.dateRange,
+      }, null, 2);
+    }
+  }
+
+  function _esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    })[c]);
+  }
+
+  function _initStepNav() {
+    document.querySelectorAll('[data-csi-back]').forEach(btn => {
+      btn.addEventListener("click", _goBack);
+    });
+    const cont1 = $("csi-step-1-continue");
+    if (cont1) cont1.addEventListener("click", () => _goToStep(2));
+    const cont2 = $("csi-step-2-continue");
+    if (cont2) cont2.addEventListener("click", () => _goToStep(3));
+    const done3 = $("csi-step-3-done");
+    if (done3) done3.addEventListener("click", () => {
+      // Slice 3 will commit the import; for now just dump state and
+      // close the modal if there's a known close hook. Otherwise reset
+      // to step 0 so the next attempt starts clean.
+      console.log("[CoachSheetImport] (Slice 2) Done pressed with state:", _lastImport);
+      _resetToStep0();
+      _setStaged(null);
+      // If the modal exposes a close, call it. Soft-fallback: leave
+      // the modal open at step 0 — user can hit the modal's own close.
+      if (typeof closeCustomPlanModal === "function") {
+        try { closeCustomPlanModal(); } catch {}
+      }
+    });
+  }
+
   // Defer init until DOM is parsed and Supabase is ready. The modal
   // itself is hidden behind a tab switch so the dropzone DOM exists at
   // load time even if it isn't visible yet.
   function _ready() {
+    const init = () => { _initDropzone(); _initStepNav(); };
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", _initDropzone, { once: true });
+      document.addEventListener("DOMContentLoaded", init, { once: true });
     } else {
-      _initDropzone();
+      init();
     }
   }
 
   _ready();
 
-  // Export for Slices 2–3 + console testing.
+  // Export for Slice 3 + console testing.
   window.CoachSheetImport = {
     getStaged: () => _stagedFile,
     getLastImport: () => _lastImport,
+    getCurrentStep: () => _currentStep,
+    goToStep: _goToStep,
+    resetToStep0: _resetToStep0,
     _setStatus,
-    _setStaged,
     _validateFile,
   };
 })();
