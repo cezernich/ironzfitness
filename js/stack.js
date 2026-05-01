@@ -369,6 +369,14 @@
 
   // ── Public surface ────────────────────────────────────────────────────────
 
+  // Debug-only: force the toast + ring pulse to play, bypassing the
+  // pillar check and the once-per-day gate. Doesn't mark celebrated
+  // and doesn't touch history. Useful from the console:
+  //   StackUX.previewCelebration()
+  function previewCelebration() {
+    _runCelebrationAnimation();
+  }
+
   window.StackUX = {
     getPillarState,
     isStackHit,
@@ -378,5 +386,6 @@
     maybeFireStackCelebration,
     buildStackPill,
     toggleStackHistory,
+    previewCelebration,
   };
 })();
