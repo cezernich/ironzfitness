@@ -63,21 +63,34 @@ function _renderCameraPanel() {
 }
 
 function _startNativeOrFallback() {
-  // Prefer @zxing/browser, used directly. Earlier versions wrapped
-  // html5-qrcode around it (which in turn wraps zxing), but the
-  // wrapper's iOS Safari path silently failed to decode well-framed
-  // UPC-A barcodes — driving zxing ourselves is the smaller surface
-  // area and stops the camera lifecycle from being a black box.
-  // The UMD bundle exposes the API at window.ZXingBrowser (not ZXing —
-  // checked the wrong global before, which made every iOS Safari path
-  // fall through to "Barcode scanning is not supported on this device"
-  // since iOS has no BarcodeDetector to back-stop the missing wrapper).
-  if (typeof window !== "undefined" && window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader) {
+  // Diagnostic: surface why each fallback didn't fire instead of
+  // silently bouncing through to "not supported on this device".
+  // Multiple "fix" attempts have been wrong because the actual
+  // failure mode wasn't visible to the user; this prints to the
+  // status line so the user can read out what the page actually
+  // sees on their device.
+  const dx = {
+    hasZXingBrowser: !!(typeof window !== "undefined" && window.ZXingBrowser),
+    hasReader:       !!(typeof window !== "undefined" && window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader),
+    hasZXingLibrary: !!(typeof window !== "undefined" && window.ZXing),
+    hasNativeAPI:    typeof window !== "undefined" && "BarcodeDetector" in window,
+    ua:              (typeof navigator !== "undefined" && navigator.userAgent) || "?",
+  };
+  console.log("[barcode] env check:", dx);
+
+  if (dx.hasReader) {
     _startFallbackScan();
-  } else if ("BarcodeDetector" in window) {
+  } else if (dx.hasNativeAPI) {
+    console.log("[barcode] falling back to native BarcodeDetector");
     _startNativeScan();
   } else {
-    _showCameraError("Barcode scanning is not supported on this device.");
+    // Print what's missing so the user can screenshot the message
+    // and we can stop guessing.
+    const missing = [];
+    if (!dx.hasZXingBrowser)  missing.push("window.ZXingBrowser");
+    if (dx.hasZXingBrowser && !dx.hasReader) missing.push("ZXingBrowser.BrowserMultiFormatReader");
+    if (!dx.hasNativeAPI)     missing.push("BarcodeDetector");
+    _showCameraError("Scanner couldn't load. Missing: " + missing.join(", "));
   }
 }
 
