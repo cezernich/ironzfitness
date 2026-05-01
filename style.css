@@ -11391,7 +11391,16 @@ input.completion-ex-name:focus {
   letter-spacing: 0.05em;
 }
 .move-session-modal-date {
+  /* box-sizing keeps padding INSIDE the 100% width — iOS Safari was
+     adding 24px of horizontal padding on top of width:100%, pushing
+     the input past the modal's content box and clipping the date
+     text on the right. */
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
   width: 100%;
+  max-width: 100%;
   padding: 10px 12px;
   font-size: 1rem;
   border: 1px solid var(--color-border);
@@ -11399,6 +11408,7 @@ input.completion-ex-name:focus {
   background: var(--color-surface-2);
   color: var(--color-text);
   margin-bottom: 18px;
+  font-family: inherit;
 }
 .move-session-modal-actions {
   display: flex;
