@@ -43,8 +43,10 @@
   <script src="js/seed-reference-data.js"></script>
   <!-- Barcode scanning — @zxing/browser (used directly, not via the
        html5-qrcode wrapper, because the wrapper's iOS path silently
-       failed to decode sharp UPC-A codes even with full retries). -->
-  <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js"></script>
+       failed to decode sharp UPC-A codes even with full retries).
+       UMD exposes the API at window.ZXing (not @zxing/browser's npm
+       export name); the bundle path is the package's "unpkg" field. -->
+  <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/zxing-browser.min.js"></script>
 </head>
 <body>
 

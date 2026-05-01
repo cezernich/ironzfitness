@@ -68,7 +68,8 @@ function _startNativeOrFallback() {
   // wrapper's iOS Safari path silently failed to decode well-framed
   // UPC-A barcodes — driving zxing ourselves is the smaller surface
   // area and stops the camera lifecycle from being a black box.
-  if (typeof ZXingBrowser !== "undefined") {
+  // The UMD bundle exposes the API at window.ZXing.
+  if (typeof window !== "undefined" && window.ZXing && window.ZXing.BrowserMultiFormatReader) {
     _startFallbackScan();
   } else if ("BarcodeDetector" in window) {
     _startNativeScan();
@@ -237,7 +238,7 @@ async function _startFallbackScan() {
   // first hit). No format restriction — the multi-format reader
   // tries every supported decoder, which on a UPC-A image lights
   // up the UPC-A path immediately.
-  const reader2 = new ZXingBrowser.BrowserMultiFormatReader();
+  const reader2 = new window.ZXing.BrowserMultiFormatReader();
   _scanState = { native: false, zxing: reader2, stream, video, _hintTimer: null };
   _setStatus("Point camera at a barcode");
 
