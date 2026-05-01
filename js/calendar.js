@@ -5014,10 +5014,20 @@ function _macroBarColor(macro, consumed, target, goal) {
     return "var(--color-amber)";
   }
   // Calories — goal-branched.
+  // Severe under-fueling on any goal is amber (low-energy-availability).
   if (pct < 70) return "var(--color-amber)";
-  if (pct >= 85 && pct <= 110) return "var(--color-success)";
-  if (goal === "fat_loss" && pct > 120) return "var(--color-danger)";
-  if (goal === "muscle_gain" || goal === "race_performance") return "var(--color-success)";
+  // For fat loss, hitting the prescribed deficit IS the goal — so the
+  // 85–110% band reads green, red kicks in only when meaningfully over,
+  // and "between" stays neutral.
+  if (goal === "fat_loss") {
+    if (pct > 120) return "var(--color-danger)";
+    if (pct >= 85 && pct <= 110) return "var(--color-success)";
+    return "var(--color-accent)";
+  }
+  // muscle_gain / race_performance / general_fitness: under target is
+  // under-fueled, never green. Green requires actually reaching the
+  // target (or exceeding it — surplus is intentional for those goals).
+  if (pct >= 100) return "var(--color-success)";
   return "var(--color-accent)";
 }
 
