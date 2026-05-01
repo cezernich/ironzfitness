@@ -7911,13 +7911,42 @@ input.completion-ex-name:focus {
   overflow: hidden;
 }
 
-/* Html5Qrcode generates four child divs inside .qr-shaded-region to
-   form a letterbox mask outside the qrbox. The default fill is nearly
-   transparent — bump it to a noticeable but not-overpowering 35% so
-   the scan area visibly pops without big black bands top/bottom. */
-#barcode-reader .qr-shaded-region > div {
-  background: rgba(0, 0, 0, 0.35) !important;
+/* Custom qrbox overlay drawn on top of the @zxing/browser <video>:
+   • a centered transparent rectangle with corner brackets (visual
+     framing for the user)
+   • the surrounding area dimmed via a single box-shadow trick so the
+     scan target visually pops — replaces html5-qrcode's
+     .qr-shaded-region which we no longer use. */
+.barcode-zxing-mask,
+.barcode-zxing-brackets {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  /* Sized to roughly match the qrbox the previous implementation
+     drew — ~80% wide × ~55% tall — so brackets land on the visible
+     barcode area when the user holds it 6-10 in. away. */
+  width: 82%;
+  height: 55%;
+  pointer-events: none;
 }
+.barcode-zxing-mask {
+  /* "Cutout" effect: this rect is invisible, but its enormous box-
+     shadow extends 9999px outward darkening the rest of the
+     viewport. */
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+  border-radius: 6px;
+}
+.barcode-zxing-brackets .bz-corner {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border: 3px solid #fff;
+}
+.barcode-zxing-brackets .bz-tl { top: -2px;    left: -2px;    border-right: none; border-bottom: none; border-top-left-radius: 4px; }
+.barcode-zxing-brackets .bz-tr { top: -2px;    right: -2px;   border-left:  none; border-bottom: none; border-top-right-radius: 4px; }
+.barcode-zxing-brackets .bz-bl { bottom: -2px; left: -2px;    border-right: none; border-top:    none; border-bottom-left-radius: 4px; }
+.barcode-zxing-brackets .bz-br { bottom: -2px; right: -2px;   border-left:  none; border-top:    none; border-bottom-right-radius: 4px; }
 
 /* Animated scanning line inside the camera viewport */
 .barcode-scan-line {

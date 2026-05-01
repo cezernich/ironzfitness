@@ -41,7 +41,10 @@
   <script src="js/supabase-init.js"></script>
   <script src="js/db.js"></script>
   <script src="js/seed-reference-data.js"></script>
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <!-- Barcode scanning — @zxing/browser (used directly, not via the
+       html5-qrcode wrapper, because the wrapper's iOS path silently
+       failed to decode sharp UPC-A codes even with full retries). -->
+  <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js"></script>
 </head>
 <body>
 

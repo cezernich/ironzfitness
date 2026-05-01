@@ -63,11 +63,12 @@ function _renderCameraPanel() {
 }
 
 function _startNativeOrFallback() {
-  // Prefer Html5Qrcode: iOS Safari exposes BarcodeDetector but detection
-  // silently fails on every frame, leaving the camera running with no
-  // scans. The CDN-loaded Html5Qrcode library is slower but actually works
-  // cross-browser.
-  if (typeof Html5Qrcode !== "undefined") {
+  // Prefer @zxing/browser, used directly. Earlier versions wrapped
+  // html5-qrcode around it (which in turn wraps zxing), but the
+  // wrapper's iOS Safari path silently failed to decode well-framed
+  // UPC-A barcodes — driving zxing ourselves is the smaller surface
+  // area and stops the camera lifecycle from being a black box.
+  if (typeof ZXingBrowser !== "undefined") {
     _startFallbackScan();
   } else if ("BarcodeDetector" in window) {
     _startNativeScan();
@@ -162,102 +163,107 @@ async function _startNativeScan() {
   _scanState.rafId = requestAnimationFrame(tick);
 }
 
-/* ─── Html5Qrcode fallback path ────────────────────────────────────────── */
+/* ─── @zxing/browser scan path ────────────────────────────────────────── */
+// Drives the underlying ZXing decoder directly. Replaces the previous
+// html5-qrcode wrapper, whose iOS Safari path silently failed to
+// decode well-framed UPC-A barcodes despite a sharp, centered image.
+// Going direct lets us own the camera lifecycle, qrbox overlay, and
+// error surfaces explicitly.
 
-function _startFallbackScan() {
+async function _startFallbackScan() {
   const reader = document.getElementById("barcode-reader");
-  if (reader) reader.innerHTML = '<div class="barcode-scan-line" aria-hidden="true"></div>';
-  const html5 = new Html5Qrcode("barcode-reader");
-  _scanState = { native: false, html5 };
-  // Don't restrict formats. Earlier versions narrowed to EAN/UPC only
-  // because grocery barcodes are overwhelmingly those formats — but a
-  // sharp UPC-A perfectly framed in the qrbox was still failing to
-  // decode (see user reports 2026-04-30). Letting Html5Qrcode try the
-  // full format set gives ZXing more decoder paths to attempt and has
-  // not produced false-positive reads in testing.
-  const supportedFormats = undefined;
-  // qrbox sized as a percentage of the viewport so it scales with the
-  // modal width — the old fixed 250x150 was too small on iPhone Pro
-  // Max devices and clipped barcodes that visibly fit between the
-  // brackets. Higher fps gives more chances per second to lock onto
-  // a slightly-angled or moving barcode (the user reported scanning
-  // a barcode pointed straight at it that never resolved).
-  const config = {
-    // 24 fps gives the scanner ~50% more chances per second to lock onto
-    // a slightly-angled or moving barcode without being so high that we
-    // burn battery for nothing — 15 fps was leaving real barcodes
-    // un-decoded long enough that users gave up and tapped the manual
-    // entry link.
-    fps: 24,
-    qrbox: function (viewfinderWidth, viewfinderHeight) {
-      // Wide rectangle that fills most of the visible viewfinder: 92%
-      // of the width, 70% of the height. The viewfinder is forced to
-      // a small fixed-height container via CSS (#barcode-reader has
-      // max-height + the video uses object-fit:cover), so this gives
-      // a thick scan area with only thin dim bands top/bottom.
-      return {
-        width:  Math.floor(viewfinderWidth  * 0.92),
-        height: Math.floor(viewfinderHeight * 0.70),
-      };
+  if (!reader) return;
+
+  // Build the inner DOM ourselves: a <video> for the live preview, a
+  // qrbox bracket overlay (for visual framing), and the optional
+  // dim-around-scan-area mask the user asked for. Replaces whatever
+  // a previous run left behind.
+  reader.innerHTML = `
+    <video id="barcode-zxing-video" playsinline muted autoplay
+      style="width:100%;height:100%;object-fit:cover;display:block;background:#000;border-radius:8px"></video>
+    <div class="barcode-zxing-mask" aria-hidden="true"></div>
+    <div class="barcode-zxing-brackets" aria-hidden="true">
+      <span class="bz-corner bz-tl"></span>
+      <span class="bz-corner bz-tr"></span>
+      <span class="bz-corner bz-bl"></span>
+      <span class="bz-corner bz-br"></span>
+    </div>
+  `;
+
+  const video = document.getElementById("barcode-zxing-video");
+
+  // Camera constraints — same intent as before: prefer 1080p + the
+  // back camera + continuous autofocus so a barcode held 6-10 inches
+  // from the lens stays in focus. iOS honors the `ideal` hints and
+  // downgrades silently if it can't.
+  const constraints = {
+    audio: false,
+    video: {
+      facingMode: { ideal: "environment" },
+      width:  { ideal: 1920 },
+      height: { ideal: 1080 },
+      frameRate: { ideal: 30 },
+      advanced: [{ focusMode: "continuous" }],
     },
-    // aspectRatio is effectively a no-op on iOS Safari (the camera
-    // stream is natively portrait and Html5Qrcode can't rotate it),
-    // so size is controlled via CSS on #barcode-reader instead.
-    // Keep this off. iOS Safari exposes BarcodeDetector but its detect()
-    // silently returns nothing on every frame (see _startNativeOrFallback
-    // comment) — turning the flag on routes Html5Qrcode through that
-    // same broken native detector instead of ZXing, so a perfectly
-    // sharp, centered UPC never decodes. ZXing is slower but it
-    // actually works.
-    experimentalFeatures: { useBarCodeDetectorIfSupported: false },
   };
-  if (supportedFormats) config.formatsToSupport = supportedFormats;
-  // Detailed camera constraints — iPhones default to a low resolution
-  // unless asked for more, which leaves a barcode shot from arms-length
-  // (the only distance where the lens actually focuses) too few pixels
-  // to decode. Asking for 1920×1080 ideal pulls more detail through and
-  // continuous autofocus keeps a closely-held package from staying
-  // permanently blurry. Falls back gracefully if the device can't honor
-  // the constraint — `ideal` doesn't fail, just downgrades. (User
-  // feedback 2026-04-29: scanner couldn't lock — too blurry up close,
-  // too small from arms-length.)
-  // Html5Qrcode's first arg must be a string camera id OR a single-key
-  // object — the full MediaTrackConstraints goes in config.videoConstraints.
-  config.videoConstraints = {
-    facingMode: "environment",
-    width:  { ideal: 1920 },
-    height: { ideal: 1080 },
-    frameRate: { ideal: 30 },
-    advanced: [
-      { focusMode: "continuous" },
-      { focusDistance: { min: 0.05 } },
-    ],
-  };
-  html5.start(
-    { facingMode: "environment" },
-    config,
-    function (decodedText) {
-      if (!_scanState || !_scanState.html5) return;
-      if (_scanState._hintTimer) { clearTimeout(_scanState._hintTimer); _scanState._hintTimer = null; }
-      _scanState.html5.stop().catch(() => {});
-      _scanState = null;
-      _handleDetected(decodedText);
-    },
-    function () { /* frame-level scan errors are ignored — normal until a code is found */ }
-  ).then(function () {
-    _setStatus("Point camera at a barcode");
-    // After 8 seconds with no successful decode, swap the status text
-    // to something the user can act on. iPhone main lenses don't focus
-    // closer than ~10cm, so the most common failure mode is "too close
-    // → blurry" — leading the user to back up usually unsticks it.
-    if (_scanState) {
-      _scanState._hintTimer = setTimeout(() => {
-        if (_scanState && _scanState.html5) {
-          _setStatus("Trouble locking? Hold ~6–10 in. away with steady hands.");
-        }
-      }, 8000);
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+  } catch (err) {
+    if (err && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError" || err.name === "SecurityError")) {
+      _showPermissionDenied();
+    } else {
+      _showCameraError((err && err.message) || "Camera unavailable");
     }
-  }).catch(function (err) {
+    return;
+  }
+
+  video.srcObject = stream;
+  // iOS Safari sometimes rejects the first play() — retry once.
+  try { await video.play(); }
+  catch {
+    try { await new Promise(r => setTimeout(r, 50)); await video.play(); }
+    catch (err2) {
+      _showCameraError("Couldn't start the camera preview. Try closing other camera apps and reopening.");
+      stream.getTracks().forEach(t => { try { t.stop(); } catch {} });
+      return;
+    }
+  }
+
+  // Build the ZXing reader. decodeFromVideoElement runs internal
+  // requestAnimationFrame loop, scans every frame, and fires the
+  // callback exactly once per decoded code (we stop ourselves on
+  // first hit). No format restriction — the multi-format reader
+  // tries every supported decoder, which on a UPC-A image lights
+  // up the UPC-A path immediately.
+  const reader2 = new ZXingBrowser.BrowserMultiFormatReader();
+  _scanState = { native: false, zxing: reader2, stream, video, _hintTimer: null };
+  _setStatus("Point camera at a barcode");
+
+  // After 8s with no decode, soften the message — iPhone main
+  // lenses don't focus closer than ~10cm, so "too close → blurry"
+  // is the dominant failure mode and "back up" usually unsticks it.
+  _scanState._hintTimer = setTimeout(() => {
+    if (_scanState && _scanState.zxing) {
+      _setStatus("Trouble locking? Hold ~6–10 in. away with steady hands.");
+    }
+  }, 8000);
+
+  reader2.decodeFromVideoElement(video, (result, err, controls) => {
+    if (!_scanState || !_scanState.zxing) return;
+    if (result) {
+      // Decoded. Tear down before handing off so the camera light
+      // turns off immediately.
+      if (_scanState._hintTimer) { clearTimeout(_scanState._hintTimer); _scanState._hintTimer = null; }
+      try { controls && controls.stop(); } catch {}
+      try { stream.getTracks().forEach(t => t.stop()); } catch {}
+      _scanState = null;
+      _handleDetected(result.getText());
+    }
+    // Frame-level decode errors are normal (NotFoundException every
+    // frame until the barcode is found) — swallow silently.
+  }).catch(err => {
     const msg = String(err || "");
     if (/permission|notallowed|denied/i.test(msg)) {
       _showPermissionDenied();
@@ -275,11 +281,13 @@ function _stopCameraStream() {
   if (_scanState._hintTimer) {
     try { clearTimeout(_scanState._hintTimer); } catch {}
   }
+  if (_scanState.zxing) {
+    // BrowserMultiFormatReader exposes reset() to tear down its
+    // internal scan loop; safe to call regardless of state.
+    try { _scanState.zxing.reset(); } catch {}
+  }
   if (_scanState.stream && _scanState.stream.getTracks) {
     _scanState.stream.getTracks().forEach(t => { try { t.stop(); } catch {} });
-  }
-  if (_scanState.html5) {
-    try { _scanState.html5.stop().catch(() => {}); } catch {}
   }
   _scanState = null;
 }
