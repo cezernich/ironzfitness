@@ -1,0 +1,4026 @@
+{
+  "athlete_profile": {
+    "races": [
+      {
+        "name": "Boston Marathon",
+        "date": "4/20/26",
+        "priority": "MAIN",
+        "distance": "Marathon",
+        "a_goal": "3:20:00",
+        "a_goal_pace_per_mi": "7:26",
+        "course_type": "Semi-Hilly"
+      },
+      {
+        "name": "Chicago Marathon",
+        "date": "10/11/26",
+        "priority": "MAIN",
+        "distance": "Marathon",
+        "a_goal": null,
+        "a_goal_pace_per_mi": "0:00",
+        "course_type": "Flat"
+      },
+      {
+        "name": "London 2027",
+        "date": "2027.0",
+        "priority": "MAYBE",
+        "distance": "",
+        "a_goal": null,
+        "a_goal_pace_per_mi": null,
+        "course_type": ""
+      }
+    ],
+    "prs": [
+      {
+        "distance": "Marathon",
+        "time": "3:26",
+        "race": "Toronto Marathon",
+        "pace_per_mi": "7:51",
+        "date": null
+      },
+      {
+        "distance": "Half",
+        "time": "1:38:53",
+        "race": "NY United Half",
+        "pace_per_mi": "7:32",
+        "date": "3/19/23"
+      }
+    ]
+  },
+  "header_rules": {
+    "January": {
+      "warmup_distance_mi": 1.5,
+      "cooldown_distance_mi": 1.5,
+      "month_goal": "This month we will practice heavier speed work for 5k/10k and hills specifcially for Boston! Stay on top of the little things and let me now if anything hurts or is too hard ASAP!! This will build our base for the next few months!"
+    },
+    "February": {
+      "warmup_distance_mi": 1.5,
+      "cooldown_distance_mi": 1.5,
+      "month_goal": "This month we will work on hills a bit and continue to build speed! Stay on top of strength and recovery so we can have a big month before Tokyo!"
+    },
+    "March": {
+      "warmup_distance_mi": 1.5,
+      "cooldown_distance_mi": 1.5,
+      "month_goal": "Let's keep building fitness! I'll avoid harder workouts in Japan so you can enjoy the vacation! If we can get in hard workouts great! If not then don't stress it!"
+    },
+    "April": {
+      "warmup_distance_mi": 1.5,
+      "cooldown_distance_mi": 1.5,
+      "month_goal": "This month we will finalize feeling solid at race pace! Recover well post travel and focus on the little things as we execute these last few weeks!"
+    },
+    "May": {
+      "warmup_distance_mi": 1.5,
+      "cooldown_distance_mi": 1.5,
+      "month_goal": "Let's rebuild gently and focus on some speed work until we start marathon training for Chicago! Let's take this time to get some more strength in as well!"
+    },
+    "June": {
+      "warmup_distance_mi": 1.5,
+      "cooldown_distance_mi": 1.5,
+      "month_goal": null
+    },
+    "July": {
+      "warmup_distance_mi": 1.5,
+      "cooldown_distance_mi": 1.5,
+      "month_goal": null
+    },
+    "August": {
+      "warmup_distance_mi": 1.5,
+      "cooldown_distance_mi": 1.5,
+      "month_goal": null
+    },
+    "September": {
+      "warmup_distance_mi": 1.5,
+      "cooldown_distance_mi": 1.5,
+      "month_goal": null
+    },
+    "October": {
+      "warmup_distance_mi": 1.5,
+      "cooldown_distance_mi": 1.5,
+      "month_goal": null
+    },
+    "November": {
+      "warmup_distance_mi": 1.5,
+      "cooldown_distance_mi": 1.5,
+      "month_goal": null
+    },
+    "December": {
+      "warmup_distance_mi": 1.5,
+      "cooldown_distance_mi": 1.5,
+      "month_goal": null
+    }
+  },
+  "running_workouts": [
+    {
+      "date": "2026-01-05",
+      "day_of_week": "Mon",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "January",
+      "source_cell": "B8"
+    },
+    {
+      "date": "2026-01-06",
+      "day_of_week": "Tue",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 8.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 5.0,
+          "intervals": [
+            {
+              "reps": 10,
+              "distance": 800,
+              "unit": "m"
+            }
+          ],
+          "target_pace_per_mi": "3:40-3:30"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "10x800m w/ 90s walk rest btwn\n\n1st 4: 3:40-3:30\n2nd 4: 3:30-3:20\n3rd 2: 3:20-3:10",
+      "source_sheet": "January",
+      "source_cell": "D8"
+    },
+    {
+      "date": "2026-01-07",
+      "day_of_week": "Wed",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "January",
+      "source_cell": "F8"
+    },
+    {
+      "date": "2026-01-08",
+      "day_of_week": "Thu",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 3.0,
+          "intervals": [
+            {
+              "distance_mi": 3,
+              "type": "hills",
+              "rep_sec_low": 60,
+              "rep_sec_high": 90
+            }
+          ],
+          "target_pace_per_mi": "6:50-6:30"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "HILLS\n\n3 miles of 60-90s UP @ 90% w/ walk/jog back down\n\nTREADMILL (3-4% incline): 60-90s UP @ 6:50-6:30 pace w/ 90s standing rest btwn",
+      "source_sheet": "January",
+      "source_cell": "H8"
+    },
+    {
+      "date": "2026-01-09",
+      "day_of_week": "Fri",
+      "week_label": "BUILD WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "January",
+      "source_cell": "J8"
+    },
+    {
+      "date": "2026-01-10",
+      "day_of_week": "Sat",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 12.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 9.0,
+          "intensity": "easy_long"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Long Run\n\nIF YOU FEEL GOOD: Close last 2-3 miles sub 8:00",
+      "source_sheet": "January",
+      "source_cell": "L8"
+    },
+    {
+      "date": "2026-01-11",
+      "day_of_week": "Sun",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "January",
+      "source_cell": "N8"
+    },
+    {
+      "date": "2026-01-12",
+      "day_of_week": "Mon",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "January",
+      "source_cell": "B20"
+    },
+    {
+      "date": "2026-01-13",
+      "day_of_week": "Tue",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 8.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 5.0,
+          "intervals": [
+            {
+              "total_distance_mi": 5,
+              "on_min": 2,
+              "off_min": 2,
+              "type": "fartlek"
+            }
+          ],
+          "target_pace_per_mi": "6:40-6:20"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "5 miles of 2 min ON and 2 min EASY\n\nON Pace: 6:40-6:20",
+      "source_sheet": "January",
+      "source_cell": "D20"
+    },
+    {
+      "date": "2026-01-14",
+      "day_of_week": "Wed",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "January",
+      "source_cell": "F20"
+    },
+    {
+      "date": "2026-01-15",
+      "day_of_week": "Thu",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intervals": [
+            {
+              "reps": 8,
+              "distance": 400,
+              "unit": "m"
+            }
+          ],
+          "target_pace_per_mi": "1:30-1:25"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "8x400m @ 1:30-1:25 w/ 2 min walk rest btwn\n\nFOCUS ON SPEED AND PLENTY OF REST",
+      "source_sheet": "January",
+      "source_cell": "H20"
+    },
+    {
+      "date": "2026-01-16",
+      "day_of_week": "Fri",
+      "week_label": "BUILD WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "January",
+      "source_cell": "J20"
+    },
+    {
+      "date": "2026-01-17",
+      "day_of_week": "Sat",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 13.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 10.0,
+          "intensity": "easy_long"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Long Run\n\nIF YOU FEEL GOOD: Close last 2-3 miles sub 8:00",
+      "source_sheet": "January",
+      "source_cell": "L20"
+    },
+    {
+      "date": "2026-01-18",
+      "day_of_week": "Sun",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "January",
+      "source_cell": "N20"
+    },
+    {
+      "date": "2026-01-19",
+      "day_of_week": "Mon",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 3.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 0.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "January",
+      "source_cell": "B32"
+    },
+    {
+      "date": "2026-01-20",
+      "day_of_week": "Tue",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 8.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 5.0,
+          "intervals": [
+            {
+              "reps": 5,
+              "distance": 1,
+              "unit": "mile"
+            }
+          ],
+          "target_pace_per_mi": "7:10"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "5x1 mile @ 7:10, 7:00, 6:50, 6:40, 6:30 w/ 2-3 min walk/jog btwn",
+      "source_sheet": "January",
+      "source_cell": "D32"
+    },
+    {
+      "date": "2026-01-21",
+      "day_of_week": "Wed",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 3.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 0.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "January",
+      "source_cell": "F32"
+    },
+    {
+      "date": "2026-01-22",
+      "day_of_week": "Thu",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 3.0,
+          "intervals": [
+            {
+              "distance_mi": 3,
+              "type": "hills",
+              "rep_sec_low": 60,
+              "rep_sec_high": 90
+            }
+          ],
+          "target_pace_per_mi": "6:50-6:30"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "HILLS\n\n3 miles of 60-90s UP @ 90% w/ walk/jog back down\n\nTREADMILL (3-4% incline): 60-90s UP @ 6:50-6:30 pace w/ 90s standing rest btwn",
+      "source_sheet": "January",
+      "source_cell": "H32"
+    },
+    {
+      "date": "2026-01-23",
+      "day_of_week": "Fri",
+      "week_label": "REST WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "January",
+      "source_cell": "J32"
+    },
+    {
+      "date": "2026-01-24",
+      "day_of_week": "Sat",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 10.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 7.0,
+          "intensity": "easy_long"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "SUPER EASY LONG RUN",
+      "source_sheet": "January",
+      "source_cell": "L32"
+    },
+    {
+      "date": "2026-01-25",
+      "day_of_week": "Sun",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 3.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 0.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "January",
+      "source_cell": "N32"
+    },
+    {
+      "date": "2026-01-26",
+      "day_of_week": "Mon",
+      "week_label": "PUSH WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "January",
+      "source_cell": "B44"
+    },
+    {
+      "date": "2026-01-27",
+      "day_of_week": "Tue",
+      "week_label": "PUSH WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 9.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 6.0,
+          "intervals": [
+            {
+              "total_distance_mi": 6,
+              "on_min": 3,
+              "off_min": 2,
+              "type": "fartlek"
+            }
+          ],
+          "target_pace_per_mi": "6:40-6:20"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "6 miles of 3 min ON and 2 min EASY\n\nON Pace: 6:40-6:20\n\nCOMPARE TO 2 WEEKS AGO",
+      "source_sheet": "January",
+      "source_cell": "D44"
+    },
+    {
+      "date": "2026-01-28",
+      "day_of_week": "Wed",
+      "week_label": "PUSH WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "January",
+      "source_cell": "F44"
+    },
+    {
+      "date": "2026-01-29",
+      "day_of_week": "Thu",
+      "week_label": "PUSH WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intervals": [
+            {
+              "reps": 12,
+              "distance": 400,
+              "unit": "m"
+            }
+          ],
+          "target_pace_per_mi": "1:30-1:25"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "10-12x400m @ 1:30-1:25 w/ 2 min walk rest btwn\n\nCOMPARE TO 2 WEEKS AGO",
+      "source_sheet": "January",
+      "source_cell": "H44"
+    },
+    {
+      "date": "2026-01-30",
+      "day_of_week": "Fri",
+      "week_label": "PUSH WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "January",
+      "source_cell": "J44"
+    },
+    {
+      "date": "2026-01-31",
+      "day_of_week": "Sat",
+      "week_label": "PUSH WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 15.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 12.0,
+          "intensity": "easy_long"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Long Run\n\nIF YOU FEEL GOOD: Close last 2-3 miles sub 8:00",
+      "source_sheet": "January",
+      "source_cell": "L44"
+    },
+    {
+      "date": "2026-02-01",
+      "day_of_week": "Sun",
+      "week_label": "PUSH WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "January",
+      "source_cell": "N44"
+    },
+    {
+      "date": "2026-02-02",
+      "day_of_week": "Mon",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "February",
+      "source_cell": "B8"
+    },
+    {
+      "date": "2026-02-03",
+      "day_of_week": "Tue",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 9.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 6.0,
+          "intervals": [
+            {
+              "reps": 6,
+              "distance": 1,
+              "unit": "mile"
+            }
+          ],
+          "target_pace_per_mi": "6:50-6:40"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "6x1 mile @ 7:10, 7:00, 6:50, 6:50-6:40, 6:40, 6:30 w/ 2-3 min walk/jog btwn\n\nCOMPARE TO LAST MONTH",
+      "source_sheet": "February",
+      "source_cell": "D8"
+    },
+    {
+      "date": "2026-02-04",
+      "day_of_week": "Wed",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "February",
+      "source_cell": "F8"
+    },
+    {
+      "date": "2026-02-05",
+      "day_of_week": "Thu",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 3.0,
+          "intervals": [
+            {
+              "distance_mi": 3,
+              "type": "hills",
+              "rep_sec_low": 60,
+              "rep_sec_high": 90
+            }
+          ],
+          "target_pace_per_mi": "6:50-6:30"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "HILLS\n\n3 miles of 60-90s UP @ 90% w/ walk/jog back down\n\nTREADMILL (3-4% incline): 60-90s UP @ 6:50-6:30 pace w/ 90s standing rest btwn",
+      "source_sheet": "February",
+      "source_cell": "H8"
+    },
+    {
+      "date": "2026-02-06",
+      "day_of_week": "Fri",
+      "week_label": "BUILD WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "February",
+      "source_cell": "J8"
+    },
+    {
+      "date": "2026-02-07",
+      "day_of_week": "Sat",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 16.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 13.0,
+          "intensity": "easy_long"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Long Run\n\n15-17 MILES\n\nIF YOU FEEL GOOD: Close last 2-5 miles sub 8:00",
+      "source_sheet": "February",
+      "source_cell": "L8"
+    },
+    {
+      "date": "2026-02-08",
+      "day_of_week": "Sun",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "February",
+      "source_cell": "N8"
+    },
+    {
+      "date": "2026-02-09",
+      "day_of_week": "Mon",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "February",
+      "source_cell": "B20"
+    },
+    {
+      "date": "2026-02-10",
+      "day_of_week": "Tue",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 10.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 6.0,
+          "intervals": [
+            {
+              "reps": 3,
+              "distance": 2,
+              "unit": "miles"
+            }
+          ],
+          "target_pace_per_mi": "7:30-7:20"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "3x2 miles w/ 800m jog rest btwn\n\nReps:\n7:30-7:20\n7:20-7:10\n7:10-7:00",
+      "source_sheet": "February",
+      "source_cell": "D20"
+    },
+    {
+      "date": "2026-02-11",
+      "day_of_week": "Wed",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "February",
+      "source_cell": "F20"
+    },
+    {
+      "date": "2026-02-12",
+      "day_of_week": "Thu",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 3.0,
+          "intervals": [
+            {
+              "distance_mi": 3,
+              "type": "hills",
+              "rep_sec_low": 60,
+              "rep_sec_high": 90
+            }
+          ],
+          "target_pace_per_mi": "6:50-6:30"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "HILLS\n\n3 miles of 60-90s UP @ 90% w/ walk/jog back down\n\nTREADMILL (3-4% incline): 60-90s UP @ 6:50-6:30 pace w/ 90s standing rest btwn",
+      "source_sheet": "February",
+      "source_cell": "H20"
+    },
+    {
+      "date": "2026-02-13",
+      "day_of_week": "Fri",
+      "week_label": "BUILD WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "February",
+      "source_cell": "J20"
+    },
+    {
+      "date": "2026-02-14",
+      "day_of_week": "Sat",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 17.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 14.0,
+          "intensity": "easy_long"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Long Run\n\n16-18 MILES\n\nIF YOU FEEL GOOD: Close last 2-5 miles sub 8:00",
+      "source_sheet": "February",
+      "source_cell": "L20"
+    },
+    {
+      "date": "2026-02-15",
+      "day_of_week": "Sun",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "February",
+      "source_cell": "N20"
+    },
+    {
+      "date": "2026-02-16",
+      "day_of_week": "Mon",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 3.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 0.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "February",
+      "source_cell": "B32"
+    },
+    {
+      "date": "2026-02-17",
+      "day_of_week": "Tue",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 10.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 7.0,
+          "target_pace_per_mi": "7:40-7:30"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "5 miles @ 7:40-7:30 CONTROLLED; 1 mile EASY; 1 mile @ sub 7:10 PUSHING",
+      "source_sheet": "February",
+      "source_cell": "D32"
+    },
+    {
+      "date": "2026-02-18",
+      "day_of_week": "Wed",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 3.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 0.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "February",
+      "source_cell": "F32"
+    },
+    {
+      "date": "2026-02-19",
+      "day_of_week": "Thu",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 3.0,
+          "intervals": [
+            {
+              "distance_mi": 3,
+              "type": "hills",
+              "rep_sec_low": 60,
+              "rep_sec_high": 90
+            }
+          ],
+          "target_pace_per_mi": "6:50-6:30"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "HILLS\n\n3 miles of 60-90s UP @ 90% w/ walk/jog back down\n\nTREADMILL (3-4% incline): 60-90s UP @ 6:50-6:30 pace w/ 90s standing rest btwn",
+      "source_sheet": "February",
+      "source_cell": "H32"
+    },
+    {
+      "date": "2026-02-20",
+      "day_of_week": "Fri",
+      "week_label": "REST WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "February",
+      "source_cell": "J32"
+    },
+    {
+      "date": "2026-02-21",
+      "day_of_week": "Sat",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 12.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 9.0,
+          "intensity": "easy_long"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "SUPER EASY LONG RUN",
+      "source_sheet": "February",
+      "source_cell": "L32"
+    },
+    {
+      "date": "2026-02-22",
+      "day_of_week": "Sun",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 3.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 0.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "February",
+      "source_cell": "N32"
+    },
+    {
+      "date": "2026-02-23",
+      "day_of_week": "Mon",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "February",
+      "source_cell": "B44"
+    },
+    {
+      "date": "2026-02-24",
+      "day_of_week": "Tue",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 16.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 10.0,
+          "intervals": [
+            {
+              "reps": 10,
+              "distance": 1,
+              "unit": "mile"
+            }
+          ],
+          "target_pace_per_mi": "7:25-7:15"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "LONG RUN WORKOUT\n\n3 miles easy; 10x1 mile @ 7:25-7:15 w/ 2:30 jog rest btwn; 1-2 miles easy\n\nPRACTICE FUELING",
+      "source_sheet": "February",
+      "source_cell": "D44"
+    },
+    {
+      "date": "2026-02-25",
+      "day_of_week": "Wed",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "February",
+      "source_cell": "F44"
+    },
+    {
+      "date": "2026-02-26",
+      "day_of_week": "Thu",
+      "week_label": "BUILD WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "February",
+      "source_cell": "H44"
+    },
+    {
+      "date": "2026-02-27",
+      "day_of_week": "Fri",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "February",
+      "source_cell": "J44"
+    },
+    {
+      "date": "2026-02-28",
+      "day_of_week": "Sat",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 8.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 5.0,
+          "intervals": [
+            {
+              "total_distance_mi": 5,
+              "on_min": 2,
+              "off_min": 2,
+              "type": "fartlek"
+            }
+          ],
+          "target_pace_per_mi": "7:30-6:45"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "5 miles of 2 min ON and 2 min EASY\n\nON Pace: 7:30-6:45\n\nLIGHT WORKOUT WORK DOWN GENTLY\n\nOR EASY RUN 3-5 MILES",
+      "source_sheet": "February",
+      "source_cell": "L44"
+    },
+    {
+      "date": "2026-03-01",
+      "day_of_week": "Sun",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "February",
+      "source_cell": "N44"
+    },
+    {
+      "date": "2026-03-02",
+      "day_of_week": "Mon",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "March",
+      "source_cell": "B8"
+    },
+    {
+      "date": "2026-03-03",
+      "day_of_week": "Tue",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 8.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 5.0,
+          "intervals": [
+            {
+              "reps": 10,
+              "distance": 800,
+              "unit": "m"
+            }
+          ],
+          "target_pace_per_mi": "3:20-3:10"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "10x800m @ 3:20-3:10 w/ 1:30-2:00 walk/jog rest btwn",
+      "source_sheet": "March",
+      "source_cell": "D8"
+    },
+    {
+      "date": "2026-03-04",
+      "day_of_week": "Wed",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "March",
+      "source_cell": "F8"
+    },
+    {
+      "date": "2026-03-05",
+      "day_of_week": "Thu",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 3.0,
+          "intervals": [
+            {
+              "distance_mi": 3,
+              "type": "hills",
+              "rep_sec_low": 60,
+              "rep_sec_high": 90
+            }
+          ],
+          "target_pace_per_mi": "6:50-6:30"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "HILLS\n\n3 miles of 60-90s UP @ 90% w/ walk/jog back down\n\nTREADMILL (3-4% incline): 60-90s UP @ 6:50-6:30 pace w/ 90s standing rest btwn",
+      "source_sheet": "March",
+      "source_cell": "H8"
+    },
+    {
+      "date": "2026-03-06",
+      "day_of_week": "Fri",
+      "week_label": "BUILD WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "March",
+      "source_cell": "J8"
+    },
+    {
+      "date": "2026-03-07",
+      "day_of_week": "Sat",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 18.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 15.0,
+          "target_pace_per_mi": "8:20-7:50"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "STEADY STATE LONG RUN\n\n4 miles easy; 10 miles @ 8:20-7:50; 4 miles easy\n\nPRACTICE FUELING",
+      "source_sheet": "March",
+      "source_cell": "L8"
+    },
+    {
+      "date": "2026-03-08",
+      "day_of_week": "Sun",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "March",
+      "source_cell": "N8"
+    },
+    {
+      "date": "2026-03-09",
+      "day_of_week": "Mon",
+      "week_label": "PUSH WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "March",
+      "source_cell": "B20"
+    },
+    {
+      "date": "2026-03-10",
+      "day_of_week": "Tue",
+      "week_label": "PUSH WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 19.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 16.0,
+          "target_pace_per_mi": "7:40-7:30"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "LONG RUN WORKOUT\n\n3 miles easy; 4, 3, 2, 1 mile w/ 1 mile FLOAT btwn; 3 miles easy\n\n4 mile: 7:40-7:30\n3 mile: 7:30-7:20\n2 mile: 7:20-7:10\n1 mile: 7:10-7:00\nFLOAT:  8:50-8:20\n\nPRACTICE FUELING\n\nCAN MOVE TO WEDNESDAY",
+      "source_sheet": "March",
+      "source_cell": "D20"
+    },
+    {
+      "date": "2026-03-11",
+      "day_of_week": "Wed",
+      "week_label": "PUSH WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "March",
+      "source_cell": "F20"
+    },
+    {
+      "date": "2026-03-12",
+      "day_of_week": "Thu",
+      "week_label": "PUSH WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "March",
+      "source_cell": "H20"
+    },
+    {
+      "date": "2026-03-13",
+      "day_of_week": "Fri",
+      "week_label": "PUSH WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "March",
+      "source_cell": "J20"
+    },
+    {
+      "date": "2026-03-14",
+      "day_of_week": "Sat",
+      "week_label": "PUSH WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 9.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 5.0,
+          "target_pace_per_mi": "7:15-6:45"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "5 miles of 3 min ON and 2 min FLOAT\n\nON Pace: 7:15-6:45\nFLOAT: 8:15-7:45\n\nOPTIONAL",
+      "source_sheet": "March",
+      "source_cell": "L20"
+    },
+    {
+      "date": "2026-03-15",
+      "day_of_week": "Sun",
+      "week_label": "PUSH WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "March",
+      "source_cell": "N20"
+    },
+    {
+      "date": "2026-03-16",
+      "day_of_week": "Mon",
+      "week_label": "TRAVEL/ LIMITED WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "3-5 Miles Easy Run\n\nOR Day Off",
+      "source_sheet": "March",
+      "source_cell": "B32"
+    },
+    {
+      "date": "2026-03-17",
+      "day_of_week": "Tue",
+      "week_label": "TRAVEL/ LIMITED WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 8.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 5.0,
+          "intervals": [
+            {
+              "reps": 5,
+              "distance": 1,
+              "unit": "mile"
+            }
+          ],
+          "target_pace_per_mi": "7:00-6:30"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "5x1 mile @ 7:00-6:30 w/ 2 min walk/jog rest",
+      "source_sheet": "March",
+      "source_cell": "D32"
+    },
+    {
+      "date": "2026-03-18",
+      "day_of_week": "Wed",
+      "week_label": "TRAVEL/ LIMITED WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "3-5 Miles Easy Run\n\nOR Day Off",
+      "source_sheet": "March",
+      "source_cell": "F32"
+    },
+    {
+      "date": "2026-03-19",
+      "day_of_week": "Thu",
+      "week_label": "TRAVEL/ LIMITED WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 3.0,
+          "intervals": [
+            {
+              "reps": 12,
+              "distance": 200,
+              "unit": "m"
+            }
+          ]
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "12x200m @ 50-45s w/ 200m jog rest btwn\n\nOR\n\n3 miles of 1 min FAST and 90s JOG",
+      "source_sheet": "March",
+      "source_cell": "H32"
+    },
+    {
+      "date": "2026-03-20",
+      "day_of_week": "Fri",
+      "week_label": "TRAVEL/ LIMITED WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "March",
+      "source_cell": "J32"
+    },
+    {
+      "date": "2026-03-21",
+      "day_of_week": "Sat",
+      "week_label": "TRAVEL/ LIMITED WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 14.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 11.0,
+          "intensity": "easy_long"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Long Run\n\n8-14 MILES",
+      "source_sheet": "March",
+      "source_cell": "L32"
+    },
+    {
+      "date": "2026-03-22",
+      "day_of_week": "Sun",
+      "week_label": "TRAVEL/ LIMITED WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "March",
+      "source_cell": "N32"
+    },
+    {
+      "date": "2026-03-23",
+      "day_of_week": "Mon",
+      "week_label": "TRAVEL/ LIMITED WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "3-5 Miles Easy Run\n\nOR Day Off",
+      "source_sheet": "March",
+      "source_cell": "B44"
+    },
+    {
+      "date": "2026-03-24",
+      "day_of_week": "Tue",
+      "week_label": "TRAVEL/ LIMITED WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 8.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 5.0,
+          "intervals": [
+            {
+              "reps": 10,
+              "distance": 800,
+              "unit": "m"
+            }
+          ],
+          "target_pace_per_mi": "3:30-3:10"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "10x800m @ 3:30-3:10 w/ 90s walk/jog rest btwn",
+      "source_sheet": "March",
+      "source_cell": "D44"
+    },
+    {
+      "date": "2026-03-25",
+      "day_of_week": "Wed",
+      "week_label": "TRAVEL/ LIMITED WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "3-5 Miles Easy Run\n\nOR Day Off",
+      "source_sheet": "March",
+      "source_cell": "F44"
+    },
+    {
+      "date": "2026-03-26",
+      "day_of_week": "Thu",
+      "week_label": "TRAVEL/ LIMITED WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 3.0,
+          "intervals": [
+            {
+              "reps": 12,
+              "distance": 200,
+              "unit": "m"
+            }
+          ]
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "12x200m @ 50-45s w/ 200m jog rest btwn\n\nOR\n\n3 miles of 1 min FAST and 90s JOG",
+      "source_sheet": "March",
+      "source_cell": "H44"
+    },
+    {
+      "date": "2026-03-27",
+      "day_of_week": "Fri",
+      "week_label": "TRAVEL/ LIMITED WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "March",
+      "source_cell": "J44"
+    },
+    {
+      "date": "2026-03-28",
+      "day_of_week": "Sat",
+      "week_label": "TRAVEL/ LIMITED WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "March",
+      "source_cell": "L44"
+    },
+    {
+      "date": "2026-03-29",
+      "day_of_week": "Sun",
+      "week_label": "TRAVEL/ LIMITED WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 20.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 17.0,
+          "intensity": "easy_long"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Long Run\n\n16-20 miles!\n\nPRACTICE FUELING",
+      "source_sheet": "March",
+      "source_cell": "N44"
+    },
+    {
+      "date": "2026-03-30",
+      "day_of_week": "Mon",
+      "week_label": "PEAK WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\n10:00 down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "April",
+      "source_cell": "B8"
+    },
+    {
+      "date": "2026-03-31",
+      "day_of_week": "Tue",
+      "week_label": "PEAK WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 10.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 7.0,
+          "intervals": [
+            {
+              "reps": 7,
+              "distance": 1,
+              "unit": "mile"
+            }
+          ],
+          "target_pace_per_mi": "7:30-7:20"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "7x1 mile w/ 2 min jog rest btwn\n\n1st 3: 7:30-7:20\n2nd 2: 7:20-7:10\nLast 2: 7:10-7:00",
+      "source_sheet": "April",
+      "source_cell": "D8"
+    },
+    {
+      "date": "2026-04-01",
+      "day_of_week": "Wed",
+      "week_label": "PEAK WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\n10:00 down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "April",
+      "source_cell": "F8"
+    },
+    {
+      "date": "2026-04-02",
+      "day_of_week": "Thu",
+      "week_label": "PEAK WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 3.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 0.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run",
+      "source_sheet": "April",
+      "source_cell": "H8"
+    },
+    {
+      "date": "2026-04-03",
+      "day_of_week": "Fri",
+      "week_label": "PEAK WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 21.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 16.0,
+          "intervals": [
+            {
+              "reps": 4,
+              "distance": 4,
+              "unit": "mile"
+            }
+          ],
+          "target_pace_per_mi": "7:50-7:35"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "LAST LONG RUN WORKOUT\n\n3 miles easy; 4x4 mile w/ 800m jog rest btwn; 1 mile easy\n\n1st 4: 7:50-7:35\n2nd 4: 7:45-7:30\n3rd 4: 7:35-7:25\n 3rd 4: 7:20-7:10\n\nPRACTICE FUELING",
+      "source_sheet": "April",
+      "source_cell": "J8"
+    },
+    {
+      "date": "2026-04-04",
+      "day_of_week": "Sat",
+      "week_label": "PEAK WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "April",
+      "source_cell": "L8"
+    },
+    {
+      "date": "2026-04-05",
+      "day_of_week": "Sun",
+      "week_label": "PEAK WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\nStart around 10:00 and work down to 9:00 IF IT FEELS EASY\n\n4-6 miles",
+      "source_sheet": "April",
+      "source_cell": "N8"
+    },
+    {
+      "date": "2026-04-06",
+      "day_of_week": "Mon",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\n10:00 down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "April",
+      "source_cell": "B20"
+    },
+    {
+      "date": "2026-04-07",
+      "day_of_week": "Tue",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 11.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 8.0,
+          "target_pace_per_mi": "7:20-7:00"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "8 miles of 3 min ON and 2 min FLOAT\n\nON Pace: 7:20-7:00\nFLOAT: 8:20-8:00",
+      "source_sheet": "April",
+      "source_cell": "D20"
+    },
+    {
+      "date": "2026-04-08",
+      "day_of_week": "Wed",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\n10:00 down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "April",
+      "source_cell": "F20"
+    },
+    {
+      "date": "2026-04-09",
+      "day_of_week": "Thu",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 6.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 3.0,
+          "intervals": [
+            {
+              "distance_mi": 3,
+              "type": "hills",
+              "rep_sec_low": 60,
+              "rep_sec_high": 90
+            }
+          ],
+          "target_pace_per_mi": "6:50-6:30"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "HILLS\n\n3 miles of 60-90s UP @ 90% w/ walk/jog back down\n\nTREADMILL (3-4% incline): 60-90s UP @ 6:50-6:30 pace w/ 90s standing rest btwn",
+      "source_sheet": "April",
+      "source_cell": "H20"
+    },
+    {
+      "date": "2026-04-10",
+      "day_of_week": "Fri",
+      "week_label": "REST WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "April",
+      "source_cell": "J20"
+    },
+    {
+      "date": "2026-04-11",
+      "day_of_week": "Sat",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 12.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 9.0,
+          "intensity": "easy_long"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "SUPER EASY LONG RUN",
+      "source_sheet": "April",
+      "source_cell": "L20"
+    },
+    {
+      "date": "2026-04-12",
+      "day_of_week": "Sun",
+      "week_label": "REST WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "April",
+      "source_cell": "N20"
+    },
+    {
+      "date": "2026-04-13",
+      "day_of_week": "Mon",
+      "week_label": "RACE WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\n10:00 down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "April",
+      "source_cell": "B32"
+    },
+    {
+      "date": "2026-04-14",
+      "day_of_week": "Tue",
+      "week_label": "RACE WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 7.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 4.0,
+          "intervals": [
+            {
+              "reps": 8,
+              "distance": 800,
+              "unit": "m"
+            }
+          ],
+          "target_pace_per_mi": "3:40-3:35"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "8x800m @ 3:40-3:35 w/ 90s walk rest btwn\n\nLIGHT PACE WORK",
+      "source_sheet": "April",
+      "source_cell": "D32"
+    },
+    {
+      "date": "2026-04-15",
+      "day_of_week": "Wed",
+      "week_label": "RACE WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\n10:00 down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "April",
+      "source_cell": "F32"
+    },
+    {
+      "date": "2026-04-16",
+      "day_of_week": "Thu",
+      "week_label": "RACE WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\n10:00 down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "April",
+      "source_cell": "H32"
+    },
+    {
+      "date": "2026-04-17",
+      "day_of_week": "Fri",
+      "week_label": "RACE WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "April",
+      "source_cell": "J32"
+    },
+    {
+      "date": "2026-04-18",
+      "day_of_week": "Sat",
+      "week_label": "RACE WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 3.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 0.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run",
+      "source_sheet": "April",
+      "source_cell": "L32"
+    },
+    {
+      "date": "2026-04-19",
+      "day_of_week": "Sun",
+      "week_label": "RACE WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 3.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 0.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Shakeout Jog",
+      "source_sheet": "April",
+      "source_cell": "N32"
+    },
+    {
+      "date": "2026-04-20",
+      "day_of_week": "Mon",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 27.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 24.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "BOSTON MARATHON",
+      "source_sheet": "April",
+      "source_cell": "B44"
+    },
+    {
+      "date": "2026-04-21",
+      "day_of_week": "Tue",
+      "week_label": "REST WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "REST",
+      "source_sheet": "April",
+      "source_cell": "D44"
+    },
+    {
+      "date": "2026-04-22",
+      "day_of_week": "Wed",
+      "week_label": "REST WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "REST",
+      "source_sheet": "April",
+      "source_cell": "F44"
+    },
+    {
+      "date": "2026-04-23",
+      "day_of_week": "Thu",
+      "week_label": "REST WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "REST",
+      "source_sheet": "April",
+      "source_cell": "H44"
+    },
+    {
+      "date": "2026-04-24",
+      "day_of_week": "Fri",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "unknown",
+      "total_distance_mi": null,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": null
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "REST/ ACTIVE RECOVERY",
+      "source_sheet": "April",
+      "source_cell": "J44"
+    },
+    {
+      "date": "2026-04-25",
+      "day_of_week": "Sat",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "unknown",
+      "total_distance_mi": null,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": null
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "REST/ ACTIVE RECOVERY",
+      "source_sheet": "April",
+      "source_cell": "L44"
+    },
+    {
+      "date": "2026-04-26",
+      "day_of_week": "Sun",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "unknown",
+      "total_distance_mi": null,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": null
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "REST/ ACTIVE RECOVERY",
+      "source_sheet": "April",
+      "source_cell": "N44"
+    },
+    {
+      "date": "2026-04-27",
+      "day_of_week": "Mon",
+      "week_label": "RETURN WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\n10:00 down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "April",
+      "source_cell": "B56"
+    },
+    {
+      "date": "2026-04-28",
+      "day_of_week": "Tue",
+      "week_label": "RETURN WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 6.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 3.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run",
+      "source_sheet": "April",
+      "source_cell": "D56"
+    },
+    {
+      "date": "2026-04-29",
+      "day_of_week": "Wed",
+      "week_label": "RETURN WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\n10:00 down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "April",
+      "source_cell": "F56"
+    },
+    {
+      "date": "2026-04-30",
+      "day_of_week": "Thu",
+      "week_label": "RETURN WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 6.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 3.0,
+          "intervals": [
+            {
+              "reps": 12,
+              "distance": 400,
+              "unit": "m"
+            }
+          ],
+          "target_pace_per_mi": "1:45-1:35"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "12x400m @ 1:45-1:35 w/ 90s walk rest btwn",
+      "source_sheet": "April",
+      "source_cell": "H56"
+    },
+    {
+      "date": "2026-05-01",
+      "day_of_week": "Fri",
+      "week_label": "RETURN WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "April",
+      "source_cell": "J56"
+    },
+    {
+      "date": "2026-05-02",
+      "day_of_week": "Sat",
+      "week_label": "RETURN WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 10.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 7.0,
+          "intensity": "easy_long"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Long Run\n\n8-12 Miles",
+      "source_sheet": "April",
+      "source_cell": "L56"
+    },
+    {
+      "date": "2026-05-03",
+      "day_of_week": "Sun",
+      "week_label": "RETURN WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "April",
+      "source_cell": "N56"
+    },
+    {
+      "date": "2026-05-04",
+      "day_of_week": "Mon",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\n10:00 down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "May",
+      "source_cell": "B8"
+    },
+    {
+      "date": "2026-05-05",
+      "day_of_week": "Tue",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 8.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 5.0,
+          "intervals": [
+            {
+              "total_distance_mi": 5,
+              "on_min": 3,
+              "off_min": 2,
+              "type": "fartlek"
+            }
+          ],
+          "target_pace_per_mi": "8:15-7:15"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "5 miles of 3 min ON and 2 min EASY\n\nON Pace: 8:15-7:15\n\nEASE BACK INTO THINGS",
+      "source_sheet": "May",
+      "source_cell": "D8"
+    },
+    {
+      "date": "2026-05-06",
+      "day_of_week": "Wed",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\n10:00 down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "May",
+      "source_cell": "F8"
+    },
+    {
+      "date": "2026-05-07",
+      "day_of_week": "Thu",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 6.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 3.0,
+          "intervals": [
+            {
+              "distance_mi": 3,
+              "type": "hills",
+              "rep_sec_low": 60,
+              "rep_sec_high": 90
+            }
+          ],
+          "target_pace_per_mi": "6:50-6:30"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "HILLS\n\n3 miles of 60-90s UP @ 90% w/ walk/jog back down\n\nTREADMILL (3-4% incline): 60-90s UP @ 6:50-6:30 pace w/ 90s standing rest btwn",
+      "source_sheet": "May",
+      "source_cell": "H8"
+    },
+    {
+      "date": "2026-05-08",
+      "day_of_week": "Fri",
+      "week_label": "BUILD WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "May",
+      "source_cell": "J8"
+    },
+    {
+      "date": "2026-05-09",
+      "day_of_week": "Sat",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 11.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 8.0,
+          "intensity": "easy_long"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Long Run\n\n9-13 Miles",
+      "source_sheet": "May",
+      "source_cell": "L8"
+    },
+    {
+      "date": "2026-05-10",
+      "day_of_week": "Sun",
+      "week_label": "BUILD WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "May",
+      "source_cell": "N8"
+    },
+    {
+      "date": "2026-05-11",
+      "day_of_week": "Mon",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\n10:00 down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "May",
+      "source_cell": "B20"
+    },
+    {
+      "date": "2026-05-12",
+      "day_of_week": "Tue",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 8.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 5.0,
+          "intervals": [
+            {
+              "reps": 10,
+              "distance": 800,
+              "unit": "m"
+            }
+          ],
+          "target_pace_per_mi": "3:45-3:40"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "10x800m w/ 2 min walk rest btwn\n\n1st 4: 3:45-3:40\n2nd 4: 3:40-3:30\nLast 2: Sub 3:30",
+      "source_sheet": "May",
+      "source_cell": "D20"
+    },
+    {
+      "date": "2026-05-13",
+      "day_of_week": "Wed",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\n10:00 down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "May",
+      "source_cell": "F20"
+    },
+    {
+      "date": "2026-05-14",
+      "day_of_week": "Thu",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intervals": [
+            {
+              "reps": 8,
+              "distance": 200,
+              "unit": "m"
+            }
+          ]
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "8x200m 45-35s w/ 200m walk/jog btwn\n\nHAVE SOME FUN AND PUSH A BIT TOWARDS THE END",
+      "source_sheet": "May",
+      "source_cell": "H20"
+    },
+    {
+      "date": "2026-05-15",
+      "day_of_week": "Fri",
+      "week_label": "BUILD WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "May",
+      "source_cell": "J20"
+    },
+    {
+      "date": "2026-05-16",
+      "day_of_week": "Sat",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 12.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 9.0,
+          "intensity": "easy_long"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Long Run\n\n10-14 Miles",
+      "source_sheet": "May",
+      "source_cell": "L20"
+    },
+    {
+      "date": "2026-05-17",
+      "day_of_week": "Sun",
+      "week_label": "BUILD WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "May",
+      "source_cell": "N20"
+    },
+    {
+      "date": "2026-05-18",
+      "day_of_week": "Mon",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\n10:00 down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "May",
+      "source_cell": "B32"
+    },
+    {
+      "date": "2026-05-19",
+      "day_of_week": "Tue",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 9.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 6.0,
+          "intervals": [
+            {
+              "reps": 6,
+              "distance": 1,
+              "unit": "mile"
+            }
+          ],
+          "target_pace_per_mi": "7:20-7:10"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "6x1 mile w/ 2 min jog rest btwn\n\n1st 3: 7:20-7:10\n2nd 3: 7:10-6:50",
+      "source_sheet": "May",
+      "source_cell": "D32"
+    },
+    {
+      "date": "2026-05-20",
+      "day_of_week": "Wed",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 4.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 1.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\n10:00 down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "May",
+      "source_cell": "F32"
+    },
+    {
+      "date": "2026-05-21",
+      "day_of_week": "Thu",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 6.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 3.0,
+          "intervals": [
+            {
+              "distance_mi": 3,
+              "type": "hills",
+              "rep_sec_low": 60,
+              "rep_sec_high": 90
+            }
+          ],
+          "target_pace_per_mi": "6:50-6:30"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "HILLS\n\n3 miles of 60-90s UP @ 90% w/ walk/jog back down\n\nTREADMILL (3-4% incline): 60-90s UP @ 6:50-6:30 pace w/ 90s standing rest btwn",
+      "source_sheet": "May",
+      "source_cell": "H32"
+    },
+    {
+      "date": "2026-05-22",
+      "day_of_week": "Fri",
+      "week_label": "BUILD WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "May",
+      "source_cell": "J32"
+    },
+    {
+      "date": "2026-05-23",
+      "day_of_week": "Sat",
+      "week_label": "BUILD WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 12.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 9.0,
+          "intensity": "easy_long"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Long Run\n\n10-14 Miles",
+      "source_sheet": "May",
+      "source_cell": "L32"
+    },
+    {
+      "date": "2026-05-24",
+      "day_of_week": "Sun",
+      "week_label": "BUILD WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "May",
+      "source_cell": "N32"
+    },
+    {
+      "date": "2026-05-25",
+      "day_of_week": "Mon",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 3.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 0.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\n10:00 down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "May",
+      "source_cell": "B44"
+    },
+    {
+      "date": "2026-05-26",
+      "day_of_week": "Tue",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 9.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 6.0,
+          "target_pace_per_mi": "7:30-7:10"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "4 miles @ 7:30-7:10; 1 mile easy; 1 mile Sub 7 PUSHING",
+      "source_sheet": "May",
+      "source_cell": "D44"
+    },
+    {
+      "date": "2026-05-27",
+      "day_of_week": "Wed",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "easy_run",
+      "total_distance_mi": 3.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy",
+          "note": "Start slower (e.g. 10:00) and progress"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 0.0,
+          "intensity": "easy"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Run\n\n10:00 down to 9:00 IF IT FEELS EASY",
+      "source_sheet": "May",
+      "source_cell": "F44"
+    },
+    {
+      "date": "2026-05-28",
+      "day_of_week": "Thu",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "hard_workout",
+      "total_distance_mi": 5.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 2.0,
+          "intervals": [
+            {
+              "reps": 8,
+              "distance": 400,
+              "unit": "m"
+            }
+          ],
+          "target_pace_per_mi": "1:45-1:40"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "8x400m w/ 2:30 walk rest btwn\n\n3 @ 1:45-1:40\n3 @ 1:40-1:35\n2 @ 1:35 or FASTER\n\nOPEN UP AND PROGRESS",
+      "source_sheet": "May",
+      "source_cell": "H44"
+    },
+    {
+      "date": "2026-05-29",
+      "day_of_week": "Fri",
+      "week_label": "REST WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "May",
+      "source_cell": "J44"
+    },
+    {
+      "date": "2026-05-30",
+      "day_of_week": "Sat",
+      "week_label": "REST WEEK",
+      "sport": "running",
+      "day_type": "long_run",
+      "total_distance_mi": 10.0,
+      "structure": [
+        {
+          "phase": "warmup",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        },
+        {
+          "phase": "main",
+          "distance_mi": 7.0,
+          "intensity": "easy_long"
+        },
+        {
+          "phase": "cooldown",
+          "distance_mi": 1.5,
+          "intensity": "easy"
+        }
+      ],
+      "raw_description": "Easy Long Run",
+      "source_sheet": "May",
+      "source_cell": "L44"
+    },
+    {
+      "date": "2026-05-31",
+      "day_of_week": "Sun",
+      "week_label": "REST WEEK",
+      "sport": "rest",
+      "day_type": "rest",
+      "total_distance_mi": null,
+      "structure": [],
+      "raw_description": "Day Off",
+      "source_sheet": "May",
+      "source_cell": "N44"
+    }
+  ],
+  "metadata": {
+    "source_file": "2026 Paige Tuchner Training Plan.xlsx",
+    "workout_count": 147,
+    "wucd_applied_to": "all running workouts (universal coach rule)"
+  }
+}

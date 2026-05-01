@@ -807,6 +807,122 @@ nav {
   gap: 12px;
 }
 
+/* ==== COACH SHEET IMPORT — Phase A drop zone (csi prefix) ==================
+   Lives inside the existing "Import a Plan" tab above the textarea, with a
+   divider below. Visual language matches the rest of the modal: rounded
+   card surface, neutral border that lights up on drag-over, brand-accent
+   when a file is staged. */
+.csi-dropzone {
+  display: block;
+  position: relative;
+  border: 1.5px dashed var(--color-border);
+  border-radius: 12px;
+  padding: 22px 16px;
+  background: var(--color-bg-soft, rgba(0, 0, 0, 0.02));
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  margin: 0 0 14px;
+  outline: none;
+}
+.csi-dropzone:hover,
+.csi-dropzone:focus-visible {
+  border-color: var(--color-accent, #6366f1);
+  background: var(--color-accent-glow, rgba(99, 102, 241, 0.05));
+}
+.csi-dropzone--dragover {
+  border-color: #dc2626;
+  border-style: solid;
+  background: rgba(220, 38, 38, 0.05);
+}
+.csi-dropzone--has-file {
+  border-style: solid;
+  border-color: var(--color-accent, #6366f1);
+  background: var(--color-accent-glow, rgba(99, 102, 241, 0.04));
+  cursor: default;
+}
+.csi-dropzone-idle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.csi-dropzone-icon {
+  width: 28px;
+  height: 28px;
+  color: var(--color-text-muted);
+  margin-bottom: 2px;
+}
+.csi-dropzone-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--color-text);
+}
+.csi-dropzone-sub {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+.csi-dropzone-staged {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.csi-staged-info { min-width: 0; flex: 1; }
+.csi-staged-name {
+  font-weight: 600;
+  font-size: 0.92rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.csi-staged-size {
+  font-size: 0.74rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+.csi-staged-remove {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  border-radius: 999px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.csi-staged-remove:hover { color: var(--color-text); border-color: var(--color-text); }
+.csi-status {
+  margin: -6px 0 14px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+.csi-status--info    { background: rgba(99, 102, 241, 0.08); color: var(--color-text); }
+.csi-status--success { background: rgba(34, 197, 94, 0.10);  color: var(--color-text); }
+.csi-status--error   { background: rgba(239, 68, 68, 0.10);  color: #b91c1c; }
+.csi-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 14px;
+  color: var(--color-text-muted);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.csi-divider::before,
+.csi-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
 input[type="text"],
 input[type="number"],
 input[type="date"],

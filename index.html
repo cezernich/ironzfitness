@@ -429,6 +429,33 @@
 
               <!-- Import a Plan -->
               <div id="import-plan-body" style="display:none">
+                <!-- Coach-sheet upload (Phase A). Lives above the textarea per
+                     COACH_SHEET_IMPORT_SPEC §A1; both paths coexist. The
+                     drop zone and textarea soft-disable each other based on
+                     which has user input. -->
+                <div class="csi-dropzone" id="csi-dropzone" tabindex="0" role="button" aria-label="Upload coach sheet">
+                  <div class="csi-dropzone-idle">
+                    <svg class="csi-dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="17 8 12 3 7 8"/>
+                      <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <div class="csi-dropzone-title">Drop your coach's sheet here, or click to browse</div>
+                    <div class="csi-dropzone-sub">Supported: Excel (.xlsx), CSV. Max 10 MB.</div>
+                  </div>
+                  <div class="csi-dropzone-staged" id="csi-dropzone-staged" hidden>
+                    <div class="csi-staged-info">
+                      <div class="csi-staged-name" id="csi-staged-name"></div>
+                      <div class="csi-staged-size" id="csi-staged-size"></div>
+                    </div>
+                    <button type="button" class="csi-staged-remove" id="csi-staged-remove" aria-label="Remove file">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                  <input type="file" id="csi-file-input" accept=".xlsx,.csv" style="display:none" />
+                </div>
+                <div id="csi-status" class="csi-status" hidden></div>
+                <div class="csi-divider"><span>or paste plan text</span></div>
                 <p class="hint">Paste a training plan from a coach, spreadsheet, email, or anywhere else.</p>
                 <div class="form-grid">
                   <div class="form-row">
@@ -3923,6 +3950,7 @@
   <script src="js/nutrition-v2.js"></script>
   <script src="js/meal-planner.js"></script>
   <script src="js/custom-plan.js"></script>
+  <script src="js/coach-sheet-import.js"></script>
   <!-- Unified workout builder save handlers (cowork-handoff/UNIFIED_BUILDER_SPEC.md,
        docs/BUILDER_INVENTORY.md). Must load AFTER custom-plan.js and
        calendar.js so it can reference their function-declaration globals
