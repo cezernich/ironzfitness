@@ -277,21 +277,21 @@
   function maybeFireStackCelebration(dateStr) {
     const date = dateStr || _today();
     if (date !== _today()) {
-      console.debug("[Stack] skip celebration — not today:", date);
+      console.log("[Stack] skip celebration — not today:", date);
       return false;
     }
     const state = getPillarState(date);
     if (!state.hit) {
-      console.debug("[Stack] skip celebration — pillars not all filled:",
+      console.log("[Stack] skip celebration — pillars not all filled:",
         { workouts: state.workouts, hydration: state.hydration, nutrition: state.nutrition });
       return false;
     }
     if (_alreadyCelebrated(date)) {
-      console.debug("[Stack] already celebrated", date, "— re-rendering badge only");
+      console.log("[Stack] already celebrated", date, "— re-rendering badge only");
       _renderStackedBadge();
       return false;
     }
-    console.debug("[Stack] FIRING celebration for", date);
+    console.log("[Stack] FIRING celebration for", date);
     _markCelebrated(date);
     _runCelebrationAnimation();
     setTimeout(_renderStackedBadge, 400);

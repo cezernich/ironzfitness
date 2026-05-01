@@ -847,6 +847,16 @@ const DB = (() => {
     for (var k in w) {
       if (w.hasOwnProperty(k) && !skipKeys[k]) fullData[k] = w[k];
     }
+    // Coerce numeric columns to integer — Postgres `duration_minutes`
+    // and `avg_watts` are typed `integer` and reject floats like
+    // "41.5" with "invalid input syntax for type integer". Local
+    // workout records store these as raw form-input strings ("41.5")
+    // and parsed numbers, so we round at write time.
+    var _toInt = function (v) {
+      if (v === null || v === undefined || v === '') return null;
+      var n = parseFloat(v);
+      return Number.isFinite(n) ? Math.round(n) : null;
+    };
     var row = {
       id: (_isUUID(w.id) ? w.id : null) || crypto.randomUUID(),
       user_id: uid,
@@ -854,8 +864,8 @@ const DB = (() => {
       name: w.name || w.type || null,
       type: w.type || 'general',
       notes: w.notes || null,
-      duration_minutes: w.duration || w.duration_minutes || null,
-      avg_watts: w.avgWatts || w.avg_watts || null,
+      duration_minutes: _toInt(w.duration || w.duration_minutes),
+      avg_watts: _toInt(w.avgWatts || w.avg_watts),
       source: w.source || 'manual',
       completed: w.completed !== false,
       created_at: w.createdAt || w.created_at || new Date().toISOString()
