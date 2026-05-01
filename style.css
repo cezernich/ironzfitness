@@ -2913,6 +2913,61 @@ input.completion-ex-name:focus {
   border-color: rgba(34, 197, 94, 0.3);
 }
 
+/* Completed-card "Option B" layout: when collapsed, the card collapses
+   to a single-row review surface. Workouts in progress / planned keep
+   the full card UI (intensity strip + badges) — that preview info is
+   useful for upcoming sessions but noise on a finished one. The expanded
+   state (no .is-collapsed) restores the full body for tap-to-expand
+   review of intervals / exercises. */
+.session-card--completed.is-collapsed {
+  background: var(--color-card-bg, #fff);
+  border-left: 3px solid var(--color-success);
+}
+.session-card--completed.is-collapsed .session-phase,
+.session-card--completed.is-collapsed .session-duration-badge,
+.session-card--completed.is-collapsed .intensity-badge,
+.session-card--completed.is-collapsed .undo-complete-btn-header,
+.session-card--completed.is-collapsed .session-intensity-strip,
+.session-card--completed.is-collapsed .session-complete-indicator {
+  display: none !important;
+}
+.session-card--completed.is-collapsed .session-name {
+  /* "Push Day" was truncating because duration / intensity / Undo ate
+     the row. With those hidden, let the title use the full width and
+     only ellipsis if it actually overflows the spec line. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.session-card-leading-check {
+  display: none;
+  align-items: center;
+  margin-right: 8px;
+  color: var(--color-success);
+  flex-shrink: 0;
+}
+.session-card-leading-check .icon {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.5;
+}
+.session-card--completed.is-collapsed .session-card-leading-check {
+  display: inline-flex;
+}
+.session-spec-line {
+  display: none;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+.session-card--completed.is-collapsed .session-spec-line {
+  display: inline-flex;
+  align-items: center;
+}
+
 .undo-complete-btn-header {
   padding: 3px 8px;
   border-radius: 5px;
@@ -11723,6 +11778,22 @@ input.completion-ex-name:focus {
 }
 .rating-note::placeholder { color: var(--color-text-muted); }
 
+/* Second textarea, only rendered for coach-assigned workouts. Coach-
+   purple border so the user reads it as a separate channel from the
+   private "Quick note" field above. */
+.rating-coach-note-wrap { margin-top: -4px; margin-bottom: 14px; }
+.rating-coach-note-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-coach, #534AB7);
+  margin-bottom: 6px;
+  letter-spacing: 0.02em;
+}
+.rating-coach-note {
+  margin-bottom: 0;
+  border-color: var(--color-coach, #534AB7);
+}
+
 .rating-modal-actions {
   display: flex;
   gap: 10px;
@@ -14268,6 +14339,7 @@ input.completion-ex-name:focus {
 }
 .coach-cal-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 6px 8px;
@@ -14280,6 +14352,34 @@ input.completion-ex-name:focus {
 .coach-cal-meta          { font-size: 0.78rem; color: var(--color-text-muted); }
 .coach-cal-status        { font-size: 0.78rem; font-weight: 600; }
 .coach-cal-status--planned { color: var(--color-text-muted); }
+
+/* Client → coach reply rendered under a coach-assigned item when the
+   client filled in the rating modal's second textarea or picked a
+   rating. flex-basis:100% wraps it onto its own row inside the
+   .coach-cal-item flex container. */
+.coach-cal-reply {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: rgba(83, 74, 183, 0.06);
+  border-left: 2px solid var(--color-coach, #534AB7);
+  border-radius: 4px;
+  font-size: 0.82rem;
+  color: var(--color-text);
+}
+.coach-cal-reply-label {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  color: var(--color-coach, #534AB7);
+}
+.coach-cal-reply-rating { font-weight: 600; }
+.coach-cal-reply-note   { font-style: italic; color: var(--color-text-muted); }
 
 /* Per-day coach nutrition overlay row (Calendar tab). */
 .coach-cal-nutrition {

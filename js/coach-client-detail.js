@@ -109,6 +109,16 @@
         .order("date", { ascending: false })
         .limit(60);
 
+      // Pull this coach's assignments for this client so the calendar
+      // can surface client_note / client_rating on completed coach
+      // workouts. Indexed by id to match the coachAssignmentId on each
+      // synthetic workoutSchedule entry.
+      const assignRes = await sb.from("coach_assigned_workouts")
+        .select("id, date, client_note, client_rating, client_responded_at")
+        .eq("client_id", clientId);
+      _data.assignments = {};
+      for (const r of (assignRes?.data || [])) _data.assignments[r.id] = r;
+
       _data.schedule  = _coerceArray(byKey.workoutSchedule);
       _data.ratings   = _coerceArray(byKey.workoutRatings);
       _data.zones     = byKey.trainingZones || null;
@@ -324,6 +334,28 @@
         // content. Tapping the item itself also opens the editor —
         // makes the whole row a tap target.
         const isCompleted = !!matchedDone;
+        // Pull the client's post-completion feedback for coach-assigned
+        // workouts: note + rating, written via submit_assignment_feedback
+        // RPC from the rating modal. Only renders when the client filled
+        // in the second textarea (or chose a rating).
+        const RATING_EMOJIS = ["", "🥱", "😌", "👌", "💪", "😵"];
+        const RATING_LABELS = ["", "Too easy", "Easy", "Just right", "Hard", "Crushed me"];
+        let clientReplyHtml = "";
+        if (p.source === "coach_assigned" && p.coachAssignmentId && _data.assignments) {
+          const a = _data.assignments[p.coachAssignmentId];
+          if (a && (a.client_note || a.client_rating)) {
+            const ratingPart = a.client_rating
+              ? `<span class="coach-cal-reply-rating">${RATING_EMOJIS[a.client_rating] || ""} ${_esc(RATING_LABELS[a.client_rating] || "")}</span>`
+              : "";
+            const notePart = a.client_note
+              ? `<span class="coach-cal-reply-note">"${_esc(a.client_note)}"</span>`
+              : "";
+            clientReplyHtml = `<div class="coach-cal-reply">
+              <span class="coach-cal-reply-label">Client reply</span>
+              ${ratingPart}${notePart}
+            </div>`;
+          }
+        }
         items.push(`<div class="coach-cal-item${isCompleted ? " coach-cal-item--done" : ""}${p.source === "coach_assigned" ? " coach-cal-item--coach" : ""}"
                           onclick="coachEditCalItem(${idx})"
                           tabindex="0"
@@ -333,6 +365,7 @@
           <span class="coach-cal-meta">${_esc(p.duration ? p.duration + " min" : "")}</span>
           ${isCompleted ? `<span class="coach-cal-status">✓ done</span>` : `<span class="coach-cal-status coach-cal-status--planned">planned</span>`}
           <span class="coach-cal-edit" aria-hidden="true">✎</span>
+          ${clientReplyHtml}
         </div>`);
       }
       // Completed-only rows (logged but not on the schedule).

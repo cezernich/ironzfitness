@@ -1221,18 +1221,21 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
       _ovflMoveItem(cardId, "logged", w.id, dateStr) +
       _ovflShareItem(w) +
       _ovflSaveToLibraryItem(w) +
-      _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
+      _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`),
+      { dateStr });
+    const _cSpecLine = _buildCompletedSpecLine(cardId, w);
+    const _cLeadCheck = _buildLeadingCompletedCheck();
 
     return `
       <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
         <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
-          <span class="session-icon" style="color:${color}">${icon}</span>
+          ${_cLeadCheck}<span class="session-icon" style="color:${color}">${icon}</span>
           <div class="session-meta">
             <div class="session-name">${escHtml(_cSessionName)}</div>
             <div class="session-phase">${escHtml(_cSubtitle)}</div>
           </div>
           <div class="session-header-right">
-            ${_cBadge}${_cUndoBtn}${_cOverflow}<span class="card-chevron">▾</span>
+            ${_cSpecLine}${_cBadge}${_cUndoBtn}${_cOverflow}<span class="card-chevron">▾</span>
           </div>
         </div>
         <div class="card-body">
@@ -1371,16 +1374,20 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
       _ovflMoveItem(cardId, "logged", w.id, dateStr) +
       _ovflShareItem(w) +
       _ovflSaveToLibraryItem(w) +
-      _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
+      _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`),
+      { dateStr });
+    const _aiSpecLine = _buildCompletedSpecLine(cardId, w);
+    const _aiLeadCheck = _buildLeadingCompletedCheck();
     return `
       <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
         <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
-          <span class="session-icon" style="color:${color}">${icon}</span>
+          ${_aiLeadCheck}<span class="session-icon" style="color:${color}">${icon}</span>
           <div class="session-meta">
             <div class="session-name">${s.title || _wTypeLabel(w.type)}${_logComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : ""}</div>
             <div class="session-phase">${_logComplete ? "Completed" : "Logged"} · ${_wTypeLabel(w.type)}</div>
           </div>
           <div class="session-header-right">
+            ${_aiSpecLine}
             ${(() => {
               const actual = _getCompletionDuration(cardId);
               if (actual) return `<span class="session-duration-badge">${_fmtBadgeMin(actual)} min</span>`;
@@ -1412,16 +1419,20 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
       _ovflEditItem(w.id) +
       _ovflShareItem(w) +
       _ovflSaveToLibraryItem(w) +
-      _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
+      _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`),
+      { dateStr });
+    const _genSpecLine = _buildCompletedSpecLine(cardId, w);
+    const _genLeadCheck = _buildLeadingCompletedCheck();
     return `
       <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
         <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
-          <span class="session-icon" style="color:${color}">${icon}</span>
+          ${_genLeadCheck}<span class="session-icon" style="color:${color}">${icon}</span>
           <div class="session-meta">
             <div class="session-name">${s.name || _wTypeLabel(w.type)}${_logComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : ""}</div>
             <div class="session-phase">${_logComplete ? "Completed · " : "Planned · "}${_wTypeLabel(w.type)}</div>
           </div>
           <div class="session-header-right">
+            ${_genSpecLine}
             <span class="session-duration-badge">${_fmtBadgeMin(_getCompletionDuration(cardId) || s.duration)} min</span>
             ${_buildUndoHeaderBtn(cardId, dateStr)}${_genOverflow}
             <span class="card-chevron">▾</span>
@@ -1479,7 +1490,10 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
       _ovflMoveItem(cardId, "logged", w.id, dateStr) +
       _ovflShareItem(w) +
       _ovflSaveToLibraryItem(w) +
-      _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
+      _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`),
+      { dateStr });
+    const _exSpecLine = _buildCompletedSpecLine(cardId, w);
+    const _exLeadCheck = _buildLeadingCompletedCheck();
     const _exBadgeDur = _getCompletionDuration(cardId) || _exEstDur || w.duration;
     const _exDurationBadge = _exBadgeDur
       ? `<span class="session-duration-badge">${_fmtBadgeMin(_exBadgeDur)} min</span>`
@@ -1487,13 +1501,13 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
     return `
       <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
         <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
-          <span class="session-icon" style="color:${color}">${icon}</span>
+          ${_exLeadCheck}<span class="session-icon" style="color:${color}">${icon}</span>
           <div class="session-meta">
             <div class="session-name">${w.fromSaved || _wTypeLabel(w.type)}${_logComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : ""}</div>
             <div class="session-phase">${_logComplete ? "Completed" : (w.fromSaved ? "Logged · " + _wTypeLabel(w.type) : "Planned")}${(!w.fromSaved && w.notes) ? " · " + w.notes : ""}</div>
           </div>
           <div class="session-header-right">
-            ${_exDurationBadge}${_buildUndoHeaderBtn(cardId, dateStr)}${_exOverflow}
+            ${_exSpecLine}${_exDurationBadge}${_buildUndoHeaderBtn(cardId, dateStr)}${_exOverflow}
             <span class="card-chevron">▾</span>
           </div>
         </div>
@@ -1512,16 +1526,19 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
     _ovflEditItem(w.id) +
     _ovflShareItem(w) +
     _ovflSaveToLibraryItem(w) +
-    _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`));
+    _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`),
+    { dateStr });
+  const _minSpecLine = _buildCompletedSpecLine(cardId, w);
+  const _minLeadCheck = _buildLeadingCompletedCheck();
   return `
     <div class="session-card collapsible is-collapsed${_logCompleteCls}" id="${cardId}">
       <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
-        <span class="session-icon" style="color:${color}">${icon}</span>
+        ${_minLeadCheck}<span class="session-icon" style="color:${color}">${icon}</span>
         <div class="session-meta">
           <div class="session-name">${w.fromSaved || _wTypeLabel(w.type)}</div>
           ${w.fromSaved ? `<div class="session-phase">Logged · ${_wTypeLabel(w.type)}</div>` : (w.notes ? `<div class="session-phase">${escHtml(w.notes)}</div>` : "")}
         </div>
-        <div class="session-header-right">${_buildUndoHeaderBtn(cardId, dateStr)}${_minOverflow}<span class="card-chevron">▾</span></div>
+        <div class="session-header-right">${_minSpecLine}${_buildUndoHeaderBtn(cardId, dateStr)}${_minOverflow}<span class="card-chevron">▾</span></div>
       </div>
       <div class="card-body">${_minCompletion}</div>
     </div>`;
@@ -2387,12 +2404,23 @@ function toggleOverflowMenu(e, menuId) {
 
 // Builds the •••-button + hidden popover wrapper. innerHtml is the menu
 // items already stringified by the caller.
-function _buildOverflowMenu(cardId, innerHtml) {
-  if (!innerHtml || !innerHtml.trim()) return "";
+function _buildOverflowMenu(cardId, innerHtml, opts) {
+  // When `opts.dateStr` is provided AND this session is complete, an
+  // "Undo completion" item is prepended to the menu so the inline header
+  // Undo button can be hidden in the new compact completed-card layout
+  // (see _buildLeadingCompletedCheck / _buildCompletedSpecLine + CSS).
+  // Callers that don't pass dateStr keep the legacy behaviour — the
+  // inline header button stays interactive on non-completed cards.
+  let prepended = "";
+  if (opts && opts.dateStr && typeof isSessionComplete === "function" && isSessionComplete(cardId)) {
+    prepended = `<button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();undoSessionCompletion('${cardId}','${opts.dateStr}')">Undo completion</button>`;
+  }
+  const inner = prepended + (innerHtml || "");
+  if (!inner.trim()) return "";
   const menuId = `ovflow-${cardId}`;
   return `<div class="overflow-menu-wrap">
     <button class="overflow-menu-btn" title="More actions" aria-label="More actions" onclick="toggleOverflowMenu(event,'${menuId}')">⋯</button>
-    <div class="overflow-menu" id="${menuId}" hidden>${innerHtml}</div>
+    <div class="overflow-menu" id="${menuId}" hidden>${inner}</div>
   </div>`;
 }
 
@@ -2598,6 +2626,131 @@ function _getCompletionDuration(sessionId) {
     }
   } catch {}
   return null;
+}
+
+// Completed-card "Option B" layout helpers ─────────────────────────────────
+//
+// When a session is complete, the card collapses to a single review row:
+//   ✓  <icon>  <name>                              <spec line>      ⋯  ▾
+// `_buildCompletedSpecLine` produces the right-aligned spec text for that
+// row, formatted per sport. CSS gates visibility (.session-card-leading-check
+// / .session-spec-line are display:none unless .session-card--completed
+// .is-collapsed), so the helpers can be emitted unconditionally — the
+// non-completed card never shows them.
+
+function _formatCompletedDur(durMin) {
+  const n = parseFloat(durMin);
+  if (!isFinite(n) || n <= 0) return "";
+  if (n >= 60) {
+    const h = Math.floor(n / 60);
+    const m = Math.round(n - h * 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+  return `${Math.round(n)} min`;
+}
+
+function _formatCompletedDist(value, unit) {
+  const n = parseFloat(value);
+  if (!isFinite(n) || n <= 0) return "";
+  if (unit === "yd" || unit === "m") {
+    return `${Math.round(n).toLocaleString()} ${unit}`;
+  }
+  // Mi/km: 1 decimal once we're past 10 (8.4 mi); 2 decimals below
+  // (0.75 mi) so a bike commute doesn't lose precision.
+  const formatted = n >= 10 ? n.toFixed(1) : (Math.round(n * 100) / 100).toString();
+  return `${formatted} ${unit || ""}`.trim();
+}
+
+// Pace shown only on tempo / threshold / track / interval / repeats
+// running sessions per the spec — those are the workouts where pace is
+// the meaningful data point. Z2 / long runs surface duration alone.
+function _runShouldShowPace(w, rec) {
+  const haystack = (
+    (w?.load || "") + " " +
+    (w?.sessionName || "") + " " +
+    (rec?.name || "")
+  ).toLowerCase();
+  return /(tempo|threshold|track|interval|repeats|cv\b|t1\b|t2\b|cruise)/.test(haystack);
+}
+
+function _buildCompletedSpecLine(cardId, w) {
+  const rec = _getCompletionRecord(cardId);
+  if (!rec) return "";
+  const userUnit = (typeof getDistanceUnit === "function") ? getDistanceUnit() : "mi";
+  const dur = _formatCompletedDur(rec.duration);
+  const t = String(rec.type || w?.type || w?.discipline || "").toLowerCase();
+  const isSwim   = t === "swim" || t === "swimming";
+  const isRun    = t === "run"  || t === "running" || t === "walking" || t === "hiking";
+  const isBike   = t === "bike" || t === "cycling" || t === "rowing";
+  const isBrick  = t === "brick";
+  const isHyrox  = t === "hyrox" || !!rec.isHyrox || !!w?.isHyrox;
+  const hasExercises = Array.isArray(rec.exercises) && rec.exercises.length > 0;
+  const isStrengthLike =
+    !isHyrox && (t === "weightlifting" || t === "strength" || t === "yoga" ||
+                 t === "mobility" || t === "hiit" || t === "circuit" ||
+                 (hasExercises && !isSwim && !isRun && !isBike && !isBrick));
+
+  const parts = [];
+
+  if (isSwim) {
+    const u = (rec.distance_unit === "m" || rec.distance_unit === "yd") ? rec.distance_unit : "yd";
+    const d = _formatCompletedDist(rec.distance, u);
+    if (d) parts.push(d);
+    if (dur) parts.push(dur);
+  } else if (isBrick) {
+    const u = userUnit;
+    const bd = _formatCompletedDist(rec.bike_distance, u);
+    const rd = _formatCompletedDist(rec.run_distance, u);
+    const segs = [];
+    if (bd) segs.push(`${bd} ride`);
+    if (rd) segs.push(`${rd} run`);
+    if (segs.length) parts.push(segs.join(" + "));
+    if (dur) parts.push(dur);
+  } else if (isHyrox) {
+    // Stations = exercise count minus the 8 "Run …" segments. Some
+    // imports tag every entry as a station; in that case n won't be 8
+    // and we still surface the count we have.
+    const ex = Array.isArray(rec.exercises) ? rec.exercises : [];
+    const stations = ex.filter(e => !/^run\s/i.test(String(e?.name || ""))).length;
+    if (stations) parts.push(`${stations} station${stations === 1 ? "" : "s"}`);
+    if (dur) parts.push(dur);
+  } else if (isRun) {
+    const distUnit = rec.distance_unit || userUnit;
+    const d = _formatCompletedDist(rec.distance, distUnit);
+    if (d) parts.push(d);
+    if (dur) parts.push(dur);
+    if (_runShouldShowPace(w, rec)) {
+      const distN = parseFloat(rec.distance);
+      const durN  = parseFloat(rec.duration);
+      if (distN > 0 && durN > 0) {
+        const minPer = durN / distN;
+        const m = Math.floor(minPer);
+        const s = Math.round((minPer - m) * 60);
+        parts.push(`pace · ${m}:${String(s).padStart(2, "0")}/${distUnit}`);
+      }
+    }
+  } else if (isBike) {
+    const d = _formatCompletedDist(rec.distance, rec.distance_unit || userUnit);
+    if (d) parts.push(d);
+    if (dur) parts.push(dur);
+  } else if (isStrengthLike) {
+    const n = (rec.exercises || []).length;
+    if (n) parts.push(`${n} exercise${n === 1 ? "" : "s"}`);
+    if (dur) parts.push(dur);
+  } else {
+    // Unknown / yoga without exercises etc — fall back to duration only.
+    if (dur) parts.push(dur);
+  }
+
+  if (!parts.length) return "";
+  return `<span class="session-spec-line">${escHtml(parts.join(" · "))}</span>`;
+}
+
+// Leading ✓ icon for the completed-card row. CSS shows it only when the
+// card is `.session-card--completed.is-collapsed`, so callers can emit
+// it unconditionally — non-completed cards just have an inert span.
+function _buildLeadingCompletedCheck() {
+  return `<span class="session-card-leading-check">${ICONS.check}</span>`;
 }
 
 // Duration badges show whole minutes. mm:ss completion input can land at
@@ -4167,17 +4320,21 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         _planEditItem +
         _ovflShareItem(p) +
         _ovflSaveToLibraryItem(p) +
-        _ovflDeleteItem(`deletePlanEntry('${p.raceId}','${p.discipline}','${dateStr}')`));
+        _ovflDeleteItem(`deletePlanEntry('${p.raceId}','${p.discipline}','${dateStr}')`),
+        { dateStr });
+      const _planSpecLine = _buildCompletedSpecLine(cardId, p);
+      const _planLeadCheck = _buildLeadingCompletedCheck();
       if (session) {
         html += `
           <div class="session-card collapsible${_planIsComplete ? " session-card--completed is-collapsed" : ""}" id="${cardId}">
             <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
-              <span class="session-icon" style="color:${color}">${icon}</span>
+              ${_planLeadCheck}<span class="session-icon" style="color:${color}">${icon}</span>
               <div class="session-meta">
                 <div class="session-name">${p.sessionName}${_planDoneIndicator}</div>
                 <div class="session-phase">${p.phase} · Week ${p.weekNumber}</div>
               </div>
               <div class="session-header-right">
+                ${_planSpecLine}
                 <span class="session-duration-badge">${_fmtBadgeMin(_getCompletionDuration(cardId) || session.duration)} min</span>
                 <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
                 ${_planUndoBtn}${_planOverflow}
@@ -4224,12 +4381,13 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         html += `
           <div class="session-card collapsible${_planIsComplete ? " session-card--completed is-collapsed" : ""}" id="${cardId}">
             <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
-              <span class="session-icon" style="color:${color}">${icon}</span>
+              ${_planLeadCheck}<span class="session-icon" style="color:${color}">${icon}</span>
               <div class="session-meta">
                 <div class="session-name">${p.sessionName}${_planDoneIndicator}</div>
                 <div class="session-phase">${p.phase} · Week ${p.weekNumber}</div>
               </div>
               <div class="session-header-right">
+                ${_planSpecLine}
                 ${p.duration ? `<span class="session-duration-badge">${p.duration} min</span>` : ""}
                 <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
                 ${_planUndoBtn}${_planOverflow}
@@ -4252,12 +4410,13 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         html += `
           <div class="session-card collapsible${_planIsComplete ? " session-card--completed is-collapsed" : ""}" id="${cardId}">
             <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
-              <span class="session-icon" style="color:${color}">${icon}</span>
+              ${_planLeadCheck}<span class="session-icon" style="color:${color}">${icon}</span>
               <div class="session-meta">
                 <div class="session-name">${p.sessionName}${_planDoneIndicator}</div>
                 <div class="session-phase">${p.phase} · Week ${p.weekNumber}</div>
               </div>
               <div class="session-header-right">
+                ${_planSpecLine}
                 <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
                 ${_planUndoBtn}${_planOverflow}
                 <span class="card-chevron">▾</span>
@@ -4357,19 +4516,23 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
             _ovflMoveItem(cardId, "scheduled", w.id, dateStr) +
             _ovflShareItem(w) +
             _ovflSaveToLibraryItem(w) +
-            _ovflDeleteItem(`deleteScheduledWorkout('${w.id}','${dateStr}')`));
+            _ovflDeleteItem(`deleteScheduledWorkout('${w.id}','${dateStr}')`),
+            { dateStr });
+          const _swSpecLine = _buildCompletedSpecLine(cardId, w);
+          const _swLeadCheck = _buildLeadingCompletedCheck();
           const _bRacePill = w.isBRace
             ? ` <span class="b-race-pill b-race-pill--day">B RACE</span>`
             : (w.bRaceWindow ? ` <span class="b-race-pill b-race-pill--window">B RACE WINDOW</span>` : "");
           html += `
             <div class="session-card collapsible${_swIsComplete ? " session-card--completed is-collapsed" : ""}${_swUserAddedCls}${w.isBRace ? " session-card--b-race" : w.bRaceWindow ? " session-card--b-window" : ""}" id="${cardId}">
               <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
-                <span class="session-icon" style="color:${color}">${icon}</span>
+                ${_swLeadCheck}<span class="session-icon" style="color:${color}">${icon}</span>
                 <div class="session-meta">
                   <div class="session-name">${w.sessionName}${_bRacePill}${_swDoneIndicator}</div>
                   <div class="session-phase">${({ run: "Running", bike: "Cycling", swim: "Swimming", brick: "Brick" })[w.discipline] || capitalize(w.discipline || "")}</div>
                 </div>
                 <div class="session-header-right">
+                  ${_swSpecLine}
                   <span class="session-duration-badge">${_fmtBadgeMin(_getCompletionDuration(cardId) || targetDuration)} min</span>
                   <span class="intensity-badge ${intensClass}">${isReduced ? "⬇ " : ""}${intensLabel}</span>
                   ${_swUndoBtn}${_swOverflow}
@@ -4410,17 +4573,20 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
           _ovflMoveItem(cardId, "scheduled", w.id, dateStr) +
           _ovflShareItem(w) +
           _ovflSaveToLibraryItem(w) +
-          _ovflDeleteItem(`deleteScheduledWorkout('${w.id}','${dateStr}')`));
+          _ovflDeleteItem(`deleteScheduledWorkout('${w.id}','${dateStr}')`),
+          { dateStr });
+        const _swcSpecLine = _buildCompletedSpecLine(cardId, w);
+        const _swcLeadCheck = _buildLeadingCompletedCheck();
         html += `
           <div class="session-card collapsible${_swcIsComplete ? " session-card--completed is-collapsed" : ""}" id="${cardId}">
             <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
-              <span class="session-icon" style="color:${color}">${icon}</span>
+              ${_swcLeadCheck}<span class="session-icon" style="color:${color}">${icon}</span>
               <div class="session-meta">
                 <div class="session-name">${escHtml(_swcSessionName)}${_swcDoneInd}</div>
                 <div class="session-phase">${escHtml(_swcSubtitle)}</div>
               </div>
               <div class="session-header-right">
-                ${_swcBadge}${_swcUndoBtn}${_swcOverflow}<span class="card-chevron">▾</span>
+                ${_swcSpecLine}${_swcBadge}${_swcUndoBtn}${_swcOverflow}<span class="card-chevron">▾</span>
               </div>
             </div>
             <div class="card-body">
@@ -4678,16 +4844,19 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         _ovflMoveItem(cardId, "scheduled", w.id, dateStr) +
         _ovflShareItem(w) +
         _ovflSaveToLibraryItem(w) +
-        _ovflDeleteItem(`deleteScheduledWorkout('${w.id}','${dateStr}')`));
+        _ovflDeleteItem(`deleteScheduledWorkout('${w.id}','${dateStr}')`),
+        { dateStr });
+      const _swGenSpecLine = _buildCompletedSpecLine(cardId, w);
+      const _swGenLeadCheck = _buildLeadingCompletedCheck();
       html += `
         <div class="session-card collapsible${_swGenCompleted ? " session-card--completed is-collapsed" : ""}${_swGenUserAddedCls}${_coachAttribClass}" id="${cardId}">
           <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
-            <span class="session-icon" style="color:${color}">${icon}</span>
+            ${_swGenLeadCheck}<span class="session-icon" style="color:${color}">${icon}</span>
             <div class="session-meta">
               <div class="session-name">${w.sessionName}${_swGenDoneInd}</div>
               <div class="session-phase">${_wTypeLabel(w.type)}</div>
             </div>
-            <div class="session-header-right">${(_getCompletionDuration(cardId) || _swGenDurMin) ? `<span class="session-duration-badge">${_fmtBadgeMin(_getCompletionDuration(cardId) || _swGenDurMin)} min</span>` : ""}${_swGenUndoBtn}${_swGenOverflow}<span class="card-chevron">▾</span></div>
+            <div class="session-header-right">${_swGenSpecLine}${(_getCompletionDuration(cardId) || _swGenDurMin) ? `<span class="session-duration-badge">${_fmtBadgeMin(_getCompletionDuration(cardId) || _swGenDurMin)} min</span>` : ""}${_swGenUndoBtn}${_swGenOverflow}<span class="card-chevron">▾</span></div>
           </div>
           ${_coachAttrib}
           ${_swGenStrip}
@@ -10290,17 +10459,51 @@ function getWorkoutRating(workoutId) {
   return loadWorkoutRatings()[workoutId] || null;
 }
 
+// Resolve the coach assignment UUID behind a rating-modal workoutId.
+// Returns null for non-coach workouts. The modal shows a second
+// "Note for your coach" textarea only when this returns a UUID, and
+// uses it to dispatch the submit_assignment_feedback RPC on Save.
+function _ratingCoachAssignmentIdFor(workoutId) {
+  try {
+    const workouts = JSON.parse(localStorage.getItem("workouts")) || [];
+    const completion = workouts.find(w => String(w.id) === String(workoutId));
+    if (!completion || !completion.completedSessionId) return null;
+    // completedSessionId is shaped like "session-sw-<scheduleEntryId>"
+    // for workoutSchedule-backed sessions. Coach assignments live in
+    // workoutSchedule with id "coach-<assignmentUuid>" (mirror trigger).
+    const m = String(completion.completedSessionId).match(/^session-sw-(.+)$/);
+    if (!m) return null;
+    const scheduleEntryId = m[1];
+    const sched = JSON.parse(localStorage.getItem("workoutSchedule")) || [];
+    const entry = sched.find(e => String(e.id) === scheduleEntryId);
+    if (!entry || entry.source !== "coach_assigned") return null;
+    return entry.coachAssignmentId || null;
+  } catch { return null; }
+}
+
 function showRatingModal(workoutId, dateStr) {
   // Remove existing modal if any
   const existing = document.getElementById("rating-modal-overlay");
   if (existing) existing.remove();
 
+  const coachAssignmentId = _ratingCoachAssignmentIdFor(workoutId);
+
   const overlay = document.createElement("div");
   overlay.id = "rating-modal-overlay";
   overlay.className = "rating-modal-overlay";
   overlay.onclick = e => { if (e.target === overlay) dismissRatingModal(); };
+  // Second textarea is gated on coach assignment so non-coach workouts
+  // see the original single-field UI. data-coach-assignment-id is read
+  // by confirmRating to know whether to fire the feedback RPC.
+  const coachNoteBlock = coachAssignmentId
+    ? `<div class="rating-coach-note-wrap">
+         <div class="rating-coach-note-label">Send back to your coach (optional)</div>
+         <textarea id="rating-coach-note" class="rating-note rating-coach-note"
+           placeholder="Anything your coach should know — e.g. 'felt strong, ready to push next week'"></textarea>
+       </div>`
+    : "";
   overlay.innerHTML = `
-    <div class="rating-modal">
+    <div class="rating-modal" data-coach-assignment-id="${coachAssignmentId || ""}">
       <div class="rating-modal-title">How did that feel?</div>
       <div class="rating-scale" id="rating-scale">
         ${[1,2,3,4,5].map(n => `
@@ -10311,6 +10514,7 @@ function showRatingModal(workoutId, dateStr) {
         `).join("")}
       </div>
       <textarea id="rating-note" class="rating-note" placeholder="Quick note (optional) — e.g. 'Shoulders felt tight'"></textarea>
+      ${coachNoteBlock}
       <div class="rating-modal-actions">
         <button class="rating-skip-btn" onclick="dismissRatingModal()">Skip</button>
         <button class="rating-save-btn" id="rating-save-btn" disabled onclick="confirmRating('${workoutId}','${dateStr}')">Save</button>
@@ -10336,7 +10540,28 @@ function selectRating(n) {
 function confirmRating(workoutId, dateStr) {
   if (!_selectedRating) return;
   const note = (document.getElementById("rating-note")?.value || "").trim();
+  const coachNote = (document.getElementById("rating-coach-note")?.value || "").trim();
+  const coachAssignmentId = document.querySelector(".rating-modal")?.dataset?.coachAssignmentId || null;
+
   saveWorkoutRating(workoutId, _selectedRating, note);
+
+  // If this was a coach-assigned workout AND the user filled in the
+  // second box, push the response back via the SECURITY DEFINER RPC.
+  // Fire-and-forget: a network failure shouldn't block the local save.
+  if (coachAssignmentId && (coachNote || _selectedRating)) {
+    try {
+      window.supabaseClient?.rpc("submit_assignment_feedback", {
+        _assignment_id: coachAssignmentId,
+        _note:          coachNote || null,
+        _rating:        _selectedRating || null,
+      }).then(({ error }) => {
+        if (error) console.warn("[rating] submit_assignment_feedback failed:", error.message);
+      });
+    } catch (e) {
+      console.warn("[rating] coach feedback RPC threw:", e);
+    }
+  }
+
   _selectedRating = 0;
   dismissRatingModal();
   // Re-render to show rating on badge
