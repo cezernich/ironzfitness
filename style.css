@@ -813,7 +813,15 @@ nav {
    card surface, neutral border that lights up on drag-over, brand-accent
    when a file is staged. */
 .csi-dropzone {
-  display: block;
+  /* Vertically center the idle content (icon + title + sub) inside
+     the dashed box. Previously block layout pinned everything to the
+     top and the bottom half of the box was empty whitespace. flex +
+     min-height gives the upload affordance consistent visual weight
+     and keeps idle/staged centered without per-state overrides. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
   position: relative;
   border: 1.5px dashed var(--color-border);
   border-radius: 12px;
