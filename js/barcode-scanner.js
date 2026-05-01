@@ -326,7 +326,22 @@ function _handleDetected(barcode) {
     setTimeout(() => flash.classList.remove("is-visible"), 500);
   }
   _setStatus("Looking up " + barcode + "…");
+  // Swap the camera panel for a centered spinner + text so the user
+  // gets clear feedback that we're working — without this, the camera
+  // froze on the last frame and the scanner appeared hung.
+  _showBarcodeLoading(barcode);
   setTimeout(() => _lookupBarcode(barcode), 300);
+}
+
+function _showBarcodeLoading(barcode) {
+  const cam = document.getElementById("barcode-camera-panel");
+  if (!cam) return;
+  cam.innerHTML =
+    '<div class="barcode-lookup-loader">' +
+      '<div class="qe-spinner"></div>' +
+      '<div class="barcode-lookup-text">Looking up product…</div>' +
+      (barcode ? '<div class="barcode-lookup-code">' + escHtml(barcode) + '</div>' : "") +
+    '</div>';
 }
 
 function _lookupBarcode(barcode) {
@@ -549,6 +564,11 @@ function confirmBarcodeLog() {
 
   if (typeof renderNutritionHistory === "function") renderNutritionHistory();
   if (typeof updateNutritionDashboard === "function") updateNutritionDashboard();
+
+  // After logging, jump back to the top so the just-added meal is
+  // visible near the dashboard rather than leaving the user mid-scroll
+  // where they tapped the barcode tile.
+  try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { window.scrollTo(0, 0); }
 }
 
 /* ─── Manual barcode entry (inline, in-modal) ──────────────────────────── */
@@ -676,4 +696,9 @@ function quickLogRecentScan(index) {
 
   if (typeof renderNutritionHistory === "function") renderNutritionHistory();
   if (typeof updateNutritionDashboard === "function") updateNutritionDashboard();
+
+  // After logging, jump back to the top so the just-added meal is
+  // visible near the dashboard rather than leaving the user mid-scroll
+  // where they tapped the barcode tile.
+  try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { window.scrollTo(0, 0); }
 }
