@@ -206,29 +206,30 @@
   }
 
   function _runCelebrationAnimation() {
-    // Two surfaces: (1) toast at top of viewport that the user sees
-    // regardless of scroll position — primary signal since the rings
-    // live below the fold while the user is logging, and (2) in-place
-    // ring pulse + sweep for the case the user happens to be at top.
+    // Two surfaces, both anchored to the viewport (not the rings) so
+    // the user sees them regardless of scroll position:
+    //   1. Big lightning bolt flash at center of screen — primary,
+    //      brand-red, slow enough to actually register (~1.7s total).
+    //   2. Toast pill at top with "Stacked Day · Day N".
+    _runCelebrationFlash();
     _runCelebrationToast();
-
-    const container = document.getElementById("daily-rings");
-    if (container) {
-      container.classList.add("stack-pulse");
-      const sweep = document.createElement("div");
-      sweep.className = "stack-sweep";
-      sweep.innerHTML = `
-        <svg viewBox="0 0 24 24" fill="#dc2626" stroke="#dc2626" stroke-width="1" stroke-linejoin="round" aria-hidden="true">
-          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-        </svg>`;
-      container.appendChild(sweep);
-      setTimeout(() => {
-        container.classList.remove("stack-pulse");
-        try { sweep.remove(); } catch {}
-      }, 900);
-    }
-
     _haptic();
+  }
+
+  function _runCelebrationFlash() {
+    const existing = document.getElementById("stack-celebration-flash");
+    if (existing) try { existing.remove(); } catch {}
+
+    const flash = document.createElement("div");
+    flash.id = "stack-celebration-flash";
+    flash.className = "stack-flash";
+    flash.setAttribute("aria-hidden", "true");
+    flash.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="#dc2626" stroke="#dc2626" stroke-width="1" stroke-linejoin="round">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+      </svg>`;
+    document.body.appendChild(flash);
+    setTimeout(() => { try { flash.remove(); } catch {} }, 1800);
   }
 
   function _runCelebrationToast() {
