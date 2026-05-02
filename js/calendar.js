@@ -4972,6 +4972,29 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
           ${buildMacroBox("carbs",    "Carbs",    nutrition.carbs,    dateStr, _floorMin("carbs",     50),  600,  10, "g")}
           ${buildMacroBox("fat",      "Fat",      nutrition.fat,      dateStr, _floorMin("fat",       20),  200,   5, "g")}
         </div>
+        ${isToday ? `
+        <div class="quick-meal-log" role="group" aria-label="Quick meal log">
+          <button type="button" class="quick-meal-btn" onclick="openPhotoMealLog()" title="Photo Log" aria-label="Photo Log">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            <span class="quick-meal-label">Photo</span>
+          </button>
+          <button type="button" class="quick-meal-btn" onclick="openAskIronZMeal()" title="Ask IronZ" aria-label="Ask IronZ">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+            <span class="quick-meal-label">Ask AI</span>
+          </button>
+          <button type="button" class="quick-meal-btn" onclick="openManualMealLog()" title="Manual Entry" aria-label="Manual Entry">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            <span class="quick-meal-label">Manual</span>
+          </button>
+          <button type="button" class="quick-meal-btn" onclick="openQuickAddMeal()" title="Quick Add — recents &amp; favorites" aria-label="Quick Add">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <span class="quick-meal-label">Quick</span>
+          </button>
+          <button type="button" class="quick-meal-btn" onclick="openBarcodeScanner()" title="Scan Barcode" aria-label="Scan Barcode">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6" y2="16"/><line x1="9" y1="8" x2="9" y2="16"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="15" y1="8" x2="15" y2="16"/><line x1="18" y1="8" x2="18" y2="16"/></svg>
+            <span class="quick-meal-label">Barcode</span>
+          </button>
+        </div>` : ""}
       </div>`;
 
     if (data.loggedMeals.length > 0) {

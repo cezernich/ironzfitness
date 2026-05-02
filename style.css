@@ -3712,6 +3712,52 @@ input.completion-ex-name:focus {
 
 .nutrition-target-section { display: flex; flex-direction: column; gap: 10px; }
 
+/* Compact "log a meal" quick-action row inside the home day-detail
+   nutrition section. Mirrors the entry points in the dedicated
+   Nutrition tab card (Photo / Ask IronZ / Manual / Quick / Barcode)
+   but icon-only-with-tiny-label so the row doesn't dominate the home
+   screen the way the tab's full-card buttons would. Each button
+   delegates to the same global handler the Nutrition tab uses, so
+   downstream sync / progress-bar refresh / barcode camera all work
+   identically — no parallel implementations. */
+.quick-meal-log {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+  margin-top: 4px;
+}
+.quick-meal-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex: 1 1 0;
+  min-height: auto;
+  padding: 8px 4px;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.quick-meal-btn:hover {
+  background: var(--color-surface-2);
+  border-color: var(--color-text-muted);
+}
+.quick-meal-btn svg { display: block; }
+.quick-meal-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  letter-spacing: 0.04em;
+}
+
 .generate-meals-section {
   display: flex;
   flex-direction: column;
