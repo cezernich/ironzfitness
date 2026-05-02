@@ -2466,6 +2466,25 @@ function _renderWorkoutHistoryList(workouts) {
       const str = parts.filter(Boolean).join(" · ");
       return str ? `<span class="history-summary">${str}</span>` : "";
     };
+    // Distance formatter — append the unit so "10.67" reads as "10.67 mi"
+    // instead of an unlabelled number. Honors w.distance_unit when the
+    // workout already carries one (e.g. swims log "2000 yd"); otherwise
+    // derives from sport (swim → yd/m, others → mi/km) + the user's
+    // measurement system. Returns "" when no distance is recorded so
+    // _histSummary's filter(Boolean) drops the slot cleanly.
+    const _fmtDistance = (entry) => {
+      if (!entry || !entry.distance) return "";
+      const raw = String(entry.distance).trim();
+      if (!raw) return "";
+      // Already includes a unit (e.g. "10.67 mi") — pass through.
+      if (/[a-zA-Z]/.test(raw)) return raw;
+      if (entry.distance_unit) return `${raw} ${entry.distance_unit}`;
+      const t = String(entry.type || "").toLowerCase();
+      const isSwim = (t === "swimming" || t === "swim");
+      const isMetric = (typeof getMeasurementSystem === "function") && getMeasurementSystem() === "metric";
+      const unit = isSwim ? (isMetric ? "m" : "yd") : (isMetric ? "km" : "mi");
+      return `${raw} ${unit}`;
+    };
 
     // AI-generated cardio session (intervals)
     if (w.aiSession && w.aiSession.intervals) {
@@ -2476,7 +2495,7 @@ function _renderWorkoutHistoryList(workouts) {
       }, 0));
       const summaryHtml = _histSummary([
         totalMin ? `${totalMin} min` : "",
-        w.distance ? String(w.distance) : "",
+        _fmtDistance(w),
       ]);
       const intervals = buildAiIntervalsList(w.aiSession, w.type);
       return `
@@ -2609,7 +2628,7 @@ function _renderWorkoutHistoryList(workouts) {
     // Cardio / minimal session
     const summaryHtml = _histSummary([
       w.duration ? `${w.duration} min` : "",
-      w.distance ? String(w.distance) : "",
+      _fmtDistance(w),
       w.avgWatts ? `${w.avgWatts}W avg` : "",
     ]);
     return `
