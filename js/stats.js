@@ -9,11 +9,21 @@ function localDateStr(d) {
 /* ─── Computations ─────────────────────────────────────────────────────── */
 
 function computeByType(workouts) {
-  const order  = ["weightlifting","bodyweight","hiit","running","swimming","cycling","triathlon","stairstepper","hyrox","yoga","wellness","general","other"];
+  const order  = ["weightlifting","bodyweight","hiit","running","swimming","cycling","brick","stairstepper","hyrox","yoga","wellness","general","other"];
   const counts = {};
   order.forEach(t => counts[t] = 0);
   workouts.forEach(w => {
-    const t = order.includes(w.type) ? w.type : "other";
+    // Run subtypes (easy_recovery, long_run), bike/swim subtypes, and
+    // aliases (run/bike/swim) used to fall through to "other" — fold
+    // them up via the same normalizer the Totals card uses. Also map
+    // legacy triathlon-typed bricks (onboarding-v2 used to store
+    // brick sessions with type:"triathlon"; the Log a Workout form
+    // still does too) onto the brick bucket so they stop landing in
+    // a row called "Triathlon" with a swim icon next to their actual
+    // brick metadata.
+    let t = (typeof _normalizeType === "function") ? _normalizeType(w.type) : (w.type || "general");
+    if (t === "triathlon") t = "brick";
+    if (!order.includes(t)) t = "other";
     counts[t]++;
   });
   return counts;
@@ -161,6 +171,11 @@ function _normalizeType(t) {
   if (x === "walk") return "walking";
   if (x === "row")  return "rowing";
   if (x === "hike") return "hiking";
+  // Legacy: onboarding-v2's brick template + the Log a Workout form's
+  // "Triathlon / Brick" option both stored type:"triathlon" for what
+  // are functionally brick sessions. Fold them into the brick bucket
+  // so the Totals card stops showing a separate Triathlon row.
+  if (x === "triathlon") return "brick";
   return x || "general";
 }
 
@@ -280,8 +295,7 @@ const _TOTALS_TYPE_META = {
   walking:      { label: "Walking",       icon: () => ICONS.activity},
   rowing:       { label: "Rowing",        icon: () => ICONS.activity},
   hiking:       { label: "Hiking",        icon: () => ICONS.activity},
-  triathlon:    { label: "Triathlon",     icon: () => ICONS.swim    },
-  brick:        { label: "Brick",         icon: () => ICONS.bike    },
+  brick:        { label: "Brick",         icon: () => ICONS.brick   },
   hyrox:        { label: "Hyrox",         icon: () => ICONS.flame   },
   stairstepper: { label: "Stair Stepper", icon: () => ICONS.run     },
   mobility:     { label: "Mobility",      icon: () => ICONS.activity},
@@ -471,8 +485,7 @@ function buildStatsBreakdown(byType, total) {
     running:       { label:"Running",        icon:ICONS.run,      color:"var(--color-amber)"  },
     swimming:      { label:"Swimming",       icon:ICONS.swim,     color:"var(--color-cyan)"   },
     cycling:       { label:"Cycling",        icon:ICONS.bike,     color:"var(--color-teal)"   },
-    brick:         { label:"Brick",          icon:ICONS.bike,     color:"var(--color-accent)" },
-    triathlon:     { label:"Triathlon",      icon:ICONS.swim,     color:"var(--color-cyan)"   },
+    brick:         { label:"Brick",          icon:ICONS.brick,    color:"var(--color-accent)" },
     stairstepper:  { label:"Stair Stepper",  icon:ICONS.run,      color:"var(--color-amber)"  },
     hyrox:         { label:"Hyrox",          icon:ICONS.flame,    color:"var(--color-danger)" },
     yoga:          { label:"Yoga",           icon:ICONS.activity, color:"var(--color-teal)"   },

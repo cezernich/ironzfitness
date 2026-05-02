@@ -5070,7 +5070,7 @@
       "strength-full": { type: "weightlifting",discipline: "strength", sessionName: "Full Body",   load: "moderate", _strengthFocus: "full" },
       "strength-custom":{type: "weightlifting",discipline: "strength", sessionName: "Strength",    load: "moderate", _strengthFocus: "full" },
       // Other disciplines
-      "brick":         { type: "triathlon",    discipline: "brick", sessionName: "Brick (Bike → Run)", load: "moderate", duration: Math.round(sessionLen * 1.3) },
+      "brick":         { type: "brick",        discipline: "brick", sessionName: "Brick (Bike → Run)", load: "moderate", duration: Math.round(sessionLen * 1.3) },
       "hiit":          { type: "hiit",         discipline: "hiit",  sessionName: "HIIT",      load: "hard", duration: Math.max(20, Math.round(sessionLen * 0.5)) },
       "yoga":          { type: "yoga",         discipline: "yoga",  sessionName: "Yoga",      load: "easy" },
       "mobility":      { type: "mobility",     discipline: "mobility", sessionName: "Mobility", load: "easy", duration: 20 },
