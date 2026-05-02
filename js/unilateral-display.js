@@ -48,13 +48,16 @@
     /\bstanding\s*(dumbbell|db)\s*single\s*arm/i,
   ];
 
-  // "Per leg" vs "per side" — running cue. Upper-body unilateral
-  // (single-arm row, single-arm press) uses "per arm" / "per side".
-  // Lower-body uses "per leg".
+  // "Per leg" vs "per arm" vs "per side". Order matters — lower-body
+  // keywords have to win first, otherwise "Single Leg Hamstring Ball
+  // Curl" matches the upper-body `\bcurl\b` regex and gets labeled
+  // "per arm" on a hamstring exercise (real bug 2026-05-02). Specific
+  // multi-joint patterns (Turkish get-up, renegade row) get "per side".
   function _perLabel(name) {
     const n = String(name || "").toLowerCase();
-    if (/\barm\b|\brow\b|\bpress\b|\bcurl\b|\bextension\b|\bpulldown\b/.test(n)) return "per arm";
     if (/\bturkish\s*get-?up\b|\brenegade\s*row\b/.test(n)) return "per side";
+    if (/\bleg\b|\bsquat\b|\blunge\b|\bcalf\b|\bhamstring\b|\bglute\b|\bhip\b|\brdl\b|\bdeadlift\b|\bstep[-\s]?up\b|\bbridge\b|\bskater\b|\bkickstand\b/.test(n)) return "per leg";
+    if (/\barm\b|\brow\b|\bpress\b|\bcurl\b|\bextension\b|\bpulldown\b/.test(n)) return "per arm";
     return "per leg";
   }
 

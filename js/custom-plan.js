@@ -1900,17 +1900,19 @@ function customPlanSaveManual() {
         if (pyrRows.length > 0) {
           const perSet = [];
           let hasDiff = false;
-          let hasAnyValue = false;
           pyrRows.forEach(pr => {
             const rRaw = pr.querySelector(".ex-pyr-reps")?.value.trim() || "";
             const wRaw = pr.querySelector(".ex-pyr-weight")?.value.trim() || "";
-            if (rRaw || wRaw) hasAnyValue = true;
             const r = rRaw || ex.reps;
             const w = wRaw || ex.weight;
             perSet.push({ reps: r, weight: w });
             if (r !== ex.reps || w !== ex.weight) hasDiff = true;
           });
-          if (hasDiff || hasAnyValue) {
+          // Only attach perSet when something actually diverges. The
+          // pyramid inputs auto-populate to the parent values, so a
+          // user who never customized would otherwise ship a redundant
+          // perSet that the renderer turns into noisy "Set 1..N" rows.
+          if (hasDiff) {
             ex.perSet = perSet;
             ex.setDetails = perSet; // legacy alias for existing readers
           }

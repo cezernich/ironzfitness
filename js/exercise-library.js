@@ -377,6 +377,21 @@ function buildExerciseTableHTML(exercises, opts) {
     }
   }
 
+  // Per-set rows are noise when every set matches the parent's
+  // reps/weight \u2014 coach-assign currently emits a perSet array even
+  // when nothing was customized (auto-populated inputs match the row
+  // default). Skip the breakdown unless at least one set diverges.
+  const _setsAddSignal = (e) => {
+    if (!e || !Array.isArray(e.setDetails) || !e.setDetails.length) return false;
+    const parentReps = String(e.reps == null ? "" : e.reps).trim();
+    const parentWt   = String(e.weight == null ? "" : e.weight).trim();
+    return e.setDetails.some(sd => {
+      const r = String(sd?.reps == null ? "" : sd.reps).trim();
+      const w = String(sd?.weight == null ? "" : sd.weight).trim();
+      return (r && r !== parentReps) || (w && w !== parentWt);
+    });
+  };
+
   let rows = "";
   let flatIdx = 0;
   segments.forEach(seg => {
@@ -385,7 +400,7 @@ function buildExerciseTableHTML(exercises, opts) {
       rows += `<tr class="superset-label-row"><td colspan="${cols}">Superset &mdash; ${ssSets} sets</td></tr>`;
       seg.items.forEach(e => {
         rows += `<tr class="superset-ex-row"><td>${_link(e)}</td><td></td><td>${_reps(e.reps, e.name)}</td><td>${_wt(e.weight, e.name)}</td>${_swapBtn(flatIdx)}</tr>`;
-        if (e.setDetails && e.setDetails.length) {
+        if (_setsAddSignal(e)) {
           e.setDetails.forEach((sd, si) => {
             rows += `<tr class="superset-ex-row set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${_reps(sd.reps, e.name)}</td><td>${_wt(sd.weight, e.name)}</td>${swappable ? "<td></td>" : ""}</tr>`;
           });
@@ -400,7 +415,7 @@ function buildExerciseTableHTML(exercises, opts) {
       } else {
         rows += `<tr><td>${_link(e)}</td><td>${e.sets||"\u2014"}</td><td>${_reps(e.reps, e.name)}</td><td>${_wt(e.weight, e.name)}</td>${_swapBtn(flatIdx)}</tr>`;
       }
-      if (e.setDetails && e.setDetails.length) {
+      if (_setsAddSignal(e)) {
         e.setDetails.forEach((sd, si) => {
           rows += `<tr class="set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${_reps(sd.reps, e.name)}</td><td>${_wt(sd.weight, e.name)}</td>${swappable ? "<td></td>" : ""}</tr>`;
         });

@@ -674,22 +674,22 @@
     const defaultWeight = (document.getElementById(`coach-assign-ex-weight-${rowId}`)?.value || "").trim();
     const details = [];
     let hasDiff = false;
-    let hasAnyValue = false;
     for (let s = 0; ; s++) {
       const r = document.getElementById(`coach-assign-sd-reps-${rowId}-${s}`);
       if (!r) break;
       const rv = (r.value || "").trim();
       const wv = (document.getElementById(`coach-assign-sd-wt-${rowId}-${s}`)?.value || "").trim();
       details.push({ reps: rv || defaultReps, weight: wv || defaultWeight });
-      if (rv || wv) hasAnyValue = true;
       if ((rv && rv !== defaultReps) || (wv && wv !== defaultWeight)) hasDiff = true;
     }
     if (!details.length) return null;
-    // Skip perSet only when there's literally nothing useful to send:
-    // no per-set values entered AND no diff vs the row defaults. If the
-    // coach typed per-set values that happen to match an empty default
-    // row, we still want to ship them — that's intent.
-    if (!hasAnyValue && !hasDiff) return null;
+    // Only emit perSet when at least one set diverges from the row
+    // default. The per-set inputs auto-populate visually with the row
+    // value, so a coach who never customized would otherwise ship 4
+    // identical perSet rows that the athlete's calendar then renders
+    // as "Set 1, Set 2, Set 3, Set 4" — pure noise. Real customization
+    // (a different rep count or weight on any set) still ships.
+    if (!hasDiff) return null;
     return details;
   }
 

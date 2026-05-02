@@ -456,18 +456,19 @@ function _editReadSetDetails(rowId) {
   const defaultWeight = (document.getElementById(`edit-wt-${rowId}`)?.value || "").trim();
   const details = [];
   let hasDiff = false;
-  let hasAnyValue = false;
   for (let s = 0; ; s++) {
     const r = document.getElementById(`edit-sd-reps-${rowId}-${s}`);
     if (!r) break;
     const rv = (r.value || "").trim();
     const wv = (document.getElementById(`edit-sd-wt-${rowId}-${s}`)?.value || "").trim();
     details.push({ reps: rv || defaultReps, weight: wv || defaultWeight });
-    if (rv || wv) hasAnyValue = true;
     if ((rv && rv !== defaultReps) || (wv && wv !== defaultWeight)) hasDiff = true;
   }
   if (!details.length) return null;
-  if (!hasAnyValue && !hasDiff) return null;
+  // Only emit perSet when at least one set actually diverges from the
+  // row default — auto-populated inputs would otherwise carry 4 noise
+  // rows downstream. Mirrors _coachAssignReadSetDetails.
+  if (!hasDiff) return null;
   return details;
 }
 
