@@ -180,6 +180,26 @@
     return "unchanged";
   }
 
+  // Sweep the last N days through reconcileStack. Needed because
+  // reconcileStack alone is per-date — if a user retroactively deletes
+  // a meal from yesterday today, the per-pillar handler that fires
+  // passes today's date (or the deleted item's date, sometimes), and
+  // yesterday's stale history entry never gets revisited. Confirmed
+  // bug 2026-05-02: stackedDayHistory had a date whose live pillars
+  // showed nutrition:false, so the streak said 1-day even though
+  // yesterday wasn't actually stacked.
+  function reconcileRecentStack(days) {
+    const n = Math.max(1, Number(days) || 7);
+    const today = _today();
+    let changed = 0;
+    for (let i = 0; i < n; i++) {
+      const d = _addDays(today, -i);
+      const r = reconcileStack(d);
+      if (r === "added" || r === "removed") changed++;
+    }
+    return changed;
+  }
+
   // Walks the history backward from today; tolerates a missed-but-not-yet
   // ended state (today not yet hit, but yesterday was → streak still alive).
   function getStackStreak() {
@@ -429,6 +449,7 @@
     isStackHit,
     recordStackIfHit,
     reconcileStack,
+    reconcileRecentStack,
     getStackStreak,
     getBestStackStreak,
     maybeFireStackCelebration,
@@ -436,4 +457,19 @@
     toggleStackHistory,
     previewCelebration,
   };
+
+  // Boot sweep: pillar-state helpers (getDataForDate, getDailyNutritionTarget,
+  // getHydrationBreakdownForDate) come from sibling scripts loaded in
+  // index.html order — defer until DOMContentLoaded so they're defined.
+  // Without this, a stale yesterday entry survives the page load and the
+  // streak pill renders before the visibility / data-refresh handlers
+  // get a chance to clean it up.
+  function _bootReconcile() {
+    try { reconcileRecentStack(7); } catch (e) { console.warn("[Stack] boot reconcile failed:", e); }
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", _bootReconcile, { once: true });
+  } else {
+    setTimeout(_bootReconcile, 0);
+  }
 })();

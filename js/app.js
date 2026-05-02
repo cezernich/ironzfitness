@@ -714,6 +714,11 @@ function init() {
       if (window.StackUX) {
         try {
           window.StackUX.recordStackIfHit();
+          // Sweep recent days too — a retroactive change on another
+          // device (deleted meal, edited target) could have invalidated
+          // a previously-recorded stack date that reconcileStack alone
+          // wouldn't revisit.
+          if (window.StackUX.reconcileRecentStack) window.StackUX.reconcileRecentStack(7);
           window.StackUX.maybeFireStackCelebration();
         } catch {}
       }
@@ -747,7 +752,11 @@ function init() {
       // stack-eligibility.
       const stackKeys = ["meals", "hydrationLog", "completedSessions", "stackedDayHistory"];
       if (window.StackUX && keys.some(k => stackKeys.includes(k))) {
-        if (window.StackUX.reconcileStack) window.StackUX.reconcileStack();
+        // Sweep last 7 days, not just today — a retroactive edit
+        // (e.g. meal removed from yesterday) needs to revisit the
+        // affected past date, not just today's reconcile.
+        if (window.StackUX.reconcileRecentStack) window.StackUX.reconcileRecentStack(7);
+        else if (window.StackUX.reconcileStack)  window.StackUX.reconcileStack();
         if (window.StackUX.maybeFireStackCelebration) window.StackUX.maybeFireStackCelebration();
       }
     } catch (err) {
