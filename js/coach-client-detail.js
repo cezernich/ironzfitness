@@ -36,6 +36,11 @@
   // Save state for the active edit form: "idle" | "saving" | "error".
   let _tiSaveState = "idle";
   let _tiSaveError = "";
+  // PR 3c: in-progress weekly-schedule chip edits live here (separate
+  // from the read-mode template) so picker add/remove between renders
+  // doesn't snap back to the saved value. Initialized when edit opens,
+  // cleared on cancel or save.
+  let _tiWeeklyDraft = null;
   // Phase 3B: lookup table for the Calendar tab. Each rendered planned
   // item gets an index here; the inline onclick references it so the
   // Edit handler can resolve back to the schedule entry without
@@ -748,27 +753,10 @@
         : _renderTIReadStrength(ti));
     }
 
-    // Weekly schedule template (read-only — chip-grid editor deferred
-    // to PR 3c).
-    const tpl = ti.buildPlanTemplate;
-    if (tpl && typeof tpl === "object") {
-      const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-      const dayLabels = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
-      const rows = days.map(d => {
-        const slots = Array.isArray(tpl[d]) ? tpl[d] : [];
-        const chips = slots.length
-          ? slots.map(s => `<span class="coach-ti-slot">${_esc(_prettySlot(s))}</span>`).join("")
-          : `<span class="coach-ti-slot coach-ti-slot--rest">Rest</span>`;
-        return `<div class="coach-ti-week-row">
-          <div class="coach-ti-week-day">${dayLabels[d]}</div>
-          <div class="coach-ti-week-slots">${chips}</div>
-        </div>`;
-      }).join("");
-      sections.push(`<div class="card coach-ti-card">
-        <div class="coach-ti-card-title">Weekly Schedule</div>
-        <div class="coach-ti-week">${rows}</div>
-      </div>`);
-    }
+    // Weekly schedule template (PR 3c: editable chip grid)
+    sections.push(_editingTI === "weekly-schedule"
+      ? _renderTIEditWeekly(ti)
+      : _renderTIReadWeekly(ti));
 
     // Long days
     sections.push(_editingTI === "long-days"
@@ -819,6 +807,116 @@
       ${ti.longDays.longRun  ? `<div class="coach-ti-row"><div class="coach-ti-label">Long run</div><div class="coach-ti-value">${_esc(dayLabels[ti.longDays.longRun]  || ti.longDays.longRun)}</div></div>` : ""}
       ${ti.longDays.longRide ? `<div class="coach-ti-row"><div class="coach-ti-label">Long ride</div><div class="coach-ti-value">${_esc(dayLabels[ti.longDays.longRide] || ti.longDays.longRide)}</div></div>` : ""}
     </div>`;
+  }
+
+  // ── PR 3c: Weekly Schedule chip-grid editor ───────────────────────────
+  // Read-mode mirrors PR 1's render (chip per slot, "Rest" placeholder
+  // for empty days). Edit-mode replaces each day's chip row with chips
+  // that have a remove (×) button + a small picker to add new slots.
+  // Drag/drop is intentionally skipped — the V2 athlete picker has
+  // it but it's hard to make accessible on mobile, and add+remove
+  // covers the cases coaches actually care about. Variant sub-types
+  // (run-long, run-interval, etc.) aren't selectable here either —
+  // they get re-derived by the plan generator from the long-day picks
+  // and run/bike count, so coaches stay in plain-type land.
+  const _TI_DAY_KEYS   = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+  const _TI_DAY_LABELS = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
+  const _TI_PICKER_OPTIONS = [
+    { id: "run",      label: "Run" },
+    { id: "bike",     label: "Bike" },
+    { id: "swim",     label: "Swim" },
+    { id: "strength", label: "Strength" },
+    { id: "brick",    label: "Brick" },
+    { id: "rest",     label: "Rest (clear day)" },
+  ];
+  function _renderTIReadWeekly(ti) {
+    const tpl = ti.buildPlanTemplate;
+    if (!tpl || typeof tpl !== "object") return "";
+    const rows = _TI_DAY_KEYS.map(d => {
+      const slots = Array.isArray(tpl[d]) ? tpl[d] : [];
+      const chips = slots.length
+        ? slots.map(s => `<span class="coach-ti-slot">${_esc(_prettySlot(s))}</span>`).join("")
+        : `<span class="coach-ti-slot coach-ti-slot--rest">Rest</span>`;
+      return `<div class="coach-ti-week-row">
+        <div class="coach-ti-week-day">${_TI_DAY_LABELS[d]}</div>
+        <div class="coach-ti-week-slots">${chips}</div>
+      </div>`;
+    }).join("");
+    return `<div class="card coach-ti-card">
+      <div class="coach-ti-card-header">
+        <div class="coach-ti-card-title">Weekly Schedule</div>
+        <button type="button" class="coach-ti-edit-btn" onclick="coachTIEdit('weekly-schedule')">Edit</button>
+      </div>
+      <div class="coach-ti-week">${rows}</div>
+    </div>`;
+  }
+  function _renderTIEditWeekly(ti) {
+    const draft = _tiWeeklyDraft || {};
+    const pickerOpts = _TI_PICKER_OPTIONS
+      .map(o => `<option value="${o.id}">${_esc(o.label)}</option>`)
+      .join("");
+    const rows = _TI_DAY_KEYS.map(d => {
+      const slots = Array.isArray(draft[d]) ? draft[d] : [];
+      const chips = slots.length === 0
+        ? `<span class="coach-ti-slot coach-ti-slot--rest">Rest</span>`
+        : slots.map((s, i) => `<span class="coach-ti-slot coach-ti-slot--editable">
+            ${_esc(_prettySlot(s))}
+            <button type="button" class="coach-ti-slot-x" aria-label="Remove"
+              onclick="coachTIWeeklyRemove('${d}', ${i})">&times;</button>
+          </span>`).join("");
+      return `<div class="coach-ti-week-row coach-ti-week-row--editing">
+        <div class="coach-ti-week-day">${_TI_DAY_LABELS[d]}</div>
+        <div class="coach-ti-week-slots">${chips}</div>
+        <select class="coach-ti-week-pick" onchange="coachTIWeeklyAdd('${d}', this.value); this.value='';">
+          <option value="">+ Add</option>
+          ${pickerOpts}
+        </select>
+      </div>`;
+    }).join("");
+    return `<div class="card coach-ti-card coach-ti-card--editing">
+      <div class="coach-ti-card-header">
+        <div class="coach-ti-card-title">Edit Weekly Schedule</div>
+      </div>
+      <p class="coach-ti-help">Tap × to remove a slot. Use + Add to drop in a new sport for any day. The plan generator handles the variant (long / interval / easy) automatically based on the long-day picks below.</p>
+      <div class="coach-ti-week">${rows}</div>
+      ${_renderTISaveBar("weekly-schedule")}
+    </div>`;
+  }
+  // Picker handlers — both mutate the draft, then rerender. Keep the
+  // mutual-exclusion rules consistent with onboarding-v2's
+  // _addSlotToDay so the saved template lines up with what the
+  // athlete would have produced building it themselves:
+  //   - Adding "rest" wipes the day.
+  //   - Adding "brick" strips bike/run-family chips.
+  //   - Adding bike/run when "brick" is already there is a no-op.
+  //   - Adding "rest" silently strips any other slots first (no-op
+  //     if the day is already empty).
+  function coachTIWeeklyAdd(dayKey, sport) {
+    if (!_tiWeeklyDraft || !sport) return;
+    if (!Array.isArray(_tiWeeklyDraft[dayKey])) _tiWeeklyDraft[dayKey] = [];
+    const day = _tiWeeklyDraft[dayKey];
+    if (sport === "rest") {
+      _tiWeeklyDraft[dayKey] = [];
+      _rerenderTrainingInputs();
+      return;
+    }
+    const isBikeRunFamily = (s) =>
+      s === "bike" || s === "run" ||
+      (typeof s === "string" && (s.indexOf("bike-") === 0 || s.indexOf("run-") === 0));
+    if (sport === "brick") {
+      _tiWeeklyDraft[dayKey] = day.filter(s => !isBikeRunFamily(s));
+    } else if (isBikeRunFamily(sport) && day.includes("brick")) {
+      return; // brick covers bike + run for that day
+    }
+    if (!_tiWeeklyDraft[dayKey].includes(sport)) {
+      _tiWeeklyDraft[dayKey].push(sport);
+    }
+    _rerenderTrainingInputs();
+  }
+  function coachTIWeeklyRemove(dayKey, idx) {
+    if (!_tiWeeklyDraft || !Array.isArray(_tiWeeklyDraft[dayKey])) return;
+    _tiWeeklyDraft[dayKey].splice(idx, 1);
+    _rerenderTrainingInputs();
   }
 
   // ── Edit-mode renderers ─────────────────────────────────────────────
@@ -963,12 +1061,26 @@
     _editingTI    = card;
     _tiSaveState  = "idle";
     _tiSaveError  = "";
+    // Snapshot the current weekly template so picker add/remove
+    // operations have a target to mutate that's separate from the
+    // saved value. Per-day arrays are shallow-cloned so removals
+    // don't reach back into _data.trainingInputs.
+    if (card === "weekly-schedule") {
+      const tpl = _data.trainingInputs?.buildPlanTemplate || {};
+      _tiWeeklyDraft = {};
+      for (const d of _TI_DAY_KEYS) {
+        _tiWeeklyDraft[d] = Array.isArray(tpl[d]) ? tpl[d].slice() : [];
+      }
+    } else {
+      _tiWeeklyDraft = null;
+    }
     _rerenderTrainingInputs();
   }
   function coachTICancel() {
-    _editingTI    = null;
-    _tiSaveState  = "idle";
-    _tiSaveError  = "";
+    _editingTI     = null;
+    _tiSaveState   = "idle";
+    _tiSaveError   = "";
+    _tiWeeklyDraft = null;
     _rerenderTrainingInputs();
   }
   async function coachTISave(card) {
@@ -1001,9 +1113,10 @@
           : dataKey
         ] = dataValue;
       }
-      _editingTI    = null;
-      _tiSaveState  = "idle";
-      _tiSaveError  = "";
+      _editingTI     = null;
+      _tiSaveState   = "idle";
+      _tiSaveError   = "";
+      _tiWeeklyDraft = null;
       _rerenderTrainingInputs();
     } catch (e) {
       _tiSaveState = "error";
@@ -1052,6 +1165,17 @@
       if (longRun)  next.longRun  = longRun;
       if (longRide) next.longRide = longRide;
       return [["longDays", next]];
+    }
+    if (card === "weekly-schedule") {
+      // Normalize the in-memory draft for save: only persist days that
+      // have at least one slot (matches onboarding-v2 _normalizeTemplate).
+      // Empty days are implicit rest — no entry needed in the JSONB.
+      const out = {};
+      for (const d of _TI_DAY_KEYS) {
+        const slots = Array.isArray(_tiWeeklyDraft?.[d]) ? _tiWeeklyDraft[d] : [];
+        if (slots.length) out[d] = slots.slice();
+      }
+      return [["buildPlanTemplate", out]];
     }
     return null;
   }
@@ -1858,4 +1982,7 @@
   window.coachTIEdit             = coachTIEdit;
   window.coachTICancel           = coachTICancel;
   window.coachTISave             = coachTISave;
+  // PR 3c — Weekly Schedule chip-grid handlers.
+  window.coachTIWeeklyAdd        = coachTIWeeklyAdd;
+  window.coachTIWeeklyRemove     = coachTIWeeklyRemove;
 })();

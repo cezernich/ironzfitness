@@ -15473,6 +15473,48 @@ input.completion-ex-name:focus {
   font-size: 0.78rem;
   color: var(--color-danger, #b91c1c);
 }
+
+/* Weekly schedule editor (PR 3c). Editable rows get an inline picker
+   trailing the chips; chips themselves grow a small × button so the
+   coach can pull a slot without re-opening anything. */
+.coach-ti-week-row--editing {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.coach-ti-slot--editable {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 4px;
+}
+.coach-ti-slot-x {
+  background: none;
+  border: none;
+  font-size: 0.95rem;
+  line-height: 1;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.coach-ti-slot-x:hover { color: var(--color-danger, #b91c1c); }
+.coach-ti-week-pick {
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 3px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+.coach-ti-help {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+  margin: 0 0 12px;
+}
 .coach-ti-row {
   display: flex;
   align-items: baseline;
