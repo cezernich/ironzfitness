@@ -177,6 +177,12 @@
       const pills = slots.length === 0
         ? `<span class="coach-program-day-empty">Rest</span>`
         : slots.map((slot, i) => {
+            // Slot can be:
+            //   { library_id }                       — pristine library reference
+            //   { ...workoutJson, derived_from_library_id? } — detached / customized
+            // Custom slots show "✎" suffix so the coach can see at a glance
+            // which workouts have been edited away from the library version.
+            const isCustom = !!(slot && !slot.library_id);
             let name;
             if (slot && slot.library_id) {
               const lib = _libraryItems.find(x => x.id === slot.library_id);
@@ -184,10 +190,13 @@
             } else {
               name = (slot && slot.sessionName) || "Custom";
             }
-            return `<span class="coach-program-day-pill">
-              <span class="coach-program-day-pill-name">${_esc(name)}</span>
+            return `<span class="coach-program-day-pill${isCustom ? " coach-program-day-pill--custom" : ""}"
+                          onclick="editCoachProgramDay('${d.key}', ${i})"
+                          role="button" tabindex="0"
+                          title="${isCustom ? "Customized for this program — tap to edit" : "Tap to customize for this program"}">
+              <span class="coach-program-day-pill-name">${_esc(name)}${isCustom ? " <span class=\"coach-program-day-pill-edited\">✎</span>" : ""}</span>
               <button type="button" class="coach-program-day-pill-x" aria-label="Remove"
-                onclick="removeCoachProgramDay('${d.key}', ${i})">&times;</button>
+                onclick="event.stopPropagation();removeCoachProgramDay('${d.key}', ${i})">&times;</button>
             </span>`;
           }).join("");
       const restOption = slots.length > 0
@@ -254,6 +263,77 @@
     if (next.length === 0) delete _draftTemplate[dayKey];
     else                   _draftTemplate[dayKey] = next;
     _renderBuilder();
+  }
+
+  // PR 3a: tap a workout pill in the program builder → opens the
+  // coach-assignment modal in program-slot mode. Save replaces this
+  // slot's content with the coach's customized JSONB and stamps
+  // derived_from_library_id (if the slot was a pristine library
+  // reference) so we keep the breadcrumb to the original. The
+  // library item itself is not touched — same workout in another
+  // program stays as the original. Coach can rename via the
+  // sessionName field and that rename also stays scoped to this
+  // slot only.
+  function editCoachProgramDay(dayKey, idx) {
+    const current = _slotsForDay(_draftTemplate, dayKey);
+    const slot = current[idx];
+    if (!slot) return;
+    if (typeof window.openAssignWorkoutModalForProgramSlot !== "function") {
+      console.warn("[coach-programs] assign modal not loaded");
+      return;
+    }
+
+    // Build the prefill from whatever shape the slot is in. Pristine
+    // library reference → look up the library item's content; custom
+    // slot → use the slot's own fields.
+    let prefill;
+    let originLibraryId = null;
+    if (slot.library_id) {
+      const lib = _libraryItems.find(x => x.id === slot.library_id);
+      originLibraryId = slot.library_id;
+      const w = (lib && lib.workout) || {};
+      prefill = {
+        sessionName: lib?.name || w.sessionName || "",
+        type:        w.type || "weightlifting",
+        exercises:   Array.isArray(w.exercises) ? w.exercises : [],
+        intervals:   Array.isArray(w.aiSession?.intervals) ? w.aiSession.intervals
+                    : Array.isArray(w.intervals)          ? w.intervals : [],
+        hiitMeta:    w.hiitMeta || null,
+        duration:    w.duration || "",
+        coachNote:   w.coachNote || w.details || "",
+        whyText:     w.whyText || w.why_text || "",
+      };
+    } else {
+      // Already-customized slot — preserve any prior derived_from_library_id
+      // so further edits keep the same ancestry breadcrumb.
+      originLibraryId = slot.derived_from_library_id || null;
+      prefill = {
+        sessionName: slot.sessionName || "",
+        type:        slot.type || "weightlifting",
+        exercises:   Array.isArray(slot.exercises) ? slot.exercises : [],
+        intervals:   Array.isArray(slot.aiSession?.intervals) ? slot.aiSession.intervals
+                    : Array.isArray(slot.intervals)          ? slot.intervals : [],
+        hiitMeta:    slot.hiitMeta || null,
+        duration:    slot.duration || "",
+        coachNote:   slot.coachNote || slot.details || "",
+        whyText:     slot.whyText || slot.why_text || "",
+      };
+    }
+
+    window.openAssignWorkoutModalForProgramSlot(prefill, (workoutJson) => {
+      // Detach: replace this slot with the customized JSONB. Stamp
+      // derived_from_library_id so the breadcrumb survives — future
+      // features (re-link, "view original") read this field. Library
+      // item is untouched; programs sharing it see the original.
+      const updatedSlot = {
+        ...workoutJson,
+        ...(originLibraryId ? { derived_from_library_id: originLibraryId } : {}),
+      };
+      const next = _slotsForDay(_draftTemplate, dayKey).slice();
+      next[idx] = updatedSlot;
+      _draftTemplate[dayKey] = next;
+      _renderBuilder();
+    });
   }
 
   async function saveCoachProgram() {
@@ -635,6 +715,7 @@
   window.setCoachProgramWeeks          = setCoachProgramWeeks;
   window.addCoachProgramDay            = addCoachProgramDay;
   window.removeCoachProgramDay         = removeCoachProgramDay;
+  window.editCoachProgramDay           = editCoachProgramDay;
   window.saveCoachProgram              = saveCoachProgram;
   window.deleteCoachProgram            = deleteCoachProgram;
   window.openCoachProgramApply         = openCoachProgramApply;

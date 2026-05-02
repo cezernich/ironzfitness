@@ -27,6 +27,15 @@
                                      // coach_workout_library instead of
                                      // coach_assigned_workouts.
   let _libraryEditId = null;         // 3C edit existing library item.
+  // PR 3a (coach programs): when true, submit hands the built workoutJson
+  // to a caller-supplied callback INSTEAD of writing anywhere. Used by
+  // the program builder to detach a program slot from its library origin
+  // and inline-customize the workout for that program only — the caller
+  // (coach-programs.js) then writes the JSONB onto its own weekly_template
+  // slot and persists via update_coach_program_workout. Library entry +
+  // any other programs sharing it stay untouched.
+  let _programSlotMode = false;
+  let _programSlotCallback = null;   // (workoutJson) => void
   // Buffer used by the conflict modal so the user's filled form doesn't
   // get re-fetched after they pick replace/stack/freeze.
   let _pendingPayload = null;
@@ -128,7 +137,55 @@
     _editingAssignmentId = null;
     _libraryMode = false;
     _libraryEditId = null;
+    _programSlotMode = false;
+    _programSlotCallback = null;
     _pendingPayload = null;
+  }
+
+  // PR 3a entry point: re-uses the assignment modal in "edit a program
+  // slot" mode. Same form layout as the library editor — date hidden,
+  // sessionName editable — but on submit the modal calls back to the
+  // caller (coach-programs.js) with the built workoutJson INSTEAD of
+  // writing to coach_workout_library or coach_assigned_workouts. The
+  // caller is responsible for detaching the slot from its library
+  // ancestor (storing derived_from_library_id) and persisting via
+  // its own RPC.
+  //
+  // prefill mirrors the library editor: { sessionName, type, exercises,
+  // intervals/aiSession, hiitMeta, duration, coachNote, whyText }.
+  // onSave(workoutJson) is invoked exactly once, then the modal closes.
+  function openAssignWorkoutModalForProgramSlot(prefill, onSave) {
+    _clientId = null;
+    _clientName = "";
+    _libraryMode = false;
+    _libraryEditId = null;
+    _editingAssignmentId = null;
+    _programSlotMode = true;
+    _programSlotCallback = (typeof onSave === "function") ? onSave : null;
+
+    const overlay = document.getElementById("coach-assign-overlay");
+    if (!overlay) return;
+
+    _resetForm();
+    _populatePrefill(prefill || {});
+
+    // Hide date + duration like the library editor — this slot is part
+    // of a weekly template, not a calendar entry. Subtitle reflects the
+    // detach semantics so the coach knows their edit only affects this
+    // program.
+    const dateRow = document.getElementById("coach-assign-date")?.closest(".form-row");
+    if (dateRow) dateRow.style.display = "none";
+    const subtitle = document.getElementById("coach-assign-subtitle");
+    if (subtitle) subtitle.textContent = "Customize this workout for this program only — the library version stays unchanged.";
+
+    const submitBtn = document.getElementById("coach-assign-save-btn");
+    if (submitBtn) submitBtn.textContent = "Save Changes";
+
+    overlay.classList.add("is-open");
+
+    if (typeof trackEvent === "function") {
+      try { trackEvent("coach_program_slot_edit_opened", {}); } catch {}
+    }
   }
 
   // Phase 3C entry point: re-uses the assignment modal in "save to
@@ -1108,11 +1165,25 @@
       ...(isYoga && coachNote ? { details: coachNote } : {}),
       ...(duration ? { duration } : {}),
       ...(whyText ? { whyText } : {}),
+      ...(coachNote && !isYoga ? { coachNote } : {}),
       level: "intermediate",
       source: "coach_assigned",   // hint for any code that walks the
                                   // JSONB before the trigger merges its
                                   // own copy of the same field.
     };
+
+    // PR 3a: program-slot edit hands the JSONB to the caller and exits
+    // before any write path. The caller is responsible for persisting
+    // (with derived_from_library_id stamped on the slot).
+    if (_programSlotMode) {
+      const cb = _programSlotCallback;
+      closeAssignWorkoutModal();
+      if (cb) {
+        try { cb(workoutJson); }
+        catch (e) { console.warn("[coach-assign] program slot callback failed", e); }
+      }
+      return;
+    }
 
     _pendingPayload = {
       client_id: _clientId,
@@ -1417,6 +1488,7 @@
   // ── Public surface ─────────────────────────────────────────────────────
   window.openAssignWorkoutModal             = openAssignWorkoutModal;
   window.openAssignWorkoutModalForLibrary   = openAssignWorkoutModalForLibrary;
+  window.openAssignWorkoutModalForProgramSlot = openAssignWorkoutModalForProgramSlot;
   window.closeAssignWorkoutModal            = closeAssignWorkoutModal;
   window.submitAssignWorkout                = submitAssignWorkout;
   window.coachAssignAddExRow                = coachAssignAddExRow;
