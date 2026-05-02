@@ -2443,9 +2443,15 @@ function _renderWorkoutHistoryList(workouts) {
     const _fallbackName = !w.name ? capitalize(w.type || "Workout") : "";
     const nameHtml   = `<span class="history-workout-name">${escHtml(w.name || _fallbackName)}</span>`;
     const starred    = isWorkoutStarred(w.id);
-    const hasContent = (w.exercises && w.exercises.length) || (w.segments && w.segments.length);
+    // Share button used to be gated on exercises[].length || segments[].length,
+    // which silently hid it on cardio entries logged as name + duration +
+    // distance (running, brick, etc.). Result: weightlifting cards had a
+    // share icon, running cards didn't — looked like an arbitrary
+    // restriction. Every workout in history has at least name + duration,
+    // which is enough to share. buildShareIconButton handles the empty-
+    // payload case downstream if we ever want to gate again.
     const _eid = escHtml(String(w.id));
-    const _shareBtn = (hasContent && typeof buildShareIconButton === "function")
+    const _shareBtn = (typeof buildShareIconButton === "function")
       ? buildShareIconButton(w, "history")
       : "";
     const btnHtml   = `
