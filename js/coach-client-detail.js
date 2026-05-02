@@ -29,6 +29,13 @@
   // etc.) so only one field is open at a time.
   let _audit = {};
   let _editingFeature = null;
+  // PR 3b: which Training Inputs card is in edit mode. One at a time so
+  // the surrounding cards stay read-only and the coach has one place to
+  // commit/cancel. Values: null | "sports-goals" | "strength" | "long-days".
+  let _editingTI = null;
+  // Save state for the active edit form: "idle" | "saving" | "error".
+  let _tiSaveState = "idle";
+  let _tiSaveError = "";
   // Phase 3B: lookup table for the Calendar tab. Each rendered planned
   // item gets an index here; the inline onclick references it so the
   // Edit handler can resolve back to the schedule entry without
@@ -700,9 +707,15 @@
   // Read-only mirror of the athlete's "Active Training Inputs" home-card.
   // Lists upcoming races (with priority + countdown), the sport mix and
   // training goals, the weekly schedule template, and (for hybrids) the
-  // strength role + setup. Edit lands in PR 3 with an in-place coach-edit
-  // mode that re-runs the plan generator on save; delete lands in PR 4
-  // with a typed-confirm modal.
+  // strength role + setup.
+  //
+  // PR 3b adds inline edit forms for Sports & Goals, Strength, and
+  // Long Days. Race + Weekly Schedule are read-only here — race edit
+  // is a multi-step modal (PR 5 / future) and weekly-schedule edit
+  // would re-introduce the chip drag/drop widget (deferred to PR 3c).
+  // Only one card can be in edit mode at a time so the coach has a
+  // clear save/cancel surface and we don't have to coordinate
+  // partially-saved state across multiple in-flight forms.
   function _renderTrainingInputs() {
     const ti = _data.trainingInputs || {};
     const today = new Date().toISOString().slice(0, 10);
@@ -712,7 +725,8 @@
 
     const sections = [];
 
-    // Race cards
+    // Race cards (read-only — race edit lives in its own multi-step
+    // modal, deferred to PR 5).
     if (upcoming.length) {
       sections.push(`<div class="coach-ti-section-label">Upcoming races</div>`);
       sections.push(upcoming.map(r => _coachRaceCard(r)).join(""));
@@ -721,31 +735,21 @@
     }
 
     // Sports + goals
-    const sportsRow = (ti.selectedSports || []).map(s => `<span class="coach-ti-pill">${_esc(_prettySport(s))}</span>`).join("");
-    const goalsRow  = (ti.trainingGoals  || []).map(g => `<span class="coach-ti-pill coach-ti-pill--accent">${_esc(_prettyGoal(g))}</span>`).join("");
-    if (sportsRow || goalsRow) {
-      sections.push(`<div class="card coach-ti-card">
-        <div class="coach-ti-card-title">Sports &amp; Goals</div>
-        ${sportsRow ? `<div class="coach-ti-row"><div class="coach-ti-label">Sports</div><div class="coach-ti-pills">${sportsRow}</div></div>` : ""}
-        ${goalsRow  ? `<div class="coach-ti-row"><div class="coach-ti-label">Goals</div><div class="coach-ti-pills">${goalsRow}</div></div>` : ""}
-      </div>`);
-    }
+    sections.push(_editingTI === "sports-goals"
+      ? _renderTIEditSportsGoals(ti)
+      : _renderTIReadSportsGoals(ti));
 
     // Strength setup — only when the athlete is hybrid (selectedSports
     // includes "strength" OR a strengthRole is set).
     const hasStrength = (ti.selectedSports || []).includes("strength") || !!ti.strengthRole;
-    if (hasStrength) {
-      const setup = ti.strengthSetup || {};
-      sections.push(`<div class="card coach-ti-card">
-        <div class="coach-ti-card-title">Strength</div>
-        ${ti.strengthRole ? `<div class="coach-ti-row"><div class="coach-ti-label">Role</div><div class="coach-ti-value">${_esc(_prettyRole(ti.strengthRole))}</div></div>` : ""}
-        ${setup.sessionsPerWeek ? `<div class="coach-ti-row"><div class="coach-ti-label">Sessions / week</div><div class="coach-ti-value">${_esc(String(setup.sessionsPerWeek))}</div></div>` : ""}
-        ${setup.split ? `<div class="coach-ti-row"><div class="coach-ti-label">Split</div><div class="coach-ti-value">${_esc(_prettySplit(setup.split))}</div></div>` : ""}
-        ${setup.sessionLength ? `<div class="coach-ti-row"><div class="coach-ti-label">Session length</div><div class="coach-ti-value">${_esc(String(setup.sessionLength))} min</div></div>` : ""}
-      </div>`);
+    if (hasStrength || _editingTI === "strength") {
+      sections.push(_editingTI === "strength"
+        ? _renderTIEditStrength(ti)
+        : _renderTIReadStrength(ti));
     }
 
-    // Weekly schedule template
+    // Weekly schedule template (read-only — chip-grid editor deferred
+    // to PR 3c).
     const tpl = ti.buildPlanTemplate;
     if (tpl && typeof tpl === "object") {
       const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -767,16 +771,299 @@
     }
 
     // Long days
-    if (ti.longDays && (ti.longDays.longRun || ti.longDays.longRide)) {
-      const dayLabels = { sun: "Sunday", mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday" };
-      sections.push(`<div class="card coach-ti-card">
-        <div class="coach-ti-card-title">Long Days</div>
-        ${ti.longDays.longRun  ? `<div class="coach-ti-row"><div class="coach-ti-label">Long run</div><div class="coach-ti-value">${_esc(dayLabels[ti.longDays.longRun]  || ti.longDays.longRun)}</div></div>` : ""}
-        ${ti.longDays.longRide ? `<div class="coach-ti-row"><div class="coach-ti-label">Long ride</div><div class="coach-ti-value">${_esc(dayLabels[ti.longDays.longRide] || ti.longDays.longRide)}</div></div>` : ""}
-      </div>`);
-    }
+    sections.push(_editingTI === "long-days"
+      ? _renderTIEditLongDays(ti)
+      : _renderTIReadLongDays(ti));
 
-    return sections.length ? sections.join("") : `<div class="coach-ti-empty">This athlete hasn't built a plan yet.</div>`;
+    const filtered = sections.filter(Boolean);
+    return filtered.length ? filtered.join("") : `<div class="coach-ti-empty">This athlete hasn't built a plan yet.</div>`;
+  }
+
+  // ── Read-mode renderers (PR 1 logic, factored out so the edit-mode
+  //    forms can replace them in place when _editingTI matches). ─────────
+  function _renderTIReadSportsGoals(ti) {
+    const sportsRow = (ti.selectedSports || []).map(s => `<span class="coach-ti-pill">${_esc(_prettySport(s))}</span>`).join("");
+    const goalsRow  = (ti.trainingGoals  || []).map(g => `<span class="coach-ti-pill coach-ti-pill--accent">${_esc(_prettyGoal(g))}</span>`).join("");
+    if (!sportsRow && !goalsRow && !_editingTI) return "";
+    return `<div class="card coach-ti-card">
+      <div class="coach-ti-card-header">
+        <div class="coach-ti-card-title">Sports &amp; Goals</div>
+        <button type="button" class="coach-ti-edit-btn" onclick="coachTIEdit('sports-goals')">Edit</button>
+      </div>
+      ${sportsRow ? `<div class="coach-ti-row"><div class="coach-ti-label">Sports</div><div class="coach-ti-pills">${sportsRow}</div></div>` : ""}
+      ${goalsRow  ? `<div class="coach-ti-row"><div class="coach-ti-label">Goals</div><div class="coach-ti-pills">${goalsRow}</div></div>` : ""}
+      ${(!sportsRow && !goalsRow) ? `<div class="coach-ti-row coach-ti-row--empty">Not set</div>` : ""}
+    </div>`;
+  }
+  function _renderTIReadStrength(ti) {
+    const setup = ti.strengthSetup || {};
+    return `<div class="card coach-ti-card">
+      <div class="coach-ti-card-header">
+        <div class="coach-ti-card-title">Strength</div>
+        <button type="button" class="coach-ti-edit-btn" onclick="coachTIEdit('strength')">Edit</button>
+      </div>
+      ${ti.strengthRole ? `<div class="coach-ti-row"><div class="coach-ti-label">Role</div><div class="coach-ti-value">${_esc(_prettyRole(ti.strengthRole))}</div></div>` : ""}
+      ${setup.sessionsPerWeek ? `<div class="coach-ti-row"><div class="coach-ti-label">Sessions / week</div><div class="coach-ti-value">${_esc(String(setup.sessionsPerWeek))}</div></div>` : ""}
+      ${setup.split ? `<div class="coach-ti-row"><div class="coach-ti-label">Split</div><div class="coach-ti-value">${_esc(_prettySplit(setup.split))}</div></div>` : ""}
+      ${setup.sessionLength ? `<div class="coach-ti-row"><div class="coach-ti-label">Session length</div><div class="coach-ti-value">${_esc(String(setup.sessionLength))} min</div></div>` : ""}
+    </div>`;
+  }
+  function _renderTIReadLongDays(ti) {
+    if (!ti.longDays || (!ti.longDays.longRun && !ti.longDays.longRide)) return "";
+    const dayLabels = { sun: "Sunday", mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday" };
+    return `<div class="card coach-ti-card">
+      <div class="coach-ti-card-header">
+        <div class="coach-ti-card-title">Long Days</div>
+        <button type="button" class="coach-ti-edit-btn" onclick="coachTIEdit('long-days')">Edit</button>
+      </div>
+      ${ti.longDays.longRun  ? `<div class="coach-ti-row"><div class="coach-ti-label">Long run</div><div class="coach-ti-value">${_esc(dayLabels[ti.longDays.longRun]  || ti.longDays.longRun)}</div></div>` : ""}
+      ${ti.longDays.longRide ? `<div class="coach-ti-row"><div class="coach-ti-label">Long ride</div><div class="coach-ti-value">${_esc(dayLabels[ti.longDays.longRide] || ti.longDays.longRide)}</div></div>` : ""}
+    </div>`;
+  }
+
+  // ── Edit-mode renderers ─────────────────────────────────────────────
+  // Each form prefills from current ti.* values, marks the active card,
+  // and posts via coach_update_client_training_input. On success the
+  // RPC stamps pendingPlanRegen on the client; their next app boot
+  // re-runs the plan generator. Save / cancel refresh the tab so the
+  // edited card slides back to read-mode with the new values.
+  const _ALL_SPORTS = [
+    { id: "run",      label: "Run" },
+    { id: "bike",     label: "Bike" },
+    { id: "swim",     label: "Swim" },
+    { id: "strength", label: "Strength" },
+    { id: "hyrox",    label: "Hyrox" },
+    { id: "rowing",   label: "Rowing" },
+    { id: "walking",  label: "Walking" },
+  ];
+  // Goal catalog mirrors onboarding-v2 ENDURANCE_GOALS / STRENGTH_ONLY_GOALS,
+  // minus body-comp signals (bulk/cut/weight) — those live on
+  // profile.bodyCompGoal now and aren't writable from this surface.
+  const _ALL_GOALS = [
+    { id: "race",      label: "Train for a race" },
+    { id: "speed",     label: "Get faster" },
+    { id: "endurance", label: "Build endurance" },
+    { id: "general",   label: "General fitness" },
+    { id: "stronger",  label: "Get stronger" },
+  ];
+  function _renderTIEditSportsGoals(ti) {
+    const selectedSports = new Set(ti.selectedSports || []);
+    const trainingGoals  = new Set(ti.trainingGoals  || []);
+    const sportsCheckboxes = _ALL_SPORTS.map(s => `
+      <label class="coach-ti-check">
+        <input type="checkbox" name="ti-sport" value="${s.id}" ${selectedSports.has(s.id) ? "checked" : ""} />
+        <span>${_esc(s.label)}</span>
+      </label>`).join("");
+    const goalsCheckboxes = _ALL_GOALS.map(g => `
+      <label class="coach-ti-check">
+        <input type="checkbox" name="ti-goal" value="${g.id}" ${trainingGoals.has(g.id) ? "checked" : ""} />
+        <span>${_esc(g.label)}</span>
+      </label>`).join("");
+    return `<div class="card coach-ti-card coach-ti-card--editing">
+      <div class="coach-ti-card-header">
+        <div class="coach-ti-card-title">Edit Sports &amp; Goals</div>
+      </div>
+      <div class="coach-ti-row coach-ti-row--stacked">
+        <div class="coach-ti-label">Sports</div>
+        <div class="coach-ti-checks">${sportsCheckboxes}</div>
+      </div>
+      <div class="coach-ti-row coach-ti-row--stacked">
+        <div class="coach-ti-label">Goals</div>
+        <div class="coach-ti-checks">${goalsCheckboxes}</div>
+      </div>
+      ${_renderTISaveBar("sports-goals")}
+    </div>`;
+  }
+  function _renderTIEditStrength(ti) {
+    const role  = ti.strengthRole || "general";
+    const setup = ti.strengthSetup || {};
+    const sessions = setup.sessionsPerWeek || 3;
+    const split    = setup.split           || "ppl";
+    const length   = setup.sessionLength   || 45;
+    const roles = [
+      { id: "injury_prevention", label: "Injury prevention" },
+      { id: "race_performance",  label: "Race performance" },
+      { id: "general",           label: "General strength" },
+      { id: "minimal",           label: "Minimal" },
+    ];
+    const splits = [
+      { id: "ppl",      label: "Push / Pull / Legs" },
+      { id: "ul",       label: "Upper / Lower" },
+      { id: "fullBody", label: "Full body" },
+      { id: "custom",   label: "Custom" },
+    ];
+    return `<div class="card coach-ti-card coach-ti-card--editing">
+      <div class="coach-ti-card-header">
+        <div class="coach-ti-card-title">Edit Strength</div>
+      </div>
+      <div class="coach-ti-row coach-ti-row--stacked">
+        <div class="coach-ti-label">Role</div>
+        <select id="ti-strength-role" class="coach-ti-input">
+          ${roles.map(r => `<option value="${r.id}" ${r.id === role ? "selected" : ""}>${_esc(r.label)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="coach-ti-row coach-ti-row--stacked">
+        <div class="coach-ti-label">Sessions / week</div>
+        <input type="number" id="ti-strength-sessions" class="coach-ti-input" min="0" max="7" value="${_esc(String(sessions))}" />
+      </div>
+      <div class="coach-ti-row coach-ti-row--stacked">
+        <div class="coach-ti-label">Split</div>
+        <select id="ti-strength-split" class="coach-ti-input">
+          ${splits.map(s => `<option value="${s.id}" ${s.id === split ? "selected" : ""}>${_esc(s.label)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="coach-ti-row coach-ti-row--stacked">
+        <div class="coach-ti-label">Session length (min)</div>
+        <input type="number" id="ti-strength-length" class="coach-ti-input" min="15" max="180" step="5" value="${_esc(String(length))}" />
+      </div>
+      ${_renderTISaveBar("strength")}
+    </div>`;
+  }
+  function _renderTIEditLongDays(ti) {
+    const longRun  = ti.longDays?.longRun  || "";
+    const longRide = ti.longDays?.longRide || "";
+    const days = [
+      { id: "",    label: "Not set" },
+      { id: "mon", label: "Monday" },
+      { id: "tue", label: "Tuesday" },
+      { id: "wed", label: "Wednesday" },
+      { id: "thu", label: "Thursday" },
+      { id: "fri", label: "Friday" },
+      { id: "sat", label: "Saturday" },
+      { id: "sun", label: "Sunday" },
+    ];
+    const opts = (sel) => days.map(d => `<option value="${d.id}" ${d.id === sel ? "selected" : ""}>${_esc(d.label)}</option>`).join("");
+    return `<div class="card coach-ti-card coach-ti-card--editing">
+      <div class="coach-ti-card-header">
+        <div class="coach-ti-card-title">Edit Long Days</div>
+      </div>
+      <div class="coach-ti-row coach-ti-row--stacked">
+        <div class="coach-ti-label">Long run</div>
+        <select id="ti-longdays-run" class="coach-ti-input">${opts(longRun)}</select>
+      </div>
+      <div class="coach-ti-row coach-ti-row--stacked">
+        <div class="coach-ti-label">Long ride</div>
+        <select id="ti-longdays-ride" class="coach-ti-input">${opts(longRide)}</select>
+      </div>
+      ${_renderTISaveBar("long-days")}
+    </div>`;
+  }
+  function _renderTISaveBar(card) {
+    const saving = _tiSaveState === "saving";
+    const errorHtml = _tiSaveError ? `<div class="coach-ti-save-err">${_esc(_tiSaveError)}</div>` : "";
+    return `<div class="coach-ti-save-bar">
+      ${errorHtml}
+      <button type="button" class="btn-secondary" ${saving ? "disabled" : ""} onclick="coachTICancel()">Cancel</button>
+      <button type="button" class="btn-primary" ${saving ? "disabled" : ""} onclick="coachTISave('${card}')">${saving ? "Saving…" : "Save"}</button>
+    </div>`;
+  }
+
+  // ── Edit-mode handlers + RPC plumbing ───────────────────────────────
+  function coachTIEdit(card) {
+    _editingTI    = card;
+    _tiSaveState  = "idle";
+    _tiSaveError  = "";
+    _rerenderTrainingInputs();
+  }
+  function coachTICancel() {
+    _editingTI    = null;
+    _tiSaveState  = "idle";
+    _tiSaveError  = "";
+    _rerenderTrainingInputs();
+  }
+  async function coachTISave(card) {
+    if (!_client || !_client.id) return;
+    _tiSaveState = "saving";
+    _tiSaveError = "";
+    _rerenderTrainingInputs();
+    try {
+      const writes = _readTIEditForm(card);
+      if (!writes) {
+        _tiSaveState = "error";
+        _tiSaveError = "Couldn't read form values.";
+        _rerenderTrainingInputs();
+        return;
+      }
+      // Each writable field goes through its own RPC call so the audit
+      // log captures field-level history. Sequential rather than
+      // parallel — keeps the audit trail in a deterministic order and
+      // means a partial failure reports cleanly.
+      for (const [dataKey, dataValue] of writes) {
+        await _callCoachTrainingInputRPC(dataKey, dataValue);
+        // Patch local _data.trainingInputs so the UI reflects the save
+        // immediately without a full re-fetch round-trip.
+        _data.trainingInputs[
+          dataKey === "selectedSports" ? "selectedSports"
+          : dataKey === "trainingGoals" ? "trainingGoals"
+          : dataKey === "strengthRole"  ? "strengthRole"
+          : dataKey === "strengthSetup" ? "strengthSetup"
+          : dataKey === "longDays"      ? "longDays"
+          : dataKey
+        ] = dataValue;
+      }
+      _editingTI    = null;
+      _tiSaveState  = "idle";
+      _tiSaveError  = "";
+      _rerenderTrainingInputs();
+    } catch (e) {
+      _tiSaveState = "error";
+      _tiSaveError = (e && e.message) || "Save failed.";
+      _rerenderTrainingInputs();
+    }
+  }
+  function _rerenderTrainingInputs() {
+    if (_activeTab !== "training-inputs") return;
+    const wrap = document.querySelector(".coach-client-tab-content");
+    if (wrap) wrap.innerHTML = _renderTrainingInputs();
+  }
+  function _readTIEditForm(card) {
+    if (card === "sports-goals") {
+      const sports = Array.from(document.querySelectorAll('input[name="ti-sport"]:checked')).map(el => el.value);
+      const goals  = Array.from(document.querySelectorAll('input[name="ti-goal"]:checked')).map(el => el.value);
+      return [
+        ["selectedSports", sports],
+        ["trainingGoals",  goals],
+      ];
+    }
+    if (card === "strength") {
+      const role = document.getElementById("ti-strength-role")?.value || "general";
+      const sessionsPerWeek = parseInt(document.getElementById("ti-strength-sessions")?.value, 10);
+      const split = document.getElementById("ti-strength-split")?.value || "ppl";
+      const sessionLength = parseInt(document.getElementById("ti-strength-length")?.value, 10);
+      if (Number.isNaN(sessionsPerWeek) || sessionsPerWeek < 0 || sessionsPerWeek > 7) {
+        throw new Error("Sessions / week must be 0–7.");
+      }
+      if (Number.isNaN(sessionLength) || sessionLength < 15 || sessionLength > 180) {
+        throw new Error("Session length must be 15–180 min.");
+      }
+      // Preserve any prior fields (customMuscles, refreshWeeks, etc.) the
+      // UI doesn't expose so a partial edit doesn't blow them away.
+      const prior = _data.trainingInputs.strengthSetup || {};
+      const setup = { ...prior, sessionsPerWeek, split, sessionLength };
+      return [
+        ["strengthRole",  role],
+        ["strengthSetup", setup],
+      ];
+    }
+    if (card === "long-days") {
+      const longRun  = document.getElementById("ti-longdays-run")?.value || "";
+      const longRide = document.getElementById("ti-longdays-ride")?.value || "";
+      const next = {};
+      if (longRun)  next.longRun  = longRun;
+      if (longRide) next.longRide = longRide;
+      return [["longDays", next]];
+    }
+    return null;
+  }
+  async function _callCoachTrainingInputRPC(dataKey, dataValue) {
+    const sb = window.supabaseClient;
+    if (!sb) throw new Error("Supabase client not initialized.");
+    const { error } = await sb.rpc("coach_update_client_training_input", {
+      p_client_id:  _client.id,
+      p_data_key:   dataKey,
+      p_data_value: dataValue,
+    });
+    if (error) throw new Error(error.message);
   }
 
   // Helpers — minimal pretty-printers shared by the read-only render.
@@ -1567,4 +1854,8 @@
   window.closeCoachLibraryPicker = closeCoachLibraryPicker;
   window.pickCoachLibraryForAssign = pickCoachLibraryForAssign;
   window.setCoachLibPickerSection = setCoachLibPickerSection;
+  // PR 3b — Training Inputs edit handlers.
+  window.coachTIEdit             = coachTIEdit;
+  window.coachTICancel           = coachTICancel;
+  window.coachTISave             = coachTISave;
 })();

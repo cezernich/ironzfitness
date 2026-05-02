@@ -2294,6 +2294,63 @@ if (typeof window !== "undefined") {
   window.generateTrainingPlan = generateTrainingPlan;
 }
 
+// PR 3b: client-side hook for the pendingPlanRegen flag the
+// coach_update_client_training_input RPC stamps on every coach edit.
+// Runs at app boot from app.js init(). Reads the flag, regenerates
+// the plan against the (now-updated) training inputs if there's an
+// upcoming A-race to anchor against, and clears the flag.
+//
+// We deliberately don't run the generator on the coach's browser —
+// generator state is large (profile, thresholds, restrictions, etc.)
+// and reading from the coach's localStorage would either get the
+// coach's data (wrong) or require pulling everything via Supabase
+// (more RLS surface). Instead we stamp the flag, the athlete's app
+// reruns the generator with full local state on next boot.
+//
+// No-op cases:
+//   - Flag absent — most boots
+//   - No upcoming A-race — coach edited inputs but no race to anchor;
+//     athlete will pick up the new inputs the next time they open
+//     Build Plan or run a generation themselves.
+function consumePendingPlanRegen() {
+  let flag = null;
+  try { flag = JSON.parse(localStorage.getItem("pendingPlanRegen") || "null"); } catch {}
+  if (!flag) return;
+
+  let aRace = null;
+  try {
+    const events = JSON.parse(localStorage.getItem("events") || "[]") || [];
+    const todayStr = new Date().toISOString().slice(0, 10);
+    aRace = events
+      .filter(e => e && e.date && e.date >= todayStr && (e.priority || "A").toString().toUpperCase() === "A")
+      .sort((a, b) => a.date.localeCompare(b.date))[0] || null;
+  } catch {}
+
+  if (aRace && typeof window._regeneratePlanForRace === "function") {
+    try {
+      window._regeneratePlanForRace(aRace);
+      console.log("[IronZ] regenerated plan after coach edit (reason:", flag.reason || "?", ")");
+    } catch (e) {
+      console.warn("[IronZ] consumePendingPlanRegen regenerate failed", e);
+    }
+  } else {
+    console.log("[IronZ] pendingPlanRegen present but no A-race to anchor — clearing flag");
+  }
+
+  // Clear the flag (write null + sync). Don't try to delete the
+  // user_data row outright — DB.syncKey doesn't delete on null
+  // localStorage values. Writing null parses back to null on the
+  // next boot's `if (!flag) return` and behaves like a delete.
+  try {
+    localStorage.setItem("pendingPlanRegen", JSON.stringify(null));
+    if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("pendingPlanRegen");
+  } catch {}
+}
+
+if (typeof window !== "undefined") {
+  window.consumePendingPlanRegen = consumePendingPlanRegen;
+}
+
 function _showARacePromotionModal(bRaces, allEvents) {
   let overlay = document.getElementById("a-race-promotion-overlay");
   if (overlay) overlay.remove();

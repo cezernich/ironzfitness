@@ -637,6 +637,14 @@ function init() {
     try { freezePastHydrationTargets(); } catch (e) { console.warn("[IronZ] hydration freeze:", e); }
   }
 
+  // PR 3b: when a coach edits this client's training inputs, the RPC
+  // stamps a pendingPlanRegen flag on user_data. Consume it here —
+  // regenerates the plan against the new inputs if there's an
+  // upcoming A-race, then clears the flag.
+  if (typeof consumePendingPlanRegen === "function") {
+    try { consumePendingPlanRegen(); } catch (e) { console.warn("[IronZ] pendingPlanRegen:", e); }
+  }
+
   // Load philosophy engine modules (non-blocking)
   if (typeof loadPhilosophyModules === 'function') {
     loadPhilosophyModules().catch(e => console.warn('[IronZ] Philosophy module load:', e.message));
