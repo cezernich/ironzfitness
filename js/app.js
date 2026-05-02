@@ -1797,17 +1797,20 @@ function _renderZoneHistoryRow(entry) {
 
 function _buildZoneHistoryHTML(sport) {
   const history = _getZoneHistory(sport);
-  if (history.length <= 1) return ""; // Only current entry or none — nothing to show
+  // _appendZoneHistoryAt only archives PREVIOUS values during a save —
+  // nothing in trainingZonesHistory ever represents the current entry.
+  // The earlier slice(1) here was leftover from a deprecated path that
+  // also pushed a "current" snapshot, so for sports with a single
+  // archived entry (typical right after a first update — e.g. strength
+  // archived once when the user updated bench from 275 → 285) the
+  // section rendered empty even though one valid past row existed.
+  if (!history.length) return "";
 
-  // Skip the most recent (it's the current zones), show the rest
-  const past = history.slice(1);
-  if (past.length === 0) return "";
-
-  const rows = past.slice(0, 20).map(e => _renderZoneHistoryRow(e)).join("");
+  const rows = history.slice(0, 20).map(e => _renderZoneHistoryRow(e)).join("");
   return `
     <div class="zone-history-section">
       <div class="zone-history-header" onclick="this.parentElement.classList.toggle('is-expanded')">
-        <span>Zone History (${past.length})</span>
+        <span>Zone History (${history.length})</span>
         <span class="card-chevron">▾</span>
       </div>
       <div class="zone-history-list">${rows}</div>
