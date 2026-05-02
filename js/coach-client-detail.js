@@ -161,6 +161,7 @@
       }
 
       _data.schedule        = _coerceArray(byKey.workoutSchedule);
+      _data.plan            = _coerceArray(byKey.trainingPlan);
       _data.ratings         = _coerceArray(byKey.workoutRatings);
       _data.zones           = byKey.trainingZones || null;
       _data.zoneHistory     = _coerceArray(byKey.trainingZonesHistory);
@@ -919,6 +920,146 @@
     _rerenderTrainingInputs();
   }
 
+  // ── PR 4: Delete race + AI plan with typed-confirm modal ─────────────
+  // Two-step modal because deleting a client's race wipes the AI-
+  // generated plan and we don't want it to feel like a thumb-slip.
+  // Step 1 confirms intent ("Delete X's Y plan?"), step 2 requires
+  // typing DELETE + shows the workout count that's about to disappear.
+  // Coach-assigned workouts and completed history are preserved by
+  // the RPC — the modal copy says so explicitly.
+  let _tiDelete = null; // { step, raceId, race, removeCount, typed, saving, error }
+
+  function coachTIRaceDeleteOpen(raceId) {
+    if (!_client || !_client.id) return;
+    const race = (_data.races || []).find(r => String(r.id) === String(raceId));
+    if (!race) return;
+    // Compute how many AI-generated workouts get stripped — count
+    // entries with raceId match in trainingPlan + workoutSchedule
+    // (excluding coach-assigned schedule entries the RPC will keep).
+    const planMatch = (_data.plan || []).filter(e => e && String(e.raceId) === String(raceId)).length;
+    const schedMatch = (_data.schedule || []).filter(e =>
+      e && String(e.raceId) === String(raceId) && e.source !== "coach_assigned"
+    ).length;
+    _tiDelete = {
+      step: 1,
+      raceId: String(raceId),
+      race,
+      removeCount: planMatch + schedMatch,
+      typed: "",
+      saving: false,
+      error: "",
+    };
+    _renderTIDeleteModal();
+  }
+  function coachTIRaceDeleteClose() {
+    _tiDelete = null;
+    _renderTIDeleteModal();
+  }
+  function coachTIRaceDeleteAdvance() {
+    if (!_tiDelete || _tiDelete.step !== 1) return;
+    _tiDelete.step = 2;
+    _tiDelete.typed = "";
+    _renderTIDeleteModal();
+  }
+  function coachTIRaceDeleteType(value) {
+    if (!_tiDelete || _tiDelete.step !== 2) return;
+    _tiDelete.typed = String(value || "");
+    // Light render — only the button's enabled state changes; full
+    // re-render keeps the text input's caret + value in sync without
+    // having to manage focus restoration manually.
+    const btn = document.getElementById("ti-delete-final-btn");
+    if (btn) btn.disabled = _tiDelete.typed !== "DELETE" || !!_tiDelete.saving;
+  }
+  async function coachTIRaceDeleteConfirm() {
+    if (!_tiDelete || _tiDelete.step !== 2 || _tiDelete.typed !== "DELETE") return;
+    _tiDelete.saving = true;
+    _tiDelete.error  = "";
+    _renderTIDeleteModal();
+    try {
+      const sb = window.supabaseClient;
+      if (!sb) throw new Error("Supabase client not initialized.");
+      const { error } = await sb.rpc("coach_delete_client_race", {
+        p_client_id: _client.id,
+        p_race_id:   _tiDelete.raceId,
+      });
+      if (error) throw new Error(error.message);
+      // Patch local state so the deleted race vanishes from the
+      // Training Inputs tab without a full re-fetch round trip.
+      const raceId = _tiDelete.raceId;
+      _data.races    = (_data.races    || []).filter(r => String(r.id) !== raceId);
+      _data.plan     = (_data.plan     || []).filter(e => String(e.raceId) !== raceId);
+      _data.schedule = (_data.schedule || []).filter(e =>
+        String(e.raceId) !== raceId || e.source === "coach_assigned"
+      );
+      _tiDelete = null;
+      _renderTIDeleteModal();
+      _rerenderTrainingInputs();
+    } catch (e) {
+      _tiDelete.saving = false;
+      _tiDelete.error  = (e && e.message) || "Delete failed.";
+      _renderTIDeleteModal();
+    }
+  }
+  function _renderTIDeleteModal() {
+    let host = document.getElementById("coach-ti-delete-overlay");
+    if (!_tiDelete) {
+      if (host) host.remove();
+      return;
+    }
+    if (!host) {
+      host = document.createElement("div");
+      host.id = "coach-ti-delete-overlay";
+      host.className = "coach-ti-delete-overlay";
+      document.body.appendChild(host);
+    }
+    const r = _tiDelete.race;
+    const clientName = (_client?.full_name || _client?.email || "this client").trim();
+    const raceName = r?.name || r?.type || "this race";
+    const errorHtml = _tiDelete.error ? `<div class="coach-ti-delete-err">${_esc(_tiDelete.error)}</div>` : "";
+    if (_tiDelete.step === 1) {
+      host.innerHTML = `
+        <div class="coach-ti-delete-modal" role="dialog" aria-modal="true" aria-label="Confirm delete">
+          <div class="coach-ti-delete-title">Delete ${_esc(clientName)}'s ${_esc(raceName)} training plan?</div>
+          <div class="coach-ti-delete-body">
+            This will remove the race from ${_esc(clientName)}'s plan and strip the AI-generated workouts tied to it.
+            <strong>Coach-assigned workouts and completed history are preserved.</strong>
+          </div>
+          ${errorHtml}
+          <div class="coach-ti-delete-actions">
+            <button type="button" class="btn-secondary" onclick="coachTIRaceDeleteClose()">Cancel</button>
+            <button type="button" class="btn-danger" onclick="coachTIRaceDeleteAdvance()">Delete</button>
+          </div>
+        </div>`;
+      return;
+    }
+    // Step 2 — typed confirm.
+    const finalDisabled = _tiDelete.typed !== "DELETE" || _tiDelete.saving;
+    const count = _tiDelete.removeCount;
+    const countLabel = count === 1 ? "1 generated workout" : `${count} generated workouts`;
+    host.innerHTML = `
+      <div class="coach-ti-delete-modal" role="dialog" aria-modal="true" aria-label="Type DELETE to confirm">
+        <div class="coach-ti-delete-title">Final confirmation</div>
+        <div class="coach-ti-delete-body">
+          This will remove <strong>${_esc(raceName)}</strong>, its build plan, and <strong>${countLabel}</strong> from ${_esc(clientName)}'s calendar. Coach-assigned workouts and completed history are preserved. <strong>This can't be undone.</strong>
+        </div>
+        <label class="coach-ti-delete-typed-label">Type <code>DELETE</code> to confirm:</label>
+        <input type="text" id="coach-ti-delete-typed-input" class="coach-ti-input"
+               value="${_esc(_tiDelete.typed)}" autocomplete="off" autocapitalize="characters"
+               oninput="coachTIRaceDeleteType(this.value)" />
+        ${errorHtml}
+        <div class="coach-ti-delete-actions">
+          <button type="button" class="btn-secondary" ${_tiDelete.saving ? "disabled" : ""} onclick="coachTIRaceDeleteClose()">Cancel</button>
+          <button type="button" class="btn-danger" id="ti-delete-final-btn" ${finalDisabled ? "disabled" : ""} onclick="coachTIRaceDeleteConfirm()">${_tiDelete.saving ? "Deleting…" : "Delete forever"}</button>
+        </div>
+      </div>`;
+    // Focus the input so the coach can type immediately. Without this
+    // the modal opens and they have to tap the field first.
+    setTimeout(() => {
+      const el = document.getElementById("coach-ti-delete-typed-input");
+      if (el && !_tiDelete.saving) el.focus();
+    }, 0);
+  }
+
   // ── Edit-mode renderers ─────────────────────────────────────────────
   // Each form prefills from current ti.* values, marks the active card,
   // and posts via coach_update_client_training_input. On success the
@@ -1205,9 +1346,17 @@
       race.level ? race.level.charAt(0).toUpperCase() + race.level.slice(1) : null,
       race.daysPerWeek ? `${race.daysPerWeek}× / week` : null,
     ].filter(Boolean).map(t => `<span class="race-tag">${_esc(t)}</span>`).join("");
+    // Race id may be numeric or uuid — escape for the inline attribute
+    // and pass through to the typed-confirm flow as a string.
+    const raceId = String(race.id || "");
     return `<div class="race-card coach-ti-race-card">
       <div class="race-card-top">
         <span class="race-priority-badge priority-${priorityClass}">${priority} Race</span>
+        <button type="button" class="coach-ti-race-delete" aria-label="Delete this race"
+                title="Delete race + AI plan"
+                onclick="coachTIRaceDeleteOpen('${raceId}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>
+        </button>
       </div>
       <div class="race-card-name">${_esc(race.name || race.type || "Race")}</div>
       ${race.location ? `<div class="race-card-detail">${_esc(race.location)}</div>` : ""}
@@ -1985,4 +2134,10 @@
   // PR 3c — Weekly Schedule chip-grid handlers.
   window.coachTIWeeklyAdd        = coachTIWeeklyAdd;
   window.coachTIWeeklyRemove     = coachTIWeeklyRemove;
+  // PR 4 — Delete race + AI plan flow.
+  window.coachTIRaceDeleteOpen     = coachTIRaceDeleteOpen;
+  window.coachTIRaceDeleteClose    = coachTIRaceDeleteClose;
+  window.coachTIRaceDeleteAdvance  = coachTIRaceDeleteAdvance;
+  window.coachTIRaceDeleteType     = coachTIRaceDeleteType;
+  window.coachTIRaceDeleteConfirm  = coachTIRaceDeleteConfirm;
 })();
