@@ -613,6 +613,21 @@ function cleanupOrphanedCompletions() {
 }
 
 function init() {
+  // Hoist meal-log modals out of #tab-nutrition so they can be opened
+  // from anywhere — the home day-detail's quick meal-log row, the
+  // Nutrition tab card, etc. The modals were authored as children of
+  // #tab-nutrition, which is display:none whenever home is the active
+  // tab, so opening them from home rendered nothing (the user tap
+  // looked like a freeze). Barcode modal already lives at body level
+  // and worked from any tab; this brings the other four into line.
+  // Idempotent: re-running just no-ops if they're already at body.
+  ["photo-meal-modal", "manual-meal-modal", "quick-add-meal-modal", "ai-meal-modal"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.parentElement && el.parentElement !== document.body) {
+      document.body.appendChild(el);
+    }
+  });
+
   // One-time migration: derive profile.bodyCompGoal from legacy signals
   // (trainingGoals / strengthRole). Idempotent — no-op once set. This
   // ensures every user has a body-comp value the new nutrition path
