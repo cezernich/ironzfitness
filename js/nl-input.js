@@ -90,7 +90,7 @@ function renderNLInput(dateStr) {
     <div class="nl-input-bar">
       <div class="nl-input-wrap">
         <input type="text" id="nl-input-field" class="nl-input-field"
-          placeholder="Ask IronZ anything or tell us what's going on\u2026"
+          placeholder="Ask IronZ anything\u2026"
           onkeydown="if(event.key==='Enter') submitNLInput('${dateStr}')" />
         <button class="nl-submit-btn" id="nl-submit-btn" onclick="submitNLInput('${dateStr}')">
           ${typeof ICONS !== "undefined" ? ICONS.sparkles : "AI"}
