@@ -1060,6 +1060,223 @@
     }, 0);
   }
 
+  // ── PR 5: Race-edit modal ───────────────────────────────────────────
+  // Single-page form (not the V2 multi-step wizard) — coach is editing
+  // an existing race, not stepping through creation, so a flat layout
+  // covers the plan-affecting fields (type, date, priority, level,
+  // daysPerWeek, goal, longDay) plus name + location in one screen.
+  // Save replaces the race in raceEvents OR events (whichever array
+  // it lives in) via coach_update_client_training_input. Field-level
+  // audit logging falls out for free — the RPC writes one entry per
+  // data_key with before/after snapshots.
+  let _tiRaceEdit = null; // { raceId, draft, sourceKey, saving, error }
+
+  const _RACE_TYPE_OPTIONS = [
+    { id: "ironman",      label: "Ironman" },
+    { id: "halfIronman",  label: "Half Ironman (70.3)" },
+    { id: "olympic",      label: "Olympic Triathlon" },
+    { id: "sprint",       label: "Sprint Triathlon" },
+    { id: "marathon",     label: "Marathon" },
+    { id: "halfMarathon", label: "Half Marathon" },
+    { id: "tenK",         label: "10K" },
+    { id: "fiveK",        label: "5K" },
+    { id: "centuryRide",  label: "Century Ride" },
+    { id: "granFondo",    label: "Gran Fondo" },
+    { id: "hyrox",        label: "Hyrox" },
+    { id: "hyroxDoubles", label: "Hyrox Doubles" },
+  ];
+  const _RACE_PRIORITY_OPTIONS = [
+    { id: "A", label: "A — Goal race" },
+    { id: "B", label: "B — Tune-up" },
+    { id: "C", label: "C — Training day" },
+  ];
+  const _RACE_LEVEL_OPTIONS = [
+    { id: "beginner",     label: "Beginner" },
+    { id: "intermediate", label: "Intermediate" },
+    { id: "advanced",     label: "Advanced" },
+  ];
+  const _RACE_GOAL_OPTIONS = [
+    { id: "finish",   label: "Finish" },
+    { id: "time",     label: "Time goal" },
+    { id: "compete",  label: "Compete / podium" },
+  ];
+
+  function coachTIRaceEditOpen(raceId) {
+    if (!_client || !_client.id) return;
+    const ti = _data.trainingInputs || {};
+    const allRaceEvents = Array.isArray(ti.raceEvents) ? ti.raceEvents : null;
+    // Look in both arrays — race could legitimately be in either, and
+    // we need to know which to write back to so we don't accidentally
+    // write to the wrong one and orphan the original.
+    const inRaceEvents = (allRaceEvents || []).find(r => String(r.id) === String(raceId));
+    const inEvents     = (_data.races || []).find(r => String(r.id) === String(raceId));
+    const race = inRaceEvents || inEvents;
+    if (!race) return;
+    // Determine which user_data key to write back. Prefer raceEvents
+    // if the race is there (V2 onboarding's canonical home); fall back
+    // to events for legacy races.
+    const sourceKey = inRaceEvents ? "raceEvents" : "events";
+    _tiRaceEdit = {
+      raceId: String(raceId),
+      sourceKey,
+      draft: { ...race },
+      saving: false,
+      error: "",
+    };
+    _renderTIRaceEditModal();
+  }
+  function coachTIRaceEditClose() {
+    _tiRaceEdit = null;
+    _renderTIRaceEditModal();
+  }
+  function coachTIRaceEditField(field, value) {
+    if (!_tiRaceEdit) return;
+    _tiRaceEdit.draft[field] = value;
+  }
+  async function coachTIRaceEditSave() {
+    if (!_tiRaceEdit) return;
+    // Pull current values out of the form one-shot before the spinner
+    // re-renders the modal (would lose unsaved input otherwise).
+    const get = (id) => document.getElementById(id);
+    const draft = _tiRaceEdit.draft;
+    draft.name         = get("ti-race-name")?.value.trim()        ?? draft.name;
+    draft.type         = get("ti-race-type")?.value               || draft.type;
+    draft.date         = get("ti-race-date")?.value               || draft.date;
+    draft.priority     = get("ti-race-priority")?.value           || draft.priority;
+    draft.level        = get("ti-race-level")?.value              || draft.level;
+    draft.goal         = get("ti-race-goal")?.value               || draft.goal;
+    const dpw          = parseInt(get("ti-race-days")?.value, 10);
+    if (!Number.isNaN(dpw) && dpw >= 1 && dpw <= 7) draft.daysPerWeek = dpw;
+    draft.longDay      = get("ti-race-longday")?.value            ?? draft.longDay;
+    draft.location     = get("ti-race-location")?.value.trim()    ?? draft.location;
+
+    if (!draft.name)            { _tiRaceEdit.error = "Name is required."; _renderTIRaceEditModal(); return; }
+    if (!draft.type)            { _tiRaceEdit.error = "Type is required."; _renderTIRaceEditModal(); return; }
+    if (!draft.date)            { _tiRaceEdit.error = "Date is required."; _renderTIRaceEditModal(); return; }
+
+    _tiRaceEdit.saving = true;
+    _tiRaceEdit.error  = "";
+    _renderTIRaceEditModal();
+
+    try {
+      // Build the updated array for whichever user_data key holds the
+      // race. Replace just this race; leave other races in the array
+      // untouched. Mirror the same write to both the RPC and local
+      // _data so the tab refreshes without a re-fetch round-trip.
+      const ti = _data.trainingInputs || {};
+      const sourceArr = _tiRaceEdit.sourceKey === "raceEvents"
+        ? (Array.isArray(ti.raceEvents) ? ti.raceEvents : [])
+        : (_data.races || []).filter(r => {
+            // Reconstruct just the events-side races for the write
+            // back. Anything in raceEvents is excluded so we don't
+            // duplicate the race in events.
+            const inRE = Array.isArray(ti.raceEvents)
+              ? ti.raceEvents.some(re => String(re.id) === String(r.id))
+              : false;
+            return !inRE;
+          });
+      const next = sourceArr.map(r =>
+        String(r.id) === _tiRaceEdit.raceId ? { ...r, ...draft } : r
+      );
+      const sb = window.supabaseClient;
+      if (!sb) throw new Error("Supabase client not initialized.");
+      const { error } = await sb.rpc("coach_update_client_training_input", {
+        p_client_id:  _client.id,
+        p_data_key:   _tiRaceEdit.sourceKey,
+        p_data_value: next,
+      });
+      if (error) throw new Error(error.message);
+
+      // Patch local state.
+      if (_tiRaceEdit.sourceKey === "raceEvents") {
+        _data.trainingInputs.raceEvents = next;
+      }
+      _data.races = (_data.races || []).map(r =>
+        String(r.id) === _tiRaceEdit.raceId ? { ...r, ...draft } : r
+      );
+      _tiRaceEdit = null;
+      _renderTIRaceEditModal();
+      _rerenderTrainingInputs();
+    } catch (e) {
+      _tiRaceEdit.saving = false;
+      _tiRaceEdit.error  = (e && e.message) || "Save failed.";
+      _renderTIRaceEditModal();
+    }
+  }
+  function _renderTIRaceEditModal() {
+    let host = document.getElementById("coach-ti-raceedit-overlay");
+    if (!_tiRaceEdit) {
+      if (host) host.remove();
+      return;
+    }
+    if (!host) {
+      host = document.createElement("div");
+      host.id = "coach-ti-raceedit-overlay";
+      host.className = "coach-ti-delete-overlay";
+      document.body.appendChild(host);
+    }
+    const d = _tiRaceEdit.draft;
+    const errorHtml = _tiRaceEdit.error ? `<div class="coach-ti-delete-err">${_esc(_tiRaceEdit.error)}</div>` : "";
+    const opts = (arr, sel) => arr.map(o => `<option value="${o.id}" ${o.id === sel ? "selected" : ""}>${_esc(o.label)}</option>`).join("");
+    const dayOpts = [
+      { id: "",    label: "Not set" },
+      { id: "mon", label: "Monday" },
+      { id: "tue", label: "Tuesday" },
+      { id: "wed", label: "Wednesday" },
+      { id: "thu", label: "Thursday" },
+      { id: "fri", label: "Friday" },
+      { id: "sat", label: "Saturday" },
+      { id: "sun", label: "Sunday" },
+    ];
+    host.innerHTML = `
+      <div class="coach-ti-delete-modal coach-ti-raceedit-modal" role="dialog" aria-modal="true" aria-label="Edit race">
+        <div class="coach-ti-delete-title">Edit race</div>
+        <div class="coach-ti-raceedit-grid">
+          <div class="form-row">
+            <label for="ti-race-name">Name</label>
+            <input type="text" id="ti-race-name" class="coach-ti-input" value="${_esc(d.name || "")}" />
+          </div>
+          <div class="form-row">
+            <label for="ti-race-type">Type</label>
+            <select id="ti-race-type" class="coach-ti-input">${opts(_RACE_TYPE_OPTIONS, d.type)}</select>
+          </div>
+          <div class="form-row">
+            <label for="ti-race-date">Date</label>
+            <input type="date" id="ti-race-date" class="coach-ti-input" value="${_esc(d.date || "")}" />
+          </div>
+          <div class="form-row">
+            <label for="ti-race-priority">Priority</label>
+            <select id="ti-race-priority" class="coach-ti-input">${opts(_RACE_PRIORITY_OPTIONS, d.priority || "A")}</select>
+          </div>
+          <div class="form-row">
+            <label for="ti-race-level">Level</label>
+            <select id="ti-race-level" class="coach-ti-input">${opts(_RACE_LEVEL_OPTIONS, d.level || "intermediate")}</select>
+          </div>
+          <div class="form-row">
+            <label for="ti-race-goal">Goal</label>
+            <select id="ti-race-goal" class="coach-ti-input">${opts(_RACE_GOAL_OPTIONS, d.goal || "finish")}</select>
+          </div>
+          <div class="form-row">
+            <label for="ti-race-days">Days / week</label>
+            <input type="number" id="ti-race-days" class="coach-ti-input" min="1" max="7" value="${_esc(String(d.daysPerWeek || ""))}" />
+          </div>
+          <div class="form-row">
+            <label for="ti-race-longday">Long day</label>
+            <select id="ti-race-longday" class="coach-ti-input">${dayOpts.map(o => `<option value="${o.id}" ${o.id === (d.longDay || "") ? "selected" : ""}>${_esc(o.label)}</option>`).join("")}</select>
+          </div>
+          <div class="form-row form-row--full">
+            <label for="ti-race-location">Location</label>
+            <input type="text" id="ti-race-location" class="coach-ti-input" value="${_esc(d.location || "")}" />
+          </div>
+        </div>
+        ${errorHtml}
+        <div class="coach-ti-delete-actions">
+          <button type="button" class="btn-secondary" ${_tiRaceEdit.saving ? "disabled" : ""} onclick="coachTIRaceEditClose()">Cancel</button>
+          <button type="button" class="btn-primary" ${_tiRaceEdit.saving ? "disabled" : ""} onclick="coachTIRaceEditSave()">${_tiRaceEdit.saving ? "Saving…" : "Save"}</button>
+        </div>
+      </div>`;
+  }
+
   // ── Edit-mode renderers ─────────────────────────────────────────────
   // Each form prefills from current ti.* values, marks the active card,
   // and posts via coach_update_client_training_input. On success the
@@ -1347,16 +1564,19 @@
       race.daysPerWeek ? `${race.daysPerWeek}× / week` : null,
     ].filter(Boolean).map(t => `<span class="race-tag">${_esc(t)}</span>`).join("");
     // Race id may be numeric or uuid — escape for the inline attribute
-    // and pass through to the typed-confirm flow as a string.
+    // and pass through to the edit / typed-confirm flow as a string.
     const raceId = String(race.id || "");
     return `<div class="race-card coach-ti-race-card">
       <div class="race-card-top">
         <span class="race-priority-badge priority-${priorityClass}">${priority} Race</span>
-        <button type="button" class="coach-ti-race-delete" aria-label="Delete this race"
-                title="Delete race + AI plan"
-                onclick="coachTIRaceDeleteOpen('${raceId}')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>
-        </button>
+        <div class="coach-ti-race-actions">
+          <button type="button" class="coach-ti-edit-btn" onclick="coachTIRaceEditOpen('${raceId}')" title="Edit race">Edit</button>
+          <button type="button" class="coach-ti-race-delete" aria-label="Delete this race"
+                  title="Delete race + AI plan"
+                  onclick="coachTIRaceDeleteOpen('${raceId}')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>
+          </button>
+        </div>
       </div>
       <div class="race-card-name">${_esc(race.name || race.type || "Race")}</div>
       ${race.location ? `<div class="race-card-detail">${_esc(race.location)}</div>` : ""}
@@ -2140,4 +2360,9 @@
   window.coachTIRaceDeleteAdvance  = coachTIRaceDeleteAdvance;
   window.coachTIRaceDeleteType     = coachTIRaceDeleteType;
   window.coachTIRaceDeleteConfirm  = coachTIRaceDeleteConfirm;
+  // PR 5 — Race edit flow.
+  window.coachTIRaceEditOpen       = coachTIRaceEditOpen;
+  window.coachTIRaceEditClose      = coachTIRaceEditClose;
+  window.coachTIRaceEditField      = coachTIRaceEditField;
+  window.coachTIRaceEditSave       = coachTIRaceEditSave;
 })();

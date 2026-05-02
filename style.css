@@ -15626,6 +15626,26 @@ input.completion-ex-name:focus {
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+/* PR 5: race-edit modal — wider than the delete modal so the form
+   grid has room for two columns on desktop. Reuses .coach-ti-delete-
+   overlay for the dimmer + centering. */
+.coach-ti-race-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.coach-ti-raceedit-modal { max-width: 560px; }
+.coach-ti-raceedit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+  margin-bottom: 10px;
+}
+.coach-ti-raceedit-grid .form-row--full { grid-column: 1 / -1; }
+@media (max-width: 540px) {
+  .coach-ti-raceedit-grid { grid-template-columns: 1fr; }
+}
 .coach-ti-row {
   display: flex;
   align-items: baseline;
