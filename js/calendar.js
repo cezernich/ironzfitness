@@ -11057,14 +11057,40 @@ function getRestDayRecommendation(dateStr) {
 }
 
 function buildRestDayBanner(dateStr) {
+  // Dismissed for this specific date — banner stays gone for today
+  // and naturally returns tomorrow if the same condition holds.
+  // Per-date keying so a user dismissing today doesn't suppress an
+  // identical warning that'd be useful tomorrow.
+  if (_isRestDayBannerDismissed(dateStr)) return "";
+
   const recs = getRestDayRecommendation(dateStr);
   if (!recs.length) return "";
 
   // Show the most important recommendation only (avoid banner overload)
   const rec = recs[0];
   const icon = ICONS[rec.icon] || ICONS.lightbulb;
-  return `<div class="rest-intel-banner rest-intel-${rec.type}">
+  return `<div class="rest-intel-banner rest-intel-${rec.type}" data-rest-banner-date="${dateStr}">
     <span class="rest-intel-icon">${icon}</span>
     <span class="rest-intel-msg">${rec.message}</span>
+    <button type="button" class="rest-intel-dismiss" aria-label="Dismiss for today" title="Dismiss"
+            onclick="dismissRestDayBanner('${dateStr}')">×</button>
   </div>`;
+}
+
+function _restDayDismissKey(dateStr) {
+  return `restDayBannerDismissed_${dateStr}`;
+}
+function _isRestDayBannerDismissed(dateStr) {
+  try { return localStorage.getItem(_restDayDismissKey(dateStr)) === "1"; }
+  catch { return false; }
+}
+function dismissRestDayBanner(dateStr) {
+  try { localStorage.setItem(_restDayDismissKey(dateStr), "1"); } catch {}
+  // Hide in-place rather than re-rendering the whole day-detail block —
+  // keeps the user's scroll position and doesn't flash other surfaces.
+  const banner = document.querySelector(`[data-rest-banner-date="${dateStr}"]`);
+  if (banner && banner.parentElement) banner.parentElement.removeChild(banner);
+}
+if (typeof window !== "undefined") {
+  window.dismissRestDayBanner = dismissRestDayBanner;
 }
