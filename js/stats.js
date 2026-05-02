@@ -198,15 +198,41 @@ function _computeTotals(workouts) {
         if (km > 0) bucket.km += km;
       });
     }
-    // Distance from direct field
+    // Distance from direct field. Two stored shapes:
+    //   1. Legacy / generated: a string with units baked in ("4.3 mi",
+    //      "10 km") — match via regex.
+    //   2. Completion form: a bare number string ("10.67") with the
+    //      unit on the separate `distance_unit` field ("mi" | "km" |
+    //      "m" | "yd"). The previous regex-only code dropped #2 on the
+    //      floor, so a hand-completed run / ride / swim contributed 0
+    //      km to the totals card.
     if (w.distance) {
       const dStr = String(w.distance);
       const miM = dStr.match(/([\d.]+)\s*mi/i);
       const kmM = dStr.match(/([\d.]+)\s*km/i);
       let km = 0;
-      if (miM) km = parseFloat(miM[1]) * 1.60934;
+      if (miM)      km = parseFloat(miM[1]) * 1.60934;
       else if (kmM) km = parseFloat(kmM[1]);
+      else {
+        const num = parseFloat(dStr);
+        if (isFinite(num) && num > 0) {
+          const unitRaw = w.distance_unit
+            || (typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi");
+          const unit = String(unitRaw).toLowerCase();
+          if      (unit === "km") km = num;
+          else if (unit === "m")  km = num / 1000;
+          else if (unit === "yd") km = num * 0.0009144;
+          else                    km = num * 1.60934; // default: miles
+        }
+      }
       if (km > 0) bucket.km += km;
+    }
+    // Swim fallback: generated swim sessions carry total_distance_m
+    // even when `distance` isn't set. Only applied when no per-distance
+    // value was already added above.
+    else if (type === "swimming" && w.total_distance_m) {
+      const m = parseFloat(w.total_distance_m);
+      if (isFinite(m) && m > 0) bucket.km += m / 1000;
     }
   });
   return { byType, totalMin };
@@ -1849,13 +1875,18 @@ function buildStatsHydration() {
     if (typeof getHydrationTarget === "function") return getHydrationTarget();
     return 96;
   };
-  const _targetBottlesFor = (d) => Math.ceil(_targetOzFor(d) / bottleSize);
   // Today's target drives the chart-axis scaling + summary card label.
   const targetOz = _targetOzFor(todayKey);
-  const targetBottles = _targetBottlesFor(todayKey);
 
   // Helper: extract bottle count from log entry (supports old number & new object format)
   const _hb = (entry) => (typeof getLogBottles === "function") ? getLogBottles(entry) : (typeof entry === "number" ? entry : (entry && entry.total) || 0);
+  // Logged effective oz for a day. Matches the hydration card's
+  // displayed "X / Y oz" exactly (per-beverage coefficients applied,
+  // mixed bottle sizes summed precisely). Falls back to raw bottle×size
+  // only if the helper isn't available.
+  const _ozOn = (d) => (typeof getEffectiveOzForDate === "function")
+    ? getEffectiveOzForDate(d)
+    : _hb(log[d]) * bottleSize;
 
   const loggedDates = Object.keys(log).filter(d => _hb(log[d]) > 0).sort();
   if (loggedDates.length === 0) {
@@ -1878,8 +1909,6 @@ function buildStatsHydration() {
     activeDays.push(d.toISOString().slice(0, 10));
   }
 
-  // Total oz and average (denominator = all active days, including 0s)
-  const totalBottles = activeDays.reduce((s, d) => s + _hb(log[d]), 0);
   // Round to 2 decimals to kill floating-point artifacts like
   // 115.00000000000001 that come from summing coefficient-adjusted
   // beverages. Integers render as "115" (no trailing .00); values
@@ -1888,11 +1917,17 @@ function buildStatsHydration() {
     const r = Math.round((n || 0) * 100) / 100;
     return r;
   };
-  const totalOz = _roundOz(totalBottles * bottleSize);
+  // Total / average: sum effective oz so it matches what the hydration
+  // card shows for each day. Summing bottles × size double-discounts
+  // beverages with non-1 coefficients.
+  const totalOz = _roundOz(activeDays.reduce((s, d) => s + _ozOn(d), 0));
   const avgOzPerDay = Math.round(totalOz / activeDays.length);
 
   // Days that met target (out of all active days) — per-day goalpost.
-  const _metOn = (d) => _hb(log[d]) >= _targetBottlesFor(d);
+  // Compare in oz, not bottles: the previous bottle-based check rounded
+  // the target up via Math.ceil, so a day at 147/139 oz read as missed
+  // because 5.88 bottles < ceil(139/25)=6, even though oz ≥ target.
+  const _metOn = (d) => _ozOn(d) >= _targetOzFor(d);
   const metTargetDays = activeDays.filter(_metOn).length;
   const hitRate = Math.round((metTargetDays / activeDays.length) * 100);
 
@@ -1949,12 +1984,11 @@ function buildStatsHydration() {
     const d = new Date(today + "T12:00:00");
     d.setDate(d.getDate() - i);
     const key = d.toISOString().slice(0, 10);
-    const bottles = _hb(log[key]);
-    const oz = _roundOz(bottles * bottleSize);
+    const oz = _roundOz(_ozOn(key));
     const dayTargetOz = _targetOzFor(key) || 1;
     const pctOfTarget = (oz / dayTargetOz) * 100;
     const active = key >= firstLogDate; // day is within active tracking range
-    last7.push({ label: dayLabels[d.getDay()], oz, bottles, pctOfTarget, met: _metOn(key), active });
+    last7.push({ label: dayLabels[d.getDay()], oz, pctOfTarget, met: _metOn(key), active });
   }
 
   // Visual cap so a 200%+ over-achiever day doesn't squash the rest of
