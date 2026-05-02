@@ -122,11 +122,41 @@
 
     _resetForm();
     _populatePrefill(prefill);
+
+    // Title reflects context: editing or adding, plus the date so the
+    // coach knows which day they're working on. Generic "Add a Workout"
+    // gave no spatial anchor when the modal opened on top of a calendar
+    // tap — coach had no way to verify they tapped the right cell.
+    const dateLabel = _formatTitleDate(prefill && prefill.date);
+    _setAssignTitle(_editingAssignmentId
+      ? `Edit Workout${dateLabel ? " · " + dateLabel : ""}`
+      : `Add a Workout${dateLabel ? " · " + dateLabel : ""}`);
+
     overlay.classList.add("is-open");
 
     if (typeof trackEvent === "function") {
       try { trackEvent("coach_assign_opened", { editing: !!_editingAssignmentId }); } catch {}
     }
+  }
+
+  // Title helper — small wrapper so every entry point uses the same id
+  // and we can swap to a richer header (avatar, dirty indicator, etc.)
+  // without hunting for callsites later.
+  function _setAssignTitle(text) {
+    const el = document.getElementById("coach-assign-title");
+    if (el) el.textContent = text || "Add a Workout";
+  }
+  // Date formatter that mirrors the calendar cell's "Mon, May 4" label
+  // so coaches see the same string they tapped to open the modal.
+  // Returns "" for invalid / missing dates so the caller can join with
+  // a separator without trailing dashes.
+  function _formatTitleDate(iso) {
+    if (!iso) return "";
+    try {
+      const d = new Date(iso + "T00:00:00");
+      if (Number.isNaN(d.getTime())) return "";
+      return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    } catch { return ""; }
   }
 
   function closeAssignWorkoutModal() {
@@ -137,6 +167,10 @@
     // modal (in a non-program-slot context) renders at the default
     // stacking.
     overlay.style.zIndex = "";
+    // Reset the title to the default — every entry point sets its own
+    // title before opening, but a stale title flashing for a beat
+    // during the open transition feels janky.
+    _setAssignTitle("Add a Workout");
     _closeConflictModal();
     _editingAssignmentId = null;
     _libraryMode = false;
@@ -193,6 +227,11 @@
     // (non-program-slot paths) don't accidentally inherit the bumped
     // stacking.
     overlay.style.zIndex = "1200";
+    // Title makes the context unambiguous — coach is editing a slot
+    // inside a program template, not assigning a one-off date-bound
+    // workout. The workout name (if any) anchors which slot.
+    const wname = (prefill && prefill.sessionName) || "";
+    _setAssignTitle(wname ? `Program Editor · ${wname}` : "Program Editor");
     overlay.classList.add("is-open");
 
     if (typeof trackEvent === "function") {
@@ -230,6 +269,14 @@
     // field. Re-label it.
     const noteLabel = document.querySelector('label[for="coach-assign-note"]');
     if (noteLabel) noteLabel.firstChild.textContent = "Library notes ";
+
+    // Title differentiates the library editor from a date-bound assign
+    // (no date in this mode, so the workout name + edit/new context
+    // is the meaningful anchor).
+    const wname = (prefill && prefill.sessionName) || "";
+    _setAssignTitle(_libraryEditId
+      ? `Edit Library Workout${wname ? " · " + wname : ""}`
+      : "Save to Library");
 
     overlay.classList.add("is-open");
   }
