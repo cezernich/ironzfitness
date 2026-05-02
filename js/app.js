@@ -1685,9 +1685,18 @@ function _zoneEntryMaterialDiff(prev, next) {
 function _appendZoneHistoryAt(sport, data, dateIso) {
   let history = [];
   try { history = JSON.parse(localStorage.getItem("trainingZonesHistory")) || []; } catch {}
+  // entry.date is the EFFECTIVE date of the previous values (when they
+  // were originally recorded). entry.archivedAt is when the archival
+  // happened (i.e., when the user replaced those values with new ones).
+  // Coach views need archivedAt to filter "updates since this client
+  // joined me" — without it, an athlete who joins a coach in April but
+  // updates their bench in May, where the previous values dated to
+  // March, would never surface in the coach's history feed because
+  // entry.date (March) predates the coaching relationship (April).
   history.push({
     sport,
     date: dateIso || new Date().toISOString(),
+    archivedAt: new Date().toISOString(),
     data: JSON.parse(JSON.stringify(data)),
   });
   localStorage.setItem("trainingZonesHistory", JSON.stringify(history));

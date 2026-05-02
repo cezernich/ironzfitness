@@ -601,26 +601,46 @@
 
   // History entries archived by saveTrainingZonesData each time the
   // client updates a zone. Filter to the active sport, drop entries
-  // older than the coach-relationship start (assigned_at), and sort
-  // newest-first.
+  // archived before the coach-relationship start (assigned_at), and
+  // sort newest-archive first.
+  //
+  // archivedAt is the moment of change (May 2 in the bench 275 → 285
+  // case). entry.date is the effective date of the previous values
+  // (Apr 7 — when those values were originally recorded). Filtering
+  // by entry.date misses updates where the previous values pre-date
+  // the coaching relationship; archivedAt is the right axis.
   function _renderZoneHistory(sport) {
     const all = Array.isArray(_data.zoneHistory) ? _data.zoneHistory : [];
     const since = _data.coachAssignedAt ? new Date(_data.coachAssignedAt).getTime() : 0;
+    const eventTime = (e) => {
+      // Prefer archivedAt (when the change happened); fall back to
+      // date for legacy entries from before the archivedAt field
+      // shipped (so a coach with pre-existing history doesn't see
+      // their feed silently empty out on the next deploy).
+      const raw = e.archivedAt || e.date;
+      const t = new Date(raw).getTime();
+      return Number.isFinite(t) ? t : 0;
+    };
     const entries = all
-      .filter(e => e && e.sport === sport && e.date)
+      .filter(e => e && e.sport === sport)
       .filter(e => {
         if (!since) return true;
-        const t = new Date(e.date).getTime();
-        return Number.isFinite(t) && t >= since;
+        return eventTime(e) >= since;
       })
-      .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+      .sort((a, b) => eventTime(b) - eventTime(a));
     if (!entries.length) {
       return `<div class="coach-bench-history-empty">No updates since this client joined you.</div>`;
     }
     const rows = entries.slice(0, 20).map(e => {
       const dateStr = (() => {
-        try { return new Date(e.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
-        catch { return String(e.date).slice(0, 10); }
+        try {
+          // Surface the moment of change in the row label — that's
+          // what the coach cares about ("they bumped bench on May 2").
+          // Falls back to entry.date for legacy entries.
+          const raw = e.archivedAt || e.date;
+          return new Date(raw).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        }
+        catch { return String(e.archivedAt || e.date).slice(0, 10); }
       })();
       const d = e.data || {};
       let summary = "";
