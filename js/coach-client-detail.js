@@ -1601,9 +1601,11 @@
     })();
     const sessionLabel = `${cp.sessions} upcoming workout${cp.sessions === 1 ? "" : "s"}`;
     const meta = cp.weeks ? `${cp.weeks}-week program` : "Custom program";
+    const programId = String(cp.programId || "");
     return `<div class="ti-card ti-card--coach-plan coach-ti-program-tile">
       <div class="race-card-top">
         <span class="ti-card-badge ti-card-badge--coach-plan">COACH PLAN</span>
+        ${programId ? `<button type="button" class="coach-ti-edit-btn" onclick="openCoachProgramEdit('${programId}')">Edit</button>` : ""}
       </div>
       <div class="race-card-name">${_esc(cp.programName)}</div>
       <div class="race-card-meta">${_esc(meta)}</div>

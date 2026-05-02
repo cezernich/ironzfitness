@@ -133,6 +133,10 @@
     const overlay = document.getElementById("coach-assign-overlay");
     if (!overlay) return;
     overlay.classList.remove("is-open");
+    // Clear the program-slot z-index bump so the next open of this
+    // modal (in a non-program-slot context) renders at the default
+    // stacking.
+    overlay.style.zIndex = "";
     _closeConflictModal();
     _editingAssignmentId = null;
     _libraryMode = false;
@@ -181,6 +185,14 @@
     const submitBtn = document.getElementById("coach-assign-save-btn");
     if (submitBtn) submitBtn.textContent = "Save Changes";
 
+    // Stack ABOVE the program-builder overlay (which sits at z-index
+    // 1100). Both overlays share .quick-entry-overlay so without this
+    // bump the assignment form rendered behind the program-builder
+    // dimmer — coach saw a dark screen and nothing else. Cleared in
+    // closeAssignWorkoutModal so subsequent uses of the assign modal
+    // (non-program-slot paths) don't accidentally inherit the bumped
+    // stacking.
+    overlay.style.zIndex = "1200";
     overlay.classList.add("is-open");
 
     if (typeof trackEvent === "function") {
