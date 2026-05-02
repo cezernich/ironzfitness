@@ -126,9 +126,11 @@
         }
       }
 
-      // Logged workouts come from the dedicated table.
+      // Logged workouts come from the dedicated table. `data` carries
+      // the JSONB blob where `isCompletion` lives — we need it to match
+      // the athlete's history dedup (workouts.js filterWorkoutHistory).
       const completedRes = await sb.from("workouts")
-        .select("id, user_id, name, type, date, duration_minutes, completed, notes, created_at")
+        .select("id, user_id, name, type, date, duration_minutes, completed, notes, created_at, data")
         .eq("user_id", clientId)
         .order("date", { ascending: false })
         .limit(60);
@@ -168,7 +170,23 @@
       _data.coachAssignedAt = coachAssignedAt;
       _data.prs       = byKey.personalRecords || null;
       _data.races     = _coerceArray(byKey.raceEvents).concat(_coerceArray(byKey.events));
-      _data.completed = completedRes.data || [];
+      // Mirror athlete-side dedup: Mark-as-Complete on a scheduled
+      // session writes a second `workouts` row tagged isCompletion=true
+      // alongside any hand-logged workout for the same (date, type).
+      // The athlete's history view hides the isCompletion duplicate;
+      // the coach calendar was rendering both, so a single workout
+      // showed up twice (different durations because the auto-record
+      // pulls from the schedule and the hand log from the form).
+      const _completedRaw = completedRes.data || [];
+      const _isCompletionFlag = (w) => !!(w && w.data && w.data.isCompletion);
+      const _handLoggedKeys = new Set(
+        _completedRaw
+          .filter(w => !_isCompletionFlag(w))
+          .map(w => `${w.date}|${w.type}`)
+      );
+      _data.completed = _completedRaw.filter(w =>
+        !_isCompletionFlag(w) || !_handLoggedKeys.has(`${w.date}|${w.type}`)
+      );
       // Training Inputs — coach-readable mirror of the athlete's
       // home-screen "Active Training Inputs" card. Bundled into one
       // sub-object so the renderer can pull from a single namespace
