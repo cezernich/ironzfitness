@@ -375,8 +375,117 @@
     }
     if (res?.error) return setErr("Couldn't save: " + res.error.message);
 
+    // Edits to a program template don't auto-flow to already-applied
+    // assignments (coach_assigned_workouts rows are independent JSONB
+    // snapshots). Propagate the new content to future-dated rows
+    // tagged with this program_id so the coach's "I changed Push to
+    // Z4 Threshold" reaches every client this program is on. Past
+    // (completed) entries are preserved as historical record.
+    if (_editingProgram) {
+      try {
+        await _propagateProgramEditsToAssignments(_editingProgram.id, templateForSave, _draftWeeks);
+      } catch (e) {
+        console.warn("[coach-programs] propagate to assignments failed:", e);
+      }
+    }
+
     closeCoachProgramBuilder();
     await loadCoachPrograms();
+  }
+
+  // Walk every future-dated coach_assigned_workouts row tied to this
+  // program, group by (program_week, program_day), and patch each
+  // row's workout JSONB to match the corresponding slot in the new
+  // template. Multi-slot days match by position (1st slot → 1st row
+  // for that day, etc. — same order as the apply path emits, so the
+  // pairing stays stable across saves).
+  //
+  // Trade-offs by design:
+  //   - We update existing rows IN PLACE (preserves date, conflict_mode,
+  //     coach_note, client_note, client_rating). The AFTER UPDATE
+  //     trigger re-mirrors the row to user_data.workoutSchedule so
+  //     the athlete sees the new content automatically.
+  //   - If the new template ADDED a slot, we don't insert a new
+  //     coach_assigned row for it — would re-trigger conflict-mode
+  //     decisions and we'd need to re-confirm with the coach. They
+  //     can re-Apply the program if they want net-new days.
+  //   - If the new template REMOVED a slot, we don't delete the
+  //     existing row — coach can delete the workout from the calendar
+  //     directly if they want it gone. Avoids destructive surprise.
+  //   - Past (date < today) rows aren't touched. Completed history
+  //     stays as the record of what the athlete actually did against.
+  async function _propagateProgramEditsToAssignments(programId, template, durationWeeks) {
+    const sb = window.supabaseClient;
+    if (!sb || !programId) return;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const { data: rows, error } = await sb.from("coach_assigned_workouts")
+      .select("id, date, program_week, program_day, workout")
+      .eq("program_id", programId)
+      .gte("date", todayStr);
+    if (error || !rows || !rows.length) return;
+
+    // Group future rows by (program_week, program_day). Sort each
+    // group by date+id so the pairing with template slots is stable.
+    const groups = {};
+    for (const r of rows) {
+      const k = `${r.program_week}|${r.program_day}`;
+      if (!groups[k]) groups[k] = [];
+      groups[k].push(r);
+    }
+    for (const k of Object.keys(groups)) {
+      groups[k].sort((a, b) => {
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        return String(a.id).localeCompare(String(b.id));
+      });
+    }
+
+    const libById = {};
+    for (const li of _libraryItems || []) libById[li.id] = li;
+
+    const updates = [];
+    for (let w = 1; w <= durationWeeks; w++) {
+      for (const d of DAYS) {
+        const slots = _slotsForDay(template, d.key);
+        if (!slots.length) continue;
+        const programDay = d.offset + 1;
+        const groupRows = groups[`${w}|${programDay}`] || [];
+        const pairCount = Math.min(slots.length, groupRows.length);
+        for (let i = 0; i < pairCount; i++) {
+          const slot = slots[i];
+          const row  = groupRows[i];
+          // Preserve coachName + coachProgram from the existing row's
+          // workout JSONB — these are display-only metadata stamped
+          // at apply time; no reason to re-derive them here.
+          const carry = {
+            coachName:    row.workout?.coachName    || undefined,
+            coachProgram: row.workout?.coachProgram || undefined,
+          };
+          let workoutJson;
+          if (slot.library_id && libById[slot.library_id]) {
+            workoutJson = { ...(libById[slot.library_id].workout || {}), ...carry };
+          } else if (slot.library_id) {
+            continue; // library item gone — leave the row alone
+          } else {
+            workoutJson = { ...slot, ...carry };
+          }
+          updates.push({ id: row.id, workout: workoutJson });
+        }
+      }
+    }
+
+    // Sequential per-row UPDATE — Supabase doesn't take a bulk update
+    // with different values per row. The AFTER UPDATE trigger handles
+    // the user_data mirror for each one, so the athlete's view picks
+    // up the change without a separate sync pass.
+    for (const u of updates) {
+      const { error: upErr } = await sb.from("coach_assigned_workouts")
+        .update({ workout: u.workout })
+        .eq("id", u.id);
+      if (upErr) console.warn("[coach-programs] row update failed", u.id, upErr.message);
+    }
+    if (updates.length) {
+      console.log("[coach-programs] propagated edits to", updates.length, "assignments");
+    }
   }
 
   async function deleteCoachProgram(id) {
