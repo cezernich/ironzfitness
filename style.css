@@ -9170,6 +9170,16 @@ input.completion-ex-name:focus {
   color: var(--color-text-muted);
   text-align: center;
 }
+.hydration-future-notice-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--color-accent, #4a7c59);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.hydration-future-notice-link:hover { opacity: 0.85; }
 /* Bottle editor rows in the settings modal */
 .hydration-bottles-list {
   display: flex;

@@ -1171,13 +1171,15 @@ function _setHydrationFutureLock(isFuture) {
   }
   // Per-bottle row buttons (rendered dynamically by _renderBottleButtons).
   document.querySelectorAll(".hydration-bottle-btn").forEach(b => { b.disabled = isFuture; });
-  // Inline notice — added once, toggled visible.
+  // Inline notice — added once, toggled visible. The "Switch to today"
+  // span is wired as an inline action so the user doesn't have to
+  // scroll back up to the date-nav Today button.
   let notice = document.getElementById("hydration-future-notice");
   if (!notice && card) {
     notice = document.createElement("div");
     notice.id = "hydration-future-notice";
     notice.className = "hydration-future-notice";
-    notice.textContent = "Projected target. Switch to today to log water.";
+    notice.innerHTML = `Projected target. <button type="button" class="hydration-future-notice-link" onclick="setHydrationDate(null)">Switch to today</button> to log water.`;
     const bar = document.getElementById("hydration-bar-fill")?.parentElement;
     if (bar && bar.parentElement) bar.parentElement.insertBefore(notice, bar.nextSibling);
   }
