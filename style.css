@@ -15635,6 +15635,10 @@ input.completion-ex-name:focus {
   align-items: center;
   gap: 6px;
 }
+/* COACH PLAN tile in the coach view — same .ti-card--coach-plan
+   visual as the athlete sees, just spaced for the coach tab's card
+   stack. */
+.coach-ti-program-tile { margin-bottom: 10px; }
 .coach-ti-raceedit-modal { max-width: 560px; }
 .coach-ti-raceedit-grid {
   display: grid;

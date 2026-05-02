@@ -740,6 +740,17 @@
       sections.push(`<div class="coach-ti-empty">No upcoming races. The athlete hasn't scheduled an A-priority race yet.</div>`);
     }
 
+    // Coach-assigned programs — mirrors the athlete's "COACH PLAN"
+    // tile (planner.js renderRaceEvents → _getCoachProgramInputs).
+    // We read from the same underlying source (workoutSchedule rows
+    // tagged source='coach_assigned' with a coachProgram blob) so the
+    // tile lines up exactly with what the athlete sees.
+    const coachPlans = _coachProgramInputsFromSchedule(_data.schedule || []);
+    if (coachPlans.length) {
+      sections.push(`<div class="coach-ti-section-label">Programs assigned</div>`);
+      sections.push(coachPlans.map(cp => _coachProgramTile(cp)).join(""));
+    }
+
     // Sports + goals
     sections.push(_editingTI === "sports-goals"
       ? _renderTIEditSportsGoals(ti)
@@ -1551,6 +1562,58 @@
   // Helpers — minimal pretty-printers shared by the read-only render.
   // Kept inline to keep PR 1 self-contained; if PR 3 needs to write
   // these labels back through an edit form the maps lift up cleanly.
+  // Coach-assigned program inputs — mirror of planner.js
+  // _getCoachProgramInputs but reads from a passed-in schedule rather
+  // than localStorage so the coach view sees the CLIENT's schedule.
+  // Groups by program id; counts upcoming sessions; returns the
+  // earliest start + latest end so the tile can show a window.
+  function _coachProgramInputsFromSchedule(schedule) {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const groups = {};
+    for (const e of schedule || []) {
+      if (!e || e.source !== "coach_assigned") continue;
+      if (!e.date || e.date < todayStr) continue;
+      const cp = e.coachProgram;
+      if (!cp || !cp.id) continue;
+      if (!groups[cp.id]) {
+        groups[cp.id] = {
+          programId:   cp.id,
+          programName: cp.name || "Coach Program",
+          weeks:       cp.weeks || null,
+          coachName:   e.coachName || "Coach",
+          sessions:    0,
+          startDate:   e.date,
+          endDate:     e.date,
+        };
+      }
+      const g = groups[cp.id];
+      g.sessions++;
+      if (e.date < g.startDate) g.startDate = e.date;
+      if (e.date > g.endDate)   g.endDate   = e.date;
+    }
+    return Object.values(groups).sort((a, b) => a.startDate.localeCompare(b.startDate));
+  }
+  function _coachProgramTile(cp) {
+    const endLabel = (() => {
+      try {
+        return new Date(cp.endDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      } catch { return cp.endDate; }
+    })();
+    const sessionLabel = `${cp.sessions} upcoming workout${cp.sessions === 1 ? "" : "s"}`;
+    const meta = cp.weeks ? `${cp.weeks}-week program` : "Custom program";
+    return `<div class="ti-card ti-card--coach-plan coach-ti-program-tile">
+      <div class="race-card-top">
+        <span class="ti-card-badge ti-card-badge--coach-plan">COACH PLAN</span>
+      </div>
+      <div class="race-card-name">${_esc(cp.programName)}</div>
+      <div class="race-card-meta">${_esc(meta)}</div>
+      <div class="race-card-footer">
+        <span class="race-date-badge">${_esc(sessionLabel)}</span>
+        <span class="race-countdown">through ${_esc(endLabel)}</span>
+      </div>
+    </div>`;
+  }
+
   function _coachRaceCard(race) {
     const dateObj = new Date(race.date + "T00:00:00");
     const today = new Date();
