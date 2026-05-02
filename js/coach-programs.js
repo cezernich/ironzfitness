@@ -148,9 +148,20 @@
     document.getElementById("coach-program-builder-overlay")?.classList.add("is-open");
   }
 
-  function openCoachProgramEdit(id) {
-    const p = _programs.find(x => x.id === id);
-    if (!p) return;
+  async function openCoachProgramEdit(id) {
+    // _programs is populated by loadCoachPrograms() when the coach
+    // visits the Programs tab. From other entry points (the COACH PLAN
+    // tile on a client's Training Inputs view, deep links, etc.) the
+    // cache is empty and the previous implementation silently no-op'd.
+    // Lazy-fetch programs + library so this entry always works.
+    if (!_programs || _programs.length === 0) {
+      try { await loadCoachPrograms(); } catch (e) { console.warn("[coach-programs] load failed", e); }
+    }
+    const p = (_programs || []).find(x => x.id === id);
+    if (!p) {
+      console.warn("[coach-programs] openCoachProgramEdit — program not found:", id);
+      return;
+    }
     _editingProgram = p;
     _draftName = p.name;
     _draftWeeks = p.duration_weeks;
