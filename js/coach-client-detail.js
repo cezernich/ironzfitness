@@ -94,6 +94,12 @@
           "workoutRatings", "personalRecords",
           "trainingZones", "trainingZonesHistory",
           "raceEvents", "events",
+          // Training Inputs tab — same source keys the athlete's
+          // "Active Training Inputs" card reads on their home screen.
+          // The coach view mirrors that surface read-only in PR 1;
+          // edit (PR 3) and delete (PR 4) come later.
+          "selectedSports", "trainingGoals", "strengthRole",
+          "strengthSetup", "thresholds", "buildPlanTemplate", "longDays",
           "nutritionEnabled", "hydrationEnabled", "fuelingEnabled",
           "nutritionAdjustments",
           "hydrationSettings", "hydrationDailyTargetOz",
@@ -150,6 +156,20 @@
       _data.prs       = byKey.personalRecords || null;
       _data.races     = _coerceArray(byKey.raceEvents).concat(_coerceArray(byKey.events));
       _data.completed = completedRes.data || [];
+      // Training Inputs — coach-readable mirror of the athlete's
+      // home-screen "Active Training Inputs" card. Bundled into one
+      // sub-object so the renderer can pull from a single namespace
+      // and the (forthcoming) edit/delete surfaces have one place to
+      // wire writes through.
+      _data.trainingInputs = {
+        selectedSports:    _coerceArray(byKey.selectedSports),
+        trainingGoals:     _coerceArray(byKey.trainingGoals),
+        strengthRole:      typeof byKey.strengthRole === "string" ? byKey.strengthRole : (byKey.strengthRole?.role || null),
+        strengthSetup:     byKey.strengthSetup    || null,
+        thresholds:        byKey.thresholds       || null,
+        buildPlanTemplate: byKey.buildPlanTemplate || null,
+        longDays:          byKey.longDays         || null,
+      };
       _data.flags = {
         nutritionEnabled: _readFlag(byKey.nutritionEnabled),
         hydrationEnabled: _readFlag(byKey.hydrationEnabled),
@@ -210,6 +230,7 @@
       <div class="coach-client-tabs">
         ${_tabBtn("calendar", "Calendar")}
         ${_tabBtn("benchmarks", "Benchmarks")}
+        ${_tabBtn("training-inputs", "Training Inputs")}
         ${_tabBtn("feedback", "Feedback")}
         ${_tabBtn("nutrition", "Nutrition & Fueling")}
       </div>
@@ -236,11 +257,12 @@
 
   function _renderActiveTab() {
     switch (_activeTab) {
-      case "benchmarks": return _renderBenchmarks();
-      case "feedback":   return _renderFeedback();
-      case "nutrition":  return _renderNutritionFueling();
+      case "benchmarks":      return _renderBenchmarks();
+      case "training-inputs": return _renderTrainingInputs();
+      case "feedback":        return _renderFeedback();
+      case "nutrition":       return _renderNutritionFueling();
       case "calendar":
-      default:           return _renderCalendar();
+      default:                return _renderCalendar();
     }
   }
 
@@ -672,6 +694,145 @@
     }).join("");
 
     return `<div class="card">${items}</div>`;
+  }
+
+  // ── Tab: Training Inputs ─────────────────────────────────────────────
+  // Read-only mirror of the athlete's "Active Training Inputs" home-card.
+  // Lists upcoming races (with priority + countdown), the sport mix and
+  // training goals, the weekly schedule template, and (for hybrids) the
+  // strength role + setup. Edit lands in PR 3 with an in-place coach-edit
+  // mode that re-runs the plan generator on save; delete lands in PR 4
+  // with a typed-confirm modal.
+  function _renderTrainingInputs() {
+    const ti = _data.trainingInputs || {};
+    const today = new Date().toISOString().slice(0, 10);
+    const upcoming = (_data.races || [])
+      .filter(r => r && r.date && r.date >= today && !r.isPastRace)
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const sections = [];
+
+    // Race cards
+    if (upcoming.length) {
+      sections.push(`<div class="coach-ti-section-label">Upcoming races</div>`);
+      sections.push(upcoming.map(r => _coachRaceCard(r)).join(""));
+    } else {
+      sections.push(`<div class="coach-ti-empty">No upcoming races. The athlete hasn't scheduled an A-priority race yet.</div>`);
+    }
+
+    // Sports + goals
+    const sportsRow = (ti.selectedSports || []).map(s => `<span class="coach-ti-pill">${_esc(_prettySport(s))}</span>`).join("");
+    const goalsRow  = (ti.trainingGoals  || []).map(g => `<span class="coach-ti-pill coach-ti-pill--accent">${_esc(_prettyGoal(g))}</span>`).join("");
+    if (sportsRow || goalsRow) {
+      sections.push(`<div class="card coach-ti-card">
+        <div class="coach-ti-card-title">Sports &amp; Goals</div>
+        ${sportsRow ? `<div class="coach-ti-row"><div class="coach-ti-label">Sports</div><div class="coach-ti-pills">${sportsRow}</div></div>` : ""}
+        ${goalsRow  ? `<div class="coach-ti-row"><div class="coach-ti-label">Goals</div><div class="coach-ti-pills">${goalsRow}</div></div>` : ""}
+      </div>`);
+    }
+
+    // Strength setup — only when the athlete is hybrid (selectedSports
+    // includes "strength" OR a strengthRole is set).
+    const hasStrength = (ti.selectedSports || []).includes("strength") || !!ti.strengthRole;
+    if (hasStrength) {
+      const setup = ti.strengthSetup || {};
+      sections.push(`<div class="card coach-ti-card">
+        <div class="coach-ti-card-title">Strength</div>
+        ${ti.strengthRole ? `<div class="coach-ti-row"><div class="coach-ti-label">Role</div><div class="coach-ti-value">${_esc(_prettyRole(ti.strengthRole))}</div></div>` : ""}
+        ${setup.sessionsPerWeek ? `<div class="coach-ti-row"><div class="coach-ti-label">Sessions / week</div><div class="coach-ti-value">${_esc(String(setup.sessionsPerWeek))}</div></div>` : ""}
+        ${setup.split ? `<div class="coach-ti-row"><div class="coach-ti-label">Split</div><div class="coach-ti-value">${_esc(_prettySplit(setup.split))}</div></div>` : ""}
+        ${setup.sessionLength ? `<div class="coach-ti-row"><div class="coach-ti-label">Session length</div><div class="coach-ti-value">${_esc(String(setup.sessionLength))} min</div></div>` : ""}
+      </div>`);
+    }
+
+    // Weekly schedule template
+    const tpl = ti.buildPlanTemplate;
+    if (tpl && typeof tpl === "object") {
+      const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+      const dayLabels = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
+      const rows = days.map(d => {
+        const slots = Array.isArray(tpl[d]) ? tpl[d] : [];
+        const chips = slots.length
+          ? slots.map(s => `<span class="coach-ti-slot">${_esc(_prettySlot(s))}</span>`).join("")
+          : `<span class="coach-ti-slot coach-ti-slot--rest">Rest</span>`;
+        return `<div class="coach-ti-week-row">
+          <div class="coach-ti-week-day">${dayLabels[d]}</div>
+          <div class="coach-ti-week-slots">${chips}</div>
+        </div>`;
+      }).join("");
+      sections.push(`<div class="card coach-ti-card">
+        <div class="coach-ti-card-title">Weekly Schedule</div>
+        <div class="coach-ti-week">${rows}</div>
+      </div>`);
+    }
+
+    // Long days
+    if (ti.longDays && (ti.longDays.longRun || ti.longDays.longRide)) {
+      const dayLabels = { sun: "Sunday", mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday" };
+      sections.push(`<div class="card coach-ti-card">
+        <div class="coach-ti-card-title">Long Days</div>
+        ${ti.longDays.longRun  ? `<div class="coach-ti-row"><div class="coach-ti-label">Long run</div><div class="coach-ti-value">${_esc(dayLabels[ti.longDays.longRun]  || ti.longDays.longRun)}</div></div>` : ""}
+        ${ti.longDays.longRide ? `<div class="coach-ti-row"><div class="coach-ti-label">Long ride</div><div class="coach-ti-value">${_esc(dayLabels[ti.longDays.longRide] || ti.longDays.longRide)}</div></div>` : ""}
+      </div>`);
+    }
+
+    return sections.length ? sections.join("") : `<div class="coach-ti-empty">This athlete hasn't built a plan yet.</div>`;
+  }
+
+  // Helpers — minimal pretty-printers shared by the read-only render.
+  // Kept inline to keep PR 1 self-contained; if PR 3 needs to write
+  // these labels back through an edit form the maps lift up cleanly.
+  function _coachRaceCard(race) {
+    const dateObj = new Date(race.date + "T00:00:00");
+    const today = new Date();
+    const daysAway = Math.ceil((dateObj - today) / (1000 * 60 * 60 * 24));
+    const priority = (race.priority || "A").toUpperCase();
+    const priorityClass = priority.toLowerCase();
+    const dateLabel = dateObj.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const countdownLabel = daysAway >= 0 ? `${daysAway} days away` : `${Math.abs(daysAway)} days ago`;
+    const tagBits = [
+      race.level ? race.level.charAt(0).toUpperCase() + race.level.slice(1) : null,
+      race.daysPerWeek ? `${race.daysPerWeek}× / week` : null,
+    ].filter(Boolean).map(t => `<span class="race-tag">${_esc(t)}</span>`).join("");
+    return `<div class="race-card coach-ti-race-card">
+      <div class="race-card-top">
+        <span class="race-priority-badge priority-${priorityClass}">${priority} Race</span>
+      </div>
+      <div class="race-card-name">${_esc(race.name || race.type || "Race")}</div>
+      ${race.location ? `<div class="race-card-detail">${_esc(race.location)}</div>` : ""}
+      ${tagBits ? `<div class="race-tags">${tagBits}</div>` : ""}
+      <div class="race-card-footer">
+        <span class="race-date-badge">${dateLabel}</span>
+        <span class="race-countdown ${daysAway < 0 ? "past" : ""}">${countdownLabel}</span>
+      </div>
+    </div>`;
+  }
+
+  function _prettySport(s) {
+    return ({ run: "Run", bike: "Bike", swim: "Swim", strength: "Strength", hyrox: "Hyrox", rowing: "Rowing", walking: "Walking", yoga: "Yoga", hiit: "HIIT" })[s] || s;
+  }
+  function _prettyGoal(g) {
+    return ({ race: "Train for a race", speed: "Get faster", endurance: "Build endurance", general: "General fitness", stronger: "Get stronger" })[g] || g;
+  }
+  function _prettyRole(r) {
+    return ({ injury_prevention: "Injury prevention", race_performance: "Race performance", general: "General strength", hypertrophy: "Build muscle", minimal: "Minimal" })[r] || r;
+  }
+  function _prettySplit(s) {
+    return ({ ppl: "Push / Pull / Legs", ul: "Upper / Lower", "upper-lower": "Upper / Lower", fullBody: "Full body", full: "Full body", custom: "Custom" })[s] || s;
+  }
+  function _prettySlot(s) {
+    if (!s) return "";
+    if (s === "rest") return "Rest";
+    if (s === "brick") return "Brick";
+    const map = {
+      "run-long": "Long run", "run-interval": "Interval run", "run-tempo": "Tempo run", "run-easy": "Easy run", "run-recovery": "Recovery run", "run": "Run",
+      "bike-long": "Long ride", "bike-interval": "Interval ride", "bike-easy": "Easy ride", "bike": "Ride",
+      "swim-css": "CSS swim", "swim-endurance": "Endurance swim", "swim": "Swim",
+      "strength-push": "Push", "strength-pull": "Pull", "strength-legs": "Legs",
+      "strength-upper": "Upper", "strength-lower": "Lower", "strength-full": "Full body",
+      "strength-custom": "Custom", "strength": "Strength",
+    };
+    return map[s] || s;
   }
 
   // ── Tab: Nutrition & Fueling ──────────────────────────────────────────
