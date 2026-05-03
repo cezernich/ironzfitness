@@ -663,7 +663,27 @@
     const sess = (await sb.auth.getSession())?.data?.session;
     const coachId = sess?.user?.id;
     if (!coachId) return setErr("Not signed in.");
-    const coachName = (window._coachNameCache && window._coachNameCache[coachId]) || "Your coach";
+    // Lazy-fetch the coach's name on cache miss — matches the
+    // coach-assignment-flow apply path (which also reads
+    // _coachNameCache, falls through to a profiles query, and
+    // stamps the result so later applies don't refetch). Without
+    // this, a fresh coach session that hadn't already loaded the
+    // name elsewhere stamped every program-applied workout with
+    // the literal string "Your coach", which then surfaced on the
+    // athlete's card as "From Your coach" instead of the actual
+    // coach name.
+    if (!window._coachNameCache) window._coachNameCache = {};
+    let coachName = window._coachNameCache[coachId];
+    if (!coachName) {
+      try {
+        const { data: cp } = await sb.from("profiles")
+          .select("full_name, email")
+          .eq("id", coachId)
+          .maybeSingle();
+        coachName = cp?.full_name || cp?.email || "Your coach";
+        window._coachNameCache[coachId] = coachName;
+      } catch { coachName = "Your coach"; }
+    }
 
     const program = _applyState.program;
     const template = program.weekly_template || {};
