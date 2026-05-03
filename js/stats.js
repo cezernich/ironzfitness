@@ -1990,11 +1990,14 @@ function buildStatsHydration() {
     }
   }
 
-  // Last 7 days bar chart — each bar is normalized to ITS OWN day's
-  // hydration target so 100% reads as one consistent line across days
-  // that had different goals (e.g. long-run day = ~150 oz target,
-  // rest day = ~80 oz target). Without normalization, comparing
-  // absolute oz against a single dashed line lies about adherence.
+  // Last 7 days bar chart — bar height is absolute oz consumed, color
+  // carries the goal-hit signal (black = hit goal that day, muted blue
+  // = missed). The earlier per-day-normalized + dashed-100%-line
+  // version was confusing because bars sized to ratio meant a
+  // higher-target day with more absolute oz could end up rendering
+  // shorter than a lower-target day, and the dashed line didn't sit
+  // visually where users expected. Switching to absolute oz lets the
+  // chart read at a glance: tall black = good day, short blue = miss.
   const last7 = [];
   const dayLabels = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   for (let i = 6; i >= 0; i--) {
@@ -2002,21 +2005,17 @@ function buildStatsHydration() {
     d.setDate(d.getDate() - i);
     const key = d.toISOString().slice(0, 10);
     const oz = _roundOz(_ozOn(key));
-    const dayTargetOz = _targetOzFor(key) || 1;
-    const pctOfTarget = (oz / dayTargetOz) * 100;
     const active = key >= firstLogDate; // day is within active tracking range
-    last7.push({ label: dayLabels[d.getDay()], oz, pctOfTarget, met: _metOn(key), active });
+    last7.push({ label: dayLabels[d.getDay()], oz, met: _metOn(key), active });
   }
 
-  // Visual cap so a 200%+ over-achiever day doesn't squash the rest of
-  // the chart. Real value still surfaces in the oz callout above each
-  // bar, so capping the bar height doesn't lose information.
-  const VIS_CAP = 150;
-  const maxPct = Math.max(VIS_CAP, ...last7.map(d => d.pctOfTarget));
+  // Scale bar height to the tallest day in the window so the chart
+  // fills its track rather than always cramming under the same axis
+  // ceiling. Floor at 1 to avoid divide-by-zero on empty weeks.
+  const maxOz = Math.max(1, ...last7.map(d => d.oz));
 
   const barChart = last7.map(d => {
-    const visualPct = Math.min(d.pctOfTarget, maxPct);
-    const heightPct = maxPct > 0 ? Math.round((visualPct / maxPct) * 100) : 0;
+    const heightPct = Math.round((d.oz / maxOz) * 100);
     const color = !d.active ? "#555" : d.met ? "var(--color-accent)" : "rgba(129, 140, 248, 0.5)";
     const countLabel = d.active ? `${Math.round(d.oz)} oz` : "—";
     return `<div class="weekly-col">
@@ -2027,10 +2026,6 @@ function buildStatsHydration() {
       <div class="weekly-label" style="${!d.active ? 'opacity:0.4' : ''}">${d.label}</div>
     </div>`;
   }).join("");
-
-  // Dashed line at 100% (= "you hit your goal that day", whatever the
-  // goal was). With maxPct=150 this lands at 67% of chart height.
-  const targetPct = maxPct > 0 ? Math.round((100 / maxPct) * 100) : 100;
 
   const boxes = [
     { val: currentStreak, label: "Current Streak", sub: "days hitting target" },
@@ -2052,12 +2047,11 @@ function buildStatsHydration() {
       <div class="card-body">
         <div class="streak-grid">${boxes}</div>
         <div class="section-label"><span>Last 7 Days</span></div>
-        <div class="weekly-chart" style="position:relative">
-          <div style="position:absolute;left:0;right:0;bottom:${Math.round(targetPct * 72 / 100) + 18}px;border-top:1.5px dashed var(--color-text-muted);opacity:0.4"></div>
+        <div class="weekly-chart">
           ${barChart}
         </div>
         <div style="text-align:center;font-size:0.7rem;color:var(--color-text-muted);margin-top:4px">
-          Dashed line = 100% of that day's goal · bars normalized per-day
+          Black = hit goal · blue = under goal
         </div>
         <div class="totals-row" style="margin-top:14px">
           <span class="totals-label">Total Logged</span>
