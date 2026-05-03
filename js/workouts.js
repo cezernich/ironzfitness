@@ -3896,6 +3896,10 @@ const COMMUNITY_WORKOUTS = [
 let _commActiveCategory = "All";
 let _commDbWorkouts = [];      // fetched from Supabase
 let _commIsAdmin = false;
+let _commIsCoach = false;
+let _commAuthorName = "";      // profile.full_name for the current user
+                               // — used as the author column when coaches
+                               // post (admin posts default to IronZ Team).
 
 /** Fetch community workouts from Supabase and merge with defaults */
 async function _commFetchFromDb() {
@@ -3914,12 +3918,19 @@ async function _commFetchFromDb() {
     }
   } catch {}
 
-  // Check admin role
+  // Check role + coach flag — both gate the "Add Community Workout"
+  // button. Coaches post under their own name; admins default to
+  // IronZ Team unless they overwrite the author field on the form.
   try {
     const { data: { session } } = await client.auth.getSession();
     if (session) {
-      const { data: profile } = await client.from("profiles").select("role").eq("id", session.user.id).maybeSingle();
-      _commIsAdmin = profile?.role === "admin";
+      const { data: profile } = await client.from("profiles")
+        .select("role, is_coach, full_name")
+        .eq("id", session.user.id)
+        .maybeSingle();
+      _commIsAdmin     = profile?.role === "admin";
+      _commIsCoach     = !!profile?.is_coach;
+      _commAuthorName  = profile?.full_name || "";
     }
   } catch {}
 }
@@ -3996,9 +4007,14 @@ async function renderCommunityWorkouts(filter) {
 
   let html = "";
 
-  // Admin: add workout button
-  if (_commIsAdmin) {
-    html += `<button class="btn-primary" style="margin-bottom:12px" onclick="openCommAdminForm()">+ Add Community Workout (Admin)</button>`;
+  // Authored-write affordance — admins and coaches see the button.
+  // Coaches post under their full_name (set in saveCommAdminWorkout
+  // when the author input is left blank); admins default to "IronZ
+  // Team". Label drops the "(Admin)" suffix now that coaches can use
+  // it too — the author field on the card itself differentiates the
+  // source.
+  if (_commIsAdmin || _commIsCoach) {
+    html += `<button class="btn-primary" style="margin-bottom:12px" onclick="openCommAdminForm()">+ Add Community Workout</button>`;
   }
 
 
@@ -4776,7 +4792,13 @@ async function saveCommAdminWorkout() {
   const category   = document.getElementById("ca-category")?.value;
   const difficulty = document.getElementById("ca-difficulty")?.value;
   const type       = document.getElementById("ca-type")?.value;
-  const author     = document.getElementById("ca-author")?.value.trim() || "IronZ Team";
+  // Author default differs by writer:
+  //   Admin → "IronZ Team" (the existing canonical IronZ-curated value)
+  //   Coach → their full_name (so the feed attributes the post to them)
+  // Either can override the field manually if they want to publish
+  // under a brand / pseudonym.
+  const _authorDefault = (_commIsCoach && !_commIsAdmin && _commAuthorName) ? _commAuthorName : "IronZ Team";
+  const author     = document.getElementById("ca-author")?.value.trim() || _authorDefault;
 
   if (!name) { msg.textContent = "Name is required."; msg.style.color = "#ef4444"; return; }
 
@@ -4834,7 +4856,11 @@ async function saveCommAdminWorkout() {
 
   const id = "c-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "") + "-" + Date.now();
 
-  const record = { id, category, name, author, difficulty, type };
+  // is_official:true mandatory for the row to surface in the feed —
+  // the read filter at _commFetchFromDb requires it (or author ===
+  // "IronZ Team", which catches admin-default-author rows). Coach
+  // posts with their own name as author wouldn't pass without this.
+  const record = { id, category, name, author, difficulty, type, is_official: true };
   if (exercises) record.exercises = exercises;
   if (segments)  record.segments  = segments;
 
