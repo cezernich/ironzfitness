@@ -152,7 +152,11 @@ function initUniversalLinks() {
 
 const PUSH_PREF_DEFAULTS = {
   workout_reminders: true,
-  reminder_minutes_before: 30,
+  // HH:MM local-time for the daily workout reminder. The previous
+  // "minutes before scheduled workout" model never fired because
+  // workouts in this app aren't time-scheduled — see migration
+  // 20260503b_workout_reminder_time.sql for the why.
+  workout_reminder_time: "07:00",
   share_alerts: true,
   hydration_reminders: true,
   hydration_start_hour: 8,
@@ -224,16 +228,13 @@ async function renderPushNotifPrefs() {
     ${prefs.workout_reminders ? `
     <div class="pref-row" style="padding-left:16px">
       <div>
-        <div class="pref-label">Remind me</div>
-        <div class="pref-desc">Minutes before workout</div>
+        <div class="pref-label">Daily reminder</div>
+        <div class="pref-desc">Time of day to nudge you about today's workout</div>
       </div>
-      <select id="push-pref-reminder-min" onchange="savePushPref('reminder_minutes_before', parseInt(this.value))"
-        style="width:auto;padding:6px 32px 6px 10px">
-        <option value="15" ${prefs.reminder_minutes_before === 15 ? 'selected' : ''}>15 min</option>
-        <option value="30" ${prefs.reminder_minutes_before === 30 ? 'selected' : ''}>30 min</option>
-        <option value="60" ${prefs.reminder_minutes_before === 60 ? 'selected' : ''}>1 hour</option>
-        <option value="120" ${prefs.reminder_minutes_before === 120 ? 'selected' : ''}>2 hours</option>
-      </select>
+      <input type="time" id="push-pref-reminder-time"
+        value="${(prefs.workout_reminder_time || '07:00').slice(0, 5)}"
+        onchange="savePushPref('workout_reminder_time', this.value)"
+        style="width:auto;padding:6px 10px" />
     </div>` : ''}
 
     <div class="pref-row">
