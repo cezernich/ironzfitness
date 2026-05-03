@@ -20,6 +20,12 @@
   const ALLOWED_EXT = new Set(["xlsx", "csv"]);
   const BUCKET = "coach-sheet-imports";
 
+  // Per-spec §C2: undo button is visible for 1 hour after import; after
+  // that the calendar has likely been viewed/edited and full undo
+  // becomes risky. The summary itself persists for forensic value.
+  const UNDO_KEY = "coachSheetImportLastCommit";
+  const UNDO_WINDOW_MS = 60 * 60 * 1000;
+
   // Latest staged-file state lives on the module so Slices 2–3 can
   // read it when they advance through the modal steps.
   let _stagedFile = null;
@@ -710,6 +716,10 @@
     const summary = _structureSummary(w);
     const pace = _firstPace(w.structure);
     const dow = w.day_of_week || "";
+    const conflictCount = _countConflictsOnDate(w.date);
+    const conflictBadge = conflictCount > 0
+      ? `<span class="csi-conflict-badge" title="${conflictCount} existing item${conflictCount === 1 ? "" : "s"} on this date — both will appear on the calendar">+${conflictCount} existing</span>`
+      : "";
     return `
       <div class="csi-workout-row">
         <input type="checkbox" data-csi-workout="${idx}" ${checked ? "checked" : ""} aria-label="Include workout" />
@@ -718,6 +728,7 @@
             <span class="csi-workout-date">${_esc(w.date)}${dow ? ` · ${_esc(dow)}` : ""}</span>
             <span class="csi-badge ${badge.cls}">${badge.label}</span>
             ${w.total_distance_mi ? `<span class="csi-workout-distance">${_esc(String(w.total_distance_mi))} mi</span>` : ""}
+            ${conflictBadge}
           </div>
           <div class="csi-workout-line2">${_esc(summary || "—")}${pace ? ` · pace ${_esc(pace)}` : ""}</div>
           ${w.raw_description ? `
@@ -726,6 +737,24 @@
           ` : ""}
         </div>
       </div>`;
+  }
+
+  // Conflict detection — scan local workouts + scheduled sessions for
+  // anything already on this date. The calendar already supports
+  // multi-session days (Decision #8), so we don't block import — just
+  // flag so the user knows what'll appear alongside.
+  function _countConflictsOnDate(dateStr) {
+    if (!dateStr) return 0;
+    let n = 0;
+    try {
+      const ws = JSON.parse(localStorage.getItem("workouts") || "[]");
+      n += ws.filter(w => w.date === dateStr && !w.fromImport).length;
+    } catch {}
+    try {
+      const ss = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
+      n += ss.filter(s => s.date === dateStr).length;
+    } catch {}
+    return n;
   }
 
   function _renderTemplateCard(t, idx) {
@@ -801,15 +830,20 @@
 
     let workoutsInserted = 0;
     let templatesInserted = 0;
+    const insertedWorkoutIds = [];
+    const insertedTemplateIds = [];
     try {
       // Workouts → localStorage `workouts` array. _shapeWorkout in db.js
       // maps canonical fields and stashes everything else in the `data`
       // jsonb on Supabase, so source_cell / structure / day_type all
-      // survive cross-device.
+      // survive cross-device. Capture each generated id so undo can
+      // delete by id without scanning data.importId on Supabase.
       let local = [];
       try { local = JSON.parse(localStorage.getItem("workouts") || "[]"); } catch {}
       for (const w of workouts) {
-        local.unshift(_shapeImportedWorkoutForLocal(w, _lastImport.importId));
+        const shaped = _shapeImportedWorkoutForLocal(w, _lastImport.importId);
+        local.unshift(shaped);
+        insertedWorkoutIds.push(shaped.id);
         workoutsInserted++;
       }
       if (workouts.length) {
@@ -817,7 +851,9 @@
         if (typeof DB !== "undefined" && DB.syncWorkouts) DB.syncWorkouts();
       }
 
-      // Templates → saved workouts library.
+      // Templates → saved workouts library. saveCustom returns the
+      // saved row (with its generated id) so undo can call
+      // SavedWorkoutsLibrary.removeSaved cleanly.
       if (templates.length && window.SavedWorkoutsLibrary && window.SavedWorkoutsLibrary.saveCustom) {
         for (const t of templates) {
           const exercises = (t.exercises || []).map(e => ({
@@ -826,12 +862,13 @@
             reps: e.reps,
             weight: e.weight,
           }));
-          await window.SavedWorkoutsLibrary.saveCustom({
+          const savedRow = await window.SavedWorkoutsLibrary.saveCustom({
             name: t.library_name,
             workout_kind: "weightlifting",
             exercises,
             notes: `Imported from ${_lastImport.filename} (${_lastImport.importId})`,
           });
+          if (savedRow && savedRow.id) insertedTemplateIds.push(savedRow.id);
           templatesInserted++;
         }
       }
@@ -872,11 +909,25 @@
         if (typeof renderStats === "function") renderStats();
       } catch (e) { console.warn("[CoachSheetImport] post-import render error", e); }
 
-      _csiToast(
-        `Imported ${workoutsInserted} workout${workoutsInserted === 1 ? "" : "s"}` +
-        (templatesInserted ? ` and ${templatesInserted} template${templatesInserted === 1 ? "" : "s"}` : "") + ".",
-        "success",
-      );
+      // Persist a commit summary so the undo affordance survives a
+      // page reload within the 1-hour window. UNDO_KEY is namespaced
+      // so a future cross-session "Undo last import" entry point can
+      // read it without re-deriving from logs.
+      const commitSummary = {
+        importId: _lastImport.importId,
+        filename: _lastImport.filename,
+        workoutIds: insertedWorkoutIds,
+        templateIds: insertedTemplateIds,
+        workoutsInserted,
+        templatesInserted,
+        committedAt: Date.now(),
+      };
+      try { localStorage.setItem(UNDO_KEY, JSON.stringify(commitSummary)); } catch {}
+      window.__coachSheetImportLastCommit = commitSummary;
+
+      const summaryText = `Imported ${workoutsInserted} workout${workoutsInserted === 1 ? "" : "s"}` +
+        (templatesInserted ? ` and ${templatesInserted} template${templatesInserted === 1 ? "" : "s"}` : "") + ".";
+      _csiToastWithUndo(summaryText, commitSummary);
       _resetToStep0();
       _setStaged(null);
     } catch (e) {
@@ -941,6 +992,127 @@
     }, 3500);
   }
 
+  // Success toast with an undo affordance. Stays visible ~10s so the
+  // user has time to react. After dismissal the import is still
+  // undoable via the persisted UNDO_KEY for up to 1 hour (Slice 2 of
+  // Phase C will surface that as an entry-point on the import modal).
+  function _csiToastWithUndo(message, commit) {
+    const existing = document.getElementById("ironz-toast");
+    if (existing) existing.remove();
+    const t = document.createElement("div");
+    t.id = "ironz-toast";
+    t.className = "ironz-toast ironz-toast--success ironz-toast--with-action";
+    t.innerHTML = `
+      <span class="ironz-toast-text">${_esc(message)}</span>
+      <button type="button" class="ironz-toast-action" data-action="undo">Undo</button>
+    `;
+    document.body.appendChild(t);
+    requestAnimationFrame(() => t.classList.add("visible"));
+
+    let dismissed = false;
+    const dismiss = () => {
+      if (dismissed) return;
+      dismissed = true;
+      t.classList.remove("visible");
+      setTimeout(() => { try { t.remove(); } catch {} }, 220);
+    };
+
+    const undoBtn = t.querySelector('[data-action="undo"]');
+    if (undoBtn) {
+      undoBtn.addEventListener("click", async () => {
+        dismiss();
+        await _undoImport(commit);
+      });
+    }
+
+    setTimeout(dismiss, 10000);
+  }
+
+  // Undo handler. Deletes every workout + template that was inserted by
+  // this import_id, both locally and from Supabase. Doesn't decrement
+  // the monthly quota — operationally simpler, and the user did
+  // consume a parse pass; an undo is "I changed my mind about
+  // committing", not "this never happened".
+  async function _undoImport(commit) {
+    if (!commit) {
+      try { commit = JSON.parse(localStorage.getItem(UNDO_KEY) || "null"); } catch {}
+    }
+    if (!commit) {
+      _csiToast("Nothing to undo.", "error");
+      return;
+    }
+    const ageMs = Date.now() - (commit.committedAt || 0);
+    if (ageMs > UNDO_WINDOW_MS) {
+      _csiToast("This import is too old to undo (over 1 hour).", "error");
+      return;
+    }
+
+    const workoutCount = (commit.workoutIds || []).length;
+    const templateCount = (commit.templateIds || []).length;
+    const ok = window.confirm(
+      `Undo will remove ${workoutCount} workout${workoutCount === 1 ? "" : "s"}` +
+      (templateCount ? ` and ${templateCount} template${templateCount === 1 ? "" : "s"}` : "") +
+      ` from this import. Continue?`,
+    );
+    if (!ok) return;
+
+    _csiToast("Undoing import…", "info");
+
+    // Remove from localStorage `workouts`.
+    try {
+      const ws = JSON.parse(localStorage.getItem("workouts") || "[]");
+      const idsToRemove = new Set(commit.workoutIds || []);
+      const remaining = ws.filter(w => !idsToRemove.has(w.id));
+      localStorage.setItem("workouts", JSON.stringify(remaining));
+      if (typeof DB !== "undefined" && DB.syncWorkouts) DB.syncWorkouts();
+    } catch (e) {
+      console.warn("[CoachSheetImport] undo: local workout cleanup failed", e);
+    }
+
+    // Remove from Supabase workouts table by id (RLS scopes to user).
+    if (window.supabaseClient && (commit.workoutIds || []).length) {
+      try {
+        const { error } = await window.supabaseClient
+          .from("workouts")
+          .delete()
+          .in("id", commit.workoutIds);
+        if (error) console.warn("[CoachSheetImport] undo: Supabase workouts delete error", error);
+      } catch (e) {
+        console.warn("[CoachSheetImport] undo: Supabase workouts delete threw", e);
+      }
+    }
+
+    // Remove templates via the saved-workouts library API (handles
+    // local + Supabase + tombstone in one shot).
+    if (window.SavedWorkoutsLibrary && window.SavedWorkoutsLibrary.removeSaved) {
+      for (const id of (commit.templateIds || [])) {
+        try { await window.SavedWorkoutsLibrary.removeSaved(id); }
+        catch (e) { console.warn("[CoachSheetImport] undo: template remove failed", id, e); }
+      }
+    }
+
+    // Clear the persisted commit summary so the toast / future
+    // entry-point won't offer undo for an already-undone import.
+    try { localStorage.removeItem(UNDO_KEY); } catch {}
+    delete window.__coachSheetImportLastCommit;
+
+    // Refresh surfaces.
+    try {
+      if (typeof renderCalendar === "function") renderCalendar();
+      if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
+        renderDayDetail(selectedDate);
+      }
+      if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
+      if (typeof renderStats === "function") renderStats();
+    } catch (e) { console.warn("[CoachSheetImport] undo: post-render error", e); }
+
+    _csiToast(
+      `Undone — removed ${workoutCount} workout${workoutCount === 1 ? "" : "s"}` +
+      (templateCount ? ` and ${templateCount} template${templateCount === 1 ? "" : "s"}` : "") + ".",
+      "success",
+    );
+  }
+
   function _esc(s) {
     return String(s).replace(/[&<>"']/g, c => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -973,13 +1145,17 @@
 
   _ready();
 
-  // Export for Slice 3 + console testing.
+  // Public surface for downstream slices + console testing.
   window.CoachSheetImport = {
     getStaged: () => _stagedFile,
     getLastImport: () => _lastImport,
     getCurrentStep: () => _currentStep,
     goToStep: _goToStep,
     resetToStep0: _resetToStep0,
+    undoLastImport: () => _undoImport(null),
+    getLastCommit: () => {
+      try { return JSON.parse(localStorage.getItem(UNDO_KEY) || "null"); } catch { return null; }
+    },
     _setStatus,
     _validateFile,
   };

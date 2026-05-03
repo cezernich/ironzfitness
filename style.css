@@ -1222,6 +1222,43 @@ nav {
   color: var(--color-text-muted);
 }
 
+/* Conflict badge — appears on a workout row when an existing workout
+   or scheduled session already lives on that date. The calendar
+   already handles multi-session days (Decision #8); this is a
+   heads-up, not a block. */
+.csi-conflict-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: rgba(245, 158, 11, 0.18);
+  color: #92400e;
+}
+
+/* Toast variants — info tint and the success+action shape used for
+   the undo affordance after a successful import. */
+.ironz-toast--info { background: var(--color-text); color: #fff; }
+.ironz-toast--with-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 4px;
+}
+.ironz-toast-text { white-space: nowrap; }
+.ironz-toast-action {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+.ironz-toast-action:hover { background: rgba(255, 255, 255, 0.28); }
+
 input[type="text"],
 input[type="number"],
 input[type="date"],
