@@ -7499,6 +7499,7 @@ input.completion-ex-name:focus {
 .app-logo--google  { background: #4285f4; }
 .app-logo--wahoo   { background: #e8002d; }
 .app-logo--whoop   { background: #000; border: 1px solid rgba(255,255,255,0.15); }
+.app-logo--mfp     { background: #0072ce; }
 
 .app-info {
   flex: 1;
