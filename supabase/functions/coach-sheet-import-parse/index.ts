@@ -78,17 +78,40 @@ Deno.serve(async (req) => {
   }
 
   // ── Audit log row ──────────────────────────────────────────────────────────
-  await supabase.from("coach_sheet_import_logs").insert({
-    user_id: user.id,
-    import_id: body.import_id,
-    storage_path: body.storage_path,
-    filename: body.filename ?? null,
-    file_size_bytes: body.file_size_bytes ?? null,
-    selected_sheets: body.selected_sheets ?? null,
-    date_range_from: body.date_range?.from ?? null,
-    date_range_to: body.date_range?.to ?? null,
-    status: "pending",
-  });
+  // Insert at the start so even a parse failure leaves a paper trail.
+  // Captured logId is used by every exit path below to update the row
+  // with final status (success/failed) + token usage + cost.
+  const { data: logRow } = await supabase
+    .from("coach_sheet_import_logs")
+    .insert({
+      user_id: user.id,
+      import_id: body.import_id,
+      storage_path: body.storage_path,
+      filename: body.filename ?? null,
+      file_size_bytes: body.file_size_bytes ?? null,
+      selected_sheets: body.selected_sheets ?? null,
+      date_range_from: body.date_range?.from ?? null,
+      date_range_to: body.date_range?.to ?? null,
+      status: "pending",
+    })
+    .select("id")
+    .single();
+  const logId: string | null = logRow?.id ?? null;
+
+  // Helper: every exit path that doesn't go through the normal success
+  // return uses this to flip the log row to "failed" with an error
+  // code. Best-effort — a Supabase write hiccup here doesn't block the
+  // response; the operator can still see the original "pending" row.
+  const failLog = async (code: string, message: string) => {
+    if (!logId) return;
+    try {
+      await supabase.from("coach_sheet_import_logs")
+        .update({ status: "failed", error_code: code, error_message: message?.slice(0, 1000) ?? null, updated_at: new Date().toISOString() })
+        .eq("id", logId);
+    } catch (e) {
+      console.warn("[parse] failLog write failed", e);
+    }
+  };
 
   // ── Download from storage ──────────────────────────────────────────────────
   const { data: fileBlob, error: dlErr } = await supabase.storage
@@ -96,10 +119,12 @@ Deno.serve(async (req) => {
     .download(body.storage_path.replace(/^coach-sheet-imports\//, ""));
   if (dlErr || !fileBlob) {
     console.warn("[parse] storage download failed", dlErr);
+    await failLog("IRO06_PARSE_FAILED", `download: ${dlErr?.message ?? "unknown"}`);
     return errorResponse("IRO06_PARSE_FAILED", "Couldn't read the uploaded file. Try uploading again.", 500);
   }
   const arrayBuffer = await fileBlob.arrayBuffer();
   if (arrayBuffer.byteLength > 10 * 1024 * 1024) {
+    await failLog("IRO07_FILE_TOO_LARGE", `${arrayBuffer.byteLength} bytes`);
     return errorResponse("IRO07_FILE_TOO_LARGE", "File exceeds the 10 MB limit.", 413);
   }
 
@@ -109,20 +134,19 @@ Deno.serve(async (req) => {
     workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: "array", cellDates: true, cellNF: false, cellText: false });
   } catch (e) {
     console.warn("[parse] XLSX.read threw", e);
+    await failLog("IRO06_PARSE_FAILED", `XLSX.read: ${String(e).slice(0, 500)}`);
     return errorResponse("IRO06_PARSE_FAILED", "We couldn't read this file. Make sure it's a valid Excel file and try again.", 422);
   }
   if (!workbook.SheetNames?.length) {
+    await failLog("IRO06_PARSE_FAILED", "no sheets");
     return errorResponse("IRO06_PARSE_FAILED", "The workbook has no sheets.", 422);
   }
 
   // ── Stage 1: structural analysis ──────────────────────────────────────────
   const analysis = analyzeWorkbook(workbook);
   if (!analysis.sheets.some(s => s.role === "calendar")) {
-    // Don't hard-fail metadata_only requests — the user may still want to
-    // see the picker and pick a non-calendar sheet (e.g. only Strength).
-    // But for a full request with no calendar sheet AND no strength
-    // sheet, the file is unusable.
     if (!body.metadata_only && !analysis.sheets.some(s => s.role === "strength_library")) {
+      await failLog("IRO06_PARSE_FAILED", "no calendar/strength sheet detected");
       return errorResponse(
         "IRO06_PARSE_FAILED",
         "We couldn't find a calendar layout in this file. Check that there's a sheet with dates laid out as a weekly grid (Mon–Sun across columns).",
@@ -187,12 +211,28 @@ Deno.serve(async (req) => {
   const sheetByName = new Map<string, SheetAnalysis>();
   for (const s of analysis.sheets) sheetByName.set(s.name, s);
 
-  const normalizeResult = await normalizeBlocks(
-    allRawBlocks,
-    sheetByName,
-    body.import_id,
-    body.filename,
-  );
+  let normalizeResult: NormalizeResult;
+  try {
+    normalizeResult = await normalizeBlocks(
+      allRawBlocks,
+      sheetByName,
+      body.import_id,
+      body.filename,
+      { budgetCapUsd: BUDGET_CAP_USD },
+    );
+  } catch (e: any) {
+    if (e?.code === "IRO08_PARSE_BUDGET_EXCEEDED") {
+      await failLog("IRO08_PARSE_BUDGET_EXCEEDED", e.message);
+      return errorResponse(
+        "IRO08_PARSE_BUDGET_EXCEEDED",
+        "This import is unusually large. Try a shorter date range.",
+        413,
+      );
+    }
+    console.warn("[parse] normalizeBlocks threw", e);
+    await failLog("IRO06_PARSE_FAILED", `normalize: ${String(e).slice(0, 500)}`);
+    return errorResponse("IRO06_PARSE_FAILED", "Auto-parse failed. Try again.", 500);
+  }
   const running_workouts = normalizeResult.workouts;
   warnings.push(...normalizeResult.warnings);
 
@@ -209,6 +249,54 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Athlete profile (Resources sheet). Heuristic-only for Slice 3 —
+  // the LLM normalizer would lift quality but profile data is opt-in
+  // beta on the front-end (Decision #13), so a lightweight extractor
+  // is enough to populate it. Front-end shows it under a "(beta)" tag.
+  let athlete_profile: Record<string, unknown> | null = null;
+  for (const sheet of analysis.sheets) {
+    if (sheet.role !== "athlete_profile") continue;
+    if (!selected.has(sheet.name)) continue;
+    try {
+      const profile = extractAthleteProfile(workbook.Sheets[sheet.name]);
+      if (profile && (profile.races?.length || profile.prs?.length)) {
+        athlete_profile = profile;
+      }
+    } catch (e) {
+      console.warn(`[parse] athlete_profile sheet ${sheet.name} failed`, e);
+    }
+  }
+
+  // Math reconciliation runtime check (per spec §B5). Surface a warning
+  // if fewer than 90% of workouts have sum(structure[*].distance_mi)
+  // matching total_distance_mi within 0.5mi tolerance.
+  const recon = computeReconciliation(running_workouts);
+  if (recon.total > 0 && recon.ratio < 0.9) {
+    warnings.push(
+      `${recon.total - recon.reconciled}/${recon.total} workouts have structure totals that don't match prescribed mileage — review carefully.`,
+    );
+  }
+
+  // Final log update — success path. Write the parse counters + cost
+  // so support can audit any user's import history without needing the
+  // file itself.
+  if (logId) {
+    try {
+      await supabase.from("coach_sheet_import_logs")
+        .update({
+          status: "success",
+          workouts_parsed: running_workouts.length,
+          templates_parsed: strength_templates.length,
+          llm_tokens_used: normalizeResult.usage.total_tokens,
+          estimated_cost_usd: normalizeResult.usage.estimated_cost_usd,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", logId);
+    } catch (e) {
+      console.warn("[parse] success log update failed", e);
+    }
+  }
+
   return jsonResponse({
     status: "ok",
     import_id: body.import_id,
@@ -216,11 +304,14 @@ Deno.serve(async (req) => {
     sheets: analysis.sheets.map(stripInternal),
     running_workouts,
     strength_templates,
-    athlete_profile: null, // Slice 3 may extract from athlete_profile sheet
+    athlete_profile,
     warnings,
     stats: {
       workouts_parsed: running_workouts.length,
       templates_parsed: strength_templates.length,
+      reconciliation_ratio: recon.ratio,
+      reconciliation_count: recon.reconciled,
+      reconciliation_total: recon.total,
       llm_tokens_used: normalizeResult.usage.total_tokens,
       llm_cache_read_tokens: normalizeResult.usage.cache_read_tokens,
       llm_cache_write_tokens: normalizeResult.usage.cache_write_tokens,
@@ -733,6 +824,10 @@ const NORMALIZE_MODEL = "claude-opus-4-7";
 const NORMALIZE_BATCH_SIZE = 20;
 const NORMALIZE_MAX_TOKENS = 16000;
 
+// Per-import LLM cost cap (spec §B3). Pre-flight + mid-flight checks
+// abort with IRO08_PARSE_BUDGET_EXCEEDED before runaway spend.
+const BUDGET_CAP_USD = 2.00;
+
 // Opus 4.7 pricing (cached: 2026-04-15 from skill table). Cache reads
 // are 0.1×, cache writes are 1.25× of base input rate.
 const PRICE_INPUT_PER_M = 5.00;
@@ -768,7 +863,9 @@ async function normalizeBlocks(
   sheetByName: Map<string, SheetAnalysis>,
   importId: string,
   filename: string | undefined,
+  opts?: { budgetCapUsd?: number },
 ): Promise<NormalizeResult> {
+  const budgetCap = opts?.budgetCapUsd ?? BUDGET_CAP_USD;
   const usage: NormalizeUsage = {
     input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0,
     total_tokens: 0, batch_count: 0, fallback_batch_count: 0,
@@ -794,17 +891,35 @@ async function normalizeBlocks(
     return { workouts: out, warnings, usage };
   }
 
+  // Pre-flight cost estimate. Worst case: every batch is uncached
+  // (no system-prefix cache hits) at ~$0.30 per batch (≈10k input
+  // uncached + ≈10k output). If the projection clearly exceeds the
+  // cap, abort before any tokens are spent.
+  const estBatches = Math.ceil(blocks.length / NORMALIZE_BATCH_SIZE);
+  const worstCaseCost = estBatches * 0.30;
+  if (worstCaseCost > budgetCap) {
+    const err: any = new Error(`pre-flight estimate $${worstCaseCost.toFixed(2)} > cap $${budgetCap.toFixed(2)} (${estBatches} batches for ${blocks.length} workouts)`);
+    err.code = "IRO08_PARSE_BUDGET_EXCEEDED";
+    throw err;
+  }
+
   usage.llm_used = true;
 
-  // Batch and call.
+  // Batch and call. Mid-flight cap check after each batch so a
+  // pathological file (lots of long descriptions, large tokens) can't
+  // overrun even if the pre-flight estimate said it'd fit.
+  let fallbackSummarized = false;
   for (let i = 0; i < blocks.length; i += NORMALIZE_BATCH_SIZE) {
+    if (usage.estimated_cost_usd >= budgetCap) {
+      const err: any = new Error(`mid-flight cost $${usage.estimated_cost_usd.toFixed(2)} >= cap $${budgetCap.toFixed(2)} after ${usage.batch_count} batches`);
+      err.code = "IRO08_PARSE_BUDGET_EXCEEDED";
+      throw err;
+    }
+
     const batch = blocks.slice(i, i + NORMALIZE_BATCH_SIZE);
     usage.batch_count++;
     try {
       const result = await callNormalizerLLM(apiKey, batch);
-      // Stitch source_file / import_id back onto each workout — the LLM
-      // doesn't need to see these fields (saves tokens) and shouldn't
-      // be trusted to echo them faithfully if it did.
       for (const w of result.workouts) {
         const block = batch.find(b => (b.date === w.date) && (b.source_cell === w.source_cell));
         const sheetName = block?.sheet_name ?? (w.source_sheet as string | undefined) ?? "";
@@ -820,10 +935,17 @@ async function normalizeBlocks(
       usage.output_tokens      += result.usage.output_tokens;
       usage.cache_read_tokens  += result.usage.cache_read_tokens;
       usage.cache_write_tokens += result.usage.cache_write_tokens;
+      // Recompute running cost so the next iteration's cap check sees it.
+      usage.estimated_cost_usd = computeCost(usage);
     } catch (e) {
-      console.warn(`[parse] LLM batch ${i / NORMALIZE_BATCH_SIZE + 1} failed; falling back to heuristic`, e);
+      console.warn(`[parse] LLM batch ${usage.batch_count} failed; falling back to heuristic`, e);
       usage.fallback_batch_count++;
-      warnings.push(`Auto-parse fell back to heuristic for ${batch.length} workout${batch.length === 1 ? "" : "s"} — review carefully.`);
+      // Aggregate one "fell back" warning instead of N — a flapping LLM
+      // shouldn't spam the review screen.
+      if (!fallbackSummarized) {
+        warnings.push(`Auto-parse fell back to heuristic for some workouts — review carefully.`);
+        fallbackSummarized = true;
+      }
       for (const b of batch) {
         const sheet = sheetByName.get(b.sheet_name);
         if (!sheet) continue;
@@ -834,14 +956,18 @@ async function normalizeBlocks(
   }
 
   usage.total_tokens = usage.input_tokens + usage.output_tokens + usage.cache_read_tokens + usage.cache_write_tokens;
-  usage.estimated_cost_usd = round4(
-    (usage.input_tokens       / 1_000_000) * PRICE_INPUT_PER_M +
-    (usage.output_tokens      / 1_000_000) * PRICE_OUTPUT_PER_M +
-    (usage.cache_read_tokens  / 1_000_000) * PRICE_CACHE_READ_PER_M +
-    (usage.cache_write_tokens / 1_000_000) * PRICE_CACHE_WRITE_PER_M
-  );
+  usage.estimated_cost_usd = computeCost(usage);
 
   return { workouts: out, warnings, usage };
+}
+
+function computeCost(u: NormalizeUsage): number {
+  return round4(
+    (u.input_tokens       / 1_000_000) * PRICE_INPUT_PER_M +
+    (u.output_tokens      / 1_000_000) * PRICE_OUTPUT_PER_M +
+    (u.cache_read_tokens  / 1_000_000) * PRICE_CACHE_READ_PER_M +
+    (u.cache_write_tokens / 1_000_000) * PRICE_CACHE_WRITE_PER_M
+  );
 }
 
 function round4(n: number): number { return Math.round(n * 10000) / 10000; }
@@ -1033,3 +1159,124 @@ Return ONE \`workouts\` array, one entry per input block, in the same order. Use
 8. **Intensity:** for easy/long runs the main phase intensity is \`"easy"\`. For hard workouts, use \`"tempo"\` / \`"threshold"\` / \`"hard"\` based on description language. WU/CD phases are always \`"easy"\`.
 
 9. **Rest days:** \`structure: []\`, \`total_distance_mi: 0\`, no pace.`;
+
+// ────────────────────────────────────────────────────────────────────────────
+// Math reconciliation runtime check (spec §B5)
+// ────────────────────────────────────────────────────────────────────────────
+//
+// For every workout that has a non-null total_distance_mi and a non-empty
+// structure array, check whether the sum of phase distances matches the
+// declared total within 0.5mi tolerance. Surfaces a single warning if
+// fewer than 90% reconcile — Phase B's accuracy bar per spec.
+
+function computeReconciliation(workouts: Array<Record<string, any>>) {
+  let total = 0, reconciled = 0;
+  for (const w of workouts) {
+    const tot = w.total_distance_mi;
+    if (typeof tot !== "number" || tot <= 0) continue;
+    if (!Array.isArray(w.structure) || w.structure.length === 0) continue;
+    total++;
+    const sum = w.structure.reduce((s: number, p: any) => s + (typeof p?.distance_mi === "number" ? p.distance_mi : 0), 0);
+    if (Math.abs(sum - tot) <= 0.5) reconciled++;
+  }
+  return { total, reconciled, ratio: total ? reconciled / total : 1 };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Athlete profile extractor (Resources sheet, beta)
+// ────────────────────────────────────────────────────────────────────────────
+//
+// Heuristic-only: walks the sheet looking for tabular blocks that match
+// race or PR row shapes. Front-end shows this under a "(beta)" tag and
+// defaults the per-item checkboxes to OFF (Decision #13), so a noisy
+// extractor doesn't accidentally write incorrect race/PR data on import.
+//
+// Race row signals: a date column + words like "Marathon" / "Half" /
+// "10K" / "5K" + an optional priority column (MAIN/A/B/C).
+// PR row signals: a distance column + a time column ("3:26", "1:38:53").
+
+interface AthleteProfile {
+  races: Array<Record<string, unknown>>;
+  prs: Array<Record<string, unknown>>;
+}
+
+function extractAthleteProfile(sheet: XLSX.WorkSheet): AthleteProfile | null {
+  const ref = sheet["!ref"];
+  if (!ref) return null;
+  const range = XLSX.utils.decode_range(ref);
+  const races: Array<Record<string, unknown>> = [];
+  const prs: Array<Record<string, unknown>> = [];
+
+  // Two-pass: first find header rows ("Race", "Date", "Distance",
+  // "Goal" / "PR", "Time"), then read the rows beneath. Falls back to
+  // a row-by-row scan if no headers detected.
+  const racesHeader = findHeaderRow(sheet, range, ["race", "event"], ["date"], ["distance"]);
+  if (racesHeader) {
+    const cols = racesHeader.cols;
+    for (let r = racesHeader.row + 1; r <= range.e.r; r++) {
+      const name = textCell(sheet, cols.race ?? range.s.c, r);
+      if (!name) break; // blank row → end of block
+      const dateCell = sheet[XLSX.utils.encode_cell({ c: cols.date ?? range.s.c + 1, r })];
+      const dateIso = dateCell ? coerceToIsoDate(dateCell) : null;
+      races.push({
+        name,
+        date: dateIso ?? (dateCell ? cellToText(dateCell) : null),
+        distance: textCell(sheet, cols.distance ?? range.s.c + 2, r),
+        priority: textCell(sheet, cols.priority ?? range.s.c + 3, r),
+        a_goal: textCell(sheet, cols.goal ?? range.s.c + 4, r),
+        course_type: textCell(sheet, cols.course ?? range.s.c + 5, r),
+      });
+    }
+  }
+
+  const prsHeader = findHeaderRow(sheet, range, ["pr", "personal best", "best"], ["distance"], ["time"]);
+  if (prsHeader) {
+    const cols = prsHeader.cols;
+    for (let r = prsHeader.row + 1; r <= range.e.r; r++) {
+      const distance = textCell(sheet, cols.distance ?? range.s.c, r);
+      const time = textCell(sheet, cols.time ?? range.s.c + 1, r);
+      if (!distance || !time) break;
+      const dateCell = sheet[XLSX.utils.encode_cell({ c: cols.date ?? range.s.c + 4, r })];
+      const dateIso = dateCell ? coerceToIsoDate(dateCell) : null;
+      prs.push({
+        distance,
+        time,
+        race: textCell(sheet, cols.race ?? range.s.c + 2, r),
+        pace_per_mi: textCell(sheet, cols.pace ?? range.s.c + 3, r),
+        date: dateIso ?? (dateCell ? cellToText(dateCell) : null),
+      });
+    }
+  }
+
+  return { races, prs };
+}
+
+function findHeaderRow(
+  sheet: XLSX.WorkSheet,
+  range: XLSX.Range,
+  primaryKeywords: string[],
+  ...secondaryKeywords: string[][]
+): { row: number; cols: Record<string, number> } | null {
+  for (let r = range.s.r; r <= Math.min(range.e.r, range.s.r + 50); r++) {
+    const cols: Record<string, number> = {};
+    let primaryHit = false;
+    let secondaryHits = 0;
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const t = (cellToText(sheet[XLSX.utils.encode_cell({ c, r })]) || "").trim().toLowerCase();
+      if (!t) continue;
+      if (primaryKeywords.some(k => t.includes(k))) { primaryHit = true; cols[primaryKeywords[0]] = c; }
+      for (const grp of secondaryKeywords) {
+        if (grp.some(k => t.includes(k))) { secondaryHits++; cols[grp[0]] = c; break; }
+      }
+      // Common extra columns we care about.
+      if (t.includes("priority")) cols.priority = c;
+      else if (t.includes("goal"))     cols.goal     = c;
+      else if (t.includes("course"))   cols.course   = c;
+      else if (t.includes("race") && !cols.race) cols.race = c;
+      else if (t.includes("pace"))     cols.pace     = c;
+      else if (t === "date" || t.endsWith(" date")) cols.date = c;
+    }
+    if (primaryHit && secondaryHits >= secondaryKeywords.length) return { row: r, cols };
+  }
+  return null;
+}

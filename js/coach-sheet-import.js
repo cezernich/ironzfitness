@@ -600,6 +600,10 @@
     const resp = _lastImport.fullResponse || {};
     const workouts = Array.isArray(resp.running_workouts) ? resp.running_workouts : [];
     const templates = Array.isArray(resp.strength_templates) ? resp.strength_templates : [];
+    const profile = resp.athlete_profile || null;
+    const profileRaceCount = profile?.races?.length || 0;
+    const profilePrCount   = profile?.prs?.length   || 0;
+    const warns = Array.isArray(resp.warnings) ? resp.warnings : [];
 
     if (!workouts.length && !templates.length) {
       host.innerHTML = `<div class="csi-review-empty">No workouts found in the selected range. Try a wider range or different sheets.</div>`;
@@ -610,7 +614,12 @@
     let html = `<div class="csi-review-summary">
       <strong>${workouts.length}</strong> workout${workouts.length === 1 ? "" : "s"} ·
       <strong>${templates.length}</strong> strength template${templates.length === 1 ? "" : "s"}
+      ${profileRaceCount + profilePrCount > 0 ? `· profile data found (${profileRaceCount} race${profileRaceCount === 1 ? "" : "s"}, ${profilePrCount} PR${profilePrCount === 1 ? "" : "s"})` : ""}
     </div>`;
+
+    if (warns.length) {
+      html += `<div class="csi-review-warnings">${warns.map(w => `<div class="csi-review-warning">${_esc(w)}</div>`).join("")}</div>`;
+    }
 
     if (workouts.length) {
       html += `<div class="csi-review-section-label">Running calendar</div>`;
@@ -620,6 +629,25 @@
     if (templates.length) {
       html += `<div class="csi-review-section-label">Strength templates</div>`;
       html += `<div class="csi-review-grid">${templates.map((t, i) => _renderTemplateCard(t, i)).join("")}</div>`;
+    }
+
+    if (profile && (profileRaceCount || profilePrCount)) {
+      html += `<div class="csi-review-section-label">Athlete profile <span class="csi-beta-tag">beta</span></div>`;
+      html += `<div class="csi-profile-note">Detected races and PRs from the Resources sheet. Full profile import ships in a follow-up; for now this is a heads-up that the data was found.</div>`;
+      html += `<div class="csi-profile-grid">`;
+      (profile.races || []).forEach(r => {
+        html += `<div class="csi-profile-card">
+          <div class="csi-profile-card-name">${_esc(r.name || "Race")}</div>
+          <div class="csi-profile-card-sub">${_esc(r.distance || "")}${r.date ? ` · ${_esc(r.date)}` : ""}${r.priority ? ` · ${_esc(r.priority)}` : ""}</div>
+        </div>`;
+      });
+      (profile.prs || []).forEach(p => {
+        html += `<div class="csi-profile-card">
+          <div class="csi-profile-card-name">${_esc(p.distance || "PR")}: ${_esc(p.time || "")}</div>
+          <div class="csi-profile-card-sub">${_esc(p.race || "")}${p.pace_per_mi ? ` · ${_esc(p.pace_per_mi)}/mi` : ""}${p.date ? ` · ${_esc(p.date)}` : ""}</div>
+        </div>`;
+      });
+      html += `</div>`;
     }
 
     host.innerHTML = html;
