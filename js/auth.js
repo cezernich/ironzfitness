@@ -234,6 +234,10 @@ async function handleSignup() {
   const email    = document.getElementById('auth-signup-email').value.trim();
   const password = document.getElementById('auth-signup-password').value;
 
+  if (!name) {
+    setAuthMsg('auth-signup-msg', 'Please enter your full name.', true);
+    return;
+  }
   if (!email || !password) {
     setAuthMsg('auth-signup-msg', 'Please enter your email and password.', true);
     return;
