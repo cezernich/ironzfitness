@@ -299,6 +299,48 @@ function _getWeekTrainingByDow() {
   return byDow;
 }
 
+// Signature of the upcoming week's training schedule, scoped to the
+// dates a generated meal plan would target. Used to detect when the
+// user has added/edited/removed a session after generation so the
+// renderer can transparently regenerate. Includes per-date load AND
+// the recomputed daily calorie target — a profile change (weight,
+// goal) without any schedule edit also needs to invalidate the plan.
+function _trainingScheduleSignature(days) {
+  if (!Array.isArray(days) || !days.length) {
+    // Caller didn't supply pre-built days (we're computing the
+    // current-state signature for comparison). Walk the same Mon..Sun
+    // window the generator uses.
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const mpDowMap = [1, 2, 3, 4, 5, 6, 0];
+    days = [];
+    for (let d = 0; d < 7; d++) {
+      const dow = mpDowMap[d];
+      const daysUntil = (dow - today.getDay() + 7) % 7;
+      const dt = new Date(today);
+      dt.setDate(dt.getDate() + daysUntil);
+      days.push({ date: dt.toISOString().slice(0, 10) });
+    }
+  }
+  const trainingByDow = _getWeekTrainingByDow();
+  const parts = days.map(d => {
+    const dt = d.date;
+    const dow = new Date(dt + "T00:00:00").getDay();
+    const sessions = trainingByDow[dow] || [];
+    const sig = sessions
+      .map(s => `${s.type || s.discipline || ""}|${s.load || ""}|${s.sessionName || s.name || ""}`)
+      .sort()
+      .join(",");
+    let cals = 0;
+    try {
+      if (typeof getDailyNutritionTarget === "function") {
+        cals = getDailyNutritionTarget(dt)?.calories || 0;
+      }
+    } catch {}
+    return `${dt}:${sig}:${cals}`;
+  });
+  return parts.join(";");
+}
+
 function generateWeekMealPlan(options) {
   options = options || {};
   const hs = options.householdSize || _householdSize || 1;
@@ -368,6 +410,11 @@ function generateWeekMealPlan(options) {
     householdSize: hs,
     targets: (days[0] && days[0].dayTargets) || fallbackTargets,
     days: days,
+    // Stash the schedule signature so the renderer can detect when the
+    // user added/changed a session after generation and the cached
+    // load + targets are out of date (real bug 2026-05-03: Friday's
+    // newly-added Easy Run still rendered as REST DAY at 2500 cal).
+    scheduleSig: _trainingScheduleSignature(days),
   };
 
   localStorage.setItem("currentWeekMealPlan", JSON.stringify(plan)); if (typeof DB !== 'undefined') DB.syncKey('currentWeekMealPlan');
@@ -477,6 +524,11 @@ function loadSavedPlanById(id) {
   if (!found) return;
   _weekPlanState = JSON.parse(JSON.stringify(found.plan));
   _householdSize = _weekPlanState.householdSize || 1;
+  // Mark this load as a saved-snapshot view so the renderer's
+  // staleness auto-regen doesn't immediately overwrite it with a
+  // freshly-generated plan — saved plans are intentional point-in-
+  // time copies of past weeks.
+  _weekPlanState.fromSaved = true;
   localStorage.setItem("currentWeekMealPlan", JSON.stringify(_weekPlanState)); if (typeof DB !== 'undefined') DB.syncKey('currentWeekMealPlan');
   renderWeekMealPlanner();
 }
@@ -498,6 +550,35 @@ function renderWeekMealPlanner() {
         _householdSize = stored.householdSize || 1;
       }
     } catch {}
+  }
+
+  // Auto-regenerate when stale. Two signals trigger it:
+  //   1. Plan rolled into the past — first day's date is before today.
+  //   2. Schedule signature changed since generation — user added or
+  //      edited a session, or the daily nutrition target shifted under
+  //      a profile/goal change. The cached `days[]` would otherwise
+  //      keep showing yesterday's REST DAY label and stale calories.
+  // Skipped when no plan exists yet (initial empty state UI handles
+  // that branch) or when a fromSaved-loaded plan is being viewed —
+  // saved snapshots are intentional point-in-time copies, regenerating
+  // them out from under the user defeats the saved-plans feature.
+  if (_weekPlanState && _weekPlanState.days && !_weekPlanState.fromSaved) {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const firstDate = _weekPlanState.days[0]?.date || "";
+    const dateStale = firstDate && firstDate < todayStr;
+    // Plans generated before this fix don't carry a scheduleSig — treat
+    // those as stale so they pick up the current schedule on first
+    // render. Subsequent renders compare against the stored sig and
+    // only regen when the underlying schedule actually shifts.
+    const sigStale = (_weekPlanState.scheduleSig == null)
+      || _weekPlanState.scheduleSig !== _trainingScheduleSignature();
+    if (dateStale || sigStale) {
+      try {
+        generateWeekMealPlan({ householdSize: _householdSize });
+      } catch (e) {
+        console.warn("[MealPlanner] auto-regen failed:", e);
+      }
+    }
   }
 
   const esc = typeof escHtml === "function" ? escHtml : function(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); };
