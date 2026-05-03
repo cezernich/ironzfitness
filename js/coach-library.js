@@ -74,8 +74,16 @@
     _renderLibraryList();
   }
 
+  // Filter / search state — kept module-level so re-renders preserve
+  // the coach's filter while they edit / assign / tag rows.
+  let _filterSearch = "";
+  let _filterType   = "";
+  let _filterTag    = ""; // empty = no tag filter; tag chip click sets this
+
   // ── Render library list (called by coach-dashboard.js when tab=library) ─
   function renderCoachLibraryView(coachState) {
+    const types = _availableTypes();
+    const tags  = _availableTags();
     return `
       <div class="card coach-section">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -85,11 +93,85 @@
             <button class="btn-primary btn-sm" onclick="openCoachLibraryNew()">+ New Workout</button>
           </div>
         </div>
+        <div class="coach-library-filters">
+          <input type="search" id="coach-library-search" class="input"
+                 placeholder="Search by name, type, or tag…"
+                 value="${_esc(_filterSearch)}"
+                 oninput="setCoachLibrarySearch(this.value)" />
+          <select id="coach-library-type-filter" class="input" onchange="setCoachLibraryType(this.value)">
+            <option value="">All types</option>
+            ${types.map(t => `<option value="${_esc(t)}" ${t === _filterType ? "selected" : ""}>${_esc(_typeLabel(t))}</option>`).join("")}
+          </select>
+        </div>
+        ${tags.length ? `<div class="coach-library-tag-row">
+          <span class="coach-library-tag-row-label">Tags</span>
+          ${tags.map(t => `<button type="button" class="coach-library-tag-chip ${t === _filterTag ? "is-active" : ""}"
+                                 onclick="setCoachLibraryTagFilter('${_esc(t)}')">${_esc(t)}</button>`).join("")}
+          ${_filterTag ? `<button type="button" class="coach-library-tag-clear" onclick="setCoachLibraryTagFilter('')">Clear</button>` : ""}
+        </div>` : ""}
         <div class="coach-section-summary" id="coach-library-summary">
-          ${_items.length === 0 ? "No saved workouts yet." : `${_items.length} saved workout${_items.length === 1 ? "" : "s"}`}
+          ${_summaryText()}
         </div>
         <div id="coach-library-list">${_renderItems()}</div>
       </div>`;
+  }
+
+  // Filtered view of _items based on search / type / tag.
+  function _filteredItems() {
+    const q = _filterSearch.trim().toLowerCase();
+    return _items.filter(item => {
+      const w = item.workout || {};
+      if (_filterType && w.type !== _filterType) return false;
+      const tags = Array.isArray(w.tags) ? w.tags : [];
+      if (_filterTag && !tags.includes(_filterTag)) return false;
+      if (q) {
+        const hay = [
+          item.name, w.sessionName, _typeLabel(w.type),
+          item.notes, ...tags,
+        ].filter(Boolean).join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+  function _summaryText() {
+    if (!_items.length) return "No saved workouts yet.";
+    const filtered = _filteredItems();
+    if (filtered.length === _items.length) {
+      return `${_items.length} saved workout${_items.length === 1 ? "" : "s"}`;
+    }
+    return `${filtered.length} of ${_items.length} workouts match`;
+  }
+  function _availableTypes() {
+    const set = new Set();
+    for (const it of _items) {
+      const t = it && it.workout && it.workout.type;
+      if (t) set.add(t);
+    }
+    return Array.from(set).sort();
+  }
+  function _availableTags() {
+    const set = new Set();
+    for (const it of _items) {
+      const tags = (it && it.workout && Array.isArray(it.workout.tags)) ? it.workout.tags : [];
+      for (const t of tags) {
+        const norm = String(t || "").trim();
+        if (norm) set.add(norm);
+      }
+    }
+    return Array.from(set).sort();
+  }
+  function setCoachLibrarySearch(v) {
+    _filterSearch = String(v || "");
+    _renderLibraryList();
+  }
+  function setCoachLibraryType(v) {
+    _filterType = String(v || "");
+    _renderLibraryList();
+  }
+  function setCoachLibraryTagFilter(v) {
+    _filterTag = String(v || "");
+    _renderLibraryList();
   }
 
   // ── Import from Saved Workouts ───────────────────────────────────────
@@ -251,12 +333,31 @@
   }
 
   function _renderLibraryList() {
+    // Re-render the entire library card so the type-filter dropdown's
+    // option list reflects newly-edited tags / types and the tag chip
+    // row stays accurate after a tag was added or removed. Falls back
+    // to a list-only refresh if the card host isn't on screen yet.
+    const card = document.querySelector(".coach-section");
+    const cardHost = document.querySelector(".coach-tab-content") ||
+                     document.getElementById("coach-portal-content");
+    // Cheaper path — just refresh the inner list and summary. Full
+    // re-render of filters is reserved for tag/type edits via
+    // refreshFiltersAndList() below.
     const list = document.getElementById("coach-library-list");
     if (list) list.innerHTML = _renderItems();
     const sum = document.getElementById("coach-library-summary");
-    if (sum) sum.textContent = _items.length === 0
-      ? "No saved workouts yet."
-      : `${_items.length} saved workout${_items.length === 1 ? "" : "s"}`;
+    if (sum) sum.textContent = _summaryText();
+  }
+  // Full re-render including filter dropdown + tag chips. Used after
+  // tag edits so the chip row picks up new/removed tags and the type
+  // dropdown picks up newly-saved types.
+  function _refreshFiltersAndList() {
+    const host = document.getElementById("coach-library-list")?.closest(".coach-section");
+    if (host && host.parentElement) {
+      host.outerHTML = renderCoachLibraryView();
+    } else {
+      _renderLibraryList();
+    }
   }
 
   // Pull every per-interval / per-exercise text snippet out of a saved
@@ -288,7 +389,13 @@
         Save a workout from the Assign flow → it'll show up here for quick reuse.
       </div>`;
     }
-    return _items.map(item => {
+    const filtered = _filteredItems();
+    if (!filtered.length) {
+      return `<div style="color:var(--color-text-muted);padding:16px;text-align:center;font-size:0.9rem">
+        No workouts match. <button type="button" class="btn-link" onclick="clearCoachLibraryFilters()">Clear filters</button>
+      </div>`;
+    }
+    return filtered.map(item => {
       const w = item.workout || {};
       const exCount = Array.isArray(w.exercises) ? w.exercises.length : 0;
       const meta = [
@@ -301,6 +408,15 @@
         ? (bodyNotes[0].length > 90 ? bodyNotes[0].slice(0, 90) + "…" : bodyNotes[0])
         : "";
       const _bodyMore = bodyNotes.length > 1 ? ` (+${bodyNotes.length - 1} more)` : "";
+      const tags = Array.isArray(w.tags) ? w.tags : [];
+      // Tag chips on the row are clickable filter shortcuts; the +Tag
+      // button opens an inline editor for adding new ones. Tag delete
+      // (×) is part of the chip itself.
+      const tagChips = tags.map(t => `<span class="coach-library-tag-chip-row">
+          <span class="coach-library-tag-chip-text" onclick="setCoachLibraryTagFilter('${_esc(t)}')">${_esc(t)}</span>
+          <button type="button" class="coach-library-tag-chip-x" aria-label="Remove tag"
+                  onclick="event.stopPropagation();removeCoachLibraryTag('${item.id}','${_esc(t)}')">×</button>
+        </span>`).join("");
       return `<div class="coach-library-row">
         <div class="coach-library-row-main">
           <div class="coach-library-row-name">${_esc(item.name || w.sessionName || "Untitled")}</div>
@@ -311,6 +427,10 @@
             <span class="coach-library-row-body-notes-text">${_esc(_bodyPreview)}${_bodyMore}</span>
             <button class="coach-library-row-body-notes-clear" onclick="event.stopPropagation();clearCoachLibraryBodyNotes('${item.id}')" title="Clear all embedded interval/exercise notes from this workout">Clear</button>
           </div>` : ""}
+          <div class="coach-library-row-tags">
+            ${tagChips}
+            <button type="button" class="coach-library-tag-add" onclick="addCoachLibraryTag('${item.id}')" title="Add tag">+ Tag</button>
+          </div>
         </div>
         <div class="coach-library-row-actions">
           <button class="btn-secondary btn-sm" onclick="openCoachLibraryAssign('${item.id}')">Assign</button>
@@ -324,6 +444,48 @@
         </div>
       </div>`;
     }).join("");
+  }
+  function clearCoachLibraryFilters() {
+    _filterSearch = "";
+    _filterType   = "";
+    _filterTag    = "";
+    _refreshFiltersAndList();
+  }
+  // Tag CRUD — both writes update the row's workout JSONB in
+  // coach_workout_library and patch _items locally so the re-render
+  // shows the new state without an extra round-trip.
+  async function addCoachLibraryTag(id) {
+    const item = _items.find(x => x.id === id);
+    if (!item) return;
+    const raw = window.prompt("Tag (comma-separate to add multiple):");
+    if (!raw) return;
+    const incoming = raw.split(",").map(s => s.trim()).filter(Boolean);
+    if (!incoming.length) return;
+    const w = { ...(item.workout || {}) };
+    const existing = Array.isArray(w.tags) ? w.tags.slice() : [];
+    for (const t of incoming) if (!existing.includes(t)) existing.push(t);
+    w.tags = existing;
+    const sb = window.supabaseClient;
+    if (!sb) return;
+    const { error } = await sb.from("coach_workout_library").update({ workout: w }).eq("id", id);
+    if (error) { alert("Couldn't save tag: " + error.message); return; }
+    item.workout = w;
+    _refreshFiltersAndList();
+  }
+  async function removeCoachLibraryTag(id, tag) {
+    const item = _items.find(x => x.id === id);
+    if (!item) return;
+    const w = { ...(item.workout || {}) };
+    w.tags = (Array.isArray(w.tags) ? w.tags : []).filter(t => t !== tag);
+    const sb = window.supabaseClient;
+    if (!sb) return;
+    const { error } = await sb.from("coach_workout_library").update({ workout: w }).eq("id", id);
+    if (error) { alert("Couldn't remove tag: " + error.message); return; }
+    item.workout = w;
+    // If the active tag-filter is the one we just stripped from this
+    // item, clear it so the row doesn't fall out of view immediately.
+    if (_filterTag === tag && !_availableTags().includes(tag)) _filterTag = "";
+    _refreshFiltersAndList();
   }
 
   // One-click strip of every per-interval / per-exercise note from a
@@ -681,4 +843,11 @@
   window.addCoachBulkDate         = addCoachBulkDate;
   window.removeCoachBulkDate      = removeCoachBulkDate;
   window.confirmCoachBulkAssign   = confirmCoachBulkAssign;
+  // Search / filter / tag UX.
+  window.setCoachLibrarySearch    = setCoachLibrarySearch;
+  window.setCoachLibraryType      = setCoachLibraryType;
+  window.setCoachLibraryTagFilter = setCoachLibraryTagFilter;
+  window.clearCoachLibraryFilters = clearCoachLibraryFilters;
+  window.addCoachLibraryTag       = addCoachLibraryTag;
+  window.removeCoachLibraryTag    = removeCoachLibraryTag;
 })();
