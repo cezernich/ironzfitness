@@ -252,7 +252,22 @@ function renderAdminUsers() {
       (p.email || "").toLowerCase().includes(search)
     );
   }
-  if (roleFilter) filtered = filtered.filter(p => p.role === roleFilter);
+  if (roleFilter) {
+    // Coach isn't a profiles.role enum value — it's the separate
+    // is_coach boolean column layered on top of role (see line ~270's
+    // effectiveRole derivation: admin > coach > user). Match the same
+    // priority ordering here so "Coach" filter shows the user-tier
+    // coaches and skips coach-flagged admins (those surface under Admin).
+    if (roleFilter === "coach") {
+      filtered = filtered.filter(p => p.is_coach && p.role !== "admin");
+    } else if (roleFilter === "user") {
+      // Plain users — exclude admins AND coaches so each tier only
+      // appears under its own filter.
+      filtered = filtered.filter(p => p.role !== "admin" && !p.is_coach);
+    } else {
+      filtered = filtered.filter(p => p.role === roleFilter);
+    }
+  }
   if (subFilter) filtered = filtered.filter(p => p.subscription_status === subFilter);
 
   if (filtered.length === 0) {
