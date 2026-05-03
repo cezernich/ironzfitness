@@ -906,7 +906,11 @@ function buildStatsCompletedRaces(events) {
   // A race is "completed" when its date is strictly in the past.
   const past = events.filter(e => e.date && e.date < today);
 
-  const addBtn = `<button class="btn-secondary" style="font-size:0.78rem;padding:6px 12px" onclick="event.stopPropagation();openPastRaceModal()">+ Add Past Race</button>`;
+  // "+ Add Race" — covers both past finishes (the trophy case path) and
+  // a coach / athlete logging a finish that wasn't on the calendar.
+  // Renamed from "Add Past Race" per user feedback so the affordance
+  // doesn't read as backfill-only.
+  const addBtn = `<button class="btn-secondary" style="font-size:0.78rem;padding:6px 12px" onclick="event.stopPropagation();openPastRaceModal()">+ Add Race</button>`;
 
   if (!past.length) {
     return `
@@ -988,8 +992,8 @@ function buildStatsCompletedRaces(events) {
         <span class="card-chevron">▾</span>
       </div>
       <div class="card-body" style="gap:12px">
+        <div class="trophy-toolbar trophy-toolbar--add-row">${addBtn}</div>
         <div class="trophy-toolbar">
-          ${addBtn}
           <div class="trophy-filter-pills">${sportPills}</div>
           ${sortSelect}
         </div>

@@ -10753,6 +10753,13 @@ input.completion-ex-name:focus {
   align-items: center;
   gap: 10px;
 }
+/* Variant for the Add Race row — pulls the button to the right and
+   gives it its own line so it doesn't compete visually with the
+   filter pills + sort select below. */
+.trophy-toolbar--add-row {
+  justify-content: flex-end;
+  margin-bottom: -2px;
+}
 .trophy-filter-pills {
   display: flex;
   flex-wrap: wrap;
