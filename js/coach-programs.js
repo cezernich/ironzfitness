@@ -26,6 +26,12 @@
   let _draftTemplate = {};
   let _draftName = "";
   let _draftWeeks = 4;
+  // YYYY-MM-DD start date used to compute the "Program ends ..." hint
+  // in the builder. Set when the builder is opened from a client
+  // context where the program is already assigned (earliest
+  // coach_assigned entry); falls back to today for new programs being
+  // built from scratch in the Library tab.
+  let _draftStartDate = null;
   let _applyState = null;     // { program, clientId, startDate }
 
   const DAYS = [
@@ -144,11 +150,12 @@
     _draftTemplate = {};
     _draftName = "";
     _draftWeeks = 4;
+    _draftStartDate = null; // new program — hint anchors on today
     _renderBuilder();
     document.getElementById("coach-program-builder-overlay")?.classList.add("is-open");
   }
 
-  async function openCoachProgramEdit(id) {
+  async function openCoachProgramEdit(id, opts) {
     // _programs is populated by loadCoachPrograms() when the coach
     // visits the Programs tab. From other entry points (the COACH PLAN
     // tile on a client's Training Inputs view, deep links, etc.) the
@@ -165,6 +172,11 @@
     _editingProgram = p;
     _draftName = p.name;
     _draftWeeks = p.duration_weeks;
+    // Caller may pass startDate to anchor the end-date hint to the
+    // client's actual assignment (rather than today). The COACH PLAN
+    // tile on coach-client-detail computes this from the earliest
+    // coach_assigned schedule entry.
+    _draftStartDate = (opts && opts.startDate) || null;
     // Template can store either a library_id or a custom workout JSONB
     // per day. v1 only supports library_id; if a row has anything else
     // we keep the raw value so a save round-trip doesn't lose data.
@@ -234,11 +246,14 @@
           value="${_esc(_draftName)}" placeholder="e.g. Hyrox 8-Week Build"
           oninput="setCoachProgramName(this.value)" />
       </div>
-      <div class="form-row" style="max-width:160px">
+      <div class="form-row" style="max-width:240px">
         <label for="coach-program-weeks">Duration (weeks)</label>
         <input type="number" id="coach-program-weeks" class="input"
           value="${_esc(_draftWeeks)}" min="1" max="52"
           oninput="setCoachProgramWeeks(this.value)" />
+        <div id="coach-program-end-hint" class="hint" style="margin-top:6px;color:var(--color-text-muted)">
+          ${_endDateHint()}
+        </div>
       </div>
 
       <div class="form-row">
@@ -254,6 +269,32 @@
   function setCoachProgramWeeks(v) {
     const n = parseInt(v, 10);
     _draftWeeks = isNaN(n) || n < 1 ? 1 : (n > 52 ? 52 : n);
+    // Live-update the end-date hint without re-rendering the whole
+    // builder — re-rendering would steal focus from the duration input
+    // mid-typing.
+    const hintEl = document.getElementById("coach-program-end-hint");
+    if (hintEl) hintEl.innerHTML = _endDateHint();
+  }
+
+  function _endDateHint() {
+    const weeks = parseInt(_draftWeeks, 10);
+    if (isNaN(weeks) || weeks < 1) return "";
+    let start;
+    if (_draftStartDate) {
+      start = new Date(_draftStartDate + "T00:00:00");
+    } else {
+      start = new Date(); start.setHours(0, 0, 0, 0);
+    }
+    if (isNaN(start.getTime())) return "";
+    const end = new Date(start);
+    end.setDate(end.getDate() + weeks * 7 - 1);
+    let label;
+    try {
+      label = end.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+    } catch { label = end.toISOString().slice(0, 10); }
+    return _draftStartDate
+      ? `Program will end ${label}`
+      : `Ends ${label} if started today`;
   }
 
   function addCoachProgramDay(dayKey, libraryId) {

@@ -1643,7 +1643,7 @@
     return `<div class="ti-card ti-card--coach-plan coach-ti-program-tile">
       <div class="race-card-top">
         <span class="ti-card-badge ti-card-badge--coach-plan">COACH PLAN</span>
-        ${programId ? `<button type="button" class="coach-ti-edit-btn" onclick="openCoachProgramEdit('${programId}')">Edit</button>` : ""}
+        ${programId ? `<button type="button" class="coach-ti-edit-btn" onclick="openCoachProgramEdit('${programId}', { startDate: '${_esc(cp.startDate || "")}' })">Edit</button>` : ""}
       </div>
       <div class="race-card-name">${_esc(cp.programName)}</div>
       <div class="race-card-meta">${_esc(meta)}</div>
