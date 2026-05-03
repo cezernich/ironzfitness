@@ -35,7 +35,7 @@
       root.innerHTML = `
         <div class="coach-portal-header">
           <h2>Coach Portal</h2>
-          <button class="btn-secondary btn-sm" onclick="exitCoachPortal()">× Exit</button>
+          <button class="btn-danger btn-sm" onclick="exitCoachPortal()">× Exit</button>
         </div>
         ${_renderDashTabStrip(tab, 0)}
         <div class="card" style="text-align:center;padding:32px;color:var(--color-text-muted)">
@@ -65,7 +65,7 @@
     root.innerHTML = `
       <div class="coach-portal-header">
         <h2>Coach Portal</h2>
-        <button class="btn-secondary btn-sm" onclick="exitCoachPortal()" aria-label="Exit Coach Portal" title="Exit Coach Portal">× Exit</button>
+        <button class="btn-danger btn-sm" onclick="exitCoachPortal()" aria-label="Exit Coach Portal" title="Exit Coach Portal">× Exit</button>
       </div>
       ${_renderDashTabStrip(tab, clients.length)}
       ${body}
