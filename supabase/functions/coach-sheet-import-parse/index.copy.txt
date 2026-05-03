@@ -1,21 +1,24 @@
 // coach-sheet-import-parse — Coach sheet import edge function
 //
-// Phase A (this file): stub. Verifies the user, validates the request
-// shape, writes a row to coach_sheet_import_logs with status='pending',
-// and returns canned sheet/workout metadata so the front-end's three-step
-// modal (drop → sheet picker → date range → review) is end-to-end
-// testable against real infra.
+// Phase B Slice 1: real xlsx parsing replaces the Phase A stub. The
+// function downloads the uploaded file from storage, runs a structural
+// extractor (sheet enumeration + role detection + header rules + raw
+// per-day blocks), and returns sheet metadata + best-effort workouts.
 //
-// Phase B (later): replaces the canned response with a structural parser
-// (xlsx walker) + LLM normalizer (Anthropic API) that returns the
-// canonical IronZ workout shape. The request envelope here is the one
-// Phase B will consume — front-end won't need to change when the real
-// parser ships.
+// Slice 2 will swap the heuristic workout shaping for an Anthropic LLM
+// normalizer that takes the raw blocks + header rules and returns the
+// canonical IronZ workout shape with the accuracy the spec promises.
+// The request envelope and response shape stay the same — front-end
+// won't need to change.
+//
+// Slice 3 adds cost guardrails ($2/import LLM cap), token tracking
+// into coach_sheet_import_logs, and structured error envelopes
+// (IRO06_PARSE_FAILED, IRO07_FILE_TOO_LARGE, IRO08_PARSE_BUDGET_EXCEEDED).
 //
 // Deploy: supabase functions deploy coach-sheet-import-parse
-// Verify JWT: ON (default).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,7 +32,6 @@ function jsonResponse(body: unknown, status = 200) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
-
 function errorResponse(code: string, message: string, status = 400) {
   return jsonResponse({ status: "error", code, message }, status);
 }
@@ -41,10 +43,6 @@ interface ParseRequest {
   file_size_bytes?: number;
   selected_sheets?: string[];
   date_range?: { from: string; to: string };
-  // Phase A flag: when true, the stub returns sheet metadata only
-  // (no workouts). Used by the front-end immediately after upload to
-  // populate the sheet picker. Phase B can ignore this and always
-  // return the full payload.
   metadata_only?: boolean;
 }
 
@@ -52,62 +50,34 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return errorResponse("METHOD_NOT_ALLOWED", "POST only", 405);
 
-  // ── 1. Auth ────────────────────────────────────────────────────────────────
+  // ── Auth ───────────────────────────────────────────────────────────────────
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) return errorResponse("UNAUTHORIZED", "Missing authorization", 401);
-
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !supabaseServiceKey) {
-    return errorResponse("SERVER_MISCONFIGURED", "Missing service env", 500);
-  }
-
+  if (!supabaseUrl || !supabaseServiceKey) return errorResponse("SERVER_MISCONFIGURED", "Missing service env", 500);
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   const token = authHeader.replace("Bearer ", "");
   const { data: { user }, error: authError } = await supabase.auth.getUser(token);
   if (authError || !user) return errorResponse("UNAUTHORIZED", "Invalid session", 401);
 
-  // ── 2. Request shape ───────────────────────────────────────────────────────
+  // ── Body ───────────────────────────────────────────────────────────────────
   let body: ParseRequest;
-  try {
-    body = await req.json();
-  } catch {
-    return errorResponse("BAD_REQUEST", "Invalid JSON body");
-  }
-  if (!body?.storage_path || !body?.import_id) {
-    return errorResponse("BAD_REQUEST", "storage_path and import_id are required");
-  }
+  try { body = await req.json(); } catch { return errorResponse("BAD_REQUEST", "Invalid JSON body"); }
+  if (!body?.storage_path || !body?.import_id) return errorResponse("BAD_REQUEST", "storage_path and import_id are required");
+  if (!body.storage_path.startsWith(`${user.id}/`)) return errorResponse("FORBIDDEN", "storage_path does not belong to caller", 403);
 
-  // The path's first segment must match the caller's uid — defense in
-  // depth alongside storage RLS.
-  const expectedPrefix = `${user.id}/`;
-  if (!body.storage_path.startsWith(expectedPrefix)) {
-    return errorResponse("FORBIDDEN", "storage_path does not belong to caller", 403);
-  }
-
-  // ── 3. Quota check (warn-only in Phase A; soft-cap is enforced
-  //      client-side too, but the authoritative check lives here so a
-  //      client that bypasses the JS can't game it). ────────────────────────
-  const monthKey = new Date().toISOString().slice(0, 7); // "2026-05"
+  // ── Quota ──────────────────────────────────────────────────────────────────
+  const monthKey = new Date().toISOString().slice(0, 7);
   const { data: quotaRow } = await supabase
     .from("coach_sheet_import_quotas")
     .select("import_count")
-    .eq("user_id", user.id)
-    .eq("month_yyyymm", monthKey)
-    .maybeSingle();
-
-  const usedThisMonth = quotaRow?.import_count ?? 0;
-  if (usedThisMonth >= 5) {
-    return errorResponse(
-      "IRO05_QUOTA_EXCEEDED",
-      `You've used all 5 imports for ${monthKey}. Quota resets on the 1st.`,
-      429,
-    );
+    .eq("user_id", user.id).eq("month_yyyymm", monthKey).maybeSingle();
+  if ((quotaRow?.import_count ?? 0) >= 5) {
+    return errorResponse("IRO05_QUOTA_EXCEEDED", `You've used all 5 imports for ${monthKey}. Quota resets on the 1st.`, 429);
   }
 
-  // ── 4. Audit log row (status='pending') ───────────────────────────────────
-  // Insert here so even a malformed request leaves a paper trail; Phase B
-  // updates it to success/failed at completion.
+  // ── Audit log row ──────────────────────────────────────────────────────────
   await supabase.from("coach_sheet_import_logs").insert({
     user_id: user.id,
     import_id: body.import_id,
@@ -120,66 +90,113 @@ Deno.serve(async (req) => {
     status: "pending",
   });
 
-  // ── 5. Stub response ──────────────────────────────────────────────────────
-  // Phase A returns canned data shaped exactly like Phase B will. The
-  // front-end consumes this for the sheet picker + date range + review
-  // placeholder so the whole flow is testable end-to-end against real
-  // storage uploads.
-  //
-  // Heuristic: if the filename looks like Paige's known sample, return
-  // her canned sheet list. Anything else gets a generic single-sheet
-  // canned response. Phase B replaces this with a real workbook walker.
+  // ── Download from storage ──────────────────────────────────────────────────
+  const { data: fileBlob, error: dlErr } = await supabase.storage
+    .from("coach-sheet-imports")
+    .download(body.storage_path.replace(/^coach-sheet-imports\//, ""));
+  if (dlErr || !fileBlob) {
+    console.warn("[parse] storage download failed", dlErr);
+    return errorResponse("IRO06_PARSE_FAILED", "Couldn't read the uploaded file. Try uploading again.", 500);
+  }
+  const arrayBuffer = await fileBlob.arrayBuffer();
+  if (arrayBuffer.byteLength > 10 * 1024 * 1024) {
+    return errorResponse("IRO07_FILE_TOO_LARGE", "File exceeds the 10 MB limit.", 413);
+  }
 
-  const filename = (body.filename ?? body.storage_path.split("/").pop() ?? "").toLowerCase();
-  const isPaigeFile = filename.includes("paige");
+  // ── Parse workbook ─────────────────────────────────────────────────────────
+  let workbook: XLSX.WorkBook;
+  try {
+    workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: "array", cellDates: true, cellNF: false, cellText: false });
+  } catch (e) {
+    console.warn("[parse] XLSX.read threw", e);
+    return errorResponse("IRO06_PARSE_FAILED", "We couldn't read this file. Make sure it's a valid Excel file and try again.", 422);
+  }
+  if (!workbook.SheetNames?.length) {
+    return errorResponse("IRO06_PARSE_FAILED", "The workbook has no sheets.", 422);
+  }
 
-  const sheets = isPaigeFile
-    ? [
-        { name: "Resources", role: "athlete_profile", auto_detected: true,  date_range: null,                                week_count: 0 },
-        { name: "January",   role: "calendar",         auto_detected: true,  date_range: { from: "2026-01-05", to: "2026-02-01" }, week_count: 4 },
-        { name: "February",  role: "calendar",         auto_detected: true,  date_range: { from: "2026-02-02", to: "2026-03-01" }, week_count: 4 },
-        { name: "March",     role: "calendar",         auto_detected: true,  date_range: { from: "2026-03-02", to: "2026-04-05" }, week_count: 5 },
-        { name: "April",     role: "calendar",         auto_detected: true,  date_range: { from: "2026-04-06", to: "2026-05-03" }, week_count: 4 },
-        { name: "May",       role: "calendar",         auto_detected: true,  date_range: { from: "2026-05-04", to: "2026-05-31" }, week_count: 4 },
-        { name: "June",      role: "calendar",         auto_detected: true,  date_range: { from: "2026-06-01", to: "2026-06-28" }, week_count: 4 },
-        { name: "Strength",  role: "strength_library", auto_detected: true,  date_range: null,                                week_count: 0, template_count: 5 },
-        { name: "Fueling",   role: "fueling",          auto_detected: false, date_range: null,                                week_count: 0, disabled: true, disabled_reason: "Coming soon" },
-      ]
-    : [
-        { name: "Sheet1", role: "calendar", auto_detected: true, date_range: { from: new Date().toISOString().slice(0, 10), to: addDays(new Date().toISOString().slice(0, 10), 28) }, week_count: 4 },
-      ];
+  // ── Stage 1: structural analysis ──────────────────────────────────────────
+  const analysis = analyzeWorkbook(workbook);
+  if (!analysis.sheets.some(s => s.role === "calendar")) {
+    // Don't hard-fail metadata_only requests — the user may still want to
+    // see the picker and pick a non-calendar sheet (e.g. only Strength).
+    // But for a full request with no calendar sheet AND no strength
+    // sheet, the file is unusable.
+    if (!body.metadata_only && !analysis.sheets.some(s => s.role === "strength_library")) {
+      return errorResponse(
+        "IRO06_PARSE_FAILED",
+        "We couldn't find a calendar layout in this file. Check that there's a sheet with dates laid out as a weekly grid (Mon–Sun across columns).",
+        422,
+      );
+    }
+  }
 
-  // Phase A mocked workouts/templates so Slice 3's review screen has
-  // data to render. Only generated when:
-  //   - It's a Paige file (so the dev/test path is the only one with
-  //     fake data; generic test files keep the empty-arrays shape).
-  //   - Caller didn't ask for metadata_only (the picker step uses
-  //     metadata_only=true and doesn't need workouts yet).
-  const wantWorkouts = isPaigeFile && !body.metadata_only;
-  const range = body.date_range
-    ?? (sheets.find(s => s.role === "calendar" && s.date_range)?.date_range ?? null);
-  const selectedSet = new Set(body.selected_sheets ?? []);
-  const includesCalendarSelection = selectedSet.size === 0
-    || sheets.some(s => s.role === "calendar" && selectedSet.has(s.name));
-  const includesStrengthSelection = selectedSet.size === 0
-    || sheets.some(s => s.role === "strength_library" && selectedSet.has(s.name));
+  // Metadata-only (front-end's first call after upload — only needs the
+  // sheet list for the picker step). Skip workout extraction entirely.
+  if (body.metadata_only) {
+    return jsonResponse({
+      status: "ok",
+      import_id: body.import_id,
+      is_stub: false,
+      sheets: analysis.sheets.map(stripInternal),
+      running_workouts: [],
+      strength_templates: [],
+      athlete_profile: null,
+      warnings: [],
+      stats: { workouts_parsed: 0, templates_parsed: 0, llm_tokens_used: 0, estimated_cost_usd: 0 },
+    });
+  }
 
-  const running_workouts = (wantWorkouts && range && includesCalendarSelection)
-    ? mockRunningWorkouts(range.from, range.to, body.import_id)
-    : [];
-  const strength_templates = (wantWorkouts && includesStrengthSelection)
-    ? mockStrengthTemplates(body.import_id)
-    : [];
+  // ── Stage 2 (Slice 2 will replace this with LLM normalization) ───────────
+  // For now: heuristic workout shaping from raw blocks, scoped to the
+  // user's selected_sheets and date_range. This produces real workouts
+  // from any uploaded file but with limited intelligence — Slice 2's
+  // LLM call lifts accuracy to ~92% per spec.
+  const selected = new Set(body.selected_sheets ?? analysis.sheets.map(s => s.name));
+  const range = body.date_range ?? null;
+
+  const running_workouts: Array<Record<string, unknown>> = [];
+  const warnings: string[] = [];
+  for (const sheet of analysis.sheets) {
+    if (sheet.role !== "calendar") continue;
+    if (!selected.has(sheet.name)) continue;
+    try {
+      const blocks = extractRawBlocks(workbook.Sheets[sheet.name], sheet);
+      for (const day of blocks) {
+        if (range) {
+          if (day.date < range.from || day.date > range.to) continue;
+        }
+        const w = heuristicShapeWorkout(day, sheet, body.import_id, body.filename);
+        if (w) running_workouts.push(w);
+      }
+    } catch (e) {
+      console.warn(`[parse] sheet ${sheet.name} extraction failed`, e);
+      warnings.push(`Couldn't fully parse "${sheet.name}" — review carefully.`);
+    }
+  }
+
+  const strength_templates: Array<Record<string, unknown>> = [];
+  for (const sheet of analysis.sheets) {
+    if (sheet.role !== "strength_library") continue;
+    if (!selected.has(sheet.name)) continue;
+    try {
+      const tpls = extractStrengthTemplates(workbook.Sheets[sheet.name], sheet, body.import_id);
+      strength_templates.push(...tpls);
+    } catch (e) {
+      console.warn(`[parse] strength sheet ${sheet.name} failed`, e);
+      warnings.push(`Couldn't fully parse strength sheet "${sheet.name}" — review carefully.`);
+    }
+  }
 
   return jsonResponse({
     status: "ok",
     import_id: body.import_id,
-    is_stub: true,
-    sheets,
+    is_stub: false,
+    sheets: analysis.sheets.map(stripInternal),
     running_workouts,
     strength_templates,
-    athlete_profile: null,
-    warnings: [],
+    athlete_profile: null, // Slice 2: extract from athlete_profile sheet
+    warnings,
     stats: {
       workouts_parsed: running_workouts.length,
       templates_parsed: strength_templates.length,
@@ -189,127 +206,472 @@ Deno.serve(async (req) => {
   });
 });
 
-function addDays(dateStr: string, n: number): string {
-  const d = new Date(dateStr + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
+// ────────────────────────────────────────────────────────────────────────────
+// Stage 1 — structural extractor
+// ────────────────────────────────────────────────────────────────────────────
+
+interface SheetAnalysis {
+  name: string;
+  role: "calendar" | "strength_library" | "athlete_profile" | "fueling" | "unknown";
+  auto_detected: boolean;
+  date_range: { from: string; to: string } | null;
+  week_count: number;
+  template_count?: number;
+  disabled?: boolean;
+  disabled_reason?: string;
+  // Internals used during workout extraction; stripped from the wire response.
+  _dateRows?: Array<{ row: number; cols: number[]; dates: string[] }>;
+  _headerRules?: { warmup_distance_mi: number | null; cooldown_distance_mi: number | null };
 }
 
-function dayOfWeekShort(dateStr: string): string {
-  const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  return labels[new Date(dateStr + "T12:00:00Z").getUTCDay()];
+function stripInternal(s: SheetAnalysis) {
+  const { _dateRows, _headerRules, ...rest } = s;
+  return rest;
 }
 
-// Phase A mock data. Phase B replaces with real LLM normalizer output;
-// shape here matches the canonical IronZ workout per spec §"Data model".
-function mockRunningWorkouts(from: string, to: string, importId: string) {
-  const workouts: Array<Record<string, unknown>> = [];
-  const fromTs = new Date(from + "T00:00:00Z").getTime();
-  const toTs = new Date(to + "T00:00:00Z").getTime();
-  if (!isFinite(fromTs) || !isFinite(toTs) || toTs < fromTs) return workouts;
+function analyzeWorkbook(wb: XLSX.WorkBook) {
+  const sheets: SheetAnalysis[] = [];
+  for (const name of wb.SheetNames) {
+    const sheet = wb.Sheets[name];
+    sheets.push(analyzeSheet(name, sheet));
+  }
+  return { sheets };
+}
 
-  // Paige's plan typically: Mon easy 5 / Tue hard intervals / Wed rest /
-  // Thu tempo / Fri easy / Sat long / Sun rest. Loop per week within
-  // range and emit a representative pattern. Capped at 14 workouts so
-  // dev review screens don't drown.
-  const PATTERN: Array<null | Record<string, unknown>> = [
-    null, // Sun rest
-    {
-      day_type: "easy_run",
-      total_distance_mi: 5,
-      structure: [
-        { phase: "warmup", distance_mi: 0.5, intensity: "easy" },
-        { phase: "main",   distance_mi: 4.0, intensity: "easy", target_pace_per_mi: "9:00-9:30" },
-        { phase: "cooldown", distance_mi: 0.5, intensity: "easy" },
-      ],
-      raw_description: "5 mile easy shake-out. Conversational pace.",
-    },
-    {
-      day_type: "hard_workout",
-      total_distance_mi: 8,
-      structure: [
-        { phase: "warmup", distance_mi: 1.5, intensity: "easy" },
-        { phase: "main",   distance_mi: 5.0, intervals: [{ on_min: 3, off_min: 2, type: "fartlek", total_distance_mi: 5 }], target_pace_per_mi: "8:15-7:15" },
-        { phase: "cooldown", distance_mi: 1.5, intensity: "easy" },
-      ],
-      raw_description: "5 miles of 3 min ON and 2 min EASY\n\nON Pace: 8:15-7:15\n\nEASE BACK INTO THINGS",
-    },
-    null, // Wed rest
-    {
-      day_type: "hard_workout",
-      total_distance_mi: 7,
-      structure: [
-        { phase: "warmup", distance_mi: 1.5, intensity: "easy" },
-        { phase: "main",   distance_mi: 4.0, intensity: "tempo", target_pace_per_mi: "7:45" },
-        { phase: "cooldown", distance_mi: 1.5, intensity: "easy" },
-      ],
-      raw_description: "4 mile tempo at marathon goal pace.",
-    },
-    {
-      day_type: "easy_run",
-      total_distance_mi: 4,
-      structure: [
-        { phase: "main", distance_mi: 4.0, intensity: "easy" },
-      ],
-      raw_description: "4 miles easy.",
-    },
-    {
-      day_type: "long_run",
-      total_distance_mi: 14,
-      structure: [
-        { phase: "warmup", distance_mi: 1.0, intensity: "easy" },
-        { phase: "main",   distance_mi: 12.0, intensity: "easy", target_pace_per_mi: "9:00-9:30" },
-        { phase: "cooldown", distance_mi: 1.0, intensity: "easy" },
-      ],
-      raw_description: "Long run 14 miles. Easy effort throughout.",
-    },
-  ];
+function analyzeSheet(name: string, sheet: XLSX.WorkSheet): SheetAnalysis {
+  const lower = name.toLowerCase();
 
-  const SHEET_BY_MONTH = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const oneDay = 24 * 60 * 60 * 1000;
-  for (let ts = fromTs; ts <= toTs && workouts.length < 14; ts += oneDay) {
-    const d = new Date(ts);
-    const iso = d.toISOString().slice(0, 10);
-    const dow = d.getUTCDay();
-    const tpl = PATTERN[dow];
-    if (!tpl) continue;
-    const month = SHEET_BY_MONTH[d.getUTCMonth()];
-    workouts.push({
-      ...tpl,
-      date: iso,
-      day_of_week: dayOfWeekShort(iso),
-      sport: "running",
-      source_file: "2026 Paige Tuchner Training Plan.xlsx",
-      source_sheet: month,
-      source_cell: "D" + (8 + Math.floor((ts - fromTs) / (7 * oneDay))),
+  // Name-based heuristic first — these are stable across coach formats.
+  if (lower.includes("fuel")) {
+    return { name, role: "fueling", auto_detected: false, date_range: null, week_count: 0, disabled: true, disabled_reason: "Coming soon" };
+  }
+  if (lower.includes("strength") || lower.includes("lifting") || lower.includes("weights")) {
+    const templateCount = countStrengthTemplates(sheet);
+    return { name, role: "strength_library", auto_detected: true, date_range: null, week_count: 0, template_count: templateCount };
+  }
+  if (lower.includes("resource") || lower.includes("athlete") || lower.includes("profile") || lower.includes("race") || lower.includes("pr")) {
+    return { name, role: "athlete_profile", auto_detected: true, date_range: null, week_count: 0 };
+  }
+
+  // Structural heuristic for calendars: scan for rows with ≥3 date cells.
+  const dateRows = findDateRows(sheet);
+  if (dateRows.length > 0) {
+    const allDates = dateRows.flatMap(r => r.dates).sort();
+    const dateRange = allDates.length
+      ? { from: allDates[0], to: allDates[allDates.length - 1] }
+      : null;
+    return {
+      name,
+      role: "calendar",
+      auto_detected: true,
+      date_range: dateRange,
+      week_count: dateRows.length,
+      _dateRows: dateRows,
+      _headerRules: detectHeaderRules(sheet),
+    };
+  }
+
+  return { name, role: "unknown", auto_detected: false, date_range: null, week_count: 0 };
+}
+
+// Find rows that look like date headers — a row with ≥3 cells whose
+// values parse as ISO dates within a sensible year window.
+function findDateRows(sheet: XLSX.WorkSheet): Array<{ row: number; cols: number[]; dates: string[] }> {
+  const ref = sheet["!ref"];
+  if (!ref) return [];
+  const range = XLSX.utils.decode_range(ref);
+  const rowsScanned = Math.min(range.e.r, 200); // cap scan depth
+  const result: Array<{ row: number; cols: number[]; dates: string[] }> = [];
+
+  for (let r = range.s.r; r <= rowsScanned; r++) {
+    const cols: number[] = [];
+    const dates: string[] = [];
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const addr = XLSX.utils.encode_cell({ c, r });
+      const cell = sheet[addr];
+      if (!cell) continue;
+      const iso = coerceToIsoDate(cell);
+      if (iso) {
+        cols.push(c);
+        dates.push(iso);
+      }
+    }
+    if (cols.length >= 3) result.push({ row: r, cols, dates });
+  }
+  return result;
+}
+
+// Coerce a cell to YYYY-MM-DD if it looks date-like. Accepts:
+//   - real date type (cellDates: true gives Date in cell.v)
+//   - Excel serial numbers (large integer roughly in [25000, 60000])
+//   - "M/D/YY" / "M/D/YYYY" text
+function coerceToIsoDate(cell: XLSX.CellObject): string | null {
+  if (!cell) return null;
+  const v = cell.v;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (cell.t === "n" && typeof v === "number" && v > 25000 && v < 80000) {
+    // Excel serial date — days since 1899-12-30
+    const ms = (v - 25569) * 86400 * 1000;
+    const d = new Date(ms);
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  }
+  if (typeof v === "string") {
+    const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+    if (m) {
+      const month = parseInt(m[1], 10);
+      const day = parseInt(m[2], 10);
+      let year = parseInt(m[3], 10);
+      if (year < 100) year += 2000;
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        const d = new Date(Date.UTC(year, month - 1, day));
+        return d.toISOString().slice(0, 10);
+      }
+    }
+  }
+  return null;
+}
+
+// Detect WU/CD distance rules in the top ~15 rows of a calendar sheet.
+// Looks for cells containing the words then walks neighbors for a number.
+function detectHeaderRules(sheet: XLSX.WorkSheet): { warmup_distance_mi: number | null; cooldown_distance_mi: number | null } {
+  const ref = sheet["!ref"];
+  if (!ref) return { warmup_distance_mi: null, cooldown_distance_mi: null };
+  const range = XLSX.utils.decode_range(ref);
+  const maxR = Math.min(range.e.r, range.s.r + 15);
+
+  let wu: number | null = null;
+  let cd: number | null = null;
+
+  for (let r = range.s.r; r <= maxR; r++) {
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = sheet[XLSX.utils.encode_cell({ c, r })];
+      if (!cell || typeof cell.v !== "string") continue;
+      const text = cell.v.toLowerCase();
+      const isWu = /warm\s*up|^wu\b|warmup/i.test(text);
+      const isCd = /cool\s*down|^cd\b|cooldown/i.test(text);
+      if (!isWu && !isCd) continue;
+
+      // Embedded number ("1.5 mile warmup") wins over neighbor lookup.
+      const inline = text.match(/(\d+(?:\.\d+)?)\s*(?:mile|mi|m)?/i);
+      if (inline) {
+        const n = parseFloat(inline[1]);
+        if (Number.isFinite(n) && n < 20) {
+          if (isWu && wu == null) wu = n;
+          if (isCd && cd == null) cd = n;
+          continue;
+        }
+      }
+      // Neighbor lookup — scan right + below for the first numeric cell.
+      const neighbors: Array<[number, number]> = [
+        [c + 1, r], [c + 2, r], [c, r + 1], [c, r + 2],
+      ];
+      for (const [nc, nr] of neighbors) {
+        const nb = sheet[XLSX.utils.encode_cell({ c: nc, r: nr })];
+        if (!nb) continue;
+        const n = parseFloat(String(nb.v));
+        if (Number.isFinite(n) && n < 20) {
+          if (isWu && wu == null) wu = n;
+          if (isCd && cd == null) cd = n;
+          break;
+        }
+      }
+    }
+  }
+  return { warmup_distance_mi: wu, cooldown_distance_mi: cd };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Per-day raw block extraction (inputs to Slice 2 LLM normalizer)
+// ────────────────────────────────────────────────────────────────────────────
+
+interface RawDayBlock {
+  date: string;
+  day_of_week: string;
+  source_cell: string;
+  prescribed_mileage_mi: number | null;
+  raw_description: string;
+}
+
+// For each date row, walk the rows beneath each date column collecting
+// text content as raw_description. Tries to identify a numeric cell as
+// the prescribed mileage. Heuristic — Slice 2 LLM cleans this up.
+function extractRawBlocks(sheet: XLSX.WorkSheet, info: SheetAnalysis): RawDayBlock[] {
+  if (!info._dateRows?.length) return [];
+  const blocks: RawDayBlock[] = [];
+  const ref = sheet["!ref"];
+  if (!ref) return blocks;
+  const range = XLSX.utils.decode_range(ref);
+
+  // For each date row, we read the column under each date until we hit
+  // (a) a row with another date in any column = next week, or (b) the
+  // sheet bottom. Cell content concatenated (newline-separated) becomes
+  // raw_description. Numbers we encounter are candidates for prescribed
+  // mileage; we take the first plausible "miles"-shaped number.
+  const dateRowSet = new Set(info._dateRows.map(r => r.row));
+
+  for (let i = 0; i < info._dateRows.length; i++) {
+    const dr = info._dateRows[i];
+    const nextDateRow = info._dateRows[i + 1]?.row ?? Math.min(range.e.r, dr.row + 12);
+
+    for (let cIdx = 0; cIdx < dr.cols.length; cIdx++) {
+      const col = dr.cols[cIdx];
+      const date = dr.dates[cIdx];
+      const dow = isoDayShort(date);
+      const sourceCell = XLSX.utils.encode_cell({ c: col, r: dr.row });
+
+      const lines: string[] = [];
+      let prescribed: number | null = null;
+      for (let r = dr.row + 1; r < nextDateRow && r <= range.e.r; r++) {
+        if (dateRowSet.has(r)) break;
+        const cell = sheet[XLSX.utils.encode_cell({ c: col, r })];
+        if (!cell) continue;
+        const text = cellToText(cell);
+        if (!text) continue;
+        if (prescribed == null) {
+          const m = text.match(/^\s*(\d+(?:\.\d+)?)\s*(?:mi(?:les?)?|m)?\s*$/i);
+          if (m) {
+            const n = parseFloat(m[1]);
+            if (Number.isFinite(n) && n >= 1 && n <= 30) prescribed = n;
+          }
+        }
+        lines.push(text);
+      }
+
+      const desc = lines.join("\n").trim();
+      // Skip empty cells entirely — they're rest days the coach left blank.
+      if (!desc && prescribed == null) continue;
+
+      blocks.push({
+        date, day_of_week: dow, source_cell: sourceCell,
+        prescribed_mileage_mi: prescribed,
+        raw_description: desc,
+      });
+    }
+  }
+  return blocks;
+}
+
+function cellToText(cell: XLSX.CellObject): string {
+  if (!cell) return "";
+  if (cell.w && typeof cell.w === "string") return cell.w;
+  if (cell.v == null) return "";
+  if (cell.v instanceof Date) return cell.v.toISOString().slice(0, 10);
+  return String(cell.v);
+}
+
+function isoDayShort(iso: string): string {
+  const d = new Date(iso + "T12:00:00Z");
+  return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getUTCDay()];
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Heuristic workout shaping (Slice 1 placeholder for LLM normalization)
+// ────────────────────────────────────────────────────────────────────────────
+
+function heuristicShapeWorkout(day: RawDayBlock, sheet: SheetAnalysis, importId: string, filename?: string): Record<string, unknown> | null {
+  const desc = day.raw_description;
+  const total = day.prescribed_mileage_mi;
+  const dt = classifyDayType(desc, total);
+
+  if (dt === "rest") {
+    return {
+      date: day.date, day_of_week: day.day_of_week, sport: "running",
+      day_type: "rest", total_distance_mi: 0, structure: [],
+      raw_description: desc, source_file: filename ?? null,
+      source_sheet: sheet.name, source_cell: day.source_cell,
       import_id: importId,
+    };
+  }
+  if (!total && !desc) return null;
+
+  // Apply header WU/CD to all running workouts (Decision #12 — universal).
+  const wu = sheet._headerRules?.warmup_distance_mi ?? null;
+  const cd = sheet._headerRules?.cooldown_distance_mi ?? null;
+  const totalMi = total ?? estimateMileageFromDesc(desc) ?? 0;
+  const mainMi = totalMi > 0 ? Math.max(0, totalMi - (wu ?? 0) - (cd ?? 0)) : 0;
+  const pace = extractPace(desc);
+
+  const structure: Array<Record<string, unknown>> = [];
+  if (wu) structure.push({ phase: "warmup", distance_mi: wu, intensity: "easy" });
+  if (mainMi > 0) {
+    const mainPhase: Record<string, unknown> = { phase: "main", distance_mi: round1(mainMi) };
+    if (pace) mainPhase.target_pace_per_mi = pace;
+    if (dt === "easy_run" || dt === "long_run") mainPhase.intensity = "easy";
+    structure.push(mainPhase);
+  }
+  if (cd) structure.push({ phase: "cooldown", distance_mi: cd, intensity: "easy" });
+
+  return {
+    date: day.date,
+    day_of_week: day.day_of_week,
+    sport: "running",
+    day_type: dt,
+    total_distance_mi: totalMi || null,
+    structure,
+    raw_description: desc,
+    source_file: filename ?? null,
+    source_sheet: sheet.name,
+    source_cell: day.source_cell,
+    import_id: importId,
+  };
+}
+
+function classifyDayType(desc: string, total: number | null): "easy_run" | "hard_workout" | "long_run" | "rest" | "unknown" {
+  const d = desc.toLowerCase();
+  if (!d && (!total || total === 0)) return "rest";
+  if (/\brest\b|day off|off day|no run/.test(d)) return "rest";
+  if (/long run|long ?ru/.test(d)) return "long_run";
+  if (total != null && total >= 12) return "long_run";
+  if (/interval|tempo|threshold|fartlek|×|x\d+|\d+\s*x\s*\d|track|hill|repeat|workout|wo\b/.test(d)) return "hard_workout";
+  if (/easy|recovery|shake|cruise|conversational/.test(d)) return "easy_run";
+  if (total != null && total > 0) return "easy_run";
+  return "unknown";
+}
+
+function estimateMileageFromDesc(desc: string): number | null {
+  const m = desc.match(/(\d+(?:\.\d+)?)\s*mi(?:les?)?/i);
+  if (m) {
+    const n = parseFloat(m[1]);
+    if (Number.isFinite(n) && n < 50) return n;
+  }
+  return null;
+}
+
+function extractPace(desc: string): string | null {
+  // Common formats: "8:15", "8:15-7:15", "@8:15", "7:45 pace"
+  const m = desc.match(/(\d{1,2}:\d{2}(?:\s*-\s*\d{1,2}:\d{2})?)/);
+  return m ? m[1].replace(/\s+/g, "") : null;
+}
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Strength template extraction
+// ────────────────────────────────────────────────────────────────────────────
+
+interface StrengthTemplate {
+  library_name: string;
+  exercises: Array<{ name: string; sets: number | null; reps: string | null; weight: string | null; video_link: string | null; source_row: number }>;
+  import_id: string;
+}
+
+// Strength sheets typically have one or more named blocks ("Strength
+// Workout 1", "Strength Workout 2", ...) with exercise rows underneath
+// containing name/sets/reps/weight columns. Heuristic: scan rows; a
+// row with "Strength Workout N" or similar starts a block; subsequent
+// rows with a non-empty first cell + numeric sets/reps form exercises.
+function extractStrengthTemplates(sheet: XLSX.WorkSheet, info: SheetAnalysis, importId: string): StrengthTemplate[] {
+  const ref = sheet["!ref"];
+  if (!ref) return [];
+  const range = XLSX.utils.decode_range(ref);
+
+  const templates: StrengthTemplate[] = [];
+  let current: StrengthTemplate | null = null;
+  let templateIdx = 0;
+
+  // Detect column indices for "exercise / sets / reps / weight" once
+  // by looking for header rows. Falls back to columns 0/1/2/3 if not
+  // found — covers most coach sheets.
+  const colMap = detectStrengthColumns(sheet, range);
+
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    const firstCellAddr = XLSX.utils.encode_cell({ c: range.s.c, r });
+    const firstCell = sheet[firstCellAddr];
+    const firstText = cellToText(firstCell).trim();
+
+    // Block heading?
+    if (/^strength\s*workout|^workout\s*[#\d]|^day\s*[#\d]/i.test(firstText)) {
+      if (current && current.exercises.length) templates.push(current);
+      templateIdx++;
+      current = { library_name: firstText.length <= 80 ? firstText : `Strength Workout ${templateIdx}`, exercises: [], import_id: importId };
+      continue;
+    }
+
+    // Skip rows that look like column headers ("Exercise / Sets / Reps").
+    if (/^exercise$/i.test(firstText)) continue;
+
+    // Exercise row?
+    const name = firstText;
+    if (!name) continue;
+    const sets = numericCell(sheet, colMap.sets, r);
+    const reps = textCell(sheet, colMap.reps, r);
+    const weight = textCell(sheet, colMap.weight, r);
+    const video = textCell(sheet, colMap.video, r);
+
+    // Need at least one of sets/reps/weight to count as an exercise.
+    if (sets == null && !reps && !weight) continue;
+
+    if (!current) {
+      // No heading seen — start a default block.
+      templateIdx++;
+      current = { library_name: `Strength Workout ${templateIdx}`, exercises: [], import_id: importId };
+    }
+    current.exercises.push({
+      name, sets, reps, weight,
+      video_link: video || null,
+      source_row: r + 1,
     });
   }
-  return workouts;
+  if (current && current.exercises.length) templates.push(current);
+  return templates;
 }
 
-function mockStrengthTemplates(importId: string) {
-  return [
-    {
-      library_name: "Strength Workout 1",
-      exercises: [
-        { name: "Overhead Weighted Sit-Ups; Seated Twist (Superset)", sets: 3, reps: "8 - 12", weight: "15 - 20 lbs", video_link: null, source_row: 5 },
-        { name: "Bulgarian Split Squat",                              sets: 3, reps: "8 - 10", weight: "Bodyweight",   video_link: null, source_row: 6 },
-        { name: "Single-Leg Romanian Deadlift",                       sets: 3, reps: "8 - 10", weight: "20 - 30 lbs",  video_link: null, source_row: 7 },
-        { name: "Glute Bridge",                                       sets: 3, reps: "12 - 15", weight: "Bodyweight",  video_link: null, source_row: 8 },
-        { name: "Plank Hold",                                         sets: 3, reps: "30s - 60s", weight: "Bodyweight", video_link: null, source_row: 9 },
-      ],
-      import_id: importId,
-    },
-    {
-      library_name: "Strength Workout 2",
-      exercises: [
-        { name: "Goblet Squat",      sets: 3, reps: "10 - 12", weight: "20 - 30 lbs", video_link: null, source_row: 12 },
-        { name: "Push-Up",           sets: 3, reps: "8 - 12",  weight: "Bodyweight",  video_link: null, source_row: 13 },
-        { name: "Bent-Over Row",     sets: 3, reps: "8 - 10",  weight: "20 - 30 lbs", video_link: null, source_row: 14 },
-        { name: "Calf Raise",        sets: 3, reps: "12 - 15", weight: "Bodyweight",  video_link: null, source_row: 15 },
-      ],
-      import_id: importId,
-    },
-  ];
+function countStrengthTemplates(sheet: XLSX.WorkSheet): number {
+  const ref = sheet["!ref"];
+  if (!ref) return 0;
+  const range = XLSX.utils.decode_range(ref);
+  let count = 0;
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    const firstCell = sheet[XLSX.utils.encode_cell({ c: range.s.c, r })];
+    const txt = cellToText(firstCell).trim();
+    if (/^strength\s*workout|^workout\s*[#\d]|^day\s*[#\d]/i.test(txt)) count++;
+  }
+  return count || 1; // at least 1 if there's any content
+}
+
+interface StrengthColumns {
+  exercise: number;
+  sets: number;
+  reps: number;
+  weight: number;
+  video: number;
+}
+
+function detectStrengthColumns(sheet: XLSX.WorkSheet, range: XLSX.Range): StrengthColumns {
+  const fallback: StrengthColumns = { exercise: range.s.c, sets: range.s.c + 1, reps: range.s.c + 2, weight: range.s.c + 3, video: range.s.c + 4 };
+  const maxR = Math.min(range.e.r, range.s.r + 30);
+  for (let r = range.s.r; r <= maxR; r++) {
+    const map: Partial<StrengthColumns> = {};
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = sheet[XLSX.utils.encode_cell({ c, r })];
+      const t = cellToText(cell).trim().toLowerCase();
+      if (!t) continue;
+      if (t === "exercise" || t.startsWith("exercise"))  map.exercise = c;
+      else if (t === "sets" || t === "set")              map.sets = c;
+      else if (t === "reps" || t === "rep" || t === "rep range") map.reps = c;
+      else if (t === "weight" || t === "load" || t.startsWith("weight")) map.weight = c;
+      else if (t === "video" || t === "link" || t === "demo") map.video = c;
+    }
+    // Need at least exercise + reps to consider this a header row.
+    if (map.exercise != null && map.reps != null) {
+      return { ...fallback, ...map } as StrengthColumns;
+    }
+  }
+  return fallback;
+}
+
+function numericCell(sheet: XLSX.WorkSheet, c: number, r: number): number | null {
+  const cell = sheet[XLSX.utils.encode_cell({ c, r })];
+  if (!cell) return null;
+  const n = parseFloat(String(cell.v));
+  return Number.isFinite(n) ? n : null;
+}
+
+function textCell(sheet: XLSX.WorkSheet, c: number, r: number): string | null {
+  const cell = sheet[XLSX.utils.encode_cell({ c, r })];
+  if (!cell) return null;
+  const t = cellToText(cell).trim();
+  return t || null;
 }
