@@ -1998,9 +1998,13 @@ function _getScheduleInputs() {
 function _getBuildPlanInputs() {
   const schedule = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
   const todayStr = new Date().toISOString().slice(0, 10);
+  // `coach_sheet` joins the recognized plan-source allowlist so that
+  // imports via COACH_SHEET_IMPORT_SPEC group into a single Active
+  // Training Inputs card grouped by their planId, alongside Build
+  // Plan (`onboarding_v2`) and Custom Plan (`custom`).
   const future = schedule.filter(e =>
     e && e.planId && e.date >= todayStr &&
-    (e.source === "onboarding_v2" || e.source === "custom")
+    (e.source === "onboarding_v2" || e.source === "custom" || e.source === "coach_sheet")
   );
   const byPlan = {};
   future.forEach(e => {

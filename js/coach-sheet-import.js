@@ -752,7 +752,10 @@
     } catch {}
     try {
       const ss = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
-      n += ss.filter(s => s.date === dateStr).length;
+      // Skip our own previously-imported entries — re-importing onto a
+      // date already covered by an earlier import isn't a "conflict",
+      // it's the user extending the same coach plan.
+      n += ss.filter(s => s.date === dateStr && !s.fromImport).length;
     } catch {}
     return n;
   }
@@ -828,27 +831,39 @@
     const importBtn = $("csi-step-3-import");
     if (importBtn) { importBtn.disabled = true; importBtn.textContent = "Importing…"; }
 
+    // Plan name (optional, user-supplied) + planId. The planId
+    // groups every session in this import into one Active Training
+    // Inputs card. Falling back to the filename-derived label when
+    // empty; "Coach plan" if even that's missing.
+    const planNameInput = $("csi-plan-name");
+    const planName = (planNameInput?.value || "").trim()
+      || (_lastImport.filename ? _lastImport.filename.replace(/\.[^.]+$/, "").replace(/[_\-]+/g, " ") : "")
+      || "Coach plan";
+    const planId = `coach-sheet-${_lastImport.importId}`;
+
     let workoutsInserted = 0;
     let templatesInserted = 0;
     const insertedWorkoutIds = [];
     const insertedTemplateIds = [];
     try {
-      // Workouts → localStorage `workouts` array. _shapeWorkout in db.js
-      // maps canonical fields and stashes everything else in the `data`
-      // jsonb on Supabase, so source_cell / structure / day_type all
-      // survive cross-device. Capture each generated id so undo can
-      // delete by id without scanning data.importId on Supabase.
+      // Workouts → localStorage `workoutSchedule` array. This is the
+      // bucket native plan generators (Build Plan, Custom Plan) write
+      // to, so our entries inherit the same calendar treatment + flow
+      // through Active Training Inputs grouping by planId. Per
+      // Decision #11: imports look identical to native schedule
+      // entries downstream — no `if (entry.fromImport)` branches in
+      // the planner / calendar surfaces.
       let local = [];
-      try { local = JSON.parse(localStorage.getItem("workouts") || "[]"); } catch {}
+      try { local = JSON.parse(localStorage.getItem("workoutSchedule") || "[]"); } catch {}
       for (const w of workouts) {
-        const shaped = _shapeImportedWorkoutForLocal(w, _lastImport.importId);
-        local.unshift(shaped);
+        const shaped = _shapeImportedWorkoutForSchedule(w, _lastImport.importId, planId, planName);
+        local.push(shaped);
         insertedWorkoutIds.push(shaped.id);
         workoutsInserted++;
       }
       if (workouts.length) {
-        localStorage.setItem("workouts", JSON.stringify(local));
-        if (typeof DB !== "undefined" && DB.syncWorkouts) DB.syncWorkouts();
+        localStorage.setItem("workoutSchedule", JSON.stringify(local));
+        if (typeof DB !== "undefined" && DB.syncSchedule) DB.syncSchedule();
       }
 
       // Templates → saved workouts library. saveCustom returns the
@@ -916,7 +931,9 @@
       const commitSummary = {
         importId: _lastImport.importId,
         filename: _lastImport.filename,
-        workoutIds: insertedWorkoutIds,
+        planId,
+        planName,
+        scheduleIds: insertedWorkoutIds,
         templateIds: insertedTemplateIds,
         workoutsInserted,
         templatesInserted,
@@ -925,8 +942,8 @@
       try { localStorage.setItem(UNDO_KEY, JSON.stringify(commitSummary)); } catch {}
       window.__coachSheetImportLastCommit = commitSummary;
 
-      const summaryText = `Imported ${workoutsInserted} workout${workoutsInserted === 1 ? "" : "s"}` +
-        (templatesInserted ? ` and ${templatesInserted} template${templatesInserted === 1 ? "" : "s"}` : "") + ".";
+      const summaryText = `Imported "${planName}" — ${workoutsInserted} workout${workoutsInserted === 1 ? "" : "s"}` +
+        (templatesInserted ? `, ${templatesInserted} template${templatesInserted === 1 ? "" : "s"}` : "") + ".";
       _csiToastWithUndo(summaryText, commitSummary);
       _resetToStep0();
       _setStaged(null);
@@ -939,11 +956,13 @@
     }
   }
 
-  function _shapeImportedWorkoutForLocal(w, importId) {
-    // Native shape is what saveWorkout creates: { id, date, name, type,
-    // notes, exercises, fromSaved? }. We add import metadata as extra
-    // fields — _shapeWorkout in db.js skips named columns and stashes
-    // the rest in `data`, so source_cell/structure round-trip cleanly.
+  function _shapeImportedWorkoutForSchedule(w, importId, planId, planName) {
+    // Match the workoutSchedule entry shape produced by Custom Plan
+    // (custom-plan.js:2067) so the Active Training Inputs grouping
+    // logic in planner.js _getBuildPlanInputs picks it up. Per
+    // Decision #11: imported workouts must look identical to native
+    // schedule entries downstream — same `source` allowlist, same
+    // `planId` grouping, same `planName` field.
     const dt = w.day_type;
     const dist = w.total_distance_mi;
     const dtLabel = ({
@@ -952,20 +971,30 @@
       long_run: "Long Run",
       rest: "Rest",
     })[dt] || "Run";
-    const name = dist ? `${dtLabel} · ${dist}mi` : dtLabel;
-    const id = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `workout-imp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const sessionName = dist ? `${dtLabel} · ${dist}mi` : dtLabel;
+    const id = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `coach-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    // Map day_type to a `load` value that calendar / day-detail
+    // rendering uses for the icon tint and ring color.
+    const load = dt === "long_run" ? "long" : dt === "hard_workout" ? "hard" : "easy";
+
     return {
       id,
       date: w.date,
-      name,
       type: "running",
-      notes: w.raw_description || "",
-      exercises: [],
-      // Custom import metadata — survives the _shapeWorkout pass into
-      // workouts.data jsonb. Lets us undo by import_id later (Phase C
-      // ships the undo affordance) and trace any cell back to source.
+      sessionName,
+      source: "coach_sheet",
+      planId,
+      ...(planName ? { planName } : {}),
+      level: "intermediate",
+      discipline: "run",
+      load,
+      details: w.raw_description || "",
+      // Import metadata — _shapeTrainingSession in db.js skips named
+      // columns and stashes the rest in `data` jsonb, so all of these
+      // round-trip cross-device.
       fromImport: true,
-      importId: importId,
+      importId,
       importDayType: dt,
       importStructure: w.structure || null,
       importTotalDistanceMi: dist,
@@ -1047,38 +1076,44 @@
       return;
     }
 
-    const workoutCount = (commit.workoutIds || []).length;
+    // Backwards-compat: older commits used `workoutIds` for what's
+    // now `scheduleIds` (Phase C Slice 2 moved imports from the
+    // `workouts` bucket to `workoutSchedule`). Read whichever exists.
+    const scheduleIds = commit.scheduleIds || commit.workoutIds || [];
+    const workoutCount = scheduleIds.length;
     const templateCount = (commit.templateIds || []).length;
     const ok = window.confirm(
-      `Undo will remove ${workoutCount} workout${workoutCount === 1 ? "" : "s"}` +
+      `Undo will remove "${commit.planName || "this import"}" — ${workoutCount} workout${workoutCount === 1 ? "" : "s"}` +
       (templateCount ? ` and ${templateCount} template${templateCount === 1 ? "" : "s"}` : "") +
-      ` from this import. Continue?`,
+      `. Continue?`,
     );
     if (!ok) return;
 
     _csiToast("Undoing import…", "info");
 
-    // Remove from localStorage `workouts`.
+    // Remove from localStorage `workoutSchedule`. Use the captured
+    // schedule ids so we don't accidentally clobber any concurrent
+    // edits the user made on other plans/sessions.
     try {
-      const ws = JSON.parse(localStorage.getItem("workouts") || "[]");
-      const idsToRemove = new Set(commit.workoutIds || []);
-      const remaining = ws.filter(w => !idsToRemove.has(w.id));
-      localStorage.setItem("workouts", JSON.stringify(remaining));
-      if (typeof DB !== "undefined" && DB.syncWorkouts) DB.syncWorkouts();
+      const sched = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
+      const idsToRemove = new Set(scheduleIds);
+      const remaining = sched.filter(s => !idsToRemove.has(s.id));
+      localStorage.setItem("workoutSchedule", JSON.stringify(remaining));
+      if (typeof DB !== "undefined" && DB.syncSchedule) DB.syncSchedule();
     } catch (e) {
-      console.warn("[CoachSheetImport] undo: local workout cleanup failed", e);
+      console.warn("[CoachSheetImport] undo: local schedule cleanup failed", e);
     }
 
-    // Remove from Supabase workouts table by id (RLS scopes to user).
-    if (window.supabaseClient && (commit.workoutIds || []).length) {
+    // Remove from Supabase training_sessions by id (RLS scopes to user).
+    if (window.supabaseClient && scheduleIds.length) {
       try {
         const { error } = await window.supabaseClient
-          .from("workouts")
+          .from("training_sessions")
           .delete()
-          .in("id", commit.workoutIds);
-        if (error) console.warn("[CoachSheetImport] undo: Supabase workouts delete error", error);
+          .in("id", scheduleIds);
+        if (error) console.warn("[CoachSheetImport] undo: Supabase training_sessions delete error", error);
       } catch (e) {
-        console.warn("[CoachSheetImport] undo: Supabase workouts delete threw", e);
+        console.warn("[CoachSheetImport] undo: Supabase training_sessions delete threw", e);
       }
     }
 

@@ -1236,6 +1236,28 @@ nav {
   color: #92400e;
 }
 
+/* Plan-name input above the review list. Surfaces on the home-screen
+   Active Training Inputs card after import so the user can tell
+   multiple coach-imported plans apart. */
+.csi-plan-name-row {
+  margin-bottom: 14px;
+}
+.csi-plan-name-row label {
+  display: block;
+  font-size: 0.84rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.csi-plan-name-row input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+}
+.csi-plan-name-hint {
+  margin-top: 4px;
+  font-size: 0.74rem;
+  color: var(--color-text-muted);
+}
+
 /* Toast variants — info tint and the success+action shape used for
    the undo affordance after a successful import. */
 .ironz-toast--info { background: var(--color-text); color: #fff; }
