@@ -867,6 +867,57 @@ function getDataForDate(dateStr) {
   return { planEntry, scheduledWorkouts, loggedWorkouts, loggedMeals, event, restriction, equipmentRestriction };
 }
 
+// Resolve the coach attribution label for an athlete-side workout
+// card. Historical coach_assigned_workouts rows applied before the
+// lazy-fetch fix in coach-programs.js carry the literal placeholder
+// "Your coach" in their workout JSONB. Render-time substitution
+// recovers them: prefer the cached coach full_name keyed by coachId,
+// fall back to the stored name, and kick off a background fetch on
+// miss so the next render of this card picks up the real value.
+function _resolveCoachLabel(storedName, coachId) {
+  const cache = (window._coachNameCache = window._coachNameCache || {});
+  // If we already cached a name for this coachId, prefer it over
+  // whatever was baked into the JSONB (the cache is the live source).
+  if (coachId && cache[coachId]) return cache[coachId];
+  const looksPlaceholder = !storedName ||
+    String(storedName).toLowerCase() === "your coach" ||
+    String(storedName).toLowerCase() === "coach";
+  if (!looksPlaceholder) return storedName;
+  // Placeholder + cache miss — kick off a one-shot fetch so the next
+  // render of this card picks up the real name. _coachLookupPending
+  // dedups concurrent calls for the same id.
+  if (coachId) _kickCoachLookup(coachId);
+  return storedName || "your coach";
+}
+function _kickCoachLookup(coachId) {
+  if (!coachId) return;
+  if (!window._coachLookupPending) window._coachLookupPending = new Set();
+  if (window._coachLookupPending.has(coachId)) return;
+  const cache = (window._coachNameCache = window._coachNameCache || {});
+  if (cache[coachId]) return;
+  window._coachLookupPending.add(coachId);
+  const sb = window.supabaseClient;
+  if (!sb) return;
+  (async () => {
+    try {
+      const { data } = await sb.from("profiles")
+        .select("full_name, email")
+        .eq("id", coachId)
+        .maybeSingle();
+      const name = data?.full_name || data?.email;
+      if (name) {
+        cache[coachId] = name;
+        // Re-render the day-detail so the resolved name shows.
+        // Cheap — this only fires once per unique coachId per session.
+        if (typeof selectedDate === "string" && typeof renderDayDetail === "function") {
+          try { renderDayDetail(selectedDate); } catch {}
+        }
+      }
+    } catch {}
+    window._coachLookupPending.delete(coachId);
+  })();
+}
+
 // ─── Day selection ────────────────────────────────────────────────────────────
 
 function selectDay(dateStr) {
@@ -4889,8 +4940,15 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         // Slim attribution strip rendered between the card header and the
         // body. Hidden via CSS when the card is collapsed (`is-collapsed`)
         // so the closed tile only carries the purple left-edge accent.
+        // Resolve coach name at render time — historical rows from
+        // before the lazy-fetch fix in coach-programs.js have the
+        // literal placeholder "Your coach" baked into their workout
+        // JSONB. _resolveCoachLabel prefers the cache + kicks off a
+        // background fetch on miss; the next render of this card
+        // picks up the real name.
+        const _resolved = _resolveCoachLabel(w.coachName, w.coachId);
         const fromLabel = _coachStillActive
-          ? `From <strong>${escHtml(w.coachName || "your coach")}</strong>`
+          ? `From <strong>${escHtml(_resolved)}</strong>`
           : `From former coach`;
         _coachAttrib = `<div class="coach-attribution${_coachStillActive ? "" : " coach-attribution--former"}">
              <span class="coach-attribution-from">${fromLabel}</span>${w.coachNote ? `<span class="coach-attribution-note">${escHtml(w.coachNote)}</span>` : ""}
