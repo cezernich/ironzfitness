@@ -147,15 +147,21 @@ Deno.serve(async (req) => {
     });
   }
 
-  // ── Stage 2 (Slice 2 will replace this with LLM normalization) ───────────
-  // For now: heuristic workout shaping from raw blocks, scoped to the
-  // user's selected_sheets and date_range. This produces real workouts
-  // from any uploaded file but with limited intelligence — Slice 2's
-  // LLM call lifts accuracy to ~92% per spec.
+  // ── Stage 2 — LLM normalization (Slice 2) ────────────────────────────────
+  // Collects raw blocks across all selected calendar sheets, batches them,
+  // and sends each batch to Claude for normalization into the canonical
+  // IronZ workout shape. Heuristic shaping (Slice 1's logic) is the
+  // per-batch fallback so a single LLM hiccup doesn't drop the whole
+  // import; LLM-disabled (no API key) falls back to heuristic for the
+  // entire pipe.
   const selected = new Set(body.selected_sheets ?? analysis.sheets.map(s => s.name));
   const range = body.date_range ?? null;
 
-  const running_workouts: Array<Record<string, unknown>> = [];
+  // Phase 1 — extract raw blocks across all selected calendar sheets,
+  // filtered by the user's date range. Header rules ride along with each
+  // block so the normalizer can apply WU/CD universally per Decision #12
+  // even when batches mix sheets (e.g. "May" + "June" both selected).
+  const allRawBlocks: RawBlockWithContext[] = [];
   const warnings: string[] = [];
   for (const sheet of analysis.sheets) {
     if (sheet.role !== "calendar") continue;
@@ -163,17 +169,32 @@ Deno.serve(async (req) => {
     try {
       const blocks = extractRawBlocks(workbook.Sheets[sheet.name], sheet);
       for (const day of blocks) {
-        if (range) {
-          if (day.date < range.from || day.date > range.to) continue;
-        }
-        const w = heuristicShapeWorkout(day, sheet, body.import_id, body.filename);
-        if (w) running_workouts.push(w);
+        if (range && (day.date < range.from || day.date > range.to)) continue;
+        allRawBlocks.push({
+          ...day,
+          sheet_name: sheet.name,
+          header_rules: sheet._headerRules ?? { warmup_distance_mi: null, cooldown_distance_mi: null },
+        });
       }
     } catch (e) {
       console.warn(`[parse] sheet ${sheet.name} extraction failed`, e);
       warnings.push(`Couldn't fully parse "${sheet.name}" — review carefully.`);
     }
   }
+
+  // Phase 2 — normalize. LLM batches of NORMALIZE_BATCH_SIZE; heuristic
+  // fallback per batch on LLM error or malformed JSON.
+  const sheetByName = new Map<string, SheetAnalysis>();
+  for (const s of analysis.sheets) sheetByName.set(s.name, s);
+
+  const normalizeResult = await normalizeBlocks(
+    allRawBlocks,
+    sheetByName,
+    body.import_id,
+    body.filename,
+  );
+  const running_workouts = normalizeResult.workouts;
+  warnings.push(...normalizeResult.warnings);
 
   const strength_templates: Array<Record<string, unknown>> = [];
   for (const sheet of analysis.sheets) {
@@ -195,13 +216,20 @@ Deno.serve(async (req) => {
     sheets: analysis.sheets.map(stripInternal),
     running_workouts,
     strength_templates,
-    athlete_profile: null, // Slice 2: extract from athlete_profile sheet
+    athlete_profile: null, // Slice 3 may extract from athlete_profile sheet
     warnings,
     stats: {
       workouts_parsed: running_workouts.length,
       templates_parsed: strength_templates.length,
-      llm_tokens_used: 0,
-      estimated_cost_usd: 0,
+      llm_tokens_used: normalizeResult.usage.total_tokens,
+      llm_cache_read_tokens: normalizeResult.usage.cache_read_tokens,
+      llm_cache_write_tokens: normalizeResult.usage.cache_write_tokens,
+      llm_input_tokens: normalizeResult.usage.input_tokens,
+      llm_output_tokens: normalizeResult.usage.output_tokens,
+      llm_batches: normalizeResult.usage.batch_count,
+      llm_fallbacks: normalizeResult.usage.fallback_batch_count,
+      estimated_cost_usd: normalizeResult.usage.estimated_cost_usd,
+      llm_used: normalizeResult.usage.llm_used,
     },
   });
 });
@@ -675,3 +703,333 @@ function textCell(sheet: XLSX.WorkSheet, c: number, r: number): string | null {
   const t = cellToText(cell).trim();
   return t || null;
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Stage 2 — LLM normalizer (Anthropic API)
+// ────────────────────────────────────────────────────────────────────────────
+//
+// Architecture:
+//   1. Raw blocks are batched (NORMALIZE_BATCH_SIZE per call) so the
+//      input fits comfortably in a single Claude request and the output
+//      stays well under max_tokens.
+//   2. Each call sends an immutable system prompt + JSON schema (cached
+//      via cache_control) and a per-batch user message containing the
+//      blocks. The system prefix repeats verbatim across all 8 batches
+//      for a Paige import → ~7 cache hits per import after the first
+//      write.
+//   3. Output is constrained via output_config.format = json_schema so
+//      malformed JSON is impossible at the API layer (Claude refuses
+//      rather than emitting bad JSON). We still defensively try/catch
+//      the JSON.parse for belt-and-braces.
+//   4. On per-batch error (network, 5xx, parse miss, schema reject),
+//      that batch falls back to heuristic shaping. The whole import
+//      doesn't fail — we surface a warning and keep the user moving.
+//   5. Usage is aggregated across batches and returned in stats so
+//      Slice 3's logging can write llm_tokens_used + estimated_cost_usd
+//      to coach_sheet_import_logs.
+
+const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+const NORMALIZE_MODEL = "claude-opus-4-7";
+const NORMALIZE_BATCH_SIZE = 20;
+const NORMALIZE_MAX_TOKENS = 16000;
+
+// Opus 4.7 pricing (cached: 2026-04-15 from skill table). Cache reads
+// are 0.1×, cache writes are 1.25× of base input rate.
+const PRICE_INPUT_PER_M = 5.00;
+const PRICE_OUTPUT_PER_M = 25.00;
+const PRICE_CACHE_READ_PER_M = PRICE_INPUT_PER_M * 0.1;
+const PRICE_CACHE_WRITE_PER_M = PRICE_INPUT_PER_M * 1.25;
+
+interface RawBlockWithContext extends RawDayBlock {
+  sheet_name: string;
+  header_rules: { warmup_distance_mi: number | null; cooldown_distance_mi: number | null };
+}
+
+interface NormalizeUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  total_tokens: number;
+  batch_count: number;
+  fallback_batch_count: number;
+  estimated_cost_usd: number;
+  llm_used: boolean;
+}
+
+interface NormalizeResult {
+  workouts: Array<Record<string, unknown>>;
+  warnings: string[];
+  usage: NormalizeUsage;
+}
+
+async function normalizeBlocks(
+  blocks: RawBlockWithContext[],
+  sheetByName: Map<string, SheetAnalysis>,
+  importId: string,
+  filename: string | undefined,
+): Promise<NormalizeResult> {
+  const usage: NormalizeUsage = {
+    input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0,
+    total_tokens: 0, batch_count: 0, fallback_batch_count: 0,
+    estimated_cost_usd: 0, llm_used: false,
+  };
+  const out: Array<Record<string, unknown>> = [];
+  const warnings: string[] = [];
+
+  if (!blocks.length) return { workouts: out, warnings, usage };
+
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  // No key → fall back to heuristic for the whole pipe. Same shape; just
+  // less accurate. Logged as a warning so the operator knows.
+  if (!apiKey) {
+    console.warn("[parse] ANTHROPIC_API_KEY not set — using heuristic for all blocks");
+    warnings.push("LLM normalization unavailable; results may be less accurate.");
+    for (const b of blocks) {
+      const sheet = sheetByName.get(b.sheet_name);
+      if (!sheet) continue;
+      const w = heuristicShapeWorkout(b, sheet, importId, filename);
+      if (w) out.push(w);
+    }
+    return { workouts: out, warnings, usage };
+  }
+
+  usage.llm_used = true;
+
+  // Batch and call.
+  for (let i = 0; i < blocks.length; i += NORMALIZE_BATCH_SIZE) {
+    const batch = blocks.slice(i, i + NORMALIZE_BATCH_SIZE);
+    usage.batch_count++;
+    try {
+      const result = await callNormalizerLLM(apiKey, batch);
+      // Stitch source_file / import_id back onto each workout — the LLM
+      // doesn't need to see these fields (saves tokens) and shouldn't
+      // be trusted to echo them faithfully if it did.
+      for (const w of result.workouts) {
+        const block = batch.find(b => (b.date === w.date) && (b.source_cell === w.source_cell));
+        const sheetName = block?.sheet_name ?? (w.source_sheet as string | undefined) ?? "";
+        out.push({
+          ...w,
+          sport: "running",
+          source_file: filename ?? null,
+          source_sheet: sheetName,
+          import_id: importId,
+        });
+      }
+      usage.input_tokens       += result.usage.input_tokens;
+      usage.output_tokens      += result.usage.output_tokens;
+      usage.cache_read_tokens  += result.usage.cache_read_tokens;
+      usage.cache_write_tokens += result.usage.cache_write_tokens;
+    } catch (e) {
+      console.warn(`[parse] LLM batch ${i / NORMALIZE_BATCH_SIZE + 1} failed; falling back to heuristic`, e);
+      usage.fallback_batch_count++;
+      warnings.push(`Auto-parse fell back to heuristic for ${batch.length} workout${batch.length === 1 ? "" : "s"} — review carefully.`);
+      for (const b of batch) {
+        const sheet = sheetByName.get(b.sheet_name);
+        if (!sheet) continue;
+        const w = heuristicShapeWorkout(b, sheet, importId, filename);
+        if (w) out.push(w);
+      }
+    }
+  }
+
+  usage.total_tokens = usage.input_tokens + usage.output_tokens + usage.cache_read_tokens + usage.cache_write_tokens;
+  usage.estimated_cost_usd = round4(
+    (usage.input_tokens       / 1_000_000) * PRICE_INPUT_PER_M +
+    (usage.output_tokens      / 1_000_000) * PRICE_OUTPUT_PER_M +
+    (usage.cache_read_tokens  / 1_000_000) * PRICE_CACHE_READ_PER_M +
+    (usage.cache_write_tokens / 1_000_000) * PRICE_CACHE_WRITE_PER_M
+  );
+
+  return { workouts: out, warnings, usage };
+}
+
+function round4(n: number): number { return Math.round(n * 10000) / 10000; }
+
+interface LLMBatchResult {
+  workouts: Array<Record<string, any>>;
+  usage: { input_tokens: number; output_tokens: number; cache_read_tokens: number; cache_write_tokens: number };
+}
+
+async function callNormalizerLLM(apiKey: string, batch: RawBlockWithContext[]): Promise<LLMBatchResult> {
+  const body = {
+    model: NORMALIZE_MODEL,
+    max_tokens: NORMALIZE_MAX_TOKENS,
+    // Adaptive thinking — Claude decides depth per-batch. Display
+    // "omitted" (the Opus 4.7 default) keeps response payload small;
+    // we don't surface reasoning to the user.
+    thinking: { type: "adaptive" },
+    output_config: {
+      format: { type: "json_schema", schema: NORMALIZE_OUTPUT_SCHEMA },
+    },
+    system: [
+      {
+        type: "text",
+        text: NORMALIZE_SYSTEM_PROMPT,
+        // Cache the system prompt + schema across all 8 batches per
+        // import. Shared prefix is identical byte-for-byte; user
+        // payload is the only thing that differs per call. Each cached
+        // hit saves ~90% of the input cost on that prefix.
+        cache_control: { type: "ephemeral" },
+      },
+    ],
+    messages: [
+      {
+        role: "user",
+        content: JSON.stringify({ blocks: batch.map(serializeBlockForLLM) }),
+      },
+    ],
+  };
+
+  const response = await fetch(ANTHROPIC_URL, {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Anthropic ${response.status}: ${text.slice(0, 500)}`);
+  }
+  const data = await response.json();
+
+  // Find the text block containing the JSON output. With
+  // output_config.format=json_schema, Claude returns a single text
+  // block whose content is the structured JSON.
+  const textBlock = (data.content || []).find((b: any) => b.type === "text");
+  if (!textBlock) throw new Error("No text block in LLM response");
+  let parsed: any;
+  try {
+    parsed = JSON.parse(textBlock.text);
+  } catch (e) {
+    throw new Error(`LLM returned non-JSON despite schema: ${String(e).slice(0, 200)}`);
+  }
+  const workouts = Array.isArray(parsed?.workouts) ? parsed.workouts : null;
+  if (!workouts) throw new Error("LLM response missing 'workouts' array");
+
+  const u = data.usage || {};
+  return {
+    workouts,
+    usage: {
+      input_tokens:       u.input_tokens || 0,
+      output_tokens:      u.output_tokens || 0,
+      cache_read_tokens:  u.cache_read_input_tokens || 0,
+      cache_write_tokens: u.cache_creation_input_tokens || 0,
+    },
+  };
+}
+
+function serializeBlockForLLM(b: RawBlockWithContext) {
+  return {
+    date: b.date,
+    day_of_week: b.day_of_week,
+    prescribed_mileage_mi: b.prescribed_mileage_mi,
+    raw_description: b.raw_description,
+    source_cell: b.source_cell,
+    header_rules: b.header_rules,
+  };
+}
+
+// JSON Schema enforced by the Anthropic API via output_config.format.
+// All properties listed in `required` per Anthropic's strict mode rules
+// (nullable variants used for optional fields). additionalProperties:
+// false on every object so unknown keys can't slip through.
+const NORMALIZE_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    workouts: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          date: { type: "string", description: "ISO YYYY-MM-DD; copy verbatim from input." },
+          day_of_week: { type: "string", description: "Three-letter abbreviation; copy from input." },
+          day_type: { type: "string", enum: ["easy_run", "hard_workout", "long_run", "rest", "unknown"] },
+          total_distance_mi: { type: ["number", "null"] },
+          structure: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                phase: { type: "string", enum: ["warmup", "main", "cooldown"] },
+                distance_mi: { type: ["number", "null"] },
+                intensity: { type: ["string", "null"], description: "easy | moderate | tempo | threshold | hard | null" },
+                target_pace_per_mi: { type: ["string", "null"], description: "Per-mile pace, e.g. \"7:45\" or \"8:15-7:15\"" },
+                intervals: {
+                  type: ["array", "null"],
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    properties: {
+                      reps: { type: ["integer", "null"] },
+                      distance: { type: ["number", "null"] },
+                      unit: { type: ["string", "null"], description: "m | mi | yd | km" },
+                      on_min: { type: ["number", "null"] },
+                      off_min: { type: ["number", "null"] },
+                      type: { type: ["string", "null"], description: "fartlek | repeats | tempo | etc." },
+                    },
+                    required: ["reps", "distance", "unit", "on_min", "off_min", "type"],
+                  },
+                },
+                note: { type: ["string", "null"] },
+              },
+              required: ["phase", "distance_mi", "intensity", "target_pace_per_mi", "intervals", "note"],
+            },
+          },
+          raw_description: { type: "string", description: "Copy verbatim from input — load-bearing for the View Source UI." },
+          source_cell: { type: "string", description: "Copy verbatim from input." },
+        },
+        required: ["date", "day_of_week", "day_type", "total_distance_mi", "structure", "raw_description", "source_cell"],
+      },
+    },
+  },
+  required: ["workouts"],
+};
+
+const NORMALIZE_SYSTEM_PROMPT = `You normalize raw cells from coach-distributed Excel training plans into structured running-workout JSON for the IronZ training app.
+
+# Input
+
+You receive an array of cell blocks under the key \`blocks\`. Each block has:
+- \`date\` (ISO YYYY-MM-DD)
+- \`day_of_week\` (Mon/Tue/.../Sun)
+- \`prescribed_mileage_mi\` (number or null) — the coach's prescribed total mileage
+- \`raw_description\` (string) — verbatim text from the cell, may be empty
+- \`source_cell\` (e.g. "B8") — for forensic backtracking
+- \`header_rules\` ({ warmup_distance_mi, cooldown_distance_mi }) — universal WU/CD rules from the sheet header
+
+# Output
+
+Return ONE \`workouts\` array, one entry per input block, in the same order. Use the schema enforced by the API.
+
+# Normalization rules
+
+1. **Apply header WU/CD universally** to every running workout (Decision #12 — coach intent is universal). Structure is [warmup, main, cooldown]. Main distance = \`prescribed_mileage_mi\` − warmup − cooldown. If \`prescribed_mileage_mi\` is null, leave \`total_distance_mi\` null and infer the main distance from the description if possible.
+
+2. **Trust \`prescribed_mileage_mi\` over distances mentioned in the description.** If the description says "5 miles of intervals" but \`prescribed_mileage_mi\` is 4, the main is 4 − WU − CD; the "5 miles" is instructional context. If the description says "9-13 miles", use the LOW end (conservative).
+
+3. **Day type classification:**
+   - \`rest\`: empty description AND null/zero mileage, OR description contains "rest" / "off" / "no run"
+   - \`long_run\`: description says "long" or prescribed mileage ≥ 12
+   - \`hard_workout\`: description mentions intervals, tempo, threshold, fartlek, hills, repeats, "x" notation ("10x800m"), workout, WO
+   - \`easy_run\`: easy / recovery / shake-out / conversational
+   - \`unknown\`: ambiguous
+
+4. **Pace extraction:** pull pace ranges like "8:15-7:15" or single paces "7:45" from the description. Set on the main phase as \`target_pace_per_mi\`. Do NOT include the "/mi" suffix.
+
+5. **Intervals:** when the description mentions interval structure ("10x800m", "3 min ON 2 min OFF", "5x1mi"), capture as \`intervals\` on the main phase. Use the most natural shape — \`reps\` + \`distance\` + \`unit\`, or \`on_min\` + \`off_min\` + \`type\`. Leave fields null when not applicable.
+
+6. **Preserve \`raw_description\` and \`source_cell\` verbatim** — copy them straight through. They're load-bearing for the "View source" UI affordance and forensic backtracking.
+
+7. **Always emit one workout per input block, in the same order.** Even rest days get an entry (with \`day_type: "rest"\` and an empty \`structure: []\`).
+
+8. **Intensity:** for easy/long runs the main phase intensity is \`"easy"\`. For hard workouts, use \`"tempo"\` / \`"threshold"\` / \`"hard"\` based on description language. WU/CD phases are always \`"easy"\`.
+
+9. **Rest days:** \`structure: []\`, \`total_distance_mi: 0\`, no pace.`;
