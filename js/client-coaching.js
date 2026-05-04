@@ -220,6 +220,28 @@
           coachId:           canonical.coach_id || w.coachId,
           coachNote:         canonical.coach_note ?? w.coachNote ?? null,
         };
+        // Strip redundant setDetails — canonical exercises sometimes
+        // carry per-set arrays where every entry matches the parent
+        // reps/weight (auto-populated from the assign-flow editor).
+        // Without this the day-detail renderer drops Set 1..N rows
+        // beneath the exercise even when there's no real per-set
+        // variation, mirroring the c8eed87 / 09294fa fixes for the
+        // local write paths.
+        if (Array.isArray(merged.exercises)) {
+          merged.exercises = merged.exercises.map(e => {
+            if (!e || !Array.isArray(e.setDetails) || !e.setDetails.length) return e;
+            const pr = String(e.reps   == null ? "" : e.reps).trim();
+            const pw = String(e.weight == null ? "" : e.weight).trim();
+            const allMatch = e.setDetails.every(sd => {
+              const r = String(sd?.reps   == null ? "" : sd.reps).trim();
+              const w = String(sd?.weight == null ? "" : sd.weight).trim();
+              return r === pr && w === pw;
+            });
+            if (!allMatch) return e;
+            const { setDetails: _drop, perSet: _drop2, ...rest } = e;
+            return rest;
+          });
+        }
         // Detect drift only on the fields the trigger would propagate.
         const drift =
           (merged.coachNote || null) !== (w.coachNote || null) ||
