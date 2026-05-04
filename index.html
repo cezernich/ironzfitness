@@ -501,8 +501,8 @@
                 <!-- Step 2 — date range picker -->
                 <div class="csi-step" id="csi-step-2" hidden>
                   <div class="csi-step-header">
-                    <div class="csi-step-title">Pick your date range</div>
-                    <div class="csi-step-sub">We'll import workouts that fall inside this range. Default is the next 4 weeks.</div>
+                    <div class="csi-step-title">Confirm date range</div>
+                    <div class="csi-step-sub">Pre-filled to cover the sheets you picked. Narrow it here if you only want a slice.</div>
                   </div>
                   <div class="form-grid">
                     <div class="form-row">
@@ -2665,11 +2665,22 @@
 
         <!-- Cardio block — interval rows (phase / time-or-distance / zone /
              details, plus brick discipline). Visible for: running, cycling,
-             swimming, brick. Mirrors Add Session / custom-plan cardio rows. -->
+             brick. Swim has its own richer block below that opens the
+             SwimBuilderModal. -->
         <div class="form-row" id="coach-assign-cardio-block" style="display:none">
           <label>Intervals</label>
           <div id="coach-assign-cardio-rows" class="coach-assign-cardio-list"></div>
           <button type="button" class="btn-secondary btn-sm" onclick="coachAssignAddCardioRow()" style="margin-top:6px">+ Add Interval</button>
+        </div>
+
+        <!-- Swim block — opens SwimBuilderModal for pool/yard length cycling
+             and step-by-step pool intervals. Visible only when type=swimming.
+             Mirrors the Quick Add swim flow so coaches build pool workouts
+             with the same surface their athletes see. -->
+        <div class="form-row" id="coach-assign-swim-block" style="display:none">
+          <label>Pool Workout</label>
+          <div id="coach-assign-swim-summary" class="coach-assign-swim-summary"></div>
+          <button type="button" class="btn-secondary btn-sm" onclick="coachAssignOpenSwimBuilder()" style="margin-top:6px" id="coach-assign-swim-edit-btn">+ Build Pool Workout</button>
         </div>
 
         <div class="form-row">

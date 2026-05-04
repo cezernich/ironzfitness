@@ -492,17 +492,20 @@
       if (!fileMax || r.to > fileMax)   fileMax = r.to;
     });
 
-    // Default range = today → today+28d, intersected with the file's
-    // bounds if the file doesn't cover today.
-    const today = _todayISO();
-    let defaultFrom = today;
-    let defaultTo   = _addDays(today, 28);
+    // Default range = the union of the selected calendar sheets'
+    // date ranges. This matches the user's mental model: "I checked
+    // March + May + June, so import March + May + June." Users who
+    // want to narrow the window can still adjust the pickers below.
+    // If no sheets carry an explicit range (older parser response, no
+    // sheets selected yet), fall back to today → today+28d.
+    let defaultFrom, defaultTo;
     if (fileMin && fileMax) {
-      // If today is before the file starts, anchor to fileMin.
-      if (defaultFrom < fileMin) defaultFrom = fileMin;
-      // If 4-week window pushes past file end, clamp.
-      if (defaultTo > fileMax) defaultTo = fileMax;
-      if (defaultFrom > defaultTo) defaultFrom = fileMin;
+      defaultFrom = fileMin;
+      defaultTo   = fileMax;
+    } else {
+      const today = _todayISO();
+      defaultFrom = today;
+      defaultTo   = _addDays(today, 28);
     }
 
     if (!_lastImport.dateRange) {
