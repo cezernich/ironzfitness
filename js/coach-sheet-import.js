@@ -628,11 +628,44 @@
       range: _lastImport.dateRange,
     });
     if (!_lastImport.fullResponse || _lastImport._fullCacheKey !== cacheKey) {
-      host.innerHTML = `<div class="csi-review-loading">Fetching plan details…</div>`;
+      // Estimate workouts in range so the loading copy carries real
+      // signal — same overlap×5/week math as _renderRangePreview.
+      const _estWorkouts = (() => {
+        try {
+          const sheets = _lastImport.response?.sheets || [];
+          const sel = new Set(_lastImport.selectedSheets || []);
+          const range = _lastImport.dateRange || {};
+          if (!range.from || !range.to) return 0;
+          let weeks = 0;
+          sheets.forEach(s => {
+            if (!sel.has(s.name) || s.role !== "calendar" || !s.date_range) return;
+            const overlapFrom = s.date_range.from > range.from ? s.date_range.from : range.from;
+            const overlapTo   = s.date_range.to   < range.to   ? s.date_range.to   : range.to;
+            const overlapDays = _diffDays(overlapFrom, overlapTo) + 1;
+            if (overlapDays <= 0) return;
+            const sheetDays = _diffDays(s.date_range.from, s.date_range.to) + 1;
+            const fraction = sheetDays > 0 ? Math.min(1, overlapDays / sheetDays) : 0;
+            weeks += (s.week_count || 0) * fraction;
+          });
+          return Math.round(weeks * 5);
+        } catch { return 0; }
+      })();
+      const _loadingLabel = _estWorkouts > 0
+        ? `Analyzing ~${_estWorkouts} workouts… this can take 30–60 seconds.`
+        : `Analyzing your plan… this can take 30–60 seconds.`;
+      host.innerHTML = `<div class="csi-review-loading">
+        <div>${_loadingLabel}</div>
+        <div class="csi-review-loading-sub">Running the LLM normalizer batch-by-batch.</div>
+      </div>`;
+
       const supa = window.supabaseClient;
       if (supa) {
+        // Hard 2-minute client-side cap so a stuck edge function or
+        // upstream Anthropic hiccup doesn't leave the user staring at
+        // the spinner forever. Surfaces a Retry button on timeout.
+        const PARSE_TIMEOUT_MS = 120_000;
         try {
-          const { data, error } = await supa.functions.invoke(
+          const invokePromise = supa.functions.invoke(
             "coach-sheet-import-parse",
             {
               body: {
@@ -646,9 +679,15 @@
               },
             },
           );
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("parse_timeout")), PARSE_TIMEOUT_MS));
+          const { data, error } = await Promise.race([invokePromise, timeoutPromise]);
           if (error || data?.status === "error") {
             const msg = error?.message || data?.message || "Couldn't load plan details.";
-            host.innerHTML = `<div class="csi-review-error">${_esc(msg)}</div>`;
+            host.innerHTML = `<div class="csi-review-error">
+              <div>${_esc(msg)}</div>
+              <button type="button" class="btn-secondary csi-review-retry" onclick="window.CoachSheetImport && window.CoachSheetImport._retryReview && window.CoachSheetImport._retryReview()">Retry</button>
+            </div>`;
             return;
           }
           _lastImport.fullResponse = data;
@@ -658,7 +697,14 @@
           _raceInclude = ((data.athlete_profile?.races) || []).map(() => false);
           _prInclude   = ((data.athlete_profile?.prs)   || []).map(() => false);
         } catch (e) {
-          host.innerHTML = `<div class="csi-review-error">${_esc(e?.message || "Couldn't load plan details.")}</div>`;
+          const isTimeout = e && e.message === "parse_timeout";
+          const msg = isTimeout
+            ? "This is taking longer than expected. The plan may still process in the background — try again in a moment."
+            : (e?.message || "Couldn't load plan details.");
+          host.innerHTML = `<div class="csi-review-error">
+            <div>${_esc(msg)}</div>
+            <button type="button" class="btn-secondary csi-review-retry" onclick="window.CoachSheetImport && window.CoachSheetImport._retryReview && window.CoachSheetImport._retryReview()">Retry</button>
+          </div>`;
           return;
         }
       }
@@ -1829,7 +1875,19 @@
   _ready();
 
   // Public surface for downstream slices + console testing.
+  // Retry helper — clears the cached parse response so the next
+  // _renderReviewPlaceholder call refetches. Wired to the Retry button
+  // in the review error/timeout state.
+  function _retryReview() {
+    if (_lastImport) {
+      _lastImport.fullResponse = null;
+      _lastImport._fullCacheKey = null;
+    }
+    _renderReviewPlaceholder();
+  }
+
   window.CoachSheetImport = {
+    _retryReview,
     getStaged: () => _stagedFile,
     getLastImport: () => _lastImport,
     getCurrentStep: () => _currentStep,
