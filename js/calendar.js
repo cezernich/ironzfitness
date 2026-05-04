@@ -1528,6 +1528,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
     const _genCompletion = buildCompletionSection(cardId, w.type, null, dateStr, s.duration || null, s.steps);
     const _genOverflow = _buildOverflowMenu(cardId,
       _ovflEditItem(w.id) +
+      _ovflMoveItem(cardId, "logged", w.id, dateStr) +
       _ovflShareItem(w) +
       _ovflSaveToLibraryItem(w) +
       _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`),
@@ -1631,10 +1632,14 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
       </div>`;
   }
 
-  // Minimal card (no exercises, no generated session)
+  // Minimal card (no exercises, no generated session) — also the path
+  // for logged swim/run/bike with segments only. Needs Move so the user
+  // can reschedule it like every other logged card.
   const _minCompletion = buildCompletionSection(cardId, w.type, null, dateStr, w.duration || null);
+  const _minMovePanel  = buildSessionMovePanel(cardId, "logged", w.id, dateStr);
   const _minOverflow = _buildOverflowMenu(cardId,
     _ovflEditItem(w.id) +
+    _ovflMoveItem(cardId, "logged", w.id, dateStr) +
     _ovflShareItem(w) +
     _ovflSaveToLibraryItem(w) +
     _ovflDeleteItem(`deleteWorkout('${w.id}');renderDayDetail('${dateStr}')`),
@@ -1651,7 +1656,7 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
         </div>
         <div class="session-header-right">${_minSpecLine}${_buildUndoHeaderBtn(cardId, dateStr)}${_minOverflow}<span class="card-chevron">▾</span></div>
       </div>
-      <div class="card-body">${_minCompletion}</div>
+      <div class="card-body">${_minMovePanel}${_minCompletion}</div>
     </div>`;
 }
 
