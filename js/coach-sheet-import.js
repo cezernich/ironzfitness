@@ -1005,7 +1005,11 @@
     if (!ok) return;
 
     const importBtn = $("csi-step-3-import");
-    if (importBtn) { importBtn.disabled = true; importBtn.textContent = "Importing…"; }
+    if (importBtn) {
+      importBtn.disabled = true;
+      const totalCount = workouts.length + templates.length;
+      importBtn.textContent = totalCount > 0 ? `Importing ${totalCount}…` : "Importing…";
+    }
 
     // Plan name (optional, user-supplied) + planId. The planId
     // groups every session in this import into one Active Training
@@ -1064,30 +1068,44 @@
         }
       }
 
-      // Commit — increments quota + flips log to success.
+      // Commit — increments quota + flips log to success. Local
+      // writes have already happened, so a hung commit shouldn't
+      // block the user. 30s race timeout + soft-warning on failure
+      // means the toast and step reset land regardless.
       const supa = window.supabaseClient;
       if (supa) {
-        const { data, error } = await supa.functions.invoke("coach-sheet-import-commit", {
-          body: {
-            import_id: _lastImport.importId,
-            workouts_inserted: workoutsInserted,
-            templates_inserted: templatesInserted,
-            selected_sheets: _lastImport.selectedSheets,
-            date_range: _lastImport.dateRange,
-          },
-        });
-        if (error || data?.status === "error") {
-          const msg = error?.message || data?.message || "Commit failed.";
-          console.warn("[CoachSheetImport] commit error", error || data);
-          // Local writes already happened — surface as a partial-success
-          // warning rather than a hard error. User can still see the
-          // workouts on the calendar.
-          _csiToast(`Imported but commit hit an issue: ${msg}`, "error");
+        const COMMIT_TIMEOUT_MS = 30_000;
+        try {
+          const invokePromise = supa.functions.invoke("coach-sheet-import-commit", {
+            body: {
+              import_id: _lastImport.importId,
+              workouts_inserted: workoutsInserted,
+              templates_inserted: templatesInserted,
+              selected_sheets: _lastImport.selectedSheets,
+              date_range: _lastImport.dateRange,
+            },
+          });
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("commit_timeout")), COMMIT_TIMEOUT_MS));
+          const { data, error } = await Promise.race([invokePromise, timeoutPromise]);
+          if (error || data?.status === "error") {
+            const msg = error?.message || data?.message || "Commit failed.";
+            console.warn("[CoachSheetImport] commit error", error || data);
+            // Local writes already happened — partial-success warning.
+            _csiToast(`Imported but commit hit an issue: ${msg}`, "error");
+            _resetToStep0();
+            _setStaged(null);
+            return;
+          }
+          console.log("[CoachSheetImport] commit OK:", data);
+        } catch (commitErr) {
+          // Timeout or thrown — local data is safe, just warn.
+          console.warn("[CoachSheetImport] commit timed out / threw:", commitErr);
+          _csiToast(`Imported. Server-side log update is taking longer than usual; your workouts are saved.`, "info");
           _resetToStep0();
           _setStaged(null);
           return;
         }
-        console.log("[CoachSheetImport] commit OK:", data);
       }
 
       // Refresh surfaces that read `workouts`.
@@ -1189,9 +1207,17 @@
       if (typeof storeGeneratedPlan === "function") {
         try {
           const plan = _synthesizePlanFromImport(commitSummary, _lastImport.dateRange, workoutsInserted);
-          await storeGeneratedPlan(plan, "coach_sheet");
+          // Fire-and-forget: storeGeneratedPlan awaits getSession + two
+          // Supabase round-trips, all of which are unrelated to the
+          // user-visible "import succeeded" outcome. Awaiting it added
+          // 5–30s to the perceived import time. The local copy is
+          // written synchronously inside storeGeneratedPlan, so the
+          // active-plan badge updates immediately either way.
+          storeGeneratedPlan(plan, "coach_sheet").catch(e => {
+            console.warn("[CoachSheetImport] storeGeneratedPlan failed", e);
+          });
         } catch (e) {
-          console.warn("[CoachSheetImport] storeGeneratedPlan failed", e);
+          console.warn("[CoachSheetImport] storeGeneratedPlan synth failed", e);
         }
       }
 
