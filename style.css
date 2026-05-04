@@ -20188,14 +20188,25 @@ body.auth-visible #bottom-nav { display: none !important; }
 .swim-pool-badge {
   font-size: 12px;
   font-weight: 700;
-  padding: 6px 10px;
+  padding: 6px 12px;
   background: var(--color-accent, #ff6b35);
   color: #fff;
+  border: none;
   border-radius: 999px;
   white-space: nowrap;
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.15s, transform 0.08s;
+  user-select: none;
+}
+.swim-pool-badge:hover {
+  opacity: 0.9;
+}
+.swim-pool-badge:active {
+  transform: scale(0.96);
 }
 .swim-pool-badge-label {
   font-size: 10px;

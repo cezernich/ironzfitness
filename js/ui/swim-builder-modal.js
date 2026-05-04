@@ -183,10 +183,12 @@
             <span class="swim-total-value">${_esc(totalLabel)}</span>
             <span class="swim-total-label">Total Distance</span>
           </div>
-          <div class="swim-pool-badge" title="Pool length">
+          <button type="button" class="swim-pool-badge" data-sb-pool-cycle="1"
+                  aria-label="Cycle pool length"
+                  title="Tap to switch pool size — 25 m / 50 m / 25 yd">
             <span class="swim-pool-badge-label">Pool</span>
             <span class="swim-pool-badge-value">${_esc(_state.pool.label)}</span>
-          </div>
+          </button>
         </div>
 
         <div class="swim-builder-meta">
@@ -426,6 +428,20 @@
     root.querySelector("[data-sb-cancel]")?.addEventListener("click", close);
     root.querySelector("[data-sb-save]")?.addEventListener("click", _save);
     root.querySelector("[data-sb-date]")?.addEventListener("change", e => { _state.dateStr = e.target.value; });
+
+    // Pool length cycle — tap the POOL pill to rotate through the
+    // SwimWorkout.POOL_SIZES list (25 m → 50 m → 25 yd → 25 m...).
+    // Updates _state.pool live; the next render reflects the new
+    // length and the totals row recomputes.
+    root.querySelector("[data-sb-pool-cycle]")?.addEventListener("click", () => {
+      const M = window.SwimWorkout;
+      if (!M || !Array.isArray(M.POOL_SIZES) || !M.POOL_SIZES.length) return;
+      const sizes = M.POOL_SIZES;
+      const currentIdx = sizes.findIndex(s => s.value === _state.pool.value);
+      const next = sizes[(currentIdx + 1) % sizes.length] || sizes[0];
+      _state.pool = next;
+      _render();
+    });
 
     // Footer: add step / add repeat
     root.querySelectorAll("[data-sb-add]").forEach(el => {
