@@ -124,8 +124,12 @@
     const durationOptions = [15, 20, 30, 45, 60];
     const focusOptions = [
       { id: "bodyweight", label: "Bodyweight" },
-      { id: "barbell", label: "With Barbell" },
-      { id: "kb", label: "With KB" },
+      // "weighted" bundles dumbbells + kettlebells — most home gyms have
+      // both and the moves are largely interchangeable for circuit work.
+      // Pure-barbell circuits stay reachable through "Mixed" since few
+      // users have a barbell setup but "I have a DB or KB" is closer
+      // to universal.
+      { id: "weighted", label: "With DB/KB" },
       { id: "mixed", label: "Mixed" },
     ];
 
@@ -167,7 +171,7 @@
       </div>
       <div class="circuit-modal-footer circuit-modal-footer--dual">
         <button class="circuit-btn circuit-btn-primary" onclick="window.CircuitBuilder.generateFromEntry()">Generate Workout</button>
-        <button class="circuit-btn circuit-btn-secondary" onclick="window.CircuitBuilder.openManualBuilder()">Log Manually</button>
+        <button class="circuit-btn circuit-btn-secondary" onclick="window.CircuitBuilder.openManualBuilder()">Build Manually</button>
       </div>`;
 
     _mountModal("circuit-entry-modal", body);
@@ -302,7 +306,7 @@
       id: "helen",
       name: "Helen",
       formats: ["for_time"],
-      focuses: ["mixed", "kb"],
+      focuses: ["mixed", "weighted"],
       minDuration: 10,
       build: (opts) => ({
         name: "Helen",
@@ -411,7 +415,7 @@
       id: "standard-5x5",
       name: "Standard 5×5",
       formats: ["standard"],
-      focuses: ["bodyweight", "barbell", "kb", "mixed"],
+      focuses: ["bodyweight", "barbell", "weighted", "mixed"],
       minDuration: 10,
       build: (opts) => {
         const pool = (opts.poolByFocus[opts.focus] || opts.poolByFocus.bodyweight).slice();
@@ -447,7 +451,7 @@
     // "mixed" in its focuses list, so the candidate set was identical
     // for every focus choice — the focus chips were effectively a no-op
     // and the user got Cindy regardless of whether they picked
-    // Bodyweight / Barbell / KB / Mixed (user feedback 2026-04-29).
+    // Bodyweight / DB-KB (weighted) / Mixed (user feedback 2026-04-29).
     // Fix: require an exact focus match. Only fall back to mixed-tagged
     // templates when no template explicitly supports the requested focus
     // — preserves graceful degradation for unusual focus values without
@@ -473,7 +477,9 @@
     const nameVariants = {
       bodyweight: ["Bodyweight Burner", "No-Equipment Grinder", "Pure BW Circuit", "Calisthenics Chipper"],
       barbell:    ["Barbell Blast", "Iron Tempo", "Barbell Complex", "Heavy Lifts Circuit"],
-      kb:         ["KB Flow", "Kettlebell Chipper", "Swing & Squat", "KB Strength Circuit"],
+      // "weighted" replaces the standalone kb chip — DB and KB are
+      // bundled at the UI level, so the name set covers both.
+      weighted:   ["DB/KB Flow", "Dumbbell Grinder", "Kettlebell Chipper", "Loaded Circuit"],
       mixed:      ["Mixed Modality", "All-In Circuit", "Hybrid Grinder", "Functional Fitness"],
     };
 
@@ -498,6 +504,7 @@
       { name: "Barbell Rows", reps: 12, weight: intensity === "intense" ? 115 : 85, weight_unit: "lbs" },
     ];
 
+    // KB-specific moves
     const kbExercises = [
       { name: "Kettlebell Swings", reps: 20, weight: 53, weight_unit: "lbs" },
       { name: "Goblet Squats", reps: 15, weight: 53, weight_unit: "lbs" },
@@ -506,16 +513,34 @@
       { name: "Russian Twists", reps: 30, weight: 35, weight_unit: "lbs" },
     ];
 
+    // DB-specific moves — added so the bundled "With DB/KB" focus
+    // delivers actual dumbbell work, not KB-only.
+    const dbExercises = [
+      { name: "Dumbbell Snatches", reps: 10, weight: intensity === "intense" ? 50 : 35, weight_unit: "lbs", per_side: true },
+      { name: "DB Thrusters", reps: 12, weight: intensity === "intense" ? 45 : 30, weight_unit: "lbs" },
+      { name: "DB Renegade Rows", reps: 10, weight: intensity === "intense" ? 40 : 25, weight_unit: "lbs", per_side: true },
+      { name: "DB Push Press", reps: 10, weight: intensity === "intense" ? 45 : 30, weight_unit: "lbs" },
+      { name: "DB Walking Lunges", reps: 16, weight: intensity === "intense" ? 40 : 25, weight_unit: "lbs" },
+      { name: "DB Romanian Deadlifts", reps: 12, weight: intensity === "intense" ? 50 : 35, weight_unit: "lbs" },
+    ];
+
+    // Bundled pool for the "weighted" focus chip — DB + KB.
+    const weightedExercises = [...dbExercises, ...kbExercises];
+
     const mixedExercises = [
       ...bwExercises.slice(0, 4),
       ...barbellExercises.slice(0, 2),
-      ...kbExercises.slice(0, 2),
+      ...weightedExercises.slice(0, 3),
     ];
 
     const poolByFocus = {
       bodyweight: bwExercises,
-      barbell: barbellExercises,
+      // "weighted" is what the new chip emits; "kb" and "barbell"
+      // remain for templates that explicitly target a single equipment
+      // pool (Mixed-tagged ones can still surface them).
+      weighted: weightedExercises,
       kb: kbExercises,
+      barbell: barbellExercises,
       mixed: mixedExercises,
     };
 
