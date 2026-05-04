@@ -4453,7 +4453,26 @@
     const _hasRaceArc = !!(planRace && planRace.date);
 
     const sessions = [];
+    // When editing, past entries are preserved (line 4391). Their ids
+    // are `${planId}-${N}` from the original generation. The new
+    // generation starts its counter at 0, so it produces colliding
+    // ids on later dates — same `-0`, `-1`, ... on different days.
+    // Completion lookups by id then short-circuit to whichever side
+    // got marked complete first, lighting up future cards as ✓ and
+    // double-counting in stats. Bump the counter past the max past
+    // index so new entries inherit a clean range.
     let counter = 0;
+    if (_state._editingPlanId) {
+      const prefix = _state._editingPlanId + "-";
+      let maxIdx = -1;
+      existingArr.forEach(e => {
+        if (typeof e.id !== "string" || !e.id.startsWith(prefix)) return;
+        const tail = e.id.slice(prefix.length);
+        const n = parseInt(tail, 10);
+        if (Number.isFinite(n) && n > maxIdx) maxIdx = n;
+      });
+      counter = maxIdx + 1;
+    }
     for (let w = 0; w < weeks; w++) {
       const phaseKey = _hasRaceArc ? _phaseForWeek(w + 1, weeks) : "base";
       _BP_DAYS.forEach((day, idx) => {
