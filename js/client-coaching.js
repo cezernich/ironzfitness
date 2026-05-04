@@ -147,70 +147,98 @@
   // appended, leaving one entry per assignment with current data.
   // Idempotent — re-running with no drift is a no-op.
   let _selfHealRan = false;
+  // Helper — strip setDetails arrays whose entries all match the parent
+  // reps/weight, mirroring the c8eed87 / 09294fa fixes for the local
+  // write paths.
+  function _stripRedundantSetDetails(merged) {
+    if (!Array.isArray(merged.exercises)) return merged;
+    merged.exercises = merged.exercises.map(e => {
+      if (!e || !Array.isArray(e.setDetails) || !e.setDetails.length) return e;
+      const pr = String(e.reps   == null ? "" : e.reps).trim();
+      const pw = String(e.weight == null ? "" : e.weight).trim();
+      const allMatch = e.setDetails.every(sd => {
+        const r = String(sd?.reps   == null ? "" : sd.reps).trim();
+        const w = String(sd?.weight == null ? "" : sd.weight).trim();
+        return r === pr && w === pw;
+      });
+      if (!allMatch) return e;
+      const { setDetails: _drop, perSet: _drop2, ...rest } = e;
+      return rest;
+    });
+    return merged;
+  }
   async function selfHealCoachScheduleEntries() {
     if (_selfHealRan) return { changed: 0, skipped: "already-ran" };
     _selfHealRan = true;
     try {
       const sb = window.supabaseClient;
       if (!sb) return { changed: 0, skipped: "no-client" };
+      const sess = (await sb.auth.getSession())?.data?.session;
+      const uid = sess?.user?.id;
+      if (!uid) return { changed: 0, skipped: "no-session" };
 
       let schedule = [];
       try { schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]") || []; } catch {}
-      if (!Array.isArray(schedule) || !schedule.length) return { changed: 0, skipped: "empty" };
+      if (!Array.isArray(schedule)) schedule = [];
 
-      // Collect every coach assignment id referenced from local entries.
-      const assignmentIds = new Set();
-      for (const w of schedule) {
-        if (w && w.source === "coach_assigned" && w.coachAssignmentId) {
-          assignmentIds.add(String(w.coachAssignmentId));
-        }
-      }
-      if (!assignmentIds.size) return { changed: 0, skipped: "no-coach-entries" };
-
-      // Single batched fetch over the canonical rows.
-      const ids = Array.from(assignmentIds);
+      // Pull every coach assignment for THIS user. Driving off the
+      // canonical table (instead of the local schedule) lets us also
+      // recover from a previous broken self-heal that stripped
+      // legitimate entries — any assignment that should be visible
+      // gets re-materialized.
       const { data: rows, error } = await sb
         .from("coach_assigned_workouts")
         .select("id, date, coach_note, coach_id, workout, created_at")
-        .in("id", ids);
+        .eq("client_id", uid);
       if (error) {
-        console.warn("[selfHeal] fetch failed:", error.message);
+        // Network / RLS error — DO NOT mutate local schedule. Bail and
+        // try again on next boot. Previous version dropped local
+        // entries when it couldn't see the canonical row, which wiped
+        // the schedule when auth was locked.
+        console.warn("[selfHeal] canonical fetch failed, leaving schedule untouched:", error.message);
         return { changed: 0, skipped: "fetch-error" };
       }
-      const byId = {};
-      for (const r of (rows || [])) byId[r.id] = r;
+
+      const canonicalById = {};
+      for (const r of (rows || [])) canonicalById[r.id] = r;
+      const canonicalIds = new Set(Object.keys(canonicalById));
 
       let changed = 0;
       const seenAssignmentIds = new Set();
       const next = [];
+
       for (const w of schedule) {
-        // Pass through anything that isn't a coach-assigned mirror.
+        // Non-coach entries pass through unchanged.
         if (!w || w.source !== "coach_assigned" || !w.coachAssignmentId) {
           next.push(w);
           continue;
         }
         const aid = String(w.coachAssignmentId);
-        // Drop trigger-format duplicates when we've already kept one
-        // entry for this assignment (legacy entry usually wins because
-        // it appears first in the array — the trigger appends).
+
+        // De-dupe: if we already kept an entry for this assignment,
+        // skip subsequent ones (the AFTER UPDATE trigger appends a
+        // new 'coach-...' entry alongside legacy ones — keep the
+        // first occurrence, drop the rest). This is the only case
+        // where we drop a local entry, and only because we already
+        // kept its sibling.
         if (seenAssignmentIds.has(aid)) {
           changed++;
           continue;
         }
         seenAssignmentIds.add(aid);
 
-        const canonical = byId[aid];
+        const canonical = canonicalById[aid];
         if (!canonical) {
-          // Assignment was deleted server-side but local entry persists.
-          // Drop it — coach removed the workout.
-          changed++;
+          // Canonical is missing from the response. DO NOT drop —
+          // could be RLS, a transient sync gap, or simply that the
+          // row hasn't replicated yet. Pass through as-is.
+          next.push(w);
           continue;
         }
 
         // Merge canonical fields onto the local entry. Preserve the
-        // local id (legacy or trigger-format) so other code that joins
-        // by id stays stable.
-        const merged = {
+        // local id so other code that joins by id stays stable.
+        let merged = {
           ...w,
           ...(canonical.workout || {}),
           id:                w.id,
@@ -220,35 +248,39 @@
           coachId:           canonical.coach_id || w.coachId,
           coachNote:         canonical.coach_note ?? w.coachNote ?? null,
         };
-        // Strip redundant setDetails — canonical exercises sometimes
-        // carry per-set arrays where every entry matches the parent
-        // reps/weight (auto-populated from the assign-flow editor).
-        // Without this the day-detail renderer drops Set 1..N rows
-        // beneath the exercise even when there's no real per-set
-        // variation, mirroring the c8eed87 / 09294fa fixes for the
-        // local write paths.
-        if (Array.isArray(merged.exercises)) {
-          merged.exercises = merged.exercises.map(e => {
-            if (!e || !Array.isArray(e.setDetails) || !e.setDetails.length) return e;
-            const pr = String(e.reps   == null ? "" : e.reps).trim();
-            const pw = String(e.weight == null ? "" : e.weight).trim();
-            const allMatch = e.setDetails.every(sd => {
-              const r = String(sd?.reps   == null ? "" : sd.reps).trim();
-              const w = String(sd?.weight == null ? "" : sd.weight).trim();
-              return r === pr && w === pw;
-            });
-            if (!allMatch) return e;
-            const { setDetails: _drop, perSet: _drop2, ...rest } = e;
-            return rest;
-          });
-        }
-        // Detect drift only on the fields the trigger would propagate.
+        merged = _stripRedundantSetDetails(merged);
+
         const drift =
           (merged.coachNote || null) !== (w.coachNote || null) ||
           JSON.stringify(merged.exercises || null) !== JSON.stringify(w.exercises || null) ||
           (merged.sessionName || "") !== (w.sessionName || "");
         if (drift) changed++;
         next.push(merged);
+      }
+
+      // Rebuild any canonical assignment that has no local entry —
+      // covers the recovery case where a previous broken self-heal
+      // wiped legitimate entries. Synthesize the schedule entry the
+      // mirror trigger would have created (id 'coach-' || uuid,
+      // source 'coach_assigned', spread of workout JSONB + mirror
+      // metadata).
+      for (const aid of canonicalIds) {
+        if (seenAssignmentIds.has(aid)) continue;
+        const c = canonicalById[aid];
+        if (!c) continue;
+        let entry = {
+          ...(c.workout || {}),
+          id:                "coach-" + c.id,
+          date:              c.date,
+          source:            "coach_assigned",
+          coachId:           c.coach_id || null,
+          coachAssignmentId: c.id,
+          coachNote:         c.coach_note || null,
+          assignedAt:        c.created_at,
+        };
+        entry = _stripRedundantSetDetails(entry);
+        next.push(entry);
+        changed++;
       }
 
       if (changed > 0) {
@@ -258,9 +290,10 @@
         if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
           renderDayDetail(selectedDate);
         }
-        console.log("[selfHeal] healed", changed, "coach-assigned entries");
+        console.log("[selfHeal] healed/recovered", changed, "coach-assigned entries (",
+                    canonicalIds.size, "canonical /", seenAssignmentIds.size, "matched local)");
       }
-      return { changed, total: assignmentIds.size };
+      return { changed, canonical: canonicalIds.size, matched: seenAssignmentIds.size };
     } catch (e) {
       console.warn("[selfHeal] failed:", e);
       return { changed: 0, skipped: "exception" };
