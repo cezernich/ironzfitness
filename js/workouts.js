@@ -2557,7 +2557,7 @@ function _renderWorkoutHistoryList(workouts) {
     if ((w.type === "hyrox" || w.isHyrox) && w.exercises && w.exercises.length > 0) {
       const stationCount = w.exercises.filter(e => !/^run\s/i.test(e.name)).length;
       const summaryHtml = _histSummary([
-        w.duration ? `${w.duration} min` : "",
+        w.duration ? `${Math.round(parseFloat(w.duration)) || w.duration} min` : "",
         stationCount ? `${stationCount} station${stationCount !== 1 ? "s" : ""}` : "",
       ]);
       const _fmtMs = ms => {
@@ -2616,7 +2616,7 @@ function _renderWorkoutHistoryList(workouts) {
       const uniqueCount = new Set(w.exercises.map(e => e.name).filter(Boolean)).size;
       const summaryHtml = _histSummary([
         uniqueCount ? `${uniqueCount} exercise${uniqueCount !== 1 ? "s" : ""}` : "",
-        w.duration ? `${w.duration} min` : "",
+        w.duration ? `${Math.round(parseFloat(w.duration)) || w.duration} min` : "",
       ]);
       return `
         <div class="history-entry collapsible is-collapsed" id="${cardId}">
@@ -2636,7 +2636,7 @@ function _renderWorkoutHistoryList(workouts) {
 
     // Cardio / minimal session
     const summaryHtml = _histSummary([
-      w.duration ? `${w.duration} min` : "",
+      w.duration ? `${Math.round(parseFloat(w.duration)) || w.duration} min` : "",
       _fmtDistance(w),
       w.avgWatts ? `${w.avgWatts}W avg` : "",
     ]);
