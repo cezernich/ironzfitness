@@ -234,7 +234,17 @@ function _addEditRow(ex) {
   const div = document.createElement("div");
   div.className = "ex-row qe-manual-row edit-exercise-row" + (_editIsHiit ? " hiit-row" : "");
   div.id = `edit-row-${id}`;
-  const weightVal = typeof _normalizeWeightDisplay === 'function' ? _normalizeWeightDisplay(ex?.weight || '') : (ex?.weight || '');
+  // Don't run _normalizeWeightDisplay on an empty source weight — its
+  // empty-input branch falls back to the literal string "Moderate", which
+  // then gets saved as the persisted weight when the user submits the edit.
+  // Result: a coach-assigned exercise the coach intentionally left blank
+  // ("athlete picks the load") gets baked to "Moderate" the first time the
+  // athlete opens the editor and saves anything at all. Keep the input blank
+  // so the placeholder "lbs" hint shows.
+  const _rawWt = String(ex?.weight || "").trim();
+  const weightVal = !_rawWt
+    ? ""
+    : (typeof _normalizeWeightDisplay === 'function' ? _normalizeWeightDisplay(_rawWt, ex?.name) : _rawWt);
   const existingPerSet = (ex?.perSet && ex.perSet.length) ? ex.perSet
                        : (ex?.setDetails && ex.setDetails.length) ? ex.setDetails
                        : null;
