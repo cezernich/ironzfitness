@@ -20319,7 +20319,12 @@ body.auth-visible #bottom-nav { display: none !important; }
   width: 100%;
   max-width: 560px;
   max-height: calc(100vh - env(safe-area-inset-top, 20px));
-  background: var(--color-card-bg, #121218);
+  /* `--color-card-bg` was never defined as an app-wide variable, so
+     the previous fallback to #121218 forced a dark sheet on top of
+     the otherwise-light app theme. Use the same `--color-surface`
+     token every other modal uses so the swim builder matches. */
+  background: var(--color-surface);
+  color: var(--color-text);
   border-top-left-radius: 16px;
   border-top-right-radius: 16px;
   border: 1px solid var(--color-border);
