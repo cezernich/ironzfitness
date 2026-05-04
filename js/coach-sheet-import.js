@@ -544,10 +544,14 @@
 
   // ── Step 3 — review screen ─────────────────────────────────────────────
 
-  // Per-workout / per-template selection state — Map keyed by index so
-  // we can toggle inclusion without mutating the parsed payload.
+  // Per-workout / per-template / per-profile-item selection state.
+  // Workouts + templates default to checked (the user actively chose to
+  // import a coach plan). Profile items default to UNCHECKED per
+  // Decision #13 — opt-in beta.
   let _workoutInclude = null;
   let _templateInclude = null;
+  let _raceInclude = null;
+  let _prInclude = null;
 
   async function _renderReviewPlaceholder() {
     if (!_lastImport) return;
@@ -596,6 +600,8 @@
           _lastImport._fullCacheKey = cacheKey;
           _workoutInclude = (data.running_workouts || []).map(() => true);
           _templateInclude = (data.strength_templates || []).map(() => true);
+          _raceInclude = ((data.athlete_profile?.races) || []).map(() => false);
+          _prInclude   = ((data.athlete_profile?.prs)   || []).map(() => false);
         } catch (e) {
           host.innerHTML = `<div class="csi-review-error">${_esc(e?.message || "Couldn't load plan details.")}</div>`;
           return;
@@ -639,19 +645,27 @@
 
     if (profile && (profileRaceCount || profilePrCount)) {
       html += `<div class="csi-review-section-label">Athlete profile <span class="csi-beta-tag">beta</span></div>`;
-      html += `<div class="csi-profile-note">Detected races and PRs from the Resources sheet. Full profile import ships in a follow-up; for now this is a heads-up that the data was found.</div>`;
+      html += `<div class="csi-profile-note">Detected races and PRs from the Resources sheet. Per-item checkboxes default off — opt in to add to your race calendar / PR list.</div>`;
       html += `<div class="csi-profile-grid">`;
-      (profile.races || []).forEach(r => {
-        html += `<div class="csi-profile-card">
-          <div class="csi-profile-card-name">${_esc(r.name || "Race")}</div>
-          <div class="csi-profile-card-sub">${_esc(r.distance || "")}${r.date ? ` · ${_esc(r.date)}` : ""}${r.priority ? ` · ${_esc(r.priority)}` : ""}</div>
-        </div>`;
+      (profile.races || []).forEach((r, i) => {
+        const checked = _raceInclude[i] === true;
+        html += `<label class="csi-profile-card">
+          <input type="checkbox" data-csi-race="${i}" ${checked ? "checked" : ""} />
+          <div class="csi-profile-card-meta">
+            <div class="csi-profile-card-name">${_esc(r.name || "Race")}</div>
+            <div class="csi-profile-card-sub">${_esc(r.distance || "")}${r.date ? ` · ${_esc(r.date)}` : ""}${r.priority ? ` · ${_esc(r.priority)}` : ""}</div>
+          </div>
+        </label>`;
       });
-      (profile.prs || []).forEach(p => {
-        html += `<div class="csi-profile-card">
-          <div class="csi-profile-card-name">${_esc(p.distance || "PR")}: ${_esc(p.time || "")}</div>
-          <div class="csi-profile-card-sub">${_esc(p.race || "")}${p.pace_per_mi ? ` · ${_esc(p.pace_per_mi)}/mi` : ""}${p.date ? ` · ${_esc(p.date)}` : ""}</div>
-        </div>`;
+      (profile.prs || []).forEach((p, i) => {
+        const checked = _prInclude[i] === true;
+        html += `<label class="csi-profile-card">
+          <input type="checkbox" data-csi-pr="${i}" ${checked ? "checked" : ""} />
+          <div class="csi-profile-card-meta">
+            <div class="csi-profile-card-name">${_esc(p.distance || "PR")}: ${_esc(p.time || "")}</div>
+            <div class="csi-profile-card-sub">${_esc(p.race || "")}${p.pace_per_mi ? ` · ${_esc(p.pace_per_mi)}/mi` : ""}${p.date ? ` · ${_esc(p.date)}` : ""}</div>
+          </div>
+        </label>`;
       });
       html += `</div>`;
     }
@@ -662,14 +676,28 @@
       cb.addEventListener("change", () => {
         const idx = parseInt(cb.getAttribute("data-csi-workout"), 10);
         if (Number.isFinite(idx)) _workoutInclude[idx] = cb.checked;
-        _updateImportButton(_countSelected(_workoutInclude), _countSelected(_templateInclude));
+        _refreshImportButton();
       });
     });
     host.querySelectorAll('input[type="checkbox"][data-csi-template]').forEach(cb => {
       cb.addEventListener("change", () => {
         const idx = parseInt(cb.getAttribute("data-csi-template"), 10);
         if (Number.isFinite(idx)) _templateInclude[idx] = cb.checked;
-        _updateImportButton(_countSelected(_workoutInclude), _countSelected(_templateInclude));
+        _refreshImportButton();
+      });
+    });
+    host.querySelectorAll('input[type="checkbox"][data-csi-race]').forEach(cb => {
+      cb.addEventListener("change", () => {
+        const idx = parseInt(cb.getAttribute("data-csi-race"), 10);
+        if (Number.isFinite(idx)) _raceInclude[idx] = cb.checked;
+        _refreshImportButton();
+      });
+    });
+    host.querySelectorAll('input[type="checkbox"][data-csi-pr]').forEach(cb => {
+      cb.addEventListener("change", () => {
+        const idx = parseInt(cb.getAttribute("data-csi-pr"), 10);
+        if (Number.isFinite(idx)) _prInclude[idx] = cb.checked;
+        _refreshImportButton();
       });
     });
     host.querySelectorAll('[data-csi-source-toggle]').forEach(btn => {
@@ -684,7 +712,7 @@
       });
     });
 
-    _updateImportButton(_countSelected(_workoutInclude), _countSelected(_templateInclude));
+    _refreshImportButton();
   }
 
   function _countSelected(arr) {
@@ -692,14 +720,35 @@
     return arr.reduce((n, v) => n + (v ? 1 : 0), 0);
   }
 
-  function _updateImportButton(workoutCount, templateCount) {
+  // Wrapper that re-reads the four include arrays. Use this from
+  // change handlers so we don't have to thread counts through call
+  // sites whenever a new include category gets added.
+  function _refreshImportButton() {
+    _updateImportButton(
+      _countSelected(_workoutInclude),
+      _countSelected(_templateInclude),
+      _countSelected(_raceInclude),
+      _countSelected(_prInclude),
+    );
+  }
+
+  function _updateImportButton(workoutCount, templateCount, raceCount, prCount) {
     const btn = $("csi-step-3-import");
     if (!btn) return;
-    const total = workoutCount + templateCount;
+    raceCount = raceCount || 0;
+    prCount   = prCount   || 0;
+    const total = workoutCount + templateCount + raceCount + prCount;
     btn.disabled = total === 0;
-    btn.textContent = total
-      ? `Import all (${workoutCount} workout${workoutCount === 1 ? "" : "s"} · ${templateCount} template${templateCount === 1 ? "" : "s"})`
-      : "Import all";
+    if (!total) {
+      btn.textContent = "Import all";
+      return;
+    }
+    const parts = [];
+    if (workoutCount) parts.push(`${workoutCount} workout${workoutCount === 1 ? "" : "s"}`);
+    if (templateCount) parts.push(`${templateCount} template${templateCount === 1 ? "" : "s"}`);
+    if (raceCount) parts.push(`${raceCount} race${raceCount === 1 ? "" : "s"}`);
+    if (prCount)   parts.push(`${prCount} PR${prCount === 1 ? "" : "s"}`);
+    btn.textContent = `Import all (${parts.join(" · ")})`;
   }
 
   const _DAY_TYPE_BADGE = {
@@ -818,13 +867,20 @@
     const workouts = (resp.running_workouts || []).filter((_, i) => _workoutInclude[i] !== false);
     const templates = (resp.strength_templates || []).filter((_, i) => _templateInclude[i] !== false);
 
-    if (!workouts.length && !templates.length) {
+    const profile = resp.athlete_profile || null;
+    const races = (profile?.races || []).filter((_, i) => _raceInclude?.[i] === true);
+    const prs   = (profile?.prs   || []).filter((_, i) => _prInclude?.[i]   === true);
+
+    if (!workouts.length && !templates.length && !races.length && !prs.length) {
       _csiToast("Nothing selected to import.", "error");
       return;
     }
 
+    const profileFragment = (races.length || prs.length)
+      ? ` (plus ${races.length} race${races.length === 1 ? "" : "s"} and ${prs.length} PR${prs.length === 1 ? "" : "s"} into your profile)`
+      : "";
     const ok = window.confirm(
-      `Import ${workouts.length} workout${workouts.length === 1 ? "" : "s"} and ${templates.length} strength template${templates.length === 1 ? "" : "s"}? You can edit any of them after import.`,
+      `Import ${workouts.length} workout${workouts.length === 1 ? "" : "s"} and ${templates.length} strength template${templates.length === 1 ? "" : "s"}${profileFragment}? You can edit any of them after import.`,
     );
     if (!ok) return;
 
@@ -924,6 +980,50 @@
         if (typeof renderStats === "function") renderStats();
       } catch (e) { console.warn("[CoachSheetImport] post-import render error", e); }
 
+      // Profile writes — opt-in beta per Decision #13. Each checked
+      // race lands in localStorage `events` (the race calendar) and
+      // each checked PR keys into `personalRecords`. Both sync via
+      // existing DB helpers. We capture the inserted IDs / keys so
+      // undo can reverse cleanly.
+      const insertedRaceIds = [];
+      const insertedPrKeys = [];
+
+      if (races.length) {
+        let ev = [];
+        try { ev = JSON.parse(localStorage.getItem("events") || "[]"); } catch {}
+        for (const r of races) {
+          const shaped = _shapeImportedRace(r, _lastImport.importId);
+          if (!shaped) continue;
+          ev.push(shaped);
+          insertedRaceIds.push(shaped.id);
+        }
+        localStorage.setItem("events", JSON.stringify(ev));
+        if (typeof DB !== "undefined" && DB.syncEvents) DB.syncEvents();
+      }
+
+      if (prs.length) {
+        let pr = {};
+        try { pr = JSON.parse(localStorage.getItem("personalRecords") || "{}"); } catch {}
+        for (const p of prs) {
+          const key = _normalizePRDistance(p.distance);
+          if (!key) continue;
+          // Don't blindly clobber an existing PR if it's faster than
+          // ours — _comparePRTimes compares HH:MM:SS / MM:SS strings
+          // and returns true if the new time is faster (or no
+          // existing PR).
+          if (_isFasterPR(p.time, pr[key]?.time)) {
+            pr[key] = {
+              time: p.time,
+              date: _normalizePRDate(p.date) || (typeof getTodayString === "function" ? getTodayString() : new Date().toISOString().slice(0, 10)),
+              importId: _lastImport.importId,
+            };
+            insertedPrKeys.push(key);
+          }
+        }
+        localStorage.setItem("personalRecords", JSON.stringify(pr));
+        if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("personalRecords");
+      }
+
       // Persist a commit summary so the undo affordance survives a
       // page reload within the 1-hour window. UNDO_KEY is namespaced
       // so a future cross-session "Undo last import" entry point can
@@ -935,15 +1035,23 @@
         planName,
         scheduleIds: insertedWorkoutIds,
         templateIds: insertedTemplateIds,
+        raceIds: insertedRaceIds,
+        prKeys: insertedPrKeys,
         workoutsInserted,
         templatesInserted,
+        racesInserted: insertedRaceIds.length,
+        prsInserted: insertedPrKeys.length,
         committedAt: Date.now(),
       };
       try { localStorage.setItem(UNDO_KEY, JSON.stringify(commitSummary)); } catch {}
       window.__coachSheetImportLastCommit = commitSummary;
 
+      const profilePart = (commitSummary.racesInserted || commitSummary.prsInserted)
+        ? `, ${commitSummary.racesInserted} race${commitSummary.racesInserted === 1 ? "" : "s"} + ${commitSummary.prsInserted} PR${commitSummary.prsInserted === 1 ? "" : "s"}`
+        : "";
       const summaryText = `Imported "${planName}" — ${workoutsInserted} workout${workoutsInserted === 1 ? "" : "s"}` +
-        (templatesInserted ? `, ${templatesInserted} template${templatesInserted === 1 ? "" : "s"}` : "") + ".";
+        (templatesInserted ? `, ${templatesInserted} template${templatesInserted === 1 ? "" : "s"}` : "") +
+        profilePart + ".";
       _csiToastWithUndo(summaryText, commitSummary);
       _resetToStep0();
       _setStaged(null);
@@ -952,8 +1060,97 @@
       _csiToast(`Import failed: ${e?.message || "unknown error"}`, "error");
       if (importBtn) importBtn.disabled = false;
     } finally {
-      _updateImportButton(_countSelected(_workoutInclude), _countSelected(_templateInclude));
+      _refreshImportButton();
     }
+  }
+
+  // Race-type normalization. Maps free-text distance from the
+  // Resources sheet ("Marathon", "Half", "10K") to the IronZ taxonomy
+  // expected by the race-form / generator. Falls through to "general"
+  // for unrecognized inputs so the race still appears on the calendar.
+  function _normalizeRaceType(distance) {
+    const d = String(distance || "").toLowerCase().trim();
+    if (!d) return null;
+    if (d.includes("ironman") && !d.includes("half")) return "ironman";
+    if (d.includes("half ironman") || d.includes("70.3")) return "halfIronman";
+    if (d.includes("olympic")) return "olympic";
+    if (d.includes("sprint"))  return "sprint";
+    if (d.startsWith("marathon") || d === "full" || d === "26.2") return "marathon";
+    if (d.includes("half"))    return "halfMarathon";
+    if (d === "10k" || d.includes("10 k")) return "tenK";
+    if (d === "5k"  || d.includes("5 k"))  return "fiveK";
+    return "general";
+  }
+
+  function _normalizeImportDate(dateStr) {
+    if (!dateStr) return null;
+    const trimmed = String(dateStr).trim();
+    // Already ISO?
+    if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
+    // M/D/YY or M/D/YYYY (Paige's source format).
+    const m = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (m) {
+      let yr = parseInt(m[3], 10);
+      if (yr < 100) yr += 2000;
+      return `${yr}-${String(m[1]).padStart(2, "0")}-${String(m[2]).padStart(2, "0")}`;
+    }
+    return null;
+  }
+
+  function _shapeImportedRace(r, importId) {
+    const date = _normalizeImportDate(r.date);
+    if (!date) return null; // can't put on calendar without a date
+    const type = _normalizeRaceType(r.distance);
+    const priorityRaw = String(r.priority || "").toUpperCase().trim();
+    const priority = priorityRaw === "MAIN" ? "A"
+                   : (priorityRaw === "A" || priorityRaw === "B" || priorityRaw === "C") ? priorityRaw
+                   : "B"; // sensible default — not as load-bearing as Main, not skip-worthy
+    return {
+      id: `coach-race-${importId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      name: r.name || "Race",
+      type,
+      level: "intermediate",
+      priority,
+      date,
+      longDay: "Saturday", // placeholder; user can edit
+      ...(r.course_type ? { courseNotes: String(r.course_type) } : {}),
+      fromImport: true,
+      importId,
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  // PR distance normalization. The personalRecords store uses
+  // lowercase keys ("marathon", "half", "10k", "5k", "mile").
+  function _normalizePRDistance(distance) {
+    const d = String(distance || "").toLowerCase().trim();
+    if (!d) return null;
+    if (d.startsWith("marathon")) return "marathon";
+    if (d.includes("half"))       return "half";
+    if (d === "10k" || d.includes("10 k")) return "10k";
+    if (d === "5k"  || d.includes("5 k"))  return "5k";
+    if (d.includes("mile"))       return "mile";
+    return null;
+  }
+
+  function _normalizePRDate(d) {
+    return _normalizeImportDate(d);
+  }
+
+  // Coarse comparison of two HH:MM:SS / MM:SS strings — returns true
+  // if `candidate` is faster than `existing` (or if no existing).
+  // Conservative: any unparseable input means we don't overwrite.
+  function _toSeconds(t) {
+    if (!t) return Infinity;
+    const parts = String(t).trim().split(":").map(s => parseInt(s, 10));
+    if (parts.some(n => !Number.isFinite(n))) return Infinity;
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return Infinity;
+  }
+  function _isFasterPR(candidate, existing) {
+    if (!existing) return true;
+    return _toSeconds(candidate) < _toSeconds(existing);
   }
 
   function _shapeImportedWorkoutForSchedule(w, importId, planId, planName) {
@@ -1082,10 +1279,15 @@
     const scheduleIds = commit.scheduleIds || commit.workoutIds || [];
     const workoutCount = scheduleIds.length;
     const templateCount = (commit.templateIds || []).length;
+    const raceCount = (commit.raceIds || []).length;
+    const prCount   = (commit.prKeys  || []).length;
+    const undoParts = [];
+    if (workoutCount) undoParts.push(`${workoutCount} workout${workoutCount === 1 ? "" : "s"}`);
+    if (templateCount) undoParts.push(`${templateCount} template${templateCount === 1 ? "" : "s"}`);
+    if (raceCount) undoParts.push(`${raceCount} race${raceCount === 1 ? "" : "s"}`);
+    if (prCount)   undoParts.push(`${prCount} PR${prCount === 1 ? "" : "s"}`);
     const ok = window.confirm(
-      `Undo will remove "${commit.planName || "this import"}" — ${workoutCount} workout${workoutCount === 1 ? "" : "s"}` +
-      (templateCount ? ` and ${templateCount} template${templateCount === 1 ? "" : "s"}` : "") +
-      `. Continue?`,
+      `Undo will remove "${commit.planName || "this import"}" — ${undoParts.join(", ")}. Continue?`,
     );
     if (!ok) return;
 
@@ -1126,6 +1328,47 @@
       }
     }
 
+    // Remove imported races from events[] (and Supabase race_events).
+    if ((commit.raceIds || []).length) {
+      try {
+        const ev = JSON.parse(localStorage.getItem("events") || "[]");
+        const ids = new Set(commit.raceIds);
+        const remaining = ev.filter(e => !ids.has(e.id));
+        localStorage.setItem("events", JSON.stringify(remaining));
+        if (typeof DB !== "undefined" && DB.syncEvents) DB.syncEvents();
+      } catch (e) {
+        console.warn("[CoachSheetImport] undo: events cleanup failed", e);
+      }
+      // Note: race_events table delete is handled by syncEvents
+      // upserting the new (smaller) array — the table is treated as a
+      // mirror of the local events list, not append-only.
+    }
+
+    // Remove imported PRs. Only delete keys that the import wrote;
+    // PRs the user already had stay put. _isFasterPR meant we only
+    // overwrote slower-or-missing PRs, but record-keeping is still
+    // best-effort: if the user manually updated a PR that we
+    // imported, the prKeys list won't catch that case (we'd
+    // overwrite with the imported value). Accepting that edge for
+    // now — a future slice can record the prior value to restore.
+    if ((commit.prKeys || []).length) {
+      try {
+        const pr = JSON.parse(localStorage.getItem("personalRecords") || "{}");
+        for (const key of commit.prKeys) {
+          // Only delete if the entry's importId still matches ours —
+          // protects against the case where the user manually
+          // overwrote the PR after import.
+          if (pr[key] && pr[key].importId === commit.importId) {
+            delete pr[key];
+          }
+        }
+        localStorage.setItem("personalRecords", JSON.stringify(pr));
+        if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("personalRecords");
+      } catch (e) {
+        console.warn("[CoachSheetImport] undo: PR cleanup failed", e);
+      }
+    }
+
     // Clear the persisted commit summary so the toast / future
     // entry-point won't offer undo for an already-undone import.
     try { localStorage.removeItem(UNDO_KEY); } catch {}
@@ -1142,8 +1385,7 @@
     } catch (e) { console.warn("[CoachSheetImport] undo: post-render error", e); }
 
     _csiToast(
-      `Undone — removed ${workoutCount} workout${workoutCount === 1 ? "" : "s"}` +
-      (templateCount ? ` and ${templateCount} template${templateCount === 1 ? "" : "s"}` : "") + ".",
+      `Undone — removed ${undoParts.join(", ")}.`,
       "success",
     );
   }
