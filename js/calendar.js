@@ -4478,7 +4478,8 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         : (DISCIPLINE_TO_WORKOUT_TYPE[p.discipline] || "general");
       const _planSugDur   = session?.duration || null;
       const _planCompletion = buildCompletionSection(cardId, _planCompType, null, dateStr, _planSugDur, session?.steps);
-      const _planIsComplete    = isSessionComplete(cardId);
+      const _planIsFuture      = (typeof getTodayString === "function") && dateStr > getTodayString();
+      const _planIsComplete    = !_planIsFuture && isSessionComplete(cardId);
       const _planDoneIndicator = _planIsComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
       const _planUndoBtn       = _buildUndoHeaderBtn(cardId, dateStr);
       const _planEditItem = `<button class="ovflow-item" onclick="event.stopPropagation();closeOverflowMenu();openEditPlanSession('${dateStr}','${p.raceId}','${p.discipline}','${p.load}')">Edit</button>`;
@@ -4672,7 +4673,8 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
             : (DISCIPLINE_TO_WORKOUT_TYPE[w.discipline] || "running");
           const _swCompletion = buildCompletionSection(cardId, _swCompType, null, dateStr, targetDuration, session?.steps);
           const _swMovePanel = buildSessionMovePanel(cardId, "scheduled", w.id, dateStr);
-          const _swIsComplete    = isSessionComplete(cardId);
+          const _swIsFuture      = (typeof getTodayString === "function") && dateStr > getTodayString();
+          const _swIsComplete    = !_swIsFuture && isSessionComplete(cardId);
           const _swDoneIndicator = _swIsComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
           const _swUndoBtn       = _buildUndoHeaderBtn(cardId, dateStr);
           const _swUserAddedCls = w.source === "user_added" ? " session-card--user-added" : "";
@@ -4729,7 +4731,8 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         if (w.duration) _swcBadge = `<span class="session-duration-badge">${w.duration} min</span>`;
         const _swcCompletion = buildCompletionSection(cardId, "circuit", null, dateStr, w.duration || null, null);
         const _swcMovePanel  = buildSessionMovePanel(cardId, "scheduled", w.id, dateStr);
-        const _swcIsComplete = isSessionComplete(cardId);
+        const _swcIsFuture   = (typeof getTodayString === "function") && dateStr > getTodayString();
+        const _swcIsComplete = !_swcIsFuture && isSessionComplete(cardId);
         const _swcDoneInd    = _swcIsComplete ? ` <span class="session-complete-indicator">${ICONS.check}</span>` : "";
         const _swcUndoBtn    = _buildUndoHeaderBtn(cardId, dateStr);
         const _swcSessionName = w.sessionName || w.circuit.name || "Circuit";
