@@ -11,23 +11,40 @@ const DB = (() => {
   function _client() { return window.supabaseClient; }
 
   async function _userId() {
+    const c = _client();
+    if (!c) return null;
+    // Race against a 4s timeout so a stuck gotrue-js auth-token lock
+    // doesn't strand pending syncs forever. When the lock hangs,
+    // _doSyncKey awaits _userId() forever → workouts never upsert
+    // → live-tracker finishes don't propagate cross-device.
+    //
+    // On timeout, force-refresh the session to break the lock. Without
+    // this fallback, an auth lock at the moment of Finish silently
+    // dropped EVERY downstream write (user_data flushes, structured-
+    // table upsert, Strava prompt's session check via different path).
+    // User reported "another device still shows pending + Strava prompt
+    // never appeared" — both are downstream of _userId returning null.
+    // Mirrors the recovery pattern in strava-integration._stravaGetSession.
     try {
-      const c = _client();
-      if (!c) return null;
-      // Race against a 4s timeout so a stuck gotrue-js auth-token lock
-      // doesn't strand pending syncs forever. When the lock hangs,
-      // _doSyncKey awaits _userId() forever → workouts never upsert
-      // → live-tracker finishes don't propagate cross-device. Same
-      // pattern config.js _getSessionWithTimeout uses for callAI.
       const result = await Promise.race([
         c.auth.getSession(),
         new Promise((_, reject) => setTimeout(() => reject(new Error("auth_lock_timeout")), 4000)),
       ]);
-      return result?.data?.session?.user?.id || null;
+      const uid = result?.data?.session?.user?.id || null;
+      if (uid) return uid;
     } catch (e) {
-      if (e && e.message === "auth_lock_timeout") {
-        console.warn("[DB] _userId getSession hung — sync deferred to next replay");
-      }
+      if (!(e && e.message === "auth_lock_timeout")) return null;
+      console.warn("[DB] _userId getSession hung — attempting refreshSession");
+    }
+    // Recovery path: timed out OR getSession returned no user.
+    try {
+      const refresh = await Promise.race([
+        c.auth.refreshSession(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("refresh_timeout")), 3000)),
+      ]);
+      return refresh?.data?.session?.user?.id || null;
+    } catch (refreshErr) {
+      console.warn("[DB] refreshSession also failed:", refreshErr && refreshErr.message);
       return null;
     }
   }
