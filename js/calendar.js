@@ -4324,11 +4324,15 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
     try { if (typeof buildAdherencePrompt === "function" && !isAdherenceDismissedToday()) html += buildAdherencePrompt(); } catch (e) { console.error("adherence prompt error:", e); }
     try { if (typeof buildCoachingInsights === "function") html += buildCoachingInsights(); } catch (e) { console.error("coaching insights error:", e); }
     try {
-      if (typeof getRatingSmartAlert === "function") {
+      if (typeof getRatingSmartAlert === "function" && !_isRatingAlertDismissed(dateStr)) {
         const _rAlert = getRatingSmartAlert();
         if (_rAlert) {
           const _rIcon = _rAlert.type === "easy" ? ICONS.zap : ICONS.warning;
-          html += `<div class="rating-smart-alert rating-alert-${_rAlert.type}">${_rIcon} ${_rAlert.message}</div>`;
+          html += `<div class="rating-smart-alert rating-alert-${_rAlert.type}" data-rating-alert-date="${dateStr}">
+            <span class="rating-smart-alert-msg">${_rIcon} ${_rAlert.message}</span>
+            <button type="button" class="rating-smart-alert-dismiss" aria-label="Dismiss for today" title="Dismiss"
+                    onclick="dismissRatingAlert('${dateStr}')">×</button>
+          </div>`;
         }
       }
     } catch (e) { console.error("rating alert error:", e); }
@@ -11224,4 +11228,24 @@ function dismissRestDayBanner(dateStr) {
 }
 if (typeof window !== "undefined") {
   window.dismissRestDayBanner = dismissRestDayBanner;
+}
+
+// Per-day dismiss for the "Your last few workouts have been very tough"
+// rating smart alert. Same flow as the rest-day banner: localStorage
+// flag scoped to today, alert returns tomorrow if the rating-history
+// signal still trips.
+function _ratingAlertDismissKey(dateStr) {
+  return `ratingAlertDismissed_${dateStr}`;
+}
+function _isRatingAlertDismissed(dateStr) {
+  try { return localStorage.getItem(_ratingAlertDismissKey(dateStr)) === "1"; }
+  catch { return false; }
+}
+function dismissRatingAlert(dateStr) {
+  try { localStorage.setItem(_ratingAlertDismissKey(dateStr), "1"); } catch {}
+  const banner = document.querySelector(`[data-rating-alert-date="${dateStr}"]`);
+  if (banner && banner.parentElement) banner.parentElement.removeChild(banner);
+}
+if (typeof window !== "undefined") {
+  window.dismissRatingAlert = dismissRatingAlert;
 }
