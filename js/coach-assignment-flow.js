@@ -40,6 +40,13 @@
   // get re-fetched after they pick replace/stack/freeze.
   let _pendingPayload = null;
 
+  // Holds the pool-workout draft when the coach uses the Swim block's
+  // "Build Pool Workout" button. Shape mirrors what SwimBuilderModal's
+  // onSave callback emits: { aiSession: { title, intervals?, steps,
+  // pool_size_m, pool_unit }, ... }. Reset on form open + on type change
+  // away from swimming.
+  let _swimDraft = null;
+
   // Cardio types take interval rows (phase / time-or-distance / zone /
   // details) instead of strength's exercise rows — matches custom-plan.js's
   // CARDIO_TYPES set + the brick session shape (per-interval discipline tag).
@@ -307,6 +314,9 @@
     _cardioRowCount = 0;
     const cRows = document.getElementById("coach-assign-cardio-rows");
     if (cRows) cRows.innerHTML = "";
+
+    // Reset swim draft so a previous open's pool workout doesn't leak.
+    _swimDraft = null;
     const setVal2 = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
     setVal2("coach-assign-hiit-format", "circuit");
     setVal2("coach-assign-hiit-rounds", "3");
@@ -352,13 +362,26 @@
     // so the right container is on screen.
     _renderForType(normalizedType);
 
+    // Swim prefill: if the existing item carries a step-tree aiSession
+    // (kind:'interval' / 'rest' / 'repeat' children), restore the swim
+    // draft so the SwimBuilderModal opens with that content already
+    // populated. Falls through to the generic interval reader below
+    // when the aiSession is the legacy flat-intervals shape.
+    if (normalizedType === "swimming" && prefill.aiSession
+        && Array.isArray(prefill.aiSession.steps)
+        && prefill.aiSession.steps.length) {
+      _swimDraft = { aiSession: prefill.aiSession, type: "swimming" };
+      _coachAssignRenderSwimSummary();
+    }
+
     // Cardio intervals can arrive in either shape: top-level `intervals`
     // (legacy library items, the early Phase-3A coach JSON) or wrapped
     // inside `aiSession` (the current shape both the home renderer and
     // custom-plan emit). Accept both so old assignments / library items
-    // pre-fill correctly.
-    const _prefillIntervals =
-      Array.isArray(prefill.aiSession?.intervals) ? prefill.aiSession.intervals
+    // pre-fill correctly. (Skipped for swim — handled above.)
+    const _prefillIntervals = (normalizedType === "swimming")
+      ? null
+      : Array.isArray(prefill.aiSession?.intervals) ? prefill.aiSession.intervals
       : Array.isArray(prefill.intervals)          ? prefill.intervals
       : null;
     if (_prefillIntervals && _prefillIntervals.length) {
@@ -391,14 +414,18 @@
   // both row blocks — it's just name + duration + coach note.
   function _renderForType(type) {
     type = type || "weightlifting";
-    const isCardio = _isCardioType(type);
+    const isSwim   = type === "swimming";
+    const isCardio = _isCardioType(type) && !isSwim; // swim gets its own builder block
     const isYoga   = type === "yoga";
     const strengthBlock = document.getElementById("coach-assign-strength-block");
     const cardioBlock   = document.getElementById("coach-assign-cardio-block");
+    const swimBlock     = document.getElementById("coach-assign-swim-block");
     const hiitBlock     = document.getElementById("coach-assign-hiit-block");
-    if (strengthBlock) strengthBlock.style.display = (isCardio || isYoga) ? "none" : "";
+    if (strengthBlock) strengthBlock.style.display = (isCardio || isSwim || isYoga) ? "none" : "";
     if (cardioBlock)   cardioBlock.style.display   = isCardio ? "" : "none";
+    if (swimBlock)     swimBlock.style.display     = isSwim ? "" : "none";
     if (hiitBlock)     hiitBlock.style.display     = type === "hiit" ? "" : "none";
+    if (isSwim) _coachAssignRenderSwimSummary();
 
     // Relabel the strength block per type so "Stations" reads naturally for
     // Hyrox and the placeholder hint stays accurate.
@@ -450,6 +477,71 @@
     // Rest b/w rounds is meaningless for AMRAP (no fixed rounds) and EMOM
     // (rest is whatever's left of the minute) — hide instead of confusing.
     if (restRndWrap) restRndWrap.style.display = (fmt === "amrap" || fmt === "emom") ? "none" : "";
+  }
+
+  // ── Swim block (opens SwimBuilderModal) ────────────────────────────────
+  // The coach's Save-to-Library/Assign-Workout form swaps the generic
+  // cardio interval rows for a SwimBuilderModal launcher when type=swim.
+  // Mirrors the Quick Add swim flow so coaches build pool workouts with
+  // the same surface (pool-length cycling, step trees, repeats) their
+  // athletes see when logging.
+  function _coachAssignRenderSwimSummary() {
+    const summary = document.getElementById("coach-assign-swim-summary");
+    const editBtn = document.getElementById("coach-assign-swim-edit-btn");
+    if (!summary) return;
+    if (!_swimDraft || !_swimDraft.aiSession) {
+      summary.innerHTML = `<div class="hint" style="margin:0">No pool workout configured yet. Tap below to build one.</div>`;
+      if (editBtn) editBtn.textContent = "+ Build Pool Workout";
+      return;
+    }
+    const ai = _swimDraft.aiSession;
+    const totalM = (() => {
+      const M = window.SwimWorkout;
+      if (M && Array.isArray(ai.steps)) return M.totalDistance(ai.steps);
+      return Number(ai.total_distance_m) || 0;
+    })();
+    const unit = ai.pool_unit || "m";
+    const totalLabel = unit === "yd"
+      ? `${Math.round(totalM / 0.9144)} yd`
+      : `${Math.round(totalM)} m`;
+    const poolLabel = ai.pool_size_m ? `${Math.round(ai.pool_size_m)} m pool` : "";
+    const stepCount = Array.isArray(ai.steps) ? ai.steps.length : 0;
+    summary.innerHTML = `
+      <div class="coach-assign-swim-summary-line">
+        <strong>${_esc(ai.title || "Pool Workout")}</strong>
+        <span style="color:var(--color-text-muted)"> · ${_esc(totalLabel)} · ${stepCount} step${stepCount === 1 ? "" : "s"}${poolLabel ? " · " + _esc(poolLabel) : ""}</span>
+      </div>`;
+    if (editBtn) editBtn.textContent = "Edit Pool Workout";
+  }
+
+  function coachAssignOpenSwimBuilder() {
+    if (typeof window.SwimBuilderModal === "undefined") {
+      console.warn("[coach-assign] SwimBuilderModal not loaded");
+      return;
+    }
+    // Mirror SwimBuilderModal.open's existing-workout shape so the
+    // builder pre-populates with whatever the coach already configured
+    // — lets them reopen the modal mid-edit without losing state.
+    const existing = _swimDraft && _swimDraft.aiSession
+      ? { aiSession: _swimDraft.aiSession }
+      : null;
+    window.SwimBuilderModal.open(null, {
+      context: "library",
+      existing,
+      onSave: (workout) => {
+        // workout is the normalized output shape: { aiSession, type:'swimming', date, ... }.
+        _swimDraft = workout;
+        _coachAssignRenderSwimSummary();
+      },
+    });
+  }
+  function _esc(s) {
+    const div = document.createElement("div");
+    div.textContent = s == null ? "" : String(s);
+    return div.innerHTML;
+  }
+  if (typeof window !== "undefined") {
+    window.coachAssignOpenSwimBuilder = coachAssignOpenSwimBuilder;
   }
 
   // ── Exercise rows ──────────────────────────────────────────────────────
@@ -1132,7 +1224,16 @@
     let exercises = [];
     let intervals = [];
 
-    if (isCardio) {
+    // Swim has its own builder — bypass the generic interval reader
+    // and use the SwimBuilderModal output directly. _swimDraft is set
+    // by the modal's onSave callback in coachAssignOpenSwimBuilder.
+    let swimAiSession = null;
+    if (type === "swimming") {
+      if (!_swimDraft || !_swimDraft.aiSession || !Array.isArray(_swimDraft.aiSession.steps) || !_swimDraft.aiSession.steps.length) {
+        return setErr("Build the pool workout first — tap + Build Pool Workout.");
+      }
+      swimAiSession = _swimDraft.aiSession;
+    } else if (isCardio) {
       intervals = _collectCardioIntervals(type);
       if (!intervals.length) {
         return setErr(`Add at least one interval for this ${_typeLabel(type)} session.`);
@@ -1201,7 +1302,7 @@
     // Phase 3C: save-to-library path bypasses date / conflict /
     // assignments tables entirely.
     if (_libraryMode) {
-      return _saveLibraryItem({ sessionName, type, exercises, intervals, hiitMeta, durationRaw, coachNote, whyText });
+      return _saveLibraryItem({ sessionName, type, exercises, intervals, hiitMeta, durationRaw, coachNote, whyText, swimAiSession });
     }
 
     const duration = durationRaw ? parseInt(durationRaw, 10) || null : null;
@@ -1217,7 +1318,12 @@
     const workoutJson = {
       sessionName,
       type,
-      ...(intervals.length ? { aiSession: { title: sessionName, intervals } } : {}),
+      // Swim emits the SwimBuilderModal aiSession (step-tree) verbatim
+      // so the renderer surfaces the rich pool workout. Falls back to
+      // the generic flat-intervals shape for run/cycle/brick.
+      ...(swimAiSession
+            ? { aiSession: { ...swimAiSession, title: sessionName } }
+            : (intervals.length ? { aiSession: { title: sessionName, intervals } } : {})),
       ...(exercises.length ? { exercises } : {}),
       ...(hiitMeta ? { hiitMeta } : {}),
       ...(type === "hyrox" ? { isHyrox: true } : {}),
@@ -1453,7 +1559,7 @@
   }
 
   // ── Phase 3C: save-to-library helper ──────────────────────────────────
-  async function _saveLibraryItem({ sessionName, type, exercises, intervals, hiitMeta, durationRaw, coachNote, whyText }) {
+  async function _saveLibraryItem({ sessionName, type, exercises, intervals, hiitMeta, durationRaw, coachNote, whyText, swimAiSession }) {
     const errEl = document.getElementById("coach-assign-error");
     const setErr = (m) => { if (errEl) errEl.textContent = m || ""; };
     const btn = document.getElementById("coach-assign-save-btn");
@@ -1464,14 +1570,20 @@
     // interval. Without this, opening a saved running workout for editing and
     // hitting Save (without re-typing intervals) silently nuked the body —
     // every subsequent assignment of that library item then rendered blank.
-    const isCardioSave = _isCardioType(type);
+    const isSwimSave   = type === "swimming";
+    const isCardioSave = _isCardioType(type) && !isSwimSave;
     const isYogaSave   = type === "yoga";
+    if (isSwimSave && (!swimAiSession || !Array.isArray(swimAiSession.steps) || !swimAiSession.steps.length)) {
+      setErr("Build the pool workout first — tap + Build Pool Workout.");
+      resetBtn();
+      return;
+    }
     if (isCardioSave && (!Array.isArray(intervals) || !intervals.length)) {
       setErr(`Add at least one interval for this ${_typeLabel(type)} session.`);
       resetBtn();
       return;
     }
-    if (!isCardioSave && !isYogaSave && (!Array.isArray(exercises) || !exercises.length)) {
+    if (!isCardioSave && !isSwimSave && !isYogaSave && (!Array.isArray(exercises) || !exercises.length)) {
       setErr("Add at least one exercise (or change the type).");
       resetBtn();
       return;
@@ -1495,7 +1607,12 @@
     const workoutJson = {
       sessionName,
       type,
-      ...(Array.isArray(intervals) && intervals.length ? { aiSession: { title: sessionName, intervals } } : {}),
+      // Swim emits the SwimBuilderModal aiSession verbatim (step tree
+      // with kind:'interval'/'rest'/'repeat'). Falls back to the
+      // generic flat-intervals shape for other cardio.
+      ...(swimAiSession
+            ? { aiSession: { ...swimAiSession, title: sessionName } }
+            : (Array.isArray(intervals) && intervals.length ? { aiSession: { title: sessionName, intervals } } : {})),
       ...(Array.isArray(exercises) && exercises.length ? { exercises } : {}),
       ...(hiitMeta ? { hiitMeta } : {}),
       ...(type === "hyrox" ? { isHyrox: true } : {}),

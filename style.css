@@ -16486,6 +16486,16 @@ input.completion-ex-name:focus {
   gap: 10px;
   margin-top: 4px;
 }
+.coach-assign-swim-summary {
+  margin-top: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-2, transparent);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.coach-assign-swim-summary-line strong { font-weight: 700; }
 .coach-assign-cardio-row {
   display: flex;
   flex-direction: column;
