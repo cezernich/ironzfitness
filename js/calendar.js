@@ -3034,6 +3034,16 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
   let formBody = "";
 
   if (hasExercises) {
+    // Pre-compute superset group sizes so 1-member phantom groups
+    // (legacy editor bug, drag-out leftovers) don't render with a
+    // SUPERSET banner. Mirrors workouts.js buildExerciseTableHTML.
+    const _ssGid = ex => (ex && (ex.supersetId || ex.supersetGroup)) || null;
+    const _ssCount = {};
+    exercises.forEach(e => {
+      const g = _ssGid(e);
+      if (g) _ssCount[g] = (_ssCount[g] || 0) + 1;
+    });
+    let _ssLastGid = null;
     const rows = exercises.map((ex, i) => {
       // For sets: extract leading number (e.g. "3 sets" → 3, "3-4" → 3)
       const setsVal = ex.sets ? (String(ex.sets).match(/^\d+/) || ["3"])[0] : "3";
@@ -3069,7 +3079,27 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
         const wNum = weightVal.match(/^[\d.]+/);
         if (wNum) weightVal = String(Math.round(parseFloat(wNum[0]) / 5) * 5);
       }
+      // Superset banding: insert a "Superset — N sets" label whenever
+      // we transition into a new real (>=2 member) group, and emit a
+      // wrapping container so CSS can apply the left-accent stripe.
+      const _myGid = _ssGid(ex);
+      const _isInGroup = !!(_myGid && (_ssCount[_myGid] || 0) >= 2);
+      let _bannerHtml = "";
+      let _openWrap = "";
+      let _closePrev = "";
+      if (_isInGroup && _myGid !== _ssLastGid) {
+        if (_ssLastGid) _closePrev = `</div>`;
+        _bannerHtml = `<div class="completion-superset-label">Superset &mdash; ${escHtml(String(setsVal))} sets</div>`;
+        _openWrap = `<div class="completion-superset-group">`;
+      } else if (!_isInGroup && _ssLastGid) {
+        _closePrev = `</div>`;
+      }
+      _ssLastGid = _isInGroup ? _myGid : null;
+      // Last exercise in the list — make sure we close any open wrap.
+      const _isLast = i === exercises.length - 1;
+      const _trailingClose = (_isLast && _ssLastGid) ? `</div>` : "";
       return `
+      ${_closePrev}${_bannerHtml}${_openWrap}
       <div class="completion-ex-row" id="cex-row-${sessionId}-${i}">
         <input class="completion-ex-name ex-row-name" id="cex-name-${sessionId}-${i}"
           value="${escHtml(ex.name).replace(/"/g, "&quot;")}" placeholder="Exercise name" autocomplete="off" />
@@ -3084,7 +3114,8 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
       <div class="completion-expand-wrap" id="cex-expand-wrap-${sessionId}-${i}">
         <button class="completion-expand-btn" onclick="cexExpandSets('${sessionId}',${i})">Log per set</button>
         <div class="completion-set-details" id="cex-details-${sessionId}-${i}" style="display:none"></div>
-      </div>`;
+      </div>
+      ${_trailingClose}`;
     }).join("");
     const _unit = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
     const _resolvedType = _resolveEnduranceType(type);
