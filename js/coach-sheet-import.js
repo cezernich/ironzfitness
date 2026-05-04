@@ -552,6 +552,9 @@
   let _templateInclude = null;
   let _raceInclude = null;
   let _prInclude = null;
+  // Per spec §C3 Trigger 1 — opt-in zones recalc after PR import.
+  // Default off; user explicitly toggles in the review.
+  let _zonesUpdateOnImport = false;
 
   async function _renderReviewPlaceholder() {
     if (!_lastImport) return;
@@ -646,6 +649,19 @@
     if (profile && (profileRaceCount || profilePrCount)) {
       html += `<div class="csi-review-section-label">Athlete profile <span class="csi-beta-tag">beta</span></div>`;
       html += `<div class="csi-profile-note">Detected races and PRs from the Resources sheet. Per-item checkboxes default off — opt in to add to your race calendar / PR list.</div>`;
+      // "Update zones" toggle — only meaningful when at least one PR
+      // is being imported. Renders below the profile cards. Wiring
+      // happens in the change handler block further down.
+      if (profilePrCount) {
+        const zonesChecked = _zonesUpdateOnImport === true;
+        html += `<label class="csi-zones-toggle">
+          <input type="checkbox" id="csi-zones-update" ${zonesChecked ? "checked" : ""} />
+          <div class="csi-zones-toggle-meta">
+            <div class="csi-zones-toggle-name">Update my training zones from these PRs</div>
+            <div class="csi-zones-toggle-sub">Recalculates Z1–Z6 paces using the Jack Daniels VDOT formula. We'll show you the new zones before saving.</div>
+          </div>
+        </label>`;
+      }
       html += `<div class="csi-profile-grid">`;
       (profile.races || []).forEach((r, i) => {
         const checked = _raceInclude[i] === true;
@@ -700,6 +716,12 @@
         _refreshImportButton();
       });
     });
+    const zonesToggleEl = $("csi-zones-update");
+    if (zonesToggleEl) {
+      zonesToggleEl.addEventListener("change", () => {
+        _zonesUpdateOnImport = zonesToggleEl.checked;
+      });
+    }
     host.querySelectorAll('[data-csi-source-toggle]').forEach(btn => {
       btn.addEventListener("click", () => {
         const idx = btn.getAttribute("data-csi-source-toggle");
@@ -1055,6 +1077,24 @@
       _csiToastWithUndo(summaryText, commitSummary);
       _resetToStep0();
       _setStaged(null);
+
+      // Spec §C3 Trigger 1 — zones recalc after PR import. Fires
+      // AFTER the import toast + reset so the user sees the import
+      // landed before the modal asks them to make another decision.
+      // updateZonesFromPRs is the shared function that powers Trigger
+      // 2 (post-race-completion) too.
+      if (_zonesUpdateOnImport && insertedPrKeys.length) {
+        // Re-read the saved PRs so we use what's actually in the
+        // store (post-write, post-faster-PR comparison).
+        let savedPRs = {};
+        try { savedPRs = JSON.parse(localStorage.getItem("personalRecords") || "{}"); } catch {}
+        const importedPRObjs = insertedPrKeys
+          .map(k => ({ distance: k, ...(savedPRs[k] || {}) }))
+          .filter(p => p.time);
+        // Defer slightly so the import toast renders + the user gets
+        // a beat before the next overlay appears.
+        setTimeout(() => updateZonesFromPRs(importedPRObjs), 600);
+      }
     } catch (e) {
       console.warn("[CoachSheetImport] commit threw", e);
       _csiToast(`Import failed: ${e?.message || "unknown error"}`, "error");
@@ -1199,6 +1239,144 @@
       importSourceSheet: w.source_sheet,
       importSourceCell: w.source_cell,
     };
+  }
+
+  // ── Zones recalc (spec §C3) ───────────────────────────────────────────
+  //
+  // Shared entry point used by:
+  //   1. Post-import — fired in _commitImport when the user opted in
+  //      via the "Update zones from these PRs" toggle.
+  //   2. Post-race-completion (future slice) — when a logged race time
+  //      beats an existing PR, the same modal offers itself.
+  //
+  // Picks the longest PR (best for endurance zone derivation per
+  // Daniels), computes new zones using the existing
+  // computeRunningZones(distMeters, totalSeconds) in app.js, and
+  // shows a side-by-side current-vs-proposed modal. Save → writes via
+  // saveTrainingZonesData("running", { vdot, zones, referenceDist,
+  // referenceTime }).
+
+  const PR_DISTANCE_METERS = {
+    marathon: 42195,
+    half: 21097.5,
+    "10k": 10000,
+    "5k": 5000,
+    mile: 1609.344,
+  };
+  const PR_DISTANCE_LABEL = {
+    marathon: "Marathon",
+    half: "Half Marathon",
+    "10k": "10K",
+    "5k": "5K",
+    mile: "Mile",
+  };
+
+  function updateZonesFromPRs(prs) {
+    if (!Array.isArray(prs) || !prs.length) return;
+    if (typeof computeRunningZones !== "function" || typeof saveTrainingZonesData !== "function") {
+      console.warn("[CoachSheetImport] zones recalc unavailable — computeRunningZones/saveTrainingZonesData not loaded");
+      return;
+    }
+
+    // Pick the longest PR with parseable time. Daniels tends to give
+    // the cleanest zone derivation from longer races; for marathon
+    // training the marathon time itself is the natural anchor.
+    const candidates = prs
+      .map(p => {
+        const meters = PR_DISTANCE_METERS[p.distance];
+        const seconds = _toSeconds(p.time);
+        if (!meters || !Number.isFinite(seconds) || seconds === Infinity) return null;
+        return { distance: p.distance, meters, seconds, time: p.time };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.meters - a.meters);
+    if (!candidates.length) return;
+
+    const best = candidates[0];
+    const proposed = computeRunningZones(best.meters, best.seconds);
+    if (!proposed?.zones) return;
+
+    let current = null;
+    try { current = (typeof loadTrainingZones === "function") ? loadTrainingZones("running") : null; } catch {}
+
+    _showZonesModal({
+      anchorPR: best,
+      current,
+      proposed,
+      onSave: () => {
+        const refLabel = PR_DISTANCE_LABEL[best.distance] || best.distance;
+        saveTrainingZonesData("running", {
+          referenceDist: refLabel,
+          referenceTime: best.time,
+          vdot: proposed.vdot,
+          zones: proposed.zones,
+        });
+        // Refresh any zones panel that's currently rendered.
+        try {
+          if (typeof renderZones === "function") renderZones();
+        } catch {}
+        _csiToast(`Zones updated — VDOT ${proposed.vdot}.`, "success");
+      },
+    });
+  }
+
+  function _showZonesModal(opts) {
+    const { anchorPR, current, proposed, onSave } = opts;
+    const existing = document.getElementById("csi-zones-modal");
+    if (existing) try { existing.remove(); } catch {}
+
+    const refLabel = PR_DISTANCE_LABEL[anchorPR.distance] || anchorPR.distance;
+    const currentVdot = current?.vdot ?? null;
+    const proposedVdot = proposed.vdot;
+    const vdotDelta = currentVdot != null ? (proposedVdot - currentVdot).toFixed(1) : null;
+
+    // Zone keys we render. Z6 may not exist on older saved zones —
+    // fall back to "—" for that row in the current column.
+    const zoneKeys = ["z1", "z2", "z3", "z4", "z5", "z6"];
+    const zoneRow = (key) => {
+      const cur = current?.zones?.[key]?.paceRange || "—";
+      const prop = proposed.zones?.[key]?.paceRange || "—";
+      const changed = cur !== prop && cur !== "—";
+      return `<tr${changed ? ` class="csi-zones-row-changed"` : ""}>
+        <td class="csi-zones-cell-label">${key.toUpperCase()}</td>
+        <td class="csi-zones-cell-current">${_esc(cur)}</td>
+        <td class="csi-zones-cell-proposed">${_esc(prop)}</td>
+      </tr>`;
+    };
+
+    const overlay = document.createElement("div");
+    overlay.id = "csi-zones-modal";
+    overlay.className = "csi-zones-overlay";
+    overlay.innerHTML = `
+      <div class="csi-zones-modal" role="dialog" aria-modal="true" aria-labelledby="csi-zones-title">
+        <div class="csi-zones-header">
+          <div class="csi-zones-title" id="csi-zones-title">Update training zones?</div>
+          <div class="csi-zones-sub">Based on ${_esc(refLabel)}: ${_esc(anchorPR.time)}</div>
+        </div>
+        <div class="csi-zones-vdot">
+          ${currentVdot != null
+            ? `<span class="csi-zones-vdot-current">VDOT ${currentVdot}</span> <span class="csi-zones-vdot-arrow">→</span> <span class="csi-zones-vdot-proposed">${proposedVdot}</span>${vdotDelta != null ? ` <span class="csi-zones-vdot-delta">(${vdotDelta > 0 ? "+" : ""}${vdotDelta})</span>` : ""}`
+            : `<span class="csi-zones-vdot-proposed">VDOT ${proposedVdot}</span>`}
+        </div>
+        <table class="csi-zones-table">
+          <thead><tr><th>Zone</th><th>Current</th><th>Proposed</th></tr></thead>
+          <tbody>${zoneKeys.map(zoneRow).join("")}</tbody>
+        </table>
+        <div class="csi-zones-actions">
+          <button type="button" class="btn-secondary" id="csi-zones-keep">Keep current</button>
+          <button type="button" class="btn-primary"   id="csi-zones-save">Save new zones</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const close = () => { try { overlay.remove(); } catch {} };
+    overlay.querySelector("#csi-zones-keep").addEventListener("click", close);
+    overlay.querySelector("#csi-zones-save").addEventListener("click", () => {
+      try { onSave(); } catch (e) { console.warn("[CoachSheetImport] zones save failed", e); }
+      close();
+    });
+    // Click-outside dismiss.
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
   }
 
   function _csiToast(message, kind) {
@@ -1433,6 +1611,11 @@
     getLastCommit: () => {
       try { return JSON.parse(localStorage.getItem(UNDO_KEY) || "null"); } catch { return null; }
     },
+    // Shared zones recalc — exposed so a future post-race-completion
+    // trigger (spec §C3 Trigger 2) can call the same modal without
+    // duplicating the logic. Pass an array of `{ distance, time }`
+    // (distance keys: marathon | half | 10k | 5k | mile).
+    updateZonesFromPRs,
     _setStatus,
     _validateFile,
   };
