@@ -1285,7 +1285,12 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
   // a date that hasn't happened yet. Defensive guard at the render
   // boundary so the visual is always coherent with the date.
   const _isFutureDate = (typeof getTodayString === "function") && (w.date || dateStr) > getTodayString();
-  const _logComplete = !_isFutureDate && isSessionComplete(cardId);
+  // A workout flagged isCompletion IS the completion receipt — by definition
+  // completed regardless of whether the original session id is still present
+  // in completedSessions. Without this, orphan-rescued completion cards (e.g.
+  // a Mark-as-Complete on a coach-assigned workout whose schedule entry has
+  // since been moved or pruned) render as "Planned" with no ✓.
+  const _logComplete = !_isFutureDate && (w.isCompletion === true || w.source === "strava" || isSessionComplete(cardId));
   const _logCompleteCls = _logComplete ? " session-card--completed" : "";
 
   // ── Circuit workout (CrossFit-style) ──────────────────────────────────────
