@@ -811,7 +811,6 @@ function _buildLiveSingleExerciseCard(ei) {
             <input class="live-set-input" type="text" inputmode="numeric" value="${s.reps}" id="live-reps-${ei}-${si}" placeholder="${isUni ? _escLiveHtml(perLabel) : "reps"}" oninput="_onLiveInputEdit(${ei},${si})" />
             <input class="live-set-input" type="text" value="${s.weight}" id="live-wt-${ei}-${si}" placeholder="lbs" oninput="_onLiveInputEdit(${ei},${si})" />
             <button class="live-set-btn${s.done ? " live-set-btn--done" : ""}" onclick="_logLiveSet(${ei},${si})">${s.done ? "&#10003;" : "Log"}</button>
-            ${sets.length > 1 ? `<button class="live-set-del-btn" onclick="_removeLiveSet(${ei},${si})" aria-label="Remove set" title="Remove set">×</button>` : ""}
           </div>
         `).join("")}
         <button class="live-add-set-btn" onclick="_addLiveSet(${ei})">+ Add Set</button>
@@ -841,24 +840,6 @@ function _addLiveSet(exIdx) {
   if (body) body.innerHTML = _buildStrengthView();
 }
 if (typeof window !== "undefined") window._addLiveSet = _addLiveSet;
-
-// Remove a single set row. Mirrors _addLiveSet's pattern: capture
-// any in-progress input values into the model before mutating, then
-// re-render the strength view. Last remaining set is protected at
-// the renderer level (the × button only renders when sets.length > 1)
-// so we don't strand an exercise with zero sets.
-function _removeLiveSet(exIdx, setIdx) {
-  if (!_liveTracker || !_liveTracker.isStrength) return;
-  const sets = _liveTracker.sets[exIdx];
-  if (!Array.isArray(sets) || sets.length <= 1) return;
-  if (setIdx < 0 || setIdx >= sets.length) return;
-  _captureLiveSetInputs();
-  sets.splice(setIdx, 1);
-  if (typeof _saveLiveState === "function") { try { _saveLiveState(); } catch {} }
-  const body = document.getElementById("live-tracker-body");
-  if (body) body.innerHTML = _buildStrengthView();
-}
-if (typeof window !== "undefined") window._removeLiveSet = _removeLiveSet;
 
 function _buildLiveSupersetCard(g) {
   const t = _liveTracker;
@@ -1783,4 +1764,33 @@ function _escLiveHtml(str) {
   const d = document.createElement("div");
   d.textContent = str;
   return d.innerHTML;
+}
+
+// One-shot backfill for live-tracked completions whose pre-fix commits
+// only flushed to user_data and never reached the structured `workouts`
+// table. Without that row the coach calendar reads "planned" forever
+// even after the athlete finished. Walks localStorage.workouts for
+// liveTracked completions and triggers DB.syncWorkouts() — its
+// upsert+purge cycle pushes everything currently local up to the
+// structured table. Gated on a localStorage flag so it runs at most
+// once per device.
+function reconcileLiveTrackerStructuredSync() {
+  const FLAG = "liveTrackerStructuredReconciled_v1";
+  try {
+    if (localStorage.getItem(FLAG) === "1") return;
+    const workouts = JSON.parse(localStorage.getItem("workouts") || "[]");
+    const orphans = (Array.isArray(workouts) ? workouts : [])
+      .filter(w => w && w.liveTracked && w.isCompletion);
+    if (orphans.length && typeof DB !== "undefined" && DB.syncWorkouts) {
+      DB.syncWorkouts();
+      console.log("[live-tracker] reconciler queued sync for " + orphans.length + " orphaned live-tracked completion(s)");
+    }
+    localStorage.setItem(FLAG, "1");
+  } catch (e) {
+    console.warn("[live-tracker] reconcile failed:", e && e.message);
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.reconcileLiveTrackerStructuredSync = reconcileLiveTrackerStructuredSync;
 }

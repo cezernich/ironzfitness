@@ -1207,11 +1207,17 @@ nav {
   gap: 10px;
 }
 .csi-profile-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   padding: 12px;
   border: 1px solid var(--color-border);
   border-radius: 10px;
   background: var(--color-bg-soft, rgba(0,0,0,0.02));
+  cursor: pointer;
 }
+.csi-profile-card input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; }
+.csi-profile-card-meta { flex: 1; min-width: 0; }
 .csi-profile-card-name {
   font-size: 0.92rem;
   font-weight: 600;
@@ -13434,26 +13440,6 @@ input.completion-ex-name:focus {
 .live-set-btn--done {
   background: var(--color-success);
   color: #fff;
-}
-
-/* × button next to Log on each set row — only renders when more than
-   one set exists (renderer-side guard). Kept compact and muted so it
-   doesn't pull eye away from the primary Log action. */
-.live-set-del-btn {
-  border: none;
-  background: transparent;
-  color: var(--color-text-muted);
-  font-size: 1.1rem;
-  line-height: 1;
-  padding: 4px 6px;
-  margin-left: 4px;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: color 0.15s, background 0.15s;
-}
-.live-set-del-btn:hover {
-  color: var(--color-danger, #b91c1c);
-  background: rgba(185, 28, 28, 0.08);
 }
 
 /* BUGFIX 04-25 §6: + Add Set / + Add Exercise mid-workout buttons.
