@@ -2962,10 +2962,20 @@ function buildExerciseTableHTML(exercises, opts) {
   const _gid = ex => ex.supersetId || ex.supersetGroup || null;
   const segments = [];
   let i = 0;
+  // Count members per supersetId across the whole exercise list — a "solo
+  // superset" (one carrier, no partner) shouldn't render with the SUPERSET
+  // banner. The editor used to leave a stale supersetId tag on a row that
+  // got dragged out of its group, so legacy saves carry phantom 1-member
+  // groups. Treat any group of size 1 as a regular standalone exercise.
+  const _ssTotal = {};
+  exercises.forEach(e => {
+    const g = _gid(e);
+    if (g) _ssTotal[g] = (_ssTotal[g] || 0) + 1;
+  });
   while (i < exercises.length) {
     const ex = exercises[i];
     const gid = _gid(ex);
-    if (gid) {
+    if (gid && (_ssTotal[gid] || 0) >= 2) {
       const group = [];
       while (i < exercises.length && _gid(exercises[i]) === gid) {
         group.push(exercises[i]);

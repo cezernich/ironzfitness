@@ -482,9 +482,30 @@ function _editReorder(fromId, toId, insertAbove) {
   const fromEl = document.getElementById(`edit-row-${fromId}`);
   const toEl   = document.getElementById(`edit-row-${toId}`);
   if (!fromEl || !toEl) return;
+  const oldGid = fromEl.dataset.ssId || null;
+  const oldWrap = oldGid ? document.getElementById(`edit-ss-wrap-${oldGid}`) : null;
   const container = toEl.parentNode;
   if (insertAbove) container.insertBefore(fromEl, toEl);
   else             toEl.after(fromEl);
+  // If the row left its prior superset wrap, drop the membership tags so
+  // we don't persist a "solo superset" on save. If the wrap is now down
+  // to a single survivor, dissolve it too — a one-member superset has no
+  // meaning and renders as a phantom SUPERSET banner on the workout card.
+  if (oldGid && oldWrap && fromEl.parentNode !== oldWrap) {
+    delete fromEl.dataset.ssId;
+    fromEl.classList.remove("qe-manual-ss-member");
+    if (typeof _editShowSetsInput === "function") _editShowSetsInput(fromEl);
+    const remainingMembers = oldWrap.querySelectorAll(".edit-exercise-row");
+    if (remainingMembers.length < 2) {
+      remainingMembers.forEach(el => {
+        delete el.dataset.ssId;
+        el.classList.remove("qe-manual-ss-member");
+        if (typeof _editShowSetsInput === "function") _editShowSetsInput(el);
+        oldWrap.parentNode.insertBefore(el, oldWrap);
+      });
+      oldWrap.remove();
+    }
+  }
 }
 
 function _editGroupSuperset(fromId, toId) {
@@ -1028,6 +1049,17 @@ async function saveEditedWorkout() {
       }
       if (row?.dataset.ssId) ex.supersetId = row.dataset.ssId;
       exercises.push(ex);
+    });
+    // Strip any supersetId that ended up with only one carrier — defensive
+    // backstop for older saves where _editReorder didn't dissolve a wrap
+    // on drag-out. A single-member superset has no real meaning and renders
+    // as a phantom SUPERSET banner on the workout card.
+    const _ssMemberCount = {};
+    exercises.forEach(e => {
+      if (e.supersetId) _ssMemberCount[e.supersetId] = (_ssMemberCount[e.supersetId] || 0) + 1;
+    });
+    exercises.forEach(e => {
+      if (e.supersetId && _ssMemberCount[e.supersetId] < 2) delete e.supersetId;
     });
     // Preserve original exercises if the user didn't enter any in
     // the edit modal — same reasoning as the cardio branch above.
