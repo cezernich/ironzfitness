@@ -1611,12 +1611,22 @@ async function _commitLiveWorkout(logAll) {
   // hanging the Finish button when Supabase was slow or offline:
   // _closeLiveTracker never ran and the user saw nothing happen.
   if (typeof DB !== 'undefined') {
-    // syncWorkouts schedules upserts into BOTH user_data (JSON blob,
-    // source of truth for the athlete app) AND the structured `workouts`
-    // table. Coach-client-detail reads from the structured table — without
-    // this call the coach never sees live-tracked workouts as completed,
-    // and matching the rating-modal's submit_assignment_feedback RPC
-    // can't surface a "done" status either.
+    // Three-layer sync so the coach actually sees the row even when iOS
+    // suspends the JS context seconds after Finish:
+    //   1. flushSingleWorkout — direct upsert of THIS completion into
+    //      the structured `workouts` table. Coach-client-detail reads
+    //      from that table; the 2s debounced bulk sync used to lose
+    //      this race because iOS backgrounded us before it fired.
+    //   2. syncWorkouts — schedules the full bulk reconciliation
+    //      (user_data + structured table) at normal cadence so the
+    //      table eventually mirrors the local set.
+    //   3. flushKey — flushes pending user_data writes immediately
+    //      (workouts + completedSessions) so cross-device pull on
+    //      next load sees the freshest state.
+    if (DB.flushSingleWorkout) {
+      DB.flushSingleWorkout(completedWorkout)
+        .catch(e => console.warn('[IronZ] flushSingleWorkout failed', e && e.message));
+    }
     if (DB.syncWorkouts) DB.syncWorkouts();
     if (DB.flushKey) {
       DB.flushKey('workouts').catch(e => console.warn('[IronZ] workouts flush failed', e && e.message));
@@ -1774,16 +1784,28 @@ function _escLiveHtml(str) {
 // upsert+purge cycle pushes everything currently local up to the
 // structured table. Gated on a localStorage flag so it runs at most
 // once per device.
-function reconcileLiveTrackerStructuredSync() {
-  const FLAG = "liveTrackerStructuredReconciled_v1";
+async function reconcileLiveTrackerStructuredSync() {
+  // v2 bump: v1 only fired the 2s debounced bulk sync, which lost the
+  // race against iOS suspension on the same boot — orphans stayed
+  // orphans even after the reconciler "ran." v2 issues a direct
+  // upsert per orphan via DB.flushSingleWorkout so each row lands
+  // immediately, regardless of whether the bulk sync timer ever fires.
+  const FLAG = "liveTrackerStructuredReconciled_v2";
   try {
     if (localStorage.getItem(FLAG) === "1") return;
     const workouts = JSON.parse(localStorage.getItem("workouts") || "[]");
     const orphans = (Array.isArray(workouts) ? workouts : [])
       .filter(w => w && w.liveTracked && w.isCompletion);
-    if (orphans.length && typeof DB !== "undefined" && DB.syncWorkouts) {
-      DB.syncWorkouts();
-      console.log("[live-tracker] reconciler queued sync for " + orphans.length + " orphaned live-tracked completion(s)");
+    if (orphans.length && typeof DB !== "undefined" && DB.flushSingleWorkout) {
+      const results = await Promise.allSettled(
+        orphans.map(w => DB.flushSingleWorkout(w))
+      );
+      const failed = results.filter(r => r.status === "rejected").length;
+      console.log("[live-tracker] reconciler upserted " + (orphans.length - failed) + "/" + orphans.length + " orphaned completion(s)");
+      if (failed) {
+        // Don't set the flag — we want to retry on the next boot.
+        return;
+      }
     }
     localStorage.setItem(FLAG, "1");
   } catch (e) {

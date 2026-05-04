@@ -1038,6 +1038,32 @@ const DB = (() => {
     _debouncedSync('workouts', 'workouts', _shapeWorkout);
   }
 
+  // Push a single workout record straight to the structured `workouts`
+  // table without waiting for the 2s _debouncedSync timer. Live-tracker
+  // commits fired the debounced sync but iOS would suspend the JS
+  // context before the timer fired — coach never saw the completion.
+  // Fire-and-forget with a timeout so a stuck network call can't block
+  // the commit pipeline. The full bulk sync still runs on its normal
+  // cadence, so this is purely a "make the new row land NOW" path.
+  async function flushSingleWorkout(workout) {
+    if (!workout) return;
+    try {
+      const uid = await _userId();
+      if (!uid) return;
+      const row = _shapeWorkout(workout, uid);
+      if (!row) return;
+      const upsertPromise = _client()
+        .from('workouts')
+        .upsert([row], { onConflict: 'id' });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('flushSingleWorkout timeout')), 4000));
+      const { error } = await Promise.race([upsertPromise, timeoutPromise]);
+      if (error) console.warn('DB: flushSingleWorkout error', error.message);
+    } catch (e) {
+      console.warn('DB: flushSingleWorkout exception', e && e.message);
+    }
+  }
+
   function syncSchedule() {
     syncKey('workoutSchedule');
     _debouncedSync('training_sessions', 'workoutSchedule', _shapeTrainingSession);
@@ -1196,6 +1222,7 @@ const DB = (() => {
     generatedPlans,
     userOutcomes,
     syncWorkouts,
+    flushSingleWorkout,
     syncSchedule,
     syncTrainingPlan,
     syncEvents,
