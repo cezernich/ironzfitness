@@ -502,14 +502,22 @@
             coachProgram: row.workout?.coachProgram || undefined,
           };
           let workoutJson;
+          let coachNote;
           if (slot.library_id && libById[slot.library_id]) {
-            workoutJson = { ...(libById[slot.library_id].workout || {}), ...carry };
+            const lib = libById[slot.library_id];
+            workoutJson = { ...(lib.workout || {}), ...carry };
+            // Pull the library's current top-level notes through too.
+            // If the coach edited LIBRARY NOTES, propagate to existing
+            // assignments alongside the workout content. `null` is a
+            // legitimate value here (coach cleared the note).
+            coachNote = lib.notes || null;
           } else if (slot.library_id) {
             continue; // library item gone — leave the row alone
           } else {
             workoutJson = { ...slot, ...carry };
+            coachNote = undefined; // no library to source from — don't touch existing coach_note
           }
-          updates.push({ id: row.id, workout: workoutJson });
+          updates.push({ id: row.id, workout: workoutJson, coachNote });
         }
       }
     }
@@ -519,8 +527,13 @@
     // the user_data mirror for each one, so the athlete's view picks
     // up the change without a separate sync pass.
     for (const u of updates) {
+      // Only include coach_note in the patch when we have a library to
+      // source from — `undefined` would round-trip to null in JSON and
+      // wipe a coach's manually-edited note on a non-library slot.
+      const patch = { workout: u.workout };
+      if (u.coachNote !== undefined) patch.coach_note = u.coachNote;
       const { error: upErr } = await sb.from("coach_assigned_workouts")
-        .update({ workout: u.workout })
+        .update(patch)
         .eq("id", u.id);
       if (upErr) console.warn("[coach-programs] row update failed", u.id, upErr.message);
     }
@@ -764,8 +777,16 @@
 
         for (const slot of slots) {
           let workoutJson;
+          let coachNote = null;
           if (slot.library_id && libById[slot.library_id]) {
-            workoutJson = { ...(libById[slot.library_id].workout || {}), coachName, coachProgram };
+            const lib = libById[slot.library_id];
+            workoutJson = { ...(lib.workout || {}), coachName, coachProgram };
+            // Library notes ("LIBRARY NOTES — shown to client on the
+            // workout card") live on the library row's top-level `notes`
+            // column, separate from the `workout` JSONB. Copy it into
+            // coach_note so the AFTER INSERT mirror trigger picks it up
+            // and the athlete actually sees the comment.
+            coachNote = lib.notes || null;
           } else if (slot.library_id) {
             // Library item went missing between save and apply. Skip
             // this slot rather than dropping the whole apply.
@@ -782,6 +803,7 @@
             // conflict_mode set after the row list is built, once the
             // coach has confirmed replace-vs-stack via the prompt below.
             workout:   workoutJson,
+            coach_note: coachNote,
             program_id:  program.id,
             program_week: w + 1,
             program_day:  d.offset + 1,
