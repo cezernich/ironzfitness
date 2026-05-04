@@ -1397,6 +1397,34 @@ nav {
 .csi-zones-actions .btn-primary,
 .csi-zones-actions .btn-secondary { min-width: 130px; }
 
+.csi-recent-import-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-accent-glow, rgba(99, 102, 241, 0.06));
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+.csi-recent-import-text { flex: 1; min-width: 0; }
+.csi-recent-import-text strong { font-weight: 700; }
+.csi-recent-import-undo {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 4px 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-text);
+  cursor: pointer;
+  font-family: inherit;
+}
+.csi-recent-import-undo:hover { background: var(--color-bg-soft, rgba(0,0,0,0.04)); }
+
 input[type="text"],
 input[type="number"],
 input[type="date"],

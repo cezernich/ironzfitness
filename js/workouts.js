@@ -983,6 +983,15 @@ function finalizeWorkoutCompletion(record, opts) {
       window.StackUX.maybeFireStackCelebration(dateStr);
     } catch {}
   }
+
+  // 9. Spec §C3 Trigger 2 — if this workout was a race and the time
+  // beats an existing PR, save the PR and offer the zones-recalc
+  // modal. Conservative trigger: only fires for type==="race" or
+  // explicit "race"/"PR" in the name. See coach-sheet-import.js
+  // _detectRaceDistance for the exact heuristic.
+  if (window.CoachSheetImport && window.CoachSheetImport.checkRacePRImprovement) {
+    try { window.CoachSheetImport.checkRacePRImprovement(record); } catch {}
+  }
 }
 if (typeof window !== "undefined") {
   window.finalizeWorkoutCompletion = finalizeWorkoutCompletion;

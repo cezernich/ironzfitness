@@ -303,6 +303,55 @@
       else el.setAttribute("hidden", "");
     });
     _currentStep = n;
+    // Step 0 is also the natural place to surface the cross-session
+    // undo banner — if the user committed an import recently and
+    // re-opened the modal (whether to undo or to start a new
+    // import), they get the affordance front and center.
+    if (n === 0) _renderCrossSessionUndo();
+  }
+
+  function _renderCrossSessionUndo() {
+    const host = $("csi-step-0");
+    if (!host) return;
+    let banner = document.getElementById("csi-recent-import-banner");
+    let commit = null;
+    try { commit = JSON.parse(localStorage.getItem(UNDO_KEY) || "null"); } catch {}
+
+    const inWindow = commit && (Date.now() - (commit.committedAt || 0)) <= UNDO_WINDOW_MS;
+    if (!inWindow) {
+      if (banner) try { banner.remove(); } catch {}
+      // Once the window passes, drop the persisted summary too —
+      // a stale entry would otherwise sit forever in localStorage.
+      if (commit && !inWindow) {
+        try { localStorage.removeItem(UNDO_KEY); } catch {}
+      }
+      return;
+    }
+
+    const minsAgo = Math.max(1, Math.round((Date.now() - commit.committedAt) / 60000));
+    if (!banner) {
+      banner = document.createElement("div");
+      banner.id = "csi-recent-import-banner";
+      banner.className = "csi-recent-import-banner";
+      // Place at the top of step 0, before the drop zone, so the
+      // user sees it before deciding whether to start another
+      // import.
+      host.insertBefore(banner, host.firstChild);
+    }
+    const wParts = [];
+    if (commit.workoutsInserted) wParts.push(`${commit.workoutsInserted} workout${commit.workoutsInserted === 1 ? "" : "s"}`);
+    if (commit.templatesInserted) wParts.push(`${commit.templatesInserted} template${commit.templatesInserted === 1 ? "" : "s"}`);
+    if (commit.racesInserted)    wParts.push(`${commit.racesInserted} race${commit.racesInserted === 1 ? "" : "s"}`);
+    if (commit.prsInserted)      wParts.push(`${commit.prsInserted} PR${commit.prsInserted === 1 ? "" : "s"}`);
+    banner.innerHTML = `
+      <div class="csi-recent-import-text">
+        <strong>Imported "${_esc(commit.planName || "this plan")}"</strong> ${minsAgo}m ago
+        — ${_esc(wParts.join(" · ") || "no items")}.
+      </div>
+      <button type="button" class="csi-recent-import-undo">Undo</button>
+    `;
+    const btn = banner.querySelector(".csi-recent-import-undo");
+    if (btn) btn.addEventListener("click", () => _undoImport(commit));
   }
 
   function _goToStep(n) {
@@ -1078,6 +1127,25 @@
       _resetToStep0();
       _setStaged(null);
 
+      // Spec §C1 Decision #11 — register the import as a structured
+      // active plan via the existing storeGeneratedPlan() so it shows
+      // up in feedback_loop, validator, and any future plan-aware
+      // surface as a real plan with a known source. Keeps the
+      // "Generate a plan" Build Plan nudge from suggesting itself
+      // when the user already has a coach plan loaded. Synthesized
+      // shape matches PLAN_OUTPUT_SCHEMA loosely — fields that don't
+      // apply to a coach-imported plan (weekly_template,
+      // progression_logic, nutrition_strategy) are null rather than
+      // fabricated.
+      if (typeof storeGeneratedPlan === "function") {
+        try {
+          const plan = _synthesizePlanFromImport(commitSummary, _lastImport.dateRange, workoutsInserted);
+          await storeGeneratedPlan(plan, "coach_sheet");
+        } catch (e) {
+          console.warn("[CoachSheetImport] storeGeneratedPlan failed", e);
+        }
+      }
+
       // Spec §C3 Trigger 1 — zones recalc after PR import. Fires
       // AFTER the import toast + reset so the user sees the import
       // landed before the modal asks them to make another decision.
@@ -1241,6 +1309,53 @@
     };
   }
 
+  // ── Active plan synthesis (spec §C1 / Decision #11) ──────────────────
+  //
+  // Builds a PLAN_OUTPUT_SCHEMA-shaped object from an import commit so
+  // storeGeneratedPlan can register it as the user's active plan.
+  // Fields that don't apply to a coach-distributed plan are null —
+  // we don't fabricate weekly templates or progression logic the
+  // coach didn't specify. The plan_metadata block carries enough
+  // forensic data (importId, planId, planName, filename) for any
+  // downstream reader to identify a coach-imported plan as such.
+  function _synthesizePlanFromImport(commit, dateRange, workoutCount) {
+    const range = dateRange || {};
+    return {
+      plan_metadata: {
+        generation_source: "coach_sheet",
+        plan_version: "1.0",
+        plan_id: commit.planId,
+        plan_name: commit.planName,
+        import_id: commit.importId,
+        filename: commit.filename || null,
+        created_at: new Date(commit.committedAt || Date.now()).toISOString(),
+        session_count: workoutCount || 0,
+        template_count: commit.templatesInserted || 0,
+        date_range: { from: range.from || null, to: range.to || null },
+        philosophy_modules_used: [],
+        module_versions: {},
+        validation_flags: [],
+      },
+      athlete_summary: null,
+      plan_structure: {
+        type: "coach_imported",
+        total_sessions: workoutCount || 0,
+        date_range: { from: range.from || null, to: range.to || null },
+      },
+      weekly_template:    null,
+      progression_logic:  null,
+      nutrition_strategy: null,
+      hydration_strategy: null,
+      adaptation_rules:   null,
+      watchouts:          [],
+      rationale: `Imported from coach sheet "${commit.filename || "unknown"}" on ${new Date(commit.committedAt || Date.now()).toISOString().slice(0, 10)}.`,
+      assumptions: [
+        "Coach plan is the source of truth for sessions and pacing.",
+        "Universal warmup / cooldown applied to all running workouts per coach intent.",
+      ],
+    };
+  }
+
   // ── Zones recalc (spec §C3) ───────────────────────────────────────────
   //
   // Shared entry point used by:
@@ -1318,6 +1433,79 @@
         _csiToast(`Zones updated — VDOT ${proposed.vdot}.`, "success");
       },
     });
+  }
+
+  // ── Spec §C3 Trigger 2 — post-race-completion PR check ──────────────
+  //
+  // Called from finalizeWorkoutCompletion after any workout commit.
+  // Heuristic — only trigger when the workout looks like a race (name
+  // matches a known race-distance keyword + has a duration/time). If
+  // the recorded time beats the existing PR for that distance, save
+  // the new PR and offer the same updateZonesFromPRs modal as the
+  // post-import flow. Conservative on ambiguous inputs to avoid
+  // spurious "you set a PR!" notifications on training runs that
+  // happen to have "marathon" in the name.
+
+  function _detectRaceDistance(workout) {
+    const name = String(workout?.name || "").toLowerCase();
+    const type = String(workout?.type || "").toLowerCase();
+    // Need a race signal — explicit type or "race" in the name. We
+    // do NOT trigger on long runs that happen to be 26.2mi without
+    // race intent.
+    const isRace = type === "race" || /\brace\b|\bpr\b/.test(name);
+    if (!isRace) return null;
+    if (name.includes("marathon") && !name.includes("half")) return "marathon";
+    if (name.includes("half"))    return "half";
+    if (name.match(/\b10\s*k\b/)) return "10k";
+    if (name.match(/\b5\s*k\b/))  return "5k";
+    if (name.match(/\bmile\b/))   return "mile";
+    return null;
+  }
+
+  function _formatDurationToHMS(durationMin) {
+    const totalSec = Math.round(parseFloat(durationMin) * 60);
+    if (!Number.isFinite(totalSec) || totalSec <= 0) return null;
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  }
+
+  function checkRacePRImprovement(workout) {
+    if (!workout) return;
+    const distance = _detectRaceDistance(workout);
+    if (!distance) return;
+    const time = _formatDurationToHMS(workout.duration);
+    if (!time) return;
+
+    let prs = {};
+    try { prs = JSON.parse(localStorage.getItem("personalRecords") || "{}"); } catch {}
+    const existing = prs[distance]?.time;
+    if (!_isFasterPR(time, existing)) return;
+
+    // Save the PR. Stamp date from the workout if present, else today.
+    const today = (typeof getTodayString === "function") ? getTodayString() : new Date().toISOString().slice(0, 10);
+    prs[distance] = {
+      time,
+      date: workout.date || today,
+      // No importId — this PR came from a logged race, not an import.
+      // The undo path uses importId === commit.importId to guard
+      // deletion, so a manually-set PR is safe from import undo.
+    };
+    localStorage.setItem("personalRecords", JSON.stringify(prs));
+    if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("personalRecords");
+
+    // Offer the same zones-recalc modal the post-import flow uses.
+    // Defer slightly so the workout-complete UI (rating modal,
+    // stretch suggestion, level-up) gets to fire first.
+    setTimeout(() => {
+      try { updateZonesFromPRs([{ distance, time }]); } catch {}
+    }, 1200);
+
+    // Surface the PR moment with a simple toast — the modal handles
+    // the "what about your zones" decision separately.
+    _csiToast(`New PR — ${PR_DISTANCE_LABEL[distance] || distance}: ${time}!`, "success");
   }
 
   function _showZonesModal(opts) {
@@ -1522,6 +1710,39 @@
       // mirror of the local events list, not append-only.
     }
 
+    // Clear the activePlan if the registered plan was synthesized
+    // from this import. Don't touch a different active plan — the
+    // user might have generated a Build Plan after the import and
+    // we shouldn't nuke that.
+    try {
+      const ap = JSON.parse(localStorage.getItem("activePlan") || "null");
+      if (ap?.plan_metadata?.import_id === commit.importId) {
+        ["activePlan", "activePlanSource", "activePlanAt", "activePlanId"].forEach(k => {
+          try { localStorage.removeItem(k); } catch {}
+          if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey(k);
+        });
+        // Also flip the generated_plans row to inactive on Supabase.
+        // Best-effort — RLS scopes to user; a server failure here
+        // doesn't block the rest of the undo.
+        if (window.supabaseClient) {
+          try {
+            const { data: { session } } = await window.supabaseClient.auth.getSession();
+            const uid = session?.user?.id;
+            if (uid) {
+              await window.supabaseClient
+                .from("generated_plans")
+                .update({ is_active: false })
+                .eq("user_id", uid)
+                .eq("is_active", true)
+                .filter("plan_data->plan_metadata->>import_id", "eq", commit.importId);
+            }
+          } catch (e) { console.warn("[CoachSheetImport] undo: generated_plans deactivate failed", e); }
+        }
+      }
+    } catch (e) {
+      console.warn("[CoachSheetImport] undo: activePlan cleanup failed", e);
+    }
+
     // Remove imported PRs. Only delete keys that the import wrote;
     // PRs the user already had stay put. _isFasterPR meant we only
     // overwrote slower-or-missing PRs, but record-keeping is still
@@ -1566,6 +1787,10 @@
       `Undone — removed ${undoParts.join(", ")}.`,
       "success",
     );
+    // If the cross-session banner is currently visible, drop it now
+    // that the import it referenced is gone.
+    const banner = document.getElementById("csi-recent-import-banner");
+    if (banner) try { banner.remove(); } catch {}
   }
 
   function _esc(s) {
@@ -1616,6 +1841,10 @@
     // duplicating the logic. Pass an array of `{ distance, time }`
     // (distance keys: marathon | half | 10k | 5k | mile).
     updateZonesFromPRs,
+    // Spec §C3 Trigger 2 entry point. Pass the just-completed
+    // workout record; if it's a race that beat an existing PR, this
+    // saves the PR and fires the zones-recalc modal.
+    checkRacePRImprovement,
     _setStatus,
     _validateFile,
   };
