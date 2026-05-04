@@ -557,6 +557,13 @@ async function ensureProfile(user) {
   if (typeof fetchActiveCoachIds === 'function') fetchActiveCoachIds().catch(e => console.warn('Auth: fetchActiveCoachIds error', e));
   // Live-pick up new coach assignments without a hard refresh.
   if (typeof subscribeCoachAssignments === 'function') subscribeCoachAssignments().catch(e => console.warn('Auth: subscribeCoachAssignments error', e));
+  // Heal local schedule entries whose mirror trigger missed them
+  // (legacy id format pre-dates the strip predicate). One-shot per
+  // session — pulls the canonical coach_note + workout fields from
+  // coach_assigned_workouts and merges them in.
+  if (typeof selfHealCoachScheduleEntries === 'function') {
+    selfHealCoachScheduleEntries().catch(e => console.warn('Auth: selfHealCoachScheduleEntries error', e));
+  }
   // Phase 5C: surface the active coach on the Settings tab.
   if (typeof refreshMyCoachCard === 'function') refreshMyCoachCard().catch(e => console.warn('Auth: refreshMyCoachCard error', e));
 }
