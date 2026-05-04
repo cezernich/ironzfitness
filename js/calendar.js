@@ -3205,10 +3205,15 @@ function cexExpandSets(sessionId, exIdx) {
   const reps    = repsInput?.value || "";
   const weight  = weightInput?.value || "";
 
-  // Hide the summary row's sets/reps/weight inputs (keep name visible)
+  // Hide the summary row's sets/reps/weight inputs (keep name visible).
+  // Selector targets only the numeric controls — the original
+  // `querySelectorAll("input, .completion-x")` swept the exercise-name
+  // input too, which made the row look empty when expanded so users
+  // thought their exercise had been deleted.
   const row = document.getElementById(`cex-row-${sessionId}-${exIdx}`);
   if (row) {
-    row.querySelectorAll("input, .completion-x").forEach(el => el.style.display = "none");
+    row.querySelectorAll(".qe-edit-sets, .qe-edit-reps, .qe-weight-input, .completion-x")
+       .forEach(el => el.style.display = "none");
   }
 
   // Check for existing setDetails (pyramid) on the exercise
