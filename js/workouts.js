@@ -2995,6 +2995,17 @@ function buildExerciseTableHTML(exercises, opts) {
     });
   };
 
+  // Coach-typed per-exercise note row. e.notes carries the coach's
+  // free-text guidance ("focus on slow eccentric", "drop weight if
+  // form breaks") and used to be invisible — stored, never rendered.
+  // Surfaced here as a muted secondary line beneath the exercise row,
+  // matching the warmup-hint styling so the table stays scannable.
+  const _coachNoteRow = (e) => {
+    const t = String(e?.notes || "").trim();
+    if (!t) return "";
+    return `<tr class="coach-note-row"><td colspan="${cols}" class="coach-note-cell">${escHtml(t)}</td></tr>`;
+  };
+
   let rows = "";
   segments.forEach(seg => {
     if (seg.supersetId) {
@@ -3002,6 +3013,7 @@ function buildExerciseTableHTML(exercises, opts) {
       rows += `<tr class="superset-label-row"><td colspan="${cols}">Superset &mdash; ${ssSets} sets</td></tr>`;
       seg.items.forEach(e => {
         rows += `<tr class="superset-ex-row"><td>${escHtml(e.name)}</td><td></td><td>${escHtml(_formatRepsWithSide(e.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(e.weight, e.name, { isEstimate: !!e.isEstimate, reps: e.reps, coachAssigned })||_emptyWt)}</td></tr>`;
+        rows += _coachNoteRow(e);
         if (e.setDetails && e.setDetails.length && _setDetailsDiffer(e)) {
           e.setDetails.forEach((sd, si) => {
             rows += `<tr class="superset-ex-row set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${escHtml(_formatRepsWithSide(sd.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(sd.weight, e.name, { coachAssigned })||_emptyWt)}</td></tr>`;
@@ -3047,6 +3059,7 @@ function buildExerciseTableHTML(exercises, opts) {
           rows += `<tr class="warmup-hint-row"><td colspan="4" class="warmup-hint-cell">${escHtml(_warmup)}</td></tr>`;
         }
       }
+      rows += _coachNoteRow(e);
       if (e.setDetails && e.setDetails.length && _setDetailsDiffer(e)) {
         e.setDetails.forEach((sd, si) => {
           rows += `<tr class="set-detail-row"><td class="set-detail-label">Set ${si+1}</td><td></td><td>${escHtml(_formatRepsWithSide(sd.reps, e.name))}</td><td>${escHtml(_normalizeWeightDisplay(sd.weight, e.name, { coachAssigned })||_emptyWt)}</td></tr>`;
