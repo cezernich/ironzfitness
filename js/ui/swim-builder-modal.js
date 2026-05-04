@@ -183,7 +183,10 @@
             <span class="swim-total-value">${_esc(totalLabel)}</span>
             <span class="swim-total-label">Total Distance</span>
           </div>
-          <div class="swim-pool-badge">${_esc(_state.pool.label)}</div>
+          <div class="swim-pool-badge" title="Pool length">
+            <span class="swim-pool-badge-label">Pool</span>
+            <span class="swim-pool-badge-value">${_esc(_state.pool.label)}</span>
+          </div>
         </div>
 
         <div class="swim-builder-meta">

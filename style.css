@@ -20193,6 +20193,20 @@ body.auth-visible #bottom-nav { display: none !important; }
   color: #fff;
   border-radius: 999px;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.swim-pool-badge-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+.swim-pool-badge-value {
+  font-size: 12px;
+  font-weight: 800;
 }
 .swim-card-why {
   font-size: 12px;
