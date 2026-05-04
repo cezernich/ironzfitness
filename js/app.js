@@ -676,7 +676,17 @@ function init() {
   // Refresh all caches from Supabase (non-blocking)
   if (typeof DB !== 'undefined') {
     DB.profile.get().catch(() => {});
-    DB.refreshAllKeys().catch(() => {});
+    DB.refreshAllKeys()
+      .then(() => {
+        // One-shot: backfill the structured `workouts` table for any
+        // live-tracked completions that pre-date the syncWorkouts wiring
+        // in _commitLiveWorkout. Coach calendar reads from that table —
+        // without this, orphaned completions show "planned" forever.
+        if (typeof reconcileLiveTrackerStructuredSync === 'function') {
+          reconcileLiveTrackerStructuredSync();
+        }
+      })
+      .catch(() => {});
   }
 
   // Cross-device sync: re-pull data when user returns to the tab
