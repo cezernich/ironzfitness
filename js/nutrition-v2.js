@@ -271,6 +271,14 @@ function openPhotoMealLog() {
   // re-triggers the change event.
   const input = document.getElementById("meal-photo-input");
   if (input) input.value = "";
+  // Reset notes textarea + drop the cached photo so a stale image
+  // from a prior open doesn't get re-sent on the next Re-analyze.
+  const notes = document.getElementById("photo-meal-notes");
+  if (notes) notes.value = "";
+  if (modal) {
+    delete modal.dataset.photoBase64;
+    delete modal.dataset.photoMediaType;
+  }
   // survey-overlay needs both display:flex and .is-open to be visible —
   // same pattern as the barcode scanner. Previously this was an inline
   // div that hid the nutrition dashboard and tried to scroll the inline
@@ -521,12 +529,8 @@ async function handleMealPhoto(input) {
   // Show preview
   const previewArea = document.getElementById("photo-preview-area");
   const previewImg = document.getElementById("meal-photo-preview");
-  const loadingEl = document.getElementById("photo-ai-loading");
-  const resultEl = document.getElementById("photo-ai-result");
 
   previewArea.style.display = "";
-  resultEl.style.display = "none";
-  loadingEl.style.display = "";
 
   // Display image preview
   const reader = new FileReader();
@@ -535,9 +539,54 @@ async function handleMealPhoto(input) {
   };
   reader.readAsDataURL(file);
 
-  // Convert to base64 for API
+  // Convert to base64 once and cache on the modal so Re-analyze can
+  // refire the same image with new notes without re-uploading.
   const base64 = await fileToBase64(file);
   const mediaType = file.type || "image/jpeg";
+  const modal = document.getElementById("photo-meal-modal");
+  modal.dataset.photoBase64 = base64;
+  modal.dataset.photoMediaType = mediaType;
+
+  await _runMealPhotoAnalysis(base64, mediaType);
+}
+
+// Re-fire the AI call with the cached photo + whatever's in the notes
+// textarea now. Triggered by the "Re-analyze with notes above" button
+// in the result panel — covers the case where the AI mis-identifies
+// an item ("cheese" instead of salmon) and the user wants to correct
+// without re-taking the photo.
+async function reanalyzeMealPhoto() {
+  const modal = document.getElementById("photo-meal-modal");
+  const base64 = modal?.dataset.photoBase64;
+  const mediaType = modal?.dataset.photoMediaType || "image/jpeg";
+  if (!base64) {
+    const msg = document.getElementById("photo-meal-msg");
+    if (msg) {
+      msg.style.color = "var(--color-danger)";
+      msg.textContent = "Take a photo first, then add notes and re-analyze.";
+    }
+    return;
+  }
+  await _runMealPhotoAnalysis(base64, mediaType);
+}
+if (typeof window !== "undefined") window.reanalyzeMealPhoto = reanalyzeMealPhoto;
+
+// Shared analysis worker — used by both the initial photo upload and
+// the Re-analyze button. Reads the notes textarea live so corrections
+// flow into the AI prompt without any extra plumbing.
+async function _runMealPhotoAnalysis(base64, mediaType) {
+  const loadingEl = document.getElementById("photo-ai-loading");
+  const resultEl = document.getElementById("photo-ai-result");
+  const msgEl = document.getElementById("photo-meal-msg");
+  if (msgEl) { msgEl.textContent = ""; msgEl.style.color = ""; }
+
+  resultEl.style.display = "none";
+  loadingEl.style.display = "";
+
+  const userNotes = (document.getElementById("photo-meal-notes")?.value || "").trim();
+  const userText = userNotes
+    ? `User notes: ${userNotes}\n\nIdentify all food items in this image and estimate the nutritional content for each. The user's notes above override what the image looks like — trust them when they correct an item or specify a portion. Be as accurate as possible with portion sizes.`
+    : "Identify all food items in this image and estimate the nutritional content for each. Be as accurate as possible with portion sizes.";
 
   try {
     const data = await callAI({
@@ -548,7 +597,7 @@ async function handleMealPhoto(input) {
         role: "user",
         content: [
           { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-          { type: "text", text: "Identify all food items in this image and estimate the nutritional content for each. Be as accurate as possible with portion sizes." }
+          { type: "text", text: userText }
         ]
       }]
     });
@@ -556,18 +605,18 @@ async function handleMealPhoto(input) {
     loadingEl.style.display = "none";
 
     const text = data.content?.[0]?.text || "";
-    // Extract JSON from response (handle possible markdown wrapping)
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      document.getElementById("photo-meal-msg").textContent = "Could not parse AI response.";
-      document.getElementById("photo-meal-msg").style.color = "var(--color-danger)";
+      if (msgEl) {
+        msgEl.textContent = "Could not parse AI response.";
+        msgEl.style.color = "var(--color-danger)";
+      }
       return;
     }
 
     const result = JSON.parse(jsonMatch[0]);
     resultEl.style.display = "";
 
-    // Populate detected foods
     const foodsEl = document.getElementById("photo-detected-foods");
     if (foodsEl && result.foods) {
       foodsEl.innerHTML = result.foods.map(f =>
@@ -575,37 +624,24 @@ async function handleMealPhoto(input) {
       ).join("");
     }
 
-    // Populate macro fields
     document.getElementById("photo-calories").value = Math.round(result.total?.calories || 0);
     document.getElementById("photo-protein").value = Math.round(result.total?.protein_g || 0);
     document.getElementById("photo-carbs").value = Math.round(result.total?.carbs_g || 0);
     document.getElementById("photo-fat").value = Math.round(result.total?.fat_g || 0);
 
-    // Store description for meal name
     document.getElementById("photo-meal-modal").dataset.description = result.description || "Photo-logged meal";
 
-    // Reveal the sticky save bar — only after the AI finished and we
-    // have macro values to save. Bug 5/6 had the save action buried
-    // inside the scroll content where the user couldn't find it.
     const actions = document.getElementById("photo-meal-actions");
     if (actions) actions.style.display = "";
-
   } catch (err) {
     loadingEl.style.display = "none";
-    const msg = document.getElementById("photo-meal-msg");
-    msg.style.color = "var(--color-danger)";
-    // When callAI hits the gotrue-js auth-lock deadlock, both
-    // getSession() and refreshSession() time out and the only reliable
-    // recovery is a page reload (the lock is held by a hung promise
-    // inside the supabase-js instance — nothing in client code can
-    // release it). iOS PWA mode has no pull-to-refresh, so the user
-    // ended up stuck. Surface a one-tap Reload button alongside the
-    // error so they don't have to dig through Settings.
+    if (!msgEl) return;
+    msgEl.style.color = "var(--color-danger)";
     const isAuthLock = /Couldn't reach IronZ/i.test(err.message || "");
     if (isAuthLock) {
-      msg.innerHTML = `Error analyzing photo: ${escHtml(err.message)} <button class="btn-secondary btn-sm" style="margin-left:8px" onclick="window.location.reload()">Reload app</button>`;
+      msgEl.innerHTML = `Error analyzing photo: ${escHtml(err.message)} <button class="btn-secondary btn-sm" style="margin-left:8px" onclick="window.location.reload()">Reload app</button>`;
     } else {
-      msg.textContent = "Error analyzing photo: " + err.message;
+      msgEl.textContent = "Error analyzing photo: " + err.message;
     }
   }
 }

@@ -879,6 +879,12 @@
           </div>
           <div class="photo-meal-scroll">
             <p class="hint">Take a photo of your meal and AI will estimate the nutritional content.</p>
+            <div class="form-row">
+              <label for="photo-meal-notes">Notes for AI (optional)</label>
+              <textarea id="photo-meal-notes" rows="2" class="ex-row-name"
+                placeholder="e.g. the protein is salmon, not cheese · the rice bowl is 2 cups"
+                style="width:100%;resize:vertical"></textarea>
+            </div>
             <div class="photo-upload-area" id="photo-upload-area">
               <input type="file" id="meal-photo-input" accept="image/*" capture="environment" onchange="handleMealPhoto(this)" style="display:none" />
               <button class="btn-primary photo-upload-btn" onclick="document.getElementById('meal-photo-input').click()">
@@ -894,6 +900,11 @@
               <div id="photo-ai-result" style="display:none">
                 <h3 style="margin:0 0 8px">Detected Meal</h3>
                 <div id="photo-detected-foods"></div>
+                <button class="btn-secondary btn-sm" id="photo-reanalyze-btn"
+                  onclick="reanalyzeMealPhoto()" style="width:100%;margin-top:8px">
+                  Re-analyze with notes above
+                </button>
+                <p class="hint" style="margin-top:6px">Wrong item? Update the notes box and tap to re-run.</p>
                 <div class="form-grid" style="margin-top:12px">
                   <div class="form-row">
                     <label>Calories</label>
