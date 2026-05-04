@@ -680,6 +680,7 @@ function getWorkoutInfoForDate(dateStr) {
     const _planSessionId = (p) => p && p.date && p.raceId != null ? `session-plan-${p.date}-${p.raceId}` : null;
 
     const contributions = [];
+    const contributingNames = [];
     let bestName = "", bestType = "", bestDurationMin = 0, bestBonus = 0;
     const _trackBest = (info) => {
       if (info && info.bonus > bestBonus) {
@@ -688,6 +689,7 @@ function getWorkoutInfoForDate(dateStr) {
         bestType = info.type;
         bestDurationMin = info.durationMin;
       }
+      if (info && info.bonus > 0 && info.name) contributingNames.push(info.name);
     };
 
     // Planned entries — replace with completed if it exists, take the
@@ -743,13 +745,25 @@ function getWorkoutInfoForDate(dateStr) {
 
     if (contributions.length === 0) return null;
     const totalBonus = contributions.reduce((s, n) => s + n, 0);
+    // Build a human label for the breakdown reason. With one session,
+    // use that session's name. With two, "<A> + <B>". With more, fall
+    // back to "N workouts" so the line stays scannable.
+    const _uniqueNames = Array.from(new Set(contributingNames.filter(Boolean)));
+    let sessionsLabel = bestName;
+    if (_uniqueNames.length === 2) {
+      sessionsLabel = `${_uniqueNames[0]} + ${_uniqueNames[1]}`;
+    } else if (_uniqueNames.length >= 3) {
+      sessionsLabel = `${_uniqueNames.length} workouts`;
+    }
     return {
       bonusOz: totalBonus,
-      sessionName: bestName,
+      sessionName: sessionsLabel,
+      // bestSessionName is preserved for any caller that specifically
+      // wanted the highest-bonus session (none today, but we don't
+      // want a future regression).
+      bestSessionName: bestName,
       durationMin: bestDurationMin,
       type: bestType,
-      // Number of distinct sessions contributing — surfaced for the
-      // breakdown reason ("for your run + lift" when > 1).
       sessionCount: contributions.length,
     };
   } catch { return null; }
