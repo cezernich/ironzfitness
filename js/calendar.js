@@ -2910,6 +2910,22 @@ function _buildDistanceField(sessionId, type, globalUnit) {
     </div>`;
 }
 
+// Pull the coachAssignmentId for the schedule entry behind a sessionId.
+// Used by buildCompletionSection to decide whether to surface the
+// "Send back to your coach" textarea inline. Mirrors the workoutId-
+// indexed _ratingCoachAssignmentIdFor used by the rating modal so
+// both surfaces resolve the same id off the same schedule shape.
+function _completionCoachAssignmentIdFor(sessionId) {
+  try {
+    const m = String(sessionId || "").match(/^session-sw-(.+)$/);
+    if (!m) return null;
+    const sched = JSON.parse(localStorage.getItem("workoutSchedule")) || [];
+    const entry = sched.find(e => String(e.id) === m[1]);
+    if (!entry || entry.source !== "coach_assigned") return null;
+    return entry.coachAssignmentId || null;
+  } catch { return null; }
+}
+
 function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDuration, steps, opts) {
   // No completion UI for future dates — uniformly. There used to be an
   // `opts.allowFuture` opt-in for coach-assigned workouts (so an athlete
@@ -3046,7 +3062,13 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
           placeholder="e.g. 205" min="0" max="2000" />
       </div>` : ""}
       <textarea id="cnotes-${sessionId}" class="completion-notes"
-        placeholder="Notes (optional)"></textarea>`;
+        placeholder="Notes (private — just for you)"></textarea>
+      ${_completionCoachAssignmentIdFor(sessionId) ? `
+        <div class="completion-coach-note-wrap" data-coach-assignment-id="${_completionCoachAssignmentIdFor(sessionId)}">
+          <label class="completion-field-label">Send back to your coach <span class="optional-tag">optional</span></label>
+          <textarea id="ccoachnotes-${sessionId}" class="completion-notes completion-coach-notes"
+            placeholder="Anything your coach should know — e.g. 'felt strong, ready to push next week'"></textarea>
+        </div>` : ""}`;
   } else {
     const _cUnit = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
     const _cResolvedType = _resolveEnduranceType(type);
@@ -3064,7 +3086,13 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
             placeholder="e.g. 205" min="0" max="2000" />
         </div>` : ""}
         <textarea id="cnotes-${sessionId}" class="completion-notes"
-          placeholder="Notes (optional)"></textarea>
+          placeholder="Notes (private — just for you)"></textarea>
+        ${_completionCoachAssignmentIdFor(sessionId) ? `
+          <div class="completion-coach-note-wrap" data-coach-assignment-id="${_completionCoachAssignmentIdFor(sessionId)}">
+            <label class="completion-field-label">Send back to your coach <span class="optional-tag">optional</span></label>
+            <textarea id="ccoachnotes-${sessionId}" class="completion-notes completion-coach-notes"
+              placeholder="Anything your coach should know — e.g. 'felt strong, ready to push next week'"></textarea>
+          </div>` : ""}
       </div>`;
   }
 
@@ -3241,6 +3269,26 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   // Don't save again if already completed
   if (isSessionComplete(sessionId)) return;
   const notes    = (document.getElementById(`cnotes-${sessionId}`)?.value || "").trim();
+  // Coach-directed note (only present when this is a coach-assigned
+  // session — the form-build path conditionally renders the textarea).
+  // Captured here at the click; sent via the existing
+  // submit_assignment_feedback RPC so the coach sees it on the
+  // assignment row in coach-client-detail's Calendar tab.
+  const coachAssignmentId = (document.querySelector(`[data-coach-assignment-id]`)?.dataset?.coachAssignmentId) || null;
+  const coachNoteForCoach = (document.getElementById(`ccoachnotes-${sessionId}`)?.value || "").trim();
+  if (coachAssignmentId && coachNoteForCoach) {
+    try {
+      window.supabaseClient?.rpc("submit_assignment_feedback", {
+        _assignment_id: coachAssignmentId,
+        _note:          coachNoteForCoach,
+        _rating:        null,
+      }).then(({ error }) => {
+        if (error) console.warn("[completion] submit_assignment_feedback failed:", error.message);
+      });
+    } catch (e) {
+      console.warn("[completion] coach feedback RPC threw:", e);
+    }
+  }
   const _parsedDur = _readDurationMinSec(sessionId);
   let duration = (!isNaN(_parsedDur) && _parsedDur > 0) ? String(_parsedDur) : "";
   // Brick workouts have separate bike + run inputs. Read each one and
