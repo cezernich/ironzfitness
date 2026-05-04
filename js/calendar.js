@@ -850,7 +850,35 @@ function getDataForDate(dateStr) {
   }
 
   let loggedWorkouts = [];
-  try { loggedWorkouts = (JSON.parse(localStorage.getItem("workouts")) || []).filter(w => w.date === dateStr && !w.isCompletion); } catch {}
+  let _orphanCompletions = [];
+  try {
+    const _allW = JSON.parse(localStorage.getItem("workouts")) || [];
+    loggedWorkouts = _allW.filter(w => w.date === dateStr && !w.isCompletion);
+    // Orphan rescue: when a coach deletes / re-applies / propagates an
+    // assignment, the matching schedule entry can disappear from
+    // workoutSchedule even though the athlete already marked it
+    // complete. The completion (`isCompletion: true`) record stays in
+    // localStorage.workouts but has no card to attach to — the day-
+    // detail rendered totally blank for that workout. Surface those
+    // orphaned completions as their own cards so the athlete's
+    // Mark-as-Complete action is never visually lost. Match by the
+    // session-sw-<scheduleEntryId> suffix on completedSessionId; if
+    // the schedule entry isn't in scheduledWorkouts for this date,
+    // the completion is orphaned.
+    const _scheduleIdSet = new Set(scheduledWorkouts.map(s => String(s.id)));
+    _orphanCompletions = _allW.filter(w => {
+      if (w.date !== dateStr) return false;
+      if (!w.isCompletion) return false;
+      const cs = String(w.completedSessionId || "");
+      const m = cs.match(/^session-sw-(.+)$/);
+      const swId = m ? m[1] : null;
+      return swId && !_scheduleIdSet.has(swId);
+    });
+  } catch {}
+  // Treat orphan completions as logged workouts for render purposes.
+  // The existing log-card path handles them cleanly (it doesn't care
+  // about isCompletion when rendering history-style cards).
+  if (_orphanCompletions.length) loggedWorkouts = loggedWorkouts.concat(_orphanCompletions);
 
   let loggedMeals = [];
   try { loggedMeals = (JSON.parse(localStorage.getItem("meals")) || []).filter(m => m.date === dateStr); } catch {}
