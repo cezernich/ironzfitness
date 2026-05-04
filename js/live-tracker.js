@@ -353,6 +353,32 @@ function startLiveWorkout(sessionId, dateStr, type, stepsJson, exercisesJson) {
   const isHyrox = type === "hyrox" && exercises && exercises.length > 0;
   const isStrength = !isHyrox && !!(exercises && exercises.length > 0 && !steps);
 
+  // Look up the parent workout's metadata by sessionId so the live
+  // tracker can surface the coach's top-level note. The session id
+  // format is "session-sw-<scheduleEntryId>" for scheduled workouts;
+  // we match on the suffix against workoutSchedule entries. Falls
+  // back to "" silently when the lookup misses (self-coached
+  // workouts, ad-hoc Quick Add, etc.) so the banner stays hidden.
+  let _coachNoteForLive = "";
+  let _coachIdForLive = "";
+  let _coachNameForLive = "";
+  try {
+    const schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]") || [];
+    const card = String(sessionId || "");
+    const swIdMatch = card.match(/^session-sw-(.+)$/);
+    const swId = swIdMatch ? swIdMatch[1] : null;
+    const entry = schedule.find(e => e && (
+      String(e.id) === swId ||
+      String(e.id) === card ||
+      `session-sw-${e.id}` === card
+    ));
+    if (entry) {
+      _coachNoteForLive = entry.coachNote || entry.coach_note || "";
+      _coachIdForLive   = entry.coachId   || entry.coach_id   || "";
+      _coachNameForLive = entry.coachName || entry.coach_name || "";
+    }
+  } catch {}
+
   _liveTracker = {
     sessionId,
     dateStr,
@@ -361,6 +387,9 @@ function startLiveWorkout(sessionId, dateStr, type, stepsJson, exercisesJson) {
     exercises: exercises || [],
     isStrength,
     isHyrox,
+    coachNote: _coachNoteForLive,
+    coachId:   _coachIdForLive,
+    coachName: _coachNameForLive,
     currentStep: 0,
     startTime: Date.now(),
     stepStart: Date.now(),
