@@ -622,6 +622,19 @@ function _buildStrengthView() {
   }
 
   let html = "";
+  // Top-level coach note (if any) above the first exercise card.
+  // Reads from t.workoutMeta.coachNote (current shape) with fallback
+  // to t.coachNote (legacy shape) so older logged sessions don't go
+  // dark. Returns "" when no note is present so the live tracker
+  // stays unchanged for self-coached workouts.
+  const _coachNote = (t.workoutMeta && (t.workoutMeta.coachNote || t.workoutMeta.coach_note))
+    || t.coachNote || "";
+  if (_coachNote) {
+    html += `<div class="live-coach-note-banner">
+      <span class="live-coach-note-label">Coach note</span>
+      <span class="live-coach-note-text">${_escLiveHtml(_coachNote)}</span>
+    </div>`;
+  }
 
   for (const g of groups) {
     if (g.kind === "single") {
@@ -642,52 +655,80 @@ function _buildStrengthView() {
   return html;
 }
 
-// Add a free-text exercise to the live tracker. Uses the existing
-// swap-exercise sheet UI when available so the user gets the muscle-
-// matched library; falls back to a prompt() so the feature works
-// before the library is wired in.
+// Add a free-text exercise to the live tracker. Renders its own small
+// modal asking for name + sets count — the swap sheet was being reused
+// here previously, but with no anchor exercise it surfaced random
+// chest alternatives during a leg day (real bug 2026-05-03). Sets
+// count is asked up front so the user doesn't end up with three
+// pre-seeded set rows they have to delete.
 function _promptAddLiveExercise() {
   if (!_liveTracker || !_liveTracker.isStrength) return;
   const t = _liveTracker;
-  const _commit = (name) => {
+
+  const _commit = (name, setsCount) => {
     const trimmed = String(name || "").trim();
     if (!trimmed) return;
+    const n = Math.max(1, Math.min(10, parseInt(setsCount, 10) || 3));
     const newIdx = t.exercises.length;
     t.exercises.push({
       name: trimmed,
-      sets: "3",
+      sets: String(n),
       reps: "10",
       weight: "",
       addedDuringWorkout: true,
     });
-    // Pre-seed three blank sets so the user sees the standard scaffold.
-    t.sets[newIdx] = [
-      { reps: "10", weight: "", done: false },
-      { reps: "10", weight: "", done: false },
-      { reps: "10", weight: "", done: false },
-    ];
-    // Recompute groups since the ungrouped exercise list changed.
+    t.sets[newIdx] = Array.from({ length: n }, () => ({ reps: "10", weight: "", done: false }));
     t._groups = null;
     t.currentExercise = newIdx;
     if (typeof _saveLiveState === "function") { try { _saveLiveState(); } catch {} }
     const body = document.getElementById("live-tracker-body");
     if (body) {
       body.innerHTML = _buildStrengthView();
-      // Scroll the new card into view.
       setTimeout(() => {
         const card = document.getElementById("live-ex-" + newIdx);
         if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
       }, 50);
     }
   };
-  // Prefer the rich swap sheet (search + recents); fall back to prompt
-  // so the feature works on platforms where the sheet isn't loaded.
-  if (typeof showSwapExerciseSheet === "function") {
-    showSwapExerciseSheet("", _commit);
-  } else {
-    const name = prompt("Exercise name:");
-    _commit(name);
-  }
+
+  // Inline modal — name + sets in one shot. No equipment-busy framing
+  // because this is "add", not "swap".
+  const overlayId = "live-add-exercise-overlay";
+  document.getElementById(overlayId)?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = overlayId;
+  overlay.className = "quick-entry-overlay is-open";
+  overlay.style.cssText = "display:flex;z-index:10001";
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="quick-entry-modal" style="max-width:360px;padding:20px">
+      <h3 style="margin:0 0 12px">Add Exercise</h3>
+      <label style="display:block;font-size:0.8rem;color:var(--color-text-muted);margin-bottom:4px">Name</label>
+      <input type="text" id="live-add-ex-name" class="ex-row-name"
+        placeholder="e.g. Hamstring Curl" autocomplete="off"
+        style="width:100%;margin-bottom:12px" />
+      <label style="display:block;font-size:0.8rem;color:var(--color-text-muted);margin-bottom:4px">Sets</label>
+      <input type="number" id="live-add-ex-sets" class="ex-row-name"
+        min="1" max="10" value="3" inputmode="numeric"
+        style="width:100%;margin-bottom:16px" />
+      <div style="display:flex;gap:8px">
+        <button class="btn-secondary" style="flex:1"
+          onclick="document.getElementById('${overlayId}')?.remove()">Cancel</button>
+        <button class="btn-primary" style="flex:1" id="live-add-ex-confirm">Add</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const nameInput = document.getElementById("live-add-ex-name");
+  const setsInput = document.getElementById("live-add-ex-sets");
+  const confirmBtn = document.getElementById("live-add-ex-confirm");
+  const submit = () => {
+    _commit(nameInput.value, setsInput.value);
+    overlay.remove();
+  };
+  confirmBtn.onclick = submit;
+  nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  setsInput.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  setTimeout(() => nameInput.focus(), 50);
 }
 if (typeof window !== "undefined") window._promptAddLiveExercise = _promptAddLiveExercise;
 
@@ -727,6 +768,7 @@ function _buildLiveSingleExerciseCard(ei) {
         ${!allDone ? `<button class="live-swap-btn" onclick="_swapLiveExercise(${ei})" title="Swap exercise">&#8644;</button>` : ""}
       </div>
       ${_warmupHint ? `<div class="live-warmup-hint">${_escLiveHtml(_warmupHint)}</div>` : ""}
+      ${ex.notes ? `<div class="live-coach-ex-note"><span class="live-coach-ex-note-label">Coach</span> ${_escLiveHtml(String(ex.notes).trim())}</div>` : ""}
       <div class="live-sets-grid" id="live-sets-${ei}">
         <div class="live-sets-header">
           <span>Set</span>
@@ -740,6 +782,7 @@ function _buildLiveSingleExerciseCard(ei) {
             <input class="live-set-input" type="text" inputmode="numeric" value="${s.reps}" id="live-reps-${ei}-${si}" placeholder="${isUni ? _escLiveHtml(perLabel) : "reps"}" oninput="_onLiveInputEdit(${ei},${si})" />
             <input class="live-set-input" type="text" value="${s.weight}" id="live-wt-${ei}-${si}" placeholder="lbs" oninput="_onLiveInputEdit(${ei},${si})" />
             <button class="live-set-btn${s.done ? " live-set-btn--done" : ""}" onclick="_logLiveSet(${ei},${si})">${s.done ? "&#10003;" : "Log"}</button>
+            ${sets.length > 1 ? `<button class="live-set-del-btn" onclick="_removeLiveSet(${ei},${si})" aria-label="Remove set" title="Remove set">×</button>` : ""}
           </div>
         `).join("")}
         <button class="live-add-set-btn" onclick="_addLiveSet(${ei})">+ Add Set</button>
@@ -769,6 +812,24 @@ function _addLiveSet(exIdx) {
   if (body) body.innerHTML = _buildStrengthView();
 }
 if (typeof window !== "undefined") window._addLiveSet = _addLiveSet;
+
+// Remove a single set row. Mirrors _addLiveSet's pattern: capture
+// any in-progress input values into the model before mutating, then
+// re-render the strength view. Last remaining set is protected at
+// the renderer level (the × button only renders when sets.length > 1)
+// so we don't strand an exercise with zero sets.
+function _removeLiveSet(exIdx, setIdx) {
+  if (!_liveTracker || !_liveTracker.isStrength) return;
+  const sets = _liveTracker.sets[exIdx];
+  if (!Array.isArray(sets) || sets.length <= 1) return;
+  if (setIdx < 0 || setIdx >= sets.length) return;
+  _captureLiveSetInputs();
+  sets.splice(setIdx, 1);
+  if (typeof _saveLiveState === "function") { try { _saveLiveState(); } catch {} }
+  const body = document.getElementById("live-tracker-body");
+  if (body) body.innerHTML = _buildStrengthView();
+}
+if (typeof window !== "undefined") window._removeLiveSet = _removeLiveSet;
 
 function _buildLiveSupersetCard(g) {
   const t = _liveTracker;
@@ -805,6 +866,20 @@ function _buildLiveSupersetCard(g) {
       </div>`;
   }
 
+  // Per-exercise coach notes — rendered ONCE above the rounds (rather
+  // than repeated for every round row) so the live tracker stays
+  // skimmable. Letter-prefixed so the user can match the note to the
+  // A/B exercise.
+  const memberNotes = members
+    .map((ex, k) => {
+      const t = String(ex?.notes || "").trim();
+      if (!t) return "";
+      return `<div class="live-coach-ex-note">
+        <span class="live-coach-ex-note-label">Coach · ${letters[k] || "?"}</span> ${_escLiveHtml(t)}
+      </div>`;
+    })
+    .join("");
+
   return `
     <div class="live-exercise live-superset-group${allDone ? " live-exercise--done" : ""}" id="live-ss-${g.gid}">
       <div class="live-exercise-header live-superset-header">
@@ -814,6 +889,7 @@ function _buildLiveSupersetCard(g) {
         ${allDone ? '<span class="live-done-check">&#10003;</span>' : ""}
       </div>
       <div class="live-superset-members">${summary}</div>
+      ${memberNotes}
       <div class="live-superset-rounds">
         ${roundsHtml}
       </div>
@@ -1524,9 +1600,18 @@ async function _commitLiveWorkout(logAll) {
   // to block the UI on a network round-trip. Awaiting here was
   // hanging the Finish button when Supabase was slow or offline:
   // _closeLiveTracker never ran and the user saw nothing happen.
-  if (typeof DB !== 'undefined' && DB.flushKey) {
-    DB.flushKey('workouts').catch(e => console.warn('[IronZ] workouts flush failed', e && e.message));
-    DB.flushKey('completedSessions').catch(e => console.warn('[IronZ] completedSessions flush failed', e && e.message));
+  if (typeof DB !== 'undefined') {
+    // syncWorkouts schedules upserts into BOTH user_data (JSON blob,
+    // source of truth for the athlete app) AND the structured `workouts`
+    // table. Coach-client-detail reads from the structured table — without
+    // this call the coach never sees live-tracked workouts as completed,
+    // and matching the rating-modal's submit_assignment_feedback RPC
+    // can't surface a "done" status either.
+    if (DB.syncWorkouts) DB.syncWorkouts();
+    if (DB.flushKey) {
+      DB.flushKey('workouts').catch(e => console.warn('[IronZ] workouts flush failed', e && e.message));
+      DB.flushKey('completedSessions').catch(e => console.warn('[IronZ] completedSessions flush failed', e && e.message));
+    }
   }
 
   const dateStr = t.dateStr;

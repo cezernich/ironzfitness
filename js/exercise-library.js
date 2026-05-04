@@ -97,6 +97,13 @@ const EXERCISE_SUBSTITUTIONS = {
  */
 function getExerciseAlternatives(name) {
   const key = name.toLowerCase().trim();
+  // Empty-key guard: when called from "+ Add Exercise" with no
+  // anchor exercise (live-tracker path), the original fuzzy loop
+  // matched the very first SUBSTITUTIONS key (because every string
+  // .includes("") is true) and surfaced bench-press alternatives —
+  // chest exercises during a leg day. Bail out so callers with no
+  // anchor get nothing back and have to render their own picker.
+  if (!key) return [];
   // Direct match
   if (EXERCISE_SUBSTITUTIONS[key]) return EXERCISE_SUBSTITUTIONS[key];
   // Fuzzy: try matching any key that contains the search term
