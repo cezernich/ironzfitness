@@ -3608,29 +3608,6 @@ input.completion-ex-name:focus {
 
 .completion-cardio-fields { display: flex; flex-direction: column; gap: 6px; }
 
-/* Coach-directed note inside the mark-as-complete form. Same input
-   chrome as .completion-notes but with a coach-purple left accent
-   so the athlete reads it as "this goes to my coach" not "private
-   notes". data-coach-assignment-id on the wrap is read by the save
-   path to fire submit_assignment_feedback. */
-.completion-coach-note-wrap {
-  margin-top: 8px;
-  padding: 8px 10px 6px;
-  background: var(--color-accent-glow, rgba(83, 74, 183, 0.06));
-  border-left: 3px solid var(--color-coach, #534AB7);
-  border-radius: 0 8px 8px 0;
-}
-.completion-coach-note-wrap .completion-field-label {
-  display: block;
-  font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-coach, #534AB7);
-  margin-bottom: 4px;
-}
-.completion-coach-notes { background: var(--color-surface); }
-
 .completion-dur-row {
   display: flex;
   align-items: center;
@@ -12134,7 +12111,7 @@ input.completion-ex-name:focus {
 .move-session-modal-actions {
   display: flex;
   gap: 8px;
-  justify-content: flex-end;
+  justify-content: center;
 }
 .move-session-modal-actions button {
   min-width: 90px;

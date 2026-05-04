@@ -121,7 +121,7 @@
     const q = _filterSearch.trim().toLowerCase();
     return _items.filter(item => {
       const w = item.workout || {};
-      if (_filterType && w.type !== _filterType) return false;
+      if (_filterType && _parentType(w.type) !== _filterType) return false;
       const tags = Array.isArray(w.tags) ? w.tags : [];
       if (_filterTag && !tags.includes(_filterTag)) return false;
       if (q) {
@@ -145,8 +145,8 @@
   function _availableTypes() {
     const set = new Set();
     for (const it of _items) {
-      const t = it && it.workout && it.workout.type;
-      if (t) set.add(t);
+      const parent = _parentType(it && it.workout && it.workout.type);
+      if (parent) set.add(parent);
     }
     return Array.from(set).sort();
   }
@@ -523,12 +523,39 @@
     await loadCoachLibrary();
   }
 
+  // Mirrors strava-integration.js / stats.js: subtype keys emitted by the
+  // running/cycling/swimming generators (e.g. "easy_recovery",
+  // "bike_tempo", "swim_css_intervals") roll up to a single parent
+  // discipline so the filter shows "Run / Ride / Swim" instead of every
+  // template id leaking into the dropdown.
+  const _RUN_SUBTYPES = new Set([
+    "easy_recovery", "endurance", "long_run", "tempo_threshold",
+    "track_workout", "speed_work", "hills", "fun_social",
+    "recovery_run", "base_run", "progression_run",
+  ]);
+  const _BIKE_SUBTYPES = new Set([
+    "bike_endurance", "bike_tempo", "bike_threshold", "bike_intervals",
+    "bike_vo2", "bike_recovery", "bike_long", "bike_sweetspot",
+  ]);
+  const _SWIM_SUBTYPES = new Set([
+    "swim_endurance", "swim_technique", "swim_css_intervals", "swim_speed",
+    "swim_threshold", "swim_recovery", "swim_long",
+  ]);
+  function _parentType(t) {
+    const x = String(t || "").toLowerCase();
+    if (!x) return "";
+    if (_RUN_SUBTYPES.has(x))  return "running";
+    if (_BIKE_SUBTYPES.has(x)) return "cycling";
+    if (_SWIM_SUBTYPES.has(x)) return "swimming";
+    return x;
+  }
   function _typeLabel(t) {
     const map = { running: "Run", cycling: "Ride", swimming: "Swim",
       weightlifting: "Strength", strength: "Strength", hiit: "HIIT",
       hyrox: "Hyrox", brick: "Brick", general: "Workout", yoga: "Yoga",
       bodyweight: "Bodyweight" };
-    return map[t] || t;
+    const parent = _parentType(t);
+    return map[parent] || parent || t;
   }
 
   // ── New / edit / duplicate / delete ──────────────────────────────────

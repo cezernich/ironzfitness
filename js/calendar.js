@@ -1220,12 +1220,33 @@ function doMoveSession(cardId, sourceType, sourceId, _origDate, newDateOverride)
   } else if (sourceType === "scheduled") {
     let schedule = [];
     try { schedule = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
+    const moved = schedule.find(w => String(w.id) === String(sourceId));
     schedule = schedule.map(w => String(w.id) === String(sourceId) ? { ...w, date: newDate } : w);
     localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
+    _persistCoachAssignmentMove(moved, newDate);
   }
   renderCalendar();
   if (typeof selectedDate !== "undefined" && selectedDate) renderDayDetail(selectedDate);
   if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
+}
+
+// When the moved schedule entry is mirrored from a coach_assigned_workouts
+// row, push the new date back to the source-of-truth table. Without this
+// the AFTER-INSERT trigger re-mirrors the original date on the next sync,
+// leaving a duplicate entry on the source date AND undoing the move.
+function _persistCoachAssignmentMove(entry, newDate) {
+  if (!entry || !window.supabaseClient) return;
+  const assignmentId = entry.coachAssignmentId
+    || (typeof entry.id === "string" && entry.id.startsWith("coach-")
+        ? entry.id.slice("coach-".length)
+        : null);
+  if (!assignmentId) return;
+  window.supabaseClient.from("coach_assigned_workouts")
+    .update({ date: newDate })
+    .eq("id", assignmentId)
+    .then(({ error }) => {
+      if (error) console.warn("[move] coach_assigned date update failed", error.message);
+    });
 }
 
 function doDuplicateSession(cardId, sourceType, sourceId, _origDate, newDateOverride) {
@@ -2938,22 +2959,6 @@ function _buildDistanceField(sessionId, type, globalUnit) {
     </div>`;
 }
 
-// Pull the coachAssignmentId for the schedule entry behind a sessionId.
-// Used by buildCompletionSection to decide whether to surface the
-// "Send back to your coach" textarea inline. Mirrors the workoutId-
-// indexed _ratingCoachAssignmentIdFor used by the rating modal so
-// both surfaces resolve the same id off the same schedule shape.
-function _completionCoachAssignmentIdFor(sessionId) {
-  try {
-    const m = String(sessionId || "").match(/^session-sw-(.+)$/);
-    if (!m) return null;
-    const sched = JSON.parse(localStorage.getItem("workoutSchedule")) || [];
-    const entry = sched.find(e => String(e.id) === m[1]);
-    if (!entry || entry.source !== "coach_assigned") return null;
-    return entry.coachAssignmentId || null;
-  } catch { return null; }
-}
-
 function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDuration, steps, opts) {
   // No completion UI for future dates — uniformly. There used to be an
   // `opts.allowFuture` opt-in for coach-assigned workouts (so an athlete
@@ -3090,13 +3095,7 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
           placeholder="e.g. 205" min="0" max="2000" />
       </div>` : ""}
       <textarea id="cnotes-${sessionId}" class="completion-notes"
-        placeholder="Notes (private — just for you)"></textarea>
-      ${_completionCoachAssignmentIdFor(sessionId) ? `
-        <div class="completion-coach-note-wrap" data-coach-assignment-id="${_completionCoachAssignmentIdFor(sessionId)}">
-          <label class="completion-field-label">Send back to your coach <span class="optional-tag">optional</span></label>
-          <textarea id="ccoachnotes-${sessionId}" class="completion-notes completion-coach-notes"
-            placeholder="Anything your coach should know — e.g. 'felt strong, ready to push next week'"></textarea>
-        </div>` : ""}`;
+        placeholder="Notes (private — just for you)"></textarea>`;
   } else {
     const _cUnit = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
     const _cResolvedType = _resolveEnduranceType(type);
@@ -3115,12 +3114,6 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
         </div>` : ""}
         <textarea id="cnotes-${sessionId}" class="completion-notes"
           placeholder="Notes (private — just for you)"></textarea>
-        ${_completionCoachAssignmentIdFor(sessionId) ? `
-          <div class="completion-coach-note-wrap" data-coach-assignment-id="${_completionCoachAssignmentIdFor(sessionId)}">
-            <label class="completion-field-label">Send back to your coach <span class="optional-tag">optional</span></label>
-            <textarea id="ccoachnotes-${sessionId}" class="completion-notes completion-coach-notes"
-              placeholder="Anything your coach should know — e.g. 'felt strong, ready to push next week'"></textarea>
-          </div>` : ""}
       </div>`;
   }
 
@@ -3297,26 +3290,6 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   // Don't save again if already completed
   if (isSessionComplete(sessionId)) return;
   const notes    = (document.getElementById(`cnotes-${sessionId}`)?.value || "").trim();
-  // Coach-directed note (only present when this is a coach-assigned
-  // session — the form-build path conditionally renders the textarea).
-  // Captured here at the click; sent via the existing
-  // submit_assignment_feedback RPC so the coach sees it on the
-  // assignment row in coach-client-detail's Calendar tab.
-  const coachAssignmentId = (document.querySelector(`[data-coach-assignment-id]`)?.dataset?.coachAssignmentId) || null;
-  const coachNoteForCoach = (document.getElementById(`ccoachnotes-${sessionId}`)?.value || "").trim();
-  if (coachAssignmentId && coachNoteForCoach) {
-    try {
-      window.supabaseClient?.rpc("submit_assignment_feedback", {
-        _assignment_id: coachAssignmentId,
-        _note:          coachNoteForCoach,
-        _rating:        null,
-      }).then(({ error }) => {
-        if (error) console.warn("[completion] submit_assignment_feedback failed:", error.message);
-      });
-    } catch (e) {
-      console.warn("[completion] coach feedback RPC threw:", e);
-    }
-  }
   const _parsedDur = _readDurationMinSec(sessionId);
   let duration = (!isNaN(_parsedDur) && _parsedDur > 0) ? String(_parsedDur) : "";
   // Brick workouts have separate bike + run inputs. Read each one and
@@ -4174,6 +4147,14 @@ function renderDailyRings() {
     ${buildRing(calPct, calRingColor, calLabel, "Nutrition", nutritionEnabled, { goalAware: true, proteinHit })}
     ${buildRing(hydPct, "#3b82f6", hydLabel, "Hydration", hydrationEnabled)}
   </div>`;
+
+  // Stacked Day badge: tracks the date the rings are showing. Today
+  // gets the running streak count; past stacked days get a quieter
+  // "Stacked" pill so the rings page reads "yes, you hit it." Without
+  // this the badge only flashed at the moment of celebration.
+  if (window.StackUX && typeof window.StackUX.refreshStackedBadge === "function") {
+    try { window.StackUX.refreshStackedBadge(dateStr); } catch {}
+  }
 }
 
 async function renderDayDetail(dateStr) {
@@ -6188,10 +6169,18 @@ function onCellDrop(event, targetDate) {
     const schedule = loadWorkoutSchedule();
     const idx = schedule.findIndex(e => String(e.id) === String(dragData.payload.id) && e.date === sourceDate);
     if (idx === -1) return;
-    const entry  = { ...schedule[idx], date: targetDate };
-    if (typeof entry.id === "string") entry.id = entry.id.replace(sourceDate, targetDate);
+    const orig   = schedule[idx];
+    const isCoachMirror = typeof orig.id === "string" && orig.id.startsWith("coach-");
+    const entry  = { ...orig, date: targetDate };
+    // Preserve the coach-<uuid> id so the AFTER UPDATE trigger can match
+    // and rewrite the schedule entry in place. For non-coach scheduled
+    // entries keep the legacy date-substring rewrite.
+    if (!isCoachMirror && typeof entry.id === "string") {
+      entry.id = entry.id.replace(sourceDate, targetDate);
+    }
     schedule.splice(idx, 1, entry);
     localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
+    _persistCoachAssignmentMove(orig, targetDate);
 
   } else if (dragData.type === "plan") {
     const plan = loadTrainingPlan();

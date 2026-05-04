@@ -324,17 +324,25 @@
     setTimeout(() => { try { toast.remove(); } catch {} }, 1700);
   }
 
-  function _renderStackedBadge() {
+  function _renderStackedBadge(dateStr) {
     const host = document.getElementById("daily-rings");
     if (!host) return;
     if (document.getElementById("stacked-day-badge")) return;
 
+    const today = _today();
+    const date = dateStr || today;
     const streak = getStackStreak();
+    const zap = (typeof ICONS !== "undefined" && ICONS.zap) ? ICONS.zap : "⚡";
+    // Today's badge shows the running streak count; past stacked days
+    // get a quieter "Stacked" pill so the rings page reads "yes, you
+    // hit it" without lying about today's streak number.
+    const label = (date === today)
+      ? `Stacked Day · Day ${streak.current}`
+      : "Stacked";
     const badge = document.createElement("div");
     badge.id = "stacked-day-badge";
     badge.className = "stacked-day-badge";
-    const zap = (typeof ICONS !== "undefined" && ICONS.zap) ? ICONS.zap : "⚡";
-    badge.innerHTML = `<span class="sd-badge-icon">${zap}</span><span class="sd-badge-text">Stacked Day · Day ${streak.current}</span>`;
+    badge.innerHTML = `<span class="sd-badge-icon">${zap}</span><span class="sd-badge-text">${label}</span>`;
     host.parentNode.insertBefore(badge, host.nextSibling);
   }
 
@@ -444,6 +452,23 @@
     _runCelebrationAnimation();
   }
 
+  // Idempotent badge refresher for callers that render the rings
+  // (renderDailyRings is the canonical caller). Tracks whichever date
+  // the rings are showing — today gets the running streak count, past
+  // stacked days get a quieter "Stacked" pill, future / non-stacked
+  // days hide the badge entirely. Re-runs on every ring render so the
+  // badge follows the user as they tap through the week.
+  function refreshStackedBadge(dateStr) {
+    const date = dateStr || _today();
+    const existing = document.getElementById("stacked-day-badge");
+    if (isStackHit(date)) {
+      if (existing) existing.remove();
+      _renderStackedBadge(date);
+    } else if (existing) {
+      existing.remove();
+    }
+  }
+
   window.StackUX = {
     getPillarState,
     isStackHit,
@@ -456,6 +481,7 @@
     buildStackPill,
     toggleStackHistory,
     previewCelebration,
+    refreshStackedBadge,
   };
 
   // Boot sweep: pillar-state helpers (getDataForDate, getDailyNutritionTarget,
