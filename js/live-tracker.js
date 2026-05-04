@@ -1092,15 +1092,26 @@ function _logLiveSet(exIdx, setIdx) {
       const group = _findLiveGroupContaining(exIdx);
       let restMs = _liveRestForSet(exIdx, setIdx);
       let shouldRest = true;
+      let inSupersetMidRound = false;
       if (group && group.kind === "superset") {
         const roundComplete = group.indices.every(ix => !!_liveTracker.sets[ix]?.[setIdx]?.done);
         shouldRest = roundComplete;
+        inSupersetMidRound = !roundComplete;
         restMs = 60000;
       }
       if (shouldRest) {
         _liveTracker.inRest = true;
         _liveTracker.restCountdown = restMs;
         _liveTracker.restEndTime = Date.now() + restMs;
+      } else if (inSupersetMidRound) {
+        // Mid-superset-round logs (logged A, B not done yet) cancel any
+        // running rest from a prior exercise. Without this, the user
+        // sees a leftover countdown from the previous exercise's last
+        // set even though the whole point of a superset is to flow
+        // straight from A → B with no rest. Per user feedback.
+        _liveTracker.inRest = false;
+        _liveTracker.restCountdown = 0;
+        _liveTracker.restEndTime = 0;
       }
     }
   }
