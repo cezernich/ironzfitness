@@ -124,9 +124,23 @@
     if (tags.includes("kettlebell") || tags.includes("kettlebells")) return "KB each hand";
     if (tags.includes("cable-machine") || tags.includes("cable")) return "cable";
     if (tags.includes("machine") || tags.some(t => /machine$/.test(t))) return "machine";
-    if (tags.length === 0) return "bodyweight"; // no equipment → BW
 
-    return "";
+    // Name-keyword inference — runs when the DB lookup didn't match
+    // (e.g. coach-typed exercise names like "Front Foot Elevated
+    // (plate) Dumbbell Split Squat" that aren't in EXERCISE_DB
+    // verbatim). Without this, the next-line fallback turned
+    // "50 lbs" into "50 lbs · bodyweight" — contradictory.
+    if (/\bdumbbell?s?\b|\bdb\b/.test(n)) return "DB each hand";
+    if (/\bbarbell\b/.test(n)) return "barbell";
+    if (/\bkettlebell?s?\b|\bkb\b/.test(n)) return "KB each hand";
+    if (/\bplate\b/.test(n)) return ""; // plate-loaded — weight stands alone
+
+    // Truly nothing matched. Only call it bodyweight when the weight
+    // string is also empty / "BW"-like — a numeric weight + no
+    // equipment match means the coach typed an off-DB name with a
+    // load, and "bodyweight" would be wrong.
+    if (/\d/.test(w)) return "";
+    return "bodyweight";
   }
 
   // "175 lbs · DB each hand". Empty method or empty weight → just returns
