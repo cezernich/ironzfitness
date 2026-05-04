@@ -20386,11 +20386,23 @@ body.auth-visible #bottom-nav { display: none !important; }
   flex: 1; text-align: center;
 }
 .swim-builder-totals {
-  display: flex; align-items: flex-end; justify-content: space-between;
+  display: flex; align-items: center; justify-content: center;
   padding: 14px 18px; gap: 12px; flex-shrink: 0;
   border-bottom: 1px solid var(--color-border);
+  position: relative;
+  text-align: center;
+}
+.swim-builder-totals .swim-total {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 2px;
 }
 .swim-builder-totals .swim-total-value { font-size: 24px; }
+.swim-builder-totals .swim-pool-badge {
+  position: absolute; right: 18px; top: 50%; transform: translateY(-50%);
+}
+.swim-builder-totals .swim-pool-badge:active {
+  transform: translateY(-50%) scale(0.96);
+}
 .swim-builder-meta {
   display: flex; flex-direction: column; gap: 4px;
   padding: 10px 18px 12px; flex-shrink: 0;
