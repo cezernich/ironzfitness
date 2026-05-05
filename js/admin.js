@@ -42,12 +42,31 @@ async function loadAdminData() {
   setText("admin-premium-count", "…");
   setText("admin-admin-count", "…");
 
+  // Hard safety net: if the function below is still working past 20s
+  // (auth lock holding everything up, supabase-js stuck on a queued
+  // promise, etc.), force the stats out of the loading state so the
+  // user can see SOMETHING actionable instead of three spinning dots
+  // forever. The timeout cancels itself when the loader reaches a
+  // proper success / error terminus.
+  let _dotsStillShowing = true;
+  const _safetyTimer = setTimeout(() => {
+    if (!_dotsStillShowing) return;
+    console.warn("[Admin] safety timeout — loadAdminData hasn't terminated in 20s");
+    setText("admin-total-users", "—");
+    setText("admin-new-7d", "—");
+    setText("admin-premium-count", "—");
+    setText("admin-admin-count", "—");
+    _showAdminError("Admin data took too long to load. Reload the page to retry — if it keeps happening, the Supabase auth client may be locked.");
+  }, 20000);
+  const _clearDots = () => { _dotsStillShowing = false; clearTimeout(_safetyTimer); };
+
   // Dev bypass with placeholder credentials — show mock data
   if (typeof DEV_BYPASS_AUTH !== "undefined" && DEV_BYPASS_AUTH) {
     _adminProfiles = generateMockProfiles();
     _hideAdminError();
     renderAdminStats();
     renderAdminUsers();
+    _clearDots();
     return;
   }
 
@@ -61,6 +80,7 @@ async function loadAdminData() {
     setText("admin-new-7d", "—");
     setText("admin-premium-count", "—");
     setText("admin-admin-count", "—");
+    _clearDots();
     return;
   }
 
@@ -109,6 +129,7 @@ async function loadAdminData() {
       setText("admin-new-7d", "—");
       setText("admin-premium-count", "—");
       setText("admin-admin-count", "—");
+      _clearDots();
       return;
     }
   }
@@ -121,6 +142,7 @@ async function loadAdminData() {
     setText("admin-new-7d", "—");
     setText("admin-premium-count", "—");
     setText("admin-admin-count", "—");
+    _clearDots();
     return;
   }
 
@@ -129,6 +151,7 @@ async function loadAdminData() {
   _hideAdminError();
   renderAdminStats();
   renderAdminUsers();
+  _clearDots();
 }
 
 function _showAdminError(msg) {
