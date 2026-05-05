@@ -789,6 +789,18 @@
       sections.push(coachPlans.map(cp => _coachProgramTile(cp)).join(""));
     }
 
+    // Athlete-owned coach-sheet imports — plans the athlete brought in
+    // themselves via COACH_SHEET_IMPORT_SPEC. The coach didn't assign
+    // these but they're load-bearing for the athlete's training, so the
+    // coach needs visibility into what the athlete is doing in parallel
+    // with their own programming. Read-only here (no edit/delete) since
+    // the athlete owns these.
+    const sheetPlans = _coachSheetInputsFromSchedule(_data.schedule || []);
+    if (sheetPlans.length) {
+      sections.push(`<div class="coach-ti-section-label">Athlete's own plans</div>`);
+      sections.push(sheetPlans.map(sp => _coachSheetTile(sp)).join(""));
+    }
+
     // Sports + goals
     sections.push(_editingTI === "sports-goals"
       ? _renderTIEditSportsGoals(ti)
@@ -1631,6 +1643,61 @@
     }
     return Object.values(groups).sort((a, b) => a.startDate.localeCompare(b.startDate));
   }
+  // Aggregate athlete-owned coach-sheet imports (one tile per planId).
+  // Same shape as _coachProgramInputsFromSchedule but keyed off
+  // source==="coach_sheet" + the planId field stamped at import.
+  function _coachSheetInputsFromSchedule(schedule) {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const groups = {};
+    for (const e of schedule || []) {
+      if (!e || e.source !== "coach_sheet") continue;
+      if (!e.date || e.date < todayStr) continue;
+      if (!e.planId) continue;
+      if (!groups[e.planId]) {
+        groups[e.planId] = {
+          planId:    e.planId,
+          planName:  e.planName || "Coach plan",
+          sessions:  0,
+          startDate: e.date,
+          endDate:   e.date,
+        };
+      }
+      const g = groups[e.planId];
+      g.sessions++;
+      if (e.date < g.startDate) g.startDate = e.date;
+      if (e.date > g.endDate)   g.endDate   = e.date;
+    }
+    // Compute weeks count per group from the date range.
+    return Object.values(groups)
+      .map(g => {
+        const days = Math.round((new Date(g.endDate + "T00:00:00") - new Date(g.startDate + "T00:00:00")) / 86400000) + 1;
+        g.weeks = Math.max(1, Math.ceil(days / 7));
+        return g;
+      })
+      .sort((a, b) => a.startDate.localeCompare(b.startDate));
+  }
+  function _coachSheetTile(sp) {
+    const endLabel = (() => {
+      try {
+        return new Date(sp.endDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      } catch { return sp.endDate; }
+    })();
+    const sessionLabel = `${sp.sessions} upcoming workout${sp.sessions === 1 ? "" : "s"}`;
+    const meta = `${sp.weeks}-week plan · imported by athlete`;
+    // No edit/delete — the athlete owns this, coach is a viewer.
+    return `<div class="ti-card ti-card--coach-plan coach-ti-program-tile">
+      <div class="race-card-top">
+        <span class="ti-card-badge ti-card-badge--coach-plan">COACH SHEET</span>
+      </div>
+      <div class="race-card-name">${_esc(sp.planName)}</div>
+      <div class="race-card-meta">${_esc(meta)}</div>
+      <div class="race-card-footer">
+        <span class="race-date-badge">${_esc(sessionLabel)}</span>
+        <span class="race-countdown">through ${_esc(endLabel)}</span>
+      </div>
+    </div>`;
+  }
+
   function _coachProgramTile(cp) {
     const endLabel = (() => {
       try {

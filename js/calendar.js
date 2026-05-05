@@ -1688,6 +1688,27 @@ function buildLoggedWorkoutCard(w, dateStr, restriction) {
 
 const SESSION_TYPE_LABELS = { warmup: "WARMUP", main: "MAIN SET", cooldown: "COOLDOWN" };
 
+// Coach-imported workouts (source==="coach_sheet") carry the verbatim
+// raw cell text in `details`. The standard render path generates its
+// own descriptions per phase from the session-type library, which
+// reads natural for IronZ-generated plans but loses the coach's
+// specific intent (e.g. "10:00 down to 9:00 if it FEELS EASY"
+// becomes "Easy aerobic run — fully conversational pace, RPE 4–5").
+//
+// This block surfaces the coach's text verbatim above the
+// IronZ-derived breakdown — coach voice first, our interpretation
+// below as supporting structure. Only renders for fromImport
+// workouts with non-empty details so native sessions are unchanged.
+function _buildCoachNotesBlock(w) {
+  if (!w || !w.fromImport) return "";
+  const text = (w.details || "").trim();
+  if (!text) return "";
+  return `<div class="coach-notes-block">
+    <div class="coach-notes-label">Coach's notes</div>
+    <div class="coach-notes-text">${escHtml(text)}</div>
+  </div>`;
+}
+
 function _getZoneLabel(sport, zoneNum) {
   try {
     const all = JSON.parse(localStorage.getItem("trainingZones")) || {};
@@ -4803,7 +4824,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
                 </div>
               </div>
               ${buildIntensityStrip(session, cardId, w.discipline)}
-              <div class="card-body">${buildStepsList(session, w.discipline)}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(session.duration, session.name, { load: w.load || effectLoad, discipline: w.discipline }) : ""}${buildWorkoutExplanation(session, dateStr, w.discipline, effectLoad, w.sessionName, w)}${_swMovePanel}${_swCompletion}</div>
+              <div class="card-body">${_buildCoachNotesBlock(w)}${buildStepsList(session, w.discipline)}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(session.duration, session.name, { load: w.load || effectLoad, discipline: w.discipline }) : ""}${buildWorkoutExplanation(session, dateStr, w.discipline, effectLoad, w.sessionName, w)}${_swMovePanel}${_swCompletion}</div>
             </div>`;
           return;
         }

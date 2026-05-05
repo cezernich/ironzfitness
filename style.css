@@ -1433,6 +1433,28 @@ nav {
 }
 .csi-recent-import-undo:hover { background: var(--color-bg-soft, rgba(0,0,0,0.04)); }
 
+.coach-notes-block {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--color-accent, #6366f1);
+  border-radius: 4px;
+  background: var(--color-accent-glow, rgba(99, 102, 241, 0.06));
+}
+.coach-notes-label {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--color-accent, #6366f1);
+  margin-bottom: 4px;
+}
+.coach-notes-text {
+  font-size: 0.88rem;
+  color: var(--color-text);
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 input[type="text"],
 input[type="number"],
 input[type="date"],
