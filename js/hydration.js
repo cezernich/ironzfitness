@@ -69,8 +69,22 @@ function _beverageFor(type) {
 // workouts (a 20-min strength session still gets 16 oz even though
 // 18/hr × 0.33 hr = 6). Ceilings are enforced only at the race-day path
 // below, where the race distance determines the expected duration.
+// Per-hour fluid prescription baseline. Calibrated for a ~160 lb
+// athlete at moderate (Z2/Z3) intensity — the weight + intensity
+// multipliers in computeWorkoutBonusOz scale these for individual
+// athletes and harder sessions.
+//
+// Rate lift 2026-05-05: bike 22 → 25 and brick 22 → 28 after a user
+// flagged that a 2-hour MEDIUM brick (sweet-spot bike + Z2 run) was
+// landing at 35 oz workout-add, well below the 60-70 oz that
+// sports-science guidance would prescribe for that effort. Cycling
+// at sweet-spot clusters around 25-30 oz/hr in the literature; bricks
+// are the most demanding 2-hour combo in endurance training (sustained
+// bike sweat + run pounding) so they warrant the highest rate. Run /
+// swim / hyrox / rowing held at 22 — the original calibration is
+// reasonable for those sports' typical sweat rates.
 const HYDRATION_RATE_OZ_PER_HOUR = {
-  run: 22, running: 22, bike: 22, cycling: 22, swim: 22, swimming: 22, brick: 22, rowing: 22,
+  run: 22, running: 22, bike: 25, cycling: 25, swim: 22, swimming: 22, brick: 28, rowing: 22,
   hyrox: 22, circuit: 20,
   strength: 18, hiit: 18, weights: 18, crossfit: 18, weightlifting: 18, bodyweight: 16,
   yoga: 12, stretch: 12, flexibility: 12, mobility: 12, walking: 12,
