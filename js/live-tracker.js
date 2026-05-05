@@ -737,7 +737,7 @@ function _promptAddLiveExercise() {
         placeholder="e.g. Hamstring Curl" autocomplete="off"
         style="width:100%;margin-bottom:12px" />
       <label style="display:block;font-size:0.8rem;color:var(--color-text-muted);margin-bottom:4px">Sets</label>
-      <input type="number" id="live-add-ex-sets" class="ex-row-name"
+      <input type="number" id="live-add-ex-sets" class="input"
         min="1" max="10" value="3" inputmode="numeric"
         style="width:100%;margin-bottom:16px" />
       <div style="display:flex;gap:8px">
