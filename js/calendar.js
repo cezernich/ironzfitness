@@ -815,6 +815,12 @@ function buildDayCell(dateStr, dayNum, todayStr) {
   }
 
   const check = completed ? `<div class="md-check">${_CAL_V2_CHECK_SVG}</div>` : "";
+  // Tiny "TODAY" caption inside the today cell so the dark fill is
+  // unambiguously today and not "selected" — the two states render
+  // differently (today = filled, selected = red border) and users
+  // were guessing which was which especially since the week view
+  // applies the conventions in the opposite order.
+  const todayLabel = isToday ? `<span class="md-today-label">TODAY</span>` : "";
 
   return `
     <div class="${classes}"
@@ -823,6 +829,7 @@ function buildDayCell(dateStr, dayNum, todayStr) {
       ondragover="onCellDragOver(event,'${dateStr}')"
       ondragleave="onCellDragLeave(event)"
       ondrop="onCellDrop(event,'${dateStr}')">
+      ${todayLabel}
       <span class="md-num">${dayNum}</span>
       ${body}
       ${check}

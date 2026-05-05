@@ -23404,9 +23404,25 @@ body.ob-v2-lock { overflow: hidden; }
 .md.today {
   background: var(--color-accent, var(--cal-dark));
   border-radius: 10px;
+  position: relative;
 }
 .md.today .md-num { color: #fff; }
 .md.today .md-rest { color: rgba(255, 255, 255, 0.55); }
+.md-today-label {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.7);
+  pointer-events: none;
+}
+/* Push the day number down so the TODAY caption has room above it
+   on the today cell only — leaves non-today cells unchanged. */
+.md.today .md-num { margin-top: 8px; }
 .md.other-month { opacity: 0.3; }
 .md.selected {
   box-shadow: inset 0 0 0 2px var(--cal-red);
