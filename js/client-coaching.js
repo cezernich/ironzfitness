@@ -300,6 +300,74 @@
     }
   }
 
+  // Console diagnostic — `await diagnoseSchedule("2026-05-03")` dumps
+  // local schedule, server user_data.workoutSchedule, and any
+  // coach_assigned_workouts rows for the given date side-by-side.
+  // Beats pasting three separate snippets when figuring out which
+  // sync layer dropped a workout. Reads token straight from the
+  // sb-*-auth-token blob so it works even when the supabase-js
+  // client is wedged on the auth lock.
+  async function diagnoseSchedule(dateStr) {
+    if (!dateStr) {
+      console.warn("[diag] usage: await diagnoseSchedule('YYYY-MM-DD')");
+      return null;
+    }
+    const out = { date: dateStr, local: [], serverUserData: [], coachAssigned: [], serverUserDataUpdatedAt: null };
+
+    // 1) Local
+    try {
+      const ws = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
+      out.local = ws.filter(w => w?.date === dateStr).map(w => ({
+        id: w.id, source: w.source, type: w.type,
+        sessionName: w.sessionName, coachAssignmentId: w.coachAssignmentId,
+      }));
+    } catch (e) { console.warn("[diag] local read failed:", e); }
+
+    // 2) Read auth token from localStorage to bypass any gotrue lock
+    const sb = window.supabaseClient;
+    const url = sb?.supabaseUrl;
+    const key = sb?.supabaseKey;
+    if (!url || !key) { console.warn("[diag] supabase client not initialized"); return out; }
+    const tokenKey = Object.keys(localStorage).find(k => /^sb-.*-auth-token$/.test(k));
+    let token = key;
+    try {
+      const blob = JSON.parse(localStorage.getItem(tokenKey) || "{}");
+      token = blob?.access_token || token;
+    } catch {}
+    const headers = { apikey: key, Authorization: `Bearer ${token}` };
+
+    // 3) Server user_data.workoutSchedule
+    try {
+      const r = await fetch(`${url}/rest/v1/user_data?data_key=eq.workoutSchedule&select=data_value,updated_at`, { headers });
+      const [ud] = await r.json();
+      out.serverUserDataUpdatedAt = ud?.updated_at || null;
+      out.serverUserData = ((ud?.data_value || []).filter(w => w?.date === dateStr)).map(w => ({
+        id: w.id, source: w.source, type: w.type,
+        sessionName: w.sessionName, coachAssignmentId: w.coachAssignmentId,
+      }));
+    } catch (e) { console.warn("[diag] server user_data fetch failed:", e); }
+
+    // 4) Server coach_assigned_workouts for this date
+    try {
+      const r = await fetch(`${url}/rest/v1/coach_assigned_workouts?date=eq.${dateStr}&select=id,date,workout,program_id`, { headers });
+      const rows = await r.json();
+      out.coachAssigned = rows.map(x => ({
+        id: x.id, sessionName: x.workout?.sessionName, type: x.workout?.type,
+        program_id: x.program_id,
+      }));
+    } catch (e) { console.warn("[diag] coach_assigned fetch failed:", e); }
+
+    console.log(`%c[diag] Schedule for ${dateStr}`, "font-weight:bold;color:#16a34a");
+    console.log(`LOCAL workoutSchedule (${out.local.length}):`);
+    if (out.local.length) console.table(out.local); else console.log("  (empty)");
+    console.log(`SERVER user_data.workoutSchedule (${out.serverUserData.length}, updated_at=${out.serverUserDataUpdatedAt}):`);
+    if (out.serverUserData.length) console.table(out.serverUserData); else console.log("  (empty)");
+    console.log(`SERVER coach_assigned_workouts (${out.coachAssigned.length}):`);
+    if (out.coachAssigned.length) console.table(out.coachAssigned); else console.log("  (empty)");
+    return out;
+  }
+  if (typeof window !== "undefined") window.diagnoseSchedule = diagnoseSchedule;
+
   window.fetchActiveCoachIds         = fetchActiveCoachIds;
   window.isCoachActive               = isCoachActive;
   window.subscribeCoachAssignments   = subscribeCoachAssignments;
