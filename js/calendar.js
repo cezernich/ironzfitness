@@ -3599,12 +3599,33 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
     isCompletion:       true,
   };
   workouts.unshift(completedWorkout);
-  localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
+  localStorage.setItem("workouts", JSON.stringify(workouts));
 
   // Mark session as completed
   const meta = loadCompletionMeta();
   meta[sessionId] = { workoutId, completedAt: new Date().toISOString() };
-  localStorage.setItem("completedSessions", JSON.stringify(meta)); if (typeof DB !== 'undefined') DB.syncKey('completedSessions');
+  localStorage.setItem("completedSessions", JSON.stringify(meta));
+
+  // Three-layer sync — mirrors live-tracker _commitLiveWorkout. Without
+  // these, a Mark-as-Complete tap on phone schedules a 200ms timer that
+  // dies when iOS suspends the JS context. The completion never reaches
+  // Supabase and the second device's hard refresh shows planned forever.
+  //   1. flushSingleWorkout — direct upsert into the structured workouts
+  //      table so coach-client-detail surfaces "✓ done" immediately.
+  //   2. syncWorkouts — schedules bulk reconcile (user_data + table).
+  //   3. flushKey — flushes the immediate user_data writes synchronously
+  //      so cross-device pull on next load sees the freshest state.
+  if (typeof DB !== 'undefined') {
+    if (DB.flushSingleWorkout) {
+      DB.flushSingleWorkout(completedWorkout)
+        .catch(e => console.warn('[IronZ] flushSingleWorkout failed', e && e.message));
+    }
+    if (DB.syncWorkouts) DB.syncWorkouts();
+    if (DB.flushKey) {
+      DB.flushKey('workouts').catch(e => console.warn('[IronZ] workouts flush failed', e && e.message));
+      DB.flushKey('completedSessions').catch(e => console.warn('[IronZ] completedSessions flush failed', e && e.message));
+    }
+  }
 
   // BUGFIX 04-25 §5: shared post-commit pipeline. Both Mark-as-Complete
   // and live-tracker commit go through finalizeWorkoutCompletion so
