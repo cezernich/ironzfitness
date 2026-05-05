@@ -612,6 +612,60 @@ function cleanupOrphanedCompletions() {
   } catch {}
 }
 
+// One-shot rewrite for legacy onboarding-v2 brick entries that landed
+// with type:"triathlon" before the apply-flow fix shipped (commit
+// 4b31389). Without this they bucket as "triathlon" in the plan
+// consistency widget + stats breakdown, so a Bike→Run brick on the
+// calendar shows up under a separate Triathlon row instead of
+// merging into Brick.
+//
+// Discriminator: discipline === "brick" (set by onboarding-v2 template
+// at line 5073) OR /brick/i in sessionName/name. Conservative — won't
+// touch a real triathlon race-day session that just happens to have
+// type:"triathlon".
+//
+// Idempotent: gated on localStorage flag `brickTypeBackfillRan_v1`
+// so it runs at most once per device. Rewrites both workoutSchedule
+// and trainingPlan in place, then DB.syncKey to push the cleaned
+// arrays back to user_data.
+function _backfillBrickTypeOnce() {
+  if (localStorage.getItem("brickTypeBackfillRan_v1") === "1") return;
+
+  const isLegacyBrick = (e) => {
+    if (!e) return false;
+    if (e.type !== "triathlon") return false;
+    if (e.discipline === "brick") return true;
+    const name = String(e.sessionName || e.name || "");
+    return /brick/i.test(name);
+  };
+
+  let totalChanged = 0;
+  for (const key of ["workoutSchedule", "trainingPlan"]) {
+    let arr;
+    try { arr = JSON.parse(localStorage.getItem(key) || "[]"); }
+    catch { continue; }
+    if (!Array.isArray(arr) || !arr.length) continue;
+    let changed = 0;
+    const next = arr.map(e => {
+      if (!isLegacyBrick(e)) return e;
+      changed++;
+      return { ...e, type: "brick" };
+    });
+    if (changed > 0) {
+      localStorage.setItem(key, JSON.stringify(next));
+      if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey(key);
+      totalChanged += changed;
+      console.log(`[IronZ] brick-type backfill: rewrote ${changed} entries in ${key}`);
+    }
+  }
+
+  localStorage.setItem("brickTypeBackfillRan_v1", "1");
+  if (totalChanged > 0) {
+    if (typeof renderCalendar === "function") renderCalendar();
+    if (typeof renderStats === "function") renderStats();
+  }
+}
+
 function init() {
   // Hoist meal-log modals out of #tab-nutrition so they can be opened
   // from anywhere — the home day-detail's quick meal-log row, the
@@ -685,6 +739,16 @@ function init() {
         if (typeof reconcileLiveTrackerStructuredSync === 'function') {
           reconcileLiveTrackerStructuredSync();
         }
+        // One-shot: rewrite legacy onboarding-v2 brick entries that
+        // were stored with type:"triathlon" before commit 4b31389
+        // fixed the apply flow. Walks workoutSchedule + trainingPlan,
+        // matches entries that have a brick discriminator (discipline
+        // === "brick" OR sessionName contains "Brick"), rewrites
+        // type → "brick" so the plan-consistency widget and the stats
+        // breakdown bucket them correctly. Idempotent — gates on a
+        // localStorage flag so the migration runs at most once per
+        // device.
+        try { _backfillBrickTypeOnce(); } catch (e) { console.warn('[IronZ] brick-type backfill:', e); }
       })
       .catch(() => {});
   }
