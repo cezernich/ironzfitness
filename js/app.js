@@ -666,6 +666,53 @@ function _backfillBrickTypeOnce() {
   }
 }
 
+// One-shot duration bump for legacy brick entries. Onboarding-v2
+// generated bricks with `Math.round(sessionLen * 1.3)` before the
+// 2026-05-05 fix raised the multiplier to 2.0× — so existing brick
+// schedule entries land at ~78 min for a 60-min sessionLen even
+// though the brick template's wall-time is closer to 100-120. The
+// hydration math + nutrition load gate both read the top-level
+// duration, so the legacy stamp left them undercounting.
+//
+// Conservative rewrite: for type=brick entries with duration < 90,
+// bump to round(duration * 2.0 / 1.3) — i.e., undo the old 1.3
+// multiplier and reapply the new 2.0. Only touches entries that
+// look like they came out of the legacy generator (duration < 90
+// is the heuristic). Idempotent via the localStorage flag.
+function _backfillBrickDurationOnce() {
+  if (localStorage.getItem("brickDurationBackfillRan_v1") === "1") return;
+
+  let totalChanged = 0;
+  for (const key of ["workoutSchedule", "trainingPlan"]) {
+    let arr;
+    try { arr = JSON.parse(localStorage.getItem(key) || "[]"); }
+    catch { continue; }
+    if (!Array.isArray(arr) || !arr.length) continue;
+    let changed = 0;
+    const next = arr.map(e => {
+      if (!e || e.type !== "brick") return e;
+      const dur = parseFloat(e.duration);
+      if (!isFinite(dur) || dur <= 0 || dur >= 90) return e;
+      // 78 → 120, 65 → 100, etc. Caps at 240 just in case.
+      const bumped = Math.min(240, Math.round(dur * 2.0 / 1.3));
+      changed++;
+      return { ...e, duration: bumped };
+    });
+    if (changed > 0) {
+      localStorage.setItem(key, JSON.stringify(next));
+      if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey(key);
+      totalChanged += changed;
+      console.log(`[IronZ] brick-duration backfill: bumped ${changed} entries in ${key}`);
+    }
+  }
+
+  localStorage.setItem("brickDurationBackfillRan_v1", "1");
+  if (totalChanged > 0) {
+    if (typeof renderCalendar === "function") renderCalendar();
+    if (typeof renderStats === "function") renderStats();
+  }
+}
+
 function init() {
   // Hoist meal-log modals out of #tab-nutrition so they can be opened
   // from anywhere — the home day-detail's quick meal-log row, the
@@ -749,6 +796,7 @@ function init() {
         // localStorage flag so the migration runs at most once per
         // device.
         try { _backfillBrickTypeOnce(); } catch (e) { console.warn('[IronZ] brick-type backfill:', e); }
+        try { _backfillBrickDurationOnce(); } catch (e) { console.warn('[IronZ] brick-duration backfill:', e); }
       })
       .catch(() => {});
   }

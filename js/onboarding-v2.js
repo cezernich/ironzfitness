@@ -5089,7 +5089,15 @@
       "strength-full": { type: "weightlifting",discipline: "strength", sessionName: "Full Body",   load: "moderate", _strengthFocus: "full" },
       "strength-custom":{type: "weightlifting",discipline: "strength", sessionName: "Strength",    load: "moderate", _strengthFocus: "full" },
       // Other disciplines
-      "brick":         { type: "brick",        discipline: "brick", sessionName: "Brick (Bike → Run)", load: "moderate", duration: Math.round(sessionLen * 1.3) },
+      // Brick duration multiplier 1.3 → 2.0 (2026-05-05). Bricks are
+      // bike + transition + run; the brick template renderer wall-times
+      // (planner.js Sweet Spot Brick: 10 wu + 25×2+5 + 3 T1 + 25 run +
+      // 7 cd ≈ 100 min, longer variants up to ~120) run ~2× a
+      // single-sport session of the same sessionLen. The legacy 1.3×
+      // left a 60-min sessionLen brick stamped at 78 min, which made
+      // the hydration resolver undercount and the card's wall-time
+      // disagree with the stored duration. 2.0× aligns them.
+      "brick":         { type: "brick",        discipline: "brick", sessionName: "Brick (Bike → Run)", load: "moderate", duration: Math.round(sessionLen * 2.0) },
       "hiit":          { type: "hiit",         discipline: "hiit",  sessionName: "HIIT",      load: "hard", duration: Math.max(20, Math.round(sessionLen * 0.5)) },
       "yoga":          { type: "yoga",         discipline: "yoga",  sessionName: "Yoga",      load: "easy" },
       "mobility":      { type: "mobility",     discipline: "mobility", sessionName: "Mobility", load: "easy", duration: 20 },
