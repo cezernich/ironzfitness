@@ -1252,12 +1252,26 @@ function _persistCoachAssignmentMove(entry, newDate) {
 function doDuplicateSession(cardId, sourceType, sourceId, _origDate, newDateOverride) {
   const newDate = newDateOverride || document.getElementById(`movedate-${cardId}`)?.value;
   if (!newDate) return;
+  // Deep clone so the duplicate doesn't share nested objects (exercises,
+  // aiSession.intervals, etc.) with the source. Spread alone is shallow,
+  // so an in-place mutation on either copy's nested fields would bleed
+  // across — and editing the duplicate's exercises would silently change
+  // the source workout's exercises too.
+  const _deepClone = (o) => {
+    try { return structuredClone(o); }
+    catch { return JSON.parse(JSON.stringify(o)); }
+  };
   if (sourceType === "logged") {
     let workouts = [];
     try { workouts = JSON.parse(localStorage.getItem("workouts")) || []; } catch {}
     const orig = workouts.find(w => String(w.id) === String(sourceId));
     if (orig) {
-      workouts.unshift({ ...orig, id: generateId(), date: newDate, completedSessionId: undefined, isCompletion: undefined });
+      const dup = _deepClone(orig);
+      dup.id = generateId();
+      dup.date = newDate;
+      delete dup.completedSessionId;
+      delete dup.isCompletion;
+      workouts.unshift(dup);
       localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
     }
   } else if (sourceType === "scheduled") {
@@ -1265,7 +1279,17 @@ function doDuplicateSession(cardId, sourceType, sourceId, _origDate, newDateOver
     try { schedule = JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch {}
     const orig = schedule.find(w => String(w.id) === String(sourceId));
     if (orig) {
-      schedule.push({ ...orig, id: generateId(), date: newDate });
+      const dup = _deepClone(orig);
+      dup.id = generateId();
+      dup.date = newDate;
+      // A duplicate of a coach-assigned workout is a personal copy — drop
+      // the coach_assigned_workouts link so edits don't try to write back
+      // to the coach's row, and the trigger doesn't re-mirror this entry
+      // on the next coach update.
+      delete dup.coachAssignmentId;
+      delete dup.coachId;
+      if (dup.source === "coach_assigned") dup.source = "user_added";
+      schedule.push(dup);
       localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
     }
   }
