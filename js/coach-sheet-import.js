@@ -1336,6 +1336,115 @@
     return _toSeconds(candidate) < _toSeconds(existing);
   }
 
+  // ── importStructure → aiSession converter ─────────────────────────────
+  //
+  // The calendar renders a workout's intensity strip + per-phase rows
+  // from `aiSession.intervals`. Without that, my imported workouts
+  // pick up a default discipline+load template — which is why a coach
+  // "6×1 mile" workout was showing as "6 × 5 min" (the default
+  // hard-workout template uses time-based reps).
+  //
+  // This converter walks the LLM-normalized importStructure and
+  // produces aiSession-shaped intervals. Distance intervals
+  // (reps + distance + unit) become "6 × 1 mi"; time intervals
+  // (on_min + off_min) become "6 × 5 min". Continuous main blocks
+  // become a single rep at the prescribed distance.
+
+  const _INTENSITY_EFFORT = {
+    easy: "Z2", moderate: "Z3", tempo: "Z3",
+    threshold: "Z4", hard: "Z4",
+    vo2: "Z5", vo2max: "Z5",
+  };
+  function _phaseEffort(phase, dayType) {
+    if (phase.phase === "warmup" || phase.phase === "cooldown") return "Z1";
+    const intensity = String(phase.intensity || "").toLowerCase();
+    if (_INTENSITY_EFFORT[intensity]) return _INTENSITY_EFFORT[intensity];
+    if (dayType === "easy_run" || dayType === "long_run") return "Z2";
+    if (dayType === "hard_workout") return "Z4";
+    return "Z2";
+  }
+  function _formatDistanceUnit(distance, unit) {
+    const u = String(unit || "").toLowerCase();
+    if (!Number.isFinite(distance) || distance <= 0) return null;
+    if (u === "mi" || u === "mile" || u === "miles") return `${distance} mi`;
+    if (u === "km" || u === "kilometer" || u === "kilometers") return `${distance} km`;
+    if (u === "yd" || u === "yard" || u === "yards") return `${distance}yd`;
+    if (u === "m" || u === "meter" || u === "meters") return `${distance}m`;
+    return `${distance} mi`;
+  }
+  function _formatMinutes(min) {
+    if (!Number.isFinite(min) || min <= 0) return null;
+    if (min < 1) return `${Math.round(min * 60)}s`;
+    return `${min} min`;
+  }
+  function _phaseLabelFor(dayType, phase) {
+    if (phase.phase === "warmup")   return "Warmup";
+    if (phase.phase === "cooldown") return "Cooldown";
+    if (dayType === "easy_run") return "Easy aerobic run";
+    if (dayType === "long_run") return "Long run";
+    if (dayType === "hard_workout") return "Threshold work";
+    return "Main";
+  }
+  function _intervalLabel(iv) {
+    const t = String(iv?.type || "").toLowerCase();
+    if (t === "fartlek")           return "Fartlek";
+    if (t === "tempo")             return "Tempo";
+    if (t === "threshold")         return "Threshold repeat";
+    if (t === "vo2max" || t === "vo2") return "VO2 max repeat";
+    if (t === "repeats" || t === "repeat") return "Repeat";
+    return "Interval";
+  }
+
+  function _buildAiSessionFromImport(w) {
+    const struct = w?.structure;
+    if (!Array.isArray(struct) || !struct.length) return null;
+    const aiIntervals = [];
+    for (const phase of struct) {
+      if (!phase) continue;
+      const effort = _phaseEffort(phase, w.day_type);
+      const phaseDist = phase.distance_mi;
+
+      if (phase.phase === "main" && Array.isArray(phase.intervals) && phase.intervals.length) {
+        for (const iv of phase.intervals) {
+          const reps = Number.isInteger(iv.reps) && iv.reps > 0 ? iv.reps : 1;
+          // Distance shape wins when present — preserves coach intent
+          // ("6×1 mile" stays as "6 × 1 mi", not converted to time).
+          let duration = _formatDistanceUnit(iv.distance, iv.unit);
+          if (!duration && Number.isFinite(iv.on_min)) duration = _formatMinutes(iv.on_min);
+          if (!duration && Number.isFinite(phaseDist) && phaseDist > 0 && reps > 0) {
+            const perRep = Math.round((phaseDist / reps) * 100) / 100;
+            duration = `${perRep} mi`;
+          }
+          if (!duration) continue;
+          const restDur = Number.isFinite(iv.off_min) ? _formatMinutes(iv.off_min) : null;
+          aiIntervals.push({
+            name: _intervalLabel(iv),
+            reps,
+            duration,
+            effort,
+            ...(restDur ? { restDuration: restDur } : {}),
+            ...(phase.target_pace_per_mi ? { paceTarget: phase.target_pace_per_mi } : {}),
+            details: w.raw_description || "",
+          });
+        }
+        continue;
+      }
+
+      const distLabel = Number.isFinite(phaseDist) && phaseDist > 0 ? `${phaseDist} mi` : null;
+      if (!distLabel) continue;
+      aiIntervals.push({
+        name: _phaseLabelFor(w.day_type, phase),
+        reps: 1,
+        duration: distLabel,
+        effort,
+        ...(phase.target_pace_per_mi ? { paceTarget: phase.target_pace_per_mi } : {}),
+        ...(phase.note ? { details: phase.note } : {}),
+      });
+    }
+    if (!aiIntervals.length) return null;
+    return { title: _phaseLabelFor(w.day_type, { phase: "main" }), intervals: aiIntervals };
+  }
+
   function _shapeImportedWorkoutForSchedule(w, importId, planId, planName) {
     // Match the workoutSchedule entry shape produced by Custom Plan
     // (custom-plan.js:2067) so the Active Training Inputs grouping
@@ -1358,6 +1467,13 @@
     // rendering uses for the icon tint and ring color.
     const load = dt === "long_run" ? "long" : dt === "hard_workout" ? "hard" : "easy";
 
+    // Synthesize aiSession from importStructure so the calendar's
+    // intensity strip + per-phase rows reflect the coach's actual
+    // distances and rest intervals. Without this, the renderer falls
+    // back to a default discipline+load template (e.g. "6 × 5 min"
+    // for a hard workout), losing the coach's "6 × 1 mi" intent.
+    const aiSession = _buildAiSessionFromImport(w);
+
     return {
       id,
       date: w.date,
@@ -1370,6 +1486,7 @@
       discipline: "run",
       load,
       details: w.raw_description || "",
+      ...(aiSession ? { aiSession } : {}),
       // Import metadata — _shapeTrainingSession in db.js skips named
       // columns and stashes the rest in `data` jsonb, so all of these
       // round-trip cross-device.

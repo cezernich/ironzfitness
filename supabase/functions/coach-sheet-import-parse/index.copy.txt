@@ -1150,7 +1150,12 @@ Return ONE \`workouts\` array, one entry per input block, in the same order. Use
 
 4. **Pace extraction:** pull pace ranges like "8:15-7:15" or single paces "7:45" from the description. Set on the main phase as \`target_pace_per_mi\`. Do NOT include the "/mi" suffix.
 
-5. **Intervals:** when the description mentions interval structure ("10x800m", "3 min ON 2 min OFF", "5x1mi"), capture as \`intervals\` on the main phase. Use the most natural shape — \`reps\` + \`distance\` + \`unit\`, or \`on_min\` + \`off_min\` + \`type\`. Leave fields null when not applicable.
+5. **Intervals — preserve the coach's UNIT, never convert distance to time:**
+   - **Distance-described intervals** ("6×1 mile", "10×800m", "5×1mi", "3 × 2K"): emit \`reps\` + \`distance\` + \`unit\` (units: \`mi\` | \`km\` | \`m\` | \`yd\`). Do NOT estimate the time from pace — \`on_min\` MUST be null.
+   - **Time-described intervals** ("3 min ON 2 min OFF", "4 × 8 min @ tempo"): emit \`reps\` + \`on_min\` + \`off_min\` + \`type\`. \`distance\` MUST be null.
+   - **Rest** ("w/ 2 min jog rest", "90s rest btwn"): captured as \`off_min\`.
+   - When a coach writes "1 mile", that's a distance instruction. The athlete needs distance reps for autolaps and pacing. Converting to "5 min" loses the unit and breaks the workout.
+   Leave non-applicable fields null.
 
 6. **Preserve \`raw_description\` and \`source_cell\` verbatim** — copy them straight through. They're load-bearing for the "View source" UI affordance and forensic backtracking.
 
