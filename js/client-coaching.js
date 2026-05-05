@@ -236,13 +236,21 @@
           continue;
         }
 
-        // Merge canonical fields onto the local entry. Preserve the
-        // local id so other code that joins by id stays stable.
+        // Merge canonical content onto the local entry. CRITICALLY,
+        // preserve local id AND local date — the user may have moved
+        // the workout to a different day via the calendar Move flow,
+        // and that move IS the source of truth for placement (the
+        // move handler already calls _persistCoachAssignmentMove to
+        // update the canonical row's date too, but a sync race can
+        // leave the canonical lagging by a tick). Overwriting w.date
+        // with canonical.date here silently snaps the moved workout
+        // back to its original day — the bug that wiped the user's
+        // May 3 leg day after they'd moved it from May 9.
         let merged = {
           ...w,
           ...(canonical.workout || {}),
           id:                w.id,
-          date:              canonical.date || w.date,
+          date:              w.date || canonical.date,
           source:            "coach_assigned",
           coachAssignmentId: canonical.id,
           coachId:           canonical.coach_id || w.coachId,
