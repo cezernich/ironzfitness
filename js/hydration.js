@@ -954,7 +954,12 @@ function _pushHydrationEntry(type, oz) {
 
   log[dateStr] = day;
   localStorage.setItem("hydrationLog", JSON.stringify(log));
-  if (typeof DB !== "undefined") DB.syncKey("hydrationLog");
+  if (typeof DB !== "undefined") {
+    DB.syncKey("hydrationLog");
+    // Belt-and-suspenders: race iOS suspension with a direct flush so
+    // the row reaches user_data before the JS context can be killed.
+    if (DB.flushKey) DB.flushKey("hydrationLog").catch(() => {});
+  }
   return oz;
 }
 
@@ -1073,7 +1078,10 @@ function undoWater() {
     day.beverages = [];
     log[dateStr] = day;
     localStorage.setItem("hydrationLog", JSON.stringify(log));
-    if (typeof DB !== "undefined") DB.syncKey("hydrationLog");
+    if (typeof DB !== "undefined") {
+      DB.syncKey("hydrationLog");
+      if (DB.flushKey) DB.flushKey("hydrationLog").catch(() => {});
+    }
     renderHydration();
     return;
   }
@@ -1083,7 +1091,12 @@ function undoWater() {
 
   log[dateStr] = day;
   localStorage.setItem("hydrationLog", JSON.stringify(log));
-  if (typeof DB !== "undefined") DB.syncKey("hydrationLog");
+  if (typeof DB !== "undefined") {
+    DB.syncKey("hydrationLog");
+    // Belt-and-suspenders: race iOS suspension with a direct flush so
+    // the row reaches user_data before the JS context can be killed.
+    if (DB.flushKey) DB.flushKey("hydrationLog").catch(() => {});
+  }
   renderHydration();
 
   if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
@@ -1625,4 +1638,15 @@ function initHydration() {
   // focus fires on desktop when the user clicks back into the tab
   // even without visibility flipping; covers both bases.
   window.addEventListener("focus", _refreshOnFocus);
+
+  // Realtime: when the OTHER device upserts hydrationLog, db.js's
+  // postgres_changes subscription writes it to localStorage and
+  // dispatches ironz:data-refresh. Re-render so the bar reflects the
+  // phone's add without needing the desktop user to switch tabs.
+  document.addEventListener("ironz:data-refresh", (e) => {
+    const keys = (e && e.detail && e.detail.keys) || [];
+    if (!keys.includes("hydrationLog")) return;
+    if (!isHydrationEnabled()) return;
+    try { renderHydration(); } catch {}
+  });
 }

@@ -488,6 +488,11 @@ const DB = (() => {
     // celebratedFor is in here too so device A firing the celebration
     // suppresses device B's redundant fire on the next focus refresh.
     'stackedDayHistory', 'stackCelebratedFor',
+    // hydrationLog hits the same iOS-suspension race as workouts: a
+    // user logs water on phone, the 2s timer is killed by suspension,
+    // and the second device's hard refresh pulls a stale row from
+    // user_data. 200ms cuts the race window dramatically.
+    'hydrationLog',
     // Thresholds / 1RMs / CSS / FTP / VDOT — these drive pacing across
     // the generators, so losing the most recent edit to a refresh race
     // produces workouts that disagree with the values the user just
