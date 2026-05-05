@@ -2449,6 +2449,17 @@ function _renderWorkoutHistoryList(workouts) {
   container.innerHTML = workouts.map(w => {
     const cardId     = `hist-card-${w.id}`;
     const notesHtml  = w.notes ? `<p class="history-notes">"${escHtml(w.notes)}"</p>` : "";
+    // Surface the post-workout rating + note (the modal that fires
+    // after Mark-as-Complete with the emoji scale and comment field).
+    // Was rendered only on the day-detail "Completed" badge before —
+    // now appears on the workout history card too so users can see
+    // their own "Crushed me · 'felt strong'" annotation alongside the
+    // workout, and don't have to navigate back to the planning surface
+    // to find it.
+    const ratingHtml = (typeof window.buildRatingDisplay === "function")
+      ? window.buildRatingDisplay(String(w.id))
+      : "";
+    const ratingBlock = ratingHtml ? `<div class="history-rating">${ratingHtml}</div>` : "";
     const _fallbackName = !w.name ? capitalize(w.type || "Workout") : "";
     const nameHtml   = `<span class="history-workout-name">${escHtml(w.name || _fallbackName)}</span>`;
     const starred    = isWorkoutStarred(w.id);
@@ -2519,7 +2530,7 @@ function _renderWorkoutHistoryList(workouts) {
             </div>
             <span class="workout-tag tag-${w.type}">${w.type}</span>
           </div>
-          <div class="card-body"><div style="margin-top:8px">${intervals || notesHtml}</div></div>
+          <div class="card-body"><div style="margin-top:8px">${intervals || notesHtml}${ratingBlock}</div></div>
         </div>`;
     }
 
@@ -2549,7 +2560,7 @@ function _renderWorkoutHistoryList(workouts) {
             </div>
             <span class="workout-tag tag-${w.type}">${w.type}</span>
           </div>
-          <div class="card-body">${notesHtml}${segTable}</div>
+          <div class="card-body">${notesHtml}${ratingBlock}${segTable}</div>
         </div>`;
     }
 
@@ -2607,7 +2618,7 @@ function _renderWorkoutHistoryList(workouts) {
             </div>
             <span class="workout-tag tag-${w.type}">${w.type}</span>
           </div>
-          <div class="card-body">${notesHtml}${splitSummary}${hyroxTable}</div>
+          <div class="card-body">${notesHtml}${ratingBlock}${splitSummary}${hyroxTable}</div>
         </div>`;
     }
 
@@ -2630,7 +2641,7 @@ function _renderWorkoutHistoryList(workouts) {
             </div>
             <span class="workout-tag tag-${w.type}">${w.type}</span>
           </div>
-          <div class="card-body">${notesHtml}${buildExerciseTableHTML(w.exercises, { hiit: w.type === "hiit" || !!w.hiitMeta })}</div>
+          <div class="card-body">${notesHtml}${ratingBlock}${buildExerciseTableHTML(w.exercises, { hiit: w.type === "hiit" || !!w.hiitMeta })}</div>
         </div>`;
     }
 
@@ -2652,7 +2663,7 @@ function _renderWorkoutHistoryList(workouts) {
           </div>
           <span class="workout-tag tag-${w.type}">${w.type}</span>
         </div>
-        <div class="card-body">${notesHtml}</div>
+        <div class="card-body">${notesHtml}${ratingBlock}</div>
       </div>`;
   }).join("");
 }

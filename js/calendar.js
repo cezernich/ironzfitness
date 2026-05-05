@@ -11033,6 +11033,12 @@ function buildRatingDisplay(workoutId) {
   const noteHtml = r.note ? `<span class="rating-display-note">${_escRatingHtml(r.note)}</span>` : "";
   return `<span class="rating-display">${emoji} ${label}${noteHtml}</span>`;
 }
+// Expose so other scripts (workouts.js history renderer, devtools)
+// can pull the same display HTML without duplicating the logic.
+if (typeof window !== "undefined") {
+  window.buildRatingDisplay = buildRatingDisplay;
+  window.getWorkoutRating   = getWorkoutRating;
+}
 
 function _escRatingHtml(str) {
   const d = document.createElement("div");

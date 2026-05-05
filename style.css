@@ -12980,6 +12980,18 @@ input.completion-ex-name:focus {
   white-space: nowrap;
 }
 .rating-display-note::before { content: " \2014 "; }
+/* Wrapper used on the workout-history card so the rating + note get
+   their own line below the notes block, with the full note text wrapping
+   instead of getting ellipsis-clipped at 120px (which is the right call
+   in the badge-on-day-detail context but not here where there's room). */
+.history-rating { margin-top: 6px; }
+.history-rating .rating-display { margin-left: 0; }
+.history-rating .rating-display-note {
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
 
 /* ── Rating stats section ── */
 
