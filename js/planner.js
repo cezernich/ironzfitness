@@ -2597,22 +2597,30 @@ function renderTrainingInputs() {
       const label = SCHEDULE_TYPE_LABEL[t] || capitalize(t);
       return `<span class="race-tag">${_escapeHtml(label)}</span>`;
     }).join("");
-    // Edit routing is source-specific: onboarding_v2 plans live in the
-    // Build Plan overlay (weekly template in localStorage.buildPlanTemplate);
-    // custom plans live in the Custom Plan Builder (in-memory template,
-    // reconstructed from workoutSchedule on open). Using the wrong handler
-    // was loading a stale template and showing unrelated days.
+    // Edit routing is source-specific:
+    //   - onboarding_v2 → Build Plan overlay (weekly template in
+    //     localStorage.buildPlanTemplate)
+    //   - custom → Custom Plan Builder (in-memory template,
+    //     reconstructed from workoutSchedule on open)
+    //   - coach_sheet → no weekly template (each session is unique
+    //     per the coach's plan); Edit becomes "Rename" since the
+    //     individual sessions are editable on the calendar already
     const editHandler = bp.source === "custom"
       ? `openCustomPlanEdit('${bp.planId}')`
-      : `window.OnboardingV2 && window.OnboardingV2.openBuildPlanEdit('${bp.planId}')`;
-    const badgeLabel = bp.source === "custom" ? "Custom Plan" : "Build Plan";
+      : bp.source === "coach_sheet"
+        ? `renameCoachSheetPlan('${bp.planId}')`
+        : `window.OnboardingV2 && window.OnboardingV2.openBuildPlanEdit('${bp.planId}')`;
+    const editLabel = bp.source === "coach_sheet" ? "Rename" : "Edit";
+    const badgeLabel = bp.source === "custom" ? "Custom Plan"
+                     : bp.source === "coach_sheet" ? "Coach Sheet"
+                     : "Build Plan";
     const cardTitle = bp.planName ? _escapeHtml(bp.planName) : "Training Block";
     html += `
       <div class="ti-card ti-card--schedule">
         <div class="race-card-top">
           <span class="ti-card-badge ti-card-badge--schedule">${badgeLabel}</span>
           <div class="ti-card-actions">
-            <button class="ti-edit-btn" onclick="${editHandler}" title="Edit schedule">Edit</button>
+            <button class="ti-edit-btn" onclick="${editHandler}" title="${editLabel} plan">${editLabel}</button>
             <button class="delete-btn" onclick="removeTrainingInput('buildplan','${bp.planId}')" title="Remove plan"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
           </div>
         </div>
@@ -3017,8 +3025,76 @@ function removeTrainingInput(kind, id) {
     });
     localStorage.setItem("workoutSchedule", JSON.stringify(filtered));
     if (typeof DB !== 'undefined') DB.syncSchedule();
+
+    // Clear the registered active plan if it points at the plan
+    // we just removed. Coach-sheet imports register via
+    // storeGeneratedPlan with plan_metadata.plan_id == this id;
+    // without this cleanup, removing the plan visually leaves it
+    // as the registered active plan in localStorage + Supabase.
+    try {
+      const ap = JSON.parse(localStorage.getItem("activePlan") || "null");
+      if (ap?.plan_metadata?.plan_id === id) {
+        ["activePlan", "activePlanSource", "activePlanAt", "activePlanId"].forEach(k => {
+          try { localStorage.removeItem(k); } catch {}
+          if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey(k);
+        });
+        // Best-effort Supabase deactivate so the generated_plans row
+        // doesn't keep flagging this import as the user's active plan.
+        if (typeof window !== "undefined" && window.supabaseClient) {
+          window.supabaseClient.auth.getSession().then(({ data }) => {
+            const uid = data?.session?.user?.id;
+            if (!uid) return;
+            return window.supabaseClient
+              .from("generated_plans")
+              .update({ is_active: false })
+              .eq("user_id", uid)
+              .eq("is_active", true);
+          }).catch(e => console.warn("[removeTrainingInput:buildplan] generated_plans deactivate failed", e?.message));
+        }
+      }
+    } catch (e) {
+      console.warn("[removeTrainingInput:buildplan] activePlan cleanup failed", e?.message);
+    }
+
     if (typeof renderCalendar === "function") renderCalendar();
   }
+  renderTrainingInputs();
+}
+
+// Rename a coach-imported plan. The Build Plan and Custom Plan flows
+// both have full Edit overlays (weekly template); coach plans don't,
+// because each session is unique per the source sheet. Renaming the
+// plan is the only Edit action that makes sense — every other
+// modification is per-session via the calendar.
+//
+// Updates planName on every workoutSchedule entry with matching planId
+// and on the synthesized activePlan blob if it points at this plan.
+function renameCoachSheetPlan(planId) {
+  const sched = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
+  const sessions = sched.filter(s => s && s.planId === planId);
+  if (!sessions.length) return;
+  const currentName = sessions.find(s => s.planName)?.planName || "Coach plan";
+  const newName = window.prompt("Rename this plan:", currentName);
+  if (newName === null) return;          // cancelled
+  const trimmed = newName.trim().slice(0, 80);
+  if (!trimmed || trimmed === currentName) return;
+
+  const updated = sched.map(s => (s && s.planId === planId) ? { ...s, planName: trimmed } : s);
+  localStorage.setItem("workoutSchedule", JSON.stringify(updated));
+  if (typeof DB !== "undefined" && DB.syncSchedule) DB.syncSchedule();
+
+  // Mirror the rename onto the active plan blob so any downstream
+  // surface reading plan_metadata.plan_name (feedback_loop, validator,
+  // future "what plan are you on" copy) sees the new name too.
+  try {
+    const ap = JSON.parse(localStorage.getItem("activePlan") || "null");
+    if (ap?.plan_metadata?.plan_id === planId) {
+      ap.plan_metadata.plan_name = trimmed;
+      localStorage.setItem("activePlan", JSON.stringify(ap));
+      if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("activePlan");
+    }
+  } catch {}
+
   renderTrainingInputs();
 }
 
