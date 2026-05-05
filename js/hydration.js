@@ -486,6 +486,30 @@ function _hydrationResolveDurationMin(w) {
     const n = parseFloat(v);
     return isFinite(n) && n > 0 ? n : 0;
   };
+  // Rest periods between reps still count as sweat-time — you don't
+  // stop sweating during the 5 min between two 25-min sweet-spot
+  // intervals. Pull rest minutes off whichever shape the step uses
+  // (aiSession intervals carry "5 min" in `restDuration`; template
+  // steps carry numeric minutes in `rest`; library steps carry
+  // `restMin`). Returns 0 when no rest field is set.
+  const restMin = (step) => {
+    if (!step) return 0;
+    const fromStr = parseStrMin(step.restDuration);
+    if (fromStr > 0) return fromStr;
+    const fromNum = parseStrMin(step.rest);
+    if (fromNum > 0) return fromNum;
+    const fromMin = parseStrMin(step.restMin);
+    if (fromMin > 0) return fromMin;
+    return 0;
+  };
+  // Total contribution of one repeat-block: active time + rest time
+  // BETWEEN reps (rest after the final rep doesn't count — the next
+  // step starts there). max(reps - 1, 0) handles single-rep entries.
+  const stepMin = (step, n, reps) => {
+    if (!(n > 0)) return 0;
+    const r = Math.max(parseInt(reps) || 1, 1);
+    return n * r + restMin(step) * Math.max(r - 1, 0);
+  };
   // BUGFIX 04-29: Plan entries (raceId + discipline + load) get rendered
   // from getSessionTemplate or from libraryWorkout.main_set when its
   // shape is renderable. The plan generator may also stamp w.duration
@@ -510,9 +534,7 @@ function _hydrationResolveDurationMin(w) {
           if (Array.isArray(tmpl.steps)) {
             let sum = 0;
             for (const st of tmpl.steps) {
-              const n = parseStrMin(st && st.duration);
-              const reps = parseInt(st && st.reps) || 1;
-              if (n > 0) sum += n * reps;
+              sum += stepMin(st, parseStrMin(st && st.duration), st && st.reps);
             }
             if (sum > 0) return sum;
           }
@@ -546,9 +568,7 @@ function _hydrationResolveDurationMin(w) {
     const intervals = Array.isArray(w.aiSession.intervals) ? w.aiSession.intervals : [];
     let sum = 0;
     for (const iv of intervals) {
-      const n = parseStrMin(iv && iv.duration);
-      const reps = parseInt(iv && iv.reps) || 1;
-      if (n > 0) sum += n * reps;
+      sum += stepMin(iv, parseStrMin(iv && iv.duration), iv && iv.reps);
     }
     if (sum > 0) return sum;
   }
@@ -557,9 +577,7 @@ function _hydrationResolveDurationMin(w) {
   if (w.session && Array.isArray(w.session.steps)) {
     let sum = 0;
     for (const st of w.session.steps) {
-      const n = parseStrMin(st && st.duration);
-      const reps = parseInt(st && st.reps) || 1;
-      if (n > 0) sum += n * reps;
+      sum += stepMin(st, parseStrMin(st && st.duration), st && st.reps);
     }
     if (sum > 0) return sum;
     d = parseStrMin(w.session.duration);
@@ -574,9 +592,7 @@ function _hydrationResolveDurationMin(w) {
       if (tmpl && Array.isArray(tmpl.steps)) {
         let sum = 0;
         for (const st of tmpl.steps) {
-          const n = parseStrMin(st && st.duration);
-          const reps = parseInt(st && st.reps) || 1;
-          if (n > 0) sum += n * reps;
+          sum += stepMin(st, parseStrMin(st && st.duration), st && st.reps);
         }
         if (sum > 0) return sum;
       }
