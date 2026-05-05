@@ -15899,6 +15899,34 @@ input.completion-ex-name:focus {
   color: var(--color-text);
   border-color: var(--color-text-muted);
 }
+/* Coach-side delete on a program tile — sits next to the Edit button.
+   Muted by default to keep destructive styling subtle; hover and the
+   confirm() prompt do the actual gating. */
+.coach-ti-program-actions {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.coach-ti-delete-btn {
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.coach-ti-delete-btn:hover {
+  color: var(--color-danger, #b91c1c);
+  border-color: var(--color-danger, #b91c1c);
+  background: rgba(185, 28, 28, 0.06);
+}
+.coach-ti-delete-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
 .coach-ti-card--editing {
   border-color: var(--color-accent, #111);
   box-shadow: 0 0 0 1px var(--color-accent, #111) inset;

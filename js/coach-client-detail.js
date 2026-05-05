@@ -1640,10 +1640,24 @@
     const sessionLabel = `${cp.sessions} upcoming workout${cp.sessions === 1 ? "" : "s"}`;
     const meta = cp.weeks ? `${cp.weeks}-week program` : "Custom program";
     const programId = String(cp.programId || "");
+    // Athletes can't delete coach-assigned workouts (intentional —
+    // keeps a runaway "delete a workout" tap from wiping coach work).
+    // Coach surfaces the delete here so they can pull a misapplied or
+    // outdated program off the client's calendar in one tap. Wipes
+    // future-dated coach_assigned_workouts rows for this program for
+    // this client; AFTER DELETE trigger mirrors removal into
+    // user_data.workoutSchedule. Past assignments stay for history.
+    const delAttrs = programId
+      ? `data-program-id="${_esc(programId)}" data-program-name="${_esc(cp.programName || "")}" data-session-count="${cp.sessions || 0}"`
+      : "";
     return `<div class="ti-card ti-card--coach-plan coach-ti-program-tile">
       <div class="race-card-top">
         <span class="ti-card-badge ti-card-badge--coach-plan">COACH PLAN</span>
-        ${programId ? `<button type="button" class="coach-ti-edit-btn" onclick="openCoachProgramEdit('${programId}', { startDate: '${_esc(cp.startDate || "")}' })">Edit</button>` : ""}
+        <div class="coach-ti-program-actions">
+          ${programId ? `<button type="button" class="coach-ti-edit-btn" onclick="openCoachProgramEdit('${programId}', { startDate: '${_esc(cp.startDate || "")}' })">Edit</button>` : ""}
+          ${programId ? `<button type="button" class="coach-ti-delete-btn" ${delAttrs}
+            onclick="coachDeleteAssignedProgram(this)" title="Remove from client's calendar">Delete</button>` : ""}
+        </div>
       </div>
       <div class="race-card-name">${_esc(cp.programName)}</div>
       <div class="race-card-meta">${_esc(meta)}</div>
@@ -1652,6 +1666,51 @@
         <span class="race-countdown">through ${_esc(endLabel)}</span>
       </div>
     </div>`;
+  }
+
+  // Coach-side: remove every future-dated coach_assigned_workouts row
+  // for this (client, program) pair. Past rows stay so the client's
+  // history isn't rewritten. AFTER DELETE trigger
+  // (20260429_coach_assignment_mirror.sql) propagates each removal
+  // into user_data.workoutSchedule on its own; we just refresh the
+  // local view after.
+  async function coachDeleteAssignedProgram(btn) {
+    if (!_client || !_client.id) return;
+    const programId = btn?.dataset?.programId;
+    const programName = btn?.dataset?.programName || "this program";
+    const sessionCount = parseInt(btn?.dataset?.sessionCount, 10) || 0;
+    if (!programId) return;
+    const sessionLabel = sessionCount === 1 ? "1 upcoming workout" : `${sessionCount} upcoming workouts`;
+    if (!confirm(`Remove "${programName}" from ${_client.full_name || _client.email || "this client"}'s calendar?\n\nThis deletes ${sessionLabel}. Past completed sessions stay for history. The client can't undo this.`)) {
+      return;
+    }
+    const sb = window.supabaseClient;
+    if (!sb) { alert("Auth client not available."); return; }
+    const todayStr = new Date().toISOString().slice(0, 10);
+    btn.disabled = true;
+    btn.textContent = "Removing…";
+    try {
+      const { error } = await sb.from("coach_assigned_workouts")
+        .delete()
+        .eq("client_id", _client.id)
+        .eq("program_id", programId)
+        .gte("date", todayStr);
+      if (error) throw new Error(error.message);
+      // Reload the detail view so the COACH PLAN tile disappears /
+      // the calendar reflects the strip.
+      if (typeof window.loadCoachClientDetail === "function") {
+        await window.loadCoachClientDetail(_client.id);
+      } else {
+        _render();
+      }
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = "Delete";
+      alert("Couldn't delete: " + (e.message || "unknown error"));
+    }
+  }
+  if (typeof window !== "undefined") {
+    window.coachDeleteAssignedProgram = coachDeleteAssignedProgram;
   }
 
   function _coachRaceCard(race) {
