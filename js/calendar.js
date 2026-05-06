@@ -204,8 +204,13 @@ function goToThisWeek() {
     currentMonth = today.getMonth();
   }
   // Selecting today makes the carousel center on it so the redesigned
-  // week view highlights the correct card on return.
-  selectedDate = today.toISOString().slice(0, 10);
+  // week view highlights the correct card on return. getTodayString()
+  // is local-time; toISOString() is UTC and rolls over to tomorrow's
+  // string in the evening for any user west of UTC, which made the
+  // Today button jump users to the next calendar day.
+  selectedDate = (typeof getTodayString === "function")
+    ? getTodayString()
+    : today.toISOString().slice(0, 10);
   renderCalendar();
 }
 

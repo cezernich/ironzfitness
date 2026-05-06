@@ -2,6 +2,14 @@
 // Phase 2.1: Missed day detection, fallback plans, adaptive rescheduling,
 // consistency streaks, and welcome-back flows.
 
+// Local-date YYYY-MM-DD for any Date. toISOString() returns UTC, which
+// rolls over to tomorrow's date in the evening for any user west of
+// UTC — every "compare date" check below was off by one for evening
+// users. Use this helper for every date-string conversion in the file.
+function _adherenceLocalDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
 /* =====================================================================
    MISSED DAY DETECTION
    ===================================================================== */
@@ -25,7 +33,7 @@ function detectMissedDays(lookbackDays) {
 
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - lookbackDays);
-  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const cutoffStr = _adherenceLocalDateStr(cutoff);
 
   const missed = [];
   schedule.forEach(s => {
@@ -86,11 +94,17 @@ function getConsistencyStreak() {
   let hydLog = {};
   try { hydLog = JSON.parse(localStorage.getItem("hydrationLog") || "{}"); } catch {}
 
+  // Local-date helper — toISOString() is UTC and rolls over to
+  // tomorrow's string in the evening for users west of UTC, so the
+  // 7-day window walked the wrong dates and missed the most recent
+  // active day. Comparing local-stored workout dates against UTC
+  // strings produced false misses on the boundary day.
+  const _ds = _adherenceLocalDateStr;
   let activeDays = 0;
   for (let i = 0; i < 7; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    const ds = d.toISOString().slice(0, 10);
+    const ds = _ds(d);
 
     const hasWorkout = workouts.some(w => w.date === ds);
     const hasMeal = meals.some(m => m.date === ds);
@@ -123,11 +137,13 @@ function getCurrentStreak() {
   meals.forEach(m => activeDates.add(m.date));
   Object.keys(hydLog).forEach(d => { if (hydLog[d] > 0) activeDates.add(d); });
 
+  // Local-date string — same UTC-rollover hazard as getConsistencyStreak.
+  const _ds = _adherenceLocalDateStr;
   let streak = 0;
   for (let i = 0; i < 365; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    const ds = d.toISOString().slice(0, 10);
+    const ds = _ds(d);
     if (activeDates.has(ds)) {
       streak++;
     } else {
@@ -186,7 +202,7 @@ function getAdherencePrompt() {
     const m = missed[0];
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().slice(0, 10);
+    const yesterdayStr = _adherenceLocalDateStr(yesterday);
     if (m.date !== yesterdayStr) return null;
     return {
       type: "missed-single",
@@ -228,12 +244,12 @@ function compressWeekSchedule() {
   const endOfWeek = new Date(todayDate);
   const daysToSun = 7 - todayDate.getDay();
   endOfWeek.setDate(endOfWeek.getDate() + (daysToSun === 7 ? 0 : daysToSun));
-  const endStr = endOfWeek.toISOString().slice(0, 10);
+  const endStr = _adherenceLocalDateStr(endOfWeek);
 
   // Find incomplete sessions this week (past and future)
   const startOfWeek = new Date(todayDate);
   startOfWeek.setDate(startOfWeek.getDate() - todayDate.getDay());
-  const startStr = startOfWeek.toISOString().slice(0, 10);
+  const startStr = _adherenceLocalDateStr(startOfWeek);
 
   const weekSessions = schedule.filter(s => s.date >= startStr && s.date <= endStr);
   const incomplete = weekSessions.filter(s => {
@@ -247,7 +263,7 @@ function compressWeekSchedule() {
   const scheduledDates = new Set(weekSessions.filter(s => s.date >= today).map(s => s.date));
   const availableDays = [];
   for (let d = new Date(todayDate); d <= endOfWeek; d.setDate(d.getDate() + 1)) {
-    const ds = d.toISOString().slice(0, 10);
+    const ds = _adherenceLocalDateStr(d);
     if (!scheduledDates.has(ds)) {
       availableDays.push(ds);
     }
