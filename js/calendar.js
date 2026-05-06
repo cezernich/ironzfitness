@@ -2940,7 +2940,14 @@ function _fmtBadgeMin(v) {
   return String(Math.round(n));
 }
 
-const _ENDURANCE_TYPES = new Set(["running", "cycling", "swimming", "triathlon", "stairstepper"]);
+// "brick" added 2026-05-05 — entries that came out of onboarding-v2
+// before the brick→triathlon mislabel fix carried type:"triathlon"
+// and passed this gate; after the backfill renamed them to
+// type:"brick" the Mark-as-Complete form started skipping the
+// bike/run distance inputs because brick wasn't in the set.
+// _buildDistanceField already handles brick correctly (renders two
+// inputs); only this gate was blocking.
+const _ENDURANCE_TYPES = new Set(["running", "cycling", "swimming", "triathlon", "brick", "stairstepper"]);
 
 // Running / cycling / swimming workouts come in with sub-type keys like
 // "tempo_threshold" or "speed_work" or "swim_css_intervals". Resolve those
