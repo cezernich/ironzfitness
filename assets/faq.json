@@ -133,6 +133,13 @@
     "answer": "Your hydration target is based on your body weight (a common starting point is half your body weight in ounces), adjusted for training intensity, climate, and activity duration. The philosophy engine refines this based on your profile."
   },
   {
+    "id": "hydration-before-bed",
+    "category": "Hydration",
+    "keywords": ["water before bed", "drink water before bed", "stop drinking water", "water at night", "bathroom at night", "wake up to pee", "wake up at night", "getting up at night", "nocturia", "water disrupting sleep", "hydration before sleep", "hydration before bed", "fluids before bed", "drinking water bedtime"],
+    "question": "When should I stop drinking water before bed?",
+    "answer": "The general guideline is to stop drinking large amounts of fluids 1–2 hours before bedtime. That gives your kidneys time to process the water so you're less likely to be woken up by a full bladder. If you're still waking up to use the bathroom one or more times a night (nocturia) and it's disrupting your sleep, push the cutoff to 2–3 hours before bed and front-load your hydration earlier in the day so you still hit your daily target. A few extra tips: empty your bladder right before lying down, watch for diuretics in the evening (caffeine, alcohol), and limit salty foods late at night since sodium drives thirst. Exception: if you finished a hard or hot training session in the evening, prioritize rehydrating to recovery — the sleep cost of a single bathroom trip is smaller than the recovery cost of going to bed dehydrated. This is general guidance for healthy athletes, not medical advice — if frequent nighttime urination is new, persistent, or paired with other symptoms, see a clinician."
+  },
+  {
     "id": "ask-ironz-what",
     "category": "Ask IronZ",
     "keywords": ["what is ask ironz", "ask ironz", "ai coaching", "ai assistant", "coaching assistant"],
