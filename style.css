@@ -10010,8 +10010,39 @@ input.completion-ex-name:focus {
   display: flex; justify-content: space-between; align-items: center;
   padding: 6px 0; border-bottom: 1px solid var(--color-border); font-size: 0.85rem;
 }
-.photo-food-item:last-child { border-bottom: none; }
+.photo-food-row { border-bottom: 1px solid var(--color-border); position: relative; }
+.photo-food-row:last-child { border-bottom: none; }
+.photo-food-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 36px 8px 0; font-size: 0.85rem;
+  width: 100%; background: transparent; border: none; color: inherit;
+  text-align: left; cursor: pointer; font-family: inherit;
+}
+.photo-food-toggle:hover { background: var(--color-surface-2); border-radius: 6px; }
+.photo-food-name { flex: 1; min-width: 0; }
+.photo-food-right { display: inline-flex; align-items: center; gap: 8px; }
 .photo-food-cals { color: var(--color-text-muted); font-size: 0.8rem; }
+.photo-food-remove {
+  background: transparent; border: none; color: var(--color-text-muted);
+  padding: 4px; cursor: pointer; display: inline-flex; align-items: center;
+  border-radius: 6px;
+  position: absolute; right: 0; top: 6px;
+}
+.photo-food-remove:hover { color: var(--color-danger); background: var(--color-surface-2); }
+.photo-food-remove svg { width: 16px; height: 16px; }
+.photo-food-edit { padding: 4px 0 10px; }
+.photo-food-edit-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+}
+.photo-food-edit-grid label {
+  display: flex; flex-direction: column; gap: 2px;
+  font-size: 0.7rem; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.photo-food-edit-grid input {
+  font-size: 0.9rem; padding: 6px 8px; border: 1px solid var(--color-border);
+  border-radius: 6px; background: var(--color-surface); color: var(--color-text);
+  width: 100%; box-sizing: border-box;
+}
 
 /* Meal suggestion cards */
 .meal-suggestion-card {

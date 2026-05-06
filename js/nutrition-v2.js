@@ -617,19 +617,12 @@ async function _runMealPhotoAnalysis(base64, mediaType) {
     const result = JSON.parse(jsonMatch[0]);
     resultEl.style.display = "";
 
-    const foodsEl = document.getElementById("photo-detected-foods");
-    if (foodsEl && result.foods) {
-      foodsEl.innerHTML = result.foods.map(f =>
-        `<div class="photo-food-item">${escHtml(f.name)} <span class="photo-food-cals">${escHtml(f.estimated_calories)} cal</span></div>`
-      ).join("");
-    }
+    const modalEl = document.getElementById("photo-meal-modal");
+    modalEl._photoFoods = Array.isArray(result.foods) ? result.foods.slice() : [];
+    modalEl._photoEditingIdx = null;
+    _renderPhotoFoods();
 
-    document.getElementById("photo-calories").value = Math.round(result.total?.calories || 0);
-    document.getElementById("photo-protein").value = Math.round(result.total?.protein_g || 0);
-    document.getElementById("photo-carbs").value = Math.round(result.total?.carbs_g || 0);
-    document.getElementById("photo-fat").value = Math.round(result.total?.fat_g || 0);
-
-    document.getElementById("photo-meal-modal").dataset.description = result.description || "Photo-logged meal";
+    modalEl.dataset.description = result.description || "Photo-logged meal";
 
     const actions = document.getElementById("photo-meal-actions");
     if (actions) actions.style.display = "";
@@ -645,6 +638,101 @@ async function _runMealPhotoAnalysis(base64, mediaType) {
     }
   }
 }
+
+// Render the cached detected-foods list with per-item trash buttons, then
+// recompute the totals fields. Called after analysis and after each delete
+// so the saved macros always match what the user sees.
+function _renderPhotoFoods() {
+  const modalEl = document.getElementById("photo-meal-modal");
+  const foodsEl = document.getElementById("photo-detected-foods");
+  const foods = modalEl?._photoFoods || [];
+  const trashIcon = (typeof ICONS !== "undefined" && ICONS.trash) || "&times;";
+  const openIdx = modalEl?._photoEditingIdx;
+  if (foodsEl) {
+    foodsEl.innerHTML = foods.length
+      ? foods.map((f, i) => {
+          const open = i === openIdx;
+          const cals = Math.round(f.estimated_calories || 0);
+          const editor = open
+            ? `<div class="photo-food-edit">
+                <div class="photo-food-edit-grid">
+                  <label>Cal<input type="number" inputmode="decimal" value="${escHtml(cals)}" oninput="updatePhotoMealFoodField(${i},'estimated_calories',this.value)" /></label>
+                  <label>P (g)<input type="number" inputmode="decimal" value="${escHtml(Math.round((f.protein_g||0)*10)/10)}" oninput="updatePhotoMealFoodField(${i},'protein_g',this.value)" /></label>
+                  <label>C (g)<input type="number" inputmode="decimal" value="${escHtml(Math.round((f.carbs_g||0)*10)/10)}" oninput="updatePhotoMealFoodField(${i},'carbs_g',this.value)" /></label>
+                  <label>F (g)<input type="number" inputmode="decimal" value="${escHtml(Math.round((f.fat_g||0)*10)/10)}" oninput="updatePhotoMealFoodField(${i},'fat_g',this.value)" /></label>
+                </div>
+              </div>`
+            : "";
+          return `<div class="photo-food-row${open ? ' is-open' : ''}">
+            <button type="button" class="photo-food-item photo-food-toggle" onclick="togglePhotoMealFoodEdit(${i})" aria-expanded="${open}">
+              <span class="photo-food-name">${escHtml(f.name)}</span>
+              <span class="photo-food-right">
+                <span class="photo-food-cals" data-cal-for="${i}">${cals} cal</span>
+              </span>
+            </button>
+            <button type="button" class="photo-food-remove" aria-label="Remove ${escHtml(f.name)}" title="Remove" onclick="removePhotoMealFood(${i})">${trashIcon}</button>
+            ${editor}
+          </div>`;
+        }).join("")
+      : `<div class="hint" style="padding:6px 0">No items — re-analyze or close.</div>`;
+  }
+  const total = foods.reduce((acc, f) => {
+    acc.calories += Number(f.estimated_calories) || 0;
+    acc.protein += Number(f.protein_g) || 0;
+    acc.carbs += Number(f.carbs_g) || 0;
+    acc.fat += Number(f.fat_g) || 0;
+    return acc;
+  }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  document.getElementById("photo-calories").value = Math.round(total.calories);
+  document.getElementById("photo-protein").value = Math.round(total.protein);
+  document.getElementById("photo-carbs").value = Math.round(total.carbs);
+  document.getElementById("photo-fat").value = Math.round(total.fat);
+}
+
+function removePhotoMealFood(idx) {
+  const modalEl = document.getElementById("photo-meal-modal");
+  if (!modalEl?._photoFoods) return;
+  modalEl._photoFoods.splice(idx, 1);
+  if (modalEl._photoEditingIdx === idx) modalEl._photoEditingIdx = null;
+  else if (typeof modalEl._photoEditingIdx === "number" && modalEl._photoEditingIdx > idx) modalEl._photoEditingIdx -= 1;
+  _renderPhotoFoods();
+}
+if (typeof window !== "undefined") window.removePhotoMealFood = removePhotoMealFood;
+
+function togglePhotoMealFoodEdit(idx) {
+  const modalEl = document.getElementById("photo-meal-modal");
+  if (!modalEl?._photoFoods) return;
+  modalEl._photoEditingIdx = (modalEl._photoEditingIdx === idx) ? null : idx;
+  _renderPhotoFoods();
+}
+if (typeof window !== "undefined") window.togglePhotoMealFoodEdit = togglePhotoMealFoodEdit;
+
+// Live macro edit. Updates the cached food in place and refreshes only the
+// totals + this row's calorie label — we deliberately don't re-render the
+// list so the user keeps focus while typing.
+function updatePhotoMealFoodField(idx, field, value) {
+  const modalEl = document.getElementById("photo-meal-modal");
+  const food = modalEl?._photoFoods?.[idx];
+  if (!food) return;
+  const num = parseFloat(value);
+  food[field] = isFinite(num) ? num : 0;
+  if (field === "estimated_calories") {
+    const calEl = document.querySelector(`[data-cal-for="${idx}"]`);
+    if (calEl) calEl.textContent = `${Math.round(food.estimated_calories || 0)} cal`;
+  }
+  const total = (modalEl._photoFoods || []).reduce((acc, f) => {
+    acc.calories += Number(f.estimated_calories) || 0;
+    acc.protein += Number(f.protein_g) || 0;
+    acc.carbs += Number(f.carbs_g) || 0;
+    acc.fat += Number(f.fat_g) || 0;
+    return acc;
+  }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  document.getElementById("photo-calories").value = Math.round(total.calories);
+  document.getElementById("photo-protein").value = Math.round(total.protein);
+  document.getElementById("photo-carbs").value = Math.round(total.carbs);
+  document.getElementById("photo-fat").value = Math.round(total.fat);
+}
+if (typeof window !== "undefined") window.updatePhotoMealFoodField = updatePhotoMealFoodField;
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
