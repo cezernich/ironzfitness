@@ -327,11 +327,31 @@
   function _renderStackedBadge(dateStr) {
     const host = document.getElementById("daily-rings");
     if (!host) return;
-    if (document.getElementById("stacked-day-badge")) return;
 
     const today = _today();
     const date = dateStr || today;
+
+    // Self-heal: if all three pillars are hit today but history hasn't
+    // caught up yet (the celebration path queued this render before
+    // recordStackIfHit fired on a sibling thread), record now so the
+    // streak-walk reads the correct count. Without this the badge
+    // rendered "Day 0" while the streak pill showed "1-day stack" —
+    // two surfaces reading different snapshots of the same state.
+    if (date === today && isStackHit(today)) {
+      recordStackIfHit(today);
+    }
     const streak = getStackStreak();
+
+    // Drop any stale badge before rendering — the previous pinned-cache
+    // guard meant a "Day 0" badge created mid-flow stuck around even
+    // after history caught up. Replace-in-place is safe: this function
+    // only runs from celebration paths that already gated on state.hit
+    // or from explicit re-render calls.
+    const existing = document.getElementById("stacked-day-badge");
+    if (existing) try { existing.remove(); } catch {}
+
+    if (date === today && streak.current <= 0) return;
+
     const zap = (typeof ICONS !== "undefined" && ICONS.zap) ? ICONS.zap : "⚡";
     // Today's badge shows the running streak count; past stacked days
     // get a quieter "Stacked" pill so the rings page reads "yes, you
