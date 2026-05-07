@@ -1940,6 +1940,21 @@ function buildStatsHydration() {
   const totalOz = _roundOz(activeDays.reduce((s, d) => s + _ozOn(d), 0));
   const avgOzPerDay = Math.round(totalOz / activeDays.length);
 
+  // Trailing-window averages for the Total Logged row. Walks the most
+  // recent N active days and averages effective oz so the user can see
+  // recent trend separate from the all-time window. Both windows are
+  // clamped to the actual active history — a 12-day-old user reads as
+  // "12-day avg" labeled, not 7-day with 5 days of zeros padding it
+  // (which would understate the average).
+  const _trailingAvg = (days) => {
+    const slice = activeDays.slice(-days);
+    if (!slice.length) return null;
+    const sum = slice.reduce((s, d) => s + _ozOn(d), 0);
+    return { days: slice.length, avg: Math.round(sum / slice.length) };
+  };
+  const avg7  = _trailingAvg(7);
+  const avg30 = _trailingAvg(30);
+
   // Days that met target (out of all active days) — per-day goalpost.
   // Compare in oz, not bottles: the previous bottle-based check rounded
   // the target up via Math.ceil, so a day at 147/139 oz read as missed
@@ -2057,6 +2072,14 @@ function buildStatsHydration() {
           <span class="totals-label">Total Logged</span>
           <span class="totals-value">${Math.round(totalOz).toLocaleString()} oz over ${activeDays.length} days</span>
         </div>
+        ${avg7 ? `<div class="totals-row">
+          <span class="totals-label">${avg7.days < 7 ? `${avg7.days}-day` : "7-day"} avg</span>
+          <span class="totals-value">${avg7.avg.toLocaleString()} oz / day</span>
+        </div>` : ""}
+        ${avg30 && avg30.days > avg7?.days ? `<div class="totals-row">
+          <span class="totals-label">${avg30.days < 30 ? `${avg30.days}-day` : "30-day"} avg</span>
+          <span class="totals-value">${avg30.avg.toLocaleString()} oz / day</span>
+        </div>` : ""}
       </div>
     </section>`;
 }
