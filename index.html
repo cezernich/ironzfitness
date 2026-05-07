@@ -976,6 +976,13 @@
               <span class="btn-estimate-ai-label">Estimate with IronZ</span>
             </button>
             <p id="meal-estimate-status" class="estimate-status" style="display:none"></p>
+            <!-- Per-item breakdown returned by the AI estimate. Same UI
+                 pattern as the Photo Log's detected foods list (tap to
+                 edit per-item macros, trash to remove). Totals at the
+                 bottom recompute from this list, so users get one
+                 surface for "the AI thought I had X" corrections instead
+                 of having to back-solve from a single calorie number. -->
+            <div id="manual-meal-foods" class="photo-detected-foods" style="display:none;margin-top:8px"></div>
 
             <div class="form-grid">
               <div class="form-row">

@@ -298,7 +298,16 @@ function closePhotoMealLog() {
 
 function openManualMealLog() {
   const modal = document.getElementById("manual-meal-modal");
-  if (modal) modal.classList.add("is-open");
+  if (modal) {
+    modal.classList.add("is-open");
+    // Drop any cached AI estimate so a previous meal's foods list doesn't
+    // bleed into the new one. The hidden empty-state in the renderer
+    // hides the block until the next Estimate populates it.
+    delete modal._estimateFoods;
+    delete modal._estimateEditingIdx;
+  }
+  const foodsEl = document.getElementById("manual-meal-foods");
+  if (foodsEl) { foodsEl.style.display = "none"; foodsEl.innerHTML = ""; }
   // Clear any leftover estimate status from a prior session
   const status = document.getElementById("meal-estimate-status");
   if (status) { status.textContent = ""; status.style.display = "none"; }
@@ -377,9 +386,14 @@ async function estimateMealWithAI() {
   try {
     const res = await callAI({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 300,
+      // Same granular shape as the photo log analysis so the user gets
+      // a per-item breakdown they can edit / remove individually.
+      // `total` is still produced by the model as a sanity check; the
+      // client recomputes totals from the foods array on every render
+      // so corrections to one item flow into the bottom totals.
+      max_tokens: 600,
       system:
-        "You are a nutrition coach estimating typical macros for a meal from a short text description. Respond with ONLY a valid JSON object matching this shape: {\"calories\": number, \"protein_g\": number, \"carbs_g\": number, \"fat_g\": number}. Use whole numbers.\n\nQUANTITY HANDLING (priority order):\n1. Explicit weight in the description (lbs, lb, pounds, oz, ounces, g, grams, kg, kilograms) — scale the macros by the stated weight using realistic per-unit values for the specific food. Doubling the weight of the same food MUST roughly double the macros. Examples: \"0.4 lbs of plain chicken breast\" ≈ 0.4 × ~520 cal/lb ≈ 210 cal; \"0.8 lbs of plain chicken breast\" ≈ 0.8 × ~520 cal/lb ≈ 420 cal; \"0.4 lbs of flour-coated fried chicken tenders\" ≈ 0.4 × ~1100 cal/lb ≈ 440 cal (breading and frying oil push the per-pound number well above plain chicken). Use the food's actual calorie density — fried/breaded/oil-cooked items are 2-3× plain protein per pound.\n2. Multipliers (\"x2\", \"x3\", \"2x\", \"2 servings\", \"two\", \"three\", \"double\", \"half\", \"1.5\") — multiply per-serving macros by that exact factor.\n3. No quantity given → default to one standard serving.\nWhen both a weight and a multiplier are present, weight takes precedence.\n\nPORTION + PREP DEFAULTS: when the description doesn't specify, assume STANDARD portion sizes (one slice of bread ≈ 80g, one egg ≈ 70g, one cup of cooked rice ≈ 200g) and PLAIN preparation — no added butter, oil, dressing, or sauce. Only add cooking fat if the description mentions it (e.g., \"fried\", \"buttered\", \"olive oil\", \"with mayo\"). When in genuine doubt between a smaller and a larger plausible reading, prefer the smaller — users can adjust up after the estimate posts. Examples: \"2 eggs with a piece of sourdough\" → ~140 cal eggs (plain) + ~140 cal slice = ~280 total, NOT 370 (don't assume butter or oversize slice). \"chicken breast and rice\" → ~6 oz plain chicken (~280 cal) + ~1 cup cooked rice (~200 cal) = ~480 total. If the user mentioned cooking method or portion, follow that.\n\nDo not include any other text, comments, units, or formatting — just the JSON.",
+        "You are a nutrition coach estimating typical macros for a meal from a short text description. Respond with ONLY a valid JSON object matching this shape: {\"foods\": [{\"name\": \"item\", \"estimated_calories\": number, \"protein_g\": number, \"carbs_g\": number, \"fat_g\": number}], \"total\": {\"calories\": number, \"protein_g\": number, \"carbs_g\": number, \"fat_g\": number}}. Use whole numbers. The `foods` array breaks the meal into the components the user described — one row per food (e.g. \"chicken breast\", \"jasmine rice\", \"black beans\"). The `total` is the sum across foods.\n\nQUANTITY HANDLING (priority order):\n1. Explicit weight in the description (lbs, lb, pounds, oz, ounces, g, grams, kg, kilograms) — scale the macros by the stated weight using realistic per-unit values for the specific food. Doubling the weight of the same food MUST roughly double the macros. Examples: \"0.4 lbs of plain chicken breast\" ≈ 0.4 × ~520 cal/lb ≈ 210 cal; \"0.8 lbs of plain chicken breast\" ≈ 0.8 × ~520 cal/lb ≈ 420 cal; \"0.4 lbs of flour-coated fried chicken tenders\" ≈ 0.4 × ~1100 cal/lb ≈ 440 cal (breading and frying oil push the per-pound number well above plain chicken). Use the food's actual calorie density — fried/breaded/oil-cooked items are 2-3× plain protein per pound.\n2. Multipliers (\"x2\", \"x3\", \"2x\", \"2 servings\", \"two\", \"three\", \"double\", \"half\", \"1.5\") — multiply per-serving macros by that exact factor.\n3. No quantity given → default to one standard serving.\nWhen both a weight and a multiplier are present, weight takes precedence.\n\nPORTION + PREP DEFAULTS: when the description doesn't specify, assume STANDARD portion sizes (one slice of bread ≈ 80g, one egg ≈ 70g, one cup of cooked rice ≈ 200g) and PLAIN preparation — no added butter, oil, dressing, or sauce. Only add cooking fat if the description mentions it (e.g., \"fried\", \"buttered\", \"olive oil\", \"with mayo\"). When in genuine doubt between a smaller and a larger plausible reading, prefer the smaller — users can adjust up after the estimate posts. Examples: \"2 eggs with a piece of sourdough\" → ~140 cal eggs (plain) + ~140 cal slice = ~280 total, NOT 370 (don't assume butter or oversize slice). \"chicken breast and rice\" → ~6 oz plain chicken (~280 cal) + ~1 cup cooked rice (~200 cal) = ~480 total. If the user mentioned cooking method or portion, follow that.\n\nDo not include any other text, comments, units, or formatting — just the JSON.",
       messages: [
         { role: "user", content: `Meal: ${description}` },
       ],
@@ -390,21 +404,34 @@ async function estimateMealWithAI() {
     if (!match) throw new Error("Couldn't parse estimate.");
     const parsed = JSON.parse(match[0]);
 
-    const cal = Math.round(Number(parsed.calories) || 0);
-    const p   = Math.round(Number(parsed.protein_g) || 0);
-    const c   = Math.round(Number(parsed.carbs_g)   || 0);
-    const f   = Math.round(Number(parsed.fat_g)     || 0);
+    // Foods array: each item has `estimated_calories` (matching photo
+    // log shape so the renderer can be reused later). If the model
+    // skipped foods (older shape, parse error), fall back to a single
+    // synthetic row built from total so the user still gets row-level
+    // edit/delete affordances.
+    let foods = Array.isArray(parsed.foods) ? parsed.foods.slice() : [];
+    if (!foods.length) {
+      foods = [{
+        name: description,
+        estimated_calories: Math.round(Number(parsed.calories ?? parsed.total?.calories) || 0),
+        protein_g:          Math.round(Number(parsed.protein_g ?? parsed.total?.protein_g) || 0),
+        carbs_g:            Math.round(Number(parsed.carbs_g   ?? parsed.total?.carbs_g)   || 0),
+        fat_g:              Math.round(Number(parsed.fat_g     ?? parsed.total?.fat_g)     || 0),
+      }];
+    }
 
-    document.getElementById("meal-calories").value = cal;
-    document.getElementById("meal-protein").value  = p;
-    document.getElementById("meal-carbs").value    = c;
-    document.getElementById("meal-fat").value      = f;
+    const modalEl = document.getElementById("manual-meal-modal");
+    if (modalEl) {
+      modalEl._estimateFoods = foods;
+      modalEl._estimateEditingIdx = null;
+    }
+    _renderManualMealFoods();
 
     if (status) {
       status.style.display = "";
       status.style.color = "var(--color-accent, #16a34a)";
       const remaining = typeof res._remaining === "number" ? ` · ${res._remaining} left today` : "";
-      status.textContent = `Estimated — review and adjust if needed, then Log Meal.${remaining}`;
+      status.textContent = `Estimated — tap any item to edit, or Log Meal to save.${remaining}`;
     }
 
     if (typeof trackEvent === "function") trackEvent("meal_estimate_ai", { ok: true });
@@ -733,6 +760,113 @@ function updatePhotoMealFoodField(idx, field, value) {
   document.getElementById("photo-fat").value = Math.round(total.fat);
 }
 if (typeof window !== "undefined") window.updatePhotoMealFoodField = updatePhotoMealFoodField;
+
+// ─── Manual meal "Estimate with IronZ" — per-item breakdown ──────────────
+// Same UI pattern as the Photo Log's detected foods list. Lives on the
+// manual-meal-modal element via _estimateFoods + _estimateEditingIdx so
+// state survives card collapses but resets when the modal is closed
+// (closeManualMealLog clears it via the reset path). Function names
+// mirror the Photo Log helpers but target the manual modal's element
+// ids — code dup over a parameterized helper because each surface is
+// settling separately and shared abstraction would be a future refactor.
+function _renderManualMealFoods() {
+  const modalEl = document.getElementById("manual-meal-modal");
+  const foodsEl = document.getElementById("manual-meal-foods");
+  const foods = modalEl?._estimateFoods || [];
+  const trashIcon = (typeof ICONS !== "undefined" && ICONS.trash) || "&times;";
+  const openIdx = modalEl?._estimateEditingIdx;
+  if (foodsEl) {
+    if (!foods.length) {
+      foodsEl.style.display = "none";
+      foodsEl.innerHTML = "";
+    } else {
+      foodsEl.style.display = "";
+      foodsEl.innerHTML = foods.map((f, i) => {
+        const open = i === openIdx;
+        const cals = Math.round(f.estimated_calories || 0);
+        const editor = open
+          ? `<div class="photo-food-edit">
+              <div class="photo-food-edit-grid">
+                <label>Cal<input type="number" inputmode="decimal" value="${escHtml(cals)}" oninput="updateManualMealFoodField(${i},'estimated_calories',this.value)" /></label>
+                <label>P (g)<input type="number" inputmode="decimal" value="${escHtml(Math.round((f.protein_g||0)*10)/10)}" oninput="updateManualMealFoodField(${i},'protein_g',this.value)" /></label>
+                <label>C (g)<input type="number" inputmode="decimal" value="${escHtml(Math.round((f.carbs_g||0)*10)/10)}" oninput="updateManualMealFoodField(${i},'carbs_g',this.value)" /></label>
+                <label>F (g)<input type="number" inputmode="decimal" value="${escHtml(Math.round((f.fat_g||0)*10)/10)}" oninput="updateManualMealFoodField(${i},'fat_g',this.value)" /></label>
+              </div>
+            </div>`
+          : "";
+        return `<div class="photo-food-row${open ? ' is-open' : ''}">
+          <button type="button" class="photo-food-item photo-food-toggle" onclick="toggleManualMealFoodEdit(${i})" aria-expanded="${open}">
+            <span class="photo-food-name">${escHtml(f.name)}</span>
+            <span class="photo-food-right">
+              <span class="photo-food-cals" data-manual-cal-for="${i}">${cals} cal</span>
+            </span>
+          </button>
+          <button type="button" class="photo-food-remove" aria-label="Remove ${escHtml(f.name)}" title="Remove" onclick="removeManualMealFood(${i})">${trashIcon}</button>
+          ${editor}
+        </div>`;
+      }).join("");
+    }
+  }
+  // Recompute the four total inputs from the foods list. This is the
+  // user-visible source of truth — the saveMeal flow reads these
+  // fields when "Log Meal" is tapped, so corrections to a row flow
+  // through automatically.
+  const total = foods.reduce((acc, f) => {
+    acc.calories += Number(f.estimated_calories) || 0;
+    acc.protein += Number(f.protein_g) || 0;
+    acc.carbs += Number(f.carbs_g) || 0;
+    acc.fat += Number(f.fat_g) || 0;
+    return acc;
+  }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  if (foods.length) {
+    document.getElementById("meal-calories").value = Math.round(total.calories);
+    document.getElementById("meal-protein").value = Math.round(total.protein);
+    document.getElementById("meal-carbs").value = Math.round(total.carbs);
+    document.getElementById("meal-fat").value = Math.round(total.fat);
+  }
+}
+
+function removeManualMealFood(idx) {
+  const modalEl = document.getElementById("manual-meal-modal");
+  if (!modalEl?._estimateFoods) return;
+  modalEl._estimateFoods.splice(idx, 1);
+  if (modalEl._estimateEditingIdx === idx) modalEl._estimateEditingIdx = null;
+  else if (typeof modalEl._estimateEditingIdx === "number" && modalEl._estimateEditingIdx > idx) modalEl._estimateEditingIdx -= 1;
+  _renderManualMealFoods();
+}
+if (typeof window !== "undefined") window.removeManualMealFood = removeManualMealFood;
+
+function toggleManualMealFoodEdit(idx) {
+  const modalEl = document.getElementById("manual-meal-modal");
+  if (!modalEl?._estimateFoods) return;
+  modalEl._estimateEditingIdx = (modalEl._estimateEditingIdx === idx) ? null : idx;
+  _renderManualMealFoods();
+}
+if (typeof window !== "undefined") window.toggleManualMealFoodEdit = toggleManualMealFoodEdit;
+
+function updateManualMealFoodField(idx, field, value) {
+  const modalEl = document.getElementById("manual-meal-modal");
+  const food = modalEl?._estimateFoods?.[idx];
+  if (!food) return;
+  const num = parseFloat(value);
+  food[field] = isFinite(num) ? num : 0;
+  if (field === "estimated_calories") {
+    const calEl = document.querySelector(`[data-manual-cal-for="${idx}"]`);
+    if (calEl) calEl.textContent = `${Math.round(food.estimated_calories || 0)} cal`;
+  }
+  const total = (modalEl._estimateFoods || []).reduce((acc, f) => {
+    acc.calories += Number(f.estimated_calories) || 0;
+    acc.protein += Number(f.protein_g) || 0;
+    acc.carbs += Number(f.carbs_g) || 0;
+    acc.fat += Number(f.fat_g) || 0;
+    return acc;
+  }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  document.getElementById("meal-calories").value = Math.round(total.calories);
+  document.getElementById("meal-protein").value = Math.round(total.protein);
+  document.getElementById("meal-carbs").value = Math.round(total.carbs);
+  document.getElementById("meal-fat").value = Math.round(total.fat);
+}
+if (typeof window !== "undefined") window.updateManualMealFoodField = updateManualMealFoodField;
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
