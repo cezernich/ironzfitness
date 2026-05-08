@@ -493,7 +493,7 @@ async function ensureProfile(user) {
 
   const { data: existing, error: fetchError } = await client
     .from('profiles')
-    .select('id')
+    .select('id, full_name')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -518,6 +518,18 @@ async function ensureProfile(user) {
     });
     if (insertError) console.warn('Profile insert error:', insertError.message);
     else if (isFirstUser) console.log('First user — assigned admin role');
+  } else if (!existing.full_name && user.user_metadata?.full_name) {
+    // Auto-resync: profile already exists but its full_name is empty
+    // AND auth metadata has a value. Common cause: the user signed up
+    // before the name field was wired, profiles got inserted with an
+    // empty string, and they later set their name in auth metadata
+    // (admin update, supabase-js call, signup form fix from a separate
+    // device). Without this, profiles stayed empty forever and the
+    // Admin Panel kept rendering "—".
+    const { error: updateError } = await client.from('profiles')
+      .update({ full_name: user.user_metadata.full_name })
+      .eq('id', user.id);
+    if (updateError) console.warn('Profile name resync error:', updateError.message);
   }
 
   // Fetch role for admin gating
