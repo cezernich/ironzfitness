@@ -279,6 +279,16 @@ function openPhotoMealLog() {
     delete modal.dataset.photoBase64;
     delete modal.dataset.photoMediaType;
   }
+  // Default the date input to whichever day the user was viewing —
+  // same logic as openManualMealLog so all three meal-log surfaces
+  // (manual, photo, quick-add) honor the day-detail context. Future
+  // dates clamp to today.
+  const dateInput = document.getElementById("photo-meal-date");
+  if (dateInput) {
+    const today = (typeof getTodayString === "function") ? getTodayString() : new Date().toISOString().slice(0, 10);
+    const sel = (typeof selectedDate === "string" && selectedDate) ? selectedDate : today;
+    dateInput.value = sel <= today ? sel : today;
+  }
   // survey-overlay needs both display:flex and .is-open to be visible —
   // same pattern as the barcode scanner. Previously this was an inline
   // div that hid the nutrition dashboard and tried to scroll the inline
@@ -308,6 +318,18 @@ function openManualMealLog() {
   }
   const foodsEl = document.getElementById("manual-meal-foods");
   if (foodsEl) { foodsEl.style.display = "none"; foodsEl.innerHTML = ""; }
+  // Default the date to whichever day the user was viewing — so opening
+  // the modal from yesterday's day-detail pre-selects yesterday instead
+  // of silently dropping the entry into today. Falls back to today for
+  // anywhere the user has no day context (e.g. nutrition tab top-level).
+  // Future dates clamp to today so a calendar peek into next week
+  // doesn't accidentally log a meal in the future.
+  const dateEl = document.getElementById("meal-date");
+  if (dateEl) {
+    const today = (typeof getTodayString === "function") ? getTodayString() : new Date().toISOString().slice(0, 10);
+    const sel = (typeof selectedDate === "string" && selectedDate) ? selectedDate : today;
+    dateEl.value = sel <= today ? sel : today;
+  }
   // Clear any leftover estimate status from a prior session
   const status = document.getElementById("meal-estimate-status");
   if (status) { status.textContent = ""; status.style.display = "none"; }
@@ -524,9 +546,16 @@ function quickAddMealByIndex(index) {
 }
 
 function quickAddMealSelect(cal, protein, carbs, fat, name) {
+  // Honor the day the user is viewing — Quick Add used to hardcode
+  // today, so tapping a recent-meal pill from yesterday's day-detail
+  // dropped the entry into today's calendar instead of the day they
+  // were on. Future dates clamp to today.
+  const today = getTodayString();
+  const sel = (typeof selectedDate === "string" && selectedDate) ? selectedDate : today;
+  const date = sel <= today ? sel : today;
   const meal = {
     id: generateId("meal"),
-    date: getTodayString(),
+    date,
     name: name,
     calories: cal,
     protein: protein,
@@ -888,9 +917,16 @@ function savePhotoMeal() {
   const fat = parseFloat(document.getElementById("photo-fat").value) || 0;
   const description = document.getElementById("photo-meal-modal").dataset.description || "Photo-logged meal";
 
+  // Read the date the user picked in the modal; fall back to today
+  // when the input is missing or empty. Clamp future dates to today —
+  // logging a meal in the future is almost always a misclick.
+  const today = getTodayString();
+  const dateInput = document.getElementById("photo-meal-date")?.value;
+  const date = (dateInput && dateInput <= today) ? dateInput : today;
+
   const meal = {
     id: generateId("meal"),
-    date: getTodayString(),
+    date,
     name: description,
     calories, protein, carbs, fat,
     source: "photo",
