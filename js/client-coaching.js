@@ -376,6 +376,142 @@
   }
   if (typeof window !== "undefined") window.diagnoseSchedule = diagnoseSchedule;
 
+  // Console diagnostic — `await diagnoseCompletion("2026-05-02")` dumps
+  // local + server completion state for the given date side-by-side so
+  // we can see which sync layer dropped a live-tracker completion. Same
+  // pattern as diagnoseSchedule: reads auth token from sb-*-auth-token
+  // directly so it works even when supabase-js is wedged on auth lock.
+  //
+  // Reports for each date:
+  //   - local workouts (isCompletion entries)
+  //   - local completedSessions (sessionId → workoutId map)
+  //   - server user_data.workouts
+  //   - server user_data.completedSessions
+  //   - server structured `workouts` table rows
+  //   - ORPHAN audit: any completedSessions entry whose sessionId is
+  //     NOT in local workoutSchedule + trainingPlan + logged-workouts
+  //     (would be purged by cleanupOrphanedCompletions on next boot).
+  async function diagnoseCompletion(dateStr) {
+    if (!dateStr) {
+      console.warn("[diag] usage: await diagnoseCompletion('YYYY-MM-DD')");
+      return null;
+    }
+    const out = {
+      date: dateStr,
+      localWorkouts: [],
+      localCompletedSessions: {},
+      serverWorkouts: [],
+      serverCompletedSessions: {},
+      serverStructuredWorkouts: [],
+      orphanedCompletionIds: [],
+      serverUserDataUpdatedAt: { workouts: null, completedSessions: null },
+    };
+
+    try {
+      const ws = JSON.parse(localStorage.getItem("workouts") || "[]");
+      out.localWorkouts = ws.filter(w => w?.date === dateStr).map(w => ({
+        id: w.id, date: w.date, name: w.name, type: w.type,
+        isCompletion: !!w.isCompletion, liveTracked: !!w.liveTracked,
+        completedSessionId: w.completedSessionId, completedAt: w.completedAt,
+        duration: w.duration,
+      }));
+    } catch (e) { console.warn("[diag] local workouts read failed:", e); }
+
+    try {
+      const meta = JSON.parse(localStorage.getItem("completedSessions") || "{}");
+      out.localCompletedSessions = Object.fromEntries(
+        Object.entries(meta).filter(([, v]) => {
+          const wid = String(v?.workoutId || "");
+          return out.localWorkouts.some(w => String(w.id) === wid);
+        })
+      );
+    } catch (e) { console.warn("[diag] local completedSessions read failed:", e); }
+
+    const sb = window.supabaseClient;
+    const url = sb?.supabaseUrl;
+    const key = sb?.supabaseKey;
+    if (!url || !key) { console.warn("[diag] supabase client not initialized"); return out; }
+    const tokenKey = Object.keys(localStorage).find(k => /^sb-.*-auth-token$/.test(k));
+    let token = key;
+    try {
+      const blob = JSON.parse(localStorage.getItem(tokenKey) || "{}");
+      token = blob?.access_token || token;
+    } catch {}
+    const headers = { apikey: key, Authorization: `Bearer ${token}` };
+
+    try {
+      const r = await fetch(`${url}/rest/v1/user_data?data_key=eq.workouts&select=data_value,updated_at`, { headers });
+      const [ud] = await r.json();
+      out.serverUserDataUpdatedAt.workouts = ud?.updated_at || null;
+      out.serverWorkouts = ((ud?.data_value || []).filter(w => w?.date === dateStr)).map(w => ({
+        id: w.id, date: w.date, name: w.name, type: w.type,
+        isCompletion: !!w.isCompletion, liveTracked: !!w.liveTracked,
+        completedSessionId: w.completedSessionId, completedAt: w.completedAt,
+        duration: w.duration,
+      }));
+    } catch (e) { console.warn("[diag] server user_data.workouts fetch failed:", e); }
+
+    try {
+      const r = await fetch(`${url}/rest/v1/user_data?data_key=eq.completedSessions&select=data_value,updated_at`, { headers });
+      const [ud] = await r.json();
+      out.serverUserDataUpdatedAt.completedSessions = ud?.updated_at || null;
+      const serverMeta = ud?.data_value || {};
+      const dateWorkoutIds = new Set(out.serverWorkouts.map(w => String(w.id)));
+      out.serverCompletedSessions = Object.fromEntries(
+        Object.entries(serverMeta).filter(([, v]) => dateWorkoutIds.has(String(v?.workoutId || "")))
+      );
+    } catch (e) { console.warn("[diag] server user_data.completedSessions fetch failed:", e); }
+
+    try {
+      const r = await fetch(`${url}/rest/v1/workouts?date=eq.${dateStr}&select=id,date,name,type,is_completion,live_tracked,duration_min,completed_at`, { headers });
+      const rows = await r.json();
+      out.serverStructuredWorkouts = (rows || []).map(x => ({
+        id: x.id, date: x.date, name: x.name, type: x.type,
+        isCompletion: !!x.is_completion, liveTracked: !!x.live_tracked,
+        duration: x.duration_min, completedAt: x.completed_at,
+      }));
+    } catch (e) { console.warn("[diag] structured workouts fetch failed:", e); }
+
+    try {
+      const ws    = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
+      const plan  = JSON.parse(localStorage.getItem("trainingPlan")    || "[]");
+      const logs  = JSON.parse(localStorage.getItem("workouts")        || "[]");
+      const valid = new Set();
+      ws.forEach(s   => valid.add(`session-sw-${s.id}`));
+      plan.forEach(p => valid.add(`session-plan-${p.date}-${p.raceId}`));
+      logs.forEach(w => { if (!w.isCompletion) valid.add(`session-log-${w.id}`); });
+      const meta = JSON.parse(localStorage.getItem("completedSessions") || "{}");
+      for (const sid of Object.keys(meta)) {
+        const v = meta[sid];
+        const wid = String(v?.workoutId || "");
+        const w = (logs || []).find(x => String(x.id) === wid);
+        if (w && w.date === dateStr && !valid.has(sid)) {
+          out.orphanedCompletionIds.push({ sessionId: sid, workoutId: wid, name: w.name });
+        }
+      }
+    } catch (e) { console.warn("[diag] orphan audit failed:", e); }
+
+    console.log(`%c[diag] Completion for ${dateStr}`, "font-weight:bold;color:#16a34a");
+    console.log(`LOCAL workouts (${out.localWorkouts.length}):`);
+    if (out.localWorkouts.length) console.table(out.localWorkouts); else console.log("  (empty)");
+    console.log(`LOCAL completedSessions for those workouts (${Object.keys(out.localCompletedSessions).length}):`);
+    console.log(out.localCompletedSessions);
+    console.log(`SERVER user_data.workouts (${out.serverWorkouts.length}, updated_at=${out.serverUserDataUpdatedAt.workouts}):`);
+    if (out.serverWorkouts.length) console.table(out.serverWorkouts); else console.log("  (empty)");
+    console.log(`SERVER user_data.completedSessions for those workouts (${Object.keys(out.serverCompletedSessions).length}, updated_at=${out.serverUserDataUpdatedAt.completedSessions}):`);
+    console.log(out.serverCompletedSessions);
+    console.log(`SERVER structured workouts table (${out.serverStructuredWorkouts.length}):`);
+    if (out.serverStructuredWorkouts.length) console.table(out.serverStructuredWorkouts); else console.log("  (empty)");
+    if (out.orphanedCompletionIds.length) {
+      console.warn(`%c[diag] ORPHANED completions (would be purged on next boot):`, "color:#dc2626;font-weight:bold");
+      console.table(out.orphanedCompletionIds);
+    } else {
+      console.log("ORPHAN audit: no orphans for this date.");
+    }
+    return out;
+  }
+  if (typeof window !== "undefined") window.diagnoseCompletion = diagnoseCompletion;
+
   window.fetchActiveCoachIds         = fetchActiveCoachIds;
   window.isCoachActive               = isCoachActive;
   window.subscribeCoachAssignments   = subscribeCoachAssignments;

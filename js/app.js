@@ -552,41 +552,41 @@ function applyPoolSizeToggle() {
    INITIALIZATION
    ===================================================================== */
 
-// Remove orphaned completion records at startup:
-// 1. isCompletion workouts with no matching completedSessions entry
-// 2. isCompletion workouts whose completedSessionId points to a session that no longer exists
-// 3. completedSessions entries whose source session no longer exists
+// Remove TRULY orphaned completion bookkeeping at startup.
+//
+// "Truly orphaned" = a completion workout record (isCompletion:true) whose
+// `id` is not referenced by ANY completedSessions[sessionId].workoutId. That
+// is the unambiguous "the meta link broke; the workout record was left
+// behind" case.
+//
+// We deliberately do NOT purge based on "the source scheduled/plan session
+// is missing from workoutSchedule/trainingPlan right now." That check eats
+// real completions: workoutSchedule and trainingPlan get refreshed from
+// Supabase on boot, and a brief sync race / coach mirror lag / new device
+// pulling stale data can make a session appear missing. The prior version
+// of this function then deleted the completion record AND the matching
+// completedSessions meta entry, and pushed the deletion to the server —
+// the user's completed workout silently disappeared forever. A scheduled
+// session legitimately being deleted is handled by _cleanupCompletionRecord
+// at delete time; a leftover orphan from an edge case is harmless (the
+// completion still appears in workouts/history).
 function cleanupOrphanedCompletions() {
   try {
     const meta = JSON.parse(localStorage.getItem("completedSessions") || "{}");
     const validWorkoutIds = new Set(Object.values(meta).map(e => String(e.workoutId)));
-
-    // Build set of existing session IDs (scheduled + plan)
-    const scheduled = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
-    const plan = JSON.parse(localStorage.getItem("trainingPlan") || "[]");
-    const existingSessionIds = new Set();
-    scheduled.forEach(s => existingSessionIds.add(`session-sw-${s.id}`));
-    plan.forEach(p => existingSessionIds.add(`session-plan-${p.date}-${p.raceId}`));
-    // Logged workouts are also valid completion targets
-    const logged = JSON.parse(localStorage.getItem("workouts") || "[]");
-    logged.forEach(w => { if (!w.isCompletion) existingSessionIds.add(`session-log-${w.id}`); });
 
     let workouts = JSON.parse(localStorage.getItem("workouts") || "[]");
     const before = workouts.length;
     const removedIds = [];
     workouts = workouts.filter(w => {
       if (!w.isCompletion) return true;
-      // Remove if no matching completedSessions entry
       if (!validWorkoutIds.has(String(w.id))) { removedIds.push(String(w.id)); return false; }
-      // Remove if the source session no longer exists
-      if (w.completedSessionId && !existingSessionIds.has(w.completedSessionId)) { removedIds.push(String(w.id)); return false; }
       return true;
     });
     if (workouts.length !== before) {
       localStorage.setItem("workouts", JSON.stringify(workouts)); if (typeof DB !== 'undefined') DB.syncWorkouts();
     }
 
-    // Clean up ratings for removed workout IDs
     if (removedIds.length) {
       try {
         const ratings = JSON.parse(localStorage.getItem("workoutRatings") || "{}");
@@ -594,20 +594,11 @@ function cleanupOrphanedCompletions() {
         for (const id of removedIds) {
           if (ratings[id]) { delete ratings[id]; ratingsChanged = true; }
         }
-        if (ratingsChanged) localStorage.setItem("workoutRatings", JSON.stringify(ratings)); if (typeof DB !== 'undefined') DB.syncKey('workoutRatings');
+        if (ratingsChanged) {
+          localStorage.setItem("workoutRatings", JSON.stringify(ratings));
+          if (typeof DB !== 'undefined') DB.syncKey('workoutRatings');
+        }
       } catch {}
-    }
-
-    // Also clean up completedSessions entries for sessions that no longer exist
-    let metaChanged = false;
-    for (const sessionId of Object.keys(meta)) {
-      if (!existingSessionIds.has(sessionId)) {
-        delete meta[sessionId];
-        metaChanged = true;
-      }
-    }
-    if (metaChanged) {
-      localStorage.setItem("completedSessions", JSON.stringify(meta)); if (typeof DB !== 'undefined') DB.syncKey('completedSessions');
     }
   } catch {}
 }
