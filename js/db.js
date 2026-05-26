@@ -180,6 +180,18 @@ const DB = (() => {
           if (error) console.warn('DB: profile save error', error.message);
         } catch (e) { console.warn('DB: profile save offline', e); }
       }
+
+      // Also mirror the full profile JSON to the user_data table. 'profile'
+      // is in SYNCED_KEYS, so refreshAllKeys() will pull it from user_data
+      // on next boot and overwrite localStorage. Without this call, the
+      // structured `profiles` table holds the fresh save but the user_data
+      // row stays stale — and refreshAllKeys's stale row wins the race,
+      // wiping fields like birthday from the cached LS profile. The
+      // 20260430e migration comment flagged this exact regression class
+      // ("my birthday doesn't stick no matter how many times I save it").
+      if (typeof syncKey === 'function') {
+        try { syncKey('profile'); } catch {}
+      }
     }
   };
 
