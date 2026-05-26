@@ -5210,6 +5210,26 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       const v = parseFloat(_baseN[key]);
       return v > 0 ? Math.max(abs, Math.ceil(v * 0.9)) : abs;
     };
+
+    // Profile-completeness notice. getBaseNutritionTarget falls back to the
+    // generic NUTRITION_TARGETS table when weight/height/age aren't all > 0,
+    // and BMR is gender-sensitive. If any of those are missing, the macros
+    // shown aren't personalized — surface that so the user knows to fix it.
+    let _profileForNotice = {};
+    try { _profileForNotice = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
+    const _missingForNutrition = [];
+    if (!(parseFloat(_profileForNotice.weight) > 0)) _missingForNutrition.push("weight");
+    if (!(parseFloat(_profileForNotice.height) > 0)) _missingForNutrition.push("height");
+    if (!(parseInt(_profileForNotice.age) > 0))      _missingForNutrition.push("birthday");
+    if (!_profileForNotice.gender)                   _missingForNutrition.push("gender");
+    const _missingHtml = _missingForNutrition.length > 0
+      ? `<div class="nutrition-fallback-notice">
+           These targets aren't tuned to you yet — add your ${_missingForNutrition.join(", ")} in
+           <a href="#" onclick="event.preventDefault();_openAthleteProfileSettings();">Athlete Profile</a>
+           and they'll recalculate from your weight, height, age, and gender.
+         </div>`
+      : "";
+
     html += `
       <div class="nutrition-target-section">
         <div class="section-label">
@@ -5218,6 +5238,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
             onclick="resetNutritionTargets('${dateStr}')"
             style="${isAdjusted ? '' : 'display:none'}">↺ Reset to plan</button>
         </div>
+        ${_missingHtml}
         <p class="nutrition-hint">Tap a target to adjust it with a slider.</p>
         <div class="macro-summary">
           ${buildMacroBox("calories", "Calories", nutrition.calories, dateStr, _floorMin("calories", 1200), 5000,  50, "")}

@@ -3954,6 +3954,23 @@ input.completion-ex-name:focus {
   margin-top: -6px;
 }
 
+.nutrition-fallback-notice {
+  font-size: 0.78rem;
+  color: var(--color-amber);
+  background: rgba(245, 158, 11, 0.08);
+  border-left: 2px solid var(--color-amber);
+  padding: 8px 12px;
+  border-radius: 0 6px 6px 0;
+  margin: 4px 0 2px;
+  line-height: 1.4;
+}
+
+.nutrition-fallback-notice a {
+  color: var(--color-amber);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 .nutrition-reset-btn {
   background: transparent;
   border: none;

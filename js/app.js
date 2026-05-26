@@ -1324,6 +1324,20 @@ function displayPhilosophyPlan(result) {
    SETTINGS — PROFILE
    ===================================================================== */
 
+// Open Settings → Athlete Profile and scroll the section into view. Used
+// by the "targets aren't personalized" notice on the home day-detail when
+// the profile is missing weight/height/birthday/gender.
+function _openAthleteProfileSettings() {
+  try { if (typeof showTab === "function") showTab("settings"); } catch {}
+  setTimeout(() => {
+    const section = document.getElementById("section-profile");
+    if (!section) return;
+    section.classList.remove("is-collapsed");
+    section.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 80);
+}
+if (typeof window !== "undefined") window._openAthleteProfileSettings = _openAthleteProfileSettings;
+
 function saveProfile() {
   // Convert ft/in to total inches for height
   const feet = parseInt(document.getElementById("profile-height-feet")?.value) || 0;
@@ -1333,20 +1347,50 @@ function saveProfile() {
   let existing = {};
   try { existing = JSON.parse(localStorage.getItem("profile")) || {}; } catch {}
 
+  // Birthday: read the three Month/Day/Year selects DIRECTLY instead of the
+  // hidden #profile-birthday input. The hidden field is only kept in sync
+  // by _syncBdayPickerToHidden, which fires on `change` events from the
+  // selects. On iOS the native picker's change-event timing is flaky if the
+  // user taps Save before the picker fully dismisses, leaving the hidden
+  // field at "" even when all three selects show values. Reading the
+  // selects directly avoids that race entirely.
+  const bMonth = parseInt(document.getElementById("profile-birthday-month")?.value, 10);
+  const bDay   = parseInt(document.getElementById("profile-birthday-day")?.value, 10);
+  const bYear  = parseInt(document.getElementById("profile-birthday-year")?.value, 10);
+  let bdayVal = "";
+  if (bMonth && bDay && bYear) {
+    bdayVal = `${bYear}-${String(bMonth).padStart(2, "0")}-${String(bDay).padStart(2, "0")}`;
+  } else {
+    // Fall back to the hidden input in case the page is using the legacy
+    // type="date" widget rather than the three-select picker.
+    bdayVal = document.getElementById("profile-birthday")?.value || "";
+  }
+
+  // For every field: blank form input means "leave existing alone" rather
+  // than "wipe it". Previously these fields unconditionally overwrote, so a
+  // partially-loaded form (e.g. legacy profile with `age` but no
+  // `birthday`, or a slow DB.profile.get round-trip) would silently clear
+  // values and break personalized nutrition math.
+  const nameVal   = document.getElementById("profile-name").value.trim();
+  const weightVal = document.getElementById("profile-weight").value;
+  const genderVal = document.getElementById("profile-gender").value;
+  const goalVal   = document.getElementById("profile-goal").value;
+  const bcVal     = document.getElementById("profile-bodycomp")?.value;
+
   // Strength 1RMs used to live here too, but that duplicated the Training
   // Zones → Strength form — which is the canonical place. The spread of
   // `existing` below preserves any legacy profile.squat1RM / bench1RM /
   // deadlift1RM values a prior save wrote, so we don't clobber them.
   const profile = {
     ...existing,
-    name:   document.getElementById("profile-name").value.trim(),
-    birthday: document.getElementById("profile-birthday").value,
-    age:    document.getElementById("profile-birthday").value ? String(_calcAgeFromBirthday(document.getElementById("profile-birthday").value)) : "",
-    weight: document.getElementById("profile-weight").value,
-    height: String(totalInches || ""),
-    gender: document.getElementById("profile-gender").value,
-    goal:   document.getElementById("profile-goal").value,
-    bodyCompGoal: document.getElementById("profile-bodycomp")?.value || existing.bodyCompGoal || "maintain",
+    name:     nameVal   || existing.name     || "",
+    birthday: bdayVal   || existing.birthday || "",
+    age:      bdayVal   ? String(_calcAgeFromBirthday(bdayVal)) : (existing.age || ""),
+    weight:   weightVal || existing.weight   || "",
+    height:   totalInches > 0 ? String(totalInches) : (existing.height || ""),
+    gender:   genderVal || existing.gender   || "",
+    goal:     goalVal   || existing.goal     || "",
+    bodyCompGoal: bcVal || existing.bodyCompGoal || "maintain",
   };
 
   localStorage.setItem("profile", JSON.stringify(profile));
