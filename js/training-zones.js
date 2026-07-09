@@ -277,7 +277,9 @@
   //      classification when we have a 5K-equivalent time.
   //   2. Otherwise use VDOT normalized by (ageFactor × sexFactor) and the
   //      fixed Daniels cuts (≥48 advanced, ≥37 intermediate, <37 beginner).
-  //   3. If both are missing, return null.
+  //   3. Else, if a running threshold pace (min/mile) is present, grade it
+  //      against age/sex-adjusted, Daniels-derived cut-points.
+  //   4. If all are missing, return null.
   function classifyRunning(thresholds, opts) {
     if (!thresholds) return null;
     const demo = (opts && (opts.age || opts.sex)) ? { age: opts.age, sex: opts.sex } : _readProfileDemographics();
@@ -306,6 +308,21 @@
       const adjusted = vdot / (_ageFactor(demo.age) * _sexFactor(demo.sex));
       if (adjusted >= 48) return "advanced";
       if (adjusted >= 37) return "intermediate";
+      return "beginner";
+    }
+
+    // Threshold-pace path: the Build-Plan onboarding captures a running
+    // threshold pace (min/mile) but often no VDOT or 5K time. Grade it against
+    // Daniels-derived cut-points anchored to the same tiers as the VDOT path
+    // above — VDOT 48 ≈ 6:25/mi threshold (advanced), VDOT 37 ≈ 8:15/mi
+    // (intermediate). Age/sex grading mirrors the raw-time paths: multiplying
+    // by a factor < 1 (older, or female) credits a proportionally slower pace,
+    // reflecting the ~0.8%/yr masters decline and the ~10% endurance sex gap.
+    const tPaceSec = _parseTime(thresholds.run_threshold_pace || thresholds.thresholdPace);
+    if (tPaceSec && tPaceSec >= 180 && tPaceSec <= 1200) {
+      const adjustedPace = tPaceSec * _ageFactor(demo.age) * _sexFactor(demo.sex);
+      if (adjustedPace <= 385) return "advanced";      // ≤ ~6:25/mi
+      if (adjustedPace <= 495) return "intermediate";  // ≤ ~8:15/mi
       return "beginner";
     }
 
