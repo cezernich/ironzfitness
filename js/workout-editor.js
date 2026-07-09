@@ -662,6 +662,7 @@ function setEditIntervalMode(id, mode) {
 function _addEditIntervalRow(iv) {
   _editIntervalCount++;
   const id   = _editIntervalCount;
+  const escAttr = (v) => String(v == null ? "" : v).replace(/"/g, "&quot;");
   const eff  = iv?.effort || "Z2";
   const unit = typeof getDistanceUnit === "function" ? getDistanceUnit() : "mi";
   let initMode = "time", initDist = "", initMin = "";
@@ -689,7 +690,7 @@ function _addEditIntervalRow(iv) {
   div.innerHTML = `
     <div class="eiv-header">
       <span class="drag-handle" title="Drag to reorder · drop on a row to group">⠿</span>
-      <input type="text" id="edit-ivphase-${id}" class="eiv-phase-input" value="${iv?.name || ""}" placeholder="e.g. Warm-up" />
+      <input type="text" id="edit-ivphase-${id}" class="eiv-phase-input" value="${escAttr(iv?.name || "")}" placeholder="e.g. Warm-up" />
       <button class="remove-exercise-btn" title="Remove" onclick="removeEditIntervalRow(${id})">${_trashSvg}</button>
     </div>
     <div class="eiv-fields">
@@ -736,7 +737,7 @@ function _addEditIntervalRow(iv) {
       </div>
     </div>
     <div class="eiv-details">
-      <input type="text" id="edit-ivdetails-${id}" value="${iv?.details || ""}" placeholder="Details (e.g. 5:30/km, HR under 145)" />
+      <input type="text" id="edit-ivdetails-${id}" value="${escAttr(iv?.details || "")}" placeholder="Details (e.g. 5:30/km, HR under 145)" />
     </div>`;
   // Show/hide rest field when reps changes
   const repsInput = div.querySelector(`#edit-ivreps-${id}`);

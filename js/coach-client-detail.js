@@ -18,6 +18,10 @@
   "use strict";
 
   let _client = null;
+  // Guards against concurrent loadCoachClientDetail() calls clobbering
+  // each other's module state. Each load takes a token; after every
+  // await it bails if a newer load has started.
+  let _loadSeq = 0;
   let _activeTab = "calendar";
   // Sport sub-tab inside Benchmarks. Mirrors the client's own zones
   // surface (Running / Biking / Swimming / Strength).
@@ -70,15 +74,15 @@
   };
 
   function _esc(s) {
-    const div = document.createElement("div");
-    div.textContent = s == null ? "" : String(s);
-    return div.innerHTML;
+    return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   }
 
   // ── Entry point — called from coach-portal.js openClientDetail ────────
   async function loadCoachClientDetail(clientId) {
     const sb = window.supabaseClient;
     if (!sb || !clientId) return;
+    const seq = ++_loadSeq;
 
     const root = document.getElementById("coach-client-detail");
     if (root) root.innerHTML = `<div class="coach-loading">Loading…</div>`;
@@ -90,6 +94,7 @@
         .select("id, full_name, email, gender, weight_lbs, age")
         .eq("id", clientId)
         .maybeSingle();
+      if (seq !== _loadSeq) return;
       _client = profileRes?.data || { id: clientId };
 
       // Pull every coach-readable data_key for this client in one go.
@@ -117,6 +122,7 @@
           "hydrationSettings", "hydrationDailyTargetOz",
           "fuelingPrefs",
         ]);
+      if (seq !== _loadSeq) return;
       const byKey = {};
       _audit = {};
       for (const r of (dataRes.data || [])) {
@@ -134,6 +140,7 @@
         .eq("user_id", clientId)
         .order("date", { ascending: false })
         .limit(60);
+      if (seq !== _loadSeq) return;
 
       // Pull this coach's assignments for this client so the calendar
       // can surface client_note / client_rating on completed coach
@@ -142,12 +149,14 @@
       const assignRes = await sb.from("coach_assigned_workouts")
         .select("id, date, client_note, client_rating, client_responded_at")
         .eq("client_id", clientId);
+      if (seq !== _loadSeq) return;
       _data.assignments = {};
       for (const r of (assignRes?.data || [])) _data.assignments[r.id] = r;
 
       // When did this coach take this client on? Used by the Benchmarks
       // tab to scope the zones-update history to the relationship.
       const sess = (await sb.auth.getSession())?.data?.session;
+      if (seq !== _loadSeq) return;
       const coachUid = sess?.user?.id || null;
       let coachAssignedAt = null;
       if (coachUid) {
@@ -159,17 +168,20 @@
           .order("assigned_at", { ascending: true })
           .limit(1)
           .maybeSingle();
+        if (seq !== _loadSeq) return;
         coachAssignedAt = relRes?.data?.assigned_at || null;
       }
 
+      if (seq !== _loadSeq) return;
       _data.schedule        = _coerceArray(byKey.workoutSchedule);
       _data.plan            = _coerceArray(byKey.trainingPlan);
-      _data.ratings         = _coerceArray(byKey.workoutRatings);
+      _data.ratings         = byKey.workoutRatings || [];
       _data.zones           = byKey.trainingZones || null;
       _data.zoneHistory     = _coerceArray(byKey.trainingZonesHistory);
       _data.coachAssignedAt = coachAssignedAt;
       _data.prs       = byKey.personalRecords || null;
       _data.races     = _coerceArray(byKey.raceEvents).concat(_coerceArray(byKey.events));
+      _data.raceEventsArr = _coerceArray(byKey.raceEvents); _data.eventsArr = _coerceArray(byKey.events);
       // Mirror athlete-side dedup: Mark-as-Complete on a scheduled
       // session writes a second `workouts` row tagged isCompletion=true
       // alongside any hand-logged workout for the same (date, type).
@@ -1164,13 +1176,12 @@
 
   function coachTIRaceEditOpen(raceId) {
     if (!_client || !_client.id) return;
-    const ti = _data.trainingInputs || {};
-    const allRaceEvents = Array.isArray(ti.raceEvents) ? ti.raceEvents : null;
-    // Look in both arrays — race could legitimately be in either, and
-    // we need to know which to write back to so we don't accidentally
-    // write to the wrong one and orphan the original.
-    const inRaceEvents = (allRaceEvents || []).find(r => String(r.id) === String(raceId));
-    const inEvents     = (_data.races || []).find(r => String(r.id) === String(raceId));
+    // Look in both single-key arrays — race could legitimately be in
+    // either raceEvents or events, and we need to know which to write
+    // back to so we don't accidentally write to the wrong one and
+    // orphan the original.
+    const inRaceEvents = (_data.raceEventsArr || []).find(r => String(r.id) === String(raceId));
+    const inEvents     = (_data.eventsArr || []).find(r => String(r.id) === String(raceId));
     const race = inRaceEvents || inEvents;
     if (!race) return;
     // Determine which user_data key to write back. Prefer raceEvents
@@ -1222,20 +1233,13 @@
     try {
       // Build the updated array for whichever user_data key holds the
       // race. Replace just this race; leave other races in the array
-      // untouched. Mirror the same write to both the RPC and local
-      // _data so the tab refreshes without a re-fetch round-trip.
-      const ti = _data.trainingInputs || {};
+      // untouched. Use the single-key source arrays (raceEventsArr /
+      // eventsArr) — never the merged _data.races — so we write back to
+      // exactly one key and don't duplicate or orphan the race across
+      // the raceEvents/events keys.
       const sourceArr = _tiRaceEdit.sourceKey === "raceEvents"
-        ? (Array.isArray(ti.raceEvents) ? ti.raceEvents : [])
-        : (_data.races || []).filter(r => {
-            // Reconstruct just the events-side races for the write
-            // back. Anything in raceEvents is excluded so we don't
-            // duplicate the race in events.
-            const inRE = Array.isArray(ti.raceEvents)
-              ? ti.raceEvents.some(re => String(re.id) === String(r.id))
-              : false;
-            return !inRE;
-          });
+        ? (_data.raceEventsArr || [])
+        : (_data.eventsArr || []);
       const next = sourceArr.map(r =>
         String(r.id) === _tiRaceEdit.raceId ? { ...r, ...draft } : r
       );
@@ -1248,9 +1252,12 @@
       });
       if (error) throw new Error(error.message);
 
-      // Patch local state.
+      // Patch local state — update the single-key source array we wrote,
+      // plus the merged _data.races the renderer reads from.
       if (_tiRaceEdit.sourceKey === "raceEvents") {
-        _data.trainingInputs.raceEvents = next;
+        _data.raceEventsArr = next;
+      } else {
+        _data.eventsArr = next;
       }
       _data.races = (_data.races || []).map(r =>
         String(r.id) === _tiRaceEdit.raceId ? { ...r, ...draft } : r

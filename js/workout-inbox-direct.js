@@ -61,6 +61,14 @@
     const cleaned = String(email).trim().toLowerCase();
     if (!cleaned) return null;
     try {
+      // Prefer the SECURITY DEFINER RPC (returns id, full_name only). Falls back
+      // to a direct read for deployments where the RLS remediation migration
+      // has not been applied yet.
+      const rpc = await sb.rpc("lookup_user_by_email", { p_email: cleaned });
+      if (!rpc.error) {
+        const row = Array.isArray(rpc.data) ? rpc.data[0] : rpc.data;
+        return row || null;
+      }
       const { data, error } = await sb.from("profiles")
         .select("id, full_name, email")
         .ilike("email", cleaned)

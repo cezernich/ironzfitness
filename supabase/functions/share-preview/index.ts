@@ -108,12 +108,21 @@ serve(async (req: Request) => {
   let senderName: string | null = null;
   if (share.sender_user_id) {
     try {
-      const { data: profile } = await sb
-        .from("profiles")
-        .select("full_name")
-        .eq("id", share.sender_user_id)
-        .maybeSingle();
-      if (profile && profile.full_name) senderName = profile.full_name;
+      // Prefer the name-only SECURITY DEFINER RPC (share_sender_name), which
+      // exposes only full_name rather than the whole profile row. Falls back to
+      // a direct read for deployments where the RLS remediation migration has
+      // not been applied yet.
+      const rpcRes = await sb.rpc("share_sender_name", { p_token: share.share_token });
+      if (!rpcRes.error && rpcRes.data) {
+        senderName = rpcRes.data as string;
+      } else {
+        const { data: profile } = await sb
+          .from("profiles")
+          .select("full_name")
+          .eq("id", share.sender_user_id)
+          .maybeSingle();
+        if (profile && profile.full_name) senderName = profile.full_name;
+      }
     } catch {}
   }
 

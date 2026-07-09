@@ -38,6 +38,16 @@ serve(async (req: Request) => {
     return jsonResponse({ error: "server_misconfigured" }, 500);
   }
 
+  // Validate the caller's JWT. This function is only ever invoked from the
+  // client with a user token, so require a valid authenticated user.
+  const userClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY") || "", {
+    global: { headers: { Authorization: auth } },
+  });
+  const { data: { user }, error: authErr } = await userClient.auth.getUser();
+  if (authErr || !user) {
+    return jsonResponse({ error: "unauthorized" }, 401);
+  }
+
   let body: any;
   try { body = await req.json(); }
   catch { return jsonResponse({ error: "bad_json" }, 400); }

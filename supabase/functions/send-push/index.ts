@@ -99,6 +99,21 @@ serve(async (req: Request) => {
     return jsonResponse({ error: "server_misconfigured" }, 500);
   }
 
+  // Validate the caller. Internal service-to-service calls (e.g. from
+  // notify-share) present the service-role key as the bearer token — allow
+  // those through directly. Any other caller must present a valid user JWT.
+  const token = auth.slice(7).trim(); // strip "bearer "
+  const isInternal = SERVICE_ROLE_KEY.length > 0 && token === SERVICE_ROLE_KEY;
+  if (!isInternal) {
+    const userClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY") || "", {
+      global: { headers: { Authorization: auth } },
+    });
+    const { data: { user }, error: authErr } = await userClient.auth.getUser();
+    if (authErr || !user) {
+      return jsonResponse({ error: "unauthorized" }, 401);
+    }
+  }
+
   if (!APNS_KEY || !APNS_KEY_ID || !APNS_TEAM_ID) {
     return jsonResponse({ success: false, reason: "apns_not_configured" }, 500);
   }

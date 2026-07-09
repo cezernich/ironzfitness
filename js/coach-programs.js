@@ -45,9 +45,8 @@
   ];
 
   function _esc(s) {
-    const div = document.createElement("div");
-    div.textContent = s == null ? "" : String(s);
-    return div.innerHTML;
+    return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   }
 
   // ── Load ──────────────────────────────────────────────────────────────
