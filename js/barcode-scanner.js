@@ -548,16 +548,15 @@ function confirmBarcodeLog() {
     trackEvent("meal_logged", { source: "barcode_scan", product_name: productName, calories });
   }
 
-  // Save to Recent Scans in per-100g shape so quickLog multiplies correctly.
-  let per100 = {};
-  try { per100 = JSON.parse(panel.dataset.per100 || "{}"); } catch {}
+  // Save to Recent Scans as the as-eaten totals; quickLogRecentScan
+  // re-logs stored values verbatim (no multiplication), so store totals.
   saveRecentScan({
     name,
     barcode,
-    calories: per100.cal     || calories,
-    protein:  per100.protein || protein,
-    carbs:    per100.carbs   || carbs,
-    fat:      per100.fat     || fat,
+    calories,
+    protein,
+    carbs,
+    fat,
   });
 
   closeBarcodeScanner();

@@ -2346,6 +2346,7 @@
         injury_prevention: 2,
         race_performance:  2,
         hypertrophy:       3,
+        general:           3,
         minimal:           1,
       }[role];
       const ENDURANCE_RACES = new Set([
@@ -4263,7 +4264,10 @@
     if (legacyEvents.length) {
       // Attach preferences to each race so the generator picks them up.
       legacyEvents.forEach(r => { r.preferences = { ..._prefsForRace }; });
-      const existing = _lsGet("events", []) || [];
+      const existing = (_lsGet("events", []) || []).filter(e =>
+        !e || !legacyEvents.some(n =>
+          n.date === e.date && n.type === e.type &&
+          String(n.name).toLowerCase() === String(e.name).toLowerCase()));
       _lsSet("events", existing.concat(legacyEvents));
     }
 
@@ -4779,6 +4783,20 @@
       biasBodyweight: false,
       loadLevel: "moderate",  // endurance intensity should cap on these days
     },
+    // "General Strength" (catalog id "general") aliases hypertrophy so the
+    // role resolves to real params instead of no-opping. hypertrophy key is
+    // kept above for stale saved states.
+    general: {
+      sessionLen: 48,
+      exerciseCount: 7,
+      primaryReps: "8-12",
+      accessoryReps: "10-12",
+      primarySets: 4,
+      accessorySets: 3,
+      technique: "hypertrophy",
+      biasBodyweight: false,
+      loadLevel: "moderate",
+    },
     minimal: {
       sessionLen: 20,         // bodyweight circuit, ~20 min
       exerciseCount: 4,       // 3–4
@@ -4801,6 +4819,7 @@
     injury_prevention: 2,
     race_performance:  2,
     hypertrophy:       3,
+    general:           3,
     minimal:           1,
   };
 

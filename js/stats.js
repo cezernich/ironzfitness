@@ -199,7 +199,9 @@ function _computeTotals(workouts) {
     const tracksDist = _DIST_TYPES.has(type);
     if (!tracksDist) return;
 
-    // Distance from intervals
+    // Distance from intervals — only counted when there's NO logged
+    // distance below, to avoid double-counting.
+    let intervalKm = 0;
     if (w.aiSession?.intervals) {
       w.aiSession.intervals.forEach(iv => {
         const durStr = String(iv.duration || "");
@@ -210,7 +212,7 @@ function _computeTotals(workouts) {
         if (miMatch) km = parseFloat(miMatch[1]) * 1.60934;
         else if (kmMatch) km = parseFloat(kmMatch[1]);
         km *= reps;
-        if (km > 0) bucket.km += km;
+        if (km > 0) intervalKm += km;
       });
     }
     // Distance from direct field. Two stored shapes:
@@ -241,6 +243,7 @@ function _computeTotals(workouts) {
         }
       }
       if (km > 0) bucket.km += km;
+      else bucket.km += intervalKm;
     }
     // Swim fallback: generated swim sessions carry total_distance_m
     // even when `distance` isn't set. Only applied when no per-distance
@@ -248,6 +251,9 @@ function _computeTotals(workouts) {
     else if (type === "swimming" && w.total_distance_m) {
       const m = parseFloat(w.total_distance_m);
       if (isFinite(m) && m > 0) bucket.km += m / 1000;
+    }
+    else {
+      bucket.km += intervalKm;
     }
   });
   return { byType, totalMin };

@@ -227,10 +227,18 @@ const DB = (() => {
                 var localOnly = local.filter(function(l) { return l.id && !remoteIds[l.id]; });
                 var merged = restored.concat(localOnly);
                 _lsSet(lsKey, merged);
+                // Push local-only rows up so they don't vanish on the next
+                // device that pulls remote and overwrites its cache. uid is
+                // guaranteed present here (inside `if (uid)`). Fire-and-forget.
+                if (localOnly.length) {
+                  try { this.saveBatch(localOnly); } catch (e) { console.warn('DB: ' + lsKey + ' local-only push failed', e); }
+                }
                 return merged;
               } else if (local.length > 0) {
                 // Supabase empty, localStorage has data — keep local, re-sync up
                 console.log('DB: ' + lsKey + ' — Supabase empty but localStorage has ' + local.length + ' items, keeping local');
+                // Actually push local rows up (the "re-sync up" the log promised).
+                try { this.saveBatch(local); } catch (e) { console.warn('DB: ' + lsKey + ' local re-sync push failed', e); }
                 return local;
               }
               _lsSet(lsKey, restored);
@@ -705,6 +713,9 @@ const DB = (() => {
       for (const row of data) {
         _lsSet(row.data_key, row.data_value);
       }
+      // Confirmed remote pull this session — allow _debouncedSync's
+      // destructive delete paths to run (see FINDING 1.7).
+      _lastRemotePullAt = Date.now();
     } catch {}
   }
 
@@ -873,6 +884,25 @@ const DB = (() => {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
   }
 
+  // Deterministically derive a stable UUID from a non-UUID local id so the
+  // same local id always maps to the same remote UUID. Prevents row churn
+  // where crypto.randomUUID() minted a fresh id (and a duplicate remote row)
+  // on every sync for records with string ids like "ob-v2-<ts>".
+  function _deterministicUUID(seed) {
+    // FNV-1a over the string seed → 128-bit → RFC-4122-ish v4-shaped UUID
+    const str = String(seed);
+    function fnv(offset) {
+      let h = 0x811c9dc5 ^ offset;
+      for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+      return h >>> 0;
+    }
+    const a = fnv(0), b = fnv(0x9e3779b9), c = fnv(0x85ebca6b), d = fnv(0xc2b2ae35);
+    const hex = (n) => (n >>> 0).toString(16).padStart(8, "0");
+    const raw = hex(a) + hex(b) + hex(c) + hex(d);
+    return (raw.slice(0,8) + "-" + raw.slice(8,12) + "-4" + raw.slice(13,16) + "-" +
+      ((parseInt(raw[16],16) & 0x3 | 0x8).toString(16)) + raw.slice(17,20) + "-" + raw.slice(20,32));
+  }
+
   function _shapeWorkout(w, uid) {
     // Store the full workout object in a JSONB 'data' column
     // This preserves aiSession, exercises, segments, generatedSession, hiitMeta, supersetIds, etc.
@@ -892,7 +922,7 @@ const DB = (() => {
       return Number.isFinite(n) ? Math.round(n) : null;
     };
     var row = {
-      id: (_isUUID(w.id) ? w.id : null) || crypto.randomUUID(),
+      id: (_isUUID(w.id) ? w.id : null) || _deterministicUUID(w.id != null ? w.id : crypto.randomUUID()),
       user_id: uid,
       date: w.date || null,
       name: w.name || w.type || null,
@@ -923,7 +953,7 @@ const DB = (() => {
     var planIdTyped = _isUUID(rawPlanId) ? rawPlanId : null;
     if (rawPlanId && !planIdTyped) extraData.planId = rawPlanId;
     var row = {
-      id: (_isUUID(s.id) ? s.id : null) || crypto.randomUUID(),
+      id: (_isUUID(s.id) ? s.id : null) || _deterministicUUID(s.id != null ? s.id : crypto.randomUUID()),
       plan_id: planIdTyped,
       user_id: uid,
       scheduled_date: s.date || s.scheduled_date || null,
@@ -1001,6 +1031,11 @@ const DB = (() => {
 
   const _syncTimers = {};
 
+  // Set once refreshAllKeys() has successfully pulled remote user_data this
+  // session. Destructive deletes in _debouncedSync are gated on this so a
+  // device with a stale local cache can't wipe remote rows it never saw.
+  let _lastRemotePullAt = 0;
+
   function _debouncedSync(table, lsKey, shapeFn, delay = 2000) {
     clearTimeout(_syncTimers[lsKey]);
     // Capture the user id at schedule time so the fire-time handler can
@@ -1020,12 +1055,21 @@ const DB = (() => {
       const arr = Array.isArray(raw) ? raw : [raw];
       const rows = arr.map(item => shapeFn(item, uid)).filter(Boolean);
 
+      // Only allow destructive deletes once we've confirmed a remote pull
+      // this session. Otherwise a device booting with a stale/empty local
+      // cache could wipe remote rows it never actually reconciled against.
+      const reconciled = _lastRemotePullAt > 0;
+
       try {
         // Empty-array case: user cleared all items locally. Delete every
         // row the user owns in this table so the structured table matches
         // localStorage. Without this, deleted races/workouts resurrect on
         // the next refreshAllTables() pull.
         if (rows.length === 0) {
+          if (!reconciled) {
+            console.warn('DB: skip delete-all for ' + lsKey + ' — no remote pull this session');
+            return;
+          }
           const { error } = await _client()
             .from(table).delete().eq('user_id', uid);
           if (error) console.warn(`DB: sync ${lsKey} delete-all error`, error.message);
@@ -1052,10 +1096,12 @@ const DB = (() => {
           } else if (remote && remote.length) {
             const localIds = new Set(rows.map(r => r.id).filter(Boolean));
             const stale = remote.map(r => r.id).filter(id => id && !localIds.has(id));
-            if (stale.length) {
+            if (reconciled && stale.length) {
               const { error: delErr } = await _client()
                 .from(table).delete().eq('user_id', uid).in('id', stale);
               if (delErr) console.warn(`DB: sync ${lsKey} purge-delete error`, delErr.message);
+            } else if (stale.length) {
+              console.warn('DB: skip stale purge for ' + lsKey + ' — no remote pull this session');
             }
           }
         } catch (e) {

@@ -128,7 +128,8 @@ function getChallengeProgress(challengeId) {
   }
 
   const completedCount = days.filter(d => d.completed).length;
-  const isFinished = daysPassed >= totalDays;
+  // window is only over AFTER the final day fully elapses
+  const isFinished = daysPassed > totalDays;
   const isSuccess = completedCount === totalDays;
 
   return {

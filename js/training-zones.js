@@ -386,6 +386,7 @@
       // Running: prefer VDOT, fall back to referenceDist/referenceTime pair.
       if (tz.running) {
         if (tz.running.vdot) out.vdot = tz.running.vdot;
+        if (tz.running.thresholdPace) out.run_threshold_pace = tz.running.thresholdPace;
         if (tz.running.referenceDist) out.referenceDist = tz.running.referenceDist;
         if (tz.running.referenceTime) out.referenceTime = tz.running.referenceTime;
       }
@@ -394,8 +395,8 @@
       // Swim CSS — app stores tPaceSec or tPaceStr under trainingZones.swimming.
       if (tz.swimming) {
         if (tz.swimming.tPaceStr) out.swim_css = tz.swimming.tPaceStr;
-        else if (tz.swimming.tPaceSec) {
-          const s = Math.floor(tz.swimming.tPaceSec);
+        else if (tz.swimming.tPaceSec || tz.swimming.cssPace || tz.swimming.css) {
+          const s = Math.floor(tz.swimming.tPaceSec || tz.swimming.cssPace || tz.swimming.css);
           out.swim_css = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
         }
       }

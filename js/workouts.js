@@ -1018,7 +1018,7 @@ function renderAvoidedExercisesList() {
   }
   container.innerHTML = list.map((name, i) => `
     <span class="pref-tag">
-      ${name}
+      ${escHtml(name)}
       <button class="pref-tag-remove" onclick="removeAvoidedExercise(${i})" title="Remove"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4c0-1.1.9-2 2-2h4a2 2 0 012 2v2"/><path d="M19 6v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>
     </span>`).join("");
 }
@@ -1064,7 +1064,8 @@ function refreshGeneratedWorkouts() {
     if (w.type === "weightlifting") {
       const idMatch = String(w.id).match(/weightlifting-(\w+)-b(\d+)/);
       if (!idMatch) return w;
-      const focus      = idMatch[1];
+      const focus      = idMatch[1].toLowerCase().replace(/day$/, "");
+      if (!EXERCISE_LIBRARY.weightlifting[focus]) { changed = true; return { ...w, exercises: filterAvoidedExercises(w.exercises || []) }; }
       const blockIndex = parseInt(idMatch[2]);
       const level      = w.level || "intermediate";
       const eqRestr    = equipRestrictions[w.date] || equipRestrictions["permanent"] || null;

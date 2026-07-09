@@ -789,6 +789,7 @@
     for (const sw of old) {
       if (list.length >= _maxSaved()) break;
       if (existingIds.has(sw.id)) continue;
+      if (sw.fromLoggedId || sw.fromScheduledId || sw.communityId) continue;
       const row = {
         id: _genId(),
         _legacyId: sw.id,
@@ -816,7 +817,9 @@
     // future writes from legacy paths will reintroduce + re-migrate it.
     // Leaving it in place lets stale rows resurface in pickers that still
     // read the old key.
-    localStorage.removeItem(OLD_KEY);
+    const remaining = old.filter(sw => sw.fromLoggedId || sw.fromScheduledId || sw.communityId);
+    if (remaining.length) localStorage.setItem(OLD_KEY, JSON.stringify(remaining));
+    else localStorage.removeItem(OLD_KEY);
     if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey(OLD_KEY);
     return count;
   }

@@ -649,7 +649,7 @@ function determineSessionVolume(sessionDuration, sessionComposition, level) {
 
   // Apply level modifiers
   if (level === 'beginner') {
-    params.max_exercises = Math.min(params.min_exercises, 5);
+    params.max_exercises = Math.min(params.max_exercises, 5);
     params.min_exercises = Math.min(params.min_exercises, 5);
     params.rest_seconds = [60, 90];
   } else if (level === 'advanced') {
