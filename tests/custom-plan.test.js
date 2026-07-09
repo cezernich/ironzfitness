@@ -5,7 +5,7 @@
 //   2. Editing an existing session in place (replace by index, no duplicate)
 //   3. Superset grouping (supersetGroup field preserved and mapped to supersetId)
 
-const CP = require("../custom-plan.js");
+const CP = require("../js/custom-plan.js");
 
 let passed = 0, failed = 0;
 const failures = [];

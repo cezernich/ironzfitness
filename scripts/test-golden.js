@@ -1,6 +1,7 @@
 // Golden test runner for philosophy engine
 const fs = require('fs');
 const vm = require('vm');
+const path = require('path');
 
 global.localStorage = {
   _data: {},
@@ -27,17 +28,21 @@ const files = [
   'philosophy-planner.js'
 ];
 for (const f of files) {
-  vm.runInContext(fs.readFileSync(f, 'utf-8'), context, { filename: f });
+  // Engine files live in js/; exercise-data.js is still at repo root.
+  const fPath = f === 'exercise-data.js'
+    ? path.join(__dirname, '..', f)
+    : path.join(__dirname, '..', 'js', f);
+  vm.runInContext(fs.readFileSync(fPath, 'utf-8'), context, { filename: f });
 }
 
 // Load data
-const modules = JSON.parse(fs.readFileSync('sources-of-truth/philosophy/modules_static.json', 'utf-8'));
+const modules = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'sources-of-truth/philosophy/modules_static.json'), 'utf-8'));
 // Build the legacy snake_case exercise library shape from window.EXERCISE_DB
 // (the former philosophy/exercise_library.json was deleted when EXERCISE_DB
 // became the single source of truth). _shapeFromExerciseDB in
 // exercise-selector.js does the same translation at runtime; mirror it here
 // so the golden tests see identical data.
-const exerciseData = fs.readFileSync('exercise-data.js', 'utf-8');
+const exerciseData = fs.readFileSync(path.join(__dirname, '..', 'exercise-data.js'), 'utf-8');
 const edbMatch = exerciseData.match(/window\.EXERCISE_DB = (\[[\s\S]+?\]);/);
 const EXERCISE_DB = edbMatch ? JSON.parse(edbMatch[1]) : [];
 const exercises = EXERCISE_DB.map(e => {
@@ -64,7 +69,7 @@ vm.runInContext(`philosophyModules = ${JSON.stringify(modules)};`, context);
 vm.runInContext(`exerciseLibrary = ${JSON.stringify(exercises)};`, context);
 
 // Load test cases
-const testCases = JSON.parse(fs.readFileSync('sources-of-truth/philosophy/golden_test_cases.json', 'utf-8')).test_cases;
+const testCases = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'sources-of-truth/philosophy/golden_test_cases.json'), 'utf-8')).test_cases;
 
 // Test runner
 const testRunner = `

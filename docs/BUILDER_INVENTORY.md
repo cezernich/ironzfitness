@@ -6,6 +6,11 @@ This report catalogs every Add Session workout builder and the parallel Build-a-
 Manual flow **as they exist today**. It is the snapshot the refactor will diff
 against. No behavior changes yet.
 
+> **Code pointers use grep-able anchors, not line numbers.** Each reference
+> names a file plus the function/const to search for (e.g. `js/calendar.js`
+> + `qeSelectType`). Grep the identifier rather than trusting a line number —
+> the codebase drifts and hard line refs go stale.
+
 ---
 
 ## 1. Entry points
@@ -13,38 +18,38 @@ against. No behavior changes yet.
 ### 1.1 Add Session (calendar Quick Entry)
 
 Entry: `openQuickEntry(dateStr)` → wizard `qe-step-0` type picker →
-`qeSelectType(type)` at `js/calendar.js:4821`.
+`qeSelectType(type)` at `js/calendar.js`.
 
 Dispatch table (all in `qeSelectType`):
 
 | Type picked | Destination |
 |---|---|
-| `"running"` | `window.AddRunningSessionFlow.open(dateStr)` — `js/calendar.js:4825` |
-| `"circuit"` | `window.CircuitBuilder.openEntryFlow(dateStr)` — `js/calendar.js:4833` |
-| `"swim"` | inside `qeShowStep(1, "swim")` the cardio step mounts `SwimBuilderModal.open(dateStr)` (via the swim session-type row at `calendar.js:4606-4622`) |
+| `"running"` | `window.AddRunningSessionFlow.open(dateStr)` — `js/calendar.js` |
+| `"circuit"` | `window.CircuitBuilder.openEntryFlow(dateStr)` — `js/calendar.js` |
+| `"swim"` | inside `qeShowStep(1, "swim")` the cardio step mounts `SwimBuilderModal.open(dateStr)` (via the swim session-type row at `calendar.js`) |
 | `"strength"` | `qeShowStep(1, "strength")` — muscle picker → AI or manual |
 | `"yoga"` | `qeShowStep(1, "strength")` — reuses strength UI |
 | `"bodyweight"` | `qeShowStep(2, "manual")` — straight to manual exercise rows |
 | `"hiit"` | `qeShowStep(1, "hiit")` — `qe-step-1-hiit` form |
-| `"hyrox"` | `qeShowStep(1, "hyrox")` → `_initHyroxBuilder()` — `js/calendar.js:4594,4663` |
+| `"hyrox"` | `qeShowStep(1, "hyrox")` → `_initHyroxBuilder()` — `js/calendar.js` |
 | `"cycling"` / `"brick"` / `"rowing"` / `"walking"` / `"mobility"` / `"sport"` / `"sauna"` | `qe-step-1-cardio` generic cardio form (+ brick-specific dual-duration row) |
 | `"restriction"` / `"equipment"` | non-workout restriction forms |
 
 ### 1.2 Build a Plan → per-day Manual button
 
 Entry: each day card rendered by `renderCustomPlanBuilder()` has four buttons
-at `js/custom-plan.js:133-136`:
+at `js/custom-plan.js`:
 
 ```
 AI Generate | From Saved | Manual | Rest
 ```
 
-Manual = `customPlanAddManual(dow, editIdx)` — `js/custom-plan.js:893`.
+Manual = `customPlanAddManual(dow, editIdx)` — `js/custom-plan.js`.
 Opens `#cp-manual-modal`, step 1 = type picker
-(`cpManualSelectType(type)` — `custom-plan.js:1004`), step 2 = either
+(`cpManualSelectType(type)` — `custom-plan.js`), step 2 = either
 exercise rows (`#cp-manual-exercise-rows`) or cardio/interval rows
 (`#cp-manual-cardio-rows`). Save = `customPlanSaveManual()` —
-`custom-plan.js:1632`. None of the Add Session builders
+`custom-plan.js`. None of the Add Session builders
 (`CircuitBuilder`, `SwimBuilderModal`, Hyrox, `AddRunningSessionFlow`, …)
 are ever invoked from this path.
 
@@ -57,11 +62,11 @@ are ever invoked from this path.
 ### 2.1 Circuit
 
 - **Add Session entry**: `window.CircuitBuilder.openEntryFlow(dateStr)` —
-  `js/ui/circuit-builder.js:76`. Self-contained wizard (entry → preview
+  `js/ui/circuit-builder.js`. Self-contained wizard (entry → preview
   or manual builder → save). Already exported as `window.CircuitBuilder`
-  at `circuit-builder.js:1076`.
+  at `circuit-builder.js`.
 - **Save**: `_saveCircuitToWorkouts(circuit, dateStr)` —
-  `circuit-builder.js:305`. Writes `localStorage.workouts`,
+  `circuit-builder.js`. Writes `localStorage.workouts`,
   `DB.syncWorkouts()`, re-renders calendar/day/history.
 - **Workout object shape** (what the builder produces, pre-persistence):
   ```js
@@ -76,19 +81,19 @@ are ever invoked from this path.
   }
   ```
 - **Completion path**: `openCompletionModal` → `saveForTime` / `saveAmrap`
-  → `_writeCompletion` — `circuit-builder.js:1001,1010,1018`. Writes
+  → `_writeCompletion` — `circuit-builder.js`. Writes
   `workout.circuit_result` back onto the existing row.
 - **Build a Plan Manual**: no circuit path. `CP_TYPE_LABELS` lists
-  `circuit` (`custom-plan.js:1000`) but the manual type picker routes it
+  `circuit` (`custom-plan.js`) but the manual type picker routes it
   through the exercise-row editor, which has no concept of circuit
   `steps` / `goal` / `goal_value`. User-reported gap.
 
 ### 2.2 Swim
 
 - **Add Session entry**: `window.SwimBuilderModal.open(dateStr, opts)` —
-  `js/ui/swim-builder-modal.js:88`. Opens `#swim-builder-overlay`
+  `js/ui/swim-builder-modal.js`. Opens `#swim-builder-overlay`
   canonical step-tree builder (intervals, rests, repeat blocks).
-- **Save**: inline in `_save()` around `swim-builder-modal.js:550-586`.
+- **Save**: inline in `_save()` around `swim-builder-modal.js`.
   Writes to `localStorage.workouts` with shape:
   ```js
   { id, date, type: "swimming", notes, exercises: [],
@@ -97,9 +102,9 @@ are ever invoked from this path.
   Calls `DB.syncWorkouts()`, `renderCalendar`, `renderDayDetail`,
   `renderWorkoutHistory`, `closeQuickEntry`.
 - **Generated swim from cardio form**: when the user picks Swim in the
-  generic cardio step instead, `qeGenerateCardio()` at `calendar.js:7094`
+  generic cardio step instead, `qeGenerateCardio()` at `calendar.js`
   builds an interval structure and `qeSaveGeneratedCardio()` at
-  `calendar.js:7180` writes `type: "swimming"` with `aiSession: { title,
+  `calendar.js` writes `type: "swimming"` with `aiSession: { title,
   intervals }`. Distinct from the SwimBuilder step-tree path.
 - **Build a Plan Manual**: `"swimming"` is in `CARDIO_TYPES` — uses
   generic `cp-manual-cardio-rows` (distance/min/effort/details).
@@ -111,7 +116,7 @@ are ever invoked from this path.
 ### 2.3 HIIT
 
 - **Add Session AI entry**: `qe-step-1-hiit` form →
-  `qeGenerateHIIT()` — `js/calendar.js:5804`. Selects exercises from the
+  `qeGenerateHIIT()` — `js/calendar.js`. Selects exercises from the
   local exercise library, builds a structure based on format
   (circuit / tabata / emom / amrap), intensity, duration, equipment.
   Renders in `qe-step-2-generated`.
@@ -121,7 +126,7 @@ are ever invoked from this path.
   `qe-manual-hiit-*` meta fields for format / rounds / rest).
 - **Save**: `qeSaveGeneratedStrength()` (generated path — shared with
   strength) or `qeSaveManual()` → `_qeSaveStrengthWorkout(dateStr, label,
-  notes, exercises, hiitMeta, duration)` — `calendar.js:7841,7904`.
+  notes, exercises, hiitMeta, duration)` — `calendar.js`.
   Writes `localStorage.workouts` with:
   ```js
   { id, date, type: "hiit", name, notes, exercises: [...],
@@ -129,7 +134,7 @@ are ever invoked from this path.
   ```
 - **Build a Plan Manual**: `"hiit"` is **not** in `CARDIO_TYPES`, uses
   the exercise-row editor (`cpManualAddExRow` with the `hiit-row`
-  branch at `custom-plan.js:1060-1075`). Row shape matches Add Session,
+  branch at `custom-plan.js`). Row shape matches Add Session,
   but `hiitMeta` (format / rounds / rest) is **never collected** —
   `customPlanSaveManual` does not read any `cp-manual-hiit-*` inputs. So
   HIIT sessions from Build a Plan are missing their format metadata.
@@ -137,13 +142,13 @@ are ever invoked from this path.
 ### 2.4 Hyrox
 
 - **Add Session entry**: `qe-step-1-hyrox` → `_initHyroxBuilder()` —
-  `js/calendar.js:4663`. Renders 8 standard Hyrox stations + optional
-  run legs from `HYROX_STATIONS` at `calendar.js:4649`. Station
+  `js/calendar.js`. Renders 8 standard Hyrox stations + optional
+  run legs from `HYROX_STATIONS` at `calendar.js`. Station
   defaults are Men's Open weights; distance / weight per station are
   editable inputs.
 - **Save**: internal handler within the Hyrox builder (writes
   `type: "hyrox"` with `isHyrox: true`, station exercises, `hyroxData`)
-  — see `_buildHyroxSplitSummary` at `calendar.js:1727` for the shape
+  — see `_buildHyroxSplitSummary` at `calendar.js` for the shape
   used on read. Station completion splits live in
   completion records, not the workout row itself.
 - **Build a Plan Manual**: `"hyrox"` is in `CP_TYPE_LABELS` but not in
@@ -154,14 +159,14 @@ are ever invoked from this path.
 ### 2.5 Running
 
 - **Add Session entry**: `window.AddRunningSessionFlow.open(dateStr)` —
-  `js/add-running-session-flow.js:387`. 8-type structured generator
+  `js/add-running-session-flow.js`. 8-type structured generator
   (easy, long, tempo, threshold, intervals, fartlek, hills, progression)
   producing phase-by-phase VDOT-zoned sessions.
 - **Save**: `AddRunningSessionFlow.save(generatedWorkout, dateStr, mode,
-  notes)` — `add-running-session-flow.js:229`. Writes to
+  notes)` — `add-running-session-flow.js`. Writes to
   **`workoutSchedule`** (NOT `workouts`) — this is a *planning* flow,
   not a logging flow. Entry shape via `planEntryFor(generatedWorkout,
-  dateStr, notes)` around line 82. Calls `DB.syncTrainingPlan` for the
+  dateStr, notes)` (grep `function planEntryFor`). Calls `DB.syncTrainingPlan` for the
   conflict-replace path. Re-renders calendar / day / history / stats.
 - **Build a Plan Manual**: `"running"` is in `CARDIO_TYPES` — generic
   cardio rows. No VDOT zones, no session-type picker, no targetPace.
@@ -172,17 +177,17 @@ are ever invoked from this path.
   with a bike session-type row (shown only when `_qeSelectedType ===
   "cycling"`) and a brick dual-duration row (shown only for brick).
 - **Save — AI path**: `qeGenerateCardio()` → `qeSaveGeneratedCardio()`
-  — `calendar.js:7094,7180`. Writes `{ id, date, type, notes,
+  — `calendar.js`. Writes `{ id, date, type, notes,
   exercises: [], aiSession: { title, intervals, steps? } }`. `type` is
   mapped via `typeMap = { running: "running", cycling: "cycling",
   swim: "swimming", hiit: "hiit", brick: "brick" }`.
 - **Save — Manual cardio-row path**: `saveQuickActivity()` —
-  `calendar.js:7935`. Walks `#qe-cardio-interval-rows`, builds
+  `calendar.js`. Walks `#qe-cardio-interval-rows`, builds
   `manualIntervals = { title, intervals: [...] }`, writes
   `{ id, date, type, notes, exercises: [], aiSession: manualIntervals,
     generatedSession? }`.
 - **Build a Plan Manual**: every one of these types is in
-  `CARDIO_TYPES` (`custom-plan.js:1009`). Cardio row shape mirrors
+  `CARDIO_TYPES` (`custom-plan.js`). Cardio row shape mirrors
   Add Session's manual row (`name`, `duration`, `effort`, `details`,
   optional `repeatGroup`/`groupSets`). **Brick dual-duration, bike
   session-type, and swim pool size are NOT carried over.**
@@ -191,20 +196,20 @@ are ever invoked from this path.
 
 - **Add Session entry**:
   - Strength: `qeShowStep(1, "strength")` → muscle picker →
-    `qeGenerateStrength()` (AI, `calendar.js:5980`) or "Log Manually"
+    `qeGenerateStrength()` (AI, `calendar.js`) or "Log Manually"
     button → `qeShowStep(2, "manual")`.
   - Bodyweight: `qeShowStep(2, "manual")` directly (skips muscle
     picker), with `isBW` branch in row rendering so weights default to
     "Bodyweight".
 - **Save**: `qeSaveManual()` → `_qeSaveStrengthWorkout(...)` —
-  `calendar.js:7841,7904`. Writes:
+  `calendar.js`. Writes:
   ```js
   { id, date,
     type: _qeSelectedType === "bodyweight" ? "bodyweight" : "weightlifting",
     name, notes, exercises: [...], hiitMeta?, duration? }
   ```
 - **Build a Plan Manual**: exercise-row editor at `cpManualAddExRow`
-  (`custom-plan.js:1039`). Same fields: `name`, `sets`, `reps`,
+  (`custom-plan.js`). Same fields: `name`, `sets`, `reps`,
   `weight`, optional `perSet`/`setDetails` from expanded per-set panel,
   optional `supersetGroup`/`groupSets` from drag-to-group. The generic
   form behind the Manual button is this file — **the one the spec says
@@ -270,8 +275,8 @@ incrementally (one per phase).
 ## 5. Bugs and inconsistencies to flag (do not fix in Phase 0)
 
 1. **`customPlanSaveManual` `isCardio` narrower than `cpManualSelectType`'s
-   `CARDIO_TYPES`** — `custom-plan.js:1641` hard-codes
-   `["running","cycling","swimming"]`, but the type picker (`:1009`)
+   `CARDIO_TYPES`** — `custom-plan.js` hard-codes
+   `["running","cycling","swimming"]`, but the type picker (`cpManualSelectType`)
    accepts `brick`, `walking`, `rowing`, `mobility`, `sauna`, `sport`
    too. For the non-matching types the save handler falls into the
    exercise branch and silently drops all cardio rows the user just
@@ -291,7 +296,7 @@ incrementally (one per phase).
    `context: "plan-manual"` branch that targets the plan template
    instead of the schedule.
 6. **Circuit entry modal's Back button** in `openEntryFlow` reopens
-   `openQuickEntry(dateStr)` directly (`circuit-builder.js:95`). When
+   `openQuickEntry(dateStr)` directly (`circuit-builder.js`). When
    the caller is Build a Plan Manual, this back target is wrong —
    `context` will need to drive the back handler too.
 7. **Swim generated cardio vs SwimBuilderModal duplication** — two

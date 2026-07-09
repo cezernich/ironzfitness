@@ -1,6 +1,8 @@
-# IronZ — Bug Fix Prompts (2026-04-27, Round 4)
+# IronZ — Bug Fix Prompts (2026-04-27, Round 5)
 
-5 bugs from this morning's live workout. Two are real bugs (#2 push-day mapping, #3 live tracker data regression), two are intelligent-defaults improvements (#5 rest, #4 — informational only), and one is a fun feature add (#1 animation).
+> Supersedes BUGFIX_2026-04-27_round4.md
+
+9 items from this morning's live workout: real bugs (#2 push-day mapping, #3 live tracker data regression, #7 swim hydration duration), intelligent-defaults improvements (#5 rest, #8 hydration caps, #4 — informational only), UI redesigns (#6 warmup guidance, #9 strength creator single-row), and a fun feature add (#1 animation).
 
 ---
 

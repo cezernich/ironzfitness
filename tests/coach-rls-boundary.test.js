@@ -65,7 +65,7 @@ console.log("Section 2 — data_key allowlist parity");
 const fs = require("fs");
 const path = require("path");
 
-const sqlPath = path.join(__dirname, "..", "supabase", "migrations", "20260428b_coaching_nutrition_rls.sql");
+const sqlPath = path.join(__dirname, "..", "supabase", "migrations", "20260501b_coach_training_inputs_rls.sql");
 const jsPath  = path.join(__dirname, "..", "js", "coach-client-detail.js");
 
 const sqlText = fs.readFileSync(sqlPath, "utf-8");
@@ -88,7 +88,7 @@ if (!allowlistMatch) {
     console.error("  FAIL: couldn't locate .in() allowlist in coach-client-detail.js");
     failures++;
   } else {
-    const jsKeys = (jsKeysMatch[1].match(/"([^"]+)"/g) || []).map(s => s.replace(/"/g, ""));
+    const jsKeys = (jsKeysMatch[1].replace(/\/\/[^\n]*/g, "").match(/"([^"]+)"/g) || []).map(s => s.replace(/"/g, ""));
 
     // The conditional keys (nutritionAdjustments, hydrationSettings,
     // hydrationDailyTargetOz, fuelingPrefs) live in separate branches

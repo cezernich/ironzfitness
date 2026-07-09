@@ -2,12 +2,12 @@
   "name": "fitness-app",
   "version": "1.0.0",
   "description": "",
-  "main": "adaptive-coach.js",
+  "main": "js/adaptive-coach.js",
   "scripts": {
-    "build": "rsync -av --exclude=www --exclude=node_modules --exclude=ios --exclude=.git --exclude='*.docx' *.js *.css *.html *.json *.sql icons/ philosophy/ supabase/ Logo/ scripts/ 'Future Features/' 'Training Philosophy/' www/",
+    "build": "rsync -av --exclude=www --exclude=node_modules --exclude=ios --exclude=.git --exclude='*.docx' js/ assets/ supabase/ scripts/ sources-of-truth/ *.js *.css *.html *.json www/",
     "sync": "npm run build && npx cap sync ios",
     "open": "npx cap open ios",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node tests/run-all.js"
   },
   "repository": {
     "type": "git",

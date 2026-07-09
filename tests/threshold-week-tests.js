@@ -20,10 +20,10 @@ global.alert = () => {};
 global.confirm = () => true;
 
 // Load modules in order. Each one attaches to window.
-require("./threshold-week-scheduler.js");
+require("../js/threshold-week-scheduler.js");
 // zone-calculator references calculateHRZones internally; load it first.
-require("./zone-calculator.js");
-require("./test-result-handler.js");
+require("../js/zone-calculator.js");
+require("../js/test-result-handler.js");
 
 const TW = window.ThresholdWeekScheduler;
 const TRH = window.TestResultHandler;

@@ -6,13 +6,13 @@
 
 global.window = global;
 global.module = module;
-require("./js/variant-libraries/run.js");
-require("./js/variant-libraries/bike.js");
-require("./js/variant-libraries/swim.js");
-require("./js/variant-libraries/strength.js");
-require("./js/variant-libraries/hybrid.js");
-require("./js/variant-libraries/index.js");
-require("./js/deterministic-variant-rotation.js");
+require("../js/variant-libraries/run.js");
+require("../js/variant-libraries/bike.js");
+require("../js/variant-libraries/swim.js");
+require("../js/variant-libraries/strength.js");
+require("../js/variant-libraries/hybrid.js");
+require("../js/variant-libraries/index.js");
+require("../js/deterministic-variant-rotation.js");
 
 const VL  = window.VariantLibraries;
 const DVR = window.DeterministicVariantRotation;

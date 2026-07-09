@@ -34,17 +34,17 @@ global.RUN_DURATION_TABLES = {};
 global.NUTRITION_TARGETS = {};
 global.SESSION_DESCRIPTIONS = {};
 
-require("./threshold-week-scheduler.js");
-require("./session-type-library.js");
-require("./js/workout-validator.js");
-require("./zone-calculator.js");
-require("./running-workout-generator.js");
+require("../js/threshold-week-scheduler.js");
+require("../js/session-type-library.js");
+require("../js/workout-validator.js");
+require("../js/zone-calculator.js");
+require("../js/running-workout-generator.js");
 try {
-  require("./planner.js");
+  require("../js/planner.js");
 } catch (e) {
   console.warn("[harness] planner.js load warning:", e.message);
 }
-require("./add-running-session-flow.js");
+require("../js/add-running-session-flow.js");
 
 const STL = window.SessionTypeLibrary;
 const RWG = window.RunningWorkoutGenerator;
