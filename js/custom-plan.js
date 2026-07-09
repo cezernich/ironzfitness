@@ -1,6 +1,22 @@
 // custom-plan.js — Create Your Own Plan
 // Weekly template builder with AI, saved workout, manual, and rest day options per day.
 
+// Fallbacks for standalone/Node contexts where the shared globals (stats.js /
+// nutrition.js) aren't loaded. In the browser those globals are loaded first,
+// so these guards are no-ops there.
+if (typeof localDateStr === "undefined") {
+  var localDateStr = function (d) {
+    return d.getFullYear() + "-" +
+      String(d.getMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getDate()).padStart(2, "0");
+  };
+}
+if (typeof getTodayString === "undefined") {
+  var getTodayString = function () {
+    return localDateStr(new Date());
+  };
+}
+
 function cpSwitchMode(mode) {
   const createBody = document.getElementById("cp-create-body");
   const importBody = document.getElementById("import-plan-body");
@@ -114,7 +130,7 @@ function initCustomPlan() {
     const daysUntilMon = dow === 0 ? 1 : (8 - dow);
     const nextMon = new Date(today);
     nextMon.setDate(today.getDate() + daysUntilMon);
-    startInput.value = nextMon.toISOString().slice(0, 10);
+    startInput.value = localDateStr(nextMon);
   }
 }
 
@@ -2062,7 +2078,7 @@ function saveCustomPlan() {
         const date = new Date(weekMonday);
         date.setDate(weekMonday.getDate() + w * 7 + idx);
         if (date < start) continue;                     // skip past dates in week 1
-        const dateStr = date.toISOString().slice(0, 10);
+        const dateStr = localDateStr(date);
 
         const scheduleEntry = {
           id: `custom-${dateStr}-${entry.data?.type || "general"}-${si}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,

@@ -188,7 +188,10 @@ async function importBusyTimes() {
 
     const response = await fetch(
       `https://graph.microsoft.com/v1.0/me/calendarView?startDateTime=${today.toISOString()}&endDateTime=${nextWeek.toISOString()}&$select=subject,start,end,showAs&$top=50`,
-      { headers: { "Authorization": `Bearer ${state.accessToken}` } }
+      { headers: {
+        "Authorization": `Bearer ${state.accessToken}`,
+        "Prefer": `outlook.timezone="${Intl.DateTimeFormat().resolvedOptions().timeZone}"`,
+      } }
     );
 
     if (!response.ok) throw new Error("Failed to fetch calendar");

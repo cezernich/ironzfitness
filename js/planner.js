@@ -1,5 +1,21 @@
 // planner.js — Race event management + training plan generation
 
+// Fallbacks for standalone/Node contexts where the shared globals (stats.js /
+// nutrition.js) aren't loaded. In the browser those globals are loaded first,
+// so these guards are no-ops there.
+if (typeof localDateStr === "undefined") {
+  var localDateStr = function (d) {
+    return d.getFullYear() + "-" +
+      String(d.getMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getDate()).padStart(2, "0");
+  };
+}
+if (typeof getTodayString === "undefined") {
+  var getTodayString = function () {
+    return localDateStr(new Date());
+  };
+}
+
 // ─── Race configuration ─────────────────────────────────────────────────────
 //
 // Phase ratios come from TRAINING_PHILOSOPHY.md §4.4 (triathlon),
@@ -1803,7 +1819,7 @@ function detectTrainingConflicts() {
     catch { return []; }
   })();
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTodayString();
 
   // Active races: future A races. B races are intentionally secondary
   // goals that the A-race plan is expected to factor into its taper /
@@ -1903,7 +1919,7 @@ function removeConflictingSchedule(schedType, raceCat) {
   const catLabel = CATEGORY_LABELS[raceCat] || raceCat;
   if (!confirm(`Remove the ${catLabel} workout schedule? This will delete every future scheduled session in this training category from your calendar. Past completed sessions are kept.`)) return;
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getTodayString();
   const meta = typeof loadCompletionMeta === "function" ? loadCompletionMeta() : {};
   const existing = (() => {
     try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; }
@@ -1969,7 +1985,7 @@ const SCHEDULE_TYPE_LABEL = { running: "Running", weightlifting: "Strength", cyc
 
 function _getScheduleInputs() {
   const schedule = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getTodayString();
   const future   = schedule.filter(e => (e.source === "generated" || e.source === "custom" || e.source === "onboarding") && e.date >= todayStr && !e.planId);
   const byType   = {};
   future.forEach(e => {
@@ -1997,7 +2013,7 @@ function _getScheduleInputs() {
 // of one row per session type.
 function _getBuildPlanInputs() {
   const schedule = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getTodayString();
   // `coach_sheet` joins the recognized plan-source allowlist so that
   // imports via COACH_SHEET_IMPORT_SPEC group into a single Active
   // Training Inputs card grouped by their planId, alongside Build
@@ -2048,7 +2064,7 @@ function _getBuildPlanInputs() {
 // Group by program id, collect upcoming-only counts and date range.
 function _getCoachProgramInputs() {
   const schedule = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getTodayString();
   const groups = {};
   schedule.forEach(e => {
     if (!e || e.source !== "coach_assigned") return;
@@ -2086,7 +2102,7 @@ function _escapeHtml(str) {
  * - If multiple B races remain, prompt the user to pick
  */
 function checkARacePromotion() {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getTodayString();
   const events = loadEvents();
   const upcoming = events.filter(e => e.date >= todayStr);
   if (upcoming.length === 0) return; // no races at all
@@ -2152,7 +2168,7 @@ function _regeneratePlanForRace(race) {
   // and so the "Training Conflict Detected" warning goes away. Past entries
   // (completed workouts) are preserved.
   try {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getTodayString();
     const schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
     const keptSchedule = schedule.filter(e => {
       if (!e) return false;
@@ -2324,7 +2340,7 @@ function consumePendingPlanRegen() {
   let aRace = null;
   try {
     const events = JSON.parse(localStorage.getItem("events") || "[]") || [];
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getTodayString();
     aRace = events
       .filter(e => e && e.date && e.date >= todayStr && (e.priority || "A").toString().toUpperCase() === "A")
       .sort((a, b) => a.date.localeCompare(b.date))[0] || null;
@@ -2424,7 +2440,7 @@ function renderTrainingInputs() {
   // Check if A race needs promotion
   checkARacePromotion();
 
-  const todayStr  = new Date().toISOString().slice(0, 10);
+  const todayStr  = getTodayString();
   const races     = loadEvents().filter(e => e.date > todayStr);
   const schedules = _getScheduleInputs();
   let buildPlans  = _getBuildPlanInputs();
@@ -2885,8 +2901,7 @@ function _saveImportedPlanEdits(planId) {
   plan.startDate = newStart;
   if (shiftDays !== 0) {
     plan.sessions.forEach(s => {
-      const d = new Date(new Date(s.date + "T00:00:00").getTime() + shiftMs);
-      s.date = d.toISOString().slice(0, 10);
+      const d = new Date(s.date + "T00:00:00"); d.setDate(d.getDate() + shiftDays); s.date = localDateStr(d);
     });
   }
   localStorage.setItem("importedPlans", JSON.stringify(plans)); if (typeof DB !== 'undefined') DB.syncKey('importedPlans');
@@ -2896,8 +2911,7 @@ function _saveImportedPlanEdits(planId) {
     const schedule = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
     schedule.forEach(e => {
       if (e.planId === planId) {
-        const d = new Date(new Date(e.date + "T00:00:00").getTime() + shiftMs);
-        e.date = d.toISOString().slice(0, 10);
+        const d = new Date(e.date + "T00:00:00"); d.setDate(d.getDate() + shiftDays); e.date = localDateStr(d);
       }
     });
     localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
@@ -2916,7 +2930,7 @@ function tiEditSchedule(type) {
 }
 
 function removeTrainingInput(kind, id) {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getTodayString();
   const meta = typeof loadCompletionMeta === "function" ? loadCompletionMeta() : {};
 
   if (kind === "race") {
@@ -3178,7 +3192,7 @@ function saveTrainingPlanData(plan) {
  */
 function regenerateTrainingPlanFromEvents() {
   const events = loadEvents();
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getTodayString();
   const upcoming = events.filter(e => e && e.date && e.date >= todayStr);
   if (!upcoming.length) return -1;
   try {
@@ -3207,7 +3221,7 @@ function regenerateTrainingPlanFromEvents() {
   try {
     if (typeof localStorage === "undefined") return;
     const events = loadEvents();
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getTodayString();
     const hasUpcomingRace = events.some(e => e && e.date && e.date >= todayStr);
     if (!hasUpcomingRace) return;
     const plan = loadTrainingPlan();
@@ -4167,7 +4181,7 @@ function _generateSingleRacePlan(race) {
   startDate.setDate(startDate.getDate() - _effectiveTotalWeeks * 7);
 
   const plan = [];
-  const todayStr = _today.toISOString().slice(0, 10);
+  const todayStr = localDateStr(_today);
 
   // ── WEEKLY PATTERN ────────────────────────────────────────────────────────
   // Priority: race.preferences.weeklyTemplate > WEEKLY_PATTERNS[raceType].
@@ -4209,7 +4223,7 @@ function _generateSingleRacePlan(race) {
     const prePlanDows = runPatternKey === "beginner" ? [2, 6] : [2, 4, 6]; // Tue+Sat or Tue+Thu+Sat
     const preCursor = new Date(todayDate);
     while (preCursor < startDate) {
-      const dateStr = preCursor.toISOString().slice(0, 10);
+      const dateStr = localDateStr(preCursor);
       const dow = preCursor.getDay();
       if (prePlanDows.includes(dow) && dateStr >= todayStr) {
         const table = (RUN_DURATION_TABLES[race.type] || {})[runPatternKey] || {};
@@ -4366,7 +4380,7 @@ function _generateSingleRacePlan(race) {
   const cursor = new Date(startDate);
 
   while (cursor < raceDate) {
-    const dateStr = cursor.toISOString().slice(0, 10);
+    const dateStr = localDateStr(cursor);
     const dow = cursor.getDay(); // 0=Sun … 6=Sat
 
     // Advance phase if needed
@@ -5173,7 +5187,7 @@ function _rfValidateStep3AndNext() {
   if (!date) { _rfShowError("Please set a race date to continue."); return; }
   if (new Date(date + "T00:00:00") <= new Date()) { _rfShowError("Race date must be in the future."); return; }
   if (raceFormState.savedPriority === "A") {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getTodayString();
     const allRaces = (() => { try { return JSON.parse(localStorage.getItem("events")) || []; } catch { return []; } })();
     const existingA = allRaces.find(r => (r.priority || "A").toUpperCase() === "A" && r.id !== _editingRaceId && r.date >= todayStr);
     if (existingA) {
@@ -5406,7 +5420,7 @@ function _rfStepLife() {
   const lifeLevel = s.savedLifeLevel || "beginner";
   const lifeDuration = s.savedLifeDuration || "8";
   const lifeDays = s.savedLifeDays || [1, 3, 5]; // Mon, Wed, Fri defaults
-  const lifeStart = s.savedLifeStart || new Date().toISOString().slice(0, 10);
+  const lifeStart = s.savedLifeStart || getTodayString();
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const dayChips = [1,2,3,4,5,6,0].map(d =>
     `<input type="checkbox" id="rf-life-day-${d}" value="${d}" ${lifeDays.includes(d) ? "checked" : ""} /><label for="rf-life-day-${d}" class="day-chip">${dayNames[d]}</label>`
@@ -5494,7 +5508,7 @@ function _rfValidateStep3AndNextTri() {
   if (!date) { _rfShowError("Please set a race date to continue."); return; }
   if (new Date(date + "T00:00:00") <= new Date()) { _rfShowError("Race date must be in the future."); return; }
   if (raceFormState.savedPriority === "A") {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getTodayString();
     const allRaces = (() => { try { return JSON.parse(localStorage.getItem("events")) || []; } catch { return []; } })();
     const existingA = allRaces.find(r => (r.priority || "A").toUpperCase() === "A" && r.id !== _editingRaceId && r.date >= todayStr);
     if (existingA) {
@@ -5540,7 +5554,7 @@ function _rfValidateStep3AndNextGeneral() {
   if (!date) { _rfShowError("Please set a race date to continue."); return; }
   if (new Date(date + "T00:00:00") <= new Date()) { _rfShowError("Race date must be in the future."); return; }
   if (raceFormState.savedPriority === "A") {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getTodayString();
     const allRaces = (() => { try { return JSON.parse(localStorage.getItem("events")) || []; } catch { return []; } })();
     const existingA = allRaces.find(r => (r.priority || "A").toUpperCase() === "A" && r.id !== _editingRaceId && r.date >= todayStr);
     if (existingA) {
@@ -5722,7 +5736,7 @@ function saveRace() {
   // other race first if they really meant to swap A races.
   let effectivePriority = priority;
   if (priority === "A") {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getTodayString();
     const allRaces = (() => { try { return JSON.parse(localStorage.getItem("events")) || []; } catch { return []; } })();
     const existingA = allRaces.find(r => (r.priority || "A").toUpperCase() === "A" && r.id !== _editingRaceId && r.date >= todayStr);
     if (existingA) {
@@ -5743,7 +5757,7 @@ function saveRace() {
   if (!_editingRaceId) {
     const raceCat = TRAINING_CATEGORY[type];
     if (raceCat) {
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayStr = getTodayString();
       const schedule = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
       const conflictingType = schedule.find(s => s.date > todayStr && TRAINING_CATEGORY[s.type] === raceCat);
       if (conflictingType) {
@@ -5997,7 +6011,7 @@ function deleteEvent(id) {
   // past sessions (completion history) and drops today/future entries that
   // were generated for this race. Today is kept only if already completed.
   try {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = getTodayString();
     const meta = typeof loadCompletionMeta === "function" ? loadCompletionMeta() : {};
     const existingSched = (() => { try { return JSON.parse(localStorage.getItem("workoutSchedule")) || []; } catch { return []; } })();
     const filteredSched = existingSched.filter(e => {
@@ -6367,7 +6381,7 @@ function renderTrainingBlocksSection() {
 
   const section = document.getElementById("section-training-blocks");
   const events = typeof loadEvents === "function" ? loadEvents() : [];
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getTodayString();
   const upcoming = events.filter(e => e.date >= todayStr).sort((a, b) => a.date.localeCompare(b.date));
 
   // Only show for race types that use periodized training blocks

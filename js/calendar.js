@@ -275,7 +275,7 @@ function renderWeekOverview() {
   const el = document.getElementById("week-overview-bar");
   if (!el || calendarMode !== "week") { if (el) el.innerHTML = ""; return; }
 
-  const weekDates = getWeekDates(currentWeekStart).map(d => d.toISOString().slice(0, 10));
+  const weekDates = getWeekDates(currentWeekStart).map(d => localDateStr(d));
   let totalMin = 0, totalKm = 0;
   const bySportKm = {};  // sport → total km for the week
   const byType = {};     // type → session count
@@ -540,12 +540,12 @@ function renderWeekView() {
   // pill — reads like Mon 20 is selected when it isn't). Today still
   // gets its own pill treatment via is-today elsewhere; this flag is
   // purely about which card gets the bigger, darker centered look.
-  const weekDateStrs = weekDates.map(d => d.toISOString().slice(0, 10));
+  const weekDateStrs = weekDates.map(d => localDateStr(d));
   let centerStr = null;
   if (selectedDate && weekDateStrs.includes(selectedDate)) centerStr = selectedDate;
 
   const cards = weekDates.map(d => {
-    const dateStr = d.toISOString().slice(0, 10);
+    const dateStr = localDateStr(d);
     try {
       return _calV2BuildDayCard(dateStr, d, todayStr, centerStr === dateStr);
     } catch (e) {
@@ -10660,7 +10660,7 @@ function saveQuickEquipmentRestriction() {
     const start = new Date(startStr + "T00:00:00");
     const end   = new Date(endStr   + "T00:00:00");
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      restrictions[d.toISOString().slice(0, 10)] = entry;
+      restrictions[localDateStr(d)] = entry;
     }
   }
   localStorage.setItem("equipmentRestrictions", JSON.stringify(restrictions)); if (typeof DB !== 'undefined') DB.syncKey('equipmentRestrictions');
@@ -10820,7 +10820,7 @@ Rules:
         let delta = (dow - startDow + 7) % 7 + weekOffset * 7;
         const date = new Date(start);
         date.setDate(date.getDate() + delta);
-        const dateStr = date.toISOString().slice(0, 10);
+        const dateStr = localDateStr(date);
 
         const entry = {
           id: `import-${dateStr}-${s.type}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,

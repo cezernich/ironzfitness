@@ -1392,7 +1392,9 @@ function _stravaStartDateLocal(w) {
     try {
       const d = new Date(w.completedAt);
       // YYYY-MM-DDTHH:mm:ss with no Z
-      return d.toISOString().replace("Z", "").slice(0, 19);
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}` +
+             `T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
     } catch {}
   }
   const date = w.date || new Date().toISOString().slice(0, 10);

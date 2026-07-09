@@ -22,6 +22,17 @@
 (function () {
   "use strict";
 
+  // Local YYYY-MM-DD formatter. In the browser the global localDateStr (stats.js)
+  // is loaded first and used; this fallback only applies when this module is
+  // loaded in isolation (e.g. Node tests) where that global is absent.
+  var localDateStr = (typeof globalThis !== "undefined" && typeof globalThis.localDateStr === "function")
+    ? globalThis.localDateStr
+    : function (d) {
+        return d.getFullYear() + "-" +
+          String(d.getMonth() + 1).padStart(2, "0") + "-" +
+          String(d.getDate()).padStart(2, "0");
+      };
+
   // ─── Level-aware phase distributions (PLAN_GENERATOR_MASTER_SPEC §4) ─────
   // Target session counts per discipline per week, indexed by
   //   sportProfile → phase → level → disciplineCounts
@@ -199,7 +210,7 @@
     const day = d.getDay();
     const offset = day === 0 ? -6 : 1 - day;
     d.setDate(d.getDate() + offset);
-    return d.toISOString().slice(0, 10);
+    return localDateStr(d);
   }
 
   function groupByWeek(plan) {
@@ -249,13 +260,13 @@
     for (const offset of order) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + offset);
-      const dateStr = d.toISOString().slice(0, 10);
+      const dateStr = localDateStr(d);
       if (!used.has(dateStr)) {
         // Check no adjacent same-discipline day
         const prev = new Date(d); prev.setDate(d.getDate() - 1);
         const next = new Date(d); next.setDate(d.getDate() + 1);
-        const prevStr = prev.toISOString().slice(0, 10);
-        const nextStr = next.toISOString().slice(0, 10);
+        const prevStr = localDateStr(prev);
+        const nextStr = localDateStr(next);
         const adjacent = (hasDiscByDate[prevStr] && hasDiscByDate[prevStr][discipline]) ||
                          (hasDiscByDate[nextStr] && hasDiscByDate[nextStr][discipline]);
         if (!adjacent) return dateStr;
@@ -265,7 +276,7 @@
     for (const offset of order) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + offset);
-      const dateStr = d.toISOString().slice(0, 10);
+      const dateStr = localDateStr(d);
       if (!used.has(dateStr)) return dateStr;
     }
     return null; // week is packed; give up (caller tolerates under-count)
@@ -297,7 +308,7 @@
     for (let i = 0; i < 7; i++) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
-      const s = d.toISOString().slice(0, 10);
+      const s = localDateStr(d);
       if (!used.has(s)) empty.push(s);
     }
     return empty;
@@ -322,7 +333,7 @@
     rests.forEach(r => {
       const d = new Date(r + "T00:00:00");
       d.setDate(d.getDate() - 1);
-      blockedAsPreRest.add(d.toISOString().slice(0, 10));
+      blockedAsPreRest.add(localDateStr(d));
     });
 
     const byDate = sessionsByDate(weekEntries);
@@ -579,7 +590,7 @@
               .filter(e => typeof e.duration === "number" && e.duration > 0 && e.load !== "long" && e.load !== "hard" && e.load !== "rest")
               .sort((a, b) => {
                 const rank = { easy: 0, recovery: 0, strides: 1, moderate: 2 };
-                return (rank[a.load] || 3) - (rank[b.load] || 3);
+                return (rank[a.load] ?? 3) - (rank[b.load] ?? 3);
               });
             const trimmableTotal = trimmable.reduce((s, e) => s + e.duration, 0);
             if (trimmableTotal > 0) {
@@ -651,7 +662,7 @@
             .filter(e => e.discipline === disc && e.load !== "easy" && e.load !== "rest")
             .sort((a, b) => {
               const rank = { long: 0, hard: 1, moderate: 2, easy: 3, rest: 4 };
-              return (rank[b.load] || 3) - (rank[a.load] || 3);
+              return (rank[b.load] ?? 3) - (rank[a.load] ?? 3);
             });
           const over = have - want;
           for (let i = 0; i < over && i < extras.length; i++) {
