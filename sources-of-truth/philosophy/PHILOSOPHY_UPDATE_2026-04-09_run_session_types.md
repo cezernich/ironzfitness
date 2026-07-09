@@ -9,7 +9,7 @@
 
 ## Summary
 
-Adds an 8-option session-type picker to the **Add Running Session** flow. The user picks a date and a session type (Easy/Recovery, Endurance, Long Run, Tempo, Track Workout, Speed Work, Hills, Fun/Social). The app deterministically generates a structured workout — warmup, main set, cooldown — using the user's personal pace zones derived from VDOT. If the chosen day already has a planned workout, the app warns the user and asks whether to replace, add, or cancel. The Track Workout type rotates weekly through 800m, 1K, 1200m, and ladder formats so users don't repeat the same session four weeks in a row. Everything is philosophy-first: zero API calls in the generator path.
+Adds an 8-option session-type picker to the **Add Running Session** flow. The user picks a date and a session type (Easy/Recovery, Endurance, Long Run, Tempo, Track Workout, Speed Work, Hills, Fun/Social). The app deterministically generates a structured workout — warmup, main set, cooldown — using the user's personal pace zones derived from VDOT. If the chosen day already has a planned workout, the app warns the user and asks whether to replace, add, or cancel. The Track Workout type rotates weekly through 800m, 1K, 1200m, ladder, 400m, and cut-down formats so users don't repeat the same session for six weeks running. Everything is philosophy-first: zero API calls in the generator path.
 
 ---
 
@@ -42,7 +42,7 @@ Hill repeats deliver VO2max-equivalent cardiovascular load with substantially lo
 
 ### 4. Track Workout Rotation (Tier 2 — coaching consensus, anti-staleness)
 
-The same track workout repeated four weeks in a row produces diminishing returns (neuromuscular adaptation plateaus, motivation erodes). Coaches rotate distances and structures within the same I-pace bucket: 800m one week, 1K the next, 1200m the third, ladder the fourth. The total volume (sum of hard meters) stays in the same range; only the structure varies. Source: Magness, *The Science of Running*; Pfitzinger, *Advanced Marathoning* (interval rotation chapters).
+The same track workout repeated week after week produces diminishing returns (neuromuscular adaptation plateaus, motivation erodes). Coaches rotate distances and structures within the same I-pace bucket: 800m, 1K, 1200m, ladder, 400m, then cut-downs across a six-week cycle. The total volume (sum of hard meters) stays in the same range; only the structure varies. Source: Magness, *The Science of Running*; Pfitzinger, *Advanced Marathoning* (interval rotation chapters).
 
 ### 5. Cruise Intervals > Long Straight Tempos for Amateurs (Tier 1 — Daniels)
 
@@ -113,11 +113,13 @@ ADD THE FOLLOWING:
 > > Cruise intervals by default (safer than a straight tempo for most users). Structure: WU 15 min easy → 3–5 reps of 6–10 min at T-pace with 60–90 sec jog rest → CD 10 min easy. Total time at T-pace scales with experience: beginner 12–16 min, intermediate 20–28 min, advanced 30–40 min. Example for VDOT 53 intermediate: "WU 15 min easy → 4×8 min @ 6:36–6:51/mi w/ 90s jog → CD 10 min easy." Total ~70 min, 32 min at T.
 >
 > **Track Workout**
-> > Rotates weekly through 4 templates so the user doesn't repeat the same session. Rotation index = weeks since plan start mod 4:
-> > - **Week % 4 == 0: 800m repeats.** WU 15 min easy + 4×20s strides → 6–10 × 800m at I-pace w/ 400m jog rest → CD 10 min easy.
-> > - **Week % 4 == 1: 1K repeats.** WU 15 min easy + 4×20s strides → 5–7 × 1000m at I-pace w/ 2-min jog rest → CD 10 min easy.
-> > - **Week % 4 == 2: 1200m repeats.** WU 15 min easy + 4×20s strides → 4–6 × 1200m at I-pace w/ 3-min jog rest → CD 10 min easy.
-> > - **Week % 4 == 3: Ladder.** WU 15 min easy + 4×20s strides → 400m / 800m / 1200m / 800m / 400m at I-pace w/ equal-time jog rest → CD 10 min easy.
+> > Rotates weekly through 6 templates so the user doesn't repeat the same session. Rotation index = weeks since plan start mod 6:
+> > - **Week % 6 == 0: 800m repeats.** WU 15 min easy + 4×20s strides → 6–10 × 800m at I-pace w/ 400m jog rest → CD 10 min easy.
+> > - **Week % 6 == 1: 1K repeats.** WU 15 min easy + 4×20s strides → 5–7 × 1000m at I-pace w/ 2-min jog rest → CD 10 min easy.
+> > - **Week % 6 == 2: 1200m repeats.** WU 15 min easy + 4×20s strides → 4–6 × 1200m at I-pace w/ 3-min jog rest → CD 10 min easy.
+> > - **Week % 6 == 3: Ladder.** WU 15 min easy + 4×20s strides → 400m / 800m / 1200m / 800m / 400m at I-pace w/ equal-time jog rest → CD 10 min easy.
+> > - **Week % 6 == 4: 400m repeats.** WU 15 min easy + 4×20s strides → 8–16 × 400m at I-pace w/ 60s jog rest → CD 10 min easy.
+> > - **Week % 6 == 5: Cut-downs.** WU 15 min easy + 4×20s strides → 1600m / 1200m / 800m / 400m at I-pace w/ equal-time jog rest → CD 10 min easy.
 > > Rep count at the lower end for beginners, upper end for advanced. All reps at I-pace from VDOT. Example for VDOT 53 (I-pace ~3:00–3:05/800m): "WU 15 min easy + 4×20s strides → 6×800m @ 3:00–3:05 w/ 400m jog → CD 10 min easy."
 >
 > **Speed Work**
@@ -317,7 +319,7 @@ ADD THE FOLLOWING:
           }
         }
       ],
-      "rotation_logic": "rotation_index = (weeks_since_plan_start) mod 4",
+      "rotation_logic": "rotation_index = (weeks_since_plan_start) mod 6",
       "structure": [
         {"phase": "warmup", "intensity": "z1", "duration_min": 15, "includes": "4x20s strides"},
         {"phase": "main_set", "intensity": "z4", "structure": "from rotation_templates"},
@@ -565,7 +567,7 @@ ADD THE FOLLOWING:
 5. **Step 4 — Build phases:**
    - **For non-interval types** (Easy, Endurance, Long, Fun): single phase, target zone, target duration, pace from `userZones[template.primary_zone]`.
    - **For Tempo:** WU 15 min @ E-pace → N reps of 8 min at T-pace with 60–90s jog rest → CD 10 min @ E-pace.
-   - **For Track:** WU 15 min + 4×20s strides → main set from `template.rotation_templates[weeksSincePlanStart % 4]` with paces from `userZones.i_pace` → CD 10 min.
+   - **For Track:** WU 15 min + 4×20s strides → main set from `template.rotation_templates[weeksSincePlanStart % 6]` with paces from `userZones.i_pace` → CD 10 min.
    - **For Speed Work:** WU 15 min → main set from chosen sub-template with paces from `userZones.r_pace` → CD 10 min.
    - **For Hills:** WU 15 min easy → N reps of 60–90s hard up / easy down → CD 10 min.
 6. **Step 5 — Enrich:** Add `why_text` from template, calculate `estimated_duration_min`, build `title` (e.g., "Track Workout — 6×800m at I-pace").
@@ -698,7 +700,7 @@ All changes are additive — no existing modules or behaviors are destructively 
 ## Notes for Claude Code
 
 - **Pure function discipline.** `running-workout-generator.js` must NEVER call the Anthropic API. The whole point is philosophy-first deterministic generation. If you find yourself reaching for an API call, stop and reread the SESSION_TYPE_LIBRARY templates — the answer is in there.
-- **Track rotation is deterministic.** Use `weeksSincePlanStart % 4`. No randomness. Two runners on the same plan in the same week should get the same track workout structure (paces will differ by VDOT).
+- **Track rotation is deterministic.** Use `weeksSincePlanStart % 6`. No randomness. Two runners on the same plan in the same week should get the same track workout structure (paces will differ by VDOT).
 - **Cruise intervals, not straight tempos.** The Tempo session type generates 4×8 min at T-pace with 60–90s jog, NOT a straight 32-min tempo. This is intentional — see the evidence section.
 - **Long Run is always 1 per week, hard cap.** Even advanced runners cannot have two Long Runs in the same 7-day window. The frequency_cap_per_week of 1 has no override.
 - **Speed Work vs Track Workout are separate.** Don't merge them. R-pace and I-pace are different stimuli.

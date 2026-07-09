@@ -313,7 +313,7 @@
   function _generateTrack(template, experience, durationOverrideMin, zones, warnings, weeksSincePlanStart, variantOffset) {
     const rotCount = template.rotation_templates.length;
     let rotationIndex;
-    if (weeksSincePlanStart != null && weeksSincePlanStart > 0 && !variantOffset) {
+    if (weeksSincePlanStart != null && weeksSincePlanStart >= 0 && !variantOffset) {
       rotationIndex = ((weeksSincePlanStart) % rotCount + rotCount) % rotCount;
     } else {
       rotationIndex = _variantIndex(variantOffset) % rotCount;
@@ -596,10 +596,12 @@
     };
   }
 
-  // Deterministic variant index based on day-of-year + optional offset
+  // Deterministic variant index. Variety comes from the caller-supplied offset
+  // (e.g. a week-derived rotation), never from the wall clock — a plan must
+  // regenerate identically regardless of the day it is viewed. Default (no
+  // offset) selects the canonical variant 0 for each session type.
   function _variantIndex(offset) {
-    const doy = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
-    return doy + (offset || 0);
+    return offset || 0;
   }
 
   function _clampDurationOverride(defaultMin, override, range, warnings, maxOverride, sessionLabel) {

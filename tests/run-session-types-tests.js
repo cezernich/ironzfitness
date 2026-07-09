@@ -314,8 +314,10 @@ section("Golden 11: Tempo within 24h of Long Run");
   check("warning is overridable (in warnings, not hardBlocks)", evals.hardBlocks.length === 0);
 }
 
-// ─── GOLDEN 12: Long Run twice → HARD BLOCK ─────────────────────────────────
-section("Golden 12: Long Run twice in same week → hard block");
+// ─── GOLDEN 12: Long Run twice → overridable WARNING ────────────────────────
+// Per BUGFIX_2026-04-25 §1, the long-run cap was softened from a hard block to
+// an overridable warning (severity: warn, with an "Add Anyway" override).
+section("Golden 12: Long Run twice in same week → overridable warning");
 {
   clearStorage();
   setProfile({ vdot: 53, experience_level: "intermediate" });
@@ -325,9 +327,10 @@ section("Golden 12: Long Run twice in same week → hard block");
   const zones = ZC.getZonesForUser();
   const second = RWG.generateRunWorkout({ sessionTypeId: "long_run", userZones: zones, experienceLevel: "intermediate" });
   const evals = ARSF.evaluateConstraints(second.workout, "2026-04-15");
-  check("long_run_cap is a HARD BLOCK", evals.hardBlocks.some(b => b.rule === "long_run_cap"),
+  check("long_run_cap is NOT a hard block", evals.hardBlocks.every(b => b.rule !== "long_run_cap"),
     JSON.stringify(evals.hardBlocks.map(b=>b.rule)));
-  check("no override warning for long run cap (it's blocked)", true);
+  check("long_run_cap surfaces as an overridable warning", evals.warnings.some(b => b.rule === "long_run_cap"),
+    JSON.stringify(evals.warnings.map(b=>b.rule)));
 }
 
 // ─── GOLDEN 13: Fun / Social — instruction text only ─────────────────────────
@@ -406,8 +409,8 @@ section("Bonus: Generator determinism");
   const b = RWG.generateRunWorkout({ sessionTypeId: "track_workout", userZones: zones, experienceLevel: "intermediate", weeksSincePlanStart: 5 });
   check("two identical calls produce identical workouts",
     JSON.stringify(a.workout) === JSON.stringify(b.workout));
-  // Week 5 mod 4 = 1 → 1K repeats
-  check("week 5 → rotation_index 1 (1K repeats)", a.workout.rotation_index === 1 && a.workout.rotation_name === "1K repeats");
+  // Week 5 mod 6 = 5 → Cut-downs (rotation expanded to 6 templates)
+  check("week 5 → rotation_index 5 (Cut-downs)", a.workout.rotation_index === 5 && a.workout.rotation_name === "Cut-downs");
 }
 
 // ─── BONUS: Long Run beginner duration scaling ───────────────────────────────

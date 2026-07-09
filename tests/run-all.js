@@ -15,15 +15,10 @@ const repoRoot = path.join(__dirname, "..");
 const selfName = path.basename(__filename);
 
 // Known-failing tests, quarantined so CI stays green on their PRE-EXISTING
-// assertion mismatches while still catching any NEW regression. These fail
-// identically on untouched upstream source (verified), so they are not gating.
-// A quarantined test that starts PASSING is flagged so it can be un-quarantined;
-// any failure OUTSIDE this list fails the run.
-const KNOWN_FAILING = new Set([
-  "tests/diversification-tests.js",   // swim-CSS interval pace/name spec mismatch
-  "tests/run-session-types-tests.js", // cruise-interval / rotation spec mismatch
-  "tests/threshold-week-tests.js",    // threshold test-day placement spec mismatch
-]);
+// assertion mismatches while still catching any NEW regression. A quarantined
+// test that starts PASSING is flagged so it can be un-quarantined; any failure
+// OUTSIDE this list fails the run. Currently empty: all suites are green.
+const KNOWN_FAILING = new Set([]);
 
 const testFiles = fs
   .readdirSync(testsDir)
