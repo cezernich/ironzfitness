@@ -544,10 +544,11 @@ function renderWeekView() {
   let centerStr = null;
   if (selectedDate && weekDateStrs.includes(selectedDate)) centerStr = selectedDate;
 
+  const _weekStores = _readCalendarStores();
   const cards = weekDates.map(d => {
     const dateStr = localDateStr(d);
     try {
-      return _calV2BuildDayCard(dateStr, d, todayStr, centerStr === dateStr);
+      return _calV2BuildDayCard(dateStr, d, todayStr, centerStr === dateStr, _weekStores);
     } catch (e) {
       console.error("[calendar] buildWeekCell (v2) failed for", dateStr, e);
       return `<div class="dc s" onclick="selectDay('${dateStr}')"><span class="s-lb">${DAY_LABELS[d.getDay()].slice(0,3)}</span><span class="s-nm">${d.getDate()}</span></div>`;
@@ -646,12 +647,12 @@ function buildWeekCell(dateStr, dateObj, todayStr) {
   return _calV2BuildDayCard(dateStr, dateObj, todayStr, dateStr === (selectedDate || todayStr));
 }
 
-function _calV2BuildDayCard(dateStr, dateObj, todayStr, isCenter) {
-  const data       = getDataForDate(dateStr);
+function _calV2BuildDayCard(dateStr, dateObj, todayStr, isCenter, stores) {
+  const data       = getDataForDate(dateStr, stores);
   const isToday    = dateStr === todayStr;
   const isSelected = dateStr === selectedDate;
   const sessionRemoved = data.restriction && data.restriction.action === "remove";
-  const completed = hasAnyCompletedSession(dateStr);
+  const completed = hasAnyCompletedSession(dateStr, stores);
 
   const sessions = _calV2CollectSessions(dateStr, data);
 
@@ -768,6 +769,8 @@ function renderMonthView() {
 
   const dowRow = DAY_LABELS.map(d => `<span>${d.slice(0,3).toUpperCase()}</span>`).join("");
 
+  const stores = _readCalendarStores();
+
   let cells = "";
   for (let i = 0; i < firstDay; i++) {
     cells += `<div class="md other-month"></div>`;
@@ -775,7 +778,7 @@ function renderMonthView() {
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = formatDateStr(currentYear, currentMonth, d);
     try {
-      cells += buildDayCell(dateStr, d, todayStr);
+      cells += buildDayCell(dateStr, d, todayStr, stores);
     } catch (e) {
       console.error("[calendar] buildDayCell (v2) failed for", dateStr, e);
       cells += `<div class="md"><span class="md-num">${d}</span></div>`;
@@ -793,12 +796,12 @@ function formatDateStr(year, month, day) {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function buildDayCell(dateStr, dayNum, todayStr) {
-  const data       = getDataForDate(dateStr);
+function buildDayCell(dateStr, dayNum, todayStr, stores) {
+  const data       = getDataForDate(dateStr, stores);
   const isToday    = dateStr === todayStr;
   const isSelected = dateStr === selectedDate;
   const removed    = data.restriction && data.restriction.action === "remove";
-  const completed  = hasAnyCompletedSession(dateStr);
+  const completed  = hasAnyCompletedSession(dateStr, stores);
 
   const sessions = _calV2CollectSessions(dateStr, data);
 
@@ -843,12 +846,35 @@ function buildDayCell(dateStr, dayNum, todayStr) {
 
 // ─── Data aggregation ─────────────────────────────────────────────────────────
 
-function getDataForDate(dateStr) {
-  const plan      = loadTrainingPlan();
+// Parse every localStorage store the calendar cells read, ONCE. Month/week
+// renders build this and thread it into getDataForDate/hasAnyCompletedSession
+// so a ~30-cell render parses each blob once instead of ~9× per cell. When
+// `stores` is omitted the functions parse per-call exactly as before, so the
+// many standalone callers are unaffected.
+function _readCalendarStores() {
+  const arr = (k) => { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } };
+  const obj = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch { return {}; } };
+  return {
+    trainingPlan:          (typeof loadTrainingPlan === "function") ? loadTrainingPlan() : arr("trainingPlan"),
+    workoutSchedule:       arr("workoutSchedule"),
+    workouts:              arr("workouts"),
+    meals:                 arr("meals"),
+    events:                arr("events"),
+    dayRestrictions:       obj("dayRestrictions"),
+    equipmentRestrictions: obj("equipmentRestrictions"),
+    completedSessions:     obj("completedSessions"),
+  };
+}
+
+function getDataForDate(dateStr, stores) {
+  const plan      = stores ? (stores.trainingPlan || []) : loadTrainingPlan();
   let planEntry = plan.find(e => e.date === dateStr) || null;
 
   let scheduledWorkouts = [];
-  try { scheduledWorkouts = (JSON.parse(localStorage.getItem("workoutSchedule")) || []).filter(w => w.date === dateStr && !/^rest$/i.test((w.sessionName || "").trim())); } catch {}
+  try {
+    const _schedAll = stores ? (stores.workoutSchedule || []) : (JSON.parse(localStorage.getItem("workoutSchedule")) || []);
+    scheduledWorkouts = _schedAll.filter(w => w.date === dateStr && !/^rest$/i.test((w.sessionName || "").trim()));
+  } catch {}
 
   // Legacy `trainingPlan` (from saveRace / _regeneratePlanForRace) and new
   // `workoutSchedule` (from onboarding-v2) can both hold sessions for the
@@ -864,7 +890,7 @@ function getDataForDate(dateStr) {
   let loggedWorkouts = [];
   let _orphanCompletions = [];
   try {
-    const _allW = JSON.parse(localStorage.getItem("workouts")) || [];
+    const _allW = stores ? (stores.workouts || []) : (JSON.parse(localStorage.getItem("workouts")) || []);
     loggedWorkouts = _allW.filter(w => w.date === dateStr && !w.isCompletion);
     // Orphan rescue: when a coach deletes / re-applies / propagates an
     // assignment, the matching schedule entry can disappear from
@@ -893,16 +919,16 @@ function getDataForDate(dateStr) {
   if (_orphanCompletions.length) loggedWorkouts = loggedWorkouts.concat(_orphanCompletions);
 
   let loggedMeals = [];
-  try { loggedMeals = (JSON.parse(localStorage.getItem("meals")) || []).filter(m => m.date === dateStr); } catch {}
+  try { loggedMeals = (stores ? (stores.meals || []) : (JSON.parse(localStorage.getItem("meals")) || [])).filter(m => m.date === dateStr); } catch {}
 
   let event = null;
-  try { event = (JSON.parse(localStorage.getItem("events")) || []).find(e => e.date === dateStr) || null; } catch {}
+  try { event = (stores ? (stores.events || []) : (JSON.parse(localStorage.getItem("events")) || [])).find(e => e.date === dateStr) || null; } catch {}
 
   let restriction = null;
-  try { restriction = (JSON.parse(localStorage.getItem("dayRestrictions")) || {})[dateStr] || null; } catch {}
+  try { restriction = (stores ? (stores.dayRestrictions || {}) : (JSON.parse(localStorage.getItem("dayRestrictions")) || {}))[dateStr] || null; } catch {}
 
   let equipmentRestriction = null;
-  try { const _er = JSON.parse(localStorage.getItem("equipmentRestrictions")) || {}; equipmentRestriction = _er[dateStr] || _er["permanent"] || null; } catch {}
+  try { const _er = stores ? (stores.equipmentRestrictions || {}) : (JSON.parse(localStorage.getItem("equipmentRestrictions")) || {}); equipmentRestriction = _er[dateStr] || _er["permanent"] || null; } catch {}
 
   return { planEntry, scheduledWorkouts, loggedWorkouts, loggedMeals, event, restriction, equipmentRestriction };
 }
@@ -2475,10 +2501,10 @@ function _buildHyroxSplitSummary(hd) {
     </div>`;
 }
 
-function hasAnyCompletedSession(dateStr) {
+function hasAnyCompletedSession(dateStr, stores) {
   if (dateStr > getTodayString()) return false;
   try {
-    const workouts = JSON.parse(localStorage.getItem("workouts")) || [];
+    const workouts = stores ? (stores.workouts || []) : (JSON.parse(localStorage.getItem("workouts")) || []);
     // Only count explicit completion receipts (isCompletion === true is
     // what the Mark as Complete flow sets) and Strava imports (externally
     // logged activity, always authoritative). The bare `completed: true`
@@ -2492,7 +2518,7 @@ function hasAnyCompletedSession(dateStr) {
     // Secondary source of truth: the Mark as Complete flow also writes
     // a metadata entry into completedSessions keyed by session id. If
     // the entry's date matches, the day was actually completed.
-    const meta = JSON.parse(localStorage.getItem("completedSessions") || "{}");
+    const meta = stores ? (stores.completedSessions || {}) : JSON.parse(localStorage.getItem("completedSessions") || "{}");
     for (const sid in meta) {
       const entry = meta[sid];
       if (entry && entry.date === dateStr) return true;
@@ -4290,6 +4316,13 @@ function renderDailyRings() {
   }
 }
 
+// Cache of hydrated training_sessions bodies, keyed by variant_id. These are
+// immutable public library sessions, and the day-detail hydration mutates only
+// in-memory copies (never writes back to workoutSchedule), so without this the
+// same training_sessions query re-fired on every single render of the day.
+// `miss` records ids that returned no body so we don't re-query them either.
+const _sharedSessionCache = { strength: {}, cardio: {}, miss: {} };
+
 async function renderDayDetail(dateStr) {
   const content = document.getElementById("day-detail-content");
   if (!content) return;
@@ -4310,20 +4343,24 @@ async function renderDayDetail(dateStr) {
     });
     if (needFetch.length && window.supabaseClient) {
       try {
-        const ids = [...new Set(needFetch.map(w => w.variant_id))];
-        const { data: tsRows } = await window.supabaseClient
-          .from("training_sessions")
-          .select("id, session_name, exercises, data")
-          .in("id", ids);
-        if (tsRows) {
-          const cardio = {};
-          const strength = {};
-          tsRows.forEach(row => {
+        // Only query ids we haven't already hydrated (or recorded as a miss).
+        const cache = _sharedSessionCache;
+        const ids = [...new Set(needFetch.map(w => w.variant_id))].filter(
+          id => !(id in cache.strength) && !(id in cache.cardio) && !cache.miss[id]
+        );
+        if (ids.length) {
+          const { data: tsRows } = await window.supabaseClient
+            .from("training_sessions")
+            .select("id, session_name, exercises, data")
+            .in("id", ids);
+          const seen = new Set();
+          (tsRows || []).forEach(row => {
+            seen.add(row.id);
             let ex = row.exercises || [];
             if (typeof ex === "string") { try { ex = JSON.parse(ex); } catch { ex = []; } }
-            if (!ex.length) return;
+            if (!ex.length) { cache.miss[row.id] = true; return; }
             const rowSport = (row.data && row.data.sport_id) || null;
-            cardio[row.id] = ex.map(e => ({
+            cache.cardio[row.id] = ex.map(e => ({
               name: e.name || "Interval",
               duration: e.duration || "",
               effort: e.intensity || e.effort || "Z2",
@@ -4335,7 +4372,7 @@ async function renderDayDetail(dateStr) {
             // Map to the exercise table shape buildExerciseTableHTML expects.
             // supersetId is the field the renderer keys on; supersetGroup is
             // the canonical storage name.
-            strength[row.id] = ex.map(e => {
+            cache.strength[row.id] = ex.map(e => {
               const grp = e.supersetGroup || e.supersetId || e.repeatGroup || null;
               return {
                 name: e.name || "Exercise",
@@ -4349,16 +4386,18 @@ async function renderDayDetail(dateStr) {
                 notes: e.notes || e.details || null,
               };
             });
-            strength[row.id]._sport = rowSport;
+            cache.strength[row.id]._sport = rowSport;
           });
-          needFetch.forEach(w => {
-            if (_isStrengthEntry(w) && strength[w.variant_id]) {
-              w.exercises = strength[w.variant_id];
-            } else if (cardio[w.variant_id]) {
-              w.aiSession = { title: w.sessionName, intervals: cardio[w.variant_id] };
-            }
-          });
+          // Ids queried but absent from training_sessions → record as misses.
+          ids.forEach(id => { if (!seen.has(id)) cache.miss[id] = true; });
         }
+        needFetch.forEach(w => {
+          if (_isStrengthEntry(w) && cache.strength[w.variant_id]) {
+            w.exercises = cache.strength[w.variant_id];
+          } else if (cache.cardio[w.variant_id]) {
+            w.aiSession = { title: w.sessionName, intervals: cache.cardio[w.variant_id] };
+          }
+        });
       } catch (e) { console.warn("[IronZ] shared exercise hydration failed:", e); }
     }
 
