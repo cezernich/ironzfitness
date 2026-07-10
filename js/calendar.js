@@ -2420,10 +2420,11 @@ function _getCompletionExercises(sessionId) {
         const sw = sched.find(s => String(s.id) === rawId);
         sourceExercises = sw && Array.isArray(sw.exercises) ? sw.exercises : null;
       } else if (sessionId.startsWith("session-plan-")) {
+        // Fixed-width parse: date is 10 chars, dash at index 10 splits it
+        // from the numeric raceId (mirrors the drag-wiring parse below).
         const rest = sessionId.slice("session-plan-".length);
-        const dashIdx = rest.indexOf("-", 11);
-        const planDate = dashIdx > 0 ? rest.slice(0, dashIdx) : rest;
-        const raceId   = dashIdx > 0 ? rest.slice(dashIdx + 1) : "";
+        const planDate = rest.slice(0, 10);
+        const raceId   = (rest.length > 10 && rest[10] === "-") ? rest.slice(11) : "";
         const plan = JSON.parse(localStorage.getItem("trainingPlan") || "[]");
         const pe = plan.find(p => p.date === planDate && String(p.raceId) === raceId);
         sourceExercises = pe && Array.isArray(pe.exercises) ? pe.exercises : null;
@@ -3538,10 +3539,11 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
       }
     } else if (sessionId.startsWith("session-plan-")) {
       // Format: session-plan-<YYYY-MM-DD>-<raceId>
+      // Fixed-width parse: date is 10 chars, dash at index 10 splits it
+      // from the numeric raceId (mirrors the drag-wiring parse below).
       const rest = sessionId.slice("session-plan-".length);
-      const dashIdx = rest.indexOf("-", 11); // skip past date (YYYY-MM-DD has 10 chars)
-      const planDate = dashIdx > 0 ? rest.slice(0, dashIdx) : rest;
-      const raceId   = dashIdx > 0 ? rest.slice(dashIdx + 1) : "";
+      const planDate = rest.slice(0, 10);
+      const raceId   = (rest.length > 10 && rest[10] === "-") ? rest.slice(11) : "";
       const _plan = typeof loadTrainingPlan === "function" ? loadTrainingPlan() : [];
       const _pe = _plan.find(p => p.date === planDate && String(p.raceId) === raceId);
       if (_pe) {

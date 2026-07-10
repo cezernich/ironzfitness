@@ -916,9 +916,11 @@ function _enrichWorkoutWithSource(workout) {
       source = sched.find(s => String(s.id) === rawId) || null;
     } else if (sid.startsWith("session-plan-")) {
       const rest = sid.slice("session-plan-".length);
-      const dashIdx = rest.indexOf("-", 11);
-      const planDate = dashIdx > 0 ? rest.slice(0, dashIdx) : rest;
-      const raceId   = dashIdx > 0 ? rest.slice(dashIdx + 1) : "";
+      // Fixed-width parse: date is YYYY-MM-DD (10 chars); the separator dash is
+      // at index 10, then the (dash-free numeric) raceId. indexOf("-", 11)
+      // skipped that dash and mis-split the id.
+      const planDate = rest.slice(0, 10);
+      const raceId   = (rest.length > 10 && rest[10] === "-") ? rest.slice(11) : "";
       const plan = JSON.parse(localStorage.getItem("trainingPlan") || "[]");
       source = plan.find(p => p.date === planDate && String(p.raceId) === raceId) || null;
     } else if (sid.startsWith("session-log-")) {

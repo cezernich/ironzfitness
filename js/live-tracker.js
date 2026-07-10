@@ -22,15 +22,32 @@ const _LIVE_SESSION_KEY = "ironz_live_session";
 function _saveLiveState() {
   if (!_liveTracker) return;
   try {
+    const t = _liveTracker;
+    // elapsed is only advanced by the timer while running; recompute a
+    // fresh value here (unless paused) so a resume continues from the right
+    // spot and never counts the crash/away gap.
+    const elapsedMs = t.paused
+      ? (t.elapsed || 0)
+      : (Date.now() - t.startTime);
     const snapshot = {
-      sessionId:  _liveTracker.sessionId,
-      dateStr:    _liveTracker.dateStr,
-      type:       _liveTracker.type,
-      exercises:  _liveTracker.exercises,
-      sets:       _liveTracker.sets,
-      isStrength: _liveTracker.isStrength,
-      isHyrox:    _liveTracker.isHyrox,
-      savedAt:    new Date().toISOString(),
+      sessionId:       t.sessionId,
+      dateStr:         t.dateStr,
+      type:            t.type,
+      steps:           t.steps,
+      exercises:       t.exercises,
+      sets:            t.sets,
+      stationTimes:    t.stationTimes,
+      isStrength:      t.isStrength,
+      isHyrox:         t.isHyrox,
+      currentStep:     t.currentStep,
+      currentExercise: t.currentExercise,
+      currentSet:      t.currentSet,
+      elapsedMs,
+      coachNote:       t.coachNote || "",
+      coachId:         t.coachId || "",
+      coachName:       t.coachName || "",
+      celebrated:      !!t._celebrated,
+      savedAt:         new Date().toISOString(),
     };
     localStorage.setItem(_LIVE_SESSION_KEY, JSON.stringify(snapshot));
   } catch {}
@@ -38,6 +55,136 @@ function _saveLiveState() {
 function _clearLiveState() {
   try { localStorage.removeItem(_LIVE_SESSION_KEY); } catch {}
 }
+
+// ── Crash / refresh recovery ─────────────────────────────────────────────────
+//
+// _saveLiveState persists a snapshot after every Log / Add / Swap / nav, but
+// nothing ever read it back — a refresh, crash, or iOS app-kill mid-workout
+// silently discarded every logged set. The functions below add the missing
+// restore path: on app load, if a recent snapshot with real logged data
+// exists, prompt the user to Resume or Discard. Never auto-resumes without
+// consent; a malformed snapshot is caught and cleared rather than crashing.
+
+let _liveResumeChecked = false;
+
+function _readLiveSnapshot() {
+  try {
+    const raw = localStorage.getItem(_LIVE_SESSION_KEY);
+    if (!raw) return null;
+    const snap = JSON.parse(raw);
+    return (snap && typeof snap === "object") ? snap : null;
+  } catch {
+    return null;
+  }
+}
+
+// A snapshot is worth offering to resume only if the user actually recorded
+// something: a completed strength set or a recorded Hyrox station split.
+// (Endurance progress is purely time-based with nothing to rehydrate.)
+function _snapshotHasLoggedData(snap) {
+  if (!snap) return false;
+  if (Array.isArray(snap.sets)) {
+    for (const exSets of snap.sets) {
+      if (Array.isArray(exSets) && exSets.some(s => s && s.done)) return true;
+    }
+  }
+  if (Array.isArray(snap.stationTimes) && snap.stationTimes.some(t => t != null)) return true;
+  return false;
+}
+
+// Relevance guard: only a recent snapshot (within ~12h) that has logged
+// data is resumable. Anything stale or empty is not worth prompting for.
+function _snapshotIsResumable(snap) {
+  if (!snap || typeof snap !== "object") return false;
+  if (!_snapshotHasLoggedData(snap)) return false;
+  const saved = snap.savedAt ? Date.parse(snap.savedAt) : NaN;
+  if (Number.isNaN(saved)) return false;
+  const ageMs = Date.now() - saved;
+  const TWELVE_H = 12 * 60 * 60 * 1000;
+  return ageMs >= 0 && ageMs <= TWELVE_H;
+}
+
+// Rebuild _liveTracker from a snapshot and re-render the tracker at the
+// saved position. Mirrors the tail of startLiveWorkout so the resumed
+// session behaves identically to a fresh one.
+function _rehydrateLiveState(snap) {
+  const isStrength = !!snap.isStrength;
+  const isHyrox    = !!snap.isHyrox;
+  const now        = Date.now();
+  const elapsed    = typeof snap.elapsedMs === "number" && snap.elapsedMs >= 0 ? snap.elapsedMs : 0;
+  const exercises  = Array.isArray(snap.exercises) ? snap.exercises : [];
+
+  _liveTracker = {
+    sessionId:   snap.sessionId,
+    dateStr:     snap.dateStr,
+    type:        snap.type,
+    steps:       Array.isArray(snap.steps) ? snap.steps : [],
+    exercises,
+    isStrength,
+    isHyrox,
+    coachNote:   snap.coachNote || "",
+    coachId:     snap.coachId || "",
+    coachName:   snap.coachName || "",
+    // Continue the elapsed clock from where it was — don't count away time.
+    currentStep: typeof snap.currentStep === "number" ? snap.currentStep : 0,
+    startTime:   now - elapsed,
+    stepStart:   now,
+    paused:      false,
+    elapsed,
+    pausedAt:    null,
+    sets:        Array.isArray(snap.sets) ? snap.sets : [],
+    _groups:     null,
+    stationTimes: Array.isArray(snap.stationTimes)
+      ? snap.stationTimes
+      : (isHyrox ? exercises.map(() => null) : []),
+    currentExercise: typeof snap.currentExercise === "number" ? snap.currentExercise : 0,
+    currentSet:  typeof snap.currentSet === "number" ? snap.currentSet : 0,
+    restCountdown: 0,
+    inRest:      false,
+    _celebrated: !!snap.celebrated,
+  };
+
+  if (isStrength) _liveTracker._groups = _computeLiveGroups();
+
+  _requestWakeLock();
+  _renderLiveTracker();
+  _startLiveTimer();
+}
+
+// Fires once on app load. If a resumable snapshot exists, ask the user to
+// Resume or Discard (native confirm — the app has no shared modal helper in
+// this module). Defensive throughout: any parse/rehydrate failure clears the
+// key rather than leaving a poison snapshot that re-prompts every load.
+function _maybeResumeLiveSession() {
+  if (_liveResumeChecked) return;
+  _liveResumeChecked = true;
+  if (_liveTracker) return; // a session is already open — don't interfere
+
+  let snap;
+  try { snap = _readLiveSnapshot(); }
+  catch { try { _clearLiveState(); } catch {} return; }
+  if (!snap) return;
+
+  if (!_snapshotIsResumable(snap)) { _clearLiveState(); return; }
+
+  let resume = false;
+  try {
+    resume = (typeof confirm === "function") &&
+      confirm("You have an unfinished workout from earlier. Resume where you left off?\n\nOK = Resume · Cancel = Discard");
+  } catch { resume = false; }
+
+  if (resume) {
+    try {
+      _rehydrateLiveState(snap);
+    } catch (e) {
+      console.warn("[live-tracker] resume failed, discarding snapshot:", e && e.message);
+      _clearLiveState();
+    }
+  } else {
+    _clearLiveState();
+  }
+}
+if (typeof window !== "undefined") window._maybeResumeLiveSession = _maybeResumeLiveSession;
 
 // ── Step building from workout data ──────────────────────────────────────
 //
@@ -65,10 +212,14 @@ function _findWorkoutBySessionId(sessionId) {
       return list.find(w => String(w.id) === rawId) || null;
     }
     if (sessionId.startsWith("session-plan-")) {
+      // Format: session-plan-<YYYY-MM-DD>-<raceId>. The date is fixed-width
+      // (10 chars); the dash at index 10 separates it from the numeric
+      // raceId (Date.now string, no dashes). indexOf("-", 11) skipped that
+      // separator and, finding no later dash, folded the raceId into the
+      // date — so the lookup never matched. Fixed-width parse instead.
       const rest = sessionId.slice("session-plan-".length);
-      const dashIdx = rest.indexOf("-", 11);
-      const planDate = dashIdx > 0 ? rest.slice(0, dashIdx) : rest;
-      const raceId = dashIdx > 0 ? rest.slice(dashIdx + 1) : "";
+      const planDate = rest.slice(0, 10);
+      const raceId = (rest.length > 10 && rest[10] === "-") ? rest.slice(11) : "";
       const plan = (typeof loadTrainingPlan === "function" ? loadTrainingPlan() : []);
       return plan.find(p => p.date === planDate && String(p.raceId) === raceId) || null;
     }
@@ -864,8 +1015,8 @@ function _buildLiveSupersetCard(g) {
             <span class="live-superset-ex-name">${_escLiveHtml(ex.name)}</span>
             <span class="live-superset-ex-target">Target: ${target}</span>
           </div>
-          <input class="live-set-input" type="text" inputmode="numeric" value="${s.reps}" id="live-reps-${ix}-${r}" placeholder="reps" ${s.done ? "disabled" : ""} />
-          <input class="live-set-input" type="text" value="${s.weight}" id="live-wt-${ix}-${r}" placeholder="lbs" ${s.done ? "disabled" : ""} />
+          <input class="live-set-input" type="text" inputmode="numeric" value="${s.reps}" id="live-reps-${ix}-${r}" placeholder="reps" ${s.done ? "disabled" : ""} oninput="_onLiveInputEdit(${ix},${r})" />
+          <input class="live-set-input" type="text" value="${s.weight}" id="live-wt-${ix}-${r}" placeholder="lbs" ${s.done ? "disabled" : ""} oninput="_onLiveInputEdit(${ix},${r})" />
           <button class="live-set-btn${s.done ? " live-set-btn--done" : ""}" onclick="_logLiveSet(${ix},${r})">${s.done ? "&#10003;" : "Log"}</button>
         </div>`;
     });
@@ -989,34 +1140,44 @@ function _buildHyroxView() {
 
 function _liveHyroxNext() {
   if (!_liveTracker || _liveTracker.currentStep >= _liveTracker.exercises.length - 1) return;
-  // Record split time for current station
-  const elapsed = Date.now() - _liveTracker.stepStart;
-  _liveTracker.stationTimes[_liveTracker.currentStep] = elapsed;
+  // "Next Station" is the forward-completion path: record the split for the
+  // station we're leaving — but ONLY if it doesn't already have one. That
+  // way returning to a finished station (via Prev / list tap) and hitting
+  // Next again preserves the real split instead of overwriting it with a
+  // tiny time-since-arrival.
+  const cur = _liveTracker.currentStep;
+  if (_liveTracker.stationTimes[cur] == null) {
+    _liveTracker.stationTimes[cur] = Date.now() - _liveTracker.stepStart;
+  }
   // Advance
   _liveTracker.currentStep++;
   _liveTracker.stepStart = Date.now();
+  _saveLiveState();
   const body = document.getElementById("live-tracker-body");
   if (body) body.innerHTML = _buildHyroxView();
 }
 
 function _liveHyroxPrev() {
   if (!_liveTracker || _liveTracker.currentStep <= 0) return;
-  // Record current station time before going back
-  const elapsed = Date.now() - _liveTracker.stepStart;
-  _liveTracker.stationTimes[_liveTracker.currentStep] = elapsed;
+  // Backward navigation is review only — do NOT record or overwrite any
+  // split. The current station isn't complete, and the station we're
+  // returning to keeps whatever split it already had.
   _liveTracker.currentStep--;
   _liveTracker.stepStart = Date.now();
+  _saveLiveState();
   const body = document.getElementById("live-tracker-body");
   if (body) body.innerHTML = _buildHyroxView();
 }
 
 function _liveHyroxGoTo(idx) {
   if (!_liveTracker || idx < 0 || idx >= _liveTracker.exercises.length) return;
-  // Record current station time
-  const elapsed = Date.now() - _liveTracker.stepStart;
-  _liveTracker.stationTimes[_liveTracker.currentStep] = elapsed;
+  // Tapping a station in the list is review/navigation — never overwrite
+  // the current station's recorded split with a time-since-arrival value.
+  // Splits are recorded exclusively on forward completion (_liveHyroxNext)
+  // and on Finish.
   _liveTracker.currentStep = idx;
   _liveTracker.stepStart = Date.now();
+  _saveLiveState();
   const body = document.getElementById("live-tracker-body");
   if (body) body.innerHTML = _buildHyroxView();
 }
@@ -1040,6 +1201,12 @@ function _applyRestTimerPref(disabled) {
 
 function _toggleLivePause() {
   if (!_liveTracker) return;
+  // Flush any typed-but-unlogged reps/weight into state BEFORE the
+  // re-render below blows away the DOM inputs. Single-exercise inputs
+  // flush live via oninput, but this also covers superset inputs and any
+  // edit made between keystroke and pause. Captures by input id so it
+  // handles both single and superset rows.
+  if (_liveTracker.isStrength) _captureLiveSetInputs();
   if (_liveTracker.paused) {
     // Resume
     const pauseDuration = Date.now() - _liveTracker.pausedAt;
@@ -1537,10 +1704,11 @@ async function _commitLiveWorkout(logAll) {
       const _sw = _sched.find(s => String(s.id) === rawId);
       if (_sw) sessionName = _sw.sessionName || "";
     } else if (sid.startsWith("session-plan-")) {
+      // Fixed-width parse (see _findWorkoutBySessionId): date is 10 chars,
+      // dash at index 10 splits it from the numeric raceId.
       const rest = sid.slice("session-plan-".length);
-      const dashIdx = rest.indexOf("-", 11);
-      const planDate = dashIdx > 0 ? rest.slice(0, dashIdx) : rest;
-      const raceId   = dashIdx > 0 ? rest.slice(dashIdx + 1) : "";
+      const planDate = rest.slice(0, 10);
+      const raceId   = (rest.length > 10 && rest[10] === "-") ? rest.slice(11) : "";
       const _plan = typeof loadTrainingPlan === "function" ? loadTrainingPlan() : [];
       const _pe = _plan.find(p => p.date === planDate && String(p.raceId) === raceId);
       if (_pe) sessionName = _pe.sessionName || "";
@@ -1742,6 +1910,12 @@ async function _requestWakeLock() {
   try {
     if ("wakeLock" in navigator) {
       _liveWakeLock = await navigator.wakeLock.request("screen");
+      // The OS auto-releases the lock on tab/app switch. Null our handle
+      // when that happens so the visibilitychange hook below knows to
+      // re-acquire rather than assume it's still held.
+      if (_liveWakeLock && typeof _liveWakeLock.addEventListener === "function") {
+        _liveWakeLock.addEventListener("release", () => { _liveWakeLock = null; });
+      }
     }
   } catch {}
 }
@@ -1750,7 +1924,43 @@ function _releaseWakeLock() {
   try { if (_liveWakeLock) { _liveWakeLock.release(); _liveWakeLock = null; } } catch {}
 }
 
+// Re-request the screen wake lock when the user returns to the tab/app
+// mid-workout. The OS releases the lock on visibility change; without this
+// the screen dims mid-set after an app-switch. Registered exactly once
+// (guarded) and inert unless a live session is active and unpaused.
+let _liveWakeLockVisibilityHooked = false;
+function _ensureWakeLockVisibilityHook() {
+  if (_liveWakeLockVisibilityHooked) return;
+  if (typeof document === "undefined") return;
+  _liveWakeLockVisibilityHooked = true;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && _liveTracker && !_liveTracker.paused && !_liveWakeLock) {
+      _requestWakeLock();
+    }
+  });
+}
+if (typeof document !== "undefined") _ensureWakeLockVisibilityHook();
+
 // ── Build "Start Workout" button (called from calendar.js) ───────────────────
+
+// Registry of Start-Workout payloads keyed by a DOM-safe id. Inlining the
+// JSON.stringify'd steps/exercises straight into the onclick used to break
+// whenever the data contained an apostrophe: _escAttr turns ' into &#39;,
+// but the HTML parser decodes &#39; back to a raw ' before the JS runs,
+// terminating the onclick string literal → SyntaxError → the button
+// silently did nothing ("Don't lock out", "Farmer's Carry", etc.). We now
+// stash the payload here and pass only the id through the onclick, so no
+// user-controlled text ever lands inside the inline JS.
+const _liveBtnPayloads = {};
+
+function startLiveWorkoutById(id) {
+  const p = _liveBtnPayloads[id];
+  if (!p) return;
+  // Same argument shape the old inline onclick passed: JSON strings (or
+  // null) for steps/exercises, which startLiveWorkout JSON.parses.
+  startLiveWorkout(p.sessionId, p.dateStr, p.type, p.stepsJson, p.exercisesJson);
+}
+if (typeof window !== "undefined") window.startLiveWorkoutById = startLiveWorkoutById;
 
 function buildLiveTrackerButton(sessionId, type, dateStr, steps, exercises) {
   // Only show for today
@@ -1758,10 +1968,18 @@ function buildLiveTrackerButton(sessionId, type, dateStr, steps, exercises) {
   // Don't show if already completed
   if (typeof isSessionComplete === "function" && isSessionComplete(sessionId)) return "";
 
-  const stepsArg = steps ? _escAttr(JSON.stringify(steps)) : "";
-  const exArg = exercises ? _escAttr(JSON.stringify(exercises)) : "";
+  // Deterministic id keyed off the sessionId so re-renders overwrite rather
+  // than leak new registry entries; sanitized to attribute-safe chars.
+  const btnId = "lbt_" + String(sessionId).replace(/[^a-zA-Z0-9_-]/g, "");
+  _liveBtnPayloads[btnId] = {
+    sessionId,
+    dateStr,
+    type,
+    stepsJson:     steps     ? JSON.stringify(steps)     : null,
+    exercisesJson: exercises ? JSON.stringify(exercises) : null,
+  };
 
-  return `<button class="btn-live-start" onclick="event.stopPropagation();startLiveWorkout('${sessionId}','${dateStr}','${type}',${stepsArg ? `'${stepsArg}'` : "null"},${exArg ? `'${exArg}'` : "null"})">
+  return `<button class="btn-live-start" onclick="event.stopPropagation();startLiveWorkoutById('${btnId}')">
     ${typeof ICONS !== "undefined" ? ICONS.zap : ""} Start Workout
   </button>`;
 }
@@ -1815,4 +2033,18 @@ async function reconcileLiveTrackerStructuredSync() {
 
 if (typeof window !== "undefined") {
   window.reconcileLiveTrackerStructuredSync = reconcileLiveTrackerStructuredSync;
+
+  // Crash/refresh recovery: check for a persisted mid-workout snapshot once
+  // the app has booted. app.js does `window.onload = init` (which renders
+  // the calendar); we add a separate load listener and defer a beat so the
+  // resume prompt appears after the app has settled rather than mid-boot.
+  // Guarded internally (_liveResumeChecked) so it only ever runs once.
+  const _bootLiveResume = () => {
+    setTimeout(() => { try { _maybeResumeLiveSession(); } catch {} }, 600);
+  };
+  if (document.readyState === "complete") {
+    _bootLiveResume();
+  } else {
+    window.addEventListener("load", _bootLiveResume, { once: true });
+  }
 }
