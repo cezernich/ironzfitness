@@ -812,15 +812,22 @@ function init() {
       // refreshAllKeys overwrites local with stale Supabase data.
       if (DB.replayPendingSyncs) await DB.replayPendingSyncs();
       await DB.refreshAllKeys();
-      if (typeof renderCalendar === "function") renderCalendar();
-      if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
-        renderDayDetail(selectedDate);
+      // Only re-render the surfaces for the tab that's actually showing. The
+      // others re-render from fresh localStorage when the user switches to them
+      // via showTab(), so re-rendering them here (e.g. the calendar's per-cell
+      // parse pass while sitting on Settings) was wasted work on every return.
+      const _activeTab = (typeof localStorage !== "undefined" && localStorage.getItem("activeTab")) || "home";
+      if (_activeTab === "home") {
+        if (typeof renderCalendar === "function") renderCalendar();
+        if (typeof selectedDate !== "undefined" && selectedDate && typeof renderDayDetail === "function") {
+          renderDayDetail(selectedDate);
+        }
       }
       // Second-device scenario: user finished a workout on phone,
       // switched to laptop. Home / history / stats tabs must reflect
       // the new completion without a full relaunch.
       if (typeof renderWorkoutHistory === "function") renderWorkoutHistory();
-      if (typeof renderStats === "function") renderStats();
+      if (_activeTab === "stats" && typeof renderStats === "function") renderStats();
       // Cross-device stack: data may have arrived showing all three
       // pillars hit. recordStackIfHit + maybeFireStackCelebration are
       // idempotent and gate on stackCelebratedFor, so this is safe.
