@@ -690,8 +690,10 @@ async function authBoot() {
     // Replay any pending local writes BEFORE pulling remote — otherwise
     // refreshAllKeys overwrites unsynced edits with stale Supabase rows.
     try { await DB.replayPendingSyncs(); } catch (e) { console.warn('Auth: replayPendingSyncs error', e); }
-    // Pull all data from Supabase before initializing UI
-    try { await DB.refreshAllKeys(); } catch (e) { console.warn('Auth: refreshAllKeys error', e); }
+    // Pull all data from Supabase before initializing UI.
+    // refreshAllTables() calls refreshAllKeys() internally as its first step,
+    // so we do NOT call refreshAllKeys() separately here — that pulled the
+    // full user_data table twice, back-to-back, on every boot.
     try { await DB.refreshAllTables(); } catch (e) { console.warn('Auth: refreshAllTables error', e); }
     // Open the cross-device realtime channel after the initial pull
     // completes — surfaces re-render via `ironz:data-refresh` when

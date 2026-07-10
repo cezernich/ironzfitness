@@ -280,5 +280,14 @@ const PREMIUM_ANNUAL_SAVINGS  = "Save 37%";
     // Inline onclick handlers in the upsell modal need these on window.
     window._closePremiumUpsell = _closePremiumUpsell;
     window._trackCheckoutStarted = _trackCheckoutStarted;
+    // The #paywall-overlay modal's close handlers (index.html) referenced
+    // closePaywall(), which was never defined. Provide it so the handlers are
+    // valid if that modal is ever shown.
+    if (typeof window.closePaywall !== "function") {
+      window.closePaywall = function () {
+        const el = document.getElementById("paywall-overlay");
+        if (el) el.style.display = "none";
+      };
+    }
   }
 })();
