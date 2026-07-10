@@ -31,31 +31,20 @@ async function logPhilosophyGaps(gaps) {
     console.warn('[IronZ] Local gap logging failed:', e.message);
   }
 
-  // Log to Supabase
+  // Log to Supabase.
+  //
+  // Atomic per-gap counter bump via the bump_philosophy_gap() RPC
+  // (see supabase/migrations/20260710_philosophy_gap_bump.sql). This
+  // replaces the old SELECT-then-UPDATE/INSERT loop, which raced on
+  // `existing.user_count + 1` and issued an N+1 pair of round-trips
+  // per gap. The RPC does an atomic UPSERT server-side, so we can fan
+  // the whole batch out in parallel.
   try {
     if (typeof supabaseClient === 'undefined') return;
 
-    for (const gap of gaps) {
-      const { data: existing } = await supabaseClient
-        .from('philosophy_gaps')
-        .select('id, user_count')
-        .eq('dimension', gap.dimension)
-        .eq('value', gap.value)
-        .single();
-
-      if (existing) {
-        await supabaseClient.from('philosophy_gaps').update({
-          user_count: existing.user_count + 1,
-          last_seen: new Date().toISOString()
-        }).eq('id', existing.id);
-      } else {
-        await supabaseClient.from('philosophy_gaps').insert({
-          dimension: gap.dimension,
-          value: gap.value,
-          user_count: 1
-        });
-      }
-    }
+    await Promise.all(gaps.map(g =>
+      supabaseClient.rpc('bump_philosophy_gap', { p_dim: g.dimension, p_val: g.value })
+    ));
     console.log(`[IronZ] Logged ${gaps.length} philosophy gaps to Supabase`);
   } catch (e) {
     console.warn('[IronZ] Supabase gap logging failed:', e.message);

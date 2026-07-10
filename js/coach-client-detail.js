@@ -88,41 +88,66 @@
     if (root) root.innerHTML = `<div class="coach-loading">Loading…</div>`;
 
     try {
-      // Profile (we already have it cached by coach-portal but re-fetch
-      // for freshness in case the coach navigated directly).
-      const profileRes = await sb.from("profiles")
-        .select("id, full_name, email, gender, weight_lbs, age")
-        .eq("id", clientId)
-        .maybeSingle();
+      // These five reads are independent — profile, user_data, logged
+      // workouts and coach assignments all key off clientId, and the
+      // session lookup depends on nothing — so fire them in parallel.
+      // A SINGLE sequence guard after the batch replaces the per-query
+      // guards these awaits carried when they ran serially.
+      const [profileRes, dataRes, completedRes, assignRes, sessRes] = await Promise.all([
+        // Profile (we already have it cached by coach-portal but re-fetch
+        // for freshness in case the coach navigated directly).
+        sb.from("profiles")
+          .select("id, full_name, email, gender, weight_lbs, age")
+          .eq("id", clientId)
+          .maybeSingle(),
+        // Pull every coach-readable data_key for this client in one go.
+        // RLS filters silently — we just take what comes back. Also pull
+        // the audit columns so Phase 3E can surface "edited by [coach]
+        // on [date]" under each value. trainingZonesHistory is included
+        // so the Benchmarks tab can show zone-update history scoped to
+        // the coaching relationship.
+        sb.from("user_data")
+          .select("data_key, data_value, last_edited_by, last_edited_at")
+          .eq("user_id", clientId)
+          .in("data_key", [
+            "workoutSchedule", "trainingPlan",
+            "workoutRatings", "personalRecords",
+            "trainingZones", "trainingZonesHistory",
+            "raceEvents", "events",
+            // Training Inputs tab — same source keys the athlete's
+            // "Active Training Inputs" card reads on their home screen.
+            // The coach view mirrors that surface read-only in PR 1;
+            // edit (PR 3) and delete (PR 4) come later.
+            "selectedSports", "trainingGoals", "strengthRole",
+            "strengthSetup", "thresholds", "buildPlanTemplate", "longDays",
+            "nutritionEnabled", "hydrationEnabled", "fuelingEnabled",
+            "nutritionAdjustments",
+            "hydrationSettings", "hydrationDailyTargetOz",
+            "fuelingPrefs",
+          ]),
+        // Logged workouts come from the dedicated table. `data` carries
+        // the JSONB blob where `isCompletion` lives — we need it to match
+        // the athlete's history dedup (workouts.js filterWorkoutHistory).
+        sb.from("workouts")
+          .select("id, user_id, name, type, date, duration_minutes, completed, notes, created_at, data")
+          .eq("user_id", clientId)
+          .order("date", { ascending: false })
+          .limit(60),
+        // Pull this coach's assignments for this client so the calendar
+        // can surface client_note / client_rating on completed coach
+        // workouts. Indexed by id to match the coachAssignmentId on each
+        // synthetic workoutSchedule entry.
+        sb.from("coach_assigned_workouts")
+          .select("id, date, client_note, client_rating, client_responded_at")
+          .eq("client_id", clientId),
+        // When did this coach take this client on? Used by the Benchmarks
+        // tab to scope the zones-update history to the relationship.
+        sb.auth.getSession(),
+      ]);
       if (seq !== _loadSeq) return;
+
       _client = profileRes?.data || { id: clientId };
 
-      // Pull every coach-readable data_key for this client in one go.
-      // RLS filters silently — we just take what comes back. Also pull
-      // the audit columns so Phase 3E can surface "edited by [coach]
-      // on [date]" under each value. trainingZonesHistory is included
-      // so the Benchmarks tab can show zone-update history scoped to
-      // the coaching relationship.
-      const dataRes = await sb.from("user_data")
-        .select("data_key, data_value, last_edited_by, last_edited_at")
-        .eq("user_id", clientId)
-        .in("data_key", [
-          "workoutSchedule", "trainingPlan",
-          "workoutRatings", "personalRecords",
-          "trainingZones", "trainingZonesHistory",
-          "raceEvents", "events",
-          // Training Inputs tab — same source keys the athlete's
-          // "Active Training Inputs" card reads on their home screen.
-          // The coach view mirrors that surface read-only in PR 1;
-          // edit (PR 3) and delete (PR 4) come later.
-          "selectedSports", "trainingGoals", "strengthRole",
-          "strengthSetup", "thresholds", "buildPlanTemplate", "longDays",
-          "nutritionEnabled", "hydrationEnabled", "fuelingEnabled",
-          "nutritionAdjustments",
-          "hydrationSettings", "hydrationDailyTargetOz",
-          "fuelingPrefs",
-        ]);
-      if (seq !== _loadSeq) return;
       const byKey = {};
       _audit = {};
       for (const r of (dataRes.data || [])) {
@@ -132,31 +157,10 @@
         }
       }
 
-      // Logged workouts come from the dedicated table. `data` carries
-      // the JSONB blob where `isCompletion` lives — we need it to match
-      // the athlete's history dedup (workouts.js filterWorkoutHistory).
-      const completedRes = await sb.from("workouts")
-        .select("id, user_id, name, type, date, duration_minutes, completed, notes, created_at, data")
-        .eq("user_id", clientId)
-        .order("date", { ascending: false })
-        .limit(60);
-      if (seq !== _loadSeq) return;
-
-      // Pull this coach's assignments for this client so the calendar
-      // can surface client_note / client_rating on completed coach
-      // workouts. Indexed by id to match the coachAssignmentId on each
-      // synthetic workoutSchedule entry.
-      const assignRes = await sb.from("coach_assigned_workouts")
-        .select("id, date, client_note, client_rating, client_responded_at")
-        .eq("client_id", clientId);
-      if (seq !== _loadSeq) return;
       _data.assignments = {};
       for (const r of (assignRes?.data || [])) _data.assignments[r.id] = r;
 
-      // When did this coach take this client on? Used by the Benchmarks
-      // tab to scope the zones-update history to the relationship.
-      const sess = (await sb.auth.getSession())?.data?.session;
-      if (seq !== _loadSeq) return;
+      const sess = sessRes?.data?.session;
       const coachUid = sess?.user?.id || null;
       let coachAssignedAt = null;
       if (coachUid) {

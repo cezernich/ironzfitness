@@ -521,20 +521,23 @@
       }
     }
 
-    // Sequential per-row UPDATE — Supabase doesn't take a bulk update
-    // with different values per row. The AFTER UPDATE trigger handles
-    // the user_data mirror for each one, so the athlete's view picks
-    // up the change without a separate sync pass.
-    for (const u of updates) {
+    // Per-row UPDATE — Supabase doesn't take a bulk update with
+    // different values per row, so fire them in parallel. The AFTER
+    // UPDATE trigger handles the user_data mirror for each one, so the
+    // athlete's view picks up the change without a separate sync pass.
+    const results = await Promise.all(updates.map(async (u) => {
       // Only include coach_note in the patch when we have a library to
       // source from — `undefined` would round-trip to null in JSON and
       // wipe a coach's manually-edited note on a non-library slot.
       const patch = { workout: u.workout };
       if (u.coachNote !== undefined) patch.coach_note = u.coachNote;
-      const { error: upErr } = await sb.from("coach_assigned_workouts")
+      const { error } = await sb.from("coach_assigned_workouts")
         .update(patch)
         .eq("id", u.id);
-      if (upErr) console.warn("[coach-programs] row update failed", u.id, upErr.message);
+      return { id: u.id, error };
+    }));
+    for (const r of results) {
+      if (r.error) console.warn("[coach-programs] row update failed", r.id, r.error.message);
     }
     if (updates.length) {
       console.log("[coach-programs] propagated edits to", updates.length, "assignments");

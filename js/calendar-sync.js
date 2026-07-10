@@ -250,10 +250,18 @@ function renderCalSyncStatus() {
         <div id="cal-sync-status-msg" class="cal-sync-status-msg"></div>
       </div>`;
   } else {
+    // Only surface the Connect button when Outlook is actually
+    // configured — otherwise clicking it just alerts an error. When
+    // msClientId is empty we hide the button and show the setup note in
+    // its place. (The alert in connectOutlookCalendar stays as a
+    // belt-and-suspenders fallback for any other call path.)
+    const outlookConfigured = !!CAL_SYNC_CONFIG.msClientId;
     container.innerHTML = `
       <div class="cal-sync-disconnected">
         <p class="hint" style="margin:0 0 8px">Connect your calendar to sync workouts and import busy times as training restrictions.</p>
-        <button class="btn-primary btn-sm" onclick="connectOutlookCalendar()">Connect Outlook Calendar</button>
+        ${outlookConfigured
+          ? `<button class="btn-primary btn-sm" onclick="connectOutlookCalendar()">Connect Outlook Calendar</button>`
+          : ``}
         <p class="hint" style="margin:8px 0 0;font-size:0.7rem">Requires a Microsoft Azure AD client ID in calendar-sync.js. Google Calendar support coming soon.</p>
         <div id="cal-sync-status-msg" class="cal-sync-status-msg"></div>
       </div>`;
