@@ -31,16 +31,16 @@
        errors from every subsequent script. Uses the v8 error-only bundle;
        upgrade to bundle.tracing.replay.min.js if we ever want performance
        monitoring or session replay. -->
-  <script src="https://browser.sentry-cdn.com/8.0.0/bundle.min.js" crossorigin="anonymous"></script>
-  <script src="js/sentry-init.js"></script>
+  <script defer src="https://browser.sentry-cdn.com/8.0.0/bundle.min.js" crossorigin="anonymous"></script>
+  <script defer src="js/sentry-init.js"></script>
   <!-- In-house error reporting — runs alongside Sentry and writes to
        analytics_events for our own dashboards. -->
-  <script src="js/error-reporting.js"></script>
+  <script defer src="js/error-reporting.js"></script>
   <!-- Supabase JS SDK (must load before supabase-init.js) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="js/supabase-init.js"></script>
-  <script src="js/db.js"></script>
-  <script src="js/seed-reference-data.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script defer src="js/supabase-init.js"></script>
+  <script defer src="js/db.js"></script>
+  <script defer src="js/seed-reference-data.js"></script>
   <!-- Barcode scanning — @zxing/browser (used directly, not via the
        html5-qrcode wrapper, because the wrapper's iOS path silently
        failed to decode sharp UPC-A codes even with full retries).
@@ -48,8 +48,8 @@
        the library UMD must load FIRST (defines window.ZXing); the
        browser UMD then layers BrowserMultiFormatReader on top. Order
        matters — without library loaded, the constructor fails. -->
-  <script src="https://unpkg.com/@zxing/library@0.21.0/umd/index.min.js"></script>
-  <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/zxing-browser.min.js"></script>
+  <script defer src="https://unpkg.com/@zxing/library@0.21.0/umd/index.min.js"></script>
+  <script defer src="https://unpkg.com/@zxing/browser@0.1.5/umd/zxing-browser.min.js"></script>
 </head>
 <body>
 
@@ -1292,7 +1292,7 @@
       <!-- Workout History view -->
       <div id="stats-view-history" style="display:none">
         <div class="sw-search-wrap">
-          <input type="text" id="workout-history-search" class="sw-search-input" placeholder="Search workout history..." oninput="filterWorkoutHistory(this.value)" />
+          <input type="text" id="workout-history-search" class="sw-search-input" placeholder="Search workout history..." oninput="filterWorkoutHistoryDebounced(this.value)" />
         </div>
         <div id="workout-history">
           <p class="empty-msg">No workouts logged yet.</p>
@@ -3919,172 +3919,172 @@
   </div>
 
   <!-- Scripts — order matters -->
-  <script src="js/config.js"></script>
-  <script src="js/athlete-classifier.js"></script>
-  <script src="js/arc-builder.js"></script>
-  <script src="js/icons.js"></script>
-  <script src="js/themes.js"></script>
-  <script src="js/stats.js"></script>
-  <script src="js/touch-drag.js"></script>
-  <script src="js/workouts.js"></script>
-  <script src="js/nutrition.js"></script>
-  <script src="js/meals-data.js"></script>
-  <script src="js/threshold-week-scheduler.js"></script>
+  <script defer src="js/config.js"></script>
+  <script defer src="js/athlete-classifier.js"></script>
+  <script defer src="js/arc-builder.js"></script>
+  <script defer src="js/icons.js"></script>
+  <script defer src="js/themes.js"></script>
+  <script defer src="js/stats.js"></script>
+  <script defer src="js/touch-drag.js"></script>
+  <script defer src="js/workouts.js"></script>
+  <script defer src="js/nutrition.js"></script>
+  <script defer src="js/meals-data.js"></script>
+  <script defer src="js/threshold-week-scheduler.js"></script>
   <!-- Plan session distribution (Rule Engine Step 4 / TRAINING_PHILOSOPHY §6.1-§6.3)
        + constraint validator (Step 5 / §4.3). Must load before planner.js +
        onboarding-v2.js so both plan-generation paths can call them. Pure
        functions, no side effects on load. -->
-  <script src="js/plan-session-distribution.js"></script>
-  <script src="js/plan-constraint-validator.js"></script>
+  <script defer src="js/plan-session-distribution.js"></script>
+  <script defer src="js/plan-constraint-validator.js"></script>
   <!-- Training zones + workout library (PLAN_GENERATOR_MASTER_SPEC §8–§9).
        Zones must load before library so parameterize() can resolve Z1..Z5
        placeholders; both must load before planner.js so the generator can
        query the library per session slot. -->
-  <script src="js/training-zones.js"></script>
-  <script src="js/workout-library.js"></script>
-  <script src="js/add-session-mode.js"></script>
-  <script src="js/unilateral-display.js"></script>
-  <script src="js/session-type-library.js"></script>
+  <script defer src="js/training-zones.js"></script>
+  <script defer src="js/workout-library.js"></script>
+  <script defer src="js/add-session-mode.js"></script>
+  <script defer src="js/unilateral-display.js"></script>
+  <script defer src="js/session-type-library.js"></script>
   <!-- Variant libraries (pure data) — must load before any code that consumes them -->
-  <script src="js/variant-libraries/run.js"></script>
-  <script src="js/variant-libraries/bike.js"></script>
-  <script src="js/variant-libraries/swim.js"></script>
-  <script src="js/variant-libraries/strength.js"></script>
-  <script src="js/variant-libraries/hybrid.js"></script>
-  <script src="js/variant-libraries/index.js"></script>
-  <script src="js/deterministic-variant-rotation.js"></script>
+  <script defer src="js/variant-libraries/run.js"></script>
+  <script defer src="js/variant-libraries/bike.js"></script>
+  <script defer src="js/variant-libraries/swim.js"></script>
+  <script defer src="js/variant-libraries/strength.js"></script>
+  <script defer src="js/variant-libraries/hybrid.js"></script>
+  <script defer src="js/variant-libraries/index.js"></script>
+  <script defer src="js/deterministic-variant-rotation.js"></script>
   <!-- Shared per-session validator — used by Add Session flow + Workout Sharing import validator -->
-  <script src="js/workout-validator.js"></script>
+  <script defer src="js/workout-validator.js"></script>
   <!-- Exercise database (cowork-handoff/EXERCISE_DB_SPEC.md). exercise-data.js
        must load before exercise-filters.js (which expects window.EXERCISE_DB),
        and both must load before planner.js so plan generation can query
        window.ExerciseDB. -->
-  <script src="exercise-data.js"></script>
-  <script src="exercise-filters.js"></script>
-  <script src="js/equipment-profile.js"></script>
+  <script defer src="exercise-data.js"></script>
+  <script defer src="exercise-filters.js"></script>
+  <script defer src="js/equipment-profile.js"></script>
   <!-- Hides weight inputs for exercises that don't use load + offers a
        Weighted/BW toggle for exercises that can be done either way.
        Hooks .ex-row-name typeahead inputs across all manual builders. -->
-  <script src="js/exercise-row-weight-toggle.js"></script>
+  <script defer src="js/exercise-row-weight-toggle.js"></script>
   <!-- Rule engine session assembler (chunk 2) — requires ExerciseDB above,
        AthleteClassifier + ArcBuilder loaded earlier. Consumed by
        planner.js / philosophy-planner.js. -->
-  <script src="js/session-assembler.js"></script>
-  <script src="js/planner.js"></script>
+  <script defer src="js/session-assembler.js"></script>
+  <script defer src="js/planner.js"></script>
   <!-- Triathlon gear checklist (SPEC_triathlon_gear_checklist.md) — data + modal -->
-  <script src="js/gear-checklist.js"></script>
-  <script src="js/ui/gear-checklist-modal.js"></script>
-  <script src="js/philosophy-engine.js"></script>
-  <script src="js/exercise-selector.js"></script>
-  <script src="js/nutrition-calculator.js"></script>
+  <script defer src="js/gear-checklist.js"></script>
+  <script defer src="js/ui/gear-checklist-modal.js"></script>
+  <script defer src="js/philosophy-engine.js"></script>
+  <script defer src="js/exercise-selector.js"></script>
+  <script defer src="js/nutrition-calculator.js"></script>
   <!-- Rule engine chunk 3 — hydration, validator, rationale, generator.
        Depends on AthleteClassifier + ArcBuilder + SessionAssembler
        (loaded earlier) and NutritionCalculator (appended to the file
        above). Additive: not yet wired into planner.js. -->
-  <script src="js/hydration-calculator.js"></script>
-  <script src="js/plan-validator.js"></script>
-  <script src="js/rationale-builder.js"></script>
-  <script src="js/plan-generator.js"></script>
-  <script src="js/zone-calculator.js"></script>
-  <script src="js/sport-levels.js"></script>
-  <script src="js/threshold-reminders.js"></script>
-  <script src="js/running-workout-generator.js"></script>
-  <script src="js/bike-workout-generator.js"></script>
-  <script src="js/swim-workout-model.js"></script>
-  <script src="js/swim-workout-generator.js"></script>
-  <script src="js/ui/swim-card-renderer.js"></script>
-  <script src="js/ui/swim-builder-modal.js"></script>
+  <script defer src="js/hydration-calculator.js"></script>
+  <script defer src="js/plan-validator.js"></script>
+  <script defer src="js/rationale-builder.js"></script>
+  <script defer src="js/plan-generator.js"></script>
+  <script defer src="js/zone-calculator.js"></script>
+  <script defer src="js/sport-levels.js"></script>
+  <script defer src="js/threshold-reminders.js"></script>
+  <script defer src="js/running-workout-generator.js"></script>
+  <script defer src="js/bike-workout-generator.js"></script>
+  <script defer src="js/swim-workout-model.js"></script>
+  <script defer src="js/swim-workout-generator.js"></script>
+  <script defer src="js/ui/swim-card-renderer.js"></script>
+  <script defer src="js/ui/swim-builder-modal.js"></script>
   <!-- Circuit workouts (specs/SPEC_circuit_workouts.md, mockups/circuit-mockup.html) -->
-  <script src="js/circuit-workout.js"></script>
-  <script src="js/data/benchmark-wods.js"></script>
-  <script src="js/ui/circuit-card.js"></script>
-  <script src="js/ui/circuit-builder.js"></script>
-  <script src="js/strength-workout-generator.js"></script>
-  <script src="js/ai-variant-selector.js"></script>
-  <script src="js/add-running-session-flow.js"></script>
-  <script src="js/test-result-handler.js"></script>
-  <script src="js/post-test-modal.js"></script>
+  <script defer src="js/circuit-workout.js"></script>
+  <script defer src="js/data/benchmark-wods.js"></script>
+  <script defer src="js/ui/circuit-card.js"></script>
+  <script defer src="js/ui/circuit-builder.js"></script>
+  <script defer src="js/strength-workout-generator.js"></script>
+  <script defer src="js/ai-variant-selector.js"></script>
+  <script defer src="js/add-running-session-flow.js"></script>
+  <script defer src="js/test-result-handler.js"></script>
+  <script defer src="js/post-test-modal.js"></script>
   <!-- Workout Sharing & Personal Library (FEATURE_SPEC_2026-04-09_workout_sharing.md) -->
-  <script src="js/subscription.js"></script>
-  <script src="js/workout-sharing-privacy.js"></script>
-  <script src="js/workout-link-service.js"></script>
-  <script src="js/workout-sharing-flow.js"></script>
-  <script src="js/workout-import-validator.js"></script>
-  <script src="js/shared-workouts-inbox.js"></script>
-  <script src="js/workout-inbox-direct.js"></script>
-  <script src="js/saved-workouts-library.js"></script>
-  <script src="js/deep-link-handler.js"></script>
-  <script src="js/workout-completion-notification.js"></script>
-  <script src="js/ui/zone-translation-card.js"></script>
-  <script src="js/ui/share-sheet-modal.js"></script>
-  <script src="js/ui/link-ready-sheet.js"></script>
-  <script src="js/ui/shared-workout-preview-modal.js"></script>
-  <script src="js/ui/schedule-calendar-modal.js"></script>
-  <script src="js/ui/conflict-resolution-modal.js"></script>
-  <script src="js/ui/inbox-tab-view.js"></script>
-  <script src="js/ui/saved-library-tab-view.js"></script>
-  <script src="js/rules-engine.js"></script>
-  <script src="js/validator.js"></script>
-  <script src="js/gap-tracker.js"></script>
-  <script src="js/feedback-loop.js"></script>
-  <script src="js/feedback-tracker.js"></script>
-  <script src="js/philosophy-planner.js"></script>
-  <script src="js/survey.js"></script>
-  <script src="js/exercise-library.js"></script>
-  <script src="js/fueling.js"></script>
-  <script src="js/calendar.js"></script>
-  <script src="js/live-tracker.js"></script>
-  <script src="js/nl-input.js"></script>
+  <script defer src="js/subscription.js"></script>
+  <script defer src="js/workout-sharing-privacy.js"></script>
+  <script defer src="js/workout-link-service.js"></script>
+  <script defer src="js/workout-sharing-flow.js"></script>
+  <script defer src="js/workout-import-validator.js"></script>
+  <script defer src="js/shared-workouts-inbox.js"></script>
+  <script defer src="js/workout-inbox-direct.js"></script>
+  <script defer src="js/saved-workouts-library.js"></script>
+  <script defer src="js/deep-link-handler.js"></script>
+  <script defer src="js/workout-completion-notification.js"></script>
+  <script defer src="js/ui/zone-translation-card.js"></script>
+  <script defer src="js/ui/share-sheet-modal.js"></script>
+  <script defer src="js/ui/link-ready-sheet.js"></script>
+  <script defer src="js/ui/shared-workout-preview-modal.js"></script>
+  <script defer src="js/ui/schedule-calendar-modal.js"></script>
+  <script defer src="js/ui/conflict-resolution-modal.js"></script>
+  <script defer src="js/ui/inbox-tab-view.js"></script>
+  <script defer src="js/ui/saved-library-tab-view.js"></script>
+  <script defer src="js/rules-engine.js"></script>
+  <script defer src="js/validator.js"></script>
+  <script defer src="js/gap-tracker.js"></script>
+  <script defer src="js/feedback-loop.js"></script>
+  <script defer src="js/feedback-tracker.js"></script>
+  <script defer src="js/philosophy-planner.js"></script>
+  <script defer src="js/survey.js"></script>
+  <script defer src="js/exercise-library.js"></script>
+  <script defer src="js/fueling.js"></script>
+  <script defer src="js/calendar.js"></script>
+  <script defer src="js/live-tracker.js"></script>
+  <script defer src="js/nl-input.js"></script>
 
-  <script src="js/share.js"></script>
-  <script src="js/ui/share-action-sheet.js"></script>
-  <script src="js/calendar-sync.js"></script>
-  <script src="js/app.js"></script>
-  <script src="js/workout-editor.js"></script>
+  <script defer src="js/share.js"></script>
+  <script defer src="js/ui/share-action-sheet.js"></script>
+  <script defer src="js/calendar-sync.js"></script>
+  <script defer src="js/app.js"></script>
+  <script defer src="js/workout-editor.js"></script>
   <!-- Per-exercise "swap for same-muscle alternative" button. Reads from
        window.EXERCISE_DB (loaded via exercise-data.js earlier). Used by
        the editor row's ↻ button. -->
-  <script src="js/exercise-regenerator.js"></script>
+  <script defer src="js/exercise-regenerator.js"></script>
   <!-- Exercise name typeahead — wires document-level delegation for any
        .ex-row-name input. Reads suggestions directly from window.EXERCISE_DB
        (loaded earlier as exercise-data.js) — no separate database needed. -->
-  <script src="js/ui/exercise-autocomplete.js"></script>
-  <script src="js/nutrition-v2.js"></script>
-  <script src="js/meal-planner.js"></script>
-  <script src="js/custom-plan.js"></script>
-  <script src="js/coach-sheet-import.js"></script>
+  <script defer src="js/ui/exercise-autocomplete.js"></script>
+  <script defer src="js/nutrition-v2.js"></script>
+  <script defer src="js/meal-planner.js"></script>
+  <script defer src="js/custom-plan.js"></script>
+  <script defer src="js/coach-sheet-import.js"></script>
   <!-- Unified workout builder save handlers (cowork-handoff/UNIFIED_BUILDER_SPEC.md,
        docs/BUILDER_INVENTORY.md). Must load AFTER custom-plan.js and
        calendar.js so it can reference their function-declaration globals
        (_cpAddSession, _cpRerenderDay, renderCalendar, renderDayDetail). -->
-  <script src="js/workout-save-handlers.js"></script>
-  <script src="js/leveling.js"></script>
-  <script src="js/challenges.js"></script>
-  <script src="js/ux-level.js"></script>
-  <script src="js/hydration.js"></script>
-  <script src="js/goals.js"></script>
-  <script src="js/life-training.js"></script>
-  <script src="js/strava-integration.js"></script>
-  <script src="js/adaptive-coach.js"></script>
-  <script src="js/trust-center.js"></script>
-  <script src="js/adherence.js"></script>
-  <script src="js/stack.js"></script>
-  <script src="js/notifications.js"></script>
-  <script src="js/claims-filter.js"></script>
-  <script src="js/safety-guardrails.js"></script>
-  <script src="js/weekly-checkin.js"></script>
-  <script src="js/barcode-scanner.js"></script>
+  <script defer src="js/workout-save-handlers.js"></script>
+  <script defer src="js/leveling.js"></script>
+  <script defer src="js/challenges.js"></script>
+  <script defer src="js/ux-level.js"></script>
+  <script defer src="js/hydration.js"></script>
+  <script defer src="js/goals.js"></script>
+  <script defer src="js/life-training.js"></script>
+  <script defer src="js/strava-integration.js"></script>
+  <script defer src="js/adaptive-coach.js"></script>
+  <script defer src="js/trust-center.js"></script>
+  <script defer src="js/adherence.js"></script>
+  <script defer src="js/stack.js"></script>
+  <script defer src="js/notifications.js"></script>
+  <script defer src="js/claims-filter.js"></script>
+  <script defer src="js/safety-guardrails.js"></script>
+  <script defer src="js/weekly-checkin.js"></script>
+  <script defer src="js/barcode-scanner.js"></script>
   <!-- Legacy onboarding (renamed from js/onboarding.js in Phase 2 of
        the onboarding-v2 rollout). Still loaded because several of its
        window.* exports are used by the Build Plan flow as a temporary
        bridge until Phase 3 lands the new bp-* screens. Once Phase 3
        ships and every caller has moved to OnboardingV2, this file can
        be removed. -->
-  <script src="js/onboarding-legacy.js"></script>
+  <script defer src="js/onboarding-legacy.js"></script>
   <!-- Onboarding v2 — real onboarding flow. Must come after
        planner.js / philosophy-planner.js (loaded above) and before
        auth.js so init() can call OnboardingV2.maybeStart(). -->
-  <script src="js/onboarding-v2.js"></script>
+  <script defer src="js/onboarding-v2.js"></script>
   <!-- Hide the merged Admin & Coaching card when both rows are hidden,
        so non-admin / non-coach users don't see an empty header. Called
        from admin.js and coach-request-flow.js after they toggle row
@@ -4100,26 +4100,26 @@
       wrap.style.display = (adminVis || coachVis) ? "" : "none";
     };
   </script>
-  <script src="js/admin.js"></script>
-  <script src="js/admin-workouts.js"></script>
-  <script src="js/admin-questions.js"></script>
-  <script src="js/admin-coaches.js"></script>
-  <script src="js/coach-request-flow.js"></script>
-  <script src="js/coach-portal.js"></script>
-  <script src="js/coach-dashboard.js"></script>
-  <script src="js/coach-client-detail.js"></script>
-  <script src="js/coach-assignment-flow.js"></script>
-  <script src="js/coach-library.js"></script>
-  <script src="js/coach-programs.js"></script>
-  <script src="js/coach-invite-panel.js"></script>
-  <script src="js/coach-invite-flow.js"></script>
-  <script src="js/client-plan-freeze.js"></script>
-  <script src="js/client-coaching.js"></script>
-  <script src="js/client-coach-card.js"></script>
-  <script src="js/analytics.js"></script>
-  <script src="js/push.js"></script>
+  <script defer src="js/admin.js"></script>
+  <script defer src="js/admin-workouts.js"></script>
+  <script defer src="js/admin-questions.js"></script>
+  <script defer src="js/admin-coaches.js"></script>
+  <script defer src="js/coach-request-flow.js"></script>
+  <script defer src="js/coach-portal.js"></script>
+  <script defer src="js/coach-dashboard.js"></script>
+  <script defer src="js/coach-client-detail.js"></script>
+  <script defer src="js/coach-assignment-flow.js"></script>
+  <script defer src="js/coach-library.js"></script>
+  <script defer src="js/coach-programs.js"></script>
+  <script defer src="js/coach-invite-panel.js"></script>
+  <script defer src="js/coach-invite-flow.js"></script>
+  <script defer src="js/client-plan-freeze.js"></script>
+  <script defer src="js/client-coaching.js"></script>
+  <script defer src="js/client-coach-card.js"></script>
+  <script defer src="js/analytics.js"></script>
+  <script defer src="js/push.js"></script>
   <!-- auth.js last — overrides window.onload to gate app behind login -->
-  <script src="js/auth.js"></script>
+  <script defer src="js/auth.js"></script>
 
   <!-- ===== BOTTOM NAV BAR ===== -->
   <nav id="bottom-nav" style="display:none">

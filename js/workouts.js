@@ -2374,6 +2374,15 @@ function unstarPlanSession(id) {
   if (typeof renderSavedWorkouts === "function") renderSavedWorkouts();
 }
 
+// Debounced entry point for the search box's oninput — every keystroke
+// otherwise re-parsed the full workouts blob and rebuilt the whole list.
+// Programmatic refreshes call filterWorkoutHistory directly (synchronous).
+let _histSearchTimer = null;
+function filterWorkoutHistoryDebounced(query) {
+  clearTimeout(_histSearchTimer);
+  _histSearchTimer = setTimeout(() => filterWorkoutHistory(query), 150);
+}
+
 function filterWorkoutHistory(query) {
   const q = (query || "").toLowerCase().trim();
   const today = new Date().toISOString().slice(0, 10);
