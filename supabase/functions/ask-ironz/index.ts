@@ -134,6 +134,13 @@ Deno.serve(async (req) => {
       const result = await anthropicResponse.json();
       const remaining = MAX_REQUESTS_PER_DAY - (currentCount + 1);
 
+      // Don't leak Anthropic's raw error body/status (e.g. "credit balance too
+      // low", "overloaded") to clients — surface a generic 503 instead.
+      if (!anthropicResponse.ok) {
+        console.error("Anthropic API error", anthropicResponse.status, JSON.stringify(result));
+        return jsonResponse({ error: "AI temporarily unavailable" }, 503);
+      }
+
       return jsonResponse({ ...result, _remaining: remaining }, anthropicResponse.status);
     }
 
@@ -318,6 +325,13 @@ ${selectedModules.map((m: any) => m.id).join(", ")}` : ""}`;
 
     const result = await anthropicResponse.json();
     const remaining = MAX_REQUESTS_PER_DAY - (currentCount + 1);
+
+    // Don't leak Anthropic's raw error body/status to clients — provider
+    // problems (credits, overload) are operational, surface a generic 503.
+    if (!anthropicResponse.ok) {
+      console.error("Anthropic API error", anthropicResponse.status, JSON.stringify(result));
+      return jsonResponse({ error: "AI temporarily unavailable" }, 503);
+    }
 
     // ── 9. Return response with metadata ─────────────────────────────────
     return jsonResponse({

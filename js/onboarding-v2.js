@@ -5273,10 +5273,19 @@
     }));
   }
   function _mapRacesToLegacyEvents(races) {
+    // Values MUST be RACE_CONFIGS keys (planner.js) or the planner generates
+    // an EMPTY plan with no error. The old map passed "5k"/"10k"/"century"/
+    // "ultra"/"crit"/"stage" straight through — none of which exist in
+    // RACE_CONFIGS — so those races silently got no training plan at all.
     const typeMap = {
       sprint: "sprint", olympic: "olympic", halfIronman: "halfIronman", ironman: "ironman",
-      "5k": "5k", "10k": "10k", halfMarathon: "halfMarathon", marathon: "marathon", ultra: "ultra",
-      century: "century", granFondo: "granFondo", crit: "crit", stage: "stage",
+      "5k": "fiveK", "10k": "tenK", halfMarathon: "halfMarathon", marathon: "marathon",
+      // No dedicated configs exist for these yet — map to the closest
+      // existing periodization structure so the athlete gets a real plan.
+      ultra: "marathon",       // long-distance running block
+      crit: "granFondo",       // road cycling block
+      stage: "granFondo",      // road cycling block
+      century: "centuryRide", granFondo: "granFondo",
       hyrox: "hyrox", custom: "other",
     };
     return (races || []).filter(r => r && r.date).map(r => ({

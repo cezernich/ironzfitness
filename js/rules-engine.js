@@ -162,7 +162,12 @@ function getIntervalSessionGuidance(profile, classification) {
 // ── Plan Structure ──────────────────────────────────────────────────────────
 
 function determinePlanStructure(classification, modules) {
-  const days = parseInt(classification.trainingFrequency) || 3;
+  // Prefer the exact user selection. trainingFrequency is a BUCKET string
+  // ('2-3' | '4-5' | '6-7') for module matching — parseInt on it returns the
+  // lower bound, which silently cost users a training day (5 → 4). Fall back
+  // to the bucket's UPPER bound if the raw value is somehow missing.
+  const bucketUpper = { '2-3': 3, '4-5': 5, '6-7': 7 }[classification.trainingFrequency];
+  const days = classification.trainingFrequencyDays || bucketUpper || 3;
   const effectiveDays = Math.min(Math.max(days, 2), 7);
   let splitType, splitRationale;
 
@@ -266,7 +271,9 @@ function buildWeeklyTemplate(structure, classification, modules) {
       template[day] = {
         session_type: sType.type,
         purpose: sType.purpose,
-        duration: (parseInt(classification.sessionDuration) || 45) + 'min'
+        // sessionDuration is a bucket string ('45-60') — parseInt takes the
+        // lower bound. Prefer the raw minutes captured at classification.
+        duration: (classification.sessionDurationMin || parseInt(classification.sessionDuration) || 45) + 'min'
       };
       sessionIdx++;
     } else {
@@ -371,7 +378,9 @@ function buildEnduranceTemplate(structure, classification, modules) {
       ? { session_type: isCycling ? 'sweet_spot_intervals' : 'interval_run', purpose: 'VO2max / speed development', zone: 'Z4-Z5', duration: '45min' }
       : { session_type: 'rest', purpose: 'Recovery' };
     template['wednesday'] = { session_type: isCycling ? 'tempo_ride' : 'tempo_run', purpose: 'Threshold development', zone: 'Z3-Z4', duration: '40-50min' };
-    template['thursday'] = td >= 5
+    // td >= 4 (not 5): this branch only runs for 4+ days, and without
+    // Thursday a 4-day selection produced just 3 sessions (Mon/Wed/Sat).
+    template['thursday'] = td >= 4
       ? { session_type: isCycling ? 'endurance_ride' : 'easy_run', purpose: 'Recovery/aerobic maintenance', zone: 'Z1-Z2', duration: '30min' }
       : { session_type: 'rest', purpose: 'Recovery' };
     template['friday'] = td >= 6
@@ -497,9 +506,13 @@ function buildHybridTemplate(structure, classification, modules) {
       template['saturday'] = { session_type: 'brick', purpose: 'Brick — bike-to-run transition practice', duration: '90-120min' };
       template['sunday'] = { session_type: 'rest', purpose: 'Full recovery day' };
     } else {
-      // Fewer days: compress
+      // Fewer days: compress. Tuesday unlocks at 5 days — it was hardcoded
+      // rest, so a 5-day selection only ever produced 4 sessions. Bike Z2
+      // keeps the tri bike-volume share (~50%) intact.
       template['monday'] = { session_type: 'cardio_swim', purpose: 'Swim — technique and endurance', duration: '45min' };
-      template['tuesday'] = { session_type: 'rest', purpose: 'Recovery' };
+      template['tuesday'] = td >= 5
+        ? { session_type: 'cardio_bike', purpose: 'Bike — endurance (Zone 2)', zone: 'Z2', duration: '60min' }
+        : { session_type: 'rest', purpose: 'Recovery' };
       template['wednesday'] = { session_type: 'cardio_bike', purpose: 'Bike — quality session', zone: 'Z3', duration: '60min' };
       template['thursday'] = td >= 4 ? { session_type: 'cardio_run', purpose: 'Run — easy aerobic', zone: 'Z2', duration: '40min' } : { session_type: 'rest', purpose: 'Recovery' };
       template['friday'] = { session_type: 'rest', purpose: 'Recovery' };
@@ -521,7 +534,9 @@ function buildHybridTemplate(structure, classification, modules) {
       template['tuesday'] = { session_type: 'cardio_run', purpose: 'Cardio — tempo or intervals', zone: 'Z3', duration: '35min' };
       template['wednesday'] = { session_type: 'lower', purpose: 'Lower body strength', duration: '45min' };
       template['thursday'] = td >= 5 ? { session_type: 'cardio_run', purpose: 'Easy run — aerobic base', zone: 'Z2', duration: '30min' } : { session_type: 'rest', purpose: 'Recovery' };
-      template['friday'] = td >= 5 ? { session_type: 'full_body', purpose: 'Full-body strength or HIIT', duration: '40min' } : { session_type: 'rest', purpose: 'Recovery' };
+      // td >= 4 (not 5): this branch runs for 4+ days, and with both Thu and
+      // Fri gated at 5 a 4-day selection only produced 3 sessions.
+      template['friday'] = td >= 4 ? { session_type: 'full_body', purpose: 'Full-body strength or HIIT', duration: '40min' } : { session_type: 'rest', purpose: 'Recovery' };
       template['saturday'] = td >= 6 ? { session_type: 'long_run', purpose: 'Long endurance session', zone: 'Z2', duration: '60-90min' } : { session_type: 'rest', purpose: 'Recovery' };
       template['sunday'] = { session_type: 'rest', purpose: 'Full recovery day' };
     }
@@ -678,10 +693,17 @@ function populateExercises(weeklyTemplate, classification, modules, profile) {
   for (const [day, session] of Object.entries(populated)) {
     if (session.session_type === 'rest' || session.session_type === 'mobility') continue;
 
-    // Skip cardio sessions — they don't need exercise selection from the library
+    // Skip cardio sessions — they don't need exercise selection from the library.
+    // The explicit list is backed by a pattern check so any future cardio type
+    // (the old list missed strides_run and hill_repeats, which therefore got
+    // ~5 full-body strength exercises attached to an easy run) can't silently
+    // fall through to strength-exercise population.
+    const _st = session.session_type;
     if (['cardio_run', 'cardio_bike', 'cardio_swim', 'brick',
          'easy_run', 'tempo_run', 'interval_run', 'long_run',
-         'endurance_ride', 'sweet_spot_intervals', 'tempo_ride', 'long_ride'].includes(session.session_type)) {
+         'strides_run', 'hill_repeats',
+         'endurance_ride', 'sweet_spot_intervals', 'tempo_ride', 'long_ride'].includes(_st)
+        || /(_run|_ride|_bike|_swim)$|^cardio_/.test(_st)) {
       continue;
     }
 

@@ -542,6 +542,16 @@ const WEEKLY_PATTERNS = {
         5: { discipline: "run", load: "easy" },
         6: { discipline: "run", load: "long" },
       },
+      // Peak was missing for every level — computePhasesFromRatios always
+      // emits >=1 Peak week for halfMarathon, so those weeks generated
+      // completely EMPTY. Per Philosophy §6.2 HM override: tempo primary
+      // key + long run with HM-pace segments.
+      Peak: {
+        1: { discipline: "run", load: "easy" },
+        3: { discipline: "run", load: "moderate" },
+        5: { discipline: "run", load: "easy" },
+        6: { discipline: "run", load: "long" },
+      },
       Taper: {
         1: { discipline: "run", load: "easy" },
         4: { discipline: "run", load: "easy" },
@@ -554,6 +564,12 @@ const WEEKLY_PATTERNS = {
         6: { discipline: "run", load: "long" },
       },
       Build: {
+        1: { discipline: "run", load: "easy" },
+        3: { discipline: "run", load: "hard" },
+        5: { discipline: "run", load: "moderate" },
+        6: { discipline: "run", load: "long" },
+      },
+      Peak: {
         1: { discipline: "run", load: "easy" },
         3: { discipline: "run", load: "hard" },
         5: { discipline: "run", load: "moderate" },
@@ -574,6 +590,13 @@ const WEEKLY_PATTERNS = {
       },
       Build: {
         1: { discipline: "run", load: "moderate" },
+        3: { discipline: "run", load: "hard" },
+        5: { discipline: "run", load: "moderate" },
+        6: { discipline: "run", load: "long" },
+      },
+      Peak: {
+        1: { discipline: "run", load: "moderate" },
+        2: { discipline: "run", load: "easy" },  // buffer between Mon moderate and Wed hard
         3: { discipline: "run", load: "hard" },
         5: { discipline: "run", load: "moderate" },
         6: { discipline: "run", load: "long" },
@@ -2173,10 +2196,15 @@ function _regeneratePlanForRace(race) {
   const newEntries = generateTrainingPlan(race) || [];
   if (!newEntries.length) {
     // generateTrainingPlan returned nothing — usually because the race
-    // object is missing a required field (type, date). Warn so the empty
-    // calendar isn't silent, but still persist the filter so stale entries
-    // for this race don't linger.
+    // object is missing a required field (type, date) or its type isn't a
+    // RACE_CONFIGS key. Warn AND tell the user — an empty calendar with no
+    // explanation reads as "the app is broken".
     console.warn("[IronZ] _regeneratePlanForRace produced no entries for race", race && race.id, race && race.type);
+    try {
+      const msg = `Couldn't generate a training plan for "${(race && race.name) || "this race"}" — the race type isn't supported yet. Try editing the race and picking a similar distance.`;
+      if (typeof window !== "undefined" && typeof window.showToast === "function") window.showToast(msg);
+      else if (typeof window !== "undefined" && typeof window.alert === "function") window.alert(msg);
+    } catch {}
   }
 
   // Determine the athlete's level once so both the distribution
@@ -4379,7 +4407,17 @@ function _generateSingleRacePlan(race) {
     }
 
     const phaseName = currentPhase ? currentPhase.name : "Taper";
-    const phasePattern = patterns[phaseName] || {};
+    // Defensive fallback: if a race type's WEEKLY_PATTERNS is missing a key
+    // for this phase, fall back Peak→Build→Base rather than generating a
+    // completely EMPTY week (this is exactly what blanked halfMarathon Peak
+    // weeks before Peak keys were added).
+    let phasePattern = patterns[phaseName];
+    if (!phasePattern || Object.keys(phasePattern).length === 0) {
+      phasePattern = patterns["Build"] || patterns["Base"] || {};
+      if (Object.keys(phasePattern).length > 0) {
+        console.warn(`[IronZ] WEEKLY_PATTERNS missing "${phaseName}" for this race type — falling back to ${patterns["Build"] ? "Build" : "Base"} pattern.`);
+      }
+    }
     // phasePattern[dow] is either a legacy single {discipline, load} or
     // (from buildPatternsFromPreferences) an array of sessions so two-a-day
     // slots (e.g. mon=[swim, strength]) can both make it into the plan.
@@ -6383,7 +6421,10 @@ function renderTrainingBlocksSection() {
   // Only show training blocks for the A race — one periodization cycle at a time
   const aRace = blockRaces.find(e => (e.priority || "A").toUpperCase() === "A");
   const bRaces = blockRaces.filter(e => (e.priority || "A").toUpperCase() === "B");
-  const race = aRace || racesWithPlans[0];
+  // No A race (e.g. all upcoming races are B priority): fall back to the
+  // soonest block race so the card still renders. `racesWithPlans` was an
+  // undefined variable here — it threw and killed every render chain.
+  const race = aRace || blockRaces[0];
 
   let html = "";
   {

@@ -746,7 +746,7 @@ The tables above say *how many* sessions of each type per week. This section say
 
 **Hard constraints (enforced in every placement path):**
 
-1. **No consecutive hard days** for beginner/intermediate. "Hard" = long run, long ride, brick, or any Z4+ intensity session. (§4.3)
+1. **No consecutive hard days** for beginner/intermediate. "Hard" = any Z4+ intensity session (threshold, intervals, VO2max, race-pace, tests) — the §4.3 definition. Long Z2 runs/rides and Z2–Z3 bricks do NOT trigger this rule; the classic weekend pairing (Sat long ride → Sun quality run) is a deliberate template feature, not a violation. (§4.3)
 2. **No same-discipline on adjacent days** unless the session count exceeds what 7 days can fit with spacing (then doubling up on a single day is preferred over adjacency).
 3. **Brick is self-contained.** A brick session *is* a bike + run combo. Never place a standalone run or standalone bike on the same day as a brick — it creates redundant volume. The brick replaces whichever of bike/run would otherwise land on that day.
 4. **Minimum 1 recovery day per week.** Beginners get full rest; intermediate/advanced get active-recovery (Z1 easy spin / yoga / mobility) per Core Principle #4.

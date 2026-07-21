@@ -122,6 +122,17 @@ Deno.serve(async (req) => {
     const result = await anthropicResponse.json();
     const remaining = MAX_REQUESTS_PER_DAY - (currentCount + 1);
 
+    // Never forward Anthropic's raw error body/status to clients — provider
+    // problems like "credit balance too low" or "overloaded" are operational
+    // issues on our side, not something the end user should see or act on.
+    if (!anthropicResponse.ok) {
+      console.error("Anthropic API error", anthropicResponse.status, JSON.stringify(result));
+      return new Response(JSON.stringify({ error: "AI temporarily unavailable" }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({ ...result, _remaining: remaining }), {
       status: anthropicResponse.status,
       headers: {

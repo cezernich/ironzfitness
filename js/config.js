@@ -53,6 +53,24 @@ async function _getSessionWithTimeout(ms) {
   ]);
 }
 
+// Map raw Anthropic/API errors to user-safe copy. Provider errors like
+// "Your credit balance is too low..." or "Overloaded" are operational
+// problems on our end — never show billing/account internals to the user.
+function friendlyAIError(raw) {
+  const msg = (raw || "").toString();
+  const low = msg.toLowerCase();
+  // Billing / credits / quota — our Anthropic account, not the user's problem
+  if (/credit balance|billing|quota|insufficient|payment|plans & billing/.test(low)) {
+    return "Nutrition analysis is temporarily unavailable. Please try again later.";
+  }
+  // Provider capacity
+  if (/overloaded|capacity|503|try again/.test(low)) {
+    return "The AI is busy right now — please try again in a moment.";
+  }
+  // Fall back to the original message only if it looks user-safe
+  return msg || "AI request failed";
+}
+
 async function callAI({ messages, model, max_tokens, system }) {
   if (!window.supabaseClient) {
     throw new Error("Supabase not initialized");
@@ -137,12 +155,12 @@ async function callAI({ messages, model, max_tokens, system }) {
     if (response.status === 401) {
       throw new Error(data.debug || data.error || "Session expired. Please sign in again.");
     }
-    throw new Error(data.error?.message || data.error || data.message || "AI request failed");
+    throw new Error(friendlyAIError(data.error?.message || data.error || data.message));
   }
 
   // If the Anthropic API itself returned an error
   if (data.error) {
-    throw new Error(data.error.message || "AI service error");
+    throw new Error(friendlyAIError(data.error.message || "AI service error"));
   }
 
   return data;
@@ -213,7 +231,7 @@ async function callAskIronZ({ question, profile, context }) {
     if (response.status === 401) {
       throw new Error("Session expired. Please sign in again.");
     }
-    throw new Error(data.error || data.message || "AI request failed");
+    throw new Error(friendlyAIError(data.error || data.message));
   }
 
   return data;

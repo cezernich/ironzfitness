@@ -15,9 +15,16 @@
 //     athlete can reorder if they want).
 //   - Min rest days per week: ≥ 1
 //
-// "Hard" day = discipline session with load ∈ {hard, long, race, test}
-//             — these include intervals, tempo, threshold, long run/ride,
-//               threshold tests, brick race simulations, race day itself.
+// "Hard" day = discipline session with load ∈ {hard, race, test}
+//             — i.e. Z4+ intensity work: intervals, threshold, VO2max,
+//               race-pace, threshold tests, race day itself.
+//             Long runs/rides are Z2 VOLUME sessions and per §4.3 do NOT
+//             count toward the intensity cap or the consecutive-hard rule
+//             ("Easy runs, Z2 rides, and technique swims do not count").
+//             Counting `long` here used to let the weekend long sessions
+//             fill the entire cap, silently demoting every actual quality
+//             session in the week — the templates deliberately place
+//             quality next to long (e.g. Sat long ride → Sun hard run).
 //
 // Fixes applied in this order per week (least destructive first):
 //   1. Demote adjacent-hard conflicts: the LATER session's load becomes
@@ -34,7 +41,7 @@
 (function () {
   "use strict";
 
-  const HARD_LOADS = new Set(["hard", "long", "race", "test"]);
+  const HARD_LOADS = new Set(["hard", "race", "test"]);
   const RACE_WEEK_PHASES = new Set(["Race", "Race Week"]);
 
   const INTENSITY_CAPS = {

@@ -69,6 +69,18 @@ function classifyUser(profile) {
     primaryGoal:        mapGoal(profile.goal),
     trainingFrequency:  classifyFrequency(profile.daysPerWeek || profile.availableDaysPerWeek),
     sessionDuration:    classifyDuration(profile.sessionLength),
+    // Raw numeric values alongside the buckets. The buckets exist for
+    // philosophy-module matching, but downstream plan structure must use
+    // the EXACT user selection — parseInt('4-5') silently returned 4, so a
+    // user who chose 5 days/week got a 4-day plan.
+    trainingFrequencyDays: (() => {
+      const d = parseInt(profile.daysPerWeek || profile.availableDaysPerWeek);
+      return isNaN(d) ? null : Math.min(Math.max(d, 1), 7);
+    })(),
+    sessionDurationMin: (() => {
+      const m = parseInt(profile.sessionLength);
+      return isNaN(m) ? null : Math.min(Math.max(m, 10), 240);
+    })(),
     equipmentAccess:    classifyEquipment(profile.equipment),
     injuryHistory:      classifyInjury(profile.injuries),
     recoveryState:      deriveRecoveryState(profile),

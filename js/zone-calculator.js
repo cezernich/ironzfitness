@@ -341,7 +341,12 @@ function recalculateAllZones(userProfile) {
     try { profile = JSON.parse(localStorage.getItem('profile') || '{}'); } catch { profile = {}; }
   }
 
-  const bundle = {};
+  // MERGE, don't replace: start from the existing cache so we never wipe
+  // sport zones the user entered manually (Settings writes running/biking/
+  // swimming; survey writes running). A bare {} here silently destroyed those.
+  let bundle;
+  try { bundle = JSON.parse(localStorage.getItem('trainingZones') || '{}'); } catch { bundle = {}; }
+  if (!bundle || typeof bundle !== 'object') bundle = {};
 
   // HR — uses existing tiered logic
   const hr = calculateHRZones(profile);
@@ -356,25 +361,26 @@ function recalculateAllZones(userProfile) {
     };
   }
 
-  // Run paces from VDOT
+  // Run paces from VDOT — write under `running` (the key every reader uses;
+  // `run` was a dead key nothing consumed).
   const vdot = parseFloat(profile.vdot || profile.run_vdot);
   if (vdot) {
     const r = calculateRunZonesFromVDOT(vdot);
-    if (r) bundle.run = { ...r, calculatedAt: new Date().toISOString() };
+    if (r) bundle.running = { ...(bundle.running || {}), ...r, calculatedAt: new Date().toISOString() };
   }
 
-  // Bike power from FTP
+  // Bike power from FTP — write under `biking`.
   const ftp = parseFloat(profile.ftp_watts || profile.ftp);
   if (ftp) {
     const b = calculateBikeZonesFromFTP(ftp);
-    if (b) bundle.bike = { ...b, calculatedAt: new Date().toISOString() };
+    if (b) bundle.biking = { ...(bundle.biking || {}), ...b, calculatedAt: new Date().toISOString() };
   }
 
-  // Swim from CSS
+  // Swim from CSS — write under `swimming`.
   const css = parseFloat(profile.css_sec_per_100m || profile.css);
   if (css) {
     const s = calculateSwimZonesFromCSS(css);
-    if (s) bundle.swim = { ...s, calculatedAt: new Date().toISOString() };
+    if (s) bundle.swimming = { ...(bundle.swimming || {}), ...s, calculatedAt: new Date().toISOString() };
   }
 
   try {
@@ -388,10 +394,13 @@ function recalculateAllZones(userProfile) {
 
 // ═════════════════════════════════════════════════════════════════════════════
 // PACE RANGE TABLE — used by getZonesForUser() for the structured zone shape.
-// Calibrated against PHILOSOPHY_UPDATE_2026-04-09_run_session_types.md golden
-// test cases at VDOT 53 (E, M, T, I, R all match the spec's pace examples).
 // Values are [low_sec_per_mi, high_sec_per_mi] for each Daniels intensity.
 // Daniels' actual table is sparse; we interpolate linearly between anchors.
+// INVARIANT: every column must be strictly monotonic decreasing as VDOT rises —
+// a fitter athlete must never be prescribed a slower pace. The old VDOT-53
+// anchor violated this (its paces were faster than the 55 and 60 rows, so an
+// athlete improving 53→55 was told to slow down); it has been removed so the
+// 50↔55 interpolation fills VDOT 53 monotonically.
 // ═════════════════════════════════════════════════════════════════════════════
 
 const VDOT_PACE_RANGE_TABLE = {
@@ -400,7 +409,6 @@ const VDOT_PACE_RANGE_TABLE = {
   40: { E: [612, 650], M: [535, 555], T: [500, 520], I: [450, 465], R: [415, 432] },
   45: { E: [571, 605], M: [495, 515], T: [462, 480], I: [415, 430], R: [380, 397] },
   50: { E: [530, 565], M: [460, 480], T: [430, 446], I: [385, 400], R: [345, 362] },
-  53: { E: [471, 512], M: [420, 430], T: [396, 411], I: [362, 372], R: [305, 322] },
   55: { E: [490, 525], M: [435, 450], T: [410, 425], I: [368, 380], R: [330, 345] },
   60: { E: [460, 495], M: [410, 425], T: [385, 400], I: [345, 358], R: [305, 320] },
   65: { E: [432, 466], M: [385, 400], T: [362, 378], I: [325, 338], R: [285, 300] },
@@ -486,6 +494,82 @@ function _packRepetitionPace(rangeSecPerMi) {
  * Returns null if the user has no VDOT — the generator must then fall back
  * to effort-based descriptions.
  */
+// Parse a "m:ss" / "h:mm:ss" (or bare-seconds) string to total seconds.
+function _paceStrToSeconds(str) {
+  if (typeof str === 'number') return str > 0 ? str : null;
+  if (typeof str !== 'string') return null;
+  const parts = str.trim().split(':').map(Number);
+  if (!parts.length || parts.some(n => isNaN(n))) return null;
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  if (parts.length === 1) return parts[0]; // bare number = seconds
+  return null;
+}
+
+// 5K finish time (sec) → VDOT. Self-contained copy of the Daniels lookup so
+// zone derivation never depends on the test-result module being loaded.
+const _VDOT_5K_TABLE = [
+  [1140, 85], [1200, 80], [1260, 76], [1320, 72], [1380, 68], [1440, 65],
+  [1500, 62], [1560, 59], [1620, 56], [1680, 54], [1740, 52], [1800, 50],
+  [1860, 48], [1920, 46], [1980, 45], [2040, 43], [2100, 42], [2160, 40],
+  [2220, 39], [2280, 38], [2340, 37], [2400, 36], [2460, 34], [2520, 33],
+  [2700, 30], [2880, 28]
+];
+function _vdotFrom5kSeconds(t) {
+  t = Number(t);
+  if (!t || t <= 0) return null;
+  const T = _VDOT_5K_TABLE;
+  if (t <= T[0][0]) return T[0][1];
+  if (t >= T[T.length - 1][0]) return T[T.length - 1][1];
+  for (let i = 0; i < T.length - 1; i++) {
+    const [t1, v1] = T[i], [t2, v2] = T[i + 1];
+    if (t >= t1 && t <= t2) { const f = (t - t1) / (t2 - t1); return Math.round((v1 + (v2 - v1) * f) * 10) / 10; }
+  }
+  return null;
+}
+
+// Distances (m) matching the survey's ZONE_DISTANCES dropdown (app.js:1716).
+const _ZONE_DIST_METERS = { "Mile": 1609.344, "5K": 5000, "10K": 10000, "Half Marathon": 21097.5, "Marathon": 42195 };
+
+// Derive a VDOT from whatever the user saved under trainingZones.running:
+//   - survey race result   { dist, h, m, s }        → Riegel-normalise to 5K → VDOT
+//   - settings paces        { easy, tempo, vo2max }  → match tempo/easy pace to the table
+// Returns a number or null. This is the bridge that lets Settings/survey users
+// get real pace targets — previously getZonesForUser only read profile.vdot,
+// which nothing but the fitness-test flow ever writes.
+function deriveVdotFromStoredRunZones(rz) {
+  if (!rz || typeof rz !== 'object') return null;
+
+  // Race-result shape (survey)
+  if (rz.dist && (rz.h || rz.m || rz.s)) {
+    const meters = _ZONE_DIST_METERS[rz.dist];
+    const secs = (Number(rz.h) || 0) * 3600 + (Number(rz.m) || 0) * 60 + (Number(rz.s) || 0);
+    if (meters && secs > 0) {
+      // Riegel: T2 = T1 * (D2/D1)^1.06 → equivalent 5K time, then table lookup.
+      const t5k = secs * Math.pow(5000 / meters, 1.06);
+      const v = _vdotFrom5kSeconds(t5k);
+      if (v) return v;
+    }
+  }
+
+  // Settings-paces shape: invert the T (tempo) or E (easy) sec/mi column.
+  const tempoSec = _paceStrToSeconds(rz.tempo);
+  const easySec = _paceStrToSeconds(rz.easy);
+  const col = tempoSec ? 'T' : (easySec ? 'E' : null);
+  const target = tempoSec || easySec;
+  if (col && target) {
+    let best = null, bestErr = Infinity;
+    for (let v = 30; v <= 85; v++) {
+      const row = _interpolateRow(v);
+      const mid = (row[col][0] + row[col][1]) / 2;
+      const err = Math.abs(mid - target);
+      if (err < bestErr) { bestErr = err; best = v; }
+    }
+    if (best) return best;
+  }
+  return null;
+}
+
 function getZonesForUser(userId) {
   let profile = {};
   try {
@@ -494,7 +578,27 @@ function getZonesForUser(userId) {
   // userId arg reserved for future multi-user support; today we always use the
   // active local profile.
 
-  const vdotRaw = parseFloat(profile.vdot || profile.run_vdot);
+  let vdotRaw = parseFloat(profile.vdot || profile.run_vdot);
+  if (!vdotRaw || vdotRaw < 25) {
+    // Fall back to zones the user entered via Settings or the survey, and
+    // persist the derived VDOT so every other surface (all of which read
+    // profile.vdot) picks it up too — one derivation, app-wide effect.
+    try {
+      const tz = JSON.parse(localStorage.getItem('trainingZones') || '{}');
+      const derived = deriveVdotFromStoredRunZones(tz.running);
+      if (derived && derived >= 25) {
+        vdotRaw = derived;
+        try {
+          const p = JSON.parse(localStorage.getItem('profile') || '{}');
+          if (!p.vdot && !p.run_vdot) {
+            p.vdot = derived; p.run_vdot = derived; p.vdotSource = 'derived_from_zones';
+            localStorage.setItem('profile', JSON.stringify(p));
+            if (typeof DB !== 'undefined' && DB.syncKey) DB.syncKey('profile');
+          }
+        } catch {}
+      }
+    } catch {}
+  }
   if (!vdotRaw || vdotRaw < 25) {
     // Caller is responsible for fallback handling.
     return null;
