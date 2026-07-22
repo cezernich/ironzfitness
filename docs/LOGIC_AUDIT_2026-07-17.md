@@ -1,5 +1,27 @@
 # Backend Logic Audit — 2026-07-17
 
+> **Fix status (updated 2026-07-21, branch `fix/audit-p0`):**
+> **All 12 P0s fixed** — P0-1 zone clobber (merge + correct keys), P0-2
+> HARD_LOADS (philosophy doc aligned), P0-3 HM Peak patterns + generator
+> fallback, P0-4 discipline-aware trim + aligner constraints (verified by
+> extracted-function test suite), P0-5/6 custom-plan resize/clobber,
+> P0-7 parseInt buckets + template undercounts, P0-8 hiit template +
+> circuit volumes, P0-9 full_body preserved + cap exemptions, P0-10
+> racesWithPlans crash, P0-11 race-type mapping + user-visible error,
+> P0-12 VDOT from Settings/survey + non-monotonic row removed.
+> **P1 fixed:** zones.cycling dead key; run experience-level chain;
+> compete goal alias; philosophy-button race types; nutrition load
+> canonicalization (Hyrox/strides); long-day swap-not-delete; race-day
+> boundary; sub-minute bike intervals; import FTP/CSS lookups;
+> assembler sweet-spot/swim combo-zone targets; strides/hills strength
+> attachment; displaced-session priority swap.
+> **Remaining (unfixed):** swim 4-scheme zone unification; two VDOT
+> table reconciliation (point vs range); planner two-clock drift; UTC+
+> date shift; card-vs-phases bike/swim divergence; race-pace bike % by
+> distance; tempo dropdown mapping; equipment vocabulary unification
+> (M1-M3, M6-M8 strength); Ironman long-session ceiling; session-type
+> string unification; P2 dead-code cleanup.
+
 Full-repo audit of workout/plan generation logic across all sports (swim, bike, run,
 strength, hybrid) and the plan pipeline. Six parallel review passes covering ~17.5k
 lines: sport generators, variant libraries, session assembler, distribution aligner,
