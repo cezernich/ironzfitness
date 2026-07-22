@@ -4545,11 +4545,9 @@ function _generateSingleRacePlan(race) {
     const _patternSessionList = Array.isArray(_rawPatternSession)
       ? _rawPatternSession
       : (_rawPatternSession ? [_rawPatternSession] : []);
-    // `session` kept for the race-week / threshold-week overrides below,
-    // which were written against the single-session legacy shape and only
-    // need to know whether *any* session was scheduled. The multi-session
-    // branch lower down iterates _patternSessionList directly.
-    const session = _patternSessionList[0] || null;
+    // (The race-week / threshold-week overrides below are date-driven and
+    // don't consult the pattern; the multi-session branch iterates
+    // _patternSessionList directly.)
 
     // ── Race-week override (Philosophy §6.1 / §4.5 / §4.6) ───────────────────
     // The last 6 days before the race get a dedicated pattern so every
@@ -4624,7 +4622,17 @@ function _generateSingleRacePlan(race) {
         thresholdNote: _twOverride.note,
       });
     } else if (_patternSessionList.length && dateStr >= todayStr) {
-      const LOAD_NAMES = { easy: "Easy", strides: "Strides", moderate: "Tempo", hard: "Threshold", long: "Long", recovery: "Recovery" };
+      const LOAD_NAMES = {
+        easy: "Easy", strides: "Strides", moderate: "Tempo", hard: "Threshold", long: "Long", recovery: "Recovery",
+        // Hyrox pattern loads — without these the session name rendered the
+        // raw key ("Easy_run Hyrox", "Base_heavy HyroxStrength").
+        easy_run: "Easy Run", recovery_run: "Recovery Run", interval_run: "Interval Run",
+        station_circuit: "Station Circuit", station_practice: "Station Practice",
+        run_station_combo: "Run + Station Combo", base_heavy: "Heavy Base",
+        build_endurance: "Endurance Builder", peak_simulation: "Peak Simulation",
+        race_simulation: "Race Simulation", taper_maintenance: "Taper Maintenance",
+        short_opener_combo: "Short Opener Combo",
+      };
       const wNum = _weekNumberFor(cursor);
       weekNumber = wNum;
       const _phaseWeeks = (currentPhase && currentPhase.weeks) || 1;
@@ -4960,8 +4968,14 @@ function _inferDayLoadFromAllSources(dateStr) {
       // Hard: explicit quality-session names OR the hiit type. HIIT gets
       // the hard bucket even when the session has no descriptive name —
       // it's always a high-intensity effort by definition.
-      else if (type === "hiit" || /tempo|threshold|interval|hard|race.?pace|vo2|hiit/i.test(name)) {
+      else if (type === "hiit" || /threshold|interval|hard|race.?pace|vo2|hiit/i.test(name)) {
         load = "hard";
+      }
+      // Tempo = moderate — matches the planner's own LOAD_NAMES taxonomy
+      // (moderate is labeled "Tempo", hard is "Threshold") and custom-plan's
+      // classifier. Counting tempo as hard inflated fueling a tier.
+      else if (/tempo|sweet.?spot/i.test(name)) {
+        load = "moderate";
       }
       // Brick under 90 min — not long-fueled but still hard-effort cardio.
       else if (type === "brick") {
@@ -5152,9 +5166,9 @@ function getBaseNutritionTarget(dateStr) {
       : 10 * weightKg + 6.25 * heightCm - 5 * age + 5; // male / default
 
     const multipliers = { rest: 1.3, easy: 1.55, moderate: 1.65, hard: 1.8, long: 1.9, race: 2.1 };
-    // Apply body-comp goal multiplier on top of TDEE. Bulkers get ~+12%
-    // surplus, cutters ~-18% deficit. Maintenance / general fitness
-    // passes through at 1.0.
+    // Apply body-comp goal multiplier on top of TDEE, per
+    // _BODY_COMP_PROFILES: build +8% / bulk +15% surplus, lose −10% /
+    // cut −20% deficit. Maintenance / general fitness passes through at 1.0.
     const tdee = bmr * (multipliers[load] || 1.3);
     const calories = Math.round(tdee * goalAdj.calorieMult / 50) * 50;
 

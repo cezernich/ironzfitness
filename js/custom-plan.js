@@ -2073,16 +2073,27 @@ function saveCustomPlan() {
         // stamped with Sunday dates).
         const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
+        // Canonicalize the type at materialization: the manual picker maps
+        // strength→weightlifting (calendar's strength filter, conflict
+        // detection, and GYM_STRENGTH_TYPES all key off "weightlifting"),
+        // but the AI path stored raw "strength" — AI-generated sessions
+        // were invisible to every one of those surfaces.
+        const _rawType = entry.data?.type || "general";
+        const _canonType = _rawType === "strength" ? "weightlifting" : _rawType;
         const scheduleEntry = {
-          id: `custom-${dateStr}-${entry.data?.type || "general"}-${si}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          id: `custom-${dateStr}-${_canonType}-${si}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           date: dateStr,
-          type: entry.data?.type || "general",
+          type: _canonType,
           sessionName: entry.data?.sessionName || entry.data?.title || "Session",
           source: "custom",
           planId: planId,
           level: "intermediate",
           ...(planName ? { planName } : {}),
         };
+        // Carry duration so nutrition's load inference can see it — without
+        // it a 2-hour custom long ride was fueled as an easy day.
+        const _dur = parseFloat(entry.data?.duration || entry.data?.duration_min);
+        if (_dur > 0) scheduleEntry.duration = _dur;
 
         // Carry over exercises or intervals. For exercises, copy supersetGroup
         // to supersetId so buildExerciseTableHTML's existing superset rendering
@@ -2110,15 +2121,21 @@ function saveCustomPlan() {
         if (entry.data?.isHyrox)  scheduleEntry.isHyrox  = true;
         if (entry.data?.sessionType) scheduleEntry.sessionType = entry.data.sessionType;
 
-        // For cardio types without intervals, add discipline/load for rich rendering
+        // Add discipline/load for cardio types — for AI sessions too, so
+        // nutrition's load ranking sees them (an aiSession with no load
+        // used to fall to the type-default "easy" regardless of content).
+        // Load taxonomy matches the planner's LOAD_NAMES convention:
+        // tempo = moderate, threshold/intervals/race-pace = hard.
         const _discMap = { running: "run", cycling: "bike", swimming: "swim" };
-        if (_discMap[scheduleEntry.type] && !scheduleEntry.aiSession) {
+        if (_discMap[scheduleEntry.type]) {
           scheduleEntry.discipline = _discMap[scheduleEntry.type];
-          const nm = (scheduleEntry.sessionName + " " + (scheduleEntry.details || "")).toLowerCase();
-          if (/interval|speed|vo2|fartlek|repeat/.test(nm)) scheduleEntry.load = "hard";
-          else if (/tempo|threshold|sweetspot|race.?pace/.test(nm)) scheduleEntry.load = "moderate";
-          else if (/long|endurance|distance/.test(nm)) scheduleEntry.load = "long";
-          else scheduleEntry.load = "easy";
+          if (!scheduleEntry.load) {
+            const nm = (scheduleEntry.sessionName + " " + (scheduleEntry.details || "")).toLowerCase();
+            if (/threshold|interval|speed|vo2|fartlek|repeat|race.?pace/.test(nm)) scheduleEntry.load = "hard";
+            else if (/tempo|sweetspot|sweet.?spot/.test(nm)) scheduleEntry.load = "moderate";
+            else if (/long|endurance|distance/.test(nm) || _dur >= 90) scheduleEntry.load = "long";
+            else scheduleEntry.load = "easy";
+          }
         }
 
         newEntries.push(scheduleEntry);

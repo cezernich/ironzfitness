@@ -39,6 +39,9 @@
       bike_endurance: [
         { id: "bike_endurance_steady", name: "Steady endurance", description: "Z2 continuous.", main_set: { type: "continuous", power_target_pct_ftp: [0.65, 0.75] } },
         { id: "bike_endurance_with_surges", name: "Endurance with surges", description: "Z2 with 6x1min Z4 surges scattered across the ride.", main_set: { type: "base_plus_surges", base_pct_ftp: [0.65, 0.75], surges: { count: 6, duration_sec: 60, power_target_pct_ftp: 1.05 } } },
+        // True Z1 recovery — "Recovery Spin" used to map to the Z2 steady
+        // variant, making it byte-identical to Zone 2 Endurance.
+        { id: "bike_recovery_spin", name: "Recovery spin", description: "Z1 easy flush ride. High cadence, minimal pressure on the pedals.", main_set: { type: "continuous", power_target_pct_ftp: [0.45, 0.55] } },
       ],
     },
   };

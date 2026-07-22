@@ -434,7 +434,9 @@
       const dist = subTpl.main_set.rep_distance_m;
       const midR = zones && zones.r_pace ? (zones.r_pace.sec_per_mi[0] + zones.r_pace.sec_per_mi[1]) / 2 : 305;
       const repTime = midR * dist / 1609.344;
-      const restTime = subTpl.main_set.rest_duration_sec || (subTpl.main_set.rest_distance_m ? 60 : 60);
+      // Distance-based rest ≈ walk time: ~90s per 400m walked, min 45s.
+      const restTime = subTpl.main_set.rest_duration_sec ||
+        (subTpl.main_set.rest_distance_m ? Math.max(45, Math.round(subTpl.main_set.rest_distance_m * 0.225)) : 60);
       if (durationOverrideMin != null) {
         const targetMainSec = (durationOverrideMin - wuMin - cdMin) * 60;
         const repSlot = repTime + restTime;
@@ -454,7 +456,7 @@
       repCount = count;
     } else if (subTpl.id === "strides_only") {
       let count = subTpl.main_set.rep_count;
-      // ~45s stride + ~45s walk back ≈ 1.5 min per stride
+      // ~25s stride + ~20s walk back ≈ 0.75 min per stride
       const perStrideMin = 0.75;
       if (durationOverrideMin != null) {
         const targetMainMin = durationOverrideMin - wuMin - cdMin;

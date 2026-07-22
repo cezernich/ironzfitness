@@ -267,12 +267,16 @@
     if (budgetMin <= 0) return null;
     const pace = _resolveCssPace(ms.pace_source, css);
     const paceLabel = ms.effort === "maximal" ? "max" : _paceLabel(pace);
+    // Size distance at the pace the set is actually SWUM at (e.g. CSS+12
+    // for endurance), not raw CSS — sizing at CSS made 60-min endurance
+    // swims come out ~8-12% longer than requested.
+    const sizingPace = pace || paceSecPer100m;
     if (ms.type === "continuous") {
-      const distM = _snap((budgetMin * 60 / paceSecPer100m) * 100, pool);
+      const distM = _snap((budgetMin * 60 / sizingPace) * 100, pool);
       return [_iv("Continuous", distM, "freestyle", paceLabel)];
     }
     if (ms.type === "continuous_with_tool") {
-      const totalM = (budgetMin * 60 / paceSecPer100m) * 100;
+      const totalM = (budgetMin * 60 / sizingPace) * 100;
       const half = _snap(totalM / 2, pool);
       return [
         _iv("With pull buoy", half, "freestyle", paceLabel),
@@ -285,7 +289,17 @@
       const rest = ms.rest_sec || 15;
       const repTimeSec = (dist / 100) * paceSecPer100m + rest;
       const fitReps = Math.max(1, Math.floor((budgetMin * 60) / repTimeSec));
-      return [_repeat(fitReps, [
+      // Cap against the variant's prescribed count: max-effort sets keep
+      // exactly the prescribed dose (an "all-out" 16×25 must not become
+      // ~40×25 because the user picked 60 min), other sets stretch at most
+      // 1.5× so the workout still resembles its title.
+      const prescribed = typeof ms.reps === "number" ? ms.reps : null;
+      let reps = fitReps;
+      if (prescribed) {
+        const cap = ms.effort === "maximal" ? prescribed : Math.round(prescribed * 1.5);
+        reps = Math.min(fitReps, cap);
+      }
+      return [_repeat(reps, [
         _iv("Main", dist, "freestyle", paceLabel),
         _rest(rest),
       ])];
@@ -384,14 +398,23 @@
     const totalDistance = _totalDistance(steps);
 
     // Legacy phases (kept for back-compat with importers / old consumers).
+    // Derived from the ACTUAL generated steps — the old version hardcoded
+    // "WU 400m easy + 4x50m build" / "CD 200m" regardless of which
+    // warmup/cooldown variant was generated, so legacy consumers showed a
+    // warmup that wasn't in `steps` and phase distances didn't sum to
+    // total_distance_m.
+    const _wuDist = _totalDistance(warmupSteps);
+    const _cdDist = _totalDistance(cooldownSteps);
     const legacyPhases = [
-      { phase: "warmup",   distance_m: _snap(400, pool) + _snap(50, pool) * 4,
-        target: "easy",    instruction: "WU 400m easy + 4x50m build." },
+      { phase: "warmup",   distance_m: _wuDist,
+        target: "easy",
+        instruction: M && M.prosify ? M.prosify(warmupSteps) : `WU ${_wuDist}m easy.` },
       { phase: "main_set", distance_m: _totalDistance(mainSteps),
         target: variant.name,
         instruction: M && M.prosify ? M.prosify(mainSteps) : variant.description || "" },
-      { phase: "cooldown", distance_m: _snap(200, pool),
-        target: "easy",    instruction: "CD 200m easy choice." },
+      { phase: "cooldown", distance_m: _cdDist,
+        target: "easy",
+        instruction: M && M.prosify ? M.prosify(cooldownSteps) : `CD ${_cdDist}m easy choice.` },
     ];
 
     return {

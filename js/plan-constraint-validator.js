@@ -41,6 +41,12 @@
 (function () {
   "use strict";
 
+  // Local-date serializer — toISOString() shifts local midnight to the
+  // previous day for UTC+ users, splitting weeks across wrong boundaries.
+  function _ymd(d) {
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
   const HARD_LOADS = new Set(["hard", "race", "test"]);
   const RACE_WEEK_PHASES = new Set(["Race", "Race Week"]);
 
@@ -80,7 +86,7 @@
     const day = d.getDay(); // 0=Sun..6=Sat
     const offset = day === 0 ? -6 : 1 - day;
     d.setDate(d.getDate() + offset);
-    return d.toISOString().slice(0, 10);
+    return _ymd(d);
   }
 
   function groupByWeek(plan) {

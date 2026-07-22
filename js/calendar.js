@@ -9494,7 +9494,9 @@ function _qeBuildCardioWorkout(opts) {
       const bikeTypeMap = {
         z2_endurance:  { sessionTypeId: "bike_endurance",            preferredVariant: "bike_endurance_steady" },
         long_ride:     { sessionTypeId: "bike_endurance",            preferredVariant: "bike_endurance_steady" },
-        recovery_spin: { sessionTypeId: "bike_endurance",            preferredVariant: "bike_endurance_steady" },
+        // Real Z1 variant — recovery used to alias to the Z2 steady ride,
+        // making three dropdown labels produce the identical workout.
+        recovery_spin: { sessionTypeId: "bike_endurance",            preferredVariant: "bike_recovery_spin" },
         tempo:         { sessionTypeId: "bike_intervals_sweet_spot", preferredVariant: null },
         sweet_spot:    { sessionTypeId: "bike_intervals_sweet_spot", preferredVariant: null },
         threshold:     { sessionTypeId: "bike_intervals_ftp",        preferredVariant: null },

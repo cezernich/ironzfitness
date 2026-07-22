@@ -54,8 +54,28 @@
     const warnings = [];
     if (!ftp) warnings.push("For accurate power targets, log an FTP test result.");
 
-    const wuMin = sessionTypeId === "bike_endurance" ? 5 : 15;
-    const cdMin = sessionTypeId === "bike_endurance" ? 5 : 10;
+    // Match the day-card builder's warmup/cooldown and rep-fitting exactly
+    // (calendar.js Add Session path). The generator used to ignore
+    // durationOverrideMin for interval types and use fixed 15/10-min WU/CD,
+    // so the live tracker / share sheet (phases consumers) showed a
+    // different workout than the card for the same selection.
+    const _ovr = opts.durationOverrideMin || null;
+    const wuMin = sessionTypeId === "bike_endurance" ? 5
+      : (_ovr ? Math.min(15, Math.max(5, Math.round(_ovr * 0.15))) : 15);
+    const cdMin = sessionTypeId === "bike_endurance" ? 5
+      : (_ovr ? Math.min(10, Math.max(3, Math.round(_ovr * 0.1))) : 10);
+    const _targetMainMin = _ovr ? Math.max(5, _ovr - wuMin - cdMin) : null;
+    // Rep count that best fills the main window without overshooting:
+    // N*rep + (N-1)*rest ≤ target. Sub-minute reps keep the prescribed
+    // count (intensity is calibrated for the prescribed dose), clamped to
+    // what fits.
+    const _fitReps = (repDurSec, restSec, prescribed) => {
+      if (!_targetMainMin) return prescribed;
+      const block = Math.max(1, repDurSec + restSec);
+      const fit = Math.max(1, Math.floor((_targetMainMin * 60 + restSec) / block));
+      if (repDurSec > 0 && repDurSec < 60) return Math.min(prescribed || fit, fit);
+      return fit;
+    };
 
     const ms = variant.main_set || {};
     const phases = [];
@@ -84,7 +104,7 @@
       mainMin = dur;
     } else if (ms.type === "alternation_block" || ms.type === "progression") {
       // FTP over-unders / VO2 progressions: rep_count uses .reps
-      const reps = _clampRepCount(ms.reps, exp);
+      const reps = _fitReps(ms.duration_sec || 0, ms.rest_sec || 180, _clampRepCount(ms.reps, exp));
       const repDur = ms.duration_sec || 0;
       const blocks = ms.blocks || [];
       let blockText;
@@ -106,7 +126,7 @@
       repCount = reps;
     } else {
       // Standard interval block: reps, duration_sec, power_target_pct_ftp, rest_sec
-      const reps = _clampRepCount(ms.reps, exp);
+      const reps = _fitReps(ms.duration_sec || 0, ms.rest_sec || 180, _clampRepCount(ms.reps, exp));
       const repDur = ms.duration_sec || 0;
       const restSec = ms.rest_sec || 180;
       const power = ftp

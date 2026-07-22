@@ -16,6 +16,12 @@
 (function () {
   "use strict";
 
+  // Local-date serializer — toISOString() shifts local midnight to the
+  // previous day for UTC+ users, splitting weeks across wrong boundaries.
+  function _ymd(d) {
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
   // ─── Hard-entry classifier ──────────────────────────────────────────────────
 
   const HARD_SESSION_TYPE_IDS = new Set([
@@ -40,14 +46,14 @@
   function _addDays(dateStr, n) {
     const d = new Date(dateStr + "T00:00:00");
     d.setDate(d.getDate() + n);
-    return d.toISOString().slice(0, 10);
+    return _ymd(d);
   }
   function _mondayOf(dateStr) {
     const d = new Date(dateStr + "T00:00:00");
     const dow = d.getDay();
     const offset = dow === 0 ? -6 : 1 - dow;
     d.setDate(d.getDate() + offset);
-    return d.toISOString().slice(0, 10);
+    return _ymd(d);
   }
 
   // ─── Individual rules ───────────────────────────────────────────────────────

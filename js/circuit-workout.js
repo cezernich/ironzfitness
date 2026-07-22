@@ -28,7 +28,10 @@
   "use strict";
 
   const STEP_KINDS = ["exercise", "cardio", "rest", "repeat"];
-  const GOALS = ["for_time", "amrap", "standard"];
+  // "emom" was missing even though the circuit builder emits it and
+  // estimateMinutes special-cases it — anything validating against this
+  // list would have rejected builder-produced EMOMs.
+  const GOALS = ["for_time", "amrap", "standard", "emom"];
 
   // ── Flatten ──────────────────────────────────────────────────────────────
   //
