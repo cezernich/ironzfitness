@@ -1220,6 +1220,10 @@
   function bikePowerTarget(classification, zones) {
     const ftp = classification.thresholds && classification.thresholds.ftp;
     if (!ftp) return null;
+    // Sweet spot straddles Z3/Z4 (['Z3','Z4'] metadata) — check the combo
+    // FIRST. The old Z4-first order prescribed 97% FTP (threshold) for
+    // sessions labeled "Sweet Spot — 88-94% FTP".
+    if (zones.includes('Z3') && zones.includes('Z4')) return `${Math.round(ftp * 0.90)}W (sweet spot)`;
     if (zones.includes('Z5')) return `${Math.round(ftp * 1.08)}W`;
     if (zones.includes('Z4')) return `${Math.round(ftp * 0.97)}W`;
     if (zones.includes('Z3')) return `${Math.round(ftp * 0.88)}W (sweet spot)`;
@@ -1229,6 +1233,11 @@
   function swimPaceTarget(classification, zones) {
     const css = classification.thresholds && classification.thresholds.css;
     if (!css) return null;
+    // Same combo-first principle: css_intervals carry ['Z3','Z4'] and swim
+    // AT CSS (not CSS−3); endurance carries ['Z2','Z3'] and swims easy
+    // (CSS+12 per the variant library, not threshold).
+    if (zones.includes('Z3') && zones.includes('Z4')) return `${Math.round(css)}s/100m (CSS)`;
+    if (zones.includes('Z2') && zones.includes('Z3')) return `${Math.round(css + 12)}s/100m`;
     if (zones.includes('Z4')) return `${Math.round(css - 3)}s/100m`;
     if (zones.includes('Z3')) return `${Math.round(css)}s/100m (CSS)`;
     return `${Math.round(css + 5)}s/100m`;

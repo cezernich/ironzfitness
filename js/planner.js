@@ -2461,7 +2461,10 @@ function renderTrainingInputs() {
   checkARacePromotion();
 
   const todayStr  = new Date().toISOString().slice(0, 10);
-  const races     = loadEvents().filter(e => e.date > todayStr);
+  // >= so the race still shows on race DAY — every other surface uses >=;
+  // this one's > made the race vanish from Active Training Inputs on the
+  // morning of the event.
+  const races     = loadEvents().filter(e => e.date >= todayStr);
   const schedules = _getScheduleInputs();
   let buildPlans  = _getBuildPlanInputs();
   const coachPlans = _getCoachProgramInputs();
@@ -3423,12 +3426,18 @@ function applyLongDayPreference(patterns, longDay, targetDiscipline) {
   for (const [phaseName, phasePattern] of Object.entries(patterns)) {
     result[phaseName] = {};
     const longSession = phasePattern[defaultLongDow];
+    const displaced = phasePattern[longDay]; // whatever occupied the chosen day
     for (const [dow, session] of Object.entries(phasePattern)) {
       const d = parseInt(dow);
-      if (d === defaultLongDow || d === longDay) continue; // remove from old and new slot
+      if (d === defaultLongDow || d === longDay) continue; // clear old and new slot
       result[phaseName][d] = session;
     }
     if (longSession) result[phaseName][longDay] = longSession;
+    // SWAP, don't delete: the session that lived on the chosen long day
+    // moves to the long run's old slot. Picking Wednesday used to silently
+    // erase the Wednesday tempo — the plan lost its quality day every week.
+    if (displaced && longSession) result[phaseName][defaultLongDow] = displaced;
+    else if (displaced && !longSession) result[phaseName][longDay] = displaced;
   }
   return result;
 }
@@ -4389,6 +4398,10 @@ function _generateSingleRacePlan(race) {
   const _GOAL_ALIASES = {
     just_finish: "finish", time_goal: "get_faster", pr_podium: "pr",
     time: "get_faster", podium: "pr",
+    // Legacy race-form value — was unmapped, so the literal "compete" hit
+    // workout-library's strict race_goals tag filter and excluded EVERY
+    // goal-tagged workout for compete athletes.
+    compete: "pr",
   };
   function _normGoal(g) { return _GOAL_ALIASES[g] || g || null; }
   let _libRaceGoal = _normGoal(race.goal || race.runGoal);
@@ -4890,6 +4903,22 @@ function _inferDayLoadFromAllSources(dateStr) {
   for (const s of dayOf) {
     // Explicit load wins — race plan entries carry it directly.
     let load = String(s.load || "").toLowerCase();
+    // Canonicalize non-standard pattern loads (Hyrox et al.) onto the
+    // {rest, easy, moderate, hard, long, race} buckets the RANK/multiplier
+    // tables know. Unmapped loads used to rank 0 (= REST) — an entire
+    // Hyrox plan, 75-min race simulation included, got rest-day calories.
+    const _LOAD_CANON = {
+      easy_run: "easy", recovery_run: "easy", strides: "easy",
+      taper_maintenance: "easy", short_opener_combo: "easy",
+      station_practice: "moderate", build_endurance: "moderate",
+      base_heavy: "moderate",
+      interval_run: "hard", station_circuit: "hard",
+      run_station_combo: "hard", test: "hard",
+      race_simulation: "long", peak_simulation: "long",
+    };
+    if (_LOAD_CANON[load]) load = _LOAD_CANON[load];
+    // Any other unknown explicit load: treat as a training day, not rest.
+    else if (load && RANK[load] == null) load = "easy";
     // If no explicit load, derive from type/name/duration. Priority
     // order matters — evaluate most-specific / highest-impact rules first.
     if (!load) {
@@ -6341,7 +6370,7 @@ function renderRaceEvents() {
         <div class="race-card-footer">
           <span class="race-date-badge">${formatDisplayDate(race.date)}</span>
           <span class="race-countdown ${isPast ? "past" : ""}">${label}</span>
-          ${typeof renderTrainingPhilosophyButton === "function" ? renderTrainingPhilosophyButton(race.type === "triathlon" || race.type === "olympic-tri" || race.type === "half-ironman" || race.type === "ironman" ? "triathlon" : race.type === "marathon" || race.type === "half-marathon" || race.type === "10k" || race.type === "5k" ? "running" : race.type === "century" || race.type === "gran-fondo" ? "cycling" : "general") : ""}
+          ${typeof renderTrainingPhilosophyButton === "function" ? renderTrainingPhilosophyButton(["triathlon", "sprint", "olympic", "halfIronman", "ironman"].includes(race.type) ? "triathlon" : ["marathon", "halfMarathon", "tenK", "fiveK"].includes(race.type) ? "running" : ["centuryRide", "granFondo"].includes(race.type) ? "cycling" : "general") : ""}
         </div>
       </div>`;
   }).join("");

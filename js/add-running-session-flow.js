@@ -46,7 +46,30 @@
   }
 
   function _experienceLevel(profile) {
-    const lv = (profile && (profile.experience_level || profile.level || profile.runLevel)) || "intermediate";
+    // Priority: threshold-derived running level (most accurate — a 19:40 5K
+    // is Advanced no matter what button was tapped) → profile.fitnessLevel
+    // (what survey/onboarding actually write) → legacy fields. The old
+    // chain read only experience_level/level/runLevel, which NOTHING
+    // writes — every athlete silently got "intermediate".
+    let lv = null;
+    try {
+      // Only trust SportLevels when real threshold data exists; with no
+      // data it returns a default "intermediate" that would mask a
+      // self-reported beginner.
+      const zones = JSON.parse(localStorage.getItem("trainingZones") || "{}");
+      const rz = zones.running || {};
+      const hasRunData = !!(profile && (profile.vdot || profile.run_vdot)) ||
+        rz.vdot != null || rz.thresholdPaceMin != null || rz.tempo || rz.easy;
+      if (hasRunData && typeof window !== "undefined" && window.SportLevels && window.SportLevels.getSportLevel) {
+        lv = window.SportLevels.getSportLevel("running");
+      }
+    } catch {}
+    if (!lv && profile) {
+      lv = profile.fitnessLevel || profile.experience_level || profile.level || profile.runLevel;
+    }
+    // Normalize per-sport vocab (novice/competitive) to the template vocab.
+    if (lv === "novice") lv = "beginner";
+    if (lv === "competitive") lv = "advanced";
     return ["beginner", "intermediate", "advanced"].includes(lv) ? lv : "intermediate";
   }
 

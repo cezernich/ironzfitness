@@ -9193,7 +9193,9 @@ function _qeBuildCardioWorkout(opts) {
     return descs[zone] || "Steady effort";
   }
   function bikeDetail(zone) {
-    const c = zones.cycling || {};
+    // `biking` is the key Settings/survey/zone-calculator write; `cycling`
+    // was never written by anything, so wattage never rendered here.
+    const c = zones.biking || zones.cycling || {};
     const ftp = c.ftp ? parseInt(c.ftp) : null;
     const pctMap = { Z1: 0.5, Z2: 0.7, Z3: 0.85, Z4: 0.95, Z5: 1.1, Z6: 1.3 };
     if (ftp && pctMap[zone]) return `~${Math.round(ftp * pctMap[zone])}W (${Math.round(pctMap[zone]*100)}% FTP)`;
@@ -9574,6 +9576,28 @@ function _qeBuildCardioWorkout(opts) {
               details: `Progress from ${Math.round((ms.start_pct_ftp || 1.0) * 100)}% → ${Math.round((ms.end_pct_ftp || 1.15) * 100)}% FTP across each rep`,
               reps,
               restDuration: restMin + " min",
+              restEffort: "Z1",
+            });
+          } else if ((ms.duration_sec || 0) > 0 && ms.duration_sec < 60) {
+            // Sub-minute intervals (e.g. 30/30 VO2 shuttles at 130% FTP).
+            // These must keep their true seconds: rounding 30s up to "1 min"
+            // and duration-packing produced ~18×1min @ 130% FTP — roughly
+            // double the intended Z6 dose at an intensity calibrated for
+            // 30-second reps. Use the variant's level-resolved rep count,
+            // clamped to what actually fits the main-set window.
+            const workSec = ms.duration_sec;
+            const restSec = ms.rest_sec || workSec;
+            const prescribed = _pickReps(ms.reps) || 0;
+            const maxFit = Math.max(1, Math.floor((targetMainMin * 60 + restSec) / (workSec + restSec)));
+            const reps = prescribed > 0 ? Math.min(prescribed, maxFit) : maxFit;
+            const eff = _effortForPct(ms.power_target_pct_ftp);
+            bikeIntervals.push({
+              name: variant.name,
+              duration: workSec + "s",
+              effort: eff,
+              details: bikeDetail(eff),
+              reps,
+              restDuration: restSec + "s",
               restEffort: "Z1",
             });
           } else {

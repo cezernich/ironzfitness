@@ -148,15 +148,44 @@
         });
         workout = result && result.workout ? result.workout : null;
       } else if (sportId === "bike" && typeof window !== "undefined" && window.BikeWorkoutGenerator) {
-        const ZC = window.ZoneCalculator;
-        const zones = ZC && ZC.getZonesForUser ? ZC.getZonesForUser() : null;
-        const ftp = (zones && zones.ftp) || (profile && (profile.ftp_watts || profile.ftp)) || null;
+        // FTP lives in trainingZones.biking.ftp (the key Settings/survey
+        // write). getZonesForUser() is run-only and never carries an ftp
+        // key, so Settings-sourced FTP users imported workouts with no
+        // wattage targets.
+        let ftp = (profile && (profile.ftp_watts || profile.ftp)) || null;
+        if (!ftp) {
+          try {
+            const tz = JSON.parse(localStorage.getItem("trainingZones") || "{}");
+            ftp = (tz.biking && parseInt(tz.biking.ftp)) || null;
+          } catch {}
+        }
         const result = window.BikeWorkoutGenerator.generateBikeWorkout({
           sessionTypeId, variantId, userZones: { ftp }, experienceLevel: experience,
         });
         workout = result && result.workout ? result.workout : null;
       } else if (sportId === "swim" && typeof window !== "undefined" && window.SwimWorkoutGenerator) {
-        const css = (profile && (profile.css_sec_per_100m || profile.css)) || null;
+        // CSS commonly lives in trainingZones.swimming (css / cssPace /
+        // tPaceSec / survey {m,s}) — reading only the profile keys missed
+        // the Training Zones flow entirely (same bug calendar.js fixed for
+        // Add Session), so imports paced at the generic fallback.
+        let css = (profile && (profile.css_sec_per_100m || profile.css)) || null;
+        if (!css) {
+          try {
+            const tz = JSON.parse(localStorage.getItem("trainingZones") || "{}");
+            const sw = tz.swimming || {};
+            if (typeof sw.css === "number") css = sw.css;
+            else if (typeof sw.css === "string" && sw.css.includes(":")) {
+              const parts = sw.css.split(":").map(Number);
+              if (!isNaN(parts[0])) css = parts[0] * 60 + (parts[1] || 0);
+            }
+            else if (sw.cssPace) css = parseFloat(sw.cssPace) || null;
+            else if (sw.tPaceSec) css = parseFloat(sw.tPaceSec) || null;
+            else if (sw.m != null || sw.s != null) {
+              const secs = (Number(sw.m) || 0) * 60 + (Number(sw.s) || 0);
+              if (secs > 0) css = secs;
+            }
+          } catch {}
+        }
         const result = window.SwimWorkoutGenerator.generateSwimWorkout({
           sessionTypeId, variantId, userZones: { css }, experienceLevel: experience,
         });
