@@ -23,6 +23,11 @@
     peak: 1,
     taper: 0,
     'race-week': 0,
+    // Non-race blocks (fat-loss / general fitness mesocycles) legitimately
+    // run 3 strength days — the key was missing, so the ?? 2 default
+    // silently trimmed the fat-loss template's third session ("strength
+    // fills first", §2.5).
+    mesocycle: 3,
   };
 
   // TRAINING_PHILOSOPHY §8.1 — split design by strength frequency + level
@@ -455,6 +460,19 @@
       { role: 'hinge-light', pattern: 'hinge', tier: ['primary', 'secondary'] },
       { role: 'pull-light', pattern: 'horizontal-pull', tier: ['secondary'] },
     ],
+    // v1.4 — HIIT circuit (fat-loss template). Missing before: subtype
+    // 'hiit' silently fell back to full_body, so a card describing
+    // "40s work / 20s rest × 3-4 rounds" carried heavy barbell volumes
+    // (4×6-10 @ 120s rest). Circuit-friendly movements, cycled as rounds
+    // via the assignSetsRepsRest override below.
+    hiit: [
+      { role: 'squat-circuit', pattern: 'squat', tier: ['secondary', 'tertiary'] },
+      { role: 'push-circuit', pattern: ['horizontal-push', 'vertical-push'], tier: ['secondary', 'tertiary'] },
+      { role: 'hinge-or-lunge', pattern: ['hinge', 'isolation-legs'], tier: ['secondary', 'tertiary'] },
+      { role: 'pull-circuit', pattern: ['horizontal-pull', 'vertical-pull'], tier: ['secondary', 'tertiary'] },
+      { role: 'core-circuit', pattern: 'core', tier: ['secondary', 'tertiary'] },
+      { role: 'carry-or-legs', pattern: ['carry', 'isolation-legs'], tier: ['secondary', 'tertiary'] },
+    ],
   };
 
   // TRAINING_PHILOSOPHY §8.2 — sets/reps/rest by tier and level
@@ -660,6 +678,12 @@
   // fewer days via doubles.
   function capStrengthFrequency(template, phase, classification) {
     const sessions = template.map(s => ({ ...s }));
+    // §8.4 caps SUPPLEMENTAL strength for endurance athletes during race
+    // prep. For strength-primary and general-fitness athletes the strength
+    // sessions ARE the plan — capping them turned a 5-day PPL Build week
+    // into a single push day (trim-from-end kept only the first split day).
+    const profile = classification && classification.sportProfile;
+    if (profile === 'strength' || profile === 'general_fitness') return sessions;
     const strengthFreq = (classification && classification.goal === 'fat_loss')
       ? Math.max(2, STRENGTH_FREQUENCY[phase] ?? 2)
       : (STRENGTH_FREQUENCY[phase] ?? 2);
@@ -934,6 +958,12 @@
   // cardio-pair-driven.
   const PRESET_SPLIT_SUBTYPES = new Set([
     'push_day', 'pull_day', 'leg_day', 'upper_body', 'lower_body',
+    // full_body IS a deliberate split (2-3 day strength athletes). Excluding
+    // it let the §8.6 pairing rewrite every full-body session to
+    // pair_rest_upper when no cardio day qualified — an all-upper week with
+    // zero squat/hinge work, forever. Only sport_specific (endurance
+    // athletes' generic strength) should be pairing-adaptive.
+    'full_body', 'hiit',
     'hyrox_heavy', 'hyrox_endurance', 'hyrox_maintenance',
   ]);
 
@@ -977,13 +1007,21 @@
         layout[chosen.day].push(strength);
         usedPairTypes.push(chosen.pairType);
       } else {
-        // No paired day available — place on an empty training day with "rest-day upper" pair
+        // No paired day available — place on an empty training day.
         const emptyDay = trainingDays.find(d => layout[d].length === 0);
         const target = emptyDay != null ? emptyDay : pickLightestDayWithoutStrength(layout, trainingDays);
-        strength.subtype = PAIR_SUBTYPE_REST;
-        strength.sessionSubtype = PAIR_SUBTYPE_REST;
+        // Only adopt the §8.6 "rest-day upper" focus when this athlete's
+        // week actually contains cardio (pairing just didn't fit). A week
+        // with no cardio at all means a strength-primary athlete — keep the
+        // session's own subtype instead of forcing upper-body.
+        const weekHasCardio = trainingDays.some(d =>
+          layout[d].some(s => ['run', 'bike', 'swim', 'brick'].includes(s.type)));
+        if (weekHasCardio) {
+          strength.subtype = PAIR_SUBTYPE_REST;
+          strength.sessionSubtype = PAIR_SUBTYPE_REST;
+          usedPairTypes.push(PAIR_SUBTYPE_REST);
+        }
         layout[target].push(strength);
-        usedPairTypes.push(PAIR_SUBTYPE_REST);
       }
     }
   }
@@ -1464,6 +1502,12 @@
         volume.sets = 2;
         volume.reps = '8-10';
         volume.restSeconds = 90;
+      } else if (subtype === 'hiit' || session.type === 'hiit' || session.type === 'circuit') {
+        // Circuit volumes matching the card description ("40s work / 20s
+        // rest × 3-4 rounds") — NOT the barbell SETS_REPS_REST scheme.
+        volume.sets = classification.level === 'beginner' ? 3 : 4;   // rounds
+        volume.reps = '40s work';
+        volume.restSeconds = 20;
       }
       exercises.push({
         exerciseId: ex.id,

@@ -2047,7 +2047,10 @@ function _getBuildPlanInputs() {
     if (e.indefinite) b.indefinite = true;
   });
   return Object.values(byPlan).map(b => {
-    const wk = Math.max(1, Math.round((new Date(b.endDate + "T00:00:00") - new Date(b.startDate + "T00:00:00")) / (7 * 864e5)) + 1);
+    // A W-week plan spans at most 7W−1 days (first Monday → last Sunday), so
+    // the week count is ceil((span+1)/7). The old round(span/7)+1 was off by
+    // one — every card showed an extra week (a 1-week plan read "2 weeks").
+    const wk = Math.max(1, Math.ceil(((new Date(b.endDate + "T00:00:00") - new Date(b.startDate + "T00:00:00")) / 864e5 + 1) / 7));
     return {
       planId:   b.planId,
       sessions: b.sessions.length,
@@ -2263,7 +2266,12 @@ function _regeneratePlanForRace(race) {
         if (_preByWeek[wk].counts[d] != null) _preByWeek[wk].counts[d]++;
       });
 
-      const summary = window.PlanSessionDistribution.applySessionDistribution(newEntries, race && race.type, _level);
+      const summary = window.PlanSessionDistribution.applySessionDistribution(
+        newEntries, race && race.type, _level,
+        // Pass the user's scheduling constraints so the aligner can't refill
+        // days the user excluded or grow the week past their selection.
+        { daysPerWeek: race && race.daysPerWeek, unavailableDays: race && race.unavailableDays }
+      );
 
       // Snapshot AFTER so the diff per week is visible in devtools.
       const _postByWeek = {};
@@ -3445,7 +3453,7 @@ function computeRunDaysRecommendation(level, runGoal, returningFromInjury) {
  * Priority when trimming: long > hard/moderate/strides > easy.
  * When expanding, adds easy runs on free days while respecting quality-session buffer rules.
  */
-function adjustPatternToDays(pattern, daysPerWeek, unavailableDays) {
+function adjustPatternToDays(pattern, daysPerWeek, unavailableDays, opts) {
   const unavailSet = new Set(unavailableDays || []);
   let entries = Object.entries(pattern).map(([d, s]) => [parseInt(d), s]);
 
@@ -3459,6 +3467,12 @@ function adjustPatternToDays(pattern, daysPerWeek, unavailableDays) {
     }
     // Try to redistribute displaced sessions to open available days
     const usedDows = new Set(kept.map(([d]) => d));
+    const _dispPri = {
+      long: 0, race_simulation: 0, peak_simulation: 0, run_station_combo: 0,
+      hard: 1, interval_run: 1, station_circuit: 1, base_heavy: 1,
+      moderate: 2, strides: 2, station_practice: 2, build_endurance: 2,
+      easy: 3, easy_run: 3, recovery_run: 4,
+    };
     for (const session of displaced) {
       let placed = false;
       for (const d of [1, 2, 3, 4, 5, 6, 0]) {
@@ -3469,19 +3483,87 @@ function adjustPatternToDays(pattern, daysPerWeek, unavailableDays) {
           break;
         }
       }
-      // If no open day, drop the session (respect user's constraint)
+      if (!placed) {
+        // No open day. Before dropping, check whether this session outranks
+        // the least important kept one — losing the LONG RUN because the
+        // user blocked its day while an easy spin survives is the wrong
+        // trade. Swap into the lowest-priority slot instead.
+        const sPri = _dispPri[session.load] ?? 3;
+        let worstIdx = -1, worstPri = -1;
+        kept.forEach(([, ks], i) => {
+          const p = _dispPri[ks.load] ?? 3;
+          if (p > worstPri) { worstPri = p; worstIdx = i; }
+        });
+        if (worstIdx >= 0 && worstPri > sPri) {
+          kept[worstIdx] = [kept[worstIdx][0], session];
+        }
+        // else: genuinely drop (respect user's constraint)
+      }
     }
     entries = kept;
   }
 
   if (!daysPerWeek) return Object.fromEntries(entries);
 
-  const loadPri = { long: 0, hard: 1, moderate: 1, strides: 1, easy: 2 };
+  // Full load-priority table (lower = more protected). The old table only
+  // knew the 5 canonical run loads — every Hyrox load tied at "easy"
+  // priority, so trimming a Hyrox week kept whatever came first in DOW
+  // order and dropped station work.
+  const loadPri = {
+    long: 0, race_simulation: 0, peak_simulation: 0, run_station_combo: 0,
+    hard: 1, interval_run: 1, station_circuit: 1, base_heavy: 1,
+    moderate: 2, strides: 2, station_practice: 2, build_endurance: 2,
+    short_opener_combo: 3, taper_maintenance: 3, easy: 3, easy_run: 3,
+    recovery_run: 4,
+  };
+  const pri = (s) => loadPri[s.load] ?? 3;
+  // A brick IS a bike+run combo — it covers both base sports for the
+  // discipline-coverage pass below.
+  const baseSports = (s) =>
+    s.discipline === "brick" ? ["bike", "run"] : [s.discipline || "other"];
+
   if (entries.length > daysPerWeek) {
-    entries.sort((a, b) => (loadPri[a[1].load] ?? 2) - (loadPri[b[1].load] ?? 2));
-    return Object.fromEntries(entries.slice(0, daysPerWeek).map(([d, s]) => [d, s]));
+    // Discipline-aware trim. The old version sorted ALL sessions by load
+    // priority and kept the first N — swims always sorted last, so a
+    // 5-day triathlon selection produced Build/Peak weeks with ZERO swims.
+    // New behavior: (1) cover every base sport once, best session first,
+    // (2) then fill remaining slots round-robin so no discipline keeps a
+    // 2nd session before another keeps its 1st.
+    const byDisc = new Map();
+    for (const [d, s] of entries) {
+      const k = s.discipline || "other";
+      if (!byDisc.has(k)) byDisc.set(k, []);
+      byDisc.get(k).push([d, s]);
+    }
+    byDisc.forEach(list => list.sort((a, b) => pri(a[1]) - pri(b[1])));
+
+    const kept = [];
+    const covered = new Set();
+    // Pass 1: sport coverage — take each discipline's best session, in
+    // priority order, but only when it adds a not-yet-covered base sport
+    // (a brick after run+bike are covered doesn't add coverage).
+    const discLists = Array.from(byDisc.values())
+      .sort((a, b) => pri(a[0][1]) - pri(b[0][1]));
+    for (const list of discLists) {
+      if (kept.length >= daysPerWeek) break;
+      const sports = baseSports(list[0][1]);
+      if (sports.some(sp => !covered.has(sp))) {
+        const take = list.shift();
+        kept.push(take);
+        baseSports(take[1]).forEach(sp => covered.add(sp));
+      }
+    }
+    // Pass 2: fill remaining slots — best remaining session overall each
+    // time, round-robin-ish via re-sort so quality spreads across sports.
+    while (kept.length < daysPerWeek) {
+      const remaining = Array.from(byDisc.values()).filter(l => l.length);
+      if (!remaining.length) break;
+      remaining.sort((a, b) => pri(a[0][1]) - pri(b[0][1]));
+      kept.push(remaining[0].shift());
+    }
+    return Object.fromEntries(kept);
   }
-  if (entries.length < daysPerWeek) {
+  if (entries.length < daysPerWeek && !(opts && opts.noExpand)) {
     const usedDows = new Set(entries.map(([d]) => d));
     const blockedDows = new Set();
     entries.forEach(([d, s]) => {
@@ -3490,13 +3572,23 @@ function adjustPatternToDays(pattern, daysPerWeek, unavailableDays) {
         blockedDows.add((d + 1) % 7);
       }
     });
+    // Pad with the pattern's dominant cardio discipline, not always "run" —
+    // a 6-day Gran Fondo selection used to get padded with easy RUNS.
+    const cardioCounts = {};
+    entries.forEach(([, s]) => {
+      if (["run", "bike", "swim"].includes(s.discipline)) {
+        cardioCounts[s.discipline] = (cardioCounts[s.discipline] || 0) + 1;
+      }
+    });
+    const padDisc = Object.keys(cardioCounts)
+      .sort((a, b) => cardioCounts[b] - cardioCounts[a])[0] || "run";
     const result = { ...Object.fromEntries(entries) };
     let needed = daysPerWeek - entries.length;
     // First pass: prefer non-blocked days (soft buffer around hard/moderate)
     for (const d of [1, 2, 3, 4, 5, 6, 0]) {
       if (needed <= 0) break;
       if (!usedDows.has(d) && !blockedDows.has(d) && !unavailSet.has(d)) {
-        result[d] = { discipline: "run", load: "easy" };
+        result[d] = { discipline: padDisc, load: "easy" };
         usedDows.add(d);
         needed--;
       }
@@ -3506,7 +3598,7 @@ function adjustPatternToDays(pattern, daysPerWeek, unavailableDays) {
       for (const d of [1, 2, 3, 4, 5, 6, 0]) {
         if (needed <= 0) break;
         if (!usedDows.has(d) && !unavailSet.has(d)) {
-          result[d] = { discipline: "run", load: "easy" };
+          result[d] = { discipline: padDisc, load: "easy" };
           usedDows.add(d);
           needed--;
         }
@@ -4225,8 +4317,12 @@ function _generateSingleRacePlan(race) {
       ? applyLongDayPreference(levelPatterns, race.longDay, longDiscipline)
       : levelPatterns;
     const hasAdjustment = race.daysPerWeek || (race.unavailableDays && race.unavailableDays.length > 0);
+    // noExpand for Taper: a 6-7 day selection must not inflate the
+    // deliberately light taper pattern back up to full volume — taper IS
+    // the volume reduction. Trimming (fewer days) still applies.
     patterns = hasAdjustment
-      ? Object.fromEntries(Object.entries(longDayPatterns).map(([ph, pat]) => [ph, adjustPatternToDays(pat, race.daysPerWeek, race.unavailableDays)]))
+      ? Object.fromEntries(Object.entries(longDayPatterns).map(([ph, pat]) =>
+          [ph, adjustPatternToDays(pat, race.daysPerWeek, race.unavailableDays, { noExpand: ph === "Taper" })]))
       : longDayPatterns;
   }
 

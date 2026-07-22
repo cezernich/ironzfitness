@@ -236,8 +236,9 @@
   // Decide which day-of-week to place a new session on. Prefers days
   // with no existing session, then days with only an easy session.
   // Avoids stacking same discipline back-to-back.
-  function pickSlotForDiscipline(weekEntries, mondayStr, discipline) {
+  function pickSlotForDiscipline(weekEntries, mondayStr, discipline, unavailSet) {
     const used = new Set(weekEntries.map(e => e.date));
+    const blocked = unavailSet || new Set();
     const hasDiscByDate = {};
     weekEntries.forEach(e => {
       hasDiscByDate[e.date] = hasDiscByDate[e.date] || {};
@@ -249,6 +250,9 @@
     for (const offset of order) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + offset);
+      // Never fill a day the user marked unavailable — the aligner used to
+      // re-add sessions on the exact days the planner had just cleared.
+      if (blocked.has(d.getDay())) continue;
       const dateStr = d.toISOString().slice(0, 10);
       if (!used.has(dateStr)) {
         // Check no adjacent same-discipline day
@@ -261,10 +265,11 @@
         if (!adjacent) return dateStr;
       }
     }
-    // Fallback: any empty day, even if same-discipline adjacency.
+    // Fallback: any empty available day, even if same-discipline adjacency.
     for (const offset of order) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + offset);
+      if (blocked.has(d.getDay())) continue;
       const dateStr = d.toISOString().slice(0, 10);
       if (!used.has(dateStr)) return dateStr;
     }
@@ -396,14 +401,21 @@
     // Fill order:
     //   1) pickSlotForDiscipline — only fills an empty day when >1 rest
     //      day remains (so we preserve at least one rest day per week,
-    //      per spec §3a-iii).
+    //      per spec §3a-iii), when the user's daysPerWeek cap has room,
+    //      and never on a day the user marked unavailable.
     //   2) pickDoubleSlot — places this session on an existing day,
     //      subject to level+phase budget and hard-pair rules.
     let dateStr = null;
     let isDouble = false;
     const empties = emptyDatesInWeek(weekEntries, mondayStr);
-    if (empties.length > 1) {
-      dateStr = pickSlotForDiscipline(weekEntries, mondayStr, discipline);
+    // Respect the user's selected training-day count: once the week already
+    // uses daysPerWeek distinct days, never open a NEW day — doubling on an
+    // existing day is the only remaining option. The aligner used to grow a
+    // 5-day selection into a 6-day week.
+    const distinctDays = new Set(weekEntries.filter(e => e.load !== "rest").map(e => e.date)).size;
+    const dayCapReached = c.daysPerWeek && distinctDays >= c.daysPerWeek;
+    if (empties.length > 1 && !dayCapReached) {
+      dateStr = pickSlotForDiscipline(weekEntries, mondayStr, discipline, c.unavailSet);
     }
     if (!dateStr) {
       dateStr = pickDoubleSlot(weekEntries, mondayStr, discipline, load, c.level, phaseName, c.doublesUsedRef.n);
@@ -604,10 +616,16 @@
   // Walks each week of the plan and aligns session counts to the phase
   // distribution target. Mutates `plan` in place. Returns a summary of
   // adjustments so the caller can log what changed.
-  function applySessionDistribution(plan, raceType, athleteLevel) {
+  function applySessionDistribution(plan, raceType, athleteLevel, constraints) {
     if (!Array.isArray(plan) || plan.length === 0) return { added: 0, demoted: 0, weeksChecked: 0 };
     const sportProfile = sportProfileForRaceType(raceType);
     if (!PHASE_DISTRIBUTIONS_BY_LEVEL[sportProfile]) return { added: 0, demoted: 0, weeksChecked: 0 };
+    // User scheduling constraints (spec §3a): the aligner must never undo
+    // what the planner honored — no sessions on unavailable days, no growing
+    // the week past the selected day count.
+    const _c = constraints || {};
+    const _unavailSet = new Set(Array.isArray(_c.unavailableDays) ? _c.unavailableDays : []);
+    const _daysPerWeek = _c.daysPerWeek || null;
 
     const groups = groupByWeek(plan);
     let added = 0, demoted = 0;
@@ -625,7 +643,12 @@
 
       // Per-week doubling context. Budget is capped by level+phase; the
       // ref object is mutated by addMissingSession as doubles accumulate.
-      const weekCtx = { level: athleteLevel || "intermediate", doublesUsedRef: { n: 0 } };
+      const weekCtx = {
+        level: athleteLevel || "intermediate",
+        doublesUsedRef: { n: 0 },
+        daysPerWeek: _daysPerWeek,
+        unavailSet: _unavailSet,
+      };
 
       // Add missing sessions, each discipline.
       ["swim", "bike", "run", "strength", "brick", "hyrox"].forEach(disc => {

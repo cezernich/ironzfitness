@@ -40,6 +40,12 @@ const CP_DAYS = [
 // a single entry with mode "rest".
 let cpWeekTemplate = {};
 
+// When the builder was opened via openCustomPlanEdit, this holds the planId
+// being edited so saveCustomPlan replaces THAT plan's future sessions.
+// Previously the save wiped every source:"custom" entry in its date range —
+// including sessions belonging to OTHER custom plans that happened to overlap.
+let _cpEditingPlanId = null;
+
 // ── Data-model helpers ────────────────────────────────────────────────────────
 
 function _cpGenId() {
@@ -2117,11 +2123,29 @@ function saveCustomPlan() {
     }
   }
 
-  // Remove old custom-plan entries in the date range to avoid duplicates
-  const minDate = newEntries.length ? newEntries[0].date : startDate;
-  const maxDate = newEntries.length ? newEntries[newEntries.length - 1].date : startDate;
-  schedule = schedule.filter(e => !(e.source === "custom" && e.date >= minDate && e.date <= maxDate));
+  // Replace the plan being edited / avoid duplicates — WITHOUT touching
+  // other custom plans:
+  //   - If we're editing an existing plan, remove ALL of its future entries
+  //     (even outside the new date range, so shrinking a plan doesn't leave
+  //     orphan tail sessions). Past entries are completed history — kept.
+  //   - Legacy safety net: also clear planId-less custom entries in the new
+  //     range (pre-planId saves that would otherwise duplicate).
+  // newEntries is NOT chronological (template keys iterate "0".."6" with
+  // Sunday mapping to end-of-week), so compute true min/max — the old
+  // first/last-element shortcut could miss up to 6 days of stale entries.
+  const allDates = newEntries.map(e => e.date).sort();
+  const minDate = allDates.length ? allDates[0] : startDate;
+  const maxDate = allDates.length ? allDates[allDates.length - 1] : startDate;
+  const _todayStr = new Date().toISOString().slice(0, 10);
+  const editingId = _cpEditingPlanId;
+  schedule = schedule.filter(e => {
+    if (!e || e.source !== "custom") return true;
+    if (editingId && e.planId === editingId && e.date >= _todayStr) return false;
+    if (!e.planId && e.date >= minDate && e.date <= maxDate) return false;
+    return true;
+  });
   schedule.push(...newEntries);
+  _cpEditingPlanId = null;
 
   localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
 
@@ -2189,6 +2213,7 @@ function openCustomPlanEdit(planId) {
     if (typeof openCustomPlanBuilder === "function") openCustomPlanBuilder();
     return;
   }
+  _cpEditingPlanId = planId;
 
   // Group by DOW using only the first week of the plan — the template
   // repeats weekly, so later weeks are duplicates of the first.
@@ -2237,7 +2262,16 @@ function openCustomPlanEdit(planId) {
       if (weeksEl) {
         const maxDate = planSessions.reduce((m, s) => (s.date > m ? s.date : m), planSessions[0].date);
         const spanDays = Math.round((new Date(maxDate + "T00:00:00") - new Date(minDate + "T00:00:00")) / 864e5);
-        weeksEl.value = String(Math.max(1, Math.round(spanDays / 7) + 1));
+        // ceil((span+1)/7), NOT round(span/7)+1: a W-week plan spans 7W−1
+        // days, so the old formula computed W+1. Writing "9" into a select
+        // whose options are 1/2/4/8/12 blanked it, and saveCustomPlan's "4"
+        // fallback then silently truncated an 8-week plan to 4 on re-save.
+        const weeks = Math.max(1, Math.ceil((spanDays + 1) / 7));
+        // Snap UP to the nearest real <option> so the assignment always
+        // sticks (a blanked select is exactly how the truncation bug hid).
+        const opts = Array.from(weeksEl.options).map(o => parseInt(o.value)).filter(n => !isNaN(n)).sort((a, b) => a - b);
+        const snapped = opts.find(o => o >= weeks) || opts[opts.length - 1] || weeks;
+        weeksEl.value = String(snapped);
       }
       const nameEl = document.getElementById("custom-plan-name");
       if (nameEl) {
