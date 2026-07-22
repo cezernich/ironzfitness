@@ -15,12 +15,28 @@
 > boundary; sub-minute bike intervals; import FTP/CSS lookups;
 > assembler sweet-spot/swim combo-zone targets; strides/hills strength
 > attachment; displaced-session priority swap.
-> **Remaining (unfixed):** swim 4-scheme zone unification; two VDOT
-> table reconciliation (point vs range); planner two-clock drift; UTC+
-> date shift; card-vs-phases bike/swim divergence; race-pace bike % by
-> distance; tempo dropdown mapping; equipment vocabulary unification
-> (M1-M3, M6-M8 strength); Ironman long-session ceiling; session-type
-> string unification; P2 dead-code cleanup.
+> **Unification pass (also fixed):** swim zones canonicalized on the
+> spec scheme (Z3=CSS; UI outliers fixed; intensity strip parses numeric
+> paces vs CSS); VDOT single-sourced from the range table (monotonic
+> verified); bike Coggan boundaries + Z5 aligned; equipment vocab
+> (bodyweight/kettlebell) unified; cycling level delegates to the
+> age/sex classifier; manual-add hard cap is level-aware; UTC+ date
+> shift fixed in planner, custom-plan, and all three validators; planner
+> phase clock unified with weekNumber; Training Blocks card uses the
+> generator's phase calculator; custom-plan type/load/duration taxonomy
+> aligned with planner; bike/swim generators produce phases matching the
+> card (duration override honored, real warmups, capped scaled reps,
+> pace-correct sizing); Recovery Spin got a real Z1 variant; tempo
+> dropdown labels honest; Hyrox session names render properly; misc P2
+> comment/dead-code fixes.
+> **Remaining (unfixed):** race-pace bike % by race distance (needs
+> distance plumbed into assembler targets); Ironman long-session ceiling
+> (assembler duration model); persisting generated phases so the card
+> reflects the original plan rather than a same-algorithm re-fit;
+> workout_library seed-vs-DB drift tooling; removal of dead subsystems
+> (StrengthWorkoutGenerator, VARIANT_LIBRARY_HYBRID, Pipeline C wiring
+> decision); run VDOT range-table absolute calibration vs the Daniels
+> book values.
 
 Full-repo audit of workout/plan generation logic across all sports (swim, bike, run,
 strength, hybrid) and the plan pipeline. Six parallel review passes covering ~17.5k
