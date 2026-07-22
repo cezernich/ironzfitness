@@ -106,6 +106,9 @@
     if (hasBarbell) return 'full_gym';
     if (hasHomeKit) return 'home_gym';
     if (set.has('dumbbells')) return 'dumbbells';
+    // Kettlebell-only used to fall through to 'home_gym', granting
+    // dumbbell/bench/pull-up-bar exercises the athlete doesn't own.
+    if (set.has('kettlebell') || set.has('kettlebells')) return 'kettlebell';
     return 'home_gym';
   }
 

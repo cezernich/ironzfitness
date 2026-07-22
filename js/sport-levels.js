@@ -46,6 +46,16 @@
     if (!ftpWatts || isNaN(ftpWatts) || ftpWatts <= 0) return "intermediate";
     const weight = parseFloat(weightLbs);
     if (!weight || weight <= 0) return "intermediate";
+    // Delegate to the age/sex-adjusted classifier when available so Add
+    // Session and the planner/onboarding agree on the athlete's cycling
+    // level — the two used to run different w/kg tables and could classify
+    // the same athlete differently depending on which flow asked.
+    try {
+      if (typeof window !== "undefined" && window.TrainingZones && window.TrainingZones.classifyCycling) {
+        const lv = window.TrainingZones.classifyCycling({ ftp: ftpWatts }, weight * 0.4536);
+        if (lv) return lv;
+      }
+    } catch {}
     const wPerKg = ftpWatts / (weight * 0.4536);
     if (wPerKg < 2.0) return "beginner";
     if (wPerKg <= 3.5) return "intermediate";

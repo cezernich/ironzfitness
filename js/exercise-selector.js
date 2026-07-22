@@ -112,6 +112,11 @@ async function loadExerciseLibrary() {
 function getEquipmentList(equipmentAccess) {
   var lists = {
     none: [],
+    // AthleteClassifier emits 'bodyweight' for bodyweight-only athletes;
+    // this map only knew 'none', so 'bodyweight' fell through the
+    // unknown-key default and was granted the FULL GYM (all exercises,
+    // barbell included). Alias it explicitly.
+    bodyweight: [],
     dumbbells: ['dumbbell'],
     kettlebell: ['kettlebell'],
     home_gym: ['dumbbell', 'kettlebell', 'pull_up_bar', 'bench', 'resistance_band'],

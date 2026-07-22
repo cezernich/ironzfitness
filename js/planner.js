@@ -1,5 +1,16 @@
 // planner.js — Race event management + training plan generation
 
+// Serialize a LOCAL-midnight Date to "YYYY-MM-DD" without the UTC shift.
+// `.toISOString().slice(0,10)` converts to UTC first, so for any user east
+// of UTC a local midnight lands on the PREVIOUS calendar day — the whole
+// plan sat one day early and Monday patterns got stamped with Sunday dates.
+function _localYMD(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 // ─── Race configuration ─────────────────────────────────────────────────────
 //
 // Phase ratios come from TRAINING_PHILOSOPHY.md §4.4 (triathlon),
@@ -2925,7 +2936,7 @@ function _saveImportedPlanEdits(planId) {
   if (shiftDays !== 0) {
     plan.sessions.forEach(s => {
       const d = new Date(new Date(s.date + "T00:00:00").getTime() + shiftMs);
-      s.date = d.toISOString().slice(0, 10);
+      s.date = _localYMD(d);
     });
   }
   localStorage.setItem("importedPlans", JSON.stringify(plans)); if (typeof DB !== 'undefined') DB.syncKey('importedPlans');
@@ -2936,7 +2947,7 @@ function _saveImportedPlanEdits(planId) {
     schedule.forEach(e => {
       if (e.planId === planId) {
         const d = new Date(new Date(e.date + "T00:00:00").getTime() + shiftMs);
-        e.date = d.toISOString().slice(0, 10);
+        e.date = _localYMD(d);
       }
     });
     localStorage.setItem("workoutSchedule", JSON.stringify(schedule)); if (typeof DB !== 'undefined') DB.syncSchedule();
@@ -3291,7 +3302,7 @@ function _mondayOfDateStr(dateStr) {
   const dow = d.getDay();
   const offset = dow === 0 ? -6 : 1 - dow;
   d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
+  return _localYMD(d);
 }
 
 function _datesInWeek(weekStartDateStr) {
@@ -3300,7 +3311,7 @@ function _datesInWeek(weekStartDateStr) {
   for (let i = 0; i < 7; i++) {
     const d = new Date(start.getTime());
     d.setDate(d.getDate() + i);
-    out.push(d.toISOString().slice(0, 10));
+    out.push(_localYMD(d));
   }
   return out;
 }
@@ -4342,7 +4353,7 @@ function _generateSingleRacePlan(race) {
     const prePlanDows = runPatternKey === "beginner" ? [2, 6] : [2, 4, 6]; // Tue+Sat or Tue+Thu+Sat
     const preCursor = new Date(todayDate);
     while (preCursor < startDate) {
-      const dateStr = preCursor.toISOString().slice(0, 10);
+      const dateStr = _localYMD(preCursor);
       const dow = preCursor.getDay();
       if (prePlanDows.includes(dow) && dateStr >= todayStr) {
         const table = (RUN_DURATION_TABLES[race.type] || {})[runPatternKey] || {};
@@ -4503,7 +4514,7 @@ function _generateSingleRacePlan(race) {
   const cursor = new Date(startDate);
 
   while (cursor < raceDate) {
-    const dateStr = cursor.toISOString().slice(0, 10);
+    const dateStr = _localYMD(cursor);
     const dow = cursor.getDay(); // 0=Sun … 6=Sat
 
     // Advance phase if needed
@@ -4599,7 +4610,10 @@ function _generateSingleRacePlan(race) {
         date: dateStr,
         raceId: race.id,
         phase: "Threshold",
-        weekNumber,
+        // Compute fresh — the mutable weekNumber var only refreshes inside
+        // the pattern branch, so threshold entries could carry last week's
+        // number (or 1 if no pattern session had been emitted yet).
+        weekNumber: _weekNumberFor(cursor),
         discipline,
         load: isTestDay ? "test" : (t === "rest" ? "rest" : "easy"),
         sessionName: _twOverride.note,
@@ -4715,11 +4729,17 @@ function _generateSingleRacePlan(race) {
       });
     }
 
-    // Advance day; phase tracking still pivots on Mondays so each
-    // phase occupies complete calendar weeks.
+    // Advance day; phase weeks tick on the SAME clock as weekNumber
+    // (exact 7-day blocks from startDate). The old Monday pivot ran a
+    // second clock that drifted up to 6 days from the displayed week
+    // numbers — deloads and variant rotation disagreed about which week
+    // it was unless the race happened to fall on a Monday.
     cursor.setDate(cursor.getDate() + 1);
-    if (cursor.getDay() === 1) {
-      phaseWeekCount++;
+    {
+      const _daysSinceStart = Math.round((cursor.setHours(0, 0, 0, 0) - _planStartMs) / 86400000);
+      if (_daysSinceStart > 0 && _daysSinceStart % 7 === 0) {
+        phaseWeekCount++;
+      }
     }
   }
 
@@ -4729,7 +4749,9 @@ function _generateSingleRacePlan(race) {
     date: raceDateStr,
     raceId: race.id,
     phase: "Race",
-    weekNumber,
+    // Compute from the race date itself — the loop's mutable weekNumber
+    // could be stale by up to a week here.
+    weekNumber: _weekNumberFor(new Date(raceDateStr + "T00:00:00")),
     discipline: "race",
     load: "race",
     sessionName: `${ICONS.flag} ${race.name} — RACE DAY`,
@@ -6489,11 +6511,15 @@ function showTrainingPhilosophy(planType) {
   overlay.style.cssText = "display:flex;z-index:10001";
   overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
 
-  const blocksHTML = info.blocks.map(b => `
+  // Phase position, not absolute week ranges — the hardcoded "Weeks 1-5 /
+  // 6-10 / …" prose assumed a 16-week plan and was shown to every athlete
+  // regardless of their actual plan length (an 8-week plan user was told
+  // Taper is "weeks 15-16").
+  const blocksHTML = info.blocks.map((b, i) => `
     <div class="tb-block">
       <div class="tb-block-header">
         <span class="tb-block-name">${b.name}</span>
-        <span class="tb-block-weeks">Weeks ${b.weeks}</span>
+        <span class="tb-block-weeks">Phase ${i + 1} of ${info.blocks.length}</span>
       </div>
       <div class="tb-block-focus">${b.focus}</div>
       <p class="tb-block-desc">${b.desc}</p>
@@ -6560,9 +6586,16 @@ function renderTrainingBlocksSection() {
     const today = new Date();
     const weeksOut = Math.max(1, Math.ceil((raceDate - today) / (7 * 24 * 60 * 60 * 1000)));
 
-    // Get adaptive phases based on athlete profile
-    const adaptive = getAdaptivePhases(race.type, weeksOut, race.level || "intermediate", race.daysPerWeek || null);
-    const phases = adaptive ? adaptive.phases : config.phases;
+    // Use the SAME phase calculator as the plan generator so the timeline
+    // the athlete sees matches the phases stamped on their actual sessions.
+    // getAdaptivePhases was a second, disagreeing algorithm (different taper
+    // lengths, Peak merged for halfMarathon, clamped-up week totals) — it
+    // remains only as a fallback for race types without phaseRatios.
+    const ratioPhases = typeof computePhasesFromRatios === "function"
+      ? computePhasesFromRatios(race.type, weeksOut)
+      : null;
+    const adaptive = ratioPhases ? null : getAdaptivePhases(race.type, weeksOut, race.level || "intermediate", race.daysPerWeek || null);
+    const phases = ratioPhases || (adaptive ? adaptive.phases : config.phases);
 
     // Determine plan type for philosophy modal
     const triTypes = ["ironman", "halfIronman", "olympic", "sprint"];

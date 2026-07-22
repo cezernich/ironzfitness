@@ -1722,22 +1722,30 @@ const ZONE_DISTANCES = {
 };
 
 // ── Biking: FTP-based power zones ─────────────────────────────────────────────
+// Boundaries match the Coggan table in zone-calculator.js/training-zones.js
+// exactly (Z2 starts 56%, Z3 76%, Z4 91%, Z5 106%) — the old 55/75/90/105
+// values drifted ±1% from the generator's table, so the zones screen and
+// workout targets disagreed by a few watts.
 const BIKING_ZONE_CONFIG = [
   { num: 1, name: "Recovery",    ftpPcts: [0,    0.55], desc: "Active recovery · Easy spinning" },
-  { num: 2, name: "Endurance",   ftpPcts: [0.55, 0.75], desc: "Aerobic base · All-day effort" },
-  { num: 3, name: "Tempo",       ftpPcts: [0.75, 0.90], desc: "Sustained effort · RPE 6–7" },
-  { num: 4, name: "Threshold",   ftpPcts: [0.90, 1.05], desc: "Near FTP · RPE 8" },
-  { num: 5, name: "VO2 Max",     ftpPcts: [1.05, 1.20], desc: "Hard intervals · RPE 9" },
+  { num: 2, name: "Endurance",   ftpPcts: [0.56, 0.75], desc: "Aerobic base · All-day effort" },
+  { num: 3, name: "Tempo",       ftpPcts: [0.76, 0.90], desc: "Sustained effort · RPE 6–7" },
+  { num: 4, name: "Threshold",   ftpPcts: [0.91, 1.05], desc: "Near FTP · RPE 8" },
+  { num: 5, name: "VO2 Max",     ftpPcts: [1.06, 1.20], desc: "Hard intervals · RPE 9" },
 ];
 
 // ── Swimming: CSS / T-Pace method ──────────────────────────────────────────────
 // T-Pace = pace you can sustain for ~1500m; zones are multiples of T-Pace (per 100m)
+// Canonical swim scheme per TRAINING_PHILOSOPHY §3 / MASTER_SPEC §8b:
+// Z3 = threshold at CSS, Z4 = VO2max (CSS − 3-5s), Z5 = sprint. This matches
+// how the workout_library's swim zone refs are encoded. (The old table put
+// threshold at Z4, disagreeing with the spec and the generator.)
 const SWIMMING_ZONE_CONFIG = [
-  { num: 1, name: "Recovery",   factor: [1.20, 9.99], desc: "Easy technical work · Warm-up · Cool-down" },
-  { num: 2, name: "Endurance",  factor: [1.08, 1.20], desc: "Comfortable aerobic effort" },
-  { num: 3, name: "Tempo",      factor: [1.03, 1.08], desc: "Sustained effort · RPE 6–7" },
-  { num: 4, name: "Threshold",  factor: [1.00, 1.03], desc: "Near CSS / T-Pace · RPE 8" },
-  { num: 5, name: "Race",       factor: [0.90, 1.00], desc: "Race speed · High intensity" },
+  { num: 1, name: "Recovery",   factor: [1.15, 9.99], desc: "Easy technical work · Warm-up · Cool-down" },
+  { num: 2, name: "Endurance",  factor: [1.05, 1.15], desc: "Comfortable aerobic effort" },
+  { num: 3, name: "Threshold",  factor: [0.98, 1.05], desc: "At CSS / T-Pace · RPE 8" },
+  { num: 4, name: "VO2max",     factor: [0.94, 0.98], desc: "Hard intervals · CSS − 3-5s" },
+  { num: 5, name: "Sprint",     factor: [0.85, 0.94], desc: "Max effort · Short repeats" },
 ];
 
 // ── Storage ────────────────────────────────────────────────────────────────────

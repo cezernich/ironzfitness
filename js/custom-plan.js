@@ -2068,7 +2068,10 @@ function saveCustomPlan() {
         const date = new Date(weekMonday);
         date.setDate(weekMonday.getDate() + w * 7 + idx);
         if (date < start) continue;                     // skip past dates in week 1
-        const dateStr = date.toISOString().slice(0, 10);
+        // Local-date serialization — toISOString() converts to UTC first,
+        // which lands a day early for users east of UTC (Monday sessions
+        // stamped with Sunday dates).
+        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
         const scheduleEntry = {
           id: `custom-${dateStr}-${entry.data?.type || "general"}-${si}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,

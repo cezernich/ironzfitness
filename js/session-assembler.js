@@ -1224,7 +1224,7 @@
     // FIRST. The old Z4-first order prescribed 97% FTP (threshold) for
     // sessions labeled "Sweet Spot — 88-94% FTP".
     if (zones.includes('Z3') && zones.includes('Z4')) return `${Math.round(ftp * 0.90)}W (sweet spot)`;
-    if (zones.includes('Z5')) return `${Math.round(ftp * 1.08)}W`;
+    if (zones.includes('Z5')) return `${Math.round(ftp * 1.10)}W`;  // mid-Coggan Z5 (106-120%), matches calendar pctMap
     if (zones.includes('Z4')) return `${Math.round(ftp * 0.97)}W`;
     if (zones.includes('Z3')) return `${Math.round(ftp * 0.88)}W (sweet spot)`;
     return `${Math.round(ftp * 0.70)}W`;

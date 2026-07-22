@@ -652,11 +652,19 @@
   // cooldown as Z1). Rest carries the rep count too — without it,
   // multi-round sets compute duration with one rest instead of N.
   function _paceTargetToZone(paceTarget, name) {
+    // Delegate to the shared calendar mapper (handles the generator's
+    // numeric "M:SS/100m" labels vs the user's CSS, spec zone numbering
+    // Z3 = CSS). The local regex is only a fallback when calendar.js
+    // isn't loaded — keeping two diverging copies is how the intensity
+    // strip painted all CSS work Z2.
+    if (typeof window !== "undefined" && typeof window._swimPaceTargetToZone === "function") {
+      return window._swimPaceTargetToZone(paceTarget, name);
+    }
     const c = (String(paceTarget || "") + " " + String(name || "")).toLowerCase();
     if (/cool ?down|very easy|long and loose/.test(c)) return "Z1";
-    if (/sprint|all.?out|max|race ?pace|css.?-|build to fast/.test(c)) return "Z5";
-    if (/threshold|@ ?css\b/.test(c)) return "Z4";
-    if (/tempo|css.?\+ ?[1-5]\b/.test(c)) return "Z3";
+    if (/sprint|all.?out|max/.test(c)) return "Z5";
+    if (/race ?pace|css.?-|build to fast/.test(c)) return "Z4";
+    if (/threshold|@ ?css\b|tempo|css.?\+ ?[1-5]\b/.test(c)) return "Z3";
     return "Z2";
   }
   function _legacyIntervalsFromSteps(steps) {

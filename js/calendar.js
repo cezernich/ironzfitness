@@ -8788,9 +8788,38 @@ function _swimPaceTargetToZone(paceTarget, name) {
   const t = String(paceTarget || "").toLowerCase();
   const n = String(name || "").toLowerCase();
   const combined = t + " " + n;
+  // Numeric pace labels — what the generator actually emits ("1:50/100m").
+  // The text patterns below never matched these, so every CSS-interval and
+  // sprint rep painted Z2 on the intensity strip. Compare against the
+  // user's CSS and map onto the spec scheme (Z3 = CSS threshold).
+  const paceMatch = t.match(/(\d+):(\d{2})\s*\/\s*100/);
+  if (paceMatch) {
+    const paceSec = parseInt(paceMatch[1]) * 60 + parseInt(paceMatch[2]);
+    let cssSec = null;
+    try {
+      const tz = JSON.parse(localStorage.getItem("trainingZones") || "{}");
+      const sw = tz.swimming || {};
+      if (typeof sw.css === "number") cssSec = sw.css;
+      else if (typeof sw.css === "string" && sw.css.includes(":")) {
+        const p = sw.css.split(":").map(Number);
+        if (!isNaN(p[0])) cssSec = p[0] * 60 + (p[1] || 0);
+      }
+      else if (sw.tPaceSec) cssSec = parseFloat(sw.tPaceSec) || null;
+    } catch {}
+    if (cssSec) {
+      const off = paceSec - cssSec;              // + = slower than CSS
+      if (off <= -6) return "Z5";                // sprint territory
+      if (off <= -2) return "Z4";                // VO2: CSS − 3-5
+      if (off <= 2)  return "Z3";                // threshold: at CSS
+      if (off <= 10) return "Z2";                // aerobic: CSS + 5-10
+      return "Z1";                               // recovery: CSS + 15+
+    }
+  }
   if (/cool ?down|very easy|long and loose/.test(combined)) return "Z1";
-  if (/sprint|all.?out|max|race ?pace|css.?-|build to fast/.test(combined)) return "Z5";
-  if (/threshold|@ ?css\b/.test(combined)) return "Z4";
+  if (/sprint|all.?out|max/.test(combined)) return "Z5";
+  if (/race ?pace|css.?-|build to fast/.test(combined)) return "Z4";
+  // Spec scheme: threshold / CSS pace = Z3 (not Z4)
+  if (/threshold|@ ?css\b/.test(combined)) return "Z3";
   if (/tempo|css.?\+ ?[1-5]\b/.test(combined)) return "Z3";
   if (/easy|warm ?up|aerobic|recovery|drill|technique|kick|side ?kick/.test(combined)) return "Z2";
   return "Z2";
@@ -9204,14 +9233,19 @@ function _qeBuildCardioWorkout(opts) {
     return descs[zone] || "Steady effort";
   }
   function swimDetail(zone) {
+    // Canonical swim scheme per TRAINING_PHILOSOPHY §3 / MASTER_SPEC §8b:
+    // Z3 = CSS (threshold), Z4 = VO2max (CSS − 3-5s), Z5 = sprint. This is
+    // also how the workout_library's swim zone refs are encoded — the old
+    // table here put CSS at Z4, so the same session showed different zone
+    // labels depending on which surface rendered it.
     const s = zones.swimming || {};
     if (s.css) {
-      const descs = { Z1: `Easy, CSS + 15-20s`, Z2: `Aerobic, CSS + 8-12s`,
-        Z3: `Tempo, CSS + 3-5s`, Z4: `Threshold, near CSS (${s.css}/100m)`, Z5: `VO2max, CSS - 3-5s` };
+      const descs = { Z1: `Easy, CSS + 15-20s`, Z2: `Aerobic, CSS + 5-10s`,
+        Z3: `Threshold, at CSS (${s.css}/100m)`, Z4: `VO2max, CSS - 3-5s`, Z5: `Sprint, max effort` };
       return descs[zone] || `Steady effort`;
     }
     const descs = { Z1: "Very easy, long rest", Z2: "Steady swimming, moderate effort",
-      Z3: "Tempo effort", Z4: "Threshold pace", Z5: "Hard interval effort" };
+      Z3: "Threshold pace", Z4: "Hard interval effort", Z5: "Sprint, max effort" };
     return descs[zone] || "Steady effort";
   }
 

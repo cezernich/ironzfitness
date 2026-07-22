@@ -281,21 +281,6 @@ function calculateSwimZonesFromCSS(cssSecPer100m) {
 
 // Minimal Daniels VDOT → pace bridge. Pace values are sec/mile for E/M/T/I/R.
 // Source: Daniels' Running Formula (table excerpts, key VDOT values).
-const VDOT_PACE_TABLE = {
-  30: { E: 720, M: 645, T: 612, I: 553, R: 514 },
-  35: { E: 660, M: 588, T: 558, I: 504, R: 469 },
-  40: { E: 612, M: 542, T: 514, I: 463, R: 431 },
-  45: { E: 571, M: 504, T: 477, I: 429, R: 399 },
-  50: { E: 537, M: 472, T: 446, I: 401, R: 372 },
-  55: { E: 508, M: 444, T: 419, I: 376, R: 349 },
-  60: { E: 482, M: 419, T: 396, I: 354, R: 329 },
-  65: { E: 459, M: 397, T: 375, I: 335, R: 311 },
-  70: { E: 439, M: 378, T: 357, I: 318, R: 295 },
-  75: { E: 421, M: 361, T: 341, I: 303, R: 281 },
-  80: { E: 405, M: 345, T: 326, I: 290, R: 268 },
-  85: { E: 391, M: 331, T: 313, I: 278, R: 257 }
-};
-
 function _formatPaceSecPerMile(sec) {
   const total = Math.round(sec);
   const m = Math.floor(total / 60);
@@ -304,24 +289,29 @@ function _formatPaceSecPerMile(sec) {
 }
 
 /**
- * Look up the closest VDOT row and return formatted pace zones.
- * Falls back to nearest neighbor if exact VDOT isn't tabulated.
+ * Formatted pace zones for a VDOT — single-sourced from
+ * VDOT_PACE_RANGE_TABLE (interpolated midpoints). There used to be a
+ * second, independently-maintained point table here whose values sat
+ * OUTSIDE the range table's bands at several VDOTs, so Settings showed
+ * different paces than generated workouts. One table now feeds both.
  */
 function calculateRunZonesFromVDOT(vdot) {
   const v = parseFloat(vdot);
   if (!v || v < 25) return null;
-  const keys = Object.keys(VDOT_PACE_TABLE).map(Number).sort((a, b) => a - b);
+  const row = _interpolateRow(v);
+  if (!row) return null;
+  const mid = (band) => Math.round((band[0] + band[1]) / 2);
+  const keys = Object.keys(VDOT_PACE_RANGE_TABLE).map(Number).sort((a, b) => a - b);
   const nearest = keys.reduce((best, k) => Math.abs(k - v) < Math.abs(best - v) ? k : best, keys[0]);
-  const row = VDOT_PACE_TABLE[nearest];
   return {
     vdot: v,
     nearest_table_vdot: nearest,
     zones: {
-      E: { name: 'Easy',       sec_per_mile: row.E, label: _formatPaceSecPerMile(row.E) },
-      M: { name: 'Marathon',   sec_per_mile: row.M, label: _formatPaceSecPerMile(row.M) },
-      T: { name: 'Threshold',  sec_per_mile: row.T, label: _formatPaceSecPerMile(row.T) },
-      I: { name: 'Interval',   sec_per_mile: row.I, label: _formatPaceSecPerMile(row.I) },
-      R: { name: 'Repetition', sec_per_mile: row.R, label: _formatPaceSecPerMile(row.R) }
+      E: { name: 'Easy',       sec_per_mile: mid(row.E), label: _formatPaceSecPerMile(mid(row.E)) },
+      M: { name: 'Marathon',   sec_per_mile: mid(row.M), label: _formatPaceSecPerMile(mid(row.M)) },
+      T: { name: 'Threshold',  sec_per_mile: mid(row.T), label: _formatPaceSecPerMile(mid(row.T)) },
+      I: { name: 'Interval',   sec_per_mile: mid(row.I), label: _formatPaceSecPerMile(mid(row.I)) },
+      R: { name: 'Repetition', sec_per_mile: mid(row.R), label: _formatPaceSecPerMile(mid(row.R)) }
     }
   };
 }

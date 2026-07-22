@@ -75,11 +75,17 @@
   function rule_weekly_hard_count(ctx) {
     const existingHard = ctx.weekEntries.filter(isHardEntry);
     const projected = existingHard.length + (ctx.candidateIsHard ? 1 : 0);
-    if (projected <= 3) return null;
+    // Level-aware cap matching §4.3 and the generator (plan-constraint-
+    // validator INTENSITY_CAPS: 1/2/3). The old flat "3 for everyone"
+    // meant a beginner could hand-add hard sessions 2 and 3 without any
+    // warning while the generator would never allow them.
+    const caps = { beginner: 1, intermediate: 2, advanced: 3 };
+    const cap = caps[ctx.experienceLevel] || 3;
+    if (projected <= cap) return null;
     return {
       rule: "weekly_hard_count",
       severity: "warning",
-      message: `This would put ${projected} hard sessions in the week of ${ctx.weekMonday}. The recommended max is 3.`,
+      message: `This would put ${projected} hard sessions in the week of ${ctx.weekMonday}. The recommended max for ${ctx.experienceLevel} athletes is ${cap}.`,
       items: existingHard.map(e => ({
         date: e.date,
         title: e.sessionName || e.title || e.type,

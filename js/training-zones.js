@@ -133,6 +133,8 @@
       z2: zone(5, 10),
       z3: { low_sec_per_100m: cssSec, high_sec_per_100m: cssSec, low_pace: _formatSwimPace(cssSec), high_pace: _formatSwimPace(cssSec), label: _formatSwimPace(cssSec) },
       z4: zone(-5, -3),
+      // §8b Z5 = sprint, max effort — no pace band, resolveZone gets a label.
+      z5: { low_sec_per_100m: null, high_sec_per_100m: null, low_pace: null, high_pace: null, label: "max effort" },
     };
   }
 
