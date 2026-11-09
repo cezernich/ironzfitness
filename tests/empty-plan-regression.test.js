@@ -70,7 +70,7 @@ async function until(check, message) {
     if (failure==='frozen') h.context.isPlanFrozen=()=>true;
     await h.ob._confirmAndSavePlan();
     assert.deepEqual([...h.store],[...before],`${failure} preserves all previous state`);
-    assert.ok(h.alerts.length,`${failure} has visible feedback`);
+    assert.ok(h.node('bp-v2-plan-error').textContent,`${failure} has visible feedback`);
     assert.notEqual(h.ob._state.currentScreen,'bp-v2-done',`${failure} must not show success`);
     assert.equal(h.remote.size,0,`${failure} must not commit partial data`);
     assert.equal(h.node('confirm').disabled,false);

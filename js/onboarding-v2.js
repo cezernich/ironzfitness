@@ -4165,6 +4165,8 @@
   // users — the user's explicit schedule is the source of truth.
   async function _confirmAndSavePlan() {
     if (_state._savingPlan) return;
+    const errorNotice = document.getElementById("bp-v2-plan-error");
+    if (errorNotice) { errorNotice.hidden = true; errorNotice.textContent = ""; }
     // TRAINING_PHILOSOPHY §4.8 — Half/Full Ironman recommend ≥5 training
     // days/week. If the schedule has fewer active days, explain why and
     // let the user choose whether to go back or keep their selection.
@@ -4286,7 +4288,9 @@
       goTo("bp-v2-done");
     } catch (e) {
       console.warn("[OnboardingV2] plan build failed");
-      alert(e && e.message || "Your plan could not be built. Please try again.");
+      const message = e && e.message || "Your plan could not be built. Please try again.";
+      if (errorNotice) { errorNotice.textContent = message; errorNotice.hidden = false; }
+      else alert(message);
     } finally {
       _state._savingPlan = false;
       if (confirmButton) confirmButton.disabled = false;
