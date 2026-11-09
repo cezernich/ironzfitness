@@ -1,3 +1,7 @@
+function _planLocalYmd(date) {
+  return date.getFullYear() + "-" + String(date.getMonth()+1).padStart(2,"0") + "-" + String(date.getDate()).padStart(2,"0");
+}
+
 // planner.js — Race event management + training plan generation
 
 // ─── Race configuration ─────────────────────────────────────────────────────
@@ -3260,7 +3264,7 @@ function _mondayOfDateStr(dateStr) {
   const dow = d.getDay();
   const offset = dow === 0 ? -6 : 1 - dow;
   d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
+  return _planLocalYmd(d);
 }
 
 function _datesInWeek(weekStartDateStr) {
@@ -3269,7 +3273,7 @@ function _datesInWeek(weekStartDateStr) {
   for (let i = 0; i < 7; i++) {
     const d = new Date(start.getTime());
     d.setDate(d.getDate() + i);
-    out.push(d.toISOString().slice(0, 10));
+    out.push(_planLocalYmd(d));
   }
   return out;
 }

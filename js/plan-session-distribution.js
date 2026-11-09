@@ -22,6 +22,10 @@
 (function () {
   "use strict";
 
+  function _ymd(date) {
+    return date.getFullYear() + "-" + String(date.getMonth()+1).padStart(2,"0") + "-" + String(date.getDate()).padStart(2,"0");
+  }
+
   // ─── Level-aware phase distributions (PLAN_GENERATOR_MASTER_SPEC §4) ─────
   // Target session counts per discipline per week, indexed by
   //   sportProfile → phase → level → disciplineCounts
@@ -199,7 +203,7 @@
     const day = d.getDay();
     const offset = day === 0 ? -6 : 1 - day;
     d.setDate(d.getDate() + offset);
-    return d.toISOString().slice(0, 10);
+    return _ymd(d);
   }
 
   function groupByWeek(plan) {
@@ -249,13 +253,13 @@
     for (const offset of order) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + offset);
-      const dateStr = d.toISOString().slice(0, 10);
+      const dateStr = _ymd(d);
       if (!used.has(dateStr)) {
         // Check no adjacent same-discipline day
         const prev = new Date(d); prev.setDate(d.getDate() - 1);
         const next = new Date(d); next.setDate(d.getDate() + 1);
-        const prevStr = prev.toISOString().slice(0, 10);
-        const nextStr = next.toISOString().slice(0, 10);
+        const prevStr = _ymd(prev);
+        const nextStr = _ymd(next);
         const adjacent = (hasDiscByDate[prevStr] && hasDiscByDate[prevStr][discipline]) ||
                          (hasDiscByDate[nextStr] && hasDiscByDate[nextStr][discipline]);
         if (!adjacent) return dateStr;
@@ -265,7 +269,7 @@
     for (const offset of order) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + offset);
-      const dateStr = d.toISOString().slice(0, 10);
+      const dateStr = _ymd(d);
       if (!used.has(dateStr)) return dateStr;
     }
     return null; // week is packed; give up (caller tolerates under-count)
@@ -297,7 +301,7 @@
     for (let i = 0; i < 7; i++) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
-      const s = d.toISOString().slice(0, 10);
+      const s = _ymd(d);
       if (!used.has(s)) empty.push(s);
     }
     return empty;
@@ -322,7 +326,7 @@
     rests.forEach(r => {
       const d = new Date(r + "T00:00:00");
       d.setDate(d.getDate() - 1);
-      blockedAsPreRest.add(d.toISOString().slice(0, 10));
+      blockedAsPreRest.add(_ymd(d));
     });
 
     const byDate = sessionsByDate(weekEntries);
