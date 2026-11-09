@@ -66,7 +66,7 @@ check "user edits own profile fields" "$(q "SELECT full_name||' '||weight_lbs FR
 as authenticated a a@x.com "INSERT INTO profiles(id,weight_lbs) VALUES (auth.uid(),181) ON CONFLICT (id) DO UPDATE SET weight_lbs=EXCLUDED.weight_lbs" >/dev/null
 check "own-profile upsert (db.js) works and keeps role" "$(q "SELECT weight_lbs||' '||role FROM profiles WHERE id='$(uid a)'")" "181 user"
 as authenticated c chase.zernich@gmail.com "UPDATE profiles SET role='admin' WHERE id=auth.uid()" >/dev/null
-check "owner email self-heals to admin" "$(q "SELECT role FROM profiles WHERE full_name='Chase'")" "admin"
+check "owner email self-heals to admin" "$(q "SELECT role FROM profiles WHERE id='$(uid c)'")" "admin"
 as authenticated f chase.zernich@kellogg.northwestern.edu "INSERT INTO profiles(id,email) VALUES (auth.uid(),'x')" >/dev/null
 check "owner email gets admin on signup" "$(q "SELECT role FROM profiles WHERE id='$(uid f)'")" "admin"
 as authenticated c chase.zernich@gmail.com "UPDATE profiles SET is_coach=true WHERE id='$(uid a)'" >/dev/null

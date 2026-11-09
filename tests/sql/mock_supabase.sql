@@ -37,7 +37,7 @@ INSERT INTO auth.users VALUES ('00000000-0000-0000-0000-00000000000a'),('0000000
 INSERT INTO profiles(id,email,full_name,birthday,weight_lbs,role) VALUES
  ('00000000-0000-0000-0000-00000000000a','a@x.com','Attacker','1990-01-01',180,'user'),
  ('00000000-0000-0000-0000-00000000000b','b@x.com','Victim','1992-02-02',140,'user'),
- ('00000000-0000-0000-0000-00000000000c','chase.zernich@gmail.com','Chase','1995-01-01',170,'user'),
+ ('00000000-0000-0000-0000-00000000000c','chase.zernich@gmail.com','Owner',NULL,NULL,'user'),
  ('00000000-0000-0000-0000-00000000000d','k@x.com','Coach',null,null,'user');
 UPDATE profiles SET is_coach=true, coach_bio='bio' WHERE full_name='Coach';
 INSERT INTO coaching_assignments(client_id,coach_id) VALUES ('00000000-0000-0000-0000-00000000000b','00000000-0000-0000-0000-00000000000d');
