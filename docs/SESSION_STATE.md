@@ -1,6 +1,22 @@
 # Iron Z current session state
 
-Updated 9 November 2026. Read this file, `AGENTS.md`, and the latest remote PRs before continuing. This is the current handoff; start with the Full PR/release review checkpoint and PR_RELEASE_REVIEW_2026-11-09.md. Earlier checkpoints are retained as history. Append completed session summaries to `SESSION_LOG.md`.
+Updated 9 November 2026. Read this file, `AGENTS.md`, and the latest remote PRs before continuing. This is the current handoff; start with the Latest implementation checkpoint below; earlier checkpoints and PR_RELEASE_REVIEW_2026-11-09.md are historical. Earlier checkpoints are retained as history. Append completed session summaries to `SESSION_LOG.md`.
+
+
+## Latest implementation checkpoint — 9 November 2026, staging correction
+
+This checkpoint supersedes older production and quarantine status below. User authorized migration-order, scheduling and failing-test repairs, Claude coordination and staging verification before a production update.
+
+- Other actors merged the prior setup/security/build/empty-plan changes. Latest fetched main is `681e68c6adf74e34dbaa10720c77068c41a88a54`. Production catalog now has `profiles_guard_privileged` and no broad/client-to-coach profile SELECT policy. Codex did not perform those production changes. Only `test` is currently required by branch protection; do not assume the older staging-release requirement still applies.
+- PR30 (`codex/fix-profile-migration-order`, `9bb444b`) adds a final corrective migration without editing historical files. Actual lexical discovery order and chronological upgrade both pass 20 database assertions locally; omission mutation fails. Independent QA review: https://github.com/cezernich/ironzfitness/pull/30#pullrequestreview-5833669261 .
+- Staging-only corrective migration successfully applied through Supabase: `20261109224651_enforce_final_profile_privacy`. It corresponds to repository sequence `20261110221358_enforce_final_profile_privacy.sql`; managed tool uses application time for its ledger. Verified catalog has no client-to-coach whole-row policy. Earlier expired confirmation did not apply anything. Production ledger/history untouched.
+- PR31 (`codex/fix-plan-availability`, `907b4ee`) enforces selected sports, weekdays, start date and legacy day cap across the arc and direct/calendar regeneration. Chicago and UTC+14 regressions pass. Independent QA: https://github.com/cezernich/ironzfitness/pull/31#pullrequestreview-5833798761 .
+- PR32 (`codex/repair-training-regressions`, `7e7e0ac`) repairs the three quarantined training suites and associated production date/week/test-placement bugs. Full npm test passes in Chicago and Pacific/Kiritimati: 21 files, zero failures, ZERO quarantines, 170 syntax checks, zero credential-scan hits. Latest timezone fixture/watchdog follow-up awaits independent QA. No tests were newly quarantined.
+- Claude PR29 (`1330f46`) is useful blocked-period UI groundwork, but review identified display-only prescription and automatic-clearance problems. Hold comment posted. Separate own worktree `/private/tmp/ironz-blocked-prescriptions` implements shared prescription-level policy plus atomic DB persistence and wizard input; unfinished/uncommitted, NOT staging certified. Do not push Claude's branch.
+- Hosted staging remains the OLD `4c1b548` artifact. Fresh combined app/browser staging verification and Claude review are still required. No current changes have been merged or deployed to production by Codex. Provider/native/hosted-auth and broader stale-device/intensity blockers remain open. No private athlete plan has been imported or generated.
+- Local disposable Postgres 16 runs on UNIX socket `/private/tmp/ironz-pg-test`, port 55439; stop owned server at session teardown. It contains synthetic fixtures only. Do not confuse local SQL passes with remote staging API/browser passes.
+
+Next: finish/review prescription restrictions, combine focused fixes on an isolated staging candidate, rerun 32 real staging API checks after migration, verify complete browser build/save/reload/failure and availability/recovery flows, update exact evidence and request Claude review. Never release merely because the narrow test suite is green.
 
 ## Objective and release constraint
 
