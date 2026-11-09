@@ -30,7 +30,7 @@ Rules:
 | `philosophy/db_snapshot_2026-11-09.json` (45 modules) | **Backup** | `tests/philosophy-modules-safety.test.js` | Exact copy of the live `philosophy_modules` table on 2026-11-09. Not read by the app. Re-snapshot after any production edit. |
 | `philosophy/IRONZ_KNOWLEDGE_BASE.md` | **Reference, in use** | Mirrored in `supabase/functions/ask-ironz/knowledge_base.ts`; cited by `js/gear-checklist.js` | Edits must be mirrored to the edge function copy. |
 | `philosophy/PHILOSOPHY_UPDATE_2026-04-09_*.md` (run session types, threshold weeks, workout diversification) | **Reference, in use** | Cited by planner, generator, scheduler, and variant-selector code and one test | Change logs whose rules should already be in the master spec. Keep until confirmed merged. |
-| Other `philosophy/*.md`, `*.txt`, and `edge_case_escalation.json`, `plan_output_schema.json`, `user_classifier_rules.json`, `validator_rules.json` | **Reference, not read by code** | none found (2026-11-09 search of `js/`, `scripts/`, `tests/`, `supabase/functions/`) | Background research and early drafts. Candidates for an archive folder in a later PR, after a fresh reference check. |
+| `archive/` (13 files) | **Archived** | none (checked 2026-11-09) | Moved from `philosophy/` on 2026-11-09. See `archive/README.md`. |
 | `exercises/IronZ_Exercise_Library_Expanded.xlsx`, `exercises/exercise-supplement.json` | **Authoritative source data** | `scripts/generate-exercise-db.py` → `exercise-data.js` | |
 
 ## 3. Runtime: where the live app actually gets philosophy modules
