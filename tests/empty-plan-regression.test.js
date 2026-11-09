@@ -96,6 +96,8 @@ async function until(check, message) {
     assert.equal(h.ob._state.currentScreen,'bp-v2-done');
     assert.ok(h.read('trainingPlan').length>20);
     assert.equal(h.read('events').length,2);
+    assert.equal(h.read('events')[0].priority,'B','previous A is demoted only on success');
+    assert.equal(h.read('events')[1].priority,'A');
     assert.equal(h.remote.get('trainingPlan'),h.store.get('trainingPlan'),'server and cache agree');
     assert.ok(h.read('trainingPlan').some(e=>e.raceId==='previous'),'unrelated race retained');
   }
