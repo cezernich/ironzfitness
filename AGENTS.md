@@ -34,7 +34,10 @@ Tests in `QUARANTINE` inside `scripts/run-tests.js` run but don't fail CI. Each 
 - `sources-of-truth/Engine Doc/PLAN_GENERATOR_MASTER_SPEC.md` is the single source of truth for training logic: classification, phases, session distribution, workouts, zones, exercise selection, nutrition, hydration, recovery, safety, coaching tone.
 - **Spec sync rule:** if you change training logic in code, update the master spec in the same PR. The spec and the code must never disagree. If the spec does not cover a case, ask in the PR; don't guess.
 - Also: `sources-of-truth/RULE_ENGINE_SPEC.md` (pipeline order), `sources-of-truth/PLAN_SCHEMA.json` (plan output contract).
-- `sources-of-truth/TRAINING_PHILOSOPHY.md` is deprecated. Do not reference or update it.
+- `sources-of-truth/TRAINING_PHILOSOPHY.md` is retired. Do not reference or update it.
+- `sources-of-truth/README.md` is the map: which document is authoritative for **plan generation** vs **adaptive coaching**, the status of every file, and what code reads it. Check it before moving, renaming, or deleting anything in that folder (the live app fetches files from it by path).
+- Adaptive coaching (day-to-day changes, briefs, reviews) is specified in `docs/COACH_AGENT_SPEC.md`. It is a **draft** until merged; don't implement from it before then.
+- The `philosophy_modules` database table is live data read by the app and by `ask-ironz`. Don't sync, reconcile, or retire it except in its own tested PR.
 
 ## 5. Current state and direction (Nov 2026)
 
