@@ -186,11 +186,11 @@ This means you can always answer: "What science was this plan based on?" and "Ha
 **Files to create:**
 - `supabase/migrations/001_philosophy_engine.sql`
 - `philosophy/philosophy_modules.json` (all 90-130 modules)
-- `philosophy/core_philosophy.md` (from Spec Section 2)
-- `philosophy/plan_output_schema.json` (from Spec Section 8)
-- `philosophy/validator_rules.json` (from Spec Section 9.1)
-- `philosophy/user_classifier_rules.json` (from Spec Section 3)
-- `philosophy/edge_case_escalation.json` (from Spec Section 2.4)
+- `archive/core_philosophy.md` (archived 2026-11-09) (from Spec Section 2)
+- `archive/plan_output_schema.json` (archived 2026-11-09) (from Spec Section 8)
+- `archive/validator_rules.json` (archived 2026-11-09) (from Spec Section 9.1)
+- `archive/user_classifier_rules.json` (archived 2026-11-09) (from Spec Section 3)
+- `archive/edge_case_escalation.json` (archived 2026-11-09) (from Spec Section 2.4)
 - `philosophy/golden_test_cases.json` (from Spec Section 9.3)
 
 ### Task 1.1: Create Supabase Migration
