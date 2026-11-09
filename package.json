@@ -4,7 +4,7 @@
   "description": "IronZ: training, nutrition and hydration app (web + Capacitor iOS)",
   "main": "adaptive-coach.js",
   "scripts": {
-    "build": "rsync -av --exclude=www --exclude=node_modules --exclude=ios --exclude=.git --exclude='*.docx' *.js *.css *.html *.json *.sql icons/ philosophy/ supabase/ Logo/ scripts/ 'Future Features/' 'Training Philosophy/' www/",
+    "build": "node scripts/build-web.js",
     "sync": "npm run build && npx cap sync ios",
     "open": "npx cap open ios",
     "test": "node scripts/run-tests.js"
