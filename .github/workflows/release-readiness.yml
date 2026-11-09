@@ -1,0 +1,21 @@
+name: Staging release gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  staging-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Hold production until staging and review blockers are cleared
+        run: node scripts/check-release-readiness.js

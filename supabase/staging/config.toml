@@ -1,0 +1,14 @@
+project_id = "ironz-staging"
+
+[auth]
+site_url = "https://ironz-staging.chase-zernich.chatgpt.site"
+additional_redirect_urls = ["https://ironz-staging.chase-zernich.chatgpt.site/**"]
+enable_signup = false
+enable_anonymous_sign_ins = false
+minimum_password_length = 12
+
+[auth.email]
+# Keep the email/password provider enabled; the global auth.enable_signup
+# above blocks self-service registration while allowing provisioned logins.
+enable_signup = true
+enable_confirmations = true

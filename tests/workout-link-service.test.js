@@ -56,11 +56,11 @@ section("3. Character distribution sanity (first char of 1000 tokens)");
 section("4. URL formatting");
 {
   const t = "abcDEF123456";
-  check("shareUrlFor returns ironz.app/w/<token>",
-    LinkService.shareUrlFor(t) === "https://ironz.app/w/abcDEF123456",
+  check("shareUrlFor returns ironz.fit/w/<token>",
+    LinkService.shareUrlFor(t) === "https://ironz.fit/w/abcDEF123456",
     LinkService.shareUrlFor(t));
   check("SHARE_URL_BASE exposed",
-    LinkService.SHARE_URL_BASE === "https://ironz.app/w/");
+    LinkService.SHARE_URL_BASE === "https://ironz.fit/w/");
   check("TOKEN_LENGTH exposed", LinkService.TOKEN_LENGTH === 12);
 }
 

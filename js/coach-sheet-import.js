@@ -1270,7 +1270,7 @@
     const trimmed = String(dateStr).trim();
     // Already ISO?
     if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
-    // M/D/YY or M/D/YYYY (Paige's source format).
+    // M/D/YY or M/D/YYYY (common coach-sheet format).
     const m = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
     if (m) {
       let yr = parseInt(m[3], 10);
