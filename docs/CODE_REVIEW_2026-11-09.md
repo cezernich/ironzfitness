@@ -17,6 +17,8 @@ Reviewed: `cezernich/ironzfitness` at commit `2590645` (last push May 26, 2026).
 
 ### P0: fix before anyone else uses the app
 
+> Status: #1 and #2 fixed by `supabase/migrations/20261109_secure_profiles.sql` (PR `claude/secure-profiles`), which also closes a third leak: anyone holding a live share link could read the sender's full profile. Covered by `tests/sql/profiles-security.sh` in CI. Must still be applied to the live database.
+
 1. **Any signed-in user can make themselves admin, premium, or a coach.** The `profiles` UPDATE policy is `USING (auth.uid() = id)` with no column restriction and no trigger guarding `role`, `subscription_status`, or `is_coach`. From the browser console: `supabaseClient.from('profiles').update({role:'admin'}).eq('id', myId)`. That unlocks the admin dashboard, every admin RLS policy, and bypasses the paywall. Fix: a `BEFORE UPDATE` trigger that rejects changes to those columns unless the caller is service_role or admin, or move them to a separate table users cannot write.
 2. **Every signed-in user can read every other user's profile row.** `inbox-migration.sql` adds `FOR SELECT TO authenticated USING (true)` on `profiles`. Since `20260430e`, that row includes `birthday` and `body_comp_goal`, plus email, name, role, and subscription status. Fix: drop that policy and replace it with a `SECURITY DEFINER` RPC that looks up one user by exact email and returns only id + display name (the migration's own comment suggests this).
 3. **A real person's training plan was in a public repo.** Removed from the working tree in PR `claude/agent-collab-setup`. It is still in git history; making the repo private (or rewriting history) is the remaining step.
