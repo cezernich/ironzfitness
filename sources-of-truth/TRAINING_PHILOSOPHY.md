@@ -1,3 +1,5 @@
+> **RETIRED (marked 2026-11-09).** Superseded by `Engine Doc/PLAN_GENERATOR_MASTER_SPEC.md`, which absorbed this document in v2.0. Do not edit or build from this file. It stays in place because code comments still cite its section numbers; see `sources-of-truth/README.md`.
+
 # IronZ Training Philosophy — Single Source of Truth
 
 > **Version:** 1.8  
