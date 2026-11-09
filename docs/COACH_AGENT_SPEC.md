@@ -1,6 +1,6 @@
-# IronZ Adaptive Coach: Spec v0.2 (draft for review)
+# IronZ Adaptive Coach: Spec v0.3 (draft for review)
 
-Status: **draft, nothing built.** v0.2 adds Chase's decisions and the research behind the auto-adjust limits (section 14). Written 2026-11-09 by Claude for review by Codex and approval by Chase. No app code changes until this is approved.
+Status: **draft, nothing built.** v0.2 adds Chase's decisions and the research behind the auto-adjust limits (section 14). v0.3 adds measured hydration, sweat tests, and fueling prescriptions (section 15). Written 2026-11-09 by Claude for review by Codex and approval by Chase. No app code changes until this is approved.
 
 Source: a working personal coaching agent the owner has run daily since Oct 2026 (Claude + Strava + Intervals.icu wellness synced from Garmin + calendar). This doc keeps that agent's **method only**. Personal data (health history, current numbers, schedule, locations, account IDs, connector URLs) is deliberately excluded because this repo is public. Do not add it.
 
@@ -276,6 +276,7 @@ From the agent, and they mostly match the master spec:
 | Trend log | `stats.js` summaries | Append-only weekly record + pattern detection | valuable soon after launch |
 | Push to watch | none for Garmin (Strava upload exists) | Intervals.icu calendar write → Garmin; workout text rules (appendix A) | future differentiator |
 | Calendar placement | `calendar-sync.js` (Codex: empty client ID, non-idempotent exports) | Fix, then availability-aware placement | future differentiator |
+| Measured hydration | formula-only daily goal; weigh-in advice is text only | Weigh-in → replacement volume; sweat tests; measured rates (section 15) | must-have (15b) |
 | Notification settings | `notification_preferences` + push infra exist | Add daily/weekly toggles, day picker, coach style | must-have |
 | LLM wording | `ask-ironz` / `ai-proxy` exist (Codex: quota race, model allowlist) | Rules decide, LLM only writes the explanation; fix quota first | must-have (after fixes) |
 
@@ -289,6 +290,7 @@ Each step is its own PR with tests. Security and sync fixes already queued come 
 
 0. **Prerequisites:** profiles security (PR #14), sync data-loss fix (Codex), one plan engine (Rule Engine wired in).
 1. **Prescription ↔ activity matching + grading** (5c) using Strava data already in the app. Visible value with no new integration.
+1b. **Weigh-in → hydration goal** (15b). Small, client-side, no integration needed.
 2. **Wellness ingest via Intervals.icu OAuth** (edge function, tokens server-side like Strava) + baselines.
 3. **Readiness + auto/propose engine** (5a, 5b) with undo and reasons. Unit tests on every threshold.
 4. **Daily brief** (5d) through existing push infra + IANA time zones + settings (section 8).
@@ -344,6 +346,86 @@ So: a 20% / 15 min trim of an easy session is far inside what maintains fitness 
 | Build effort | Low: edge function + OAuth, same pattern as Strava | High: requires bundling the iOS app + a native plugin |
 
 Recommendation: build Intervals.icu first (cheap, works with today's web architecture, the owner's own setup for dogfooding, and the only path to the watch). Position it as the "connect your Garmin" path for serious athletes. Add Apple Health once the app is bundled, as the no-extra-account path. Readiness must work without HRV so Apple Health users still get a real coach.
+
+## 15. Fueling, hydration, and sweat tests
+
+The owner's agent treats fueling and hydration as part of the prescription, not tips: it gives exact amounts, tells the athlete when to run a sweat test, and turns a post-session weigh-in into a specific fluid number. IronZ should do the same **for users who turn hydration and nutrition on** (`hydrationEnabled` and nutrition feature toggles already exist). Users who turn them off see none of this.
+
+### 15a. What exists today
+
+- `hydration.js` sets a daily goal: baseline (0.6 oz/lb) plus a **formula-estimated** workout bonus (rate × hours × weight factor × intensity factor). Master spec 11e.
+- `hydration-calculator.js` and `nutrition-calculator.js` mention "weigh before/after, replace 150%" as **text only**. Nothing reads a weigh-in.
+- No sweat test flow, no stored sweat rate, no in-session fluid plan from measured data.
+
+### 15b. Post-session weigh-in → today's hydration goal
+
+Inputs (all optional, entered on the workout completion screen or in chat, e.g. "lost 2 lb"):
+- weight before and after, or weight lost directly
+- fluid drunk during the session
+- session duration
+
+Rules:
+- **Replacement volume = 150% of weight lost**, with sodium, over the next 2 to 6 hours. In US units that's about **23 oz per lb** lost (1 lb ≈ 454 ml; × 1.5 ≈ 680 ml).
+- **No double counting:** for that session, the measured number **replaces** the formula estimate in the day's goal:
+  `session hydration = fluid drunk during + 1.5 × weight lost`
+- Sodium with the replacement (salty food or an electrolyte drink), because sodium helps the body keep the fluid instead of passing it.
+- The brief and the hydration card show the exact number and how to take it: e.g. "Drink 46 oz with sodium over the next 3 hours."
+
+Worked example: 180 lb athlete, 90-min ride, drank 24 oz, lost 2 lb.
+- Formula estimate for this ride (master spec 11e): 22 × 1.5 × 1.125 × 1.0 ≈ 37 oz
+- Measured: 24 + (2 × 23) = **70 oz**, which replaces the 37 oz estimate
+- Coach message: "You lost 2 lb, about 1.1% of body weight. Drink 46 oz with sodium over the next 3 hrs. Today's goal is now 178 oz."
+
+Guardrails:
+| Situation | Coach response |
+|---|---|
+| Lost more than 2% of body weight | Replace as above, and raise the in-session drink plan for that sport next time |
+| Lost more than 3%, or a number that looks wrong | Ask to confirm before using it (probable typo or scale error) |
+| **Gained weight** during the session | Don't add fluid. Flag over-drinking and lower the in-session plan. Drinking well beyond sweat losses carries a hyponatremia risk |
+| Any health condition affecting fluid or sodium intake (user-reported) | Defer to their clinician's guidance; don't prescribe sodium |
+| Hydration feature off | Log the weight if the user wants, give no fluid prescription |
+
+### 15c. Sweat tests
+
+**When the coach asks for one** (as a single prescription on a suitable session, never a key test day):
+- No sweat rate on file for a sport the athlete trains 2+ times a week.
+- Conditions changed (indoor to outdoor, season or heat change) since the last test.
+- Before a race build, or after a session flagged for fade, cramping, or big weight loss.
+
+**Protocol** (shown step by step in the app):
+1. Use the bathroom, then weigh nude (or in the same dry kit each time).
+2. Do 60 to 90 min at typical training effort. Record everything you drink.
+3. Towel off, then weigh again the same way. Note any bathroom stops.
+4. Sweat rate (L/hr) = (weight before − weight after + fluid drunk − urine) ÷ hours.
+
+**Stored per sport and condition** (indoor/outdoor, approximate temperature), with date.
+
+**What changes once a sweat rate exists:**
+- The in-session fluid plan for that sport uses the measured rate instead of the formula: aim to keep loss under 2% of body weight, and **never drink more than the measured sweat rate**.
+- The daily hydration goal uses the measured rate for that sport's sessions.
+- Retest prompts follow the triggers above.
+
+Sodium: without a lab sweat-sodium test, use general guidance (sodium in every bottle for sessions over 60 min, more in heat and for visibly salty sweaters). Don't present a precise sodium number as personalized unless it comes from a sodium test.
+
+### 15d. Fueling prescriptions in the brief
+
+For sessions over 75 min, and for the day before a long or key session:
+- **In-session carbs per hour** from the athlete's current target, plus bottles and sodium per bottle.
+- **Gut-training progression:** raise the carbs/hr target only after the current target has been logged on two long sessions in a row; otherwise hold it and say why.
+- **Day fueling:** carbs scaled to load (more on big and pre-key days), protein ~30 to 40 g within 2 hrs after training, per master spec 11.
+- Logging: fueling reported anywhere (completion screen or chat) counts as logged. "Unlogged" is never graded as "not done" (section 4).
+- Guardrail: the coach never suggests a calorie deficit or weight-loss target inside the training loop (section 9).
+
+### 15e. Build notes
+
+- 15b is **small and high-value**: client-side math plus two optional fields on the completion screen and a chat parser (`nl-input.js` exists). It can ship early, before wellness integrations. Label: **must-have for MVP**.
+- 15c sweat test flow and stored rates: **valuable soon after launch**.
+- 15d progression gate depends on fueling logs: **valuable soon after launch**.
+- Update master spec 11e when built (spec sync rule).
+
+Sources: 150% replacement with sodium is the standard rehydration finding (Shirreffs and Maughan; [Maughan, Dairy Council talk](https://www.dairycouncil.co.uk/assets/files/sports-nutrition/2011/Prof-Ron-Maughan---Milk-and-Rehydration-BELFAST-Nov-11.pdf); [GSSI practical guide](https://positivecoach.org/wp-content/uploads/understanding-electrolytes-hydration.pdf)); sodium reduces urine loss after rehydration ([Merson et al. 2008](https://springerlink.bibliotecabuap.elogim.com/content/pdf/10.1007/s00421-008-0748-0.pdf)).
+
+---
 
 ## Appendix A: Structured workout export rules (verified on a Garmin via Intervals.icu)
 
