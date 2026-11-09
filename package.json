@@ -5,6 +5,8 @@
   "main": "adaptive-coach.js",
   "scripts": {
     "build": "node scripts/build-web.js",
+    "build:staging": "node scripts/staging/build.js",
+    "release:check": "node scripts/check-release-readiness.js",
     "sync": "npm run build && npx cap sync ios",
     "open": "npx cap open ios",
     "test": "node scripts/run-tests.js"

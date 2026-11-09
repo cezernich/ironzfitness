@@ -1,0 +1,15 @@
+{
+  "environment": "staging",
+  "projectRef": "yhchfxjzxhinreklnxbi",
+  "releaseApproved": false,
+  "apiChecks": {"passed": 31, "failed": 0},
+  "browserQa": "pending",
+  "blockers": [
+    "Independent Claude review of Codex privacy and staging changes is pending",
+    "Three training behavior suites remain quarantined and need canonical-spec decisions",
+    "Strava provider secret rotation has not been verified",
+    "Stale-device destructive synchronization remains unresolved",
+    "Workout intensity adjustment changes labels without changing prescriptions",
+    "External AI, wearable, email, payment and push integrations are disabled and not end-to-end validated"
+  ]
+}

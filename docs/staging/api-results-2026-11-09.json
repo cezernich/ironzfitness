@@ -1,0 +1,164 @@
+{
+  "environment": "staging",
+  "projectRef": "yhchfxjzxhinreklnxbi",
+  "productionChanged": false,
+  "passed": 31,
+  "failed": 0,
+  "checks": [
+    {
+      "name": "password sign-in: athlete-a",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "password sign-in: athlete-b",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "password sign-in: coach",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "password sign-in: admin",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "reference philosophy modules seeded",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "synthetic browser state: athlete-a",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "synthetic browser state: athlete-b",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "synthetic browser state: coach",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "synthetic browser state: admin",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "athlete cannot promote self",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "athlete cannot read another athlete profile",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "own profile edit persists",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "synthetic workout fixture created",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "athlete cannot read another athlete workout",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "athlete cannot edit another athlete workout",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "own persisted state can be read back",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "persisted state isolated between athletes",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "synthetic coach assignment created",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "assigned athlete cannot read coach health fields",
+      "passed": true,
+      "detail": "A narrow display card must not grant the entire profile row"
+    },
+    {
+      "name": "assigned athlete can read narrow coach card",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "exact email lookup preserves sharing",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "anonymous email lookup rejected",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "synthetic share fixture created",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "anonymous share visitor cannot read sender health fields",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "administrator retains authorized profile access",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "external integration explicitly disabled: ask-ironz",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "external integration explicitly disabled: strava-auth",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "external integration explicitly disabled: send-push",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "account deletion rejects unauthenticated caller",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "disposable user can delete own account",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "deleted disposable account no longer exists",
+      "passed": true,
+      "detail": ""
+    }
+  ]
+}

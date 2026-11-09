@@ -4,6 +4,10 @@ Shared instructions for every coding agent on this repo (Codex, Claude, anything
 
 Owner: Chase (cezernich). He reviews and merges every PR.
 
+## Session continuity
+
+Read `docs/SESSION_STATE.md` and the latest entry in `docs/SESSION_LOG.md` at session start, then refresh remote branches and reviews. Update them after meaningful milestones, about every 30 minutes during long work, and before ending a session. Record exact code/migration/deployment revisions, passed/failed/disabled checks, unresolved blockers, and next actions. Keep production and staging status distinct. Never store passwords, API secrets, tokens, or real athlete records in these files. Do not mark a release ready merely because CI passed while tests remain quarantined or integrations are disabled.
+
 ## 1. What IronZ is
 
 Training, nutrition, and hydration app for endurance and hybrid athletes (triathlon, running, Hyrox, strength). The core promise: a plan that adapts to the athlete, not a generic template.

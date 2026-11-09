@@ -2,6 +2,8 @@ config.example.js
 .DS_Store
 node_modules/
 www/
+www-staging/
+*staging-credentials*.json
 *.docx
 
 # iOS — commit the project + config, but not per-user Xcode state or

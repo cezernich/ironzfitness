@@ -59,7 +59,7 @@ for (const t of tests) {
 const jsFiles = [];
 (function walk(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (["node_modules", "ios", ".git", "www", "supabase"].includes(e.name)) continue;
+    if (["node_modules", "ios", ".git", "www", "www-staging", "supabase"].includes(e.name)) continue;
     const p = path.join(dir, e.name);
     if (e.isDirectory()) walk(p);
     else if (e.name.endsWith(".js")) jsFiles.push(p);
