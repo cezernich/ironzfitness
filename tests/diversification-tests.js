@@ -29,6 +29,7 @@ require("../js/variant-libraries/hybrid.js");
 require("../js/variant-libraries/index.js");
 require("../js/deterministic-variant-rotation.js");
 require("../js/bike-workout-generator.js");
+require("../js/swim-workout-model.js");
 require("../js/swim-workout-generator.js");
 require("../js/strength-workout-generator.js");
 require("../js/ai-variant-selector.js");
@@ -94,9 +95,12 @@ section("C. SwimWorkoutGenerator — 8x100 at CSS=90 (1:30/100m)");
   });
   const w = r.workout;
   check("3 phases", w.phases.length === 3);
-  check("main is 8x100m", /8x100m/.test(w.phases[1].instruction), w.phases[1].instruction);
-  check("pace 1:30/100m", /1:30\/100m/.test(w.phases[1].instruction), w.phases[1].instruction);
-  check("total distance 400 + 800 + 200 = 1400 m", w.estimated_distance_m === 1400);
+  const main=w.steps.find(step=>step.kind==="repeat" && step.count===8);
+  check("main is eight100m intervals", main && main.children[0].distance_m===100);
+  check("canonical pace is1:30/100m",main && main.children[0].pace_target==="1:30/100m");
+  check("rest between intervals15seconds",main && main.children[1].kind==="rest" && main.children[1].duration_sec===15);
+  check("400easy+4x50build+800main+200CD=1600m",w.total_distance_m===1600 && w.estimated_distance_m===1600);
+  check("legacy distances agree with canonical steps",w.phases.reduce((sum,phase)=>sum+phase.distance_m,0)===w.total_distance_m);
 }
 
 section("D. SwimWorkoutGenerator — descending 10x100 with CSS=90");
@@ -107,11 +111,9 @@ section("D. SwimWorkoutGenerator — descending 10x100 with CSS=90");
     userZones: { css: 90 },
     experienceLevel: "intermediate",
   });
-  // first 5 at css_plus_5 = 95s = 1:35; last 5 at css = 1:30
-  check("first set 5x100 at 1:35/100m", /5x100 @ 1:35\/100m/.test(r.workout.phases[1].instruction),
-    r.workout.phases[1].instruction);
-  check("second set 5x100 at 1:30/100m", /5x100 @ 1:30\/100m/.test(r.workout.phases[1].instruction),
-    r.workout.phases[1].instruction);
+  const sets=r.workout.steps.filter(step=>step.kind==="repeat" && step.count===5);
+  check("first five100m reps at1:35/100m",sets[0] && sets[0].children[0].distance_m===100 && sets[0].children[0].pace_target==="1:35/100m");
+  check("second five100m reps at1:30/100m",sets[1] && sets[1].children[0].distance_m===100 && sets[1].children[0].pace_target==="1:30/100m");
 }
 
 section("E. StrengthWorkoutGenerator — compounds do NOT rotate, accessories do");

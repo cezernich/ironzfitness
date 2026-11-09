@@ -313,7 +313,7 @@
   function _generateTrack(template, experience, durationOverrideMin, zones, warnings, weeksSincePlanStart, variantOffset) {
     const rotCount = template.rotation_templates.length;
     let rotationIndex;
-    if (weeksSincePlanStart != null && weeksSincePlanStart > 0 && !variantOffset) {
+    if (weeksSincePlanStart != null && !variantOffset) {
       rotationIndex = ((weeksSincePlanStart) % rotCount + rotCount) % rotCount;
     } else {
       rotationIndex = _variantIndex(variantOffset) % rotCount;
@@ -682,7 +682,7 @@
         result = _generateTempo(template, experience, opts.durationOverrideMin, zones, warnings, vOff);
         break;
       case "track_workout":
-        result = _generateTrack(template, experience, opts.durationOverrideMin, zones, warnings, opts.weeksSincePlanStart || 0, vOff);
+        result = _generateTrack(template, experience, opts.durationOverrideMin, zones, warnings, opts.weeksSincePlanStart, vOff);
         break;
       case "speed_work":
         result = _generateSpeedWork(template, experience, opts.durationOverrideMin, zones, warnings, vOff);
