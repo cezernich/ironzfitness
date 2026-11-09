@@ -64,3 +64,57 @@ Before moving a file:
 1. Search `js/`, `scripts/`, `tests/`, `supabase/functions/`, and `index.html` for its name (not just its path).
 2. Update or remove every reference in the same PR.
 3. `npm test` includes `tests/sources-of-truth-references.test.js`, which fails if code references a `sources-of-truth/...` path that doesn't exist.
+
+## 6. Crosswalk: retired `TRAINING_PHILOSOPHY.md` → master spec
+
+About 30 code comments in 14 files still cite `TRAINING_PHILOSOPHY §x.y`. Rather than churn those files, resolve a citation here. "Partial" means the master spec covers the topic but not one-to-one; check both before relying on it.
+
+| Retired § | Topic | Master spec § | Match |
+|---|---|---|---|
+| 1 | Core principles | 0 | Full |
+| 2.1 | Sport-specific level | 2a, 2b, 2c, 2d | Full |
+| 2.2 | Dynamic level progression | 2g | Full |
+| 2.3 | Risk–performance bias | 2h | Full |
+| 2.4 | Age modifications | 2a-0, 2m | Partial |
+| 2.5 (2.5.1, 2.5.2, 2.5.4, 2.5.5) | Goal system and modifiers | 1, 3b-ii, 4c | Partial |
+| 2.5.3 | Strength role (hybrid) | 5 (5a to 5d) | Full |
+| 2.6 | Training frequency | 2i | Full |
+| 2.7 | Equipment access | 2j | Full |
+| 2.8 | Threshold refresh | 2k | Full |
+| 3 | Training zones | Appendix B | Full |
+| 4.1 | Periodization principles | 3a | Full |
+| 4.2 | Phase compression | 3a-iv | Full |
+| 4.3 | Global intensity rules (Z4+ caps) | 0 (principle 2), 3a-ii, 4b phase intensity tables | Partial |
+| 4.4 | Triathlon periodization | 3a, 4a | Full |
+| 4.5 | Running periodization | 3a, 4b | Full |
+| 4.6 | Hyrox periodization | 13a | Full |
+| 4.7 | Multi-race periodization | 3a-v | Full |
+| 4.8 | Training hours by level and distance | 3c | Full |
+| 4.9 | Rolling mesocycles (non-race) | 3b | Full |
+| 5 | Session types | 8d | Partial |
+| 6.1 | Triathlon session distribution | 4a | Full |
+| 6.1.1 | Weekly placement rules | 4d | Full |
+| 6.2 | Running session distribution | 4b | Full |
+| 6.3 | Hyrox session distribution | 13c | Full |
+| 6.4 | Bricks | 4a-ii | Full |
+| 6.5 | Goal-based distribution (non-race) | 3b-ii | Full |
+| 7.1 | Movement patterns | 10a | Full |
+| 7.2 | Exercise tiers | 10b | Full |
+| 7.3 | Sub-target diversity | 10c | Full |
+| 7.4 | Equipment matching | 10f | Full |
+| 7.5 | Slot templates | 10d | Full |
+| 7.6 (7.6.1 to 7.6.5) | Goal-specific exercise selection | 10e | Full |
+| 8.1 | Split design by frequency | 2i | Full |
+| 8.2 | Strength volume | 10g | Full |
+| 8.3 | Exercise complexity by level | 10b | Partial |
+| 8.4 | Strength periodization in endurance plans | 5b | Full |
+| 8.5 | How strength improves race performance | 5c | Partial |
+| 8.6 | Same-day strength + cardio | 10h | Full |
+| 8.7 | Weight input logic | none | **Not carried over** |
+| 9.0 | Weakness bias | Appendix E | Full |
+| 9.1 to 9.6 | Sport-specific philosophy | 4a, 4b, 5c, 13 | Partial |
+| 10.1 to 10.5 | Nutrition | 11a to 11d | Full |
+| 11 | Hydration | 11e | Full |
+| 12.1 to 12.4 | Recovery and adaptation | 12a to 12d | Full |
+| 13 | Safety boundaries | 14 | Full |
+| 14 | Coaching tone | 15 | Full |
