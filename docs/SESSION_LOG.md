@@ -78,3 +78,15 @@ This checkpoint supersedes older production and quarantine status below. User au
 - Local disposable Postgres 16 runs on UNIX socket `/private/tmp/ironz-pg-test`, port 55439; stop owned server at session teardown. It contains synthetic fixtures only. Do not confuse local SQL passes with remote staging API/browser passes.
 
 Next: finish/review prescription restrictions, combine focused fixes on an isolated staging candidate, rerun 32 real staging API checks after migration, verify complete browser build/save/reload/failure and availability/recovery flows, update exact evidence and request Claude review. Never release merely because the narrow test suite is green.
+
+## 9 November 2026 targeted-repair closeout
+
+Implemented separate PR30 migration-order (`9bb444b`), PR31 availability (`907b4ee`), PR32 training regression/quarantine repairs (`7e7e0ac`). All focused CI jobs pass. Independent QA reviews attached; Claude cross-agent reviews requested with exact staging evidence, pending. No production merges/mutations by Codex. Other actors' main/security updates were refreshed read-only and distinguished from our work.
+
+Combined application `9316eb1` on `codex/verify-training-fixes` passes 22 files/zero failures/zero quarantines in Chicago and UTC+14, fresh and upgrade SQL 20 assertions each, 32 real staging API checks after applied staging migration `20261109224651_enforce_final_profile_privacy` (repo sequence20261110221358). Actual staging browser saves50runs on exactly Tue/Wed/Thu/Sat after synthetic chosen start, no strength, survivesreload. Failed unsupportedUltra replacement retains allfive serverplan/input values byte-for-byte, staysinpreview/error/retry, nosuccess. Independent QA separately verified suites, builds, componentintegration andstagecatalog, not browserrepetition.
+
+Owner-private hosted source `22a194523459b9dbe095c590eaf912966cb6f430`, deployment `appgdep_6af24f6e54d48191b73d85e3011ca091` succeeded; appsource9316eb1. Hosted outerauth nowrequiresownerpassword, soactualappbrowserQA usedidenticalartifactlocally againstrealstage; noauthweakening. Integrationhead `e57727c` retains evidence andexplicitrelease:checkworkflow; checkintentionallyfailsremaininggates.
+
+New draftPR33 (`d27a191`) safelyretains separateprescription-level timeoff work, specsandtests; bothTZ24files0fail0quarantine175syntax. Notstaged/notapproved; direct-sourcepaths, historicrestrictionreconciliation andbrowserQA remain. Claude29notedited. Allrealathleteinformationremainsprivate; norealplancreated.
+
+Current SESSION_STATE.md is rewritten to remove stale production/quarantine/hosted pointers; earlierreviewreport is marked historical. Next: Claude review focusedPRs; finish33and retainedsync/intensity/provider/nativegates; new integratedreadinessdecision beforeprod/realplan. Localtestservicesstoppedatcloseout; syntheticstagefixturesretained.

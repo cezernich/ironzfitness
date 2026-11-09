@@ -1,3 +1,5 @@
+> Historical review-start snapshot. Current implementation, production observations and staging evidence are in [SESSION_STATE.md](SESSION_STATE.md); several PRs below have since merged. Do not use this old inventory as the release decision.
+
 # Pull-request and production release review
 
 Reviewed 9 November 2026. Scope: all 14 PRs open at the start of this review, their dependency graph, current production deployment/catalog metadata, and the readiness of a combined candidate. No production changes or PR merges were performed. Personal athlete context was read privately and is not included here.
