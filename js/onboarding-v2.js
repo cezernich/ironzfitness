@@ -1580,31 +1580,11 @@
       }
     }
 
-    // If the user picks A and there's already an existing A race in
-    // localStorage.events, demote the existing one to B in-place.
-    // We only touch the priority field — other race metadata stays.
-    if (priority === "A") {
-      try {
-        const events = JSON.parse(localStorage.getItem("events") || "[]") || [];
-        const todayStr = new Date().toISOString().slice(0, 10);
-        let demoted = false;
-        events.forEach(e => {
-          if (e && e.date >= todayStr && (e.priority || "A").toUpperCase() === "A") {
-            e.priority = "B";
-            demoted = true;
-          }
-        });
-        if (demoted) {
-          localStorage.setItem("events", JSON.stringify(events));
-          if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("events");
-        }
-      } catch (err) { console.warn("[OnboardingV2] A-race demotion failed", err); }
-    }
-
+    // Existing A-race priority changes belong to the final checked commit,
+    // not this intermediate wizard step (the replacement can still fail).
     const race = { name: name || type, category, type, date, priority, goal, leadIn };
     _state.currentRace = race;
     _state.raceEvents = [race];
-    _lsSet("raceEvents", _state.raceEvents);
 
     // B race short-circuit: a B race rides on top of the existing A
     // race's plan — there's no new threshold test, no new schedule,
@@ -1614,6 +1594,7 @@
     // in so the user can glance at what's already scheduled and
     // decide whether to tweak.
     if (priority === "B") {
+      _lsSet("raceEvents", _state.raceEvents);
       try {
         _persistBRaceAndReshape(race);
       } catch (e) {
@@ -4252,7 +4233,11 @@
       if (legacyEvents.length) {
         // Attach preferences to each race so the generator picks them up.
         legacyEvents.forEach(r => { r.preferences = { ..._prefsForRace }; });
-        const existing = _lsGet("events", []) || [];
+        const today = new Date().toISOString().slice(0, 10);
+        const replacesARace = legacyEvents.some(e => (e.priority || "A").toUpperCase() === "A");
+        const existing = (_lsGet("events", []) || []).map(e =>
+          replacesARace && e.date >= today && (e.priority || "A").toUpperCase() === "A"
+            ? { ...e, priority: "B" } : e);
         draft.events = existing.concat(legacyEvents);
       }
 
