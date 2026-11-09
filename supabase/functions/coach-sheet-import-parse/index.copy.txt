@@ -806,7 +806,7 @@ function textCell(sheet: XLSX.WorkSheet, c: number, r: number): string | null {
 //   2. Each call sends an immutable system prompt + JSON schema (cached
 //      via cache_control) and a per-batch user message containing the
 //      blocks. The system prefix repeats verbatim across all 8 batches
-//      for a Paige import → ~7 cache hits per import after the first
+//      for a large multi-sheet import → ~7 cache hits per import after the first
 //      write.
 //   3. Output is constrained via output_config.format = json_schema so
 //      malformed JSON is impossible at the API layer (Claude refuses
