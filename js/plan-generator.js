@@ -184,6 +184,7 @@
 
     // 9. Validate + auto-fix
     const validated = validator.validate(plan, classification);
+    if(window.PlanRestrictions) return window.PlanRestrictions.applyRulePlan(validated.plan,cfg.blockedPeriods || window.PlanRestrictions.read());
     return validated.plan;
   }
 

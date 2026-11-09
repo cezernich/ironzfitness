@@ -2225,7 +2225,8 @@ function _buildRacePlanReplacement(race, options = {}) {
   if (typeof window.isPlanFrozen === "function" && window.isPlanFrozen()) {
     throw new Error("Plan generation is paused while your coach manages your schedule.");
   }
-  const generated = generateTrainingPlan(race);
+  const restricted = generateTrainingPlan(race);
+  const generated = restricted.restrictionSource || restricted;
   _validateGeneratedPlan(generated);
   const scheduling = _raceSchedulingConstraints(race);
   let newEntries = _honorRaceSchedule(generated, scheduling);
@@ -2343,11 +2344,13 @@ function _buildRacePlanReplacement(race, options = {}) {
 
   newEntries = _honorRaceSchedule(newEntries, scheduling);
   _validateGeneratedPlan(newEntries);
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
+  const todayStr = _planLocalYmd(new Date());
+  const priorSource = typeof PlanRestrictions!=="undefined" ? DB.getPlanRestrictionSource() : {trainingPlan:loadTrainingPlan(),workoutSchedule:JSON.parse(localStorage.getItem("workoutSchedule") || "[]")};
+  const schedule = priorSource.workoutSchedule;
   const keptSchedule = schedule.filter(e => e && (e.date < todayStr || String(e.raceId) !== String(race.id)));
-  const existingPlan = loadTrainingPlan().filter(e => String(e.raceId) !== String(race.id));
-  const updates = { trainingPlan: [...existingPlan, ...newEntries], workoutSchedule: keptSchedule };
+  const existingPlan = priorSource.trainingPlan.filter(e => e.date < todayStr || e.completed || e.isCompleted || String(e.raceId) !== String(race.id));
+  const unrestricted = { trainingPlan: [...existingPlan.filter(e=>e.date<todayStr), ...existingPlan.filter(e=>e.date>=todayStr), ...newEntries], workoutSchedule: keptSchedule };
+  const updates = typeof PlanRestrictions !== "undefined" ? DB.prepareRestrictedPlan(unrestricted) : unrestricted;
   if (options.persist === false) return updates;
   // Existing non-wizard callers retain their synchronous API, but never clear
   // either store until generation has passed validation.
@@ -3808,6 +3811,10 @@ function _bDiscName(disc) {
  * @param {Object} raceOrCalendar - a race event OR { aRace, bRaces, all }
  * @returns {Array} plan entries, same shape as before
  */
+function _finishRestrictedPlan(entries) {
+  return typeof PlanRestrictions !== "undefined" ? PlanRestrictions.applyGenerated(entries) : entries;
+}
+
 function generateTrainingPlan(raceOrCalendar) {
   // Dispatch: if the caller passed a race calendar, use the A race
   // as the driver and apply B race windows after generation.
@@ -3815,11 +3822,11 @@ function generateTrainingPlan(raceOrCalendar) {
     const calendar = raceOrCalendar;
     const plan = _generateSingleRacePlan(calendar.aRace);
     calendar.bRaces.forEach(bRace => insertBRaceWindow(plan, bRace, calendar.aRace));
-    return _honorRaceSchedule(plan,_raceSchedulingConstraints(calendar.aRace));
+    return _finishRestrictedPlan(_honorRaceSchedule(plan,_raceSchedulingConstraints(calendar.aRace)));
   }
   // Shared boundary covers wizard, race edit/save, survey and self-healing.
   const plan = _generateSingleRacePlan(raceOrCalendar);
-  return raceOrCalendar ? _honorRaceSchedule(plan,_raceSchedulingConstraints(raceOrCalendar)) : plan;
+  return _finishRestrictedPlan(raceOrCalendar ? _honorRaceSchedule(plan,_raceSchedulingConstraints(raceOrCalendar)) : plan);
 }
 
 /**

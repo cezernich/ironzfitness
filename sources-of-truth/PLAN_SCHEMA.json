@@ -9,6 +9,53 @@
 
   "properties": {
 
+    "blockedPeriods": {
+      "type": "array",
+      "description": "Athlete-reported inclusive date blocks applied to actual prescriptions; pending never auto-clears.",
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "startDate",
+          "endDate",
+          "clearance"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "medical",
+              "injury",
+              "sick",
+              "travel",
+              "rest",
+              "other"
+            ]
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "clearance": {
+            "enum": [
+              "pending",
+              "easy",
+              "full"
+            ]
+          },
+          "source": {
+            "const": "athlete_report"
+          }
+        }
+      }
+    },
+
     "planMetadata": {
       "type": "object",
       "description": "Generation metadata for traceability and versioning.",

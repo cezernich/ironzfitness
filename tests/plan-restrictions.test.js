@@ -1,0 +1,33 @@
+'use strict';
+const assert=require('node:assert/strict');
+const P=require('../js/plan-restrictions');
+const block={id:'synthetic',type:'medical',startDate:'2027-01-11',endDate:'2027-01-17',clearance:'full'};
+const source=[];
+for(let i=0;i<70;i++) { const date=P.add('2027-01-04',i);source.push({id:'s'+i,date,discipline:i%4===0?'strength':'run',load:'hard',duration:60,weekNumber:1,phase:i>56?'Taper':'Base',workoutId:'hard-library',isThresholdTest:true,intervals:[{effort:'Z5'}],generatedSession:{zone:5}}); }
+const original=JSON.stringify(source);
+const applied=P.apply(source,[block],{today:'2027-01-04'});
+assert.equal(JSON.stringify(source),original,'pure policy never alters source');
+assert.ok(!applied.some(e=>e.date>=block.startDate&&e.date<=block.endDate),'no sessions in blocked range');
+const ramp=applied.filter(e=>e.date>block.endDate&&e.date<=P.add(block.endDate,7));
+assert.ok(ramp.length);
+assert.ok(ramp.every(e=>e.discipline==='run'&&e.load==='easy'&&!e.workoutId&&!e.intervals&&!e.isThresholdTest&&!e.generatedSession),'real easy prescription replaces every hard/test/strength payload');
+assert.ok(ramp.reduce((sum,e)=>sum+e.duration,0)<=210,'first return budget at most half420minute baseline');
+let prior=0;
+for(let i=0;i<7;i++) {const start=P.add(block.endDate,1+i*7),end=P.add(start,6); const total=applied.filter(e=>e.date>=start&&e.date<=end).reduce((sum,e)=>sum+e.duration,0); if(prior)assert.ok(total<=prior*1.1+0.01,'no catch-up after ramp');prior=total;}
+const pending=P.apply(source,[{...block,clearance:'pending'}]);
+assert.ok(pending.every(e=>e.date<block.startDate),'elapsed week never clears medical restriction');
+const easy=P.apply(source,[{...block,clearance:'easy'}]);
+assert.ok(easy.filter(e=>e.date>block.endDate).every(e=>e.load==='easy'&&e.discipline==='run'),'easy-only clearance continues beyond first week');
+const travel=P.apply(source,[{...block,type:'travel'}]);
+assert.equal(JSON.stringify(travel.filter(e=>e.date>block.endDate)),JSON.stringify(source.filter(e=>e.date>block.endDate)),'travel does not invent a medical ramp or redistribute missed work');
+const overlap=P.apply(source,[block,{type:'travel',startDate:'2027-01-19',endDate:'2027-01-21'}]);
+assert.ok(!overlap.some(e=>e.date>='2027-01-19'&&e.date<='2027-01-21'),'stronger overlapping blocks preserved');
+const past={...source[7],completed:true};
+assert.ok(P.apply([past],[block],{today:'2027-02-01'}).length===1,'past/completed history preserved');
+assert.throws(()=>P.normalize([{...block,startDate:'2027-02-30'}]));
+assert.throws(()=>P.normalize([{...block,clearance:'automatic'}]));
+const tapered=source.map(e=>({...e,duration:e.date>='2027-02-08'?5:60}));
+const keptTaper=P.apply(tapered,[block]);assert.ok(keptTaper.filter(e=>e.date>='2027-02-08').every(e=>e.duration<=5),'taper never increased');
+const short={...block,type:'injury',endDate:'2027-01-13',clearance:'pending'};assert.equal(P.status(short,'2027-01-14'),'pending');assert.ok(P.apply(source,[short]).every(e=>e.date<short.startDate));
+assert.ok(applied.filter(e=>e._restrictionApplied).every(e=>e.discipline==='run'),'no fabricated strength prescriptions during later rebuild');
+console.log('PASS: blocked dates, explicit clearance, real prescriptions, bounded return, overlap, taper and history');

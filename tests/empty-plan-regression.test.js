@@ -32,7 +32,7 @@ function setup() {
       for (const row of Array.isArray(rows) ? rows : [rows]) remote.set(row.data_key, JSON.stringify(row.data_value));
       return { error: null };
     } }; } };
-  for (const file of ['js/db.js', 'js/plan-session-distribution.js', 'js/plan-constraint-validator.js', 'js/planner.js', 'js/onboarding-v2.js']) vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'), context, { filename: file });
+  for (const file of ['js/db.js', 'js/plan-restrictions.js', 'js/plan-session-distribution.js', 'js/plan-constraint-validator.js', 'js/planner.js', 'js/onboarding-v2.js']) vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'), context, { filename: file });
   const DB = vm.runInContext('DB',context), ob = context.OnboardingV2;
   const read = k => JSON.parse(store.get(k) || 'null');
   store.set('ironz_last_user_id','synthetic-a');
@@ -51,7 +51,7 @@ async function until(check, message) {
   for (let i = 0; i < 100 && !check(); i++) await Promise.resolve();
   assert.ok(check(), message);
 }
-(async () => {
+async function run() {
   for (const [input,expected] of [['5k','fiveK'],['10k','tenK'],['century','centuryRide']]) {
     const h=setup(), race=h.ob._mapRacesToLegacyEvents([{type:input,date:h.ob._state.raceEvents[0].date}])[0];
     assert.equal(race.type,expected,`${input} must cross the onboarding boundary as a supported ID`);
@@ -194,4 +194,6 @@ async function until(check, message) {
     assert.ok(Object.values(firstFullWeek).some(entries=>entries.length===4),'full Base weeks retain all four selected days, including UTC+ time zones');
   }
   console.log('PASS: onboarding aliases, generation failures, prior-plan preservation, checked persistence, double-click and non-race flows');
-})().catch(e=>{console.error(e);process.exitCode=1;});
+}
+module.exports={setup};
+if(require.main===module) run().catch(e=>{console.error(e);process.exitCode=1;});

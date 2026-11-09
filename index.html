@@ -3398,14 +3398,10 @@
           <input type="date" id="qe-restriction-end" onchange="onRestrictionRangeChange()" />
           <p style="font-size:0.8rem;color:var(--color-text-muted);margin-top:4px">Leave blank for a single day. Applies to every day from the date above through this date.</p>
         </div>
-        <div class="form-row" id="qe-restriction-ramp-row" style="display:none;margin-top:8px">
-          <label class="restriction-action-option">
-            <input type="checkbox" id="qe-restriction-ramp" />
-            <div>
-              <div class="restriction-action-label">Add a 1-week easy return</div>
-              <div class="restriction-action-desc">The 7 days after this block are easy effort only at about half duration, then normal training resumes.</div>
-            </div>
-          </label>
+        <div class="form-row" id="qe-return-clearance-row" style="display:none">
+          <label for="qe-return-clearance">Reported return status</label>
+          <select id="qe-return-clearance"><option value="pending">Not cleared / not ready to return</option><option value="easy">Cleared for easy endurance only</option><option value="full">Restrictions lifted</option></select>
+          <p>Later training stays paused until return is confirmed. Follow clinician restrictions; a week ending is not clearance.</p>
         </div>
         <div class="form-row" id="qe-restriction-action-row" style="margin-top:12px">
           <label>Session Action</label>
@@ -3985,6 +3981,7 @@
        AthleteClassifier + ArcBuilder loaded earlier. Consumed by
        planner.js / philosophy-planner.js. -->
   <script src="js/session-assembler.js"></script>
+  <script src="js/plan-restrictions.js"></script>
   <script src="js/planner.js"></script>
   <!-- Triathlon gear checklist (SPEC_triathlon_gear_checklist.md) — data + modal -->
   <script src="js/gear-checklist.js"></script>
@@ -4763,6 +4760,18 @@
           <div class="ob-v2-callout ob-v2-callout--warning" id="bp-v2-rest-warning" style="display:none">
             No rest days in your schedule — most athletes benefit from at least one full recovery day per week.
           </div>
+          <details class="ob-v2-callout">
+            <summary>Time off and return to training</summary>
+            <p>No workouts will be scheduled in a blocked period. A minimum time off is not medical clearance.</p>
+            <div id="bp-v2-blocked-list"></div>
+            <label for="bp-v2-block-start">Start</label><input type="date" id="bp-v2-block-start" />
+            <label for="bp-v2-block-end">Through</label><input type="date" id="bp-v2-block-end" />
+            <label for="bp-v2-block-type">Reason</label><select id="bp-v2-block-type"><option value="travel">Travel</option><option value="rest">Planned time off</option><option value="medical">Medical restriction</option><option value="injury">Injury</option><option value="sick">Illness</option><option value="other">Other</option></select>
+            <label for="bp-v2-block-clearance">Reported return status</label><select id="bp-v2-block-clearance"><option value="pending">Not cleared / not ready to return</option><option value="easy">Cleared for easy endurance only</option><option value="full">Restrictions lifted</option></select>
+            <p>Medical restrictions stay active until you report clearance. Easy-only clearance does not permit lifting, intervals or tests.</p>
+            <button type="button" onclick="OnboardingV2._addBlockedPeriod()">Add period</button>
+            <p id="bp-v2-block-error" role="alert"></p>
+          </details>
           <button type="button" class="ob-v2-btn-primary" id="bp-v2-schedule-cta" onclick="OnboardingV2._saveScheduleAndContinue()">Continue</button>
         </div>
 
@@ -4771,6 +4780,7 @@
           <button type="button" class="ob-v2-back" onclick="OnboardingV2.goTo('bp-v2-5')">&larr; Back</button>
           <h2 class="ob-v2-h2">Here's Your Plan</h2>
           <p class="ob-v2-subtitle">Review, then hit start to save your plan and see it in your calendar.</p>
+          <p id="bp-v2-restriction-notice" class="ob-v2-callout" role="status" hidden></p>
           <div id="bp-v2-preview-body"></div>
           <div class="ob-v2-callout ob-v2-callout--info" id="bp-v2-test-callout" style="display:none">
             Tests for your missing thresholds are scheduled in week 1 so we can dial in your zones fast.
@@ -4783,8 +4793,8 @@
         <!-- bp-done: Confirmation -->
         <div class="ob-v2-screen" id="bp-v2-done">
           <div class="ob-v2-welcome-logo"><span class="ob-v2-welcome-bolt" data-ob-icon="zap"></span></div>
-          <h2 class="ob-v2-h2 ob-v2-center">You're Ready</h2>
-          <p class="ob-v2-subtitle ob-v2-center">Your plan is saved. Week 1 is already on your home calendar.</p>
+          <h2 id="bp-v2-done-title" class="ob-v2-h2 ob-v2-center">You're Ready</h2>
+          <p id="bp-v2-done-copy" class="ob-v2-subtitle ob-v2-center">Your plan is saved. Week 1 is already on your home calendar.</p>
           <button type="button" class="ob-v2-btn-primary" onclick="OnboardingV2._goToHomeTab()">Go to Home</button>
         </div>
 

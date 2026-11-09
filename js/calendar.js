@@ -905,7 +905,7 @@ function getDataForDate(dateStr) {
   try { event = (JSON.parse(localStorage.getItem("events")) || []).find(e => e.date === dateStr) || null; } catch {}
 
   let restriction = null;
-  try { restriction = (JSON.parse(localStorage.getItem("dayRestrictions")) || {})[dateStr] || null; } catch {}
+  try { restriction = getPlanDateRestriction(dateStr); } catch {}
 
   let equipmentRestriction = null;
   try { const _er = JSON.parse(localStorage.getItem("equipmentRestrictions")) || {}; equipmentRestriction = _er[dateStr] || _er["permanent"] || null; } catch {}
@@ -5525,6 +5525,17 @@ function renderNutritionProgressBars(dateStr) {
 
 // ─── Meal plan renderer (called on load + after every slider adjustment) ──────
 
+function getPlanDateRestriction(dateStr) {
+  const legacy=(JSON.parse(localStorage.getItem("dayRestrictions") || "{}"))[dateStr] || null;
+  if(typeof PlanRestrictions === "undefined" || dateStr < getTodayString()) return legacy;
+  const states=PlanRestrictions.read().map(block=>({block,state:PlanRestrictions.status(block,dateStr)})).filter(item=>item.state);
+  const hard=states.find(item=>item.state==="off" || item.state==="pending");
+  if(hard) return {type:hard.block.type,action:"remove",note:hard.state==="pending"?"Training paused until return is confirmed.":"Planned time off. No training.",blockId:hard.block.id};
+  if(legacy && legacy.action==="remove") return legacy;
+  if(states.length) return {type:"return",action:"prescription",note:"Easy return prescription. Follow reported restrictions."};
+  return legacy;
+}
+
 function getEffectiveLoad(load, restriction) {
   if (!restriction) return load;
   if (restriction.action === "remove") return "rest";
@@ -6050,7 +6061,7 @@ function renderMealPlan(dateStr) {
   const planEntry   = loadTrainingPlan().find(e => e.date === dateStr);
   const baseLoad    = planEntry ? planEntry.load : "rest";
   let   restriction = null;
-  try { restriction = (JSON.parse(localStorage.getItem("dayRestrictions")) || {})[dateStr] || null; } catch {}
+  try { restriction = getPlanDateRestriction(dateStr); } catch {}
   const load = getEffectiveLoad(baseLoad, restriction);
 
   // Determine workout type for macro targeting
@@ -10581,7 +10592,7 @@ function saveQuickActivity() {
 }
 
 // ── Restriction save ──────────────────────────────────────────────────────────
-function saveQuickRestriction() {
+async function saveQuickRestriction() {
   const dateStr = document.getElementById("qe-date").value;
   const msg     = document.getElementById("qe-restriction-msg");
   if (!dateStr) { msg.textContent = "Please select a date."; return; }
@@ -10617,19 +10628,30 @@ function saveQuickRestriction() {
     return;
   }
 
-  let restrictions = {};
-  try { restrictions = JSON.parse(localStorage.getItem("dayRestrictions")) || {}; } catch {}
-  restrictions = DayRestrictions.mergeRestrictions(restrictions, built.entries);
-  localStorage.setItem("dayRestrictions", JSON.stringify(restrictions)); if (typeof DB !== 'undefined') DB.syncKey('dayRestrictions');
+  let savedBlock=null;
+  try {
+    if(action === "remove" || ["medical","injury","sick"].includes(type)) {
+      const kind=["medical","injury","sick","travel","rest"].includes(type)?type:"other";
+      const block=PlanRestrictions.normalize([{type:kind,startDate:dateStr,endDate:endStr,
+        clearance:document.getElementById("qe-return-clearance").value}])[0];
+      savedBlock=block;
+      const previous=PlanRestrictions.read();
+      await DB.savePlanRestrictions(previous.filter(item=>item.id!==block.id).concat(block));
+    } else {
+      const restrictions=JSON.parse(localStorage.getItem("dayRestrictions") || "{}");
+      await DB.savePlanBuild({dayRestrictions:DayRestrictions.mergeRestrictions(restrictions,built.entries)});
+    }
+  } catch(problem) { msg.style.color="var(--color-danger)";msg.textContent=problem.message;return; }
 
   renderCalendar();
   if (selectedDate === dateStr) renderDayDetail(dateStr);
 
-  const days = Object.keys(built.entries).length - built.rampDates.length;
   msg.style.color = "var(--color-success)";
-  msg.textContent = days > 1
-    ? `Restriction saved for ${days} days${built.rampDates.length ? ", plus a 1-week easy return" : ""}.`
-    : (built.rampDates.length ? "Restriction saved, plus a 1-week easy return." : "Restriction saved!");
+  msg.textContent = savedBlock
+    ? (savedBlock.clearance==="pending" && ["medical","injury","sick"].includes(savedBlock.type)
+      ? "Time off saved. Later training is paused until return is confirmed."
+      : "Time off and return prescriptions saved.")
+    : "Restriction saved.";
   setTimeout(() => closeQuickEntry(), 900);
 }
 
@@ -10640,25 +10662,27 @@ function _resetRestrictionRange() {
   if (endEl) endEl.value = "";
   const rampEl = document.getElementById("qe-restriction-ramp");
   if (rampEl) { rampEl.checked = false; delete rampEl.dataset.touched; }
+  const date=document.getElementById("qe-date").value;
+  const existing=typeof PlanRestrictions!=="undefined" && PlanRestrictions.read().find(block=>date>=block.startDate&&date<=block.endDate);
+  const clearance=document.getElementById("qe-return-clearance");
+  if(clearance) clearance.value=existing ? existing.clearance : "pending";
+  if(existing) {
+    document.getElementById("qe-date").value=existing.startDate;
+    document.getElementById("qe-restriction-end").value=existing.endDate;
+    document.getElementById("qe-restriction-type").value=existing.type;
+    const remove=document.querySelector('input[name="qe-session-action"][value="remove"]');
+    if(remove) remove.checked=true;
+  }
   onRestrictionRangeChange();
 }
 
 function onRestrictionRangeChange() {
-  const row = document.getElementById("qe-restriction-ramp-row");
-  if (!row || typeof DayRestrictions === "undefined") return;
-  const type = document.getElementById("qe-restriction-type").value;
-  const start = document.getElementById("qe-date").value;
-  const end = document.getElementById("qe-restriction-end").value || start;
-  const eligible = ["medical", "injury", "sick"].includes(type);
-  row.style.display = eligible ? "" : "none";
-  const rampEl = document.getElementById("qe-restriction-ramp");
-  if (eligible && rampEl && !rampEl.dataset.touched) {
-    rampEl.checked = DayRestrictions.rampRecommended(type, start, end);
-  }
-  if (rampEl && !rampEl.dataset.bound) {
-    rampEl.dataset.bound = "1";
-    rampEl.addEventListener("change", () => { rampEl.dataset.touched = "1"; });
-  }
+  const type=document.getElementById("qe-restriction-type").value;
+  const recovery=["medical","injury","sick"].includes(type);
+  const clearanceRow=document.getElementById("qe-return-clearance-row");
+  if(clearanceRow) clearanceRow.style.display=recovery?"":"none";
+  const actionRow=document.getElementById("qe-restriction-action-row");
+  if(actionRow) actionRow.style.display=recovery?"none":"";
 }
 
 // Show/hide the discipline picker based on the Session Action radio.
@@ -10676,7 +10700,14 @@ function onRestrictionTypeChange() { onRestrictionActionChange(); }
 function toggleQEGenerate() {}
 function switchQETab() {}
 
-function removeRestriction(dateStr) {
+async function removeRestriction(dateStr) {
+  const blocks=typeof PlanRestrictions!=="undefined"?PlanRestrictions.read():[];
+  const block=blocks.find(item=>PlanRestrictions.status(item,dateStr));
+  if(block) {
+    try { await DB.savePlanRestrictions(blocks.filter(item=>item.id!==block.id)); }
+    catch(error) { alert(error.message);return; }
+    renderCalendar();renderDayDetail(dateStr);return;
+  }
   let restrictions = {};
   try { restrictions = JSON.parse(localStorage.getItem("dayRestrictions")) || {}; } catch {}
   delete restrictions[dateStr];

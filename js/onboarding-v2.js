@@ -46,6 +46,7 @@
 
   // ── In-flight state ─────────────────────────────────────────────────
   const _state = {
+    blockedPeriods: [],
     currentScreen: null,
     mode: null, // "onboarding" | "buildplan"
     profile: {},
@@ -291,6 +292,7 @@
     container.querySelectorAll(".ob-v2-screen").forEach(s => s.classList.remove("is-active"));
     target.classList.add("is-active");
     _state.currentScreen = screenId;
+    if(screenId === "bp-v2-5") _renderBlockedPeriods();
     _updateProgress(screenId);
     _hydrateIcons(target);
     container.scrollTop = 0;
@@ -600,6 +602,7 @@
     _state.longDays = { longRun: null, longRide: null };
     _state.schedule = { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] };
     _state._editingPlanId = null;
+    _state.blockedPeriods = DB.getBlockedPeriods();
     // Reset the "user touched the schedule chips" flag so a fresh Build
     // Plan run starts clean. Flipped true by any chip add/remove/drag so
     // _saveLongDaysAndContinue knows to preserve (not wipe) user edits.
@@ -3980,6 +3983,16 @@
   function _renderPlanPreview() {
     const body = document.getElementById("bp-v2-preview-body");
     if (!body) return;
+    const restrictionNotice=document.getElementById("bp-v2-restriction-notice");
+    if(restrictionNotice) {
+      const blocks=_state.blockedPeriods || [];
+      const races=_state.raceEvents || [];
+      const overlaps=blocks.some(block=>races.some(race=>race.date>=block.startDate &&
+        (race.date<=block.endDate || (["medical","injury","sick"].includes(block.type) && block.clearance==="pending"))));
+      restrictionNotice.hidden=!blocks.length;
+      restrictionNotice.textContent=blocks.length ? "Time off and return limits override this sample week. Pending return status keeps later training paused."+
+        (overlaps?" A target race overlaps time off or a return hold. Reassess the race goal before training resumes.":"") : "";
+    }
     const race = _state.currentRace;
     const hasRace = _state.trainingGoals.includes("race") && race && race.date;
 
@@ -4199,7 +4212,7 @@
         selectedSports: _state.selectedSports, trainingGoals: _state.trainingGoals,
         strengthRole: _state.strengthRole || "", raceEvents: _state.raceEvents,
         thresholds: _state.thresholds, strengthSetup: _state.strengthSetup,
-        buildPlanTemplate: _state.schedule, profile,
+        buildPlanTemplate: _state.schedule, profile, blockedPeriods: _state.blockedPeriods,
       };
 
       // Map onboarding raceEvents into the legacy events shape so the
@@ -4288,6 +4301,11 @@
 
       await DB.savePlanBuild(updates);
       goTo("bp-v2-done");
+      const doneCopy=document.getElementById("bp-v2-done-copy");
+      const doneTitle=document.getElementById("bp-v2-done-title");
+      if(doneCopy && _state.blockedPeriods.length) doneCopy.textContent="Your plan is saved with time off and return restrictions."+
+        (_state.blockedPeriods.some(block=>["medical","injury","sick"].includes(block.type)&&block.clearance!=="easy"&&block.clearance!=="full")?" Pending return clearance keeps later training paused.":"");
+      if(doneTitle && _state.blockedPeriods.length) doneTitle.textContent="Plan saved";
     } catch (e) {
       console.warn("[OnboardingV2] plan build failed");
       const message = e && e.message || "Your plan could not be built. Please try again.";
@@ -4298,6 +4316,25 @@
       if (confirmButton) confirmButton.disabled = typeof DB !== "undefined" && DB.planBuildNeedsReload && DB.planBuildNeedsReload();
     }
   }
+
+  function _renderBlockedPeriods() {
+    const list=document.getElementById("bp-v2-blocked-list");
+    if(!list) return;
+    list.innerHTML=(_state.blockedPeriods || []).map((block,index)=>
+      '<div class="ob-v2-callout">'+_escape(block.startDate)+' to '+_escape(block.endDate)+' · '+_escape(block.type)+' · return '+_escape(block.clearance || "pending")+
+      '<button type="button" onclick="OnboardingV2._removeBlockedPeriod('+index+')">Remove period</button></div>').join("");
+  }
+  function _addBlockedPeriod() {
+    const error=document.getElementById("bp-v2-block-error");
+    try {
+      const block={startDate:document.getElementById("bp-v2-block-start").value,endDate:document.getElementById("bp-v2-block-end").value,
+        type:document.getElementById("bp-v2-block-type").value,clearance:document.getElementById("bp-v2-block-clearance").value};
+      const valid=PlanRestrictions.normalize([block])[0];
+      _state.blockedPeriods=(_state.blockedPeriods || []).filter(item=>item.id!==valid.id).concat(valid);
+      error.textContent="";_renderBlockedPeriods();
+    } catch(problem) { error.textContent=problem.message; }
+  }
+  function _removeBlockedPeriod(index) { _state.blockedPeriods.splice(index,1);_renderBlockedPeriods(); }
 
   // Expand the weekly `_state.schedule` template into real sessions on
   // the user's calendar for the next N weeks (planDetails.duration).
@@ -4515,7 +4552,16 @@
 
     _validateGeneratedPlan(sessions);
     const merged = existingArr.concat(sessions);
-    if (options.persist === false) return { workoutSchedule: merged };
+    if (options.persist === false) {
+      if(typeof PlanRestrictions!=="undefined") {
+        const prior=DB.getPlanRestrictionSource();
+        // Keep unrelated source sessions and new materialization; avoid applying
+        // an already-restricted schedule a second time.
+        const source={trainingPlan:prior.trainingPlan,workoutSchedule:prior.workoutSchedule.filter(e=>!_state._editingPlanId || e.planId!==_state._editingPlanId || e.date<todayIso || e.completed || e.isCompleted).concat(sessions)};
+        return DB.prepareRestrictedPlan(source);
+      }
+      return {workoutSchedule:merged};
+    }
     localStorage.setItem("workoutSchedule", JSON.stringify(merged));
     if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("workoutSchedule");
   }
@@ -5332,6 +5378,7 @@
       _openSlotSubtypePicker, _pickSlotSubtype,
       _slotDragStart, _slotDragEnd, _slotDragOver, _slotDragLeave, _slotDrop,
       _saveScheduleAndContinue,
+      _renderBlockedPeriods, _addBlockedPeriod, _removeBlockedPeriod,
       _renderPlanPreview, _confirmAndSavePlan, _mapRacesToLegacyEvents, _goToTrainingTab, _goToHomeTab, _renderBRaceReview, _goToBRaceInCalendar,
     });
   }
