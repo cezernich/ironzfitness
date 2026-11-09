@@ -1,0 +1,14 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { profileMigrations } = require('../scripts/profile-migrations');
+const files=profileMigrations(path.resolve(__dirname,'../supabase/migrations'));
+const names=files.map(file=>path.basename(file));
+assert.equal(files.length,3,'keep original two migration files plus final correction');
+assert.ok(names[0].endsWith('_restrict_coach_profile_reads.sql'),'reproduce original CLI order, rather than hide it');
+assert.equal(names[1],'20261109_secure_profiles.sql');
+assert.ok(names[2].endsWith('_enforce_final_profile_privacy.sql'),'final corrective policy must run last');
+assert.ok(fs.readFileSync(files[2],'utf8').includes('DROP POLICY IF EXISTS "Clients can view their coach\'s profile"'));
+assert.equal(new Set(names.map(name=>name.split('_')[0])).size,3,'versions unique');
+console.log('PASS: CLI filename order ends with the profile privacy correction; actual SQL replay runs in db-security');
