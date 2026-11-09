@@ -39,7 +39,7 @@ Rules:
 2. Browser cache of the last Supabase load
 3. `philosophy/modules_static.json` (47 modules)
 
-**Drift (2026-11-09):** the database (45), the static fallback (47), and `philosophy_modules.json` (60) don't match. Production uses the database set.
+**Drift (2026-11-09):** the database (45), the static fallback (47), and `philosophy_modules.json` (60) don't match. Production uses the database set. Full analysis and recommendation: `docs/PHILOSOPHY_MODULES_DRIFT_2026-11-09.md`.
 
 Consumers of the `philosophy_modules` table (not only the legacy engine): `js/philosophy-engine.js`, `js/philosophy-planner.js`, `js/rules-engine.js`, `js/app.js`, `js/db.js`, `js/admin.js`, `js/seed-reference-data.js`, `js/coach-sheet-import.js`, `scripts/philosophy-sync.js`, and the **`ask-ironz` edge function**.
 
