@@ -4182,7 +4182,8 @@
   // corrupted it (calendar expects an array) and caused day-detail crashes.
   // We also no longer delegate to generateTrainingPlan for multi-sport
   // users — the user's explicit schedule is the source of truth.
-  function _confirmAndSavePlan() {
+  async function _confirmAndSavePlan() {
+    if (_state._savingPlan) return;
     // TRAINING_PHILOSOPHY §4.8 — Half/Full Ironman recommend ≥5 training
     // days/week. If the schedule has fewer active days, explain why and
     // let the user choose whether to go back or keep their selection.
@@ -4201,125 +4202,117 @@
       }
     }
 
-    _lsSet("selectedSports", _state.selectedSports);
-    _lsSet("trainingGoals", _state.trainingGoals);
-    _lsSet("strengthRole", _state.strengthRole);
-    _lsSet("raceEvents", _state.raceEvents);
-    _lsSet("thresholds", _state.thresholds);
-    _lsSet("strengthSetup", _state.strengthSetup);
-    // Template (weekly pattern) lives in its own key; do NOT write to workoutSchedule here.
-    _lsSet("buildPlanTemplate", _state.schedule);
-
-    // Persist which weekdays the athlete picked to the profile so the
-    // classifier + downstream plan generators honor the user's day
-    // selection instead of falling back to hardcoded defaults. DOW index
-    // matches surveyData.preferredDays: 0=Sun…6=Sat.
+    _state._savingPlan = true;
+    const confirmButton = document.querySelector('#bp-v2-7 .ob-v2-btn-primary');
+    if (confirmButton) confirmButton.disabled = true;
     try {
-      const _BP_DOW_TO_IDX = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
-      const activeDows = _BP_DAYS
-        .filter(d => Array.isArray(_state.schedule[d]) && _state.schedule[d].length > 0)
-        .map(d => _BP_DOW_TO_IDX[d])
-        .filter(n => n != null)
-        .sort((a, b) => a - b);
-      const profile = _lsGet("profile", {}) || {};
-      profile.daysPerWeek = activeDows.length || profile.daysPerWeek;
-      if (activeDows.length > 0) profile.preferredDays = activeDows;
-      _lsSet("profile", profile);
-      if (typeof DB !== "undefined" && DB.profile && DB.profile.save) {
-        DB.profile.save(profile).catch(() => {});
+      if (typeof DB === "undefined" || !DB.previewPlanBuild || !DB.savePlanBuild) {
+        throw new Error("Plan saving is unavailable. Reload the app and try again.");
       }
-    } catch (e) { console.warn("[OnboardingV2] failed to persist preferredDays", e); }
-
-    // Map onboarding raceEvents into the legacy events shape so the
-    // calendar / renderRaceEvents keep working unchanged. When the user
-    // has built a weekly template in Training Inputs, attach it to the
-    // race as `preferences` so the race plan generator can honor their
-    // day-of-week sport assignments and preferred long day. Also stamp
-    // daysPerWeek + longDay so phase-based load modulation lands on the
-    // right days.
-    const _activeDaysPerWeek = _BP_DAYS.filter(d => Array.isArray(_state.schedule[d]) && _state.schedule[d].length > 0).length;
-    const _BP_LONG_RUN_DOW = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
-    const _longDayName = _state.longDays && _state.longDays.longRun;
-    const _longDayIdx = _longDayName ? _BP_LONG_RUN_DOW[_longDayName] : null;
-    // Use the ENRICHED template (run → run-interval / run-tempo / run-long /
-    // run-easy / run-recovery) instead of raw _state.schedule so the plan
-    // generator sees the intended intensity distribution. Passing plain
-    // "run" codes made every session default to easy in every phase — the
-    // bug that produced all-Z2 get_faster plans. _enrichWeekTemplate is
-    // pure (derives from _state.schedule + _state.longDays + strength
-    // split, writes nothing), so calling it for preview is safe.
-    let _enrichedForRace;
-    try { _enrichedForRace = _enrichWeekTemplate(); }
-    catch (e) { _enrichedForRace = { ...(_state.schedule || {}) }; }
-
-    const _prefsForRace = {
-      weeklyTemplate: _enrichedForRace,
-      daysPerWeek: _activeDaysPerWeek || undefined,
-      sessionLengthMin: parseInt(_state.planDetails.sessionLength, 10) || undefined,
-      longDay: (_longDayIdx !== null && _longDayIdx !== undefined) ? _longDayIdx : undefined,
-      source: "onboarding_v2",
-    };
-    const legacyEvents = _mapRacesToLegacyEvents(_state.raceEvents);
-    if (legacyEvents.length) {
-      // Attach preferences to each race so the generator picks them up.
-      legacyEvents.forEach(r => { r.preferences = { ..._prefsForRace }; });
-      const existing = _lsGet("events", []) || [];
-      _lsSet("events", existing.concat(legacyEvents));
-    }
-
-    // Tag the generated sessions with the primary race's id so Active
-    // Training Inputs can collapse "Race + Training Block" into one card
-    // instead of showing both for what the user experiences as one plan.
-    // Prefer A-priority race; fall back to the first race.
-    const planRace = legacyEvents.find(e => (e.priority || "A").toUpperCase() === "A") || legacyEvents[0] || null;
-    const raceIdForPlan = planRace ? planRace.id : null;
-
-    // UNIFIED PLAN: if a race exists, generate the race plan (trainingPlan)
-    // which spans today→race with philosophy-based phases AND honors the
-    // athlete's preferences. Do NOT write separate workoutSchedule entries
-    // — the race plan IS the schedule. Non-race path still materializes
-    // workoutSchedule from the weekly template.
-    if (planRace && typeof window !== "undefined" && typeof window._regeneratePlanForRace === "function") {
-      try {
-        window._regeneratePlanForRace(planRace);
-      } catch (e) {
-        console.warn("[OnboardingV2] race plan generation failed", e);
-      }
-    } else {
-      try {
-        _writeScheduleSessions(raceIdForPlan, planRace);
-      } catch (e) {
-        console.warn("[OnboardingV2] writing schedule sessions failed", e);
-      }
-    }
-
-    // Bodyweight-only users: persist a permanent equipment restriction with
-    // empty `available` so the existing filterByEquipment path strips every
-    // barbell/dumbbell/cable/kettlebell exercise and falls through to the
-    // BODYWEIGHT_LIBRARY substitute when rendering strength sessions.
-    if (_state.gymAccess === "bodyweight") {
-      let eqR = {};
-      try { eqR = JSON.parse(localStorage.getItem("equipmentRestrictions")) || {}; } catch {}
-      eqR["permanent"] = {
-        available: [],
-        note: "Bodyweight only (from Build a Plan)",
-        permanent: true,
-        createdAt: new Date().toISOString()
+      const activeDows = _BP_DAYS.filter(d => (_state.schedule[d] || []).length)
+        .map(d => ({ sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 })[d]).sort((a, b) => a - b);
+      const profile = { ..._lsGet("profile", {}), daysPerWeek: activeDows.length, preferredDays: activeDows };
+      const draft = {
+        selectedSports: _state.selectedSports, trainingGoals: _state.trainingGoals,
+        strengthRole: _state.strengthRole || "", raceEvents: _state.raceEvents,
+        thresholds: _state.thresholds, strengthSetup: _state.strengthSetup,
+        buildPlanTemplate: _state.schedule, profile,
       };
-      localStorage.setItem("equipmentRestrictions", JSON.stringify(eqR));
-      if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("equipmentRestrictions");
-    }
 
-    _lsSet("surveyComplete", "1");
-    if (_state.mode === "onboarding") _lsSet("hasOnboarded", "1");
-    goTo("bp-v2-done");
+      // Map onboarding raceEvents into the legacy events shape so the
+      // calendar / renderRaceEvents keep working unchanged. When the user
+      // has built a weekly template in Training Inputs, attach it to the
+      // race as `preferences` so the race plan generator can honor their
+      // day-of-week sport assignments and preferred long day. Also stamp
+      // daysPerWeek + longDay so phase-based load modulation lands on the
+      // right days.
+      const _activeDaysPerWeek = _BP_DAYS.filter(d => Array.isArray(_state.schedule[d]) && _state.schedule[d].length > 0).length;
+      const _BP_LONG_RUN_DOW = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+      const _longDayName = _state.longDays && _state.longDays.longRun;
+      const _longDayIdx = _longDayName ? _BP_LONG_RUN_DOW[_longDayName] : null;
+      // Use the ENRICHED template (run → run-interval / run-tempo / run-long /
+      // run-easy / run-recovery) instead of raw _state.schedule so the plan
+      // generator sees the intended intensity distribution. Passing plain
+      // "run" codes made every session default to easy in every phase — the
+      // bug that produced all-Z2 get_faster plans. _enrichWeekTemplate is
+      // pure (derives from _state.schedule + _state.longDays + strength
+      // split, writes nothing), so calling it for preview is safe.
+      let _enrichedForRace;
+      try { _enrichedForRace = _enrichWeekTemplate(); }
+      catch (e) { _enrichedForRace = { ...(_state.schedule || {}) }; }
+
+      const _prefsForRace = {
+        weeklyTemplate: _enrichedForRace,
+        daysPerWeek: _activeDaysPerWeek || undefined,
+        sessionLengthMin: parseInt(_state.planDetails.sessionLength, 10) || undefined,
+        longDay: (_longDayIdx !== null && _longDayIdx !== undefined) ? _longDayIdx : undefined,
+        source: "onboarding_v2",
+      };
+      const legacyEvents = _mapRacesToLegacyEvents(_state.raceEvents);
+      if (legacyEvents.length) {
+        // Attach preferences to each race so the generator picks them up.
+        legacyEvents.forEach(r => { r.preferences = { ..._prefsForRace }; });
+        const existing = _lsGet("events", []) || [];
+        draft.events = existing.concat(legacyEvents);
+      }
+
+      // Tag the generated sessions with the primary race's id so Active
+      // Training Inputs can collapse "Race + Training Block" into one card
+      // instead of showing both for what the user experiences as one plan.
+      // Prefer A-priority race; fall back to the first race.
+      const planRace = legacyEvents.find(e => (e.priority || "A").toUpperCase() === "A") || legacyEvents[0] || null;
+      const raceIdForPlan = planRace ? planRace.id : null;
+
+      // UNIFIED PLAN: if a race exists, generate the race plan (trainingPlan)
+      // which spans today→race with philosophy-based phases AND honors the
+      // athlete's preferences. Do NOT write separate workoutSchedule entries
+      // — the race plan IS the schedule. Non-race path still materializes
+      // workoutSchedule from the weekly template.
+      const generated = DB.previewPlanBuild(draft, () => {
+        if (planRace) {
+          if (typeof window._regeneratePlanForRace !== "function") throw new Error("Plan generation is unavailable. Reload and try again.");
+          return window._regeneratePlanForRace(planRace, { persist: false });
+        }
+        return _writeScheduleSessions(raceIdForPlan, planRace, { persist: false });
+      });
+      if (!generated || (!generated.trainingPlan && !generated.workoutSchedule)) {
+        throw new Error("No training sessions were generated. Review your schedule and try again.");
+      }
+      const updates = { ...draft, ...generated, surveyComplete: "1" };
+      if (_state.mode === "onboarding") updates.hasOnboarded = "1";
+
+      // Bodyweight-only users: persist a permanent equipment restriction with
+      // empty `available` so the existing filterByEquipment path strips every
+      // barbell/dumbbell/cable/kettlebell exercise and falls through to the
+      // BODYWEIGHT_LIBRARY substitute when rendering strength sessions.
+      if (_state.gymAccess === "bodyweight") {
+        let eqR = {};
+        try { eqR = JSON.parse(localStorage.getItem("equipmentRestrictions")) || {}; } catch {}
+        eqR["permanent"] = {
+          available: [],
+          note: "Bodyweight only (from Build a Plan)",
+          permanent: true,
+          createdAt: new Date().toISOString()
+        };
+        updates.equipmentRestrictions = eqR;
+      }
+
+      await DB.savePlanBuild(updates);
+      goTo("bp-v2-done");
+    } catch (e) {
+      console.warn("[OnboardingV2] plan build failed");
+      alert(e && e.message || "Your plan could not be built. Please try again.");
+    } finally {
+      _state._savingPlan = false;
+      if (confirmButton) confirmButton.disabled = false;
+    }
   }
 
   // Expand the weekly `_state.schedule` template into real sessions on
   // the user's calendar for the next N weeks (planDetails.duration).
   // Appends to the existing `workoutSchedule` array without touching
   // past entries.
-  function _writeScheduleSessions(raceIdForPlan, planRace) {
+  function _writeScheduleSessions(raceIdForPlan, planRace, options = {}) {
     // Phase 5A: respect coach-set plan freeze. When a coach picks
     // "Freeze AI plan from this date forward", isPlanFrozen() reads
     // true from the cache populated at auth-ready by
@@ -4338,8 +4331,7 @@
         return "your coach";
       })();
       alert(`AI plan generation is paused — ${coachName} is managing your schedule. Open Profile → "Take back plan control" if you want the AI to resume.`);
-      console.log("[OnboardingV2] _writeScheduleSessions skipped — plan frozen");
-      return;
+      throw new Error("Plan generation is paused while your coach manages your schedule.");
     }
 
     // "indefinite" → materialize 12 weeks as a rolling window; numeric
@@ -4530,7 +4522,9 @@
       }
     }
 
+    _validateGeneratedPlan(sessions);
     const merged = existingArr.concat(sessions);
+    if (options.persist === false) return { workoutSchedule: merged };
     localStorage.setItem("workoutSchedule", JSON.stringify(merged));
     if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("workoutSchedule");
   }
@@ -5275,8 +5269,8 @@
   function _mapRacesToLegacyEvents(races) {
     const typeMap = {
       sprint: "sprint", olympic: "olympic", halfIronman: "halfIronman", ironman: "ironman",
-      "5k": "5k", "10k": "10k", halfMarathon: "halfMarathon", marathon: "marathon", ultra: "ultra",
-      century: "century", granFondo: "granFondo", crit: "crit", stage: "stage",
+      "5k": "fiveK", "10k": "tenK", halfMarathon: "halfMarathon", marathon: "marathon", ultra: "ultra",
+      century: "centuryRide", granFondo: "granFondo", crit: "crit", stage: "stage",
       hyrox: "hyrox", custom: "other",
     };
     return (races || []).filter(r => r && r.date).map(r => ({

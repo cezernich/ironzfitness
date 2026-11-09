@@ -557,7 +557,17 @@ const DB = (() => {
     }
   }
 
+  const _planBuildKeys = new Set();
+  const _keyWrites = new Map();
   async function _doSyncKey(lsKey, expectedAtSchedule) {
+    if (_planBuildKeys.has(lsKey)) return;
+    const writing = _writeSyncKey(lsKey, expectedAtSchedule);
+    if (!_keyWrites.has(lsKey)) _keyWrites.set(lsKey, new Set());
+    _keyWrites.get(lsKey).add(writing);
+    try { await writing; } finally { _keyWrites.get(lsKey).delete(writing); }
+  }
+
+  async function _writeSyncKey(lsKey, expectedAtSchedule) {
     const uid = await _userId();
     if (!uid) return;
     if (!_userContextOk(uid, expectedAtSchedule)) {
@@ -599,6 +609,64 @@ const DB = (() => {
     // Critical keys fire immediately; others debounce 2s to batch rapid writes
     const delay = _IMMEDIATE_SYNC_KEYS.has(lsKey) ? 200 : 2000;
     _keyTimers[lsKey] = setTimeout(() => _doSyncKey(lsKey, expectedAtSchedule), delay);
+  }
+
+  // Legacy generators read the cache synchronously. Preview draft inputs without
+  // syncing them or leaving partially generated training state behind.
+  function previewPlanBuild(inputs, build) {
+    const before = Object.fromEntries(Object.keys(inputs).map(k => [k, localStorage.getItem(k)]));
+    try {
+      for (const [key, value] of Object.entries(inputs)) {
+        localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+      }
+      return build();
+    } finally {
+      for (const [key, raw] of Object.entries(before)) {
+        if (raw === null) localStorage.removeItem(key);
+        else localStorage.setItem(key, raw);
+      }
+    }
+  }
+
+  // One user_data statement commits the plan, race and inputs together. Unlike
+  // background sync, errors propagate to the wizard; a queued write isn't success.
+  async function savePlanBuild(updates) {
+    const expected = _expectedUid();
+    const uid = await _userId();
+    if (!uid || !_userContextOk(uid, expected)) throw new Error('Sign in again before saving your plan.');
+    previewPlanBuild(updates, () => {}); // Check cache capacity before changing the server.
+    const keys = Object.keys(updates);
+    for (const key of keys) {
+      _planBuildKeys.add(key);
+      clearTimeout(_keyTimers[key]);
+      delete _keyTimers[key];
+    }
+    try {
+      // Drain older background writes before the replacement; new writes wait.
+      await Promise.all(keys.flatMap(key => Array.from(_keyWrites.get(key) || [])));
+      if (_expectedUid() !== expected || await _userId() !== uid) throw new Error('Your account changed. Sign in again.');
+      const rows = Object.entries(updates).map(([data_key, data_value]) => ({
+        user_id: uid, data_key, data_value, updated_at: new Date().toISOString(),
+      }));
+      const { error } = await _client().from('user_data').upsert(rows, { onConflict: 'user_id,data_key' });
+      if (error) throw new Error('Your plan could not be saved. Check your connection and try again.');
+      if (_expectedUid() !== expected || await _userId() !== uid) throw new Error('Your account changed. Sign in again to view your plan.');
+      for (const [key, value] of Object.entries(updates)) {
+        clearTimeout(_keyTimers[key]);
+        delete _keyTimers[key];
+        localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+        _clearPending(key);
+      }
+    } finally {
+      keys.forEach(key => _planBuildKeys.delete(key));
+    }
+  }
+
+  function cachePlanBuild(updates) {
+    for (const [key, value] of Object.entries(updates)) {
+      _lsSet(key, value);
+      syncKey(key);
+    }
   }
 
   // Force-flush a pending debounced sync and await the Supabase upsert.
@@ -1263,6 +1331,9 @@ const DB = (() => {
     syncGoals,
     syncKey,
     flushKey,
+    previewPlanBuild,
+    savePlanBuild,
+    cachePlanBuild,
     replayPendingSyncs,
     refreshAllKeys,
     refreshKey,

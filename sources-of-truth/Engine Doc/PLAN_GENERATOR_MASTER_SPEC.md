@@ -43,6 +43,14 @@ When the user presses "Generate & Schedule Plan," these inputs are available:
 | strengthSetup.split | onboarding | "upper_lower" or "full_body" etc. |
 | equipmentProfile | profile | ["barbell-rack", "dumbbells", "bench", "cable-machine", ...] |
 
+### Plan-build acceptance and failure contract (9 November 2026)
+
+- Translate onboarding race IDs `5k`, `10k` and `century` to the live planner's `fiveK`, `tenK` and `centuryRide`. Unknown distances must not be silently replaced with a different event's training prescription.
+- Build with draft inputs before replacing committed state. Accept only an array of dated, recognized sessions containing actual training, not an empty plan or a race-day placeholder alone. Apply this to race and non-race builds; a frozen plan or missing generator is a failure.
+- A failed generation leaves the previous plan, scheduled sessions, races and inputs intact. Keep the athlete on the preview with actionable feedback and allow retry.
+- Commit the accepted plan, its race events and build inputs together through the data layer. Show the saved screen only after the database acknowledges the write. A rejected save must not clear the previous plan or display success. Suppress duplicate confirmation while a save is pending and do not populate another account's cache after an account change.
+- These are reliability requirements, not changes to training load, phases or workout selection. Other training-safety release gates remain in force.
+
 ---
 
 ## 2. CLASSIFY — Determine the Athlete's Profile
