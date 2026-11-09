@@ -32,6 +32,9 @@ for label, account in accounts.items():
         raise RuntimeError("Staging sign-in failed; response withheld")
     account["token"] = login["access_token"]
 
+status, _ = seed.api("/auth/v1/signup", "POST", {"email": "unprovisioned-" + uuid.uuid4().hex + "@ironz-staging.example", "password": secrets.token_urlsafe(24)}, token=seed.ANON_KEY, key=seed.ANON_KEY)
+check("public self-service signup is disabled", status in (400, 403, 422))
+
 a, b, coach, admin = [accounts[label]["id"] for label in ("athlete-a", "athlete-b", "coach", "admin")]
 
 reference = json.loads((Path(__file__).resolve().parents[2] / "sources-of-truth/philosophy/modules_static.json").read_text())

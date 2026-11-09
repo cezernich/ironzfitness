@@ -2,7 +2,7 @@
   "environment": "staging",
   "projectRef": "yhchfxjzxhinreklnxbi",
   "productionChanged": false,
-  "passed": 31,
+  "passed": 32,
   "failed": 0,
   "checks": [
     {
@@ -22,6 +22,11 @@
     },
     {
       "name": "password sign-in: admin",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "public self-service signup is disabled",
       "passed": true,
       "detail": ""
     },

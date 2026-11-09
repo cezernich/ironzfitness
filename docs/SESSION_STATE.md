@@ -10,7 +10,7 @@ Finish isolated staging with synthetic users, test candidate fixes there, coordi
 
 - Production: `https://ironz.fit`, Supabase `dagdpdcwqdlibxbitdgr`. No production migration or application release has been performed by Codex.
 - Staging: Supabase `yhchfxjzxhinreklnxbi` in the existing Ironz organization, us-east-2, approved at a $0/month project quote.
-- Private preview registration: `appgprj_6af1feeafc008191abb0f79038aaa874`, expected origin `https://ironz-staging.chase-zernich.chatgpt.site`. Registration is not publication; verify deployment status before reporting it live.
+- Private preview: `https://ironz-staging.chase-zernich.chatgpt.site`, project `appgprj_6af1feeafc008191abb0f79038aaa874`. Deployment `appgdep_6af2079f413c81919513fca26cc97389` succeeded, owner-private. The outer ChatGPT sign-in returned an error during QA; do not count hosted authenticated access as passing.
 - Staging has a schema-only copy of production public definitions: 48 tables, 29 original functions, 147 original policies. No athlete rows were copied. Reference philosophy modules come from the repository.
 - Four synthetic Auth accounts exist: athlete-a, athlete-b, coach, administrator. Generated passwords live only in the owner-only local credentials file specified by `IRONZ_STAGING_CREDENTIALS`. Never commit credentials or tokens.
 
@@ -28,13 +28,16 @@ Finish isolated staging with synthetic users, test candidate fixes there, coordi
 
 Live production catalog checks confirmed broad profile reads and editable privilege columns without a privilege-guard trigger. The managed migration ledger does not capture the many manual schema changes. Production remains unchanged.
 
-The first real staging API run against the original security candidate passed 24 checks and failed the assigned-athlete-to-coach private-profile check. This reproduced the review finding through real Auth/PostgREST. The focused correction is now applied only to staging and is being retested. The initial reference seed formatting error was corrected by normalizing optional keys for PostgREST bulk insertion.
+The original security candidate passed 24 API checks and failed the coach-private-profile check. After PR 18's correction and an Auth-provider configuration correction, the final staging API suite passes 32 checks, including public-signup denial and disposable self-deletion. Both GitHub checks on PR 18 pass. The staging integration's client-build, db-security and test jobs pass, with three existing behavior suites explicitly quarantined. The required staging-release job intentionally fails because release blockers remain.
+
+Browser QA used the identical deployed artifact locally against real staging after the outer hosted identity error. Sign-in, meal/hydration entry, reload persistence, narrow coach card and account-switch isolation passed. The 5K plan wizard reported success but saved zero sessions: release-blocking issue 20. See `docs/staging/browser-qa-2026-11-09.md` and `STAGING_RUNBOOK.md`.
 
 Staging packaging substitutes only the isolated backend/public key, disables production Sentry and live Stripe links, adds a visible staging banner/noindex and restricts network connections to staging. Original production client configuration is unchanged. Provider credentials and background notification jobs must remain absent until separately configured for testing.
 
 ## Release blockers
 
-- Complete staging browser QA and record the exact candidate/deployment and results.
+- Complete the remaining browser/native/integration scenarios; sampled core flows and the failed race-plan scenario are recorded.
+- Correct the empty-plan false-success path in issue 20 and rerun the browser scenario; verify hosted ChatGPT sign-in access.
 - Get Claude's independent review of Codex changes and address review findings.
 - Resolve the three quarantined training behavior suites against the canonical spec; do not silently relabel them as passing.
 - Verify Strava secret rotation with the provider; deleting the committed value alone is insufficient.
@@ -44,3 +47,7 @@ Staging packaging substitutes only the isolated backend/public key, disables pro
 ## Session closeout protocol
 
 After each meaningful milestone, about every 30 minutes during long work, and before ending a session: update this state; append a dated entry to `SESSION_LOG.md`; record code revisions, migrations per environment, tests/pass/fail/disabled status, review links, and the next concrete action. Preserve unresolved issues. Read the files again next session and refresh remote state before assuming they are current. Store no credentials, real athlete records, or private health data here.
+
+## Next concrete action
+
+Read issue 20 and compare the existing `fix/audit-p0` normalization changes before making another training change. Add an onboarding-to-generator regression, fix canonical race-ID translation and false-success handling, preserve previous plans on failure, then retest the synthetic 5K scenario. Keep the staging-release hold in place. Claude should independently review PR 18 and draft PR 19. No production rollout is authorized by a passing build alone.
