@@ -27,6 +27,7 @@ Rules:
 | `philosophy/modules_static.json` (47 modules) | **Runtime data** | `js/philosophy-engine.js` (fetched at runtime as last fallback), `scripts/test-golden.js`, `scripts/philosophy-sync.js` | **Do not move or rename**: the live app fetches it by path. |
 | `philosophy/philosophy_modules.json` (60 modules) | **Runtime source data** | `scripts/philosophy-sync.js` (uploads to Supabase) | Not loaded by the app directly. See drift note below. |
 | `philosophy/golden_test_cases.json` | **Test data** | `scripts/test-golden.js` | |
+| `philosophy/db_snapshot_2026-11-09.json` (45 modules) | **Backup** | `tests/philosophy-modules-safety.test.js` | Exact copy of the live `philosophy_modules` table on 2026-11-09. Not read by the app. Re-snapshot after any production edit. |
 | `philosophy/IRONZ_KNOWLEDGE_BASE.md` | **Reference, in use** | Mirrored in `supabase/functions/ask-ironz/knowledge_base.ts`; cited by `js/gear-checklist.js` | Edits must be mirrored to the edge function copy. |
 | `philosophy/PHILOSOPHY_UPDATE_2026-04-09_*.md` (run session types, threshold weeks, workout diversification) | **Reference, in use** | Cited by planner, generator, scheduler, and variant-selector code and one test | Change logs whose rules should already be in the master spec. Keep until confirmed merged. |
 | `archive/` (13 files) | **Archived** | none (checked 2026-11-09) | Moved from `philosophy/` on 2026-11-09. See `archive/README.md`. |
@@ -43,7 +44,7 @@ Rules:
 
 Consumers of the `philosophy_modules` table (not only the legacy engine): `js/philosophy-engine.js`, `js/philosophy-planner.js`, `js/rules-engine.js`, `js/app.js`, `js/db.js`, `js/admin.js`, `js/seed-reference-data.js`, `js/coach-sheet-import.js`, `scripts/philosophy-sync.js`, and the **`ask-ironz` edge function**.
 
-Changing which modules the database holds can change generated plans and Ask IronZ answers. Any sync, reconciliation, or retirement of this table is its **own PR**, with before/after golden tests, and is not part of documentation cleanup.
+Changing which modules the database holds can change generated plans and Ask IronZ answers. **The legacy matcher gives every user every active module**, so activating a module applies it to everyone; `tests/philosophy-modules-safety.test.js` blocks this for the injury and recovery placeholders. Any sync, reconciliation, or retirement of this table is its **own PR**, with before/after golden tests, and is not part of documentation cleanup.
 
 ## 4. Pipelines
 
