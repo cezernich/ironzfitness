@@ -2142,42 +2142,40 @@ function checkARacePromotion() {
 // covers the race arc, we skip the trainingPlan write entirely — the
 // onboarding schedule is the source of truth and double-writing creates
 // duplicate sessions on the calendar.
-function _regeneratePlanForRace(race) {
-  if (!race || typeof generateTrainingPlan !== "function") return;
+// Reject empty/malformed output and race-day-only placeholders before replacing a plan.
+function _validateGeneratedPlan(entries) {
+  const dated = e => e && typeof e.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(e.date) &&
+    !isNaN(new Date(e.date + "T00:00:00").getTime()) &&
+    new Date(e.date + "T00:00:00Z").toISOString().slice(0, 10) === e.date &&
+    ["run", "bike", "swim", "strength", "weightlifting", "hyrox", "hyroxStrength", "brick", "mobility", "hiit", "yoga", "walk", "row", "circuit", "race", "rest"].includes(e.discipline);
+  if (!Array.isArray(entries) || !entries.length || !entries.every(dated) ||
+      !entries.some(e => !["race", "rest"].includes(e.discipline) && e.load !== "rest" && e.phase !== "Race")) {
+    throw new Error("No training sessions were generated. Check the race type, date and schedule, then try again.");
+  }
+}
 
-  // UNIFIED PLAN MODEL: when a race exists, the race plan IS the athlete's
-  // schedule. Any onboarding-v2 workoutSchedule entries tagged with this
-  // raceId (or sharing the race's planId) are stale scaffolding from before
-  // the race plan existed and must be cleared so we don't double-book days
-  // and so the "Training Conflict Detected" warning goes away. Past entries
-  // (completed workouts) are preserved.
+function _regeneratePlanForRace(race, options = {}) {
   try {
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
-    const keptSchedule = schedule.filter(e => {
-      if (!e) return false;
-      // Keep past sessions regardless — they're history, not future bookings.
-      if (e.date < todayStr) return true;
-      // Drop future entries that were the onboarding-v2 scaffold for THIS race.
-      if (e.raceId && String(e.raceId) === String(race.id)) return false;
-      return true;
-    });
-    if (keptSchedule.length !== schedule.length) {
-      localStorage.setItem("workoutSchedule", JSON.stringify(keptSchedule));
-      if (typeof DB !== "undefined" && DB.syncKey) DB.syncKey("workoutSchedule");
-    }
-  } catch (e) {
-    console.warn("[IronZ] failed to clear onboarding schedule for race plan", e);
+    // Repair supported IDs saved by older onboarding builds as well as new drafts.
+    const aliases = { "5k": "fiveK", "10k": "tenK", century: "centuryRide" };
+    const canonical = race ? { ...race, type: aliases[race.type] || race.type } : race;
+    return _buildRacePlanReplacement(canonical, options);
+  } catch (error) {
+    if (options.persist === false) throw error; // Wizard owns its error UI.
+    console.warn("[IronZ] race plan replacement failed; previous plan retained");
+    if (typeof window.showToast === "function") window.showToast(error.message);
+    return null; // Background render/promotion callers must remain usable.
   }
+}
 
-  const newEntries = generateTrainingPlan(race) || [];
-  if (!newEntries.length) {
-    // generateTrainingPlan returned nothing — usually because the race
-    // object is missing a required field (type, date). Warn so the empty
-    // calendar isn't silent, but still persist the filter so stale entries
-    // for this race don't linger.
-    console.warn("[IronZ] _regeneratePlanForRace produced no entries for race", race && race.id, race && race.type);
+function _buildRacePlanReplacement(race, options = {}) {
+  if (!race || typeof generateTrainingPlan !== "function") throw new Error("Plan generation is unavailable.");
+
+  if (typeof window.isPlanFrozen === "function" && window.isPlanFrozen()) {
+    throw new Error("Plan generation is paused while your coach manages your schedule.");
   }
+  const newEntries = generateTrainingPlan(race);
+  _validateGeneratedPlan(newEntries);
 
   // Determine the athlete's level once so both the distribution
   // aligner (Step 4) and the constraint validator (Step 5) see the
@@ -2289,8 +2287,18 @@ function _regeneratePlanForRace(race) {
     }
   }
 
-  const existingPlan = loadTrainingPlan().filter(e => e.raceId !== race.id);
-  saveTrainingPlanData([...existingPlan, ...newEntries]);
+  _validateGeneratedPlan(newEntries);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
+  const keptSchedule = schedule.filter(e => e && (e.date < todayStr || String(e.raceId) !== String(race.id)));
+  const existingPlan = loadTrainingPlan().filter(e => String(e.raceId) !== String(race.id));
+  const updates = { trainingPlan: [...existingPlan, ...newEntries], workoutSchedule: keptSchedule };
+  if (options.persist === false) return updates;
+  // Existing non-wizard callers retain their synchronous API, but never clear
+  // either store until generation has passed validation.
+  if (typeof DB !== "undefined" && DB.cachePlanBuild) DB.cachePlanBuild(updates);
+  else saveTrainingPlanData(updates.trainingPlan);
+  return updates;
 }
 
 if (typeof window !== "undefined") {
