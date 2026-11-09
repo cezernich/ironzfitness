@@ -1,0 +1,19 @@
+{
+  "environment": "staging",
+  "projectRef": "yhchfxjzxhinreklnxbi",
+  "applicationCommit": "9316eb1",
+  "releaseApproved": false,
+  "apiChecks": {
+    "passed": 32,
+    "failed": 0
+  },
+  "browserQa": "partial",
+  "blockers": [
+    "Claude independent review of PR30/31/32 is pending",
+    "Owner-private hosted authentication requires owner reauthentication; native/offline scenarios unverified",
+    "Issue27 recovery prescription draft is not staged or independently approved",
+    "Historical display-only restrictions and destructive stale-device synchronization remain unresolved",
+    "Strava provider secret rotation is not verified",
+    "AI/wearable/email/payment/push integrations disabled and unverified"
+  ]
+}
