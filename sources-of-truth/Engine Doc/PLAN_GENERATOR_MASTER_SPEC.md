@@ -1726,6 +1726,47 @@ Derived from weekly check-in data (sleep quality, energy level, soreness):
 | Duration | Shorter sessions |
 | Strength | Reduce sets, maintain or slightly reduce weight |
 
+### 12e. Unavailable Days and Return to Training (issue #27)
+
+Athletes must be able to block days they can't train (medical procedure or recovery, illness, injury, travel, a mandatory off week). A plan that schedules sessions on those days is wrong, not just inconvenient.
+
+**Model.** Restrictions are stored per day in the synced `dayRestrictions` key, outside the plan, so they survive plan rebuilds:
+`{ "YYYY-MM-DD": { type, action, note, disciplines?, blockId?, rampDay? } }`
+
+| Field | Values | Effect |
+|---|---|---|
+| `type` | `injury`, `sick`, `fatigue`, `travel`, `time`, `rest`, `medical`, `return` | Label, suggestion text, and how `reduce` changes the session |
+| `action` | `remove` | Day shows as rest; planned sessions are not shown as due |
+| | `reduce` | Session kept, load and duration lowered by type (below) |
+| | `swap` | Listed `disciplines` unavailable; substitute suggested |
+
+**Ranges.** One entry covers a date range (max 120 days); every day in the range gets the same restriction and a shared `blockId`.
+
+**Return ramp.** After a `medical`, `injury`, or `sick` block of **5+ days**, a 1-week return ramp is offered and **on by default**:
+- The 7 days after the block get `type: "return"`, `action: "reduce"`.
+- Every session is **easy** intensity regardless of its planned load (no intervals, tempo, long efforts, or strides).
+- Duration is **about 50%** of planned (minimum 15 min). Consistent with 12b "post-illness/injury return: start at 50% of previous volume".
+- Normal progression resumes on day 8 after the block. Missed volume is never made up (no catch-up).
+- `travel`, `time`, `rest`, and `fatigue` blocks have no ramp by default.
+- A ramp day never overwrites a restriction the athlete already set on that day.
+
+**Reduce rules by type** (`getEffectiveLoad`, `getRestrictedDuration` in `js/calendar.js`):
+
+| Type | Load | Duration |
+|---|---|---|
+| `medical`, `return` | easy (rest stays rest) | 50% |
+| `injury`, `sick` | hard/long/moderate → easy | ×0.60 to 0.75 by load |
+| `fatigue` | hard/long → moderate; moderate → easy | ×0.60 to 0.75 by load |
+| `time` | hard/long → moderate | ×0.60 to 0.75 by load |
+
+**Safety.** Clinician instructions override the plan and the ramp. Copy tells the athlete to follow their clinician and stop if anything hurts; IronZ does not interpret medical restrictions.
+
+**Known limits (follow-ups):**
+- Restrictions are applied at display time. The generator still emits sessions on restricted days, so weekly-hour totals and adherence stats don't yet account for them.
+- Strength sessions in the ramp are shown easy at half duration, not removed. Athletes with a no-lifting restriction should block strength with `swap` until cleared.
+- No Build Plan wizard input yet (calendar quick entry and natural-language input only).
+- Phases don't shift around long blocks.
+
 ### 12d. Plateau Prevention
 
 **Cause 1 — Workout Monotony:** Same exercises in same order too long. The workout repository (Section 9) and its recency filter solve this — Code picks from a rotating pool of curated workouts.
