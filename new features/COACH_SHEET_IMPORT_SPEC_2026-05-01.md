@@ -2,7 +2,7 @@
 
 Athletes whose coaches distribute training plans as Excel/PDF/Google Sheets currently have to copy-paste workouts one at a time into the existing "Import a Plan" textarea. That's a wall. This spec adds a file drop that takes the source file, parses it into structured workouts + a strength library + (optionally) athlete profile data, and lands all of it in IronZ in the canonical workout shape — same data model as native workouts, fully editable, fully integrated with stats/history/streaks.
 
-The work has been validated by a proof-of-concept run against Paige Tuchner's 2026 plan (a multi-sheet workbook with 12 month tabs, a Resources sheet, and a Strength sheet). The PoC successfully extracted 147 running workouts with 92% reconciling to prescribed mileage, 5 strength templates with 55 exercises, and the full athlete profile (3 races, 2 PRs, A/B goal paces). Architecture is sound; this spec is the build plan.
+The work has been validated by a proof-of-concept run against a beta athlete's 2026 plan (a multi-sheet workbook with 12 month tabs, a Resources sheet, and a Strength sheet). The PoC successfully extracted 147 running workouts with 92% reconciling to prescribed mileage, 5 strength templates with 55 exercises, and the full athlete profile (3 races, 2 PRs, A/B goal paces). Architecture is sound; this spec is the build plan.
 
 ---
 
@@ -69,7 +69,7 @@ Every imported running workout produces this exact shape, matching what a native
     }
   ],
   "raw_description": "5 miles of 3 min ON and 2 min EASY\n\nON Pace: 8:15-7:15\n\nEASE BACK INTO THINGS",
-  "source_file": "2026 Paige Tuchner Training Plan.xlsx",
+  "source_file": "sample-athlete-plan.xlsx",
   "source_sheet": "May",
   "source_cell": "D8",
   "import_id": "imp_abc123"
@@ -163,7 +163,7 @@ The input side. No parsing yet; this phase ships an upload affordance that posts
 
 ### A2 — Sheet picker (multi-sheet workbooks only)
 
-**Why.** Paige's file has 16 sheets. Most coach sheets are single-tab, but multi-tab files like this one need the user to indicate which tab(s) to parse.
+**Why.** the sample athlete file has 16 sheets. Most coach sheets are single-tab, but multi-tab files like this one need the user to indicate which tab(s) to parse.
 
 **Trigger.** After file upload completes, edge function returns sheet names + a guess at which sheet is the "calendar" (heuristic: contains date cells in a grid pattern). If only one sheet, skip picker. If multiple, show:
 
@@ -268,7 +268,7 @@ The brain. A new Supabase edge function `coach-sheet-import-parse` that takes a 
 **Stage 1: structural extractor (Python or Deno).**
 Reads the file from storage, walks the workbook, identifies week-block patterns by scanning for date columns, extracts raw cells (date, mileage, description) per day. Also reads header rows for WU/CD rules and the Resources sheet for profile data. Output: a "raw blocks" intermediate JSON.
 
-The PoC code in this spec's sibling files (`paige_import_v2.json` for shape reference) demonstrates this stage works at 92% accuracy on real data. Lift that logic into the edge function.
+The PoC code in this spec's sibling files (`sample_import.json (removed from repo)` for shape reference) demonstrates this stage works at 92% accuracy on real data. Lift that logic into the edge function.
 
 **Stage 2: LLM normalizer (Anthropic API).**
 Takes the raw blocks + header rules and returns the canonical IronZ workout shape. The LLM does:
@@ -292,7 +292,7 @@ Preserve raw_description verbatim for the "View source text" affordance.
 {batch_of_workouts_input}
 ```
 
-Batch workouts in groups of ~20 per LLM call to stay within context + cost limits. For Paige's file (147 workouts over 12 months), that's ~8 LLM calls per full-year import.
+Batch workouts in groups of ~20 per LLM call to stay within context + cost limits. For the sample athlete file (147 workouts over 12 months), that's ~8 LLM calls per full-year import.
 
 ### B3 — Cost guardrails
 
@@ -339,13 +339,13 @@ This log enables: cost monitoring per user (catch abuse), success rate analytics
 - Quota check happens before LLM is called
 - Cost guardrail prevents runaway spend
 - Logs written to `coach_sheet_import_logs` for every attempt (including failures)
-- Test with Paige's file: returns 28 workouts for May, 5 strength templates, athlete profile with 3 races + 2 PRs
+- Test with the sample athlete file: returns 28 workouts for May, 5 strength templates, athlete profile with 3 races + 2 PRs
 
 ### B5 — Test fixtures
 
 Coder should add three test fixtures to `__tests__/coach-sheet-import/`:
 
-1. **`paige_2026.xlsx`** (full file from PoC) — golden test, 92%+ math reconciliation expected
+1. **`sample-athlete-plan.xlsx`** (full file from PoC) — golden test, 92%+ math reconciliation expected
 2. **`single_tab_simple.xlsx`** — one sheet, 4 weeks, no Resources/Strength tabs — tests minimal happy path
 3. **`malformed_no_dates.xlsx`** — sheet with text but no date columns — tests structural-parser fallback
 
@@ -366,7 +366,7 @@ The commit + onboarding moment. After Phase B returns parsed JSON, this is what 
 
 **Top bar:**
 - Title: "Review your imported plan"
-- Subtitle: "From: 2026 Paige Tuchner Training Plan.xlsx · 28 workouts · 5 strength templates · profile data found"
+- Subtitle: "From: sample-athlete-plan.xlsx · 28 workouts · 5 strength templates · profile data found"
 - Right side: "Cancel" + "Import all" buttons
 
 **Tabs/sections (visible if data exists for each):**
@@ -514,7 +514,7 @@ Post-launch features worth tracking:
 Total: ~2 weeks. Phases ship in order; A and B can be partially parallelized (front-end builds the UI against a mock parser response while back-end builds the real parser).
 
 **Internal dogfood checklist (post-Phase C, pre-public):**
-1. Chase imports Paige's file end-to-end. All 28 May workouts land. Strength library populated. Profile beta unchecked.
+1. Chase imports the sample athlete file end-to-end. All 28 May workouts land. Strength library populated. Profile beta unchecked.
 2. Chase opens Tuesday 5/5 hard workout. Edits the WU from 1.5 to 1 mile. Saves. Total updates correctly.
 3. Chase deletes Wednesday's imported easy run. Calendar reflects the delete.
 4. Chase clicks "Undo import" within 1 hour. All workouts + templates disappear.
@@ -523,7 +523,7 @@ Total: ~2 weeks. Phases ship in order; A and B can be partially parallelized (fr
 7. Chase tries to upload a 6th file in the same calendar month. Quota error fires.
 8. Chase uploads a file with no date columns. Friendly error fires; nothing crashes.
 
-If all 8 pass, ship to a small beta cohort (Paige + 2–3 other power users) for one week before broader rollout.
+If all 8 pass, ship to a small beta cohort (2–3 other power users) for one week before broader rollout.
 
 ---
 
