@@ -1,6 +1,6 @@
-# IronZ Adaptive Coach: Spec v0.1 (draft for review)
+# IronZ Adaptive Coach: Spec v0.2 (draft for review)
 
-Status: **draft, nothing built.** Written 2026-11-09 by Claude for review by Codex and approval by Chase. No app code changes until this is approved.
+Status: **draft, nothing built.** v0.2 adds Chase's decisions and the research behind the auto-adjust limits (section 14). Written 2026-11-09 by Claude for review by Codex and approval by Chase. No app code changes until this is approved.
 
 Source: a working personal coaching agent the owner has run daily since Oct 2026 (Claude + Strava + Intervals.icu wellness synced from Garmin + calendar). This doc keeps that agent's **method only**. Personal data (health history, current numbers, schedule, locations, account IDs, connector URLs) is deliberately excluded because this repo is public. Do not add it.
 
@@ -55,7 +55,9 @@ Tone note: the owner's agent is deliberately blunt. For other users, directness 
 | Athlete reports | strength loads/reps, fueling (g carbs/hr, fluid, sodium), RPE, soreness, pain, mood | check-in (weekly only) | daily one-tap check-in + free text | Optional |
 | Thresholds and zones | FTP, CSS, run threshold pace, HR caps | profile (exists) | same, with test-based refresh | Yes |
 
-Baselines: wellness rules compare against the athlete's own rolling baseline (suggest 28-day median, with a 7-day trend), never population norms. Until 14 days of data exist, wellness rules stay off and the coach says so.
+Baselines: wellness rules compare against the athlete's own normal range, never population norms. Method (HRV-guided training research, section 14): the **7-day rolling average** of HRV (ln rMSSD) is compared with the athlete's **normal range** (mean ± 0.5 SD of the 7-day average over the last 30 to 60 days). Single-day values are notes, not triggers. Until 14 days of data exist, wellness rules stay off and the coach says so; until 30 days, it says the range is provisional.
+
+The coach must work **without HRV** (e.g., Garmin users connected through Apple Health, where Garmin HRV likely doesn't sync): resting HR, sleep, load, and the daily check-in still drive readiness. HRV improves the call; it isn't required.
 
 ---
 
@@ -85,7 +87,7 @@ Inputs: last 7 to 14 days of HRV, resting HR, sleep, plus load and yesterday's g
 | Signal | Note (single day) | Downgrade trigger (sustained) |
 |---|---|---|
 | Resting HR | 3+ bpm over baseline | 5+ bpm over baseline for 3 days |
-| HRV | well below baseline | below baseline range for several days |
+| HRV | single low reading | 7-day average outside the normal range (below, or unusually high) |
 | Sleep | under 6.5 hrs | under 6.5 hrs for 2+ nights |
 | Form (TSB) | | below about -20 |
 | Illness | | any symptoms below the neck |
@@ -93,28 +95,42 @@ Inputs: last 7 to 14 days of HRV, resting HR, sleep, plus load and yesterday's g
 
 Rule: **one bad day is a note; 2 to 3 in a row is a downgrade.** Illness below the neck and pain rules act immediately.
 
+Readiness levels:
+- **Green:** no sustained triggers. Train as planned.
+- **Easy:** one sustained trigger. Easy sessions get an auto cap (5b). Key sessions: the coach **proposes** converting to low intensity, the evidence-backed response in HRV-guided training.
+- **Rest:** two or more sustained triggers, or illness below the neck, or the pain rule. **Applied automatically** (Chase's decision), as either:
+  - **Full rest** if illness, pain, or sleep under 5 hrs; or
+  - **Very light**: 20 to 30 min Zone 1, or mobility only, otherwise.
+  Shown with the reason and undoable for that day.
+
 Pain handling (from agent guardrails): stop that sport and swap to one that doesn't load the area; pain over 3/10 for 48 hrs means see a sports medicine doctor or PT. The coach never diagnoses.
 
 Gated sessions: a key session can carry a gate (e.g., "sweet spot only if HRV and RHR are within baseline"). The gate is evaluated by the coach in the morning and resolves to **one** prescription (P2). The athlete never sees the gate as an option.
 
 ### 5b. Changing today's session: auto vs propose
 
-The owner's rule: **small changes happen automatically; big changes are proposed for approval.** Increases in load are never automatic.
+The owner's rule: **small changes happen automatically; big changes are proposed for approval.** Increases in load are never automatic. Limits below are set from the research in section 14.
+
+Principle: **protect the purpose of the session.** Auto changes only trim what isn't the point of the session. The main set of a key session is never auto-cut.
 
 | Change | Auto | Propose |
 |---|---|---|
-| Drop strides, pickups, or accessory sets | Yes | |
-| Shorten a session by up to 10% or 10 min, whichever is smaller | Yes | |
-| Lower an easy session's HR cap or swap easy ride/run for easy ride/run of equal or less load | Yes | |
-| Readiness = Rest: convert today to rest or mobility | | Yes |
-| Downgrade a key (quality or long) session's intensity | | Yes |
-| Shorten more than the auto threshold | | Yes |
+| Drop strides, pickups, or accessory strength sets | Yes | |
+| **Easy or recovery session:** shorten by up to 20% or 15 min, whichever is smaller | Yes | |
+| **Key session (intervals, threshold, long):** trim only warmup/cooldown extras or easy filler, up to 10% or 10 min, whichever is smaller; main set untouched | Yes | |
+| Lower an easy session's HR cap, or swap for an equal-or-lower-load easy session | Yes | |
+| Readiness = Rest: convert to full rest or very light (5a) | Yes | |
+| Readiness = Easy: convert a key session to low intensity | | Yes |
+| Any cut to a key session's main set (fewer reps, lower target) | | Yes |
+| Shorten beyond the auto limits | | Yes |
 | Move a key session to another day | | Yes |
 | Skip a key session | | Yes |
 | Any increase: duration, intensity, extra session | | Yes |
 | Change next week's volume | | Weekly review only |
 
-Every auto change is shown in the brief ("Shortened to 45 min: RHR up 5 for 3 days") and is undoable for that day. A proposal is a single recommended change with the reason and one-tap Accept / Keep original (P1: one recommendation, not a menu). If the athlete doesn't respond by session time, the original stands, except Rest-level readiness, which shows a persistent warning. *(Open question 1.)*
+Every auto change is shown in the brief ("Shortened to 45 min: RHR up 5 for 3 days") and is undoable for that day. A proposal is a single recommended change with the reason and one-tap Accept / Keep original (P1: one recommendation, not a menu). **If the athlete doesn't respond by session time, the original stands** (Chase's decision). Rest-level changes are already applied, so they don't wait.
+
+Missed sessions: **a missed session is gone, not rescheduled by default.** Missed easy or recovery sessions are never made up. A missed key session can move 1 to 2 days only if it doesn't create back-to-back hard days or displace another key session; that move is a proposal. Never stack missed volume: no single day grows more than about 25% to absorb it.
 
 Hard constraints still apply after any change: no back-to-back hard days, quality-session limits (section 9).
 
@@ -204,12 +220,12 @@ Store in `notification_preferences` (exists) plus a new coach-settings record.
 | Setting | Default | Notes |
 |---|---|---|
 | Adaptive coach | On for users with a plan | Off = static plan, no auto changes |
-| Daily brief | On | Time picker; local time zone (IANA, not a UTC offset) |
+| Daily brief | On, every day | Time picker; option for training days only; local time zone (IANA, not a UTC offset) |
 | Weekly review | On | Day + time picker |
-| Auto-adjust small changes | On | Off = everything is a proposal |
+| Auto-adjust small changes | On | Off = everything is a proposal, except Rest-level readiness, which still applies |
 | Channels | Push | Email optional for weekly |
 | Coach style | Direct | Direct / Supportive. Changes wording only, never the call |
-| Wellness sources | none | Connect Intervals.icu / Apple Health; each revocable |
+| Wellness sources | none | Connect Intervals.icu and/or Apple Health; each revocable (see 14c) |
 | Quiet hours | 9pm to 6am | No pushes inside |
 
 Privacy: wellness data is used only to coach the athlete it belongs to, never shown to other users or coaches without explicit opt-in, never sent to analytics or error logs.
@@ -282,15 +298,52 @@ Each step is its own PR with tests. Security and sync fixes already queued come 
 
 ---
 
-## 13. Open questions for Chase
+## 13. Decisions (Chase, 2026-11-09)
 
-1. If a proposed change gets no response by session time, should the original stand (current draft) or should the coach's recommendation apply?
-2. Auto threshold: is "up to 10% or 10 min, whichever is smaller" right, or tighter (e.g., 5 min)?
-3. Should Rest-level readiness ever auto-apply (e.g., illness reported), or always be a proposal?
-4. Is Intervals.icu as the first wellness source acceptable for an MVP aimed at serious triathletes, with Apple Health second?
-5. Daily brief every day, or only on training days plus the day after?
+| # | Question | Decision |
+|---|---|---|
+| 1 | Unanswered proposal at session time | **Original plan stands** |
+| 2 | Auto-shorten limit | **Set from research** (section 14a): easy 20% / 15 min; key sessions 10% / 10 min from non-main-set parts only |
+| 3 | Can Rest apply automatically? | **Yes**: full rest or a very light session, by the rules in 5a |
+| 4 | Intervals.icu as a wellness source | **OK**, with the account-friction trade-off in 14c |
+| 5 | Daily brief frequency | **Every day by default**, user-customizable (on/off, time, training days only) |
+
+Still open:
+- Confirm on a real iPhone which Garmin metrics land in Apple Health (HRV in particular) before committing to Apple Health as the mainstream path.
+- Whether a wellness aggregator (no extra user account, paid per user) is worth evaluating later.
 
 ---
+
+## 14. Research behind the limits
+
+### 14a. Auto-shorten limits
+
+There is no published "safe percent" for cutting one session; the numbers are a judgment call anchored on:
+- Coaching consensus: when time is short, shorten the session but keep its main purpose; a missed session is gone and shouldn't be crammed elsewhere ([Coach Ray, 2026](https://www.coachray.nz/2026/08/09/rays-rules-for-adjusting-your-training-plan-when-life-gets-in-the-way/); [CTS, Carmichael](https://trainright.com/missed-workouts-guide-to-adjusting-training/)).
+- Missed recovery runs don't need replacing; when redistributing missed volume, no day should grow more than ~25% ([CTS, Koop](https://trainright.com/?p=25360)).
+- Fitness is maintained through much larger volume cuts (33 to 66% per session) as long as intensity is kept ([road.cc summary of the maintenance literature](https://road.cc/content/feature/how-get-most-your-limited-training-time-281989); [CTS, Rutberg](https://trainright.com/minimum-amount-of-training-needed-cycling/)).
+- Interval sessions can move 2 to 3 days at most and must not create back-to-back hard days ([running.COACH](https://blog.runningcoach.me/en/2025/08/08/missed-a-workout-how-to-deal-with-deviations-from-your-plan/)).
+
+So: a 20% / 15 min trim of an easy session is far inside what maintains fitness and doesn't touch the session's purpose; key sessions are protected by only trimming non-main-set parts, and anything that changes the main set goes to the athlete.
+
+### 14b. Readiness and intensity changes
+
+- HRV-guided training trials (Kiviniemi 2007; Vesterinen 2016; Javaloyes 2019) used one rule: do the planned hard session when HRV is within the athlete's normal range; switch to low intensity or rest when it isn't. HRV-guided groups did less high-intensity work and improved as much or more ([HRV4Training summary](https://www.hrv4training.com/blog2/training-prescription-guided-by-heart-rate-variability); [TrainingPeaks](https://trainingpeaks.com/blog/new-study-widens-hrv-evidence-for-more-athletes)).
+- Use the 7-day rolling average against a normal range (about ±0.5 SD), not single days; 4 to 5 readings a week are enough ([TrainingPeaks](https://trainingpeaks.com/blog/new-study-widens-hrv-evidence-for-more-athletes)).
+- Newer protocols also treat an unusually **high** 7-day average as a caution sign, not a green light ([Altini](https://hrv4training.substack.com/p/week-29-a-brief-history-of-heart)).
+
+### 14c. Wellness sources: trade-offs
+
+| Criterion | Intervals.icu (OAuth) | Apple Health (HealthKit) |
+|---|---|---|
+| Extra account for the user | **Yes** (free Intervals.icu account, linked to Garmin/Whoop/Oura) | No |
+| HRV from Garmin | Yes | Likely no (Garmin doesn't appear to sync HRV natively; verify) |
+| Resting HR, sleep, workouts | Yes | Yes |
+| Push structured workouts to the watch | **Yes** (calendar scope → Garmin) | No |
+| Platforms | iOS, Android, web | iOS only |
+| Build effort | Low: edge function + OAuth, same pattern as Strava | High: requires bundling the iOS app + a native plugin |
+
+Recommendation: build Intervals.icu first (cheap, works with today's web architecture, the owner's own setup for dogfooding, and the only path to the watch). Position it as the "connect your Garmin" path for serious athletes. Add Apple Health once the app is bundled, as the no-extra-account path. Readiness must work without HRV so Apple Health users still get a real coach.
 
 ## Appendix A: Structured workout export rules (verified on a Garmin via Intervals.icu)
 
