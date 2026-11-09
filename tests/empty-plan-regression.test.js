@@ -78,8 +78,15 @@ async function until(check, message) {
   // Same-race replacement must not clear scaffolding on failure.
   { const h=setup(); h.context.generateTrainingPlan=()=>[];
     const before=JSON.stringify([...h.store]);
-    assert.throws(()=>h.context._regeneratePlanForRace({id:'previous',type:'unsupported',date:'2027-02-15'}));
+    assert.throws(()=>h.context._regeneratePlanForRace({id:'previous',type:'unsupported',date:'2027-02-15'}, {persist:false}));
     assert.equal(JSON.stringify([...h.store]),before);
+  }
+  { const h=setup();
+    assert.ok(h.context._regeneratePlanForRace({id:'previous',type:'5k',date:h.ob._state.raceEvents[0].date}));
+    h.context.isPlanFrozen=()=>true;
+    const before=JSON.stringify([...h.store]);
+    assert.equal(h.context._regeneratePlanForRace({id:'previous',type:'5k',date:h.ob._state.raceEvents[0].date}),null);
+    assert.equal(JSON.stringify([...h.store]),before,'frozen background regeneration does not crash or erase');
   }
   { const h=setup(); let resolve; h.gate(new Promise(r=>{resolve=r;}));
     const first=h.ob._confirmAndSavePlan(); await Promise.resolve(); await h.ob._confirmAndSavePlan();

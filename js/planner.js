@@ -2155,6 +2155,20 @@ function _validateGeneratedPlan(entries) {
 }
 
 function _regeneratePlanForRace(race, options = {}) {
+  try {
+    // Repair supported IDs saved by older onboarding builds as well as new drafts.
+    const aliases = { "5k": "fiveK", "10k": "tenK", century: "centuryRide" };
+    const canonical = race ? { ...race, type: aliases[race.type] || race.type } : race;
+    return _buildRacePlanReplacement(canonical, options);
+  } catch (error) {
+    if (options.persist === false) throw error; // Wizard owns its error UI.
+    console.warn("[IronZ] race plan replacement failed; previous plan retained");
+    if (typeof window.showToast === "function") window.showToast(error.message);
+    return null; // Background render/promotion callers must remain usable.
+  }
+}
+
+function _buildRacePlanReplacement(race, options = {}) {
   if (!race || typeof generateTrainingPlan !== "function") throw new Error("Plan generation is unavailable.");
 
   if (typeof window.isPlanFrozen === "function" && window.isPlanFrozen()) {
