@@ -25,6 +25,8 @@ node tests/<file>.js   # run one test
 
 No install step is needed to run tests (plain Node 20+).
 
+Database security tests live in `tests/sql/` and run in CI against a throwaway Postgres (`db-security` job). Locally: `bash tests/sql/profiles-security.sh` with a Postgres superuser in `PGHOST`/`PGUSER`/`PGPASSWORD`. Any migration that touches RLS, policies, or `SECURITY DEFINER` functions on user data needs a check added there.
+
 Tests in `QUARANTINE` inside `scripts/run-tests.js` run but don't fail CI. Each has a reason. If you fix one, remove it from the list in the same PR. Never add a test to quarantine to make your PR green without saying so in the PR description.
 
 ## 4. Sources of truth for training logic
@@ -78,4 +80,6 @@ Don't nitpick formatting or style unless it hurts readability.
 - The Supabase anon key in `js/supabase-init.js` is public by design. Everything depends on RLS being correct.
 - Service-role keys, Anthropic, Stripe, and Strava secrets live only in Supabase edge-function secrets.
 - Every new table gets RLS enabled in the same migration, with policies scoped to `auth.uid()`.
+- Other users' `profiles` rows are not readable. To show another person's name, use the `profile_cards(ids)` RPC; to find a user by email, use `lookup_user_by_email(email)`. Never add a `profiles` SELECT policy with `USING (true)`.
+- `role`, `subscription_status`, `is_coach`, and `email` on `profiles` are locked by the `profiles_guard_privileged` trigger. Change them only from edge functions (service_role) or as an admin.
 - This repo is public. Assume anything committed is visible to everyone, forever.
