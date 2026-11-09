@@ -48,6 +48,21 @@ Caveat: P0 #1 and #2 are read from the SQL in the repo. Confirm against the live
 - Strava OAuth, token refresh, and client secret are server-side. That is the right template for any new wearable connector.
 - The training philosophy docs, rule engine spec, plan schema, and golden tests are a real asset. Most apps don't have this layer written down.
 
+## 2a. Open security items: production status
+
+Verified against the live Supabase project (`ironz`, read-only queries) on 2026-11-09. Nothing below has been applied to production. Update this table when an item ships.
+
+| # | Item | Fix in repo | Production | Owner action |
+|---|---|---|---|---|
+| S1 | Users can change their own `role`, `subscription_status`, `is_coach`, `email` | PR #14 (draft) | **Open.** No guard trigger; `authenticated` has UPDATE on every `profiles` column | Apply `20261109_secure_profiles.sql`, then merge #14 right after |
+| S2 | `"Authenticated users can look up others by email"` policy, `USING (true)`: any user reads all 19 profiles incl. birthday and body data | PR #14 (draft) | **Open** | Same as S1 |
+| S3 | `"Anyone can read shared workout sender profiles"`: anyone with a live share link (incl. logged out) reads the sender's full row | PR #14 (draft) | **Open** | Same as S1 |
+| S4 | Strava client secret committed in `strava-migration.sql` | PR #16 removes it from source | **Open.** Value still in git history and presumably still valid | Rotate at strava.com/settings/api, then `supabase secrets set STRAVA_CLIENT_SECRET=...` |
+| S5 | Real athlete's training plan in public repo | Removed in PR #12 | **Open** in git history | Make repo private or rewrite history |
+| S6 | Edge-function authorization (`send-push`, `notify-share`, `ask-ironz` quota) | Not started | Not verified live | Codex finding (PR #13); unassigned |
+
+Observed live: 19 profiles, 1 admin. No sign of self-promotion. `ironz-staging` project exists but is empty (no tables, no users), so it cannot yet be used to rehearse migrations.
+
 ## 3. Garmin and "holistic health" input
 
 - **Garmin's developer program is paused for new applicants** (as of Sept 2026). Existing integrations keep working; new approvals are on hold. Don't build the roadmap on direct Garmin access.
