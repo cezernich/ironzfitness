@@ -21,6 +21,22 @@ GitHub's API was inspected on 9 November 2026:
 
 See [RELEASE_WORKFLOW.md](RELEASE_WORKFLOW.md) for the proposed release and environment setup. Check GitHub for the current protection state; this initial inventory is not a substitute for a live setting check.
 
+### Safeguards and staging now created
+
+Codex enabled main-branch protection: pull requests required, conversations must be resolved, force pushes and deletion blocked, administrators included, and the GitHub Actions `test` check required against an up-to-date base. Mandatory independent approval count remains zero because both tools use Chase's GitHub identity; this does not replace the agreed independent review and owner merge decision. PR 12 introduces the required test workflow and is the first merge dependency. Once PR 15 is incorporated, require `client-build` as well.
+
+With Chase's explicit organization and cost approval, Codex created the separate `ironz-staging` Supabase project in the existing Ironz organization, in us-east-2. Supabase quoted $0/month for this project; the paid hourly database-branch alternative was not used. The staging project reference is `yhchfxjzxhinreklnxbi`, distinct from production `dagdpdcwqdlibxbitdgr`. It is a newly created backend, not a finished application test environment: schema baseline, secure migrations, service configuration, frontend wiring, and synthetic accounts are still required. Do not copy real athlete records or point production at it.
+
+### Production permissions checked read only
+
+The Supabase connector became available during this work. Catalog queries confirmed the broad authenticated profile SELECT policy and live-share sender profile policy are present. `authenticated` has INSERT and UPDATE privilege on `role`, `subscription_status`, `is_coach`, and `email`. The only non-internal trigger on `profiles` was `profiles_auto_invite_link`, not a privileged-field guard. No athlete rows were selected, no exploit attempted, and no production migration applied.
+
+Only three entries appear in the managed migration ledger (`001`, `20260409`, `20260410`), despite many newer database objects being present. This reinforces the need to capture and reconcile an actual schema baseline rather than assuming the ledger describes all applied manual changes. A CLI schema-only export could not run because the local Docker service was unavailable; the connector metadata queries succeeded without it.
+
+The security advisor also flags mutable function search paths, broad executable permissions on SECURITY DEFINER functions, and disabled leaked-password protection. Classify each function by intended callers and authorization before changing grants: an advisor warning alone does not prove an exploitable path. The no-policy advisory on `strava_oauth_state` is expected for a service-only table and should not be "fixed" by opening it to clients.
+
+Coordination links: [PR 13 shared handoff](https://github.com/cezernich/ironzfitness/pull/13), [PR 15 build repair](https://github.com/cezernich/ironzfitness/pull/15), and [PR 14 Claude profile security](https://github.com/cezernich/ironzfitness/pull/14). Codex posted an inline blocking review on PR 14: its newly added client-to-coach row SELECT policy exposes the coach's whole health/body profile; use the narrow `profile_cards` RPC and test private-column denial instead. Both GitHub checks on PR 14 passed, so that scenario needs an additional assertion. No other agent's branch was modified.
+
 ## Additional findings from Codex
 
 These are source-level findings against the baseline, not a statement that production grants or function settings were verified. Do not run exploit checks or destructive synchronization tests on production athlete records.

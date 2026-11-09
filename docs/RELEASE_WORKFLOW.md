@@ -12,7 +12,7 @@ Require a pull request, resolve review conversations, prevent force pushes and b
 
 The same GitHub identity may author work through both coding tools, so GitHub may not accept its own review as an independent approval. Keep the reviewer handoff explicit and let Chase make the final merge decision. Additional human collaborators can enable a mandatory approval count without blocking the sole-owner workflow.
 
-Claude's PR 12 introduces the test workflow. Codex's build repair introduces a separate client-build check. After both land, require the successful test and build jobs on future pull requests. Quarantined behavior tests must remain clearly reported and have follow-up work; green CI is not a claim that those behaviors pass.
+Claude's PR 12 introduces the test workflow. The verified `test` job is now required on main, with an up-to-date base. Codex's PR 15 introduces a separate `client-build` check; require it too after that workflow is incorporated. Quarantined behavior tests must remain clearly reported and have follow-up work; green CI is not a claim that those behaviors pass.
 
 ## Environments
 
@@ -22,7 +22,7 @@ Claude's PR 12 introduces the test workflow. Codex's build repair introduces a s
 | Staging | A preview deployment of the proposed commit | Separate Supabase project, separate test OAuth callbacks, test billing and notification settings | Real sign-in, persistence, integration, and phone checks before release |
 | Production | `https://ironz.fit` from main under the current GitHub Pages setup | Existing production Supabase project and live services | Real athlete use |
 
-Staging is a target configuration, not an environment already provisioned by these docs. The current `js/supabase-init.js` points at production. Serving the same files at another URL does **not** make a safe staging environment. Until backend configuration is separated, call generated output a build artifact, not staging. Never embed service-role credentials in a frontend or a build artifact.
+The separate `ironz-staging` backend has been created with Chase's approval at Supabase's quoted $0/month. It is not yet a complete application test environment: schema, service settings, frontend configuration, and test users remain to be established. The current `js/supabase-init.js` still points at production. Serving the same files at another URL does **not** make a safe staging environment. Until backend configuration is separated, call generated output a build artifact, not staging. Never embed service-role credentials in a frontend or a build artifact.
 
 Use dedicated, synthetic athlete and coach accounts with invented profile data. Include two devices for the same test athlete, two unrelated athletes for isolation checks, and an administrator role assigned server-side. Keep emails deliverable to a controlled test inbox. Never send real production notifications or live charges from staging. Do not copy real health records into fixtures or the public repository.
 
