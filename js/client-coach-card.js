@@ -64,13 +64,10 @@
       const a = (assignments || [])[0];
       if (!a) { card.style.display = "none"; return; }
 
-      // Pull the coach's display profile. Coaches expose full_name/email/
-      // coach_bio (the bio column is on profiles per the coaching schema).
-      const { data: coach } = await sb
-        .from("profiles")
-        .select("id, full_name, email, coach_bio")
-        .eq("id", a.coach_id)
-        .maybeSingle();
+      // The narrow card RPC preserves display information without granting
+      // athletes direct access to their coach's complete health profile.
+      const { data: cards } = await sb.rpc("profile_cards", { p_ids: [a.coach_id] });
+      const coach = Array.isArray(cards) ? cards[0] : null;
       if (!coach) { card.style.display = "none"; return; }
 
       const displayName = coach.full_name || coach.email || "Your coach";

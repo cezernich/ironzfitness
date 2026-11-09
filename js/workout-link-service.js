@@ -109,27 +109,24 @@
     const sb = _getSupabase();
     if (!sb) return { error: "NOT_FOUND" };
 
-    // Read the row plus a join on the sender's profile for display name + avatar.
-    // The profile join uses the public profiles table populated by auth.js.
+    // Read the share row, then the sender's display card. Profiles are not
+    // readable across users (migration 20261109_secure_profiles); the
+    // profile_cards RPC returns name + avatar for senders of live shares.
     const { data, error } = await sb
       .from("shared_workouts")
-      .select(`
-        share_token, variant_id, sport_id, session_type_id, share_note,
-        created_at, expires_at, revoked_at, sender_user_id,
-        sender:profiles!shared_workouts_sender_user_id_fkey ( full_name, avatar_url )
-      `)
+      .select("share_token, variant_id, sport_id, session_type_id, share_note, created_at, expires_at, revoked_at, sender_user_id")
       .eq("share_token", token)
       .maybeSingle();
+    if (error) return { error: "NOT_FOUND" };
 
-    if (error) {
-      // Try a simpler select without the join in case the FK is missing.
-      const fallback = await sb
-        .from("shared_workouts")
-        .select("share_token, variant_id, sport_id, session_type_id, share_note, created_at, expires_at, revoked_at, sender_user_id")
-        .eq("share_token", token)
-        .maybeSingle();
-      if (fallback.error) return { error: "NOT_FOUND" };
-      return _classifyResolveResult(fallback.data);
+    if (data && data.sender_user_id && typeof sb.rpc === "function") {
+      try {
+        const cards = await sb.rpc("profile_cards", { p_ids: [data.sender_user_id] });
+        const card = cards && Array.isArray(cards.data) ? cards.data[0] : null;
+        if (card) data.sender = { full_name: card.full_name, avatar_url: card.avatar_url };
+      } catch (e) {
+        // Display name is optional; the share still resolves without it.
+      }
     }
     return _classifyResolveResult(data);
   }
