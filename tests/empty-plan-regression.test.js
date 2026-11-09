@@ -6,7 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const root = process.env.IRONZ_TEST_SOURCE || path.resolve(__dirname, '..');
 let qaCase=0;
-const watchdog=setTimeout(()=>{console.error("FAIL: async regression did not complete, case"+qaCase);process.exit(1);},10000);
+const watchdog=require.main===module ? setTimeout(()=>{console.error("FAIL: async regression did not complete, case"+qaCase);process.exit(1);},10000) : null;
 function setup() {
   qaCase++;
   const store = new Map(), remote = new Map(), alerts = [], writes = [];
