@@ -43,6 +43,10 @@ When the user presses "Generate & Schedule Plan," these inputs are available:
 | strengthSetup.split | onboarding | "upper_lower" or "full_body" etc. |
 | equipmentProfile | profile | ["barbell-rack", "dumbbells", "bench", "cable-machine", ...] |
 
+### Explicit scheduling constraints (issue26)
+
+A reviewed weekly template is a hard day-and-sport constraint throughout the arc, including lead-in, threshold and race weeks. Race-day entries are the explicit event exception. No training is scheduled before the selected start date. Distribution counts are targets, not permission to add sessions or sports absent from that template. Legacy automatic schedules may fill only available dates within the selected training-day cap. Preserve taper/recovery and never cram omitted volume into other dates. Calendar dates must remain local dates across time zones.
+
 ### Plan-build acceptance and failure contract (9 November 2026)
 
 - Translate onboarding race IDs `5k`, `10k` and `century` to the live planner's `fiveK`, `tenK` and `centuryRide`. Regeneration must also accept these supported IDs in older saved races. Unknown distances must not be silently replaced with a different event's training prescription.
