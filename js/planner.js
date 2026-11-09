@@ -2147,7 +2147,7 @@ function _validateGeneratedPlan(entries) {
   const dated = e => e && typeof e.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(e.date) &&
     !isNaN(new Date(e.date + "T00:00:00").getTime()) &&
     new Date(e.date + "T00:00:00Z").toISOString().slice(0, 10) === e.date &&
-    ["run", "bike", "swim", "strength", "weightlifting", "hyrox", "hyroxStrength", "brick", "mobility", "race", "rest"].includes(e.discipline);
+    ["run", "bike", "swim", "strength", "weightlifting", "hyrox", "hyroxStrength", "brick", "mobility", "hiit", "yoga", "walk", "row", "circuit", "race", "rest"].includes(e.discipline);
   if (!Array.isArray(entries) || !entries.length || !entries.every(dated) ||
       !entries.some(e => !["race", "rest"].includes(e.discipline) && e.load !== "rest" && e.phase !== "Race")) {
     throw new Error("No training sessions were generated. Check the race type, date and schedule, then try again.");

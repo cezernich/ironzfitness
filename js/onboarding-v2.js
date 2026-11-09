@@ -4293,7 +4293,7 @@
       else alert(message);
     } finally {
       _state._savingPlan = false;
-      if (confirmButton) confirmButton.disabled = false;
+      if (confirmButton) confirmButton.disabled = typeof DB !== "undefined" && DB.planBuildNeedsReload && DB.planBuildNeedsReload();
     }
   }
 

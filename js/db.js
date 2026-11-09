@@ -558,6 +558,7 @@ const DB = (() => {
   }
 
   const _planBuildKeys = new Set();
+  let _planBuildReloadRequired = false;
   const _keyWrites = new Map();
   async function _doSyncKey(lsKey, expectedAtSchedule) {
     if (_planBuildKeys.has(lsKey)) return;
@@ -599,6 +600,7 @@ const DB = (() => {
   }
 
   function syncKey(lsKey) {
+    if (_planBuildKeys.has(lsKey)) return;
     clearTimeout(_keyTimers[lsKey]);
     // Capture the user id at schedule time so a user switch during the
     // debounce window can't silently upsert our data under the new user.
@@ -630,7 +632,14 @@ const DB = (() => {
 
   // One user_data statement commits the plan, race and inputs together. Unlike
   // background sync, errors propagate to the wizard; a queued write isn't success.
+  function _savedPlanCacheError() {
+    const error = new Error('Your new plan is saved to your account, but this device could not refresh it. Reload the app before continuing.');
+    error.serverSaved = true;
+    return error;
+  }
+
   async function savePlanBuild(updates) {
+    if (_planBuildReloadRequired) throw _savedPlanCacheError();
     const expected = _expectedUid();
     const uid = await _userId();
     if (!uid || !_userContextOk(uid, expected)) throw new Error('Sign in again before saving your plan.');
@@ -651,14 +660,30 @@ const DB = (() => {
       const { error } = await _client().from('user_data').upsert(rows, { onConflict: 'user_id,data_key' });
       if (error) throw new Error('Your plan could not be saved. Check your connection and try again.');
       if (_expectedUid() !== expected || await _userId() !== uid) throw new Error('Your account changed. Sign in again to view your plan.');
-      for (const [key, value] of Object.entries(updates)) {
-        clearTimeout(_keyTimers[key]);
-        delete _keyTimers[key];
-        localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
-        _clearPending(key);
+      // The server has acknowledged the whole replacement. A device-cache
+      // failure after this point is recovery-required, not a failed save.
+      keys.forEach(key => _clearPending(key));
+      let before;
+      try {
+        before = Object.fromEntries(keys.map(key => [key, localStorage.getItem(key)]));
+        for (const [key, value] of Object.entries(updates)) {
+          localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+        }
+      } catch (cacheError) {
+        _planBuildReloadRequired = true;
+        // Remove partial new values first to free space for the old snapshot.
+        // Never let background sync push this stale cache over the saved plan.
+        try {
+          if (!before) throw cacheError;
+          keys.forEach(key => localStorage.removeItem(key));
+          for (const [key, raw] of Object.entries(before)) {
+            if (raw !== null) localStorage.setItem(key, raw);
+          }
+        } catch (_) { /* Server is authoritative; keep writes blocked until reload. */ }
+        throw _savedPlanCacheError();
       }
     } finally {
-      keys.forEach(key => _planBuildKeys.delete(key));
+      if (!_planBuildReloadRequired) keys.forEach(key => _planBuildKeys.delete(key));
     }
   }
 
@@ -1333,6 +1358,7 @@ const DB = (() => {
     flushKey,
     previewPlanBuild,
     savePlanBuild,
+    planBuildNeedsReload: () => _planBuildReloadRequired,
     cachePlanBuild,
     replayPendingSyncs,
     refreshAllKeys,

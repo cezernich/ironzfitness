@@ -75,6 +75,15 @@ async function until(check, message) {
     assert.equal(h.remote.size,0,`${failure} must not commit partial data`);
     assert.equal(h.node('confirm').disabled,false);
   }
+  // Every actual non-race sport-card output remains supported by validation.
+  for (const [sport,discipline] of [['run','run'],['bike','bike'],['swim','swim'],['strength','strength'],['hiit','hiit'],['yoga','yoga'],['mobility','mobility'],['walking','walk'],['rowing','row'],['hyrox','hyrox'],['circuit','circuit']]) {
+    const h=setup(); h.ob._state.raceEvents=[]; h.ob._state.selectedSports=[sport];
+    h.ob._state.trainingGoals=['general'];
+    h.ob._state.schedule={mon:[sport],tue:[],wed:[],thu:[],fri:[],sat:[],sun:[]};
+    await h.ob._confirmAndSavePlan();
+    assert.equal(h.ob._state.currentScreen,'bp-v2-done',sport+' can build a non-race plan');
+    assert.ok(h.read('workoutSchedule').some(e=>e.discipline===discipline),sport+' keeps its discipline');
+  }
   // Same-race replacement must not clear scaffolding on failure.
   { const h=setup(); h.context.generateTrainingPlan=()=>[];
     const before=JSON.stringify([...h.store]);
@@ -123,6 +132,19 @@ async function until(check, message) {
     assert.notEqual(h.ob._state.currentScreen,'bp-v2-done','account transition must not display success');
     assert.ok(h.node('bp-v2-plan-error').textContent,'account transition requires visible feedback');
     assert.ok(h.writes[0].every(row=>row.user_id==='synthetic-a'),'only original authenticated account is written');
+  }
+  // Storage may fill while the network is pending, after the preflight passed.
+  { const h=setup(); let resolve; h.gate(new Promise(r=>{resolve=r;}));
+    const before=[...h.store]; const save=h.ob._confirmAndSavePlan();
+    await until(()=>h.writes.length===1,'save reached backend before late quota failure');
+    h.quota(); resolve(); await save;
+    assert.ok(JSON.parse(h.remote.get('trainingPlan')).length>20,'server accepted replacement');
+    assert.deepEqual([...h.store].sort(),before.sort(),'device cache rolls back as a whole');
+    assert.match(h.node('bp-v2-plan-error').textContent,/saved to your account.*Reload/);
+    assert.notEqual(h.ob._state.currentScreen,'bp-v2-done');
+    assert.equal(h.node('confirm').disabled,true,'retry blocked until acknowledged plan is reloaded');
+    await h.ob._confirmAndSavePlan(); await h.DB.flushKey('trainingPlan');
+    assert.equal(h.writes.length,1,'retry/background sync must not replace acknowledged plan from stale cache');
   }
   // A background write of the old plan has started before confirmation. It must
   // settle before the replacement is sent, otherwise its late commit wins.
