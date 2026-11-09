@@ -9,6 +9,11 @@
 (function () {
   "use strict";
 
+  function _ymd(d) {
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  }
+
+
   function _esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -16,7 +21,7 @@
   }
 
   function _todayStr() {
-    return new Date().toISOString().slice(0, 10);
+    return _ymd(new Date());
   }
 
   function _mondayOf(dateStr) {
@@ -24,13 +29,13 @@
     const dow = d.getDay();
     const offset = dow === 0 ? -6 : 1 - dow;
     d.setDate(d.getDate() + offset);
-    return d.toISOString().slice(0, 10);
+    return _ymd(d);
   }
 
   function _addDays(dateStr, n) {
     const d = new Date(dateStr + "T00:00:00");
     d.setDate(d.getDate() + n);
-    return d.toISOString().slice(0, 10);
+    return _ymd(d);
   }
 
   function _readProfile() {

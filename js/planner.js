@@ -1,3 +1,7 @@
+function _planLocalYmd(date) {
+  return date.getFullYear() + "-" + String(date.getMonth()+1).padStart(2,"0") + "-" + String(date.getDate()).padStart(2,"0");
+}
+
 // planner.js — Race event management + training plan generation
 
 // ─── Race configuration ─────────────────────────────────────────────────────
@@ -2168,13 +2172,63 @@ function _regeneratePlanForRace(race, options = {}) {
   }
 }
 
+// Explicit weekday/sport choices are hard constraints, including race/test
+// weeks. Distribution targets must never silently expand a reviewed template.
+function _raceSchedulingConstraints(race) {
+  const prefs = race.preferences || {};
+  const template = prefs.weeklyTemplate;
+  const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  const blocked = new Set(race.unavailableDays || prefs.unavailableDays || []);
+  const today = new Date();
+  const localToday = today.getFullYear() + "-" + String(today.getMonth()+1).padStart(2,"0") + "-" + String(today.getDate()).padStart(2,"0");
+  const minDate = prefs.startDate && prefs.startDate > localToday ? prefs.startDate : localToday;
+  const canSchedule = (date, discipline) => {
+    if (date < minDate || date > race.date) return false;
+    const dow = new Date(date + "T00:00:00Z").getUTCDay();
+    if (blocked.has(dow)) return false;
+    if (!template) return true;
+    const slots = template[dayNames[dow]] || [];
+    return slots.some(code => String(code).split("-")[0] === discipline);
+  };
+  return { daysPerWeek: race.daysPerWeek || prefs.daysPerWeek, canSchedule, explicitTemplate: !!template };
+}
+
+function _honorRaceSchedule(entries, constraints) {
+  const available = entries.filter(entry => entry.discipline === "race" || entry.phase === "Race" ||
+    constraints.canSchedule(entry.date, entry.discipline));
+  const cap = Number(constraints.daysPerWeek);
+  if (constraints.explicitTemplate || !Number.isInteger(cap) || cap < 1 || cap > 7) return available;
+  const byWeek = new Map();
+  const isRace = entry => entry.discipline === "race" || entry.phase === "Race";
+  for (const entry of available) {
+    if (isRace(entry) || entry.load === "rest") continue;
+    const date = new Date(entry.date + "T00:00:00Z");
+    date.setUTCDate(date.getUTCDate() - (date.getUTCDay()+6)%7);
+    const monday = date.toISOString().slice(0,10);
+    if (!byWeek.has(monday)) byWeek.set(monday,new Map());
+    const rank = { long:4, hard:3, test:3, moderate:2, race_week_openers:2 }[entry.load] || 1;
+    const days = byWeek.get(monday);
+    days.set(entry.date,Math.max(days.get(entry.date)||0,rank));
+  }
+  const omitted = new Set();
+  for (const days of byWeek.values()) {
+    [...days].sort((a,b)=>b[1]-a[1] || a[0].localeCompare(b[0])).slice(cap).forEach(([date])=>omitted.add(date));
+  }
+  // Omit excess default days, including race/test overrides; never cram their
+  // volume into retained sessions. Explicit template days are not carved.
+  return available.filter(entry=>isRace(entry) || !omitted.has(entry.date));
+}
+
 function _buildRacePlanReplacement(race, options = {}) {
   if (!race || typeof generateTrainingPlan !== "function") throw new Error("Plan generation is unavailable.");
 
   if (typeof window.isPlanFrozen === "function" && window.isPlanFrozen()) {
     throw new Error("Plan generation is paused while your coach manages your schedule.");
   }
-  const newEntries = generateTrainingPlan(race);
+  const generated = generateTrainingPlan(race);
+  _validateGeneratedPlan(generated);
+  const scheduling = _raceSchedulingConstraints(race);
+  let newEntries = _honorRaceSchedule(generated, scheduling);
   _validateGeneratedPlan(newEntries);
 
   // Determine the athlete's level once so both the distribution
@@ -2233,7 +2287,7 @@ function _buildRacePlanReplacement(race, options = {}) {
         if (_preByWeek[wk].counts[d] != null) _preByWeek[wk].counts[d]++;
       });
 
-      const summary = window.PlanSessionDistribution.applySessionDistribution(newEntries, race && race.type, _level);
+      const summary = window.PlanSessionDistribution.applySessionDistribution(newEntries, race && race.type, _level, scheduling);
 
       // Snapshot AFTER so the diff per week is visible in devtools.
       const _postByWeek = {};
@@ -2287,6 +2341,7 @@ function _buildRacePlanReplacement(race, options = {}) {
     }
   }
 
+  newEntries = _honorRaceSchedule(newEntries, scheduling);
   _validateGeneratedPlan(newEntries);
   const todayStr = new Date().toISOString().slice(0, 10);
   const schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
@@ -3260,7 +3315,7 @@ function _mondayOfDateStr(dateStr) {
   const dow = d.getDay();
   const offset = dow === 0 ? -6 : 1 - dow;
   d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
+  return _planLocalYmd(d);
 }
 
 function _datesInWeek(weekStartDateStr) {
@@ -3269,7 +3324,7 @@ function _datesInWeek(weekStartDateStr) {
   for (let i = 0; i < 7; i++) {
     const d = new Date(start.getTime());
     d.setDate(d.getDate() + i);
-    out.push(d.toISOString().slice(0, 10));
+    out.push(_planLocalYmd(d));
   }
   return out;
 }
@@ -3760,10 +3815,11 @@ function generateTrainingPlan(raceOrCalendar) {
     const calendar = raceOrCalendar;
     const plan = _generateSingleRacePlan(calendar.aRace);
     calendar.bRaces.forEach(bRace => insertBRaceWindow(plan, bRace, calendar.aRace));
-    return plan;
+    return _honorRaceSchedule(plan,_raceSchedulingConstraints(calendar.aRace));
   }
-  // Legacy path: single race object passed directly.
-  return _generateSingleRacePlan(raceOrCalendar);
+  // Shared boundary covers wizard, race edit/save, survey and self-healing.
+  const plan = _generateSingleRacePlan(raceOrCalendar);
+  return raceOrCalendar ? _honorRaceSchedule(plan,_raceSchedulingConstraints(raceOrCalendar)) : plan;
 }
 
 /**
@@ -4175,7 +4231,7 @@ function _generateSingleRacePlan(race) {
   startDate.setDate(startDate.getDate() - _effectiveTotalWeeks * 7);
 
   const plan = [];
-  const todayStr = _today.toISOString().slice(0, 10);
+  const todayStr = _planLocalYmd(_today);
 
   // ── WEEKLY PATTERN ────────────────────────────────────────────────────────
   // Priority: race.preferences.weeklyTemplate > WEEKLY_PATTERNS[raceType].
@@ -4217,7 +4273,7 @@ function _generateSingleRacePlan(race) {
     const prePlanDows = runPatternKey === "beginner" ? [2, 6] : [2, 4, 6]; // Tue+Sat or Tue+Thu+Sat
     const preCursor = new Date(todayDate);
     while (preCursor < startDate) {
-      const dateStr = preCursor.toISOString().slice(0, 10);
+      const dateStr = _planLocalYmd(preCursor);
       const dow = preCursor.getDay();
       if (prePlanDows.includes(dow) && dateStr >= todayStr) {
         const table = (RUN_DURATION_TABLES[race.type] || {})[runPatternKey] || {};
@@ -4338,6 +4394,8 @@ function _generateSingleRacePlan(race) {
     try { _userData = JSON.parse(localStorage.getItem("user_data") || "{}"); } catch {}
     const _profileForScheduling = Object.assign({}, _profile, {
       goal_race_date: race.date,
+      goal_race_priority: race.priority || "A",
+      races: loadEvents(),
       active_goal: race.type,
       threshold_week_cadence_override:
         _profile.threshold_week_cadence_override || _userData.threshold_week_cadence_override,
@@ -4355,13 +4413,17 @@ function _generateSingleRacePlan(race) {
     // current zones are load-bearing for the taper anyway. Drop any
     // scheduled week that falls inside the 30-day window; downstream the
     // generator parameterizes sessions against the last-known zones.
-    const _raceMs = new Date(race.date + "T00:00:00").getTime();
-    const _window = 30 * 86400000;
+    const aRaceDates = [...loadEvents(),race]
+      .filter(event=>event && String(event.priority || "A").toUpperCase()==="A")
+      .map(event=>new Date(event.date+"T00:00:00").getTime());
     const _beforeFilter = _scheduledThresholdWeeks.length;
     _scheduledThresholdWeeks = _scheduledThresholdWeeks.filter(t => {
-      const wk = new Date(t.thresholdWeekStartDate);
-      const msToRace = _raceMs - wk.getTime();
-      return msToRace > _window; // keep only weeks > 30 days before race
+      const days = window.ThresholdWeekScheduler.buildThresholdWeekDays(t.thresholdWeekStartDate,_twSportProfile);
+      return days.filter(day=>day.type==="test" || /_test$/.test(day.type)).every(day=>
+        aRaceDates.every(raceMs=>{
+          const gap=(raceMs-new Date(day.date+"T00:00:00").getTime())/86400000;
+          return gap>30 || gap<0;
+        }));
     });
     const _dropped = _beforeFilter - _scheduledThresholdWeeks.length;
     if (_dropped > 0) {
@@ -4374,7 +4436,7 @@ function _generateSingleRacePlan(race) {
   const cursor = new Date(startDate);
 
   while (cursor < raceDate) {
-    const dateStr = cursor.toISOString().slice(0, 10);
+    const dateStr = _planLocalYmd(cursor);
     const dow = cursor.getDay(); // 0=Sun … 6=Sat
 
     // Advance phase if needed

@@ -5,7 +5,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const root = process.env.IRONZ_TEST_SOURCE || path.resolve(__dirname, '..');
+let qaCase=0;
+const watchdog=setTimeout(()=>{console.error("FAIL: async regression did not complete, case"+qaCase);process.exit(1);},10000);
 function setup() {
+  qaCase++;
   const store = new Map(), remote = new Map(), alerts = [], writes = [];
   let rejectSave = false, quotaKey = null, savingGate = null, authUid = 'synthetic-a';
   const nodes = new Map();
@@ -32,7 +35,7 @@ function setup() {
       for (const row of Array.isArray(rows) ? rows : [rows]) remote.set(row.data_key, JSON.stringify(row.data_value));
       return { error: null };
     } }; } };
-  for (const file of ['js/db.js', 'js/planner.js', 'js/onboarding-v2.js']) vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'), context, { filename: file });
+  for (const file of ['js/db.js', 'js/plan-session-distribution.js', 'js/plan-constraint-validator.js', 'js/planner.js', 'js/onboarding-v2.js']) vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'), context, { filename: file });
   const DB = vm.runInContext('DB',context), ob = context.OnboardingV2;
   const read = k => JSON.parse(store.get(k) || 'null');
   store.set('ironz_last_user_id','synthetic-a');
@@ -84,6 +87,20 @@ async function until(check, message) {
     assert.equal(h.ob._state.currentScreen,'bp-v2-done',sport+' can build a non-race plan');
     assert.ok(h.read('workoutSchedule').some(e=>e.discipline===discipline),sport+' keeps its discipline');
   }
+  // Direct generation is used outside the wizard (race edit/save/self-heal).
+  { const h=setup(); const start=new Date(); start.setDate(start.getDate()+20);
+    const race={id:'direct',type:'fiveK',date:h.ob._state.raceEvents[0].date,preferences:{startDate:start.toISOString().slice(0,10),weeklyTemplate:{tue:['run']},daysPerWeek:1}};
+    for(const input of [race,{aRace:race,bRaces:[],all:[race]}]) {
+      const plan=h.context.generateTrainingPlan(input).filter(e=>e.discipline!=='race');
+      assert.ok(plan.length>5);
+      assert.ok(plan.every(e=>e.date>=race.preferences.startDate && new Date(e.date+'T00:00:00Z').getUTCDay()===2 && e.discipline==='run'),'direct/calendar entry points preserve dates and sports');
+    }
+    const legacy={id:'legacy-cap',type:'fiveK',date:h.ob._state.raceEvents[0].date,daysPerWeek:2};
+    const capped=h.context._regeneratePlanForRace(legacy,{persist:false}).trainingPlan.filter(e=>e.raceId==='legacy-cap' && e.discipline!=='race' && e.load!=='rest');
+    const weeks={};
+    for(const e of capped) { const d=new Date(e.date+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-(d.getUTCDay()+6)%7);(weeks[d.toISOString().slice(0,10)] ||= new Set()).add(e.date); }
+    assert.ok(Object.values(weeks).every(days=>days.size<=2),'legacy cap holds across Base, threshold and Race Week');
+  }
   // Same-race replacement must not clear scaffolding on failure.
   { const h=setup(); h.context.generateTrainingPlan=()=>[];
     const before=JSON.stringify([...h.store]);
@@ -104,6 +121,15 @@ async function until(check, message) {
     assert.equal(h.writes.length,1,'double click commits once');
     assert.equal(h.ob._state.currentScreen,'bp-v2-done');
     assert.ok(h.read('trainingPlan').length>20);
+    const savedRace=h.read('events').find(e=>e.id!=='previous');
+    const sessions=h.read('trainingPlan').filter(e=>e.raceId===savedRace.id && e.discipline!=='race');
+    assert.ok(sessions.every(e=>[2,3,4,6].includes(new Date(e.date+'T00:00:00Z').getUTCDay())), 'full saved arc honors selected weekdays, including race/test weeks');
+    assert.ok(sessions.every(e=>e.discipline==='run'), 'running-only preview never silently adds strength');
+    const firstFullWeek=sessions.filter(e=>e.phase==='Base').reduce((weeks,e)=>{
+      const d=new Date(e.date+'T00:00:00Z'); const offset=(d.getUTCDay()+6)%7; d.setUTCDate(d.getUTCDate()-offset);
+      const monday=d.toISOString().slice(0,10); (weeks[monday] ||= []).push(e); return weeks;
+    },{});
+    assert.ok(Object.values(firstFullWeek).some(entries=>entries.length===4),'full Base weeks retain all four selected days, including UTC+ time zones');
     assert.equal(h.read('events').length,2);
     assert.equal(h.read('events')[0].priority,'B','previous A is demoted only on success');
     assert.equal(h.read('events')[1].priority,'A');
@@ -160,6 +186,16 @@ async function until(check, message) {
     assert.equal(h.ob._state.currentScreen,'bp-v2-done');
     assert.equal(h.remote.get('trainingPlan'),h.store.get('trainingPlan'),'late old write cannot overwrite replacement');
     assert.ok(h.read('trainingPlan').length>20);
+    const savedRace=h.read('events').find(e=>e.id!=='previous');
+    const sessions=h.read('trainingPlan').filter(e=>e.raceId===savedRace.id && e.discipline!=='race');
+    assert.ok(sessions.every(e=>[2,3,4,6].includes(new Date(e.date+'T00:00:00Z').getUTCDay())), 'full saved arc honors selected weekdays, including race/test weeks');
+    assert.ok(sessions.every(e=>e.discipline==='run'), 'running-only preview never silently adds strength');
+    const firstFullWeek=sessions.filter(e=>e.phase==='Base').reduce((weeks,e)=>{
+      const d=new Date(e.date+'T00:00:00Z'); const offset=(d.getUTCDay()+6)%7; d.setUTCDate(d.getUTCDate()-offset);
+      const monday=d.toISOString().slice(0,10); (weeks[monday] ||= []).push(e); return weeks;
+    },{});
+    assert.ok(Object.values(firstFullWeek).some(entries=>entries.length===4),'full Base weeks retain all four selected days, including UTC+ time zones');
   }
+  clearTimeout(watchdog);
   console.log('PASS: onboarding aliases, generation failures, prior-plan preservation, checked persistence, double-click and non-race flows');
 })().catch(e=>{console.error(e);process.exitCode=1;});

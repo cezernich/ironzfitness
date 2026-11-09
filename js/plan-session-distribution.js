@@ -22,6 +22,10 @@
 (function () {
   "use strict";
 
+  function _ymd(date) {
+    return date.getFullYear() + "-" + String(date.getMonth()+1).padStart(2,"0") + "-" + String(date.getDate()).padStart(2,"0");
+  }
+
   // ─── Level-aware phase distributions (PLAN_GENERATOR_MASTER_SPEC §4) ─────
   // Target session counts per discipline per week, indexed by
   //   sportProfile → phase → level → disciplineCounts
@@ -199,7 +203,7 @@
     const day = d.getDay();
     const offset = day === 0 ? -6 : 1 - day;
     d.setDate(d.getDate() + offset);
-    return d.toISOString().slice(0, 10);
+    return _ymd(d);
   }
 
   function groupByWeek(plan) {
@@ -236,7 +240,7 @@
   // Decide which day-of-week to place a new session on. Prefers days
   // with no existing session, then days with only an easy session.
   // Avoids stacking same discipline back-to-back.
-  function pickSlotForDiscipline(weekEntries, mondayStr, discipline) {
+  function pickSlotForDiscipline(weekEntries, mondayStr, discipline, canSchedule = () => true) {
     const used = new Set(weekEntries.map(e => e.date));
     const hasDiscByDate = {};
     weekEntries.forEach(e => {
@@ -249,13 +253,13 @@
     for (const offset of order) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + offset);
-      const dateStr = d.toISOString().slice(0, 10);
-      if (!used.has(dateStr)) {
+      const dateStr = _ymd(d);
+      if (!used.has(dateStr) && canSchedule(dateStr, discipline)) {
         // Check no adjacent same-discipline day
         const prev = new Date(d); prev.setDate(d.getDate() - 1);
         const next = new Date(d); next.setDate(d.getDate() + 1);
-        const prevStr = prev.toISOString().slice(0, 10);
-        const nextStr = next.toISOString().slice(0, 10);
+        const prevStr = _ymd(prev);
+        const nextStr = _ymd(next);
         const adjacent = (hasDiscByDate[prevStr] && hasDiscByDate[prevStr][discipline]) ||
                          (hasDiscByDate[nextStr] && hasDiscByDate[nextStr][discipline]);
         if (!adjacent) return dateStr;
@@ -265,8 +269,8 @@
     for (const offset of order) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + offset);
-      const dateStr = d.toISOString().slice(0, 10);
-      if (!used.has(dateStr)) return dateStr;
+      const dateStr = _ymd(d);
+      if (!used.has(dateStr) && canSchedule(dateStr, discipline)) return dateStr;
     }
     return null; // week is packed; give up (caller tolerates under-count)
   }
@@ -297,7 +301,7 @@
     for (let i = 0; i < 7; i++) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
-      const s = d.toISOString().slice(0, 10);
+      const s = _ymd(d);
       if (!used.has(s)) empty.push(s);
     }
     return empty;
@@ -322,7 +326,7 @@
     rests.forEach(r => {
       const d = new Date(r + "T00:00:00");
       d.setDate(d.getDate() - 1);
-      blockedAsPreRest.add(d.toISOString().slice(0, 10));
+      blockedAsPreRest.add(_ymd(d));
     });
 
     const byDate = sessionsByDate(weekEntries);
@@ -402,11 +406,14 @@
     let dateStr = null;
     let isDouble = false;
     const empties = emptyDatesInWeek(weekEntries, mondayStr);
-    if (empties.length > 1) {
-      dateStr = pickSlotForDiscipline(weekEntries, mondayStr, discipline);
+    const limits = c.constraints || {};
+    const usedDays = new Set(weekEntries.filter(e => e.load !== "rest").map(e => e.date)).size;
+    if (empties.length > 1 && (!limits.daysPerWeek || usedDays < limits.daysPerWeek)) {
+      dateStr = pickSlotForDiscipline(weekEntries, mondayStr, discipline, limits.canSchedule);
     }
     if (!dateStr) {
       dateStr = pickDoubleSlot(weekEntries, mondayStr, discipline, load, c.level, phaseName, c.doublesUsedRef.n);
+      if (dateStr && limits.canSchedule && !limits.canSchedule(dateStr, discipline)) dateStr = null;
       if (dateStr) {
         isDouble = true;
         c.doublesUsedRef.n++;
@@ -604,7 +611,7 @@
   // Walks each week of the plan and aligns session counts to the phase
   // distribution target. Mutates `plan` in place. Returns a summary of
   // adjustments so the caller can log what changed.
-  function applySessionDistribution(plan, raceType, athleteLevel) {
+  function applySessionDistribution(plan, raceType, athleteLevel, constraints = {}) {
     if (!Array.isArray(plan) || plan.length === 0) return { added: 0, demoted: 0, weeksChecked: 0 };
     const sportProfile = sportProfileForRaceType(raceType);
     if (!PHASE_DISTRIBUTIONS_BY_LEVEL[sportProfile]) return { added: 0, demoted: 0, weeksChecked: 0 };
@@ -625,13 +632,13 @@
 
       // Per-week doubling context. Budget is capped by level+phase; the
       // ref object is mutated by addMissingSession as doubles accumulate.
-      const weekCtx = { level: athleteLevel || "intermediate", doublesUsedRef: { n: 0 } };
+      const weekCtx = { level: athleteLevel || "intermediate", doublesUsedRef: { n: 0 }, constraints };
 
       // Add missing sessions, each discipline.
       ["swim", "bike", "run", "strength", "brick", "hyrox"].forEach(disc => {
         const want = target[disc] || 0;
         const have = counts[disc] || 0;
-        if (have < want) {
+        if (have < want && !constraints.explicitTemplate) {
           const missing = want - have;
           for (let i = 0; i < missing; i++) {
             const newEntry = addMissingSession(

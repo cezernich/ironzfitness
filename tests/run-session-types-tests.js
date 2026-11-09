@@ -3,6 +3,15 @@
 // + Add Running Session flow.
 // Run: `node run-session-types-tests.js` from the fitness-app directory.
 
+// Golden examples pin daily variants; separate assertions below verify real
+// daily rotation and that an explicit week zero stays stable across dates.
+const RealDate = Date;
+let testNow = new RealDate("2026-01-06T12:00:00").getTime();
+global.Date = class extends RealDate {
+  constructor(...args) { super(...(args.length ? args : [testNow])); }
+  static now() { return testNow; }
+};
+
 global.window = global;
 global.localStorage = {
   _store: {},
@@ -315,7 +324,7 @@ section("Golden 11: Tempo within 24h of Long Run");
 }
 
 // ─── GOLDEN 12: Long Run twice → HARD BLOCK ─────────────────────────────────
-section("Golden 12: Long Run twice in same week → hard block");
+section("Golden 12: Manual second long run surfaces a soft warning");
 {
   clearStorage();
   setProfile({ vdot: 53, experience_level: "intermediate" });
@@ -325,9 +334,8 @@ section("Golden 12: Long Run twice in same week → hard block");
   const zones = ZC.getZonesForUser();
   const second = RWG.generateRunWorkout({ sessionTypeId: "long_run", userZones: zones, experienceLevel: "intermediate" });
   const evals = ARSF.evaluateConstraints(second.workout, "2026-04-15");
-  check("long_run_cap is a HARD BLOCK", evals.hardBlocks.some(b => b.rule === "long_run_cap"),
-    JSON.stringify(evals.hardBlocks.map(b=>b.rule)));
-  check("no override warning for long run cap (it's blocked)", true);
+  check("manual long_run_cap is a warning", evals.warnings.some(w => w.rule === "long_run_cap"));
+  check("manual edit is not hard-blocked", !evals.hardBlocks.some(b => b.rule === "long_run_cap"));
 }
 
 // ─── GOLDEN 13: Fun / Social — instruction text only ─────────────────────────
@@ -406,8 +414,17 @@ section("Bonus: Generator determinism");
   const b = RWG.generateRunWorkout({ sessionTypeId: "track_workout", userZones: zones, experienceLevel: "intermediate", weeksSincePlanStart: 5 });
   check("two identical calls produce identical workouts",
     JSON.stringify(a.workout) === JSON.stringify(b.workout));
-  // Week 5 mod 4 = 1 → 1K repeats
-  check("week 5 → rotation_index 1 (1K repeats)", a.workout.rotation_index === 1 && a.workout.rotation_name === "1K repeats");
+  // Library declares six rotations: week5 selects Cut-downs.
+  check("week 5 → rotation_index 5 (Cut-downs)", a.workout.rotation_index === 5 && a.workout.rotation_name === "Cut-downs");
+  const daily = new Set();
+  for (let day=0; day<6; day++) {
+    testNow = new RealDate("2026-01-06T12:00:00").getTime()+day*86400000;
+    const explicit=RWG.generateRunWorkout({sessionTypeId:"track_workout",userZones:zones,experienceLevel:"intermediate",weeksSincePlanStart:0});
+    check("explicit week zero stays rotation zero on day"+day,explicit.workout.rotation_index===0);
+    daily.add(RWG.generateRunWorkout({sessionTypeId:"track_workout",userZones:zones,experienceLevel:"intermediate"}).workout.rotation_index);
+  }
+  check("omitted week still rotates across all six daily variants",daily.size===6);
+  testNow = new RealDate("2026-01-06T12:00:00").getTime();
 }
 
 // ─── BONUS: Long Run beginner duration scaling ───────────────────────────────

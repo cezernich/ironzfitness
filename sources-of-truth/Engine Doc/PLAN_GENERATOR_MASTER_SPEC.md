@@ -43,6 +43,10 @@ When the user presses "Generate & Schedule Plan," these inputs are available:
 | strengthSetup.split | onboarding | "upper_lower" or "full_body" etc. |
 | equipmentProfile | profile | ["barbell-rack", "dumbbells", "bench", "cable-machine", ...] |
 
+### Explicit scheduling constraints (issue26)
+
+A reviewed weekly template is a hard day-and-sport constraint throughout the arc, including lead-in, threshold and race weeks. Race-day entries are the explicit event exception. No training is scheduled before the selected start date. Distribution counts are targets, not permission to add sessions or sports absent from that template. Legacy automatic schedules may fill only available dates within the selected training-day cap. Preserve taper/recovery and never cram omitted volume into other dates. Calendar dates must remain local dates across time zones.
+
 ### Plan-build acceptance and failure contract (9 November 2026)
 
 - Translate onboarding race IDs `5k`, `10k` and `century` to the live planner's `fiveK`, `tenK` and `centuryRide`. Regeneration must also accept these supported IDs in older saved races. Unknown distances must not be silently replaced with a different event's training prescription.
@@ -915,9 +919,11 @@ After generating all sessions, run these checks. Fix violations automatically.
 
 This is a dedicated hard rule that spans the entire app, not just the generator:
 
-1. **Plan generation.** `ThresholdWeekScheduler.listThresholdWeeksForPlan` is filtered — any week whose Monday falls within 30 days of the A race is dropped. The remaining plan is parameterized against the athlete's last-known thresholds.
+1. **Plan generation.** `ThresholdWeekScheduler.listThresholdWeeksForPlan` is filtered — drop any threshold week whose actual scheduled test dates fall within 30 days of any A race (conservatively omit a whole week touching that window, rather than pull tests earlier). The remaining plan is parameterized against the athlete's last-known thresholds.
 2. **Threshold-refresh reminders.** The "your threshold was last updated X months ago" nudge (js/threshold-reminders.js) is suppressed during the 30-day window. `getStatus` returns `reason: "race_window"` and `buildBannerHtml` returns empty. Users don't get prompted to test when testing would be counterproductive.
 3. **Manual log in Settings → Training Zones.** Allowed (never blocked), but shows a soft confirm before save: **"You're within 30 days of race day. Threshold testing this close to your race may cost more in fatigue than you gain in data. Your current zones are solid — trust your training."** Strength lifts are exempt from this warning — they don't carry the same race-day fatigue cost.
+
+Threshold defaults: single-sport test Thursday; triathlon CSS Tuesday, FTP Thursday, run Saturday, with at least one easy/rest day between tests. If schedule/availability cannot support these defaults, omit the test rather than force it onto an unavailable date. An explicit training week zero selects the first of the six declared track rotations; omitting the week retains daily variation. Swim consumers and tests use the canonical step tree (including build lengths and rests); legacy text is not a separate prescription.
 
 ### 6b. User Modifications — Soft Constraints After Generation
 
