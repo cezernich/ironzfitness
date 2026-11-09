@@ -1,6 +1,6 @@
 # Pull-request and production release review
 
-Reviewed 9 November 2026. Scope: all 14 open PRs, their dependency graph, current production deployment/catalog metadata, and the readiness of a combined candidate. No production changes or PR merges were performed. Personal athlete context was read privately and is not included here.
+Reviewed 9 November 2026. Scope: all 14 PRs open at the start of this review, their dependency graph, current production deployment/catalog metadata, and the readiness of a combined candidate. No production changes or PR merges were performed. Personal athlete context was read privately and is not included here.
 
 ## Result
 
@@ -10,7 +10,7 @@ The deployment is not ready to advance. Required main checks are `test` and `sta
 
 ## Per-PR disposition
 
-Every open PR now has a COMMENT review. These are findings, not approvals. Latest heads at review:
+Every PR open at review start now has a COMMENT review. The additional documentation handoff PR28 also received an independent documentation/privacy review. These are findings, not approvals. Latest heads at review:
 
 | PR | Head | Result / next action |
 |---|---|---|

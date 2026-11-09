@@ -1,6 +1,6 @@
 # Iron Z current session state
 
-Updated 9 November 2026. Read this file, `AGENTS.md`, and the latest remote PRs before continuing. This is the current handoff; append completed session summaries to `SESSION_LOG.md`.
+Updated 9 November 2026. Read this file, `AGENTS.md`, and the latest remote PRs before continuing. This is the current handoff; start with the Full PR/release review checkpoint and PR_RELEASE_REVIEW_2026-11-09.md. Earlier checkpoints are retained as history. Append completed session summaries to `SESSION_LOG.md`.
 
 ## Objective and release constraint
 
@@ -10,7 +10,7 @@ Finish isolated staging with synthetic users, test candidate fixes there, coordi
 
 - Production: `https://ironz.fit`, Supabase `dagdpdcwqdlibxbitdgr`. No production migration or application release has been performed by Codex.
 - Staging: Supabase `yhchfxjzxhinreklnxbi` in the existing Ironz organization, us-east-2, approved at a $0/month project quote.
-- Private preview: `https://ironz-staging.chase-zernich.chatgpt.site`, project `appgprj_6af1feeafc008191abb0f79038aaa874`. Deployment `appgdep_6af2079f413c81919513fca26cc97389` succeeded, owner-private. The outer ChatGPT sign-in returned an error during QA; do not count hosted authenticated access as passing.
+- Private preview: `https://ironz-staging.chase-zernich.chatgpt.site`, project `appgprj_6af1feeafc008191abb0f79038aaa874`. Latest hosted deployment `appgdep_6af22c0082f08191addc2da6d4dd4720` succeeded, owner-private, application `4c1b548`. The newer PR25 correction `6a098ff` is not in this hosted version. The outer ChatGPT sign-in returned an error during QA; do not count hosted authenticated access as passing.
 - Staging has a schema-only copy of production public definitions: 48 tables, 29 original functions, 147 original policies. No athlete rows were copied. Reference philosophy modules come from the repository.
 - Four synthetic Auth accounts exist: athlete-a, athlete-b, coach, administrator. Generated passwords live only in the owner-only local credentials file specified by `IRONZ_STAGING_CREDENTIALS`. Never commit credentials or tokens.
 
@@ -66,7 +66,7 @@ Automatic review rejected pushing these updates to shared `codex/staging-environ
 
 ## Full PR/release review checkpoint, 9 November 2026
 
-All 14 open PRs reviewed at current heads; see PR_RELEASE_REVIEW_2026-11-09.md for per-PR results and links. Production still main `2590645`, deployed 26 May 2026. Broad profile read/unguarded privilege surface remains live; no production data or configuration changed.
+All 14 PRs open at review start reviewed at recorded heads; see PR_RELEASE_REVIEW_2026-11-09.md for per-PR results and links. Production still main `2590645`, deployed 26 May 2026. Broad profile read/unguarded privilege surface remains live; no production data or configuration changed.
 
 Independent QA found P0 migration ordering:18's 14-digit filename sorts before14's 8-digit filename, allowing base migration to recreate coach whole-row access. Passing manually ordered SQL CI does not cover it. Both PRs now have blocking COMMENT findings. Do not deploy this stack until discovery order/applied history are reconciled and tested.
 
@@ -81,3 +81,5 @@ User supplied private athlete context for the next app-use step. It was read pri
 ## Next concrete action
 
 Resolve PR14/18 migration-order P0 and verify actual replay order. Refresh stale PR19 infrastructure/readiness without duplicating component PRs; review/install the final stack through protected checks. Stage/browser-test PR25 at `6a098ff`, resolve issue26 availability mismatch and retained training/sync/intensity gates, then assess real-athlete plan creation. Keep physician restrictions as hard constraints and distinguish minimum time off from clearance. Do not bypass main protection or call disabled integrations passing.
+
+Independent QA documentation/privacy review on PR28: https://github.com/cezernich/ironzfitness/pull/28#pullrequestreview-5832464189 . No blocking documentation/privacy findings; historical/current staging pointer clarified afterward.
