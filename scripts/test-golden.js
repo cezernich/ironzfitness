@@ -27,7 +27,7 @@ const files = [
   'philosophy-planner.js'
 ];
 for (const f of files) {
-  vm.runInContext(fs.readFileSync(f, 'utf-8'), context, { filename: f });
+  vm.runInContext(fs.readFileSync('js/' + f, 'utf-8'), context, { filename: 'js/' + f });
 }
 
 // Load data

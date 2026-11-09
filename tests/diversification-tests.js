@@ -21,17 +21,17 @@ global.AbortController = class {
   abort() { this.signal.aborted = true; }
 };
 
-require("./js/variant-libraries/run.js");
-require("./js/variant-libraries/bike.js");
-require("./js/variant-libraries/swim.js");
-require("./js/variant-libraries/strength.js");
-require("./js/variant-libraries/hybrid.js");
-require("./js/variant-libraries/index.js");
-require("./js/deterministic-variant-rotation.js");
-require("./js/bike-workout-generator.js");
-require("./js/swim-workout-generator.js");
-require("./js/strength-workout-generator.js");
-require("./js/ai-variant-selector.js");
+require("../js/variant-libraries/run.js");
+require("../js/variant-libraries/bike.js");
+require("../js/variant-libraries/swim.js");
+require("../js/variant-libraries/strength.js");
+require("../js/variant-libraries/hybrid.js");
+require("../js/variant-libraries/index.js");
+require("../js/deterministic-variant-rotation.js");
+require("../js/bike-workout-generator.js");
+require("../js/swim-workout-generator.js");
+require("../js/strength-workout-generator.js");
+require("../js/ai-variant-selector.js");
 
 const VL  = window.VariantLibraries;
 const DVR = window.DeterministicVariantRotation;
@@ -365,7 +365,7 @@ async function runAsyncTests() {
   clearAll();
 
   // Set up the threshold-week scheduler context
-  const TW = require("./threshold-week-scheduler.js");
+  const TW = require("../js/threshold-week-scheduler.js");
   const profile = { vdot: 53, experience_level: "intermediate", goal_race_date: "2026-08-01" };
   const planStart = "2026-04-13"; // Mon, 16 weeks before race-ish
   const thresholdWeeks = TW.listThresholdWeeksForPlan(profile, planStart, "2026-08-01");

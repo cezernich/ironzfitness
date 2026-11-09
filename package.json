@@ -1,26 +1,18 @@
 {
-  "name": "fitness-app",
+  "name": "ironz",
   "version": "1.0.0",
-  "description": "",
+  "description": "IronZ: training, nutrition and hydration app (web + Capacitor iOS)",
   "main": "adaptive-coach.js",
   "scripts": {
     "build": "rsync -av --exclude=www --exclude=node_modules --exclude=ios --exclude=.git --exclude='*.docx' *.js *.css *.html *.json *.sql icons/ philosophy/ supabase/ Logo/ scripts/ 'Future Features/' 'Training Philosophy/' www/",
     "sync": "npm run build && npx cap sync ios",
     "open": "npx cap open ios",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/cezernich/ironz.git"
+    "test": "node scripts/run-tests.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/cezernich/ironz/issues"
-  },
-  "homepage": "https://github.com/cezernich/ironz#readme",
   "dependencies": {
     "@capacitor/app": "^8.1.0",
     "@capacitor/cli": "^8.3.0",
@@ -30,5 +22,12 @@
   },
   "devDependencies": {
     "typescript": "^6.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cezernich/ironzfitness.git"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
