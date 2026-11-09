@@ -25,6 +25,11 @@ for _ in 1 2; do
     || { echo "FAIL: migration did not apply cleanly"; exit 1; }
 done
 
+for _ in 1 2; do
+  "${PSQL[@]}" -d "$DB" -f supabase/migrations/20261109174117_restrict_coach_profile_reads.sql >/dev/null 2>&1 \
+    || { echo "FAIL: coach privacy migration did not apply cleanly"; exit 1; }
+done
+
 uid() { echo "00000000-0000-0000-0000-00000000000$1"; }
 
 # as <role> <uid-suffix|-> <email|-> <sql>
@@ -74,7 +79,8 @@ check "admin can change another user's privileged fields" "$(q "SELECT is_coach 
 as service_role - - "UPDATE profiles SET subscription_status='premium' WHERE id='$(uid b)'" >/dev/null
 check "service_role (edge functions) can set subscription" "$(q "SELECT subscription_status FROM profiles WHERE id='$(uid b)'")" "premium"
 check "coach reads assigned client's row" "$(as authenticated d k@x.com "SELECT full_name FROM profiles WHERE id='$(uid b)'")" "Victim"
-check "client reads their coach's row" "$(as authenticated b b@x.com "SELECT full_name FROM profiles WHERE id='$(uid d)'")" "Coach"
+check "client cannot read their coach's private profile row" "$(as authenticated b b@x.com "SELECT birthday,weight_lbs FROM profiles WHERE id='$(uid d)'")" ""
+check "client can read their coach's narrow display card" "$(as authenticated b b@x.com "SELECT full_name FROM profile_cards(ARRAY['$(uid d)']::uuid[])")" "Coach"
 check "email lookup is exact and case-insensitive" "$(as authenticated a a@x.com "SELECT full_name FROM lookup_user_by_email('  B@X.com ')")" "Victim"
 q "INSERT INTO workout_inbox(sender_id,recipient_id) VALUES ('$(uid a)','$(uid d)')" >/dev/null
 check "sender sees recipient card with email" \
