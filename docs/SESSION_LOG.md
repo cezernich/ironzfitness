@@ -58,3 +58,5 @@ Reviewed 14 open PRs with independent QA; posted COMMENT reviews, not approvals.
 Combined local rehearsal `db003f2` passes22files/0 enforcedfailures/3 existingquarantines/173 syntax/0 errors; secret heuristic0hits; client 169 files/stagingbuild pass. Actual-order SQL replay and latest PR25 staging browser remain unverified; release check correctly fails. Existing hosted stage remains `4c1b548`; no new deployment.
 
 PR_RELEASE_REVIEW_2026-11-09.md records every PR disposition, dependencies, reviews, tests and release path. Private athlete handover read as reference, kept out of repo and accounts. No personal plan creation, main merge, production migration or release. Next: migration-order reconciliation/regression, refreshed protected integration, latest PR25 staging, issue26 and remaining training/sync/intensity gates.
+
+Final inventory also found Claude's newly opened issue27 for blocked-date/return-ramp support. Added as a separate first-real-athlete acceptance blocker; no individual medical data or numerical return prescription was copied into this handoff.

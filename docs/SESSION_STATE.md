@@ -74,6 +74,8 @@ PR25 new code `6a098ff` corrects two review regressions: late post-ack cache fai
 
 Combined local review rehearsal `db003f2` at `/private/tmp/ironz-pr-review`:22 test files,0 enforced failures,3 existing quarantines,173 syntax checks,0 errors,heuristic secret scan 0 hits; client 169 files/staging build pass. Readiness gate remains failing. No bundle was pushed as a shortcut around component review; isolated branch contains only rehearsal merges. Latest Claude PR14 fixture cleanup `11cf48b` read/included; no security-policy correction in that change.
 
+Claude opened issue27 during review: blocked date intervals and return-to-training constraints are not represented by the current plan path. Retain it alongside26 as a real-athlete plan blocker; a minimum rest interval is not clearance.
+
 User supplied private athlete context for the next app-use step. It was read privately and never copied into public repo, production account or synthetic fixtures. No personal training plan was created. General acceptance requirements are in the review report; private health details remain outside it.
 
 ## Next concrete action

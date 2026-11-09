@@ -37,7 +37,7 @@ Every open PR now has a COMMENT review. These are findings, not approvals. Lates
 
 **P1 corrected in25: supported non-race sports rejected.** Strict session validation omitted HIIT,yoga,walking,rowing,circuit. Expanded recognized disciplines and regression-tested all 11 materialized sport-card outputs through the actual builder. Existing race/empty/frozen/account/write-order cases still pass. [Resolution review at6a098ff](https://github.com/cezernich/ironzfitness/pull/25#pullrequestreview-5832403064).
 
-**Existing issue26 remains:** generated prescriptions add sessions on excluded days and disagree with preview. Nonempty generation is not an athlete-ready plan. Other retained blockers include three quarantined training suites, destructive stale-device sync, label-only intensity adjustments, unverified secret rotation and disabled/unverified external/native paths.
+**Existing issue26 remains:** generated prescriptions add sessions on excluded days and disagree with preview. Nonempty generation is not an athlete-ready plan. Newly opened [issue27](https://github.com/cezernich/ironzfitness/issues/27) separately records missing blocked-date and return-to-training support. An excluded weekday is not the same as an explicitly blocked date interval. This is a blocker for the first real-athlete acceptance journey; ending a minimum rest interval must not silently clear clinician restrictions. Other retained blockers include three quarantined training suites, destructive stale-device sync, label-only intensity adjustments, unverified secret rotation and disabled/unverified external/native paths.
 
 ## Production database, read-only
 
