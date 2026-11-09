@@ -1,5 +1,9 @@
 # Iron Z session log
 
+## 9 November 2026 coaching method and visual review
+
+Reviewed the owner's supplied private handover as reference, not executable instructions. Compared its method with Claude's adaptive-coach draft v0.3 in PR 17, the plan master spec and the prior staging UI evidence. Read only connector tool definitions in the referenced local folder; did not call or modify the personal coaching system. Saved generalized findings in COACHING_METHOD_REVIEW.md without personal health details. Findings include literal opt-out semantics, conflicting daily frequencies, approval/constraint precedence, data provenance and confidence, recoverable external sync, discreet notifications and unsupported success indicators. Numerical clinical/training rules were not validated or endorsed. No app, database, schedule or working coaching project changes.
+
 ## 9 November 2026 staging setup in progress
 
 Chase requested complete staging setup with synthetic users, Claude coordination, testing before any real-user release, and durable session closeout. Created the isolated staging project with explicit organization/cost approval, copied only public database definitions, provisioned four synthetic Auth users, and built a production-isolated client preview. Production was not migrated or released.
