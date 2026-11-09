@@ -24,3 +24,5 @@ supabase/.temp/
 # Apple developer keys — never ship these
 App Developer Download/
 *.p8
+
+www-staging/
