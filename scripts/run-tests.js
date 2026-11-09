@@ -55,6 +55,31 @@ for (const t of tests) {
   }
 }
 
+// Secret scan: fail if anything that looks like a live credential is committed.
+// Patterns are deliberately narrow (assignments of long hex/base64 values to
+// SECRET/KEY names, and known provider prefixes). The Supabase anon key in
+// js/supabase-init.js is public by design and allowed.
+const SECRET_RES = [
+  /(SECRET|PRIVATE_KEY|SERVICE_KEY|API_KEY)\s*[=:]\s*['"]?[0-9a-fA-F]{24,}/,
+  /sk_live_[0-9a-zA-Z]{10,}/,
+  /sk-ant-[0-9a-zA-Z_-]{20,}/,
+  /"role"\s*:\s*"service_role"/,
+];
+const secretHits = [];
+(function scan(dir) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (["node_modules", ".git", "www", "Pods"].includes(e.name)) continue;
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) { scan(p); continue; }
+    if (!/\.(js|ts|sql|md|json|html|txt|env|plist|xcconfig)$/.test(e.name)) continue;
+    const text = fs.readFileSync(p, "utf-8");
+    text.split("\n").forEach((line, i) => {
+      if (SECRET_RES.some((re) => re.test(line))) secretHits.push(`${path.relative(ROOT, p)}:${i + 1}`);
+    });
+  }
+})(ROOT);
+for (const h of secretHits) console.log(`SECRET  possible credential at ${h} (value not printed)`);
+
 // Syntax check every client JS file. No bundler means a syntax error ships straight to prod.
 const jsFiles = [];
 (function walk(dir) {
@@ -78,4 +103,5 @@ console.log(
   `\n${tests.length} test files: ${hardFailures} failed, ${quarantinedFailures} quarantined. ` +
     `${jsFiles.length} JS files syntax-checked: ${syntaxErrors} errors.`
 );
-process.exit(hardFailures || syntaxErrors ? 1 : 0);
+console.log(`Secret scan: ${secretHits.length} possible credentials.`);
+process.exit(hardFailures || syntaxErrors || secretHits.length ? 1 : 0);

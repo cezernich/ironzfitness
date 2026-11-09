@@ -7,7 +7,7 @@
 --   3. Run the query
 --   4. Set the Strava client secret as a Supabase secret:
 --        supabase secrets set STRAVA_CLIENT_ID=224501
---        supabase secrets set STRAVA_CLIENT_SECRET=badd334cf44f359762e66d61cec66f6f3dd05959
+--        supabase secrets set STRAVA_CLIENT_SECRET=<from strava.com/settings/api, never commit>
 --        supabase secrets set STRAVA_REDIRECT_URI=https://dagdpdcwqdlibxbitdgr.supabase.co/functions/v1/strava-callback
 --        supabase secrets set STRAVA_RETURN_URL=https://ironz.fit/?strava=connected
 --   5. Deploy all three edge functions WITH --no-verify-jwt:

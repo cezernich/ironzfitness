@@ -61,13 +61,10 @@
     const cleaned = String(email).trim().toLowerCase();
     if (!cleaned) return null;
     try {
-      const { data, error } = await sb.from("profiles")
-        .select("id, full_name, email")
-        .ilike("email", cleaned)
-        .limit(1)
-        .maybeSingle();
+      // Exact-match RPC; other users' profile rows are not directly readable.
+      const { data, error } = await sb.rpc("lookup_user_by_email", { p_email: cleaned });
       if (error) { console.warn("[InboxDirect] lookup error:", error.message); return null; }
-      return data || null;
+      return (Array.isArray(data) ? data[0] : data) || null;
     } catch (e) {
       console.warn("[InboxDirect] lookup exception:", e);
       return null;
@@ -169,9 +166,7 @@
       const recipientIds = [...new Set(rows.map(r => r.recipient_id).filter(Boolean))];
       if (recipientIds.length) {
         try {
-          const { data: profs } = await sb.from("profiles")
-            .select("id, full_name, email")
-            .in("id", recipientIds);
+          const { data: profs } = await sb.rpc("profile_cards", { p_ids: recipientIds });
           if (profs) {
             const byId = {};
             profs.forEach(p => { byId[p.id] = p; });
