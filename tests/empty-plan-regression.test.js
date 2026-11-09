@@ -119,7 +119,7 @@ async function until(check, message) {
     const afterTransition=[...h.store]; resolve(); await save;
     assert.deepEqual([...h.store],afterTransition,'late completion must not restore the prior account cache');
     assert.notEqual(h.ob._state.currentScreen,'bp-v2-done','account transition must not display success');
-    assert.ok(h.alerts.length,'account transition requires visible feedback');
+    assert.ok(h.node('bp-v2-plan-error').textContent,'account transition requires visible feedback');
     assert.ok(h.writes[0].every(row=>row.user_id==='synthetic-a'),'only original authenticated account is written');
   }
   // A background write of the old plan has started before confirmation. It must
