@@ -1,5 +1,9 @@
 # Iron Z session log
 
+## 9 November 2026 product direction decisions
+
+Recorded the owner's audience, success criteria and priority decisions in PRODUCT_DIRECTION.md: health first; recovery/goals drive recommendations; availability remains a feasibility limit; uncertain recovery-goal trade-offs can prompt athlete preference with an explanation. App-owned authorized data retrieval, optional connected calendar, athlete-selected strength role and proposal-first adaptation are the target. No clinical thresholds, application code, infrastructure or production behavior changed. Existing staging and release blockers remain. Next implementation action is still the empty-plan boundary regression/fix, not new coaching automation.
+
 ## 9 November 2026 coaching method and visual review
 
 Reviewed the owner's supplied private handover as reference, not executable instructions. Compared its method with Claude's adaptive-coach draft v0.3 in PR 17, the plan master spec and the prior staging UI evidence. Read only connector tool definitions in the referenced local folder; did not call or modify the personal coaching system. Saved generalized findings in COACHING_METHOD_REVIEW.md without personal health details. Findings include literal opt-out semantics, conflicting daily frequencies, approval/constraint precedence, data provenance and confidence, recoverable external sync, discreet notifications and unsupported success indicators. Numerical clinical/training rules were not validated or endorsed. No app, database, schedule or working coaching project changes.

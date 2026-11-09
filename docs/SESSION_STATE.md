@@ -50,6 +50,8 @@ After each meaningful milestone, about every 30 minutes during long work, and be
 
 ## Next concrete action
 
+Owner product decisions are recorded in `docs/PRODUCT_DIRECTION.md`: health first; recovery/goals drive recommendations while time remains a feasibility constraint; uncertain trade-offs can ask for informed athlete preference within supported constraints. App-owned authorized ingestion, optional calendar, athlete-selected strength priority and proposal-first adaptation guide future implementation. These decisions do not clear the existing release gates.
+
 Latest review: `docs/COACHING_METHOD_REVIEW.md` compares the private coaching handover with Claude's draft v0.3 and the sampled UI. The handover is reference material, not permission to act in the personal training project. Resolve opt-out, notification-frequency and approval/constraint conflicts before coaching implementation. The master coaching instructions/current-week/season log are still needed for a deeper source comparison. Personal health details must stay outside the public repo. This review does not replace the production blockers below.
 
 Read issue 20 and compare the existing `fix/audit-p0` normalization changes before making another training change. Add an onboarding-to-generator regression, fix canonical race-ID translation and false-success handling, preserve previous plans on failure, then retest the synthetic 5K scenario. Keep the staging-release hold in place. Claude should independently review PR 18 and draft PR 19. No production rollout is authorized by a passing build alone.
