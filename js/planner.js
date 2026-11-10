@@ -2193,7 +2193,89 @@ function _raceSchedulingConstraints(race) {
   return { daysPerWeek: race.daysPerWeek || prefs.daysPerWeek, canSchedule, explicitTemplate: !!template };
 }
 
+// Threshold-week tests sit on default weekdays (Tue CSS, Thu FTP, Sat 5K).
+// When an explicit template has no slot for a test's sport on its default
+// day, move the test within the same Mon-Sun week to a day that does,
+// instead of letting _honorRaceSchedule delete it. Tests keep at least one
+// day between them (master spec: easy/rest between tests) and move as
+// little as possible. A test is dropped only if no valid day exists; the
+// survivors are flagged so the omission is visible, not silent.
+function _relocateThresholdTests(entries, constraints) {
+  if (!constraints || typeof constraints.canSchedule !== "function") return entries;
+  const isTest = e => e && e.isThresholdTest && e.discipline !== "race";
+  const mondayOf = ymd => {
+    const d = new Date(ymd + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7);
+    return d.toISOString().slice(0, 10);
+  };
+  const addDays = (ymd, n) => {
+    const d = new Date(ymd + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  };
+  const dayDiff = (a, b) => Math.abs((new Date(a + "T00:00:00Z") - new Date(b + "T00:00:00Z")) / 864e5);
+
+  const weeks = new Map();
+  entries.forEach(e => { if (isTest(e)) {
+    const m = mondayOf(e.date);
+    if (!weeks.has(m)) weeks.set(m, []);
+    weeks.get(m).push(e);
+  }});
+  if (!weeks.size) return entries;
+
+  const moves = new Map(); // test entry -> new date (or null = no valid day)
+  for (const [monday, tests] of weeks) {
+    const days = [0,1,2,3,4,5,6].map(i => addDays(monday, i));
+    const options = tests.map(t => days.filter(d => constraints.canSchedule(d, t.discipline)));
+    let best = null;
+    const pick = (i, chosen, cost) => {
+      if (best && cost >= best.cost) return;
+      if (i === tests.length) { best = { chosen: chosen.slice(), cost }; return; }
+      for (const d of options[i]) {
+        if (chosen.some(c => c && dayDiff(c, d) < 2)) continue;
+        // Moving a test at all costs more than moving it further: tests that
+        // already fit stay put, and only the ones that must move do.
+        const step = d === tests[i].date ? 0 : 100 + dayDiff(d, tests[i].date);
+        chosen.push(d); pick(i + 1, chosen, cost + step); chosen.pop();
+      }
+    };
+    pick(0, [], 0);
+    if (!best) {
+      // Can't keep every test with spacing; place as many as possible, in order.
+      const chosen = [];
+      tests.forEach((t, i) => {
+        const d = options[i]
+          .filter(x => !chosen.some(c => c && dayDiff(c, x) < 2))
+          .sort((a, b) => dayDiff(a, t.date) - dayDiff(b, t.date))[0] || null;
+        chosen.push(d);
+      });
+      best = { chosen };
+    }
+    tests.forEach((t, i) => moves.set(t, best.chosen[i]));
+  }
+
+  const testTargets = new Set([...moves.values()].filter(Boolean));
+  const out = [];
+  for (const e of entries) {
+    if (isTest(e)) {
+      const to = moves.get(e);
+      if (!to) continue; // no valid day this week; reported below
+      out.push(to === e.date ? e : { ...e, date: to, relocatedFrom: e.date });
+      continue;
+    }
+    // A test takes the whole day inside its threshold week.
+    if (e.isThresholdWeek && testTargets.has(e.date)) continue;
+    out.push(e);
+  }
+  const dropped = [...moves.entries()].filter(([, d]) => !d).map(([t]) => t.thresholdTestType || t.discipline);
+  if (dropped.length && typeof console !== "undefined") {
+    console.warn("[IronZ][plan-gen] threshold tests with no schedulable day were omitted:", dropped);
+  }
+  return out;
+}
+
 function _honorRaceSchedule(entries, constraints) {
+  entries = _relocateThresholdTests(entries, constraints);
   const available = entries.filter(entry => entry.discipline === "race" || entry.phase === "Race" ||
     constraints.canSchedule(entry.date, entry.discipline));
   const cap = Number(constraints.daysPerWeek);
@@ -2343,7 +2425,7 @@ function _buildRacePlanReplacement(race, options = {}) {
 
   newEntries = _honorRaceSchedule(newEntries, scheduling);
   _validateGeneratedPlan(newEntries);
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = _planLocalYmd(new Date());
   const schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
   const keptSchedule = schedule.filter(e => e && (e.date < todayStr || String(e.raceId) !== String(race.id)));
   const existingPlan = loadTrainingPlan().filter(e => String(e.raceId) !== String(race.id));
