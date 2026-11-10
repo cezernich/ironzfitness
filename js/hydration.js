@@ -521,7 +521,7 @@ function _hydrationResolveDurationMin(w) {
   // Mirror the renderer's resolution: try library steps first, fall
   // back to template.
   if (w.raceId && w.discipline && w.load) {
-    if (w.templateWorkout && Number.isFinite(w.duration) && w.duration > 0) return w.duration;
+    if (Number.isFinite(w.duration) && w.duration > 0) return w.duration;
     try {
       const _libSteps = (typeof window !== "undefined" && typeof window._librarySessionSteps === "function")
         ? window._librarySessionSteps(w.libraryWorkout)

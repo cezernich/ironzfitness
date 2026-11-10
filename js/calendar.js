@@ -1856,15 +1856,19 @@ function buildIntensityStrip(session, cardId, discipline) {
  * Used to apply progressive run durations stored on plan entries.
  */
 function scaleSessionDuration(session, targetDuration) {
-  if (!targetDuration || !session || session.duration === targetDuration) return session;
-  const scale = targetDuration / session.duration;
+  if (session && targetDuration === 0) return { ...session, duration: 0, steps: [] };
+  if (!targetDuration || !session || !Array.isArray(session.steps)) return session;
+  const actual = session.steps.reduce((sum, step) => sum +
+    Number(step.duration || 0) * (step.reps || 1) + Number(step.rest || 0) * Math.max(0, (step.reps || 1) - 1), 0);
+  if (!(actual > 0)) return session;
+  const scale = targetDuration / actual;
   return {
     ...session,
     duration: targetDuration,
     steps: session.steps.map(s => ({
       ...s,
-      duration: Math.max(1, Math.round(s.duration * scale)),
-      ...(s.rest != null ? { rest: Math.max(1, Math.round(s.rest * scale)) } : {}),
+      duration: s.duration * scale,
+      ...(s.rest != null ? { rest: s.rest * scale } : {}),
     })),
   };
 }
@@ -1958,6 +1962,7 @@ function _librarySessionSteps(lib) {
         duration: dur,
         zone: _zoneNum(b.zone),
         label: b.description || (b.zone + " block"),
+        discipline: b.discipline || (/\brun\b/i.test(b.description || "") ? "run" : /\bbike\b/i.test(b.description || "") ? "bike" : undefined),
       };
       if (reps && reps > 1) {
         entry.reps = reps;
@@ -2037,7 +2042,7 @@ function buildStepsList(session, discipline) {
       || (step.type && _STRUCTURAL_ROLES.has(String(step.type).toLowerCase()) ? String(step.type).toUpperCase() : "MAIN SET");
     let brickDisc = null;
     if (isBrick && !isT1) {
-      brickDisc = _seenT1 ? "run" : "bike";
+      brickDisc = step.discipline || (_seenT1 ? "run" : "bike");
     }
     if (isT1) _seenT1 = true;
     // Render durations in seconds when < 1 minute (strides, short walk
@@ -2059,6 +2064,7 @@ function buildStepsList(session, discipline) {
     // the bike-watts label that the outer `zones` lookup returns.
     let zData = zones ? zones[`z${step.zone}`] : null;
     if (brickDisc === "run") {
+      zData = null; // Missing run benchmarks must never fall back to bike watts.
       try {
         const all = JSON.parse(localStorage.getItem("trainingZones")) || {};
         const runZones = (all.running || {}).zones || null;
@@ -3890,7 +3896,7 @@ function _estimateRunKm(effortKey, durationMin) {
 function getDayTotals(dateStr) {
   const data = getDataForDate(dateStr);
   const restriction = data.restriction;
-  const sessionRemoved = restriction && restriction.action === "remove";
+  const sessionRemoved = restriction && (restriction.action === "remove" || getEffectiveLoad("easy", restriction) === "rest");
   let totalMin = 0, totalKm = 0;
   const sportKm = {};   // { run, bike, swim } → km
   const _addKm = (sport, km) => {
@@ -3926,7 +3932,7 @@ function getDayTotals(dateStr) {
                               : null)
                          || (SESSION_DESCRIPTIONS[p.discipline] || {})[effectLoad]
                          || (SESSION_DESCRIPTIONS[p.discipline] || {})[p.load];
-      const baseDur       = (p.templateWorkout && p.duration) || (rawSession && rawSession.duration) || p.duration;
+      const baseDur       = p.duration || (rawSession && rawSession.duration);
       const targetDur     = getRestrictedDuration(baseDur, p.load, restriction);
       const scaledSession = rawSession ? scaleSessionDuration(rawSession, targetDur) : rawSession;
       if (scaledSession?.duration) totalMin += _parseDurMin(scaledSession.duration);
@@ -4520,11 +4526,12 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
   // today" — don't render a session card for them and don't count
   // them toward allSessionsCount, otherwise the day detail shows a
   // strength-icon card labeled "Rest" on every threshold rest day.
-  const planEntryIsRest = data.planEntry && _calV2IsRestEntry(data.planEntry);
+  const planEntryIsRest = data.planEntry && (_calV2IsRestEntry(data.planEntry)
+    || (data.restriction?.type === "rest" && data.restriction.action === "reduce"));
   const planEntryIsDiscRestricted = data.planEntry && _calV2IsSessionDisciplineRestricted(data.planEntry, data.restriction);
   const effectivePlanEntry = (planEntryIsRest || planEntryIsDiscRestricted) ? null : data.planEntry;
   const nonRestScheduled = data.scheduledWorkouts.filter(w =>
-    !_calV2IsRestEntry(w) && !_calV2IsSessionDisciplineRestricted(w, data.restriction)
+    !_calV2IsRestEntry(w) && !(data.restriction?.type === "rest" && data.restriction.action === "reduce") && !_calV2IsSessionDisciplineRestricted(w, data.restriction)
   );
   const allSessionsCount = (effectivePlanEntry ? 1 : 0) + nonRestScheduled.length + data.loggedWorkouts.length;
 
@@ -4549,8 +4556,10 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       const icon        = DISCIPLINE_ICONS[p.discipline] || ICONS.weights;
       const color       = DISCIPLINE_COLORS[p.discipline] || "var(--color-accent)";
       const cardId      = `session-plan-${dateStr}-${p.raceId}`;
-      const effectLoad     = getEffectiveLoad(p.load, data.restriction);
-      const targetDuration = getRestrictedDuration(p.duration, p.load, data.restriction);
+      const sessionRestriction = Array.isArray(data.restriction?.disciplines)
+        && !_calV2IsSessionDisciplineRestricted(p, data.restriction) ? null : data.restriction;
+      const effectLoad     = getEffectiveLoad(p.load, sessionRestriction);
+      const targetDuration = getRestrictedDuration(p.duration, p.load, sessionRestriction);
       const isReduced      = effectLoad !== p.load || targetDuration !== p.duration;
       // Use edited overrides if present on the plan entry, otherwise fall back to SESSION_DESCRIPTIONS
       let rawSession;
@@ -4590,16 +4599,17 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
                   || (SESSION_DESCRIPTIONS[p.discipline] || {})[effectLoad]
                   || (SESSION_DESCRIPTIONS[p.discipline] || {})[p.load];
       }
-      // Library sessions are already parameterized (warmup / main_set /
-      // cooldown with concrete durations and sub-minute intervals for
-      // strides). Scaling them to a target minute count produces garbage
-      // like "5 × 12 min (36 min rest)" from what should be 5 × 20 sec
-      // strides with 60 sec rest, because the 1-minute floor and linear
-      // scaling destroy the semantics of short, hard intervals.
-      const skipScale = rawSession && rawSession._fromLibrary;
-      const session = rawSession && !p.aiSession && !skipScale
-        ? scaleSessionDuration(rawSession, targetDuration)
-        : rawSession;
+      // Restrictions apply to the actual prescription, including library and
+      // edited workouts. An easy restriction cannot retain threshold intervals.
+      if (effectLoad === "easy" && (isReduced || sessionRestriction?.action === "reduce")
+          && (p.discipline !== "strength" || ["injury", "sick"].includes(sessionRestriction?.type))) {
+        rawSession = { name: "Easy session", duration: targetDuration,
+          steps: [{ type: "main", duration: targetDuration, zone: 1,
+            label: p.discipline === "strength"
+              ? "Recovery only: no loaded lifting prescribed; follow your activity clearance"
+              : "Easy effort throughout; follow your return-to-training clearance" }] };
+      }
+      const session = rawSession ? scaleSessionDuration(rawSession, targetDuration) : rawSession;
       const intensLabel = getIntensityLabel(effectLoad);
       const intensClass = getIntensityClass(effectLoad);
 
@@ -5526,7 +5536,7 @@ function getEffectiveLoad(load, restriction) {
   switch (restriction.type) {
     case "rest":    return "rest";
     case "injury":
-    case "sick":    return (load === "hard" || load === "long" || load === "moderate") ? "easy" : load;
+    case "sick":    return load === "rest" ? "rest" : "easy";
     case "fatigue": return (load === "hard" || load === "long") ? "moderate" : (load === "moderate" ? "easy" : load);
     case "time":    return (load === "hard" || load === "long") ? "moderate" : load;
     default:        return load;
@@ -5537,7 +5547,8 @@ function getEffectiveLoad(load, restriction) {
 function getRestrictedDuration(duration, originalLoad, restriction) {
   if (!duration || !restriction || restriction.action !== "reduce") return duration;
   const multipliers = { long: 0.60, hard: 0.65, moderate: 0.70, strides: 0.75, easy: 0.65 };
-  return Math.max(15, Math.round(duration * (multipliers[originalLoad] || 0.70)));
+  if (getEffectiveLoad(originalLoad, restriction) === "rest") return 0;
+  return Math.min(duration, Math.max(15, Math.round(duration * (multipliers[originalLoad] || 0.70))));
 }
 
 /**
