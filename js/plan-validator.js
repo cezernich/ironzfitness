@@ -101,7 +101,7 @@
     if (!week || !Array.isArray(week.sessions) || factor >= 1) return;
     for (const s of week.sessions) {
       if (!s || s.type === 'rest') continue;
-      s.durationMin = Math.max(0, Math.floor((s.durationMin || 0) * factor));
+      s.durationMin = Math.max(0, Math.floor((s.durationMin || 0) * factor + 1e-9));
     }
     week.targetHours = Math.round(weekDuration(week) / 6) / 10;
   }
@@ -141,6 +141,35 @@
         }
       }
       for(const type of new Set(sessions.map(s=>s.type)))previous.set(type,Math.max(...sessions.filter(s=>s.type===type).map(s=>s.durationMin)));
+    }
+  }
+
+  // Taper ceilings refer to the final full loading week, never a test or
+  // deload week. Downward-only: a quiet week cannot be inflated to a target.
+  function checkTaperVolume(plan, classification, flags) {
+    const weeks=plan.weeklyPlan||[];
+    const taperWeeks=weeks.filter(w=>w.phase==='taper');
+    let reference=null,previous=null;
+    for(const week of weeks) {
+      if(!['taper','race-week'].includes(week.phase)) {
+        if(!week.isDeload&&!week.isPartial)reference=weekDuration(week);
+        continue;
+      }
+      if(reference===null) {
+        // Compressed plans may begin inside taper with no loading week.
+        reference=weekDuration(week)/.60;
+        previous=weekDuration(week);
+        continue;
+      }
+      const index=taperWeeks.indexOf(week);
+      const fraction=week.phase==='race-week'?.30:taperWeeks.length>1?.70-.20*index/(taperWeeks.length-1):.60;
+      const maximum=Math.floor(Math.min(reference*fraction,previous===null?Infinity:previous*.85)+1e-9);
+      const before=weekDuration(week);
+      if(before>maximum&&before>0) {
+        scaleWeek(week,maximum/before);
+        flag(flags,'taper_volume','auto-fixed',`Week ${week.weekNumber}: pre-race training ${before}→${weekDuration(week)}min; taper ceilings never increase work.`);
+      }
+      previous=weekDuration(week);
     }
   }
 
@@ -544,6 +573,7 @@
       // Integer rounding may change a fraction during proportional scaling.
       // Correct only this week before it becomes the next week's baseline.
     }
+    checkTaperVolume(plan,classification,flags);
     if(window.SessionAssembler && window.SessionAssembler.finalizePrescriptions) window.SessionAssembler.finalizePrescriptions(plan,classification);
     checkLongRunProportion(plan,classification,flags);
     const errors=[];
@@ -613,6 +643,7 @@
     _checkIntensityCap: checkIntensityCap,
     _checkNoConsecutiveHard: checkNoConsecutiveHard,
     _checkLongRunProportion: checkLongRunProportion,
+    _checkTaperVolume: checkTaperVolume,
     _checkBeginnerComplexity: checkBeginnerComplexity,
     _checkVolumeIncreaseCap: checkVolumeIncreaseCap,
     _checkKeystoneProgression:checkKeystoneProgression,

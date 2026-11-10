@@ -309,10 +309,10 @@ Allocate phases using these ratios:
 | Phase | Ratio | Chase's Ironman (21 weeks) |
 |-------|-------|---------------------------|
 | Base | 25% | 5 weeks |
-| Build | 30% | 7 weeks |
+| Build | 30% nominal + capped-taper remainder | 8 weeks |
 | Peak | 25% | 5 weeks |
-| Taper | 15% | 3 weeks |
-| Race Week | 5% (min 1) | 1 week |
+| Taper | 15% nominal, distance cap takes precedence | 2 weeks |
+| Race Week | Exactly 1 week | 1 week |
 | **Total** | **100%** | **21 weeks** |
 
 **Running:**
@@ -337,6 +337,10 @@ Allocate phases using these ratios:
 - Allocated weeks MUST sum to totalWeeks exactly. If rounding loses weeks, add remainder to Build.
 - Reserve Race Week (1 week) and Taper first. Then distribute remaining weeks.
 - If < 6 weeks to race: skip Base entirely → compressed Build → Peak → Taper → Race Week.
+
+**Bounded triathlon taper and declining volume:** Race Week is exactly one calendar week, irrespective of plan length. Before it, the triathlon Taper phase is at most two weeks for Ironman/70.3 and one for Olympic/sprint. Freed weeks return to Build; all phases still cover the requested arc exactly. Nominal ratios cannot create six taper weeks or multiple race weeks. The Ironman cap is consistent with the three-week total taper/peak example in [IRONMAN University Training Plan Structure](https://u.ironman.com/course-bin/coaching/content/resources/Training_plan_structure.pdf); these are product defaults, not individualized clearance.
+
+Target-engine pre-race training volume is capped downward against the last full non-deload loading week: two taper weeks at 70% then50%; a single taper week at60%; race-week training at30% (race execution itself is separate). Each subsequent taper/race week is also capped at85% of the prior actual planned week, so a quiet earlier week cannot cause a later rebound. Never scale upward to meet these ceilings. A compressed plan starting inside taper uses its first taper week as the reference, without inflating it. Final structured prescriptions must be rebuilt after reductions. These defaults remain shadow-only pending coaching and adoption review.
 
 ### 3a-ii. How Athlete Profile Changes What Happens INSIDE Each Phase
 

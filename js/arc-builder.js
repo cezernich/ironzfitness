@@ -153,7 +153,7 @@
       return compressPhases(totalWeeks, sportProfile);
     }
 
-    const raceWeek = Math.max(1, Math.round(totalWeeks * ratios.raceWeek));
+    const raceWeek = 1; // A calendar race week does not grow with plan length.
     let taper = Math.max(1, Math.round(totalWeeks * ratios.taper));
     // Running distance-specific taper cap (Philosophy §4.5): if the caller
     // supplied a shorter taper override, use it and hand the freed weeks to
@@ -367,6 +367,10 @@
     if (sportProfile === 'running') {
       const days = runningTaperDaysForRaceType(aRace.raceType);
       if (days) taperOverrideWeeks = Math.max(1, Math.round(days / 7));
+    }
+    if(sportProfile==='triathlon') {
+      // These counts exclude the separately reserved race week.
+      taperOverrideWeeks=aRace.raceType==='ironman'?2:aRace.raceType==='half-ironman'?2:1;
     }
     const phases = allocatePhases(totalWeeks, sportProfile, preBase, taperOverrideWeeks);
 
