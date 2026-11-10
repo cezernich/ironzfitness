@@ -33,6 +33,7 @@ function section(t) { console.log("\n" + t); }
 // Build a plan stub: a single week starting on Monday 2026-05-18.
 // Template: Mon strength, Tue run, Wed strength, Thu rest, Fri bike, Sat strength, Sun swim.
 // This is exactly the user's week from the screenshot.
+function localDate(date) { return date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0"); }
 function buildStubPlan(phaseName) {
   const monday = new Date("2026-05-18T00:00:00");
   const entries = [];
@@ -40,7 +41,7 @@ function buildStubPlan(phaseName) {
     const d = new Date(monday);
     d.setDate(d.getDate() + offset);
     entries.push({
-      date: d.toISOString().slice(0, 10),
+      date: localDate(d),
       raceId: "r1",
       phase: phaseName,
       weekNumber: 1,
@@ -134,7 +135,7 @@ section("Test: Advanced Base — never stacks same discipline on one day");
   const entries = [];
   const addDay = (offset, discipline, load) => {
     const d = new Date(monday); d.setDate(d.getDate() + offset);
-    entries.push({ date: d.toISOString().slice(0, 10), raceId: "r1", phase: "Base", weekNumber: 1, discipline, load, sessionName: "s", duration: 45 });
+    entries.push({ date: localDate(d), raceId: "r1", phase: "Base", weekNumber: 1, discipline, load, sessionName: "s", duration: 45 });
   };
   addDay(0, "strength", "moderate");
   addDay(1, "bike", "easy");
@@ -186,7 +187,7 @@ section("Test: Advanced Build with 2 rest days — fills one empty first, then d
   const addDay = (offset, discipline, load) => {
     const d = new Date(monday);
     d.setDate(d.getDate() + offset);
-    entries.push({ date: d.toISOString().slice(0, 10), raceId: "r1", phase: "Build", weekNumber: 1, discipline, load, sessionName: "s", duration: 45 });
+    entries.push({ date: localDate(d), raceId: "r1", phase: "Build", weekNumber: 1, discipline, load, sessionName: "s", duration: 45 });
   };
   addDay(0, "strength", "moderate");
   addDay(1, "run", "easy");

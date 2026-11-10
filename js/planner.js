@@ -1,3 +1,7 @@
+function _planLocalYmd(date) {
+  return date.getFullYear() + "-" + String(date.getMonth()+1).padStart(2,"0") + "-" + String(date.getDate()).padStart(2,"0");
+}
+
 // planner.js — Race event management + training plan generation
 
 // ─── Race configuration ─────────────────────────────────────────────────────
@@ -3260,7 +3264,7 @@ function _mondayOfDateStr(dateStr) {
   const dow = d.getDay();
   const offset = dow === 0 ? -6 : 1 - dow;
   d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
+  return _planLocalYmd(d);
 }
 
 function _datesInWeek(weekStartDateStr) {
@@ -3269,7 +3273,7 @@ function _datesInWeek(weekStartDateStr) {
   for (let i = 0; i < 7; i++) {
     const d = new Date(start.getTime());
     d.setDate(d.getDate() + i);
-    out.push(d.toISOString().slice(0, 10));
+    out.push(_planLocalYmd(d));
   }
   return out;
 }
@@ -4338,6 +4342,8 @@ function _generateSingleRacePlan(race) {
     try { _userData = JSON.parse(localStorage.getItem("user_data") || "{}"); } catch {}
     const _profileForScheduling = Object.assign({}, _profile, {
       goal_race_date: race.date,
+      goal_race_priority: race.priority || "A",
+      races: loadEvents(),
       active_goal: race.type,
       threshold_week_cadence_override:
         _profile.threshold_week_cadence_override || _userData.threshold_week_cadence_override,
@@ -4355,13 +4361,17 @@ function _generateSingleRacePlan(race) {
     // current zones are load-bearing for the taper anyway. Drop any
     // scheduled week that falls inside the 30-day window; downstream the
     // generator parameterizes sessions against the last-known zones.
-    const _raceMs = new Date(race.date + "T00:00:00").getTime();
-    const _window = 30 * 86400000;
+    const aRaceDates = [...loadEvents(),race]
+      .filter(event=>event && String(event.priority || "A").toUpperCase()==="A")
+      .map(event=>new Date(event.date+"T00:00:00").getTime());
     const _beforeFilter = _scheduledThresholdWeeks.length;
     _scheduledThresholdWeeks = _scheduledThresholdWeeks.filter(t => {
-      const wk = new Date(t.thresholdWeekStartDate);
-      const msToRace = _raceMs - wk.getTime();
-      return msToRace > _window; // keep only weeks > 30 days before race
+      const days = window.ThresholdWeekScheduler.buildThresholdWeekDays(t.thresholdWeekStartDate,_twSportProfile);
+      return days.filter(day=>day.type==="test" || /_test$/.test(day.type)).every(day=>
+        aRaceDates.every(raceMs=>{
+          const gap=(raceMs-new Date(day.date+"T00:00:00").getTime())/86400000;
+          return gap>30 || gap<0;
+        }));
     });
     const _dropped = _beforeFilter - _scheduledThresholdWeeks.length;
     if (_dropped > 0) {

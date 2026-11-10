@@ -40,4 +40,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Profiles security test
-        run: bash tests/sql/profiles-security.sh
+        run: |
+          bash tests/sql/profiles-security.sh
+          IRONZ_PROFILE_UPGRADE=1 bash tests/sql/profiles-security.sh
