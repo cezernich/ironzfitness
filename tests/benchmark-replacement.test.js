@@ -45,3 +45,6 @@ for(const bad of [{run:{mode:'known',method:'race',raceDist:'5k'}},{bike:{mode:'
 values.set('thresholds',JSON.stringify({bike:{mode:'test'}}));assert.strictEqual(c._loadExistingThresholds().bike.mode,'known','a newly present first benchmark fulfills an older undated request');
 values.set('thresholds',JSON.stringify({bike:{mode:'test',_requestedAt:'2030-01-02T00:00:00Z'}}));assert.strictEqual(c._loadExistingThresholds().bike.mode,'test','a dated request survives an older retained measurement');
 values.set('trainingZones',JSON.stringify({...retained,biking:{ftp:255,lastUpdated:'2030-01-03T00:00:00Z'}}));assert.strictEqual(c._loadExistingThresholds().bike.mode,'known','a newer actual measurement fulfills the request');
+
+values.set('thresholds',JSON.stringify({bike:{mode:'clear',_clearedAt:'2030-01-02T00:00:00Z'}}));assert.strictEqual(c._loadExistingThresholds().bike.mode,'known','a later actual measurement supersedes dated clear intent');
+values.set('trainingZones',JSON.stringify(retained));assert.strictEqual(c._loadExistingThresholds().bike.mode,'clear','stale canonical data cannot defeat dated clear intent');

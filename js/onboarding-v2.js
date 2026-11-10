@@ -574,6 +574,13 @@
     Object.keys(prior || {}).forEach(key => {
       const p = prior[key];
       if (!p || typeof p !== "object") return;
+      if(p.mode==='clear') {
+        const measuredAt=result[key]?._updatedAt;
+        const clearedAt=p._clearedAt||p._updatedAt;
+        if(!result[key]||(clearedAt&&(!measuredAt||new Date(measuredAt)<=new Date(clearedAt))))
+          result[key]={mode:'clear',_clearedAt:clearedAt};
+        return;
+      }
       if(p.mode==='test') {
         const measuredAt=result[key]?._updatedAt;
         const boundary=p._requestedAt||p._updatedAt;
@@ -1940,6 +1947,7 @@
   // AndContinue can still read its pre-filled values on submit.
   function _applyCollapsedState(section, key, saved) {
     if(!section||!saved)return;
+    if(saved.mode==='clear'){section.setAttribute('data-clear-benchmark','true');return;}
     if(saved.mode==='test') {
       const button=section.querySelector('.ob-v2-test-me');
       if(button){button.classList.add('is-active');button.textContent='Testing';}
@@ -2209,7 +2217,7 @@
       if (Object.keys(vals).length) {
         result[key] = Object.assign({ mode: "known" }, method ? { method } : {}, vals);
       } else {
-        result[key] = section.getAttribute("data-clear-benchmark") === "true" ? {mode:"clear"} : _testThresholdRequest(key);
+        result[key] = section.getAttribute("data-clear-benchmark") === "true" ? {mode:"clear",_clearedAt:new Date().toISOString()} : _testThresholdRequest(key);
       }
     });
     const inputError=_thresholdSubmissionError(result);
