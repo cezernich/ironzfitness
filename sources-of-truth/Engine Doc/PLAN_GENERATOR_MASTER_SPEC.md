@@ -1743,6 +1743,18 @@ The target snapshot carries a separate `training-history-v1` evidence report, no
 
 Deduplicate only explicit provider/local identity links. Different source order cannot change results; conflicting linked records require correction rather than selecting a convenient value. Similar-looking sessions are not proof of identity. Missing workout days are missing coverage, not confirmed rest. Record-only coverage and reported completion never establish injury tolerance, medical clearance, adherence completeness or a recent tolerated starting dose. The baseline status remains `not_established` until a separately reviewed process establishes it. No generation-dose policy changes are authorized by this evidence adapter.
 
+### 12a.2 Completed-history run limits
+
+Owner-approved policy (2026-11-10), replacing the universal 30% long-run cap:
+
+- Use the previous 28 calendar days of eligible completed records, never planned sessions. The weekly average is total recorded run minutes divided by four, including weeks with no eligible records. Missing logs remain unknown coverage rather than proof of rest or tolerance.
+- The longest standalone run proposed may not exceed the smallest of 110% of the longest standalone run completed in that window, that run plus 15 minutes, and 165 minutes for Ironman. These are safety ceilings, not targets or a claim that a 10% increase prevents injury.
+- Weekly proposed plus already-completed run time may not exceed 110% of the previous 28-day average. Count explicitly recorded completed brick run minutes in the weekly baseline, but never use brick legs as the standalone long-run anchor. Planned brick legs count in proposed weekly volume.
+- Missing actual brick run duration requires history review. Do not estimate it from distance, the planned split, or the total brick duration. No recent standalone run means insufficient history; do not manufacture a starting dose.
+- Warn above 50% long-run share of weekly run minutes, including brick legs. Suggest a third standalone easy run above 180 weekly run minutes when fewer than three standalone runs exist. These warnings do not silently add sessions or move minutes into the long run or brick.
+- Explicit pain/injury/readiness blocks take precedence. A load assessment is not clearance. Unknown readiness requires review; no automated medical return is authorized.
+- Long-range weeks are forecasts. Re-evaluate against fresh completed evidence and effective restrictions at the execution/adoption boundary; forecast work never becomes completed evidence. The current target engine remains shadow-only and refuses plan adoption. Each forecast carries the recheck requirement and failed-limit reasons; this policy does not activate the target engine.
+
 ### 12b. Adaptation Rules
 
 For the unified target engine, the historical defaults below do not authorize automatic changes or injury-return clearance. Reviewed effective restrictions, completed-load evidence, explicit proposals and adoption gates take precedence. Return-to-training limits cannot be inferred from elapsed rest time or a generic percentage.
@@ -1852,7 +1864,7 @@ These are hard constraints the validator enforces on every generated plan. They 
 6. **Beginner guardrails:** Max 4 training days/week (unless explicitly requested), max 5 exercises/session, no VO2max work in first 4 weeks
 7. **Prohibited language:** Never use "guaranteed results," "lose X lbs in Y days," "burn off that meal," "cure," "treat," "diagnose"
 8. **Wellness disclaimer:** Every plan includes: "This plan provides general wellness guidance and is not a substitute for professional medical advice."
-9. **Max long run proportion:** Never more than 30% of weekly mileage
+9. **Run growth:** Apply §12a.2 completed-history limits. Long-run share is a warning, not a 30% hard cap.
 10. **No brick workouts within 14 days of race day.** Even easy bricks create transition stress. Taper brick = first week of taper only.
 
 ---

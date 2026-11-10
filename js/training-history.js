@@ -2,7 +2,7 @@
 (function(root) {
   'use strict';
   const dayMs=86400000;
-  const sportNames={run:'run',running:'run',bike:'bike',biking:'bike',cycling:'bike',ride:'bike',swim:'swim',swimming:'swim',strength:'strength',weightlifting:'strength',lifting:'strength',walk:'walk',walking:'walk',row:'row',rowing:'row'};
+  const sportNames={run:'run',running:'run',brick:'brick',bike:'bike',biking:'bike',cycling:'bike',ride:'bike',swim:'swim',swimming:'swim',strength:'strength',weightlifting:'strength',lifting:'strength',walk:'walk',walking:'walk',row:'row',rowing:'row'};
   const clone=value=>JSON.parse(JSON.stringify(value));
   const stable=value=>JSON.stringify(value,(_,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])):item);
   const numeric=value=>value!==null&&value!==undefined&&value!==''&&typeof value!=='boolean'&&Number.isFinite(Number(value))?Number(value):null;
@@ -80,9 +80,11 @@
       }
       if(distances.some(value=>Math.abs(value-distances[0])>0.01)) {reject('conflicting_distance');continue;}
       const distanceM=distances[0]??null;
+      const runDurationMin=positive(raw.actualRunDurationMin);
+      if(type==='brick'&&raw.actualRunDurationMin!==undefined&&(!runDurationMin||runDurationMin>minutes[0])) {reject('invalid_completed_brick_run_duration');continue;}
       // Direct provider payloads need their own completion adapter. A naked
       // numeric distance has no universal unit and stays unknown here.
-      entries.push({references,date,type,durationMin:minutes[0],distanceM,movingDurationMin:movingSeconds===null?null:movingSeconds/60,
+      entries.push({references,date,type,durationMin:minutes[0],runDurationMin:type==='brick'?runDurationMin:null,distanceM,movingDurationMin:movingSeconds===null?null:movingSeconds/60,
         elapsedDurationMin:elapsedSeconds===null?null:elapsedSeconds/60,eventAt:eventAt===null?null:new Date(eventAt).toISOString(),
         receivedAt:receivedAt===null?null:new Date(receivedAt).toISOString(),completionEvidence:'reported_completed',
         exercises:Array.isArray(raw.exercises)?clone(raw.exercises):[],sourceRecord:clone(record)});
@@ -102,11 +104,12 @@
       const references=[...new Set(group.flatMap(entry=>entry.references))].sort();
       const first=group[0];
       const knownDistance=group.map(entry=>entry.distanceM).filter(value=>value!==null);
-      if(excluded.some(item=>['conflicting_completion','conflicting_duration','conflicting_distance','invalid_completed_duration'].includes(item.reason)&&item.references.some(ref=>references.includes(ref)))||knownDistance.some(value=>Math.abs(value-knownDistance[0])>0.01)||group.some(entry=>entry.type!==first.type||entry.date!==first.date||Math.abs(entry.durationMin-first.durationMin)>0.000001||entry.distanceM!==null&&first.distanceM!==null&&Math.abs(entry.distanceM-first.distanceM)>0.01)) {
+      const knownRunMinutes=group.map(entry=>entry.runDurationMin).filter(value=>value!==null);
+      if(knownRunMinutes.some(value=>value!==knownRunMinutes[0])||excluded.some(item=>['conflicting_completion','conflicting_duration','conflicting_distance','invalid_completed_duration','invalid_completed_brick_run_duration'].includes(item.reason)&&item.references.some(ref=>references.includes(ref)))||knownDistance.some(value=>Math.abs(value-knownDistance[0])>0.01)||group.some(entry=>entry.type!==first.type||entry.date!==first.date||Math.abs(entry.durationMin-first.durationMin)>0.000001||entry.distanceM!==null&&first.distanceM!==null&&Math.abs(entry.distanceM-first.distanceM)>0.01)) {
         excluded.push({references,reason:'conflicting_linked_records'});continue;
       }
       activities.push({id:references[0],references,date:first.date,type:first.type,durationMin:first.durationMin,
-        distanceM:group.map(entry=>entry.distanceM).find(value=>value!==null)??null,completed:true,
+        runDurationMin:knownRunMinutes[0]??null,distanceM:group.map(entry=>entry.distanceM).find(value=>value!==null)??null,completed:true,
         completionEvidence:'reported_completed',coverage:'observed_record_only',
         exercises:clone(group.find(entry=>entry.exercises.length)?.exercises||[]),sourceRecords:group.map(entry=>entry.sourceRecord).sort((a,b)=>stable(a).localeCompare(stable(b)))});
     }

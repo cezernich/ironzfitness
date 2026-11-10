@@ -284,27 +284,14 @@
     }
   }
 
-  // ── Rule 8: long run ≤ 30% of weekly run mileage ─────────────────────────
-
+  // Long-run concentration is a warning, not a universal runner-frequency cap.
   function checkLongRunProportion(plan, classification, flags) {
-    const weeks = plan.weeklyPlan;
-    if (!Array.isArray(weeks)) return;
-    const maxPct = 0.30;
-    for (const week of weeks) {
-      const sessions = Array.isArray(week.sessions) ? week.sessions : [];
-      const runs = sessions.filter(s => s && s.type === 'run');
-      const totalRunMin = runs.reduce((a, s) => a + (s.durationMin || 0), 0);
-      if (totalRunMin <= 0) continue;
-      const longRun = runs.find(s => s.priority === 'long' || s.subtype === 'long_run' || s.sessionSubtype === 'long_run');
-      if (!longRun) continue;
-      const otherRunMin=totalRunMin-(longRun.durationMin||0);
-      const maxAllowed=Math.floor(otherRunMin*maxPct/(1-maxPct));
-      if(longRun.durationMin>maxAllowed) {
-        const before=longRun.durationMin;
-        longRun.durationMin=maxAllowed;
-      week.targetHours=Math.round(weekDuration(week)/6)/10;
-        flag(flags,'long_run_proportion','auto-fixed',`Week ${week.weekNumber}: long run ${before}→${maxAllowed}min against FINAL weekly run total.`);
-      }
+    for(const week of plan.weeklyPlan||[]) {
+      const sessions=week.sessions||[];
+      const total=sessions.reduce((sum,s)=>sum+(s.type==='run'?(s.durationMin||0):s.type==='brick'?(s.brickDetails?.leg2DurationMin||0):0),0);
+      const longs=sessions.filter(s=>s.type==='run'&&(s.priority==='long'||/long_run/.test(s.subtype||s.sessionSubtype||'')));
+      if(longs.some(s=>total&&s.durationMin/total>.50))flag(flags,'long_run_concentration','warning',`Week ${week.weekNumber}: long run exceeds half of weekly run minutes including brick legs; consider another easy run.`);
+      if(total>180&&sessions.filter(s=>s.type==='run').length<3)flag(flags,'third_easy_run','warning',`Week ${week.weekNumber}: more than three hours running; consider a third easy standalone run rather than extending the long run or brick.`);
     }
   }
 
@@ -535,7 +522,6 @@
     checkVolumeIncreaseCap(plan, classification, flags);
     checkIntensityCap(plan, classification, flags);
     checkNoConsecutiveHard(plan, classification, flags);
-    checkLongRunProportion(plan, classification, flags);
     checkKeystoneProgression(plan,classification,flags);
     checkBeginnerComplexity(plan, classification, flags);
     checkRestDayMinimum(plan, classification, flags);
@@ -553,14 +539,13 @@
     checkKeystoneProgression(plan,classification,flags);
     for(let index=0;index<plan.weeklyPlan.length;index++) {
       const current=plan.weeklyPlan[index];
-      checkLongRunProportion({weeklyPlan:[current]},classification,flags);
       checkKeystoneProgression({weeklyPlan:plan.weeklyPlan.slice(0,index+1)},classification,flags);
       if(index)checkVolumeIncreaseCap({weeklyPlan:plan.weeklyPlan.slice(0,index+1)},classification,flags);
       // Integer rounding may change a fraction during proportional scaling.
       // Correct only this week before it becomes the next week's baseline.
-      checkLongRunProportion({weeklyPlan:[current]},classification,flags);
     }
     if(window.SessionAssembler && window.SessionAssembler.finalizePrescriptions) window.SessionAssembler.finalizePrescriptions(plan,classification);
+    checkLongRunProportion(plan,classification,flags);
     const errors=[];
     let previousWeek=null,previousHardDay=null;
     const previousKeystone=new Map();
@@ -589,7 +574,7 @@
       if(enduranceHard.length>(INTENSITY_CAP[classification.level]||2))errors.push('Final intensity count exceeds policy.');
       for(const session of hard.slice().sort((a,b)=>a.day-b.day)) {const day=(week.weekNumber-1)*7+session.day;if(previousHardDay!==null&&day===previousHardDay+1)errors.push('Final plan has consecutive hard days.');previousHardDay=day;}
       const runs=active.filter(s=>s.type==='run'),runTotal=runs.reduce((sum,s)=>sum+s.durationMin,0);
-      if(runs.some(s=>(s.priority==='long'||s.subtype==='long_run')&&s.durationMin>runTotal*.30+0.00001))errors.push('Final long-run proportion exceeds policy.');
+
       if(previousWeek&&!week.isPartial&&!week.isDeload&&!['taper','race-week'].includes(week.phase)&&weekDuration(previousWeek)>0&&weekDuration(week)>Math.floor(weekDuration(previousWeek)*(1+cap)))errors.push('Final weekly progression exceeds policy.');
       if(!week.isDeload&&!week.isPartial) {
         const keystones=active.filter(s=>s.priority==='long'||s.type==='brick');
