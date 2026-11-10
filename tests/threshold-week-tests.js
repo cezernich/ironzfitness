@@ -106,16 +106,16 @@ section("Golden 3: Triathlete threshold week starts Mon 2026-06-15");
   const swim = days.find(d => d.type === "swim_test");
   const bike = days.find(d => d.type === "bike_test");
   const run  = days.find(d => d.type === "run_test");
-  check("swim CSS test is Tuesday 2026-06-16",
-    swim && swim.date === "2026-06-16", `got ${swim && swim.date}`);
-  check("bike FTP test is Thursday 2026-06-18",
-    bike && bike.date === "2026-06-18", `got ${bike && bike.date}`);
+  check("bike FTP test is Tuesday 2026-06-16",
+    bike && bike.date === "2026-06-16", `got ${bike && bike.date}`);
+  check("swim CSS test is Thursday 2026-06-18",
+    swim && swim.date === "2026-06-18", `got ${swim && swim.date}`);
   check("run 5K test is Saturday 2026-06-20",
     run && run.date === "2026-06-20", `got ${run && run.date}`);
   // No two tests on same day
   const testDates = [swim, bike, run].filter(Boolean).map(d => d.date);
   const uniq = new Set(testDates);
-  check("at least one easy/rest day between tests",testDates.slice(1).every((date,i)=>(new Date(date+"T00:00:00")-new Date(testDates[i]+"T00:00:00"))/86400000>=2));
+  check("at least one easy/rest day between tests",[...testDates].sort().slice(1).every((date,i)=>(new Date(date+"T00:00:00")-new Date([...testDates].sort()[i]+"T00:00:00"))/86400000>=2));
   check("no two tests on the same day", uniq.size === testDates.length, `dates=${testDates.join(",")}`);
 }
 
@@ -268,6 +268,36 @@ section("Bonus: cssFromFourHundredAndTwoHundred");
 }
 
 // ─── Summary ─────────────────────────────────────────────────────────────────
+
+// ─── Test spacing and postponement (owner rule, 9 Nov) ───────────────────────
+section("Test spacing: leg tests two full days apart; postpone infeasible weeks");
+{
+  check("bike + run need 3-day gap", TW.minTestGap("bike", "run") === 3);
+  check("swim + bike need 2-day gap", TW.minTestGap("swim", "bike") === 2);
+  const days = TW.buildThresholdWeekDays("2026-06-15", "triathlon");
+  const bike = days.find(d => d.type === "bike_test"), run = days.find(d => d.type === "run_test");
+  check("default FTP -> 5K gap is at least 3 days",
+    TW.diffDays(new Date(run.date + "T00:00:00"), new Date(bike.date + "T00:00:00")) >= 3);
+  // Only bike Fri and run Sat available: no legal layout.
+  const tight = (d, disc) => { const dow = new Date(d + "T00:00:00Z").getUTCDay();
+    return (disc === "bike" && dow === 5) || (disc === "run" && dow === 6) || (disc === "swim" && dow === 1); };
+  check("Thu/Sat style leg tests are rejected",
+    TW.bestTestLayout("2026-06-15", TW.testsForWeek("2026-06-15", "triathlon"), tight) === null);
+  // Week of 2026-07-06 is blocked (travel); the test week slides to the next one.
+  const profile = { active_goal: "ironman", goal_race_date: "2026-12-20", goal_race_priority: "A", races: [] };
+  const base = TW.listThresholdWeeksForPlan(profile, "2026-06-01", "2026-12-20", null);
+  const firstMon = TW.toDateStr(base[0].thresholdWeekStartDate);
+  const blockedWeek = m => TW.toDateStr(TW.mondayOf(m)) !== firstMon;
+  const moved = TW.listThresholdWeeksForPlan(profile, "2026-06-01", "2026-12-20", null, blockedWeek);
+  check("an unworkable test week moves to the next week, not dropped",
+    TW.toDateStr(moved[0].thresholdWeekStartDate) === TW.toDateStr(TW.addWeeks(base[0].thresholdWeekStartDate, 1))
+      && moved[0].reason === "postponed_for_schedule" && moved[0].postponedFrom === firstMon,
+    `got ${moved[0] && TW.toDateStr(moved[0].thresholdWeekStartDate)} (${moved[0] && moved[0].reason})`);
+  check("later test weeks keep cadence from the postponed week",
+    TW.diffDays(moved[1].thresholdWeekStartDate, moved[0].thresholdWeekStartDate) >= 7 * (TW.MIN_BUILD_WEEKS_BETWEEN + 1));
+  check("no feasibility check = unchanged schedule", base.length >= 2 && !base[0].postponedFrom);
+}
+
 console.log(`\n${"=".repeat(60)}\nResults: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   console.log("\nFailures:");

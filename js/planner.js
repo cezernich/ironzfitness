@@ -2193,65 +2193,43 @@ function _raceSchedulingConstraints(race) {
   return { daysPerWeek: race.daysPerWeek || prefs.daysPerWeek, canSchedule, explicitTemplate: !!template };
 }
 
-// Threshold-week tests sit on default weekdays (Tue CSS, Thu FTP, Sat 5K).
-// When an explicit template has no slot for a test's sport on its default
-// day, move the test within the same Mon-Sun week to a day that does,
-// instead of letting _honorRaceSchedule delete it. Tests keep at least one
-// day between them (master spec: easy/rest between tests) and move as
-// little as possible. A test is dropped only if no valid day exists; the
-// survivors are flagged so the omission is visible, not silent.
+// Threshold-week tests start on default weekdays (Tue FTP, Thu CSS, Sat 5K)
+// only when the athlete has no template. Otherwise each test moves, within
+// its Mon-Sun week, to a day the athlete trains that sport, with the spacing
+// rules in ThresholdWeekScheduler.minTestGap (bike and run tests two full
+// days apart; anything else one easy day apart). Weeks that can't hold their
+// tests are postponed at scheduling time (listThresholdWeeksForPlan), so a
+// test is dropped here only after postponement ran out, and that is logged.
 function _relocateThresholdTests(entries, constraints) {
   if (!constraints || typeof constraints.canSchedule !== "function") return entries;
+  const TW = (typeof window !== "undefined" && window.ThresholdWeekScheduler) || null;
+  if (!TW || typeof TW.bestTestLayout !== "function") return entries;
   const isTest = e => e && e.isThresholdTest && e.discipline !== "race";
-  const mondayOf = ymd => {
-    const d = new Date(ymd + "T00:00:00Z");
-    d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7);
-    return d.toISOString().slice(0, 10);
-  };
-  const addDays = (ymd, n) => {
-    const d = new Date(ymd + "T00:00:00Z");
-    d.setUTCDate(d.getUTCDate() + n);
-    return d.toISOString().slice(0, 10);
-  };
-  const dayDiff = (a, b) => Math.abs((new Date(a + "T00:00:00Z") - new Date(b + "T00:00:00Z")) / 864e5);
-
   const weeks = new Map();
   entries.forEach(e => { if (isTest(e)) {
-    const m = mondayOf(e.date);
+    const m = TW.toDateStr(TW.mondayOf(e.date));
     if (!weeks.has(m)) weeks.set(m, []);
     weeks.get(m).push(e);
   }});
   if (!weeks.size) return entries;
 
+  const gap = (a, b) => Math.abs(TW.diffDays(new Date(a + "T00:00:00"), new Date(b + "T00:00:00")));
   const moves = new Map(); // test entry -> new date (or null = no valid day)
   for (const [monday, tests] of weeks) {
-    const days = [0,1,2,3,4,5,6].map(i => addDays(monday, i));
-    const options = tests.map(t => days.filter(d => constraints.canSchedule(d, t.discipline)));
-    let best = null;
-    const pick = (i, chosen, cost) => {
-      if (best && cost >= best.cost) return;
-      if (i === tests.length) { best = { chosen: chosen.slice(), cost }; return; }
-      for (const d of options[i]) {
-        if (chosen.some(c => c && dayDiff(c, d) < 2)) continue;
-        // Moving a test at all costs more than moving it further: tests that
-        // already fit stay put, and only the ones that must move do.
-        const step = d === tests[i].date ? 0 : 100 + dayDiff(d, tests[i].date);
-        chosen.push(d); pick(i + 1, chosen, cost + step); chosen.pop();
-      }
-    };
-    pick(0, [], 0);
-    if (!best) {
-      // Can't keep every test with spacing; place as many as possible, in order.
-      const chosen = [];
+    let chosen = TW.bestTestLayout(monday, tests, constraints.canSchedule);
+    if (!chosen) {
+      // Postponement already ran out: keep as many tests as spacing allows.
+      chosen = [];
       tests.forEach((t, i) => {
-        const d = options[i]
-          .filter(x => !chosen.some(c => c && dayDiff(c, x) < 2))
-          .sort((a, b) => dayDiff(a, t.date) - dayDiff(b, t.date))[0] || null;
+        const days = [0,1,2,3,4,5,6].map(k => TW.toDateStr(TW.addDays(TW.mondayOf(monday), k)));
+        const d = days
+          .filter(x => constraints.canSchedule(x, t.discipline))
+          .filter(x => chosen.every((c, j) => !c || gap(c, x) >= TW.minTestGap(tests[j].discipline, t.discipline)))
+          .sort((x, y) => gap(x, t.date) - gap(y, t.date))[0] || null;
         chosen.push(d);
       });
-      best = { chosen };
     }
-    tests.forEach((t, i) => moves.set(t, best.chosen[i]));
+    tests.forEach((t, i) => moves.set(t, chosen[i]));
   }
 
   const testTargets = new Set([...moves.values()].filter(Boolean));
@@ -4484,8 +4462,12 @@ function _generateSingleRacePlan(race) {
     });
     const _lastThresh = _userData.last_threshold_week_date || null;
     if (typeof window !== "undefined" && window.ThresholdWeekScheduler) {
+      // A week whose tests can't fit the athlete's schedule slides forward.
+      const _twSched = _raceSchedulingConstraints(race);
+      const _twFeasible = monday => !!window.ThresholdWeekScheduler.bestTestLayout(
+        monday, window.ThresholdWeekScheduler.testsForWeek(monday, _twSportProfile), _twSched.canSchedule);
       _scheduledThresholdWeeks = window.ThresholdWeekScheduler.listThresholdWeeksForPlan(
-        _profileForScheduling, startDate, raceDate, _lastThresh
+        _profileForScheduling, startDate, raceDate, _lastThresh, _twFeasible
       );
     }
 

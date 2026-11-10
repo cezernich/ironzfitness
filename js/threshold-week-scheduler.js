@@ -187,12 +187,22 @@
    * Build the full list of threshold week Mondays for a plan running from
    * `planStartDate` to `planEndDate`. Used by planner.js to mark weeks in advance.
    */
-  function listThresholdWeeksForPlan(userProfile, planStartDate, planEndDate, lastThresholdWeekDate) {
+  // Max weeks a threshold week may slide when the athlete's schedule can't
+  // hold its tests. Beyond this, the week is scheduled anyway and any test
+  // that can't fit is reported as skipped.
+  const MAX_POSTPONE_WEEKS = 3;
+
+  function listThresholdWeeksForPlan(userProfile, planStartDate, planEndDate, lastThresholdWeekDate, isWeekFeasible) {
     const start = toDate(planStartDate);
     const end = toDate(planEndDate);
     const out = [];
     let last = lastThresholdWeekDate ? toDate(lastThresholdWeekDate) : null;
     let safety = 0;
+    const aRaces = [];
+    (Array.isArray(userProfile && userProfile.races) ? userProfile.races : []).forEach(e => {
+      if (e && String(e.priority || "A").toUpperCase() === "A") aRaces.push(e.date);
+    });
+    if (userProfile && userProfile.goal_race_date && String(userProfile.goal_race_priority || "A").toUpperCase() === "A") aRaces.push(userProfile.goal_race_date);
     while (safety++ < 200) {
       const next = computeNextThresholdWeek(userProfile, last, start, start);
       if (!next.thresholdWeekStartDate) break;
@@ -200,6 +210,20 @@
       if (next.thresholdWeekStartDate < start) {
         last = next.thresholdWeekStartDate;
         continue;
+      }
+      // A week the athlete's schedule can't support moves to the next week
+      // (test weeks keep zones current, so postpone instead of dropping).
+      if (typeof isWeekFeasible === "function" && !isWeekFeasible(next.thresholdWeekStartDate)) {
+        let moved = null;
+        for (let k = 1; k <= MAX_POSTPONE_WEEKS; k++) {
+          const cand = addWeeks(next.thresholdWeekStartDate, k);
+          if (cand > end) break;
+          if (aRaces.some(r => applyRaceWindowGuard(cand, r) === null)) break; // never into the taper window
+          if (isWeekFeasible(cand)) { moved = cand; break; }
+        }
+        if (moved) {
+          Object.assign(next, { thresholdWeekStartDate: moved, reason: "postponed_for_schedule", postponedFrom: toDateStr(next.thresholdWeekStartDate) });
+        }
       }
       out.push(next);
       last = next.thresholdWeekStartDate;
@@ -278,26 +302,70 @@
     { dayIdx: 6, type: "rest",     duration_min: 0,  intensity: "rest", note: "Rest" },
   ];
 
-  // Triathlete week. Tests spread across the week with a recovery day
-  // between each — three max-effort tests in a row (Thu/Fri/Sat) doesn't
-  // give the body time to adapt and makes the second and third tests
-  // artificially slow. Structure: test-recovery-test-recovery-test-rest.
-  //   Mon: easy_swim
-  //   Tue: swim_test       ← test 1
-  //   Wed: easy_bike       ← recovery from swim
-  //   Thu: bike_test       ← test 2
-  //   Fri: easy_run        ← recovery from bike
-  //   Sat: run_test        ← test 3
+  // Triathlete week. Spacing follows TEST_GAP_DAYS: the two leg tests
+  // (bike FTP, run 5K) need two full days between them; swim sits between
+  // and needs one easy day on each side. Defaults only apply when the
+  // athlete has no weekly template; otherwise tests follow their schedule.
+  //   Mon: easy_run
+  //   Tue: bike_test       <- test 1 (legs)
+  //   Wed: easy_swim       <- leg recovery
+  //   Thu: swim_test       <- test 2 (upper body)
+  //   Fri: easy_bike       <- short spin before the 5K
+  //   Sat: run_test        <- test 3 (legs, 4 days after FTP)
   //   Sun: rest
   const TRIATHLON_WEEK = [
-    { dayIdx: 0, type: "easy_swim", duration_min: 30, intensity: "Z1",   note: "Easy swim 30 min Z1" },
-    { dayIdx: 1, type: "swim_test", duration_min: 40, intensity: "test", note: "CSS Test" },
-    { dayIdx: 2, type: "easy_bike", duration_min: 45, intensity: "Z1",   note: "Easy bike 45 min Z1 (recovery from swim test)" },
-    { dayIdx: 3, type: "bike_test", duration_min: 45, intensity: "test", note: "FTP Test" },
-    { dayIdx: 4, type: "easy_run",  duration_min: 30, intensity: "Z1",   note: "Easy run 30 min Z1 (recovery from bike test)" },
+    { dayIdx: 0, type: "easy_run",  duration_min: 30, intensity: "Z1",   note: "Easy run 30 min Z1" },
+    { dayIdx: 1, type: "bike_test", duration_min: 45, intensity: "test", note: "FTP Test" },
+    { dayIdx: 2, type: "easy_swim", duration_min: 30, intensity: "Z1",   note: "Easy swim 30 min Z1 (leg recovery after FTP test)" },
+    { dayIdx: 3, type: "swim_test", duration_min: 40, intensity: "test", note: "CSS Test" },
+    { dayIdx: 4, type: "easy_bike", duration_min: 30, intensity: "Z1",   note: "Easy spin 30 min Z1 (legs fresh for the 5K)" },
     { dayIdx: 5, type: "run_test",  duration_min: 50, intensity: "test", note: "5K Time Trial" },
     { dayIdx: 6, type: "rest",      duration_min: 0,  intensity: "rest", note: "Rest" },
   ];
+
+  // ─── Test spacing and placement ──────────────────────────────────────────────
+
+  // Minimum days between two max-effort tests in one week. Bike and run
+  // both load the legs, so an FTP test and a 5K need two full recovery days
+  // between them (Tue -> Fri is OK, Thu -> Sat is not). Any other pair needs
+  // one easy day between.
+  const LEG_TESTS = new Set(["bike", "run"]);
+  function minTestGap(disciplineA, disciplineB) {
+    return (LEG_TESTS.has(disciplineA) && LEG_TESTS.has(disciplineB)) ? 3 : 2;
+  }
+
+  // Find the best layout for a week's tests on days the athlete can train
+  // each sport. tests: [{ discipline, date }] where date is the preferred
+  // (default) day. canSchedule(dateStr, discipline) -> bool.
+  // Picks the layout that moves the fewest tests, then the shortest total
+  // distance. Returns an array of date strings (same order as tests) or null
+  // when no layout satisfies spacing.
+  function bestTestLayout(weekMonday, tests, canSchedule) {
+    const monday = mondayOf(weekMonday);
+    const days = [0, 1, 2, 3, 4, 5, 6].map(i => toDateStr(addDays(monday, i)));
+    const gap = (a, b) => Math.abs(diffDays(toDate(a), toDate(b)));
+    const options = tests.map(t => days.filter(d => canSchedule(d, t.discipline)));
+    let best = null;
+    const pick = (i, chosen, cost) => {
+      if (best && cost >= best.cost) return;
+      if (i === tests.length) { best = { chosen: chosen.slice(), cost }; return; }
+      for (const d of options[i]) {
+        if (chosen.some((c, j) => gap(c, d) < minTestGap(tests[j].discipline, tests[i].discipline))) continue;
+        // Moving a test at all costs more than moving it further.
+        const step = d === tests[i].date ? 0 : 100 + gap(d, tests[i].date);
+        chosen.push(d); pick(i + 1, chosen, cost + step); chosen.pop();
+      }
+    };
+    pick(0, [], 0);
+    return best ? best.chosen : null;
+  }
+
+  // Test disciplines and default dates for a threshold week.
+  function testsForWeek(weekMonday, sportProfile) {
+    return buildThresholdWeekDays(weekMonday, sportProfile)
+      .filter(d => d.type === "test" || /_test$/.test(d.type))
+      .map(d => ({ discipline: d.type === "swim_test" ? "swim" : d.type === "bike_test" ? "bike" : "run", date: d.date }));
+  }
 
   /**
    * Resolve the threshold-week template for a given sport profile.
@@ -342,6 +410,7 @@
     MIN_BUILD_WEEKS_BETWEEN,
     SINGLE_SPORT_WEEK,
     TRIATHLON_WEEK,
+    MAX_POSTPONE_WEEKS,
 
     // pure helpers
     detectPhase,
@@ -368,6 +437,11 @@
     getWeekTemplate,
     buildThresholdWeekDays,
     applyThresholdWeekVolume,
+
+    // test placement
+    minTestGap,
+    bestTestLayout,
+    testsForWeek,
   };
 
   if (typeof window !== "undefined") {

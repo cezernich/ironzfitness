@@ -1,5 +1,5 @@
 // Threshold tests must survive explicit weekly templates (#31 review).
-// Default test days are Tue CSS / Thu FTP / Sat 5K. When the athlete's
+// Default test days are Tue FTP / Thu CSS / Sat 5K (no template only). When the athlete's
 // template has no slot for that sport on that day, the test moves within
 // its week instead of being deleted.
 const assert = require("assert");
@@ -45,10 +45,10 @@ function t(name, fn) {
   catch (e) { failed++; console.log("  FAIL: " + name + "\n    " + e.message); }
 }
 
-// Synthetic triathlon template: no swim on Tue, no bike on Thu.
+// Synthetic triathlon template: no bike on Tue, no swim on Thu.
 const TRI = {
-  mon: ["swim-css"], tue: ["bike-interval", "strength-full"], wed: ["run-long", "swim-endurance"],
-  thu: ["swim-css", "run-interval"], fri: ["bike-long", "strength-full"], sat: ["bike-endurance", "run-easy"], sun: ["run-easy"],
+  mon: ["bike-interval", "swim-css"], tue: ["swim-endurance", "strength-full"], wed: ["run-long", "swim-endurance"],
+  thu: ["run-interval"], fri: ["bike-long", "strength-full"], sat: ["bike-endurance", "run-easy"], sun: ["run-easy"],
 };
 const plan = build(TRI);
 const tests = plan.filter(e => e.isThresholdTest);
@@ -68,10 +68,11 @@ t("each test sits on a day the template has for that sport", () => {
     assert.ok(slots.some(c => c.split("-")[0] === e.discipline), `${e.thresholdTestType} on ${dow(e.date)} ${e.date}`);
   }
 });
-t("tests stay inside their original week and have a day between them", () => {
+const TWm = load().ThresholdWeekScheduler;
+t("tests stay in their week; bike and run tests two full days apart, others one", () => {
   for (const [, w] of byWeek) {
-    const ds = w.map(e => e.date).sort();
-    for (let i = 1; i < ds.length; i++) assert.ok(days(ds[i], ds[i - 1]) >= 2, `tests ${ds[i - 1]} and ${ds[i]} too close`);
+    for (const a of w) for (const b of w) if (a !== b)
+      assert.ok(days(a.date, b.date) >= TWm.minTestGap(a.discipline, b.discipline), `${a.thresholdTestType} ${a.date} vs ${b.thresholdTestType} ${b.date}`);
     w.forEach(e => { if (e.relocatedFrom) assert.strictEqual(mondayOf(e.relocatedFrom), mondayOf(e.date)); });
   }
 });
@@ -89,19 +90,31 @@ t("no session lands on a day/sport the template excludes", () => {
   }
 });
 
-t("a test that already fits its day does not move (Sat 5K stays; Tue FTP / Thu CSS)", () => {
-  const want = { SWIM_CSS: "thu", BIKE_FTP_20: "tue", RUN_5K_TT: "sat" };
-  tests.forEach(e => assert.strictEqual(dow(e.date), want[e.thresholdTestType], `${e.thresholdTestType} on ${dow(e.date)}`));
+t("only tests that must move do (5K stays Sat; FTP to Mon, CSS to Tue or Wed)", () => {
+  const want = { SWIM_CSS: ["tue", "wed"], BIKE_FTP_20: ["mon"], RUN_5K_TT: ["sat"] };
+  tests.forEach(e => assert.ok(want[e.thresholdTestType].includes(dow(e.date)), `${e.thresholdTestType} on ${dow(e.date)}`));
   tests.filter(e => e.thresholdTestType === "RUN_5K_TT").forEach(e => assert.ok(!e.relocatedFrom, "5K moved"));
 });
 
 // No template: defaults unchanged (Tue CSS / Thu FTP / Sat 5K).
 const plain = build(null).filter(e => e.isThresholdTest);
-t("without a template, tests stay on Tue / Thu / Sat", () => {
+t("without a template, tests stay on Tue FTP / Thu CSS / Sat 5K", () => {
   assert.ok(plain.length >= 3, "no tests generated");
-  const want = { SWIM_CSS: "tue", BIKE_FTP_20: "thu", RUN_5K_TT: "sat" };
+  const want = { SWIM_CSS: "thu", BIKE_FTP_20: "tue", RUN_5K_TT: "sat" };
   plain.forEach(e => assert.strictEqual(dow(e.date), want[e.thresholdTestType], `${e.thresholdTestType} on ${dow(e.date)}`));
   plain.forEach(e => assert.ok(!e.relocatedFrom, "moved without a reason"));
+});
+
+// Template that can never fit both leg tests legally (bike only Thu, run only Sat).
+const TIGHT = { mon: ["swim-css"], tue: [], wed: ["swim-endurance"], thu: ["bike-long"], fri: [], sat: ["run-long"], sun: [] };
+const tight = build(TIGHT).filter(e => e.isThresholdTest);
+t("when spacing is impossible, a leg test is skipped rather than FTP Thu then 5K Sat", () => {
+  const wk = new Map();
+  tight.forEach(e => { const m = mondayOf(e.date); wk.set(m, [...(wk.get(m) || []), e]); });
+  for (const [, w] of wk) {
+    const legs = w.filter(e => e.discipline === "bike" || e.discipline === "run");
+    assert.ok(legs.length <= 1, `both leg tests kept: ${legs.map(e => e.date)}`);
+  }
 });
 
 console.log(`\nthreshold relocation: ${passed} passed, ${failed} failed`);
