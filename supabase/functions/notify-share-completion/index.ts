@@ -109,23 +109,22 @@ serve(async (req: Request) => {
     });
   }
 
-  // 24h dedupe — check workout_share_imports for an existing completion in the
-  // last 24 hours from the same receiver on the same share token.
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { data: recent, error: recentError } = await adminClient
-    .from("workout_share_imports")
-    .select("id, completed_at")
-    .eq("share_token", share_token)
-    .eq("receiver_user_id", receiverUserId)
-    .gte("completed_at", since)
-    .limit(1);
-
-  if (recentError) {
-    return new Response(JSON.stringify({ error: "completion_lookup_failed" }), {
+  // Reserve before any completion side effects. A receiver cannot reset this
+  // backend-only ledger by editing/deleting/reimporting their workout row.
+  let reservation;
+  try {
+    reservation = await adminClient.rpc("claim_share_completion_notification", {
+      p_share_token: share_token, p_receiver_user_id: receiverUserId,
+    });
+  } catch {
+    reservation = { error: true };
+  }
+  if (reservation.error || typeof reservation.data !== "boolean") {
+    return new Response(JSON.stringify({ error: "notification_reservation_failed" }), {
       status: 503, headers: { ...CORS, "content-type": "application/json" },
     });
   }
-  if (recent && recent.length > 0) {
+  if (!reservation.data) {
     return new Response(JSON.stringify({ ok: true, deduped: true }), {
       status: 200, headers: { ...CORS, "content-type": "application/json" },
     });
