@@ -415,8 +415,14 @@
         },
         "maxLongRunPctOfWeekly": {
           "type": "number",
-          "description": "Long run as max % of weekly mileage (30%)"
+          "deprecated": true,
+          "description": "Legacy metadata only; do not enforce a percentage-share hard cap. Use completed-history run ceilings."
         },
+        "longRunConcentrationWarningPct": { "const": 50 },
+        "runGrowthBaseline": { "const": "completed_previous_28_days" },
+        "maxLongRunIncreasePct": { "const": 10 },
+        "maxLongRunIncreaseMin": { "const": 15 },
+        "maxWeeklyRunIncreasePct": { "const": 10 },
         "strengthVolumeCapSetsPerMuscle": {
           "type": "integer",
           "description": "Max additional sets per muscle group per week increase"
