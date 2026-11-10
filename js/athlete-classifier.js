@@ -3,7 +3,7 @@
  *
  * Pure classification logic. Derives level, riskBias, ageGroup, equipment,
  * weakness, and recovery state from profile data. No UI, no localStorage
- * writes. See sources-of-truth/TRAINING_PHILOSOPHY.md §2 and
+ * writes. See sources-of-truth/Engine Doc/PLAN_GENERATOR_MASTER_SPEC.md §2 and
  * sources-of-truth/RULE_ENGINE_SPEC.md Step 1.
  */
 (function () {
@@ -33,7 +33,7 @@
   };
 
   function classifyAgeGroup(age) {
-    if (age == null || isNaN(age)) return '18-29';
+    if (age == null || isNaN(age)) return 'unknown';
     if (age < 30) return '18-29';
     if (age < 40) return '30-39';
     if (age < 50) return '40-49';
@@ -124,28 +124,9 @@
     return { weakestDiscipline: lowest.discipline, biasApplied: 'none' };
   }
 
-  function deriveRecoveryState(latestCheckIn) {
-    if (!latestCheckIn) return 'good';
-    if (typeof latestCheckIn === 'string') {
-      const v = latestCheckIn.toLowerCase();
-      if (v === 'good' || v === 'moderate' || v === 'low') return v;
-      return 'good';
-    }
-    if (latestCheckIn.recoveryState) {
-      const v = String(latestCheckIn.recoveryState).toLowerCase();
-      if (v === 'good' || v === 'moderate' || v === 'low') return v;
-    }
-    // Fall back to deriving from sleep/energy/soreness scores (1-5 scale each)
-    const sleep = Number(latestCheckIn.sleepQuality);
-    const energy = Number(latestCheckIn.energyLevel);
-    const soreness = Number(latestCheckIn.soreness);
-    if ([sleep, energy, soreness].every(n => !isNaN(n))) {
-      const score = (sleep + energy + (6 - soreness)) / 3;
-      if (score >= 4) return 'good';
-      if (score >= 2.5) return 'moderate';
-      return 'low';
-    }
-    return 'good';
+  function deriveRecoveryState(latestCheckIn, options) {
+    return typeof window.AthleteInput!=='undefined'
+      ? window.AthleteInput.normalizeCheckIn(latestCheckIn,options).recoveryState : 'unknown';
   }
 
   function deriveSportProfile(profile, sportLevels) {
@@ -223,7 +204,7 @@
 
   function pickNumber(...values) {
     for (const v of values) {
-      if (v != null && !isNaN(Number(v))) return Number(v);
+      if (v != null && v !== '' && typeof v !== 'boolean' && Number.isFinite(Number(v))) return Number(v);
     }
     return null;
   }
@@ -231,7 +212,7 @@
   function classify(profile) {
     const p = profile || {};
 
-    const age = pickNumber(p.age) ?? 30;
+    const age = pickNumber(p.age);
     const weight = pickNumber(p.weight, p.weightLbs);
     const height = pickNumber(p.height, p.heightIn);
     const gender = p.gender || 'not_specified';
@@ -280,7 +261,7 @@
     const equipmentProfile = Array.isArray(p.equipmentProfile) ? p.equipmentProfile.slice() : [];
     const injuries = Array.isArray(p.injuries) ? p.injuries.slice() : [];
 
-    const recoveryState = deriveRecoveryState(p.latestCheckIn || p.recentCheckIn);
+    const recoveryState = deriveRecoveryState(p.latestCheckIn || p.recentCheckIn,{asOf:p.asOf});
     const weaknessProfile = detectWeakness(sportLevels);
     const longRunDay = parseLongDay(p.longDays, 'longRun');
     const longRideDay = parseLongDay(p.longDays, 'longRide');
@@ -301,6 +282,9 @@
       sportLevels,
       riskBias,
       goal,
+      strengthRole: p.strengthRole || null,
+      strengthGoal: p.strengthGoal || null,
+      trainingGoals: Array.isArray(p.trainingGoals)?p.trainingGoals.slice():[],
       sportProfile,
       daysAvailable,
       preferredDays,

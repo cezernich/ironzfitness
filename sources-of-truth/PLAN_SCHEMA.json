@@ -49,10 +49,10 @@
       "description": "Snapshot of athlete classification at generation time.",
       "required": ["age", "level", "goal", "daysAvailable"],
       "properties": {
-        "age": { "type": "integer" },
+        "age": { "type": ["integer", "null"] },
         "ageGroup": {
           "type": "string",
-          "enum": ["18-29", "30-39", "40-49", "50-59", "60+"]
+          "enum": ["18-29", "30-39", "40-49", "50-59", "60+", "unknown"]
         },
         "level": {
           "type": "string",
@@ -128,7 +128,7 @@
         },
         "recoveryState": {
           "type": "string",
-          "enum": ["good", "moderate", "low"],
+          "enum": ["good", "moderate", "low", "unknown"],
           "description": "Current recovery state from most recent check-in"
         },
         "weight": { "type": "number", "description": "Body weight in lbs" },
