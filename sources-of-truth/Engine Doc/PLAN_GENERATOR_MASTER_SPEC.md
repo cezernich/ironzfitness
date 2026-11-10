@@ -265,7 +265,7 @@ If no equipment profile is set, assume full gym access (no filtering).
 
 Thresholds should be re-tested every 90 days. If stale (>90 days), show a subtle reminder on Add Session / Build Plan screens. Dismissable for 14 days, then reappears.
 
-Draft snapshots distinguish benchmark intent: Test me retains eligible last-known zone/profile measurements with their original observation date and a pending-test flag, never treating the request as a new measurement. Explicit clear returns unknown even when older zone/profile fallbacks still exist. Missing benchmarks remain unknown. Future/invalid dated measurements remain ineligible.
+Draft snapshots distinguish benchmark intent: Test me retains eligible last-known zone/profile measurements with their original observation date and a pending-test flag, never treating the request as a new measurement. Explicit draft clear returns unknown even when older zone/profile fallbacks still exist. A later canonical measurement newer than a persisted clear supersedes that earlier intent. Missing benchmarks remain unknown. Future/invalid dated measurements remain ineligible.
 
 ### 2m. Youth Athlete Modifiers (16–20)
 
