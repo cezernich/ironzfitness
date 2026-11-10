@@ -41,3 +41,7 @@ The daily interface should answer what the athlete should do, why, and what chan
 ## Brain review and comparison decision
 
 Owner instruction recorded 9 November 2026: use useful parts of the personal coaching method to define athlete understanding, long-term planning, daily coaching, weekly review and decision memory. Evaluate IronZ's generated plan against the existing private plan with independent review. Both may differ reasonably; neither is automatically correct. The evaluation must flag major differences, unsupported assumptions and hard failures while testing other athlete types. The [brain review and acceptance specification](brain-review/BRAIN_REVIEW_AND_ACCEPTANCE_SPEC.md) proposes the method, acceptance gates and consolidation sequence. This does not approve the draft's numerical policies, enable plan automation or release behavior.
+
+### Strength and endurance recovery decision — 9 November 2026
+
+The owner chose separate session budgets for strength and endurance quality, with shared fatigue/recovery and spacing checks. Heavy strength still contributes to combined recovery demands; light support work stays separate. This does not authorize unlimited strength volume or override health restrictions. Target implementation and provisional policy details are in master section6d; activation remains subject to acceptance and review.
