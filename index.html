@@ -4466,9 +4466,17 @@
           <h2 class="ob-v2-h2">What do you want to train?</h2>
           <p class="ob-v2-subtitle">Select all that apply.</p>
           <div class="ob-v2-sport-grid" id="bp-v2-sport-grid">
-            <button type="button" class="ob-v2-sport-card" data-sport="triathlon" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="zap"></span><span class="ob-v2-sport-name">Triathlon</span></button>
+            <button type="button" class="ob-v2-sport-card" data-sport="triathlon" aria-pressed="false" aria-expanded="false" aria-controls="bp-v2-tri-note" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="zap"></span><span class="ob-v2-sport-name">Triathlon</span></button>
             <button type="button" class="ob-v2-sport-card" data-sport="strength" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="weights"></span><span class="ob-v2-sport-name">Strength</span></button>
             <button type="button" class="ob-v2-sport-card" data-sport="run" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="run"></span><span class="ob-v2-sport-name">Running</span></button>
+            <fieldset class="ob-v2-tri-disciplines" id="bp-v2-tri-note" style="display:none">
+              <legend>Triathlon disciplines</legend>
+              <div class="ob-v2-tri-options">
+                <label><input type="checkbox" data-tri-sport="run" onchange="OnboardingV2._applySportSideEffects()"> Running</label>
+                <label><input type="checkbox" data-tri-sport="bike" onchange="OnboardingV2._applySportSideEffects()"> Biking</label>
+                <label><input type="checkbox" data-tri-sport="swim" onchange="OnboardingV2._applySportSideEffects()"> Swimming</label>
+              </div>
+            </fieldset>
             <button type="button" class="ob-v2-sport-card" data-sport="bike" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="bike"></span><span class="ob-v2-sport-name">Cycling</span></button>
             <button type="button" class="ob-v2-sport-card" data-sport="swim" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="swim"></span><span class="ob-v2-sport-name">Swimming</span></button>
             <button type="button" class="ob-v2-sport-card" data-sport="hiit" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="flame"></span><span class="ob-v2-sport-name">HIIT</span></button>
@@ -4479,7 +4487,7 @@
             <button type="button" class="ob-v2-sport-card" data-sport="hyrox" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="trophy"></span><span class="ob-v2-sport-name">Hyrox</span></button>
             <button type="button" class="ob-v2-sport-card" data-sport="circuit" onclick="OnboardingV2._toggleSport(this)"><span class="ob-v2-sport-icon" data-ob-icon="circuit"></span><span class="ob-v2-sport-name">Circuit</span></button>
           </div>
-          <div class="ob-v2-callout ob-v2-callout--info" id="bp-v2-tri-note" style="display:none">Triathlon includes Swimming, Cycling, and Running. We'll program all three.</div>
+
           <div id="bp-v2-equipment-section" style="display:none">
             <div class="ob-v2-section-label">Gym Access</div>
             <div class="ob-v2-chips">

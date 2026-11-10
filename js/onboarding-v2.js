@@ -658,8 +658,8 @@
     // Collapse any sport-conditional sections
     const equip = document.getElementById("bp-v2-equipment-section");
     if (equip) equip.style.display = "none";
-    const triNote = document.getElementById("bp-v2-tri-note");
-    if (triNote) triNote.style.display = "none";
+    document.querySelectorAll("[data-tri-sport]").forEach(el => { el.checked = false; });
+    _applySportSideEffects();
     // Clear any dynamically rendered containers so stale HTML from a
     // previous run doesn't leak through to the next one.
     const thresh = document.getElementById("bp-v2-thresholds-container");
@@ -1082,12 +1082,11 @@
     if (sport === "triathlon") {
       const on = !btn.classList.contains("is-selected");
       btn.classList.toggle("is-selected", on);
+      document.querySelectorAll("[data-tri-sport]").forEach(el => { el.checked = on; });
       ["swim", "bike", "run"].forEach(s => {
         const el = document.querySelector(`#bp-v2-sport-grid [data-sport="${s}"]`);
-        if (el) el.classList.toggle("is-selected", on);
+        if (el) el.classList.remove("is-selected");
       });
-      const triNote = document.getElementById("bp-v2-tri-note");
-      if (triNote) triNote.style.display = on ? "" : "none";
     } else if (sport === "hyrox") {
       // Hyrox is 50/50 running + functional strength (Philosophy §9.5).
       // Selecting Hyrox auto-selects run + strength so the Build Plan
@@ -1101,11 +1100,30 @@
         if (el) el.classList.toggle("is-selected", on);
       });
     } else {
-      btn.classList.toggle("is-selected");
+      const tri = document.querySelector('#bp-v2-sport-grid [data-sport="triathlon"].is-selected');
+      const discipline = document.querySelector('[data-tri-sport="' + sport + '"]');
+      if (tri && discipline) discipline.checked = !discipline.checked;
+      else btn.classList.toggle("is-selected");
     }
     _applySportSideEffects();
   }
   function _applySportSideEffects() {
+    const tri = document.querySelector('#bp-v2-sport-grid [data-sport="triathlon"]');
+    const grouped = !!tri?.classList.contains("is-selected");
+    const group = document.getElementById("bp-v2-tri-note");
+    if (group) group.style.display = grouped ? "" : "none";
+    if (tri) {
+      tri.setAttribute("aria-expanded", String(grouped));
+      tri.setAttribute("aria-pressed", String(grouped));
+    }
+    // Triathlon owns these choices while expanded; never highlight duplicates.
+    if (grouped) document.querySelectorAll("[data-tri-sport]").forEach(input => {
+      const card = document.querySelector('#bp-v2-sport-grid [data-sport="' + input.getAttribute("data-tri-sport") + '"]');
+      if (card?.classList.contains("is-selected")) {
+        input.checked = true;
+        card.classList.remove("is-selected");
+      }
+    });
     const strengthSelected = !!document.querySelector('#bp-v2-sport-grid [data-sport="strength"].is-selected');
     const equip = document.getElementById("bp-v2-equipment-section");
     if (equip) equip.style.display = strengthSelected ? "" : "none";
@@ -1119,7 +1137,10 @@
   function _saveSportsAndContinue() {
     const selected = Array.from(document.querySelectorAll("#bp-v2-sport-grid .is-selected"))
       .map(el => el.getAttribute("data-sport"));
-    const sports = selected.filter(s => s !== "triathlon");
+    const disciplines = selected.includes("triathlon")
+      ? Array.from(document.querySelectorAll("[data-tri-sport]:checked")).map(el => el.getAttribute("data-tri-sport"))
+      : [];
+    const sports = Array.from(new Set([...selected.filter(s => s !== "triathlon"), ...disciplines]));
     _state.selectedSports = sports;
     _lsSet("selectedSports", sports);
     _renderGoalCards();

@@ -22114,6 +22114,21 @@ body.ob-v2-lock { overflow: hidden; }
   color: #333;
 }
 
+/* Triathlon's disciplines stay inside one expanded selection. */
+.ob-v2-tri-disciplines {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+  padding: 10px 14px 12px;
+  border: 1px solid #E8530E;
+  border-radius: 12px;
+  background: #FFF5F0;
+}
+.ob-v2-tri-disciplines legend { padding: 0 6px; font-size: 12px; font-weight: 700; color: #333; }
+.ob-v2-tri-options { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+.ob-v2-tri-options label { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; color: #333; cursor: pointer; }
+.ob-v2-tri-options input { width: 18px; height: 18px; margin: 0; accent-color: #E8530E; }
+
 /* bp-2: goal cards */
 .ob-v2-goal-cards {
   display: flex;
