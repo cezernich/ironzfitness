@@ -3023,6 +3023,11 @@ function _buildDistanceField(sessionId, type, globalUnit) {
         <label class="completion-field-label">Run distance (${globalUnit})</label>
         <input type="number" id="cdist-run-${sessionId}" class="completion-dur-input"
           placeholder="e.g. 3.1" min="0" step="0.1" />
+      </div>
+      <div class="completion-dur-row">
+        <label class="completion-field-label" for="crun-min-${sessionId}">Actual run time (min, optional)</label>
+        <input type="number" id="crun-min-${sessionId}" class="completion-dur-input"
+          placeholder="Leave blank if unknown" min="0.01" step="0.1" />
       </div>`;
   }
   return `
@@ -3055,6 +3060,7 @@ function buildCompletionSection(sessionId, type, exercises, dateStr, suggestedDu
         if (_cW) {
           const _parts = [];
           if (_cW.duration) _parts.push(`${_cW.duration} min`);
+          if (_cW.actualRunDurationMin) _parts.push(`${_cW.actualRunDurationMin} min run`);
           if (_cW.bike_distance || _cW.run_distance) {
             // Brick — show bike + run separately rather than the summed total,
             // which is what a coach actually wants to see.
@@ -3392,6 +3398,15 @@ function _formatDuration(minutes) {
   return `${min}:${String(sec).padStart(2, "0")}`;
 }
 
+// Actual brick run time is explicit evidence, never copied from a plan.
+function parseActualBrickRunMinutes(value,totalMinutes) {
+  if(value==null||String(value).trim()==='')return null;
+  const run=Number(value),total=Number(totalMinutes);
+  if(!Number.isFinite(run)||run<=0||!Number.isFinite(total)||total<=0||run>total)
+    throw new Error('Enter actual run minutes greater than zero and no longer than the total workout time.');
+  return run;
+}
+
 let _lastCompletionSaveTime = 0;
 function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   const now = Date.now();
@@ -3407,6 +3422,17 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
   // and Strava plumbing keep working unchanged.
   const _typeForDistRead = String(type || "").toLowerCase();
   const _isBrickRead = _typeForDistRead === "triathlon" || _typeForDistRead === "brick";
+  let actualRunDurationMin=null;
+  if(_isBrickRead) {
+    try {
+      actualRunDurationMin=parseActualBrickRunMinutes(document.getElementById(`crun-min-${sessionId}`)?.value,duration);
+    } catch(error) {
+      _lastCompletionSaveTime=0;
+      if(typeof showToast==='function')showToast(error.message,'error');
+      else alert(error.message);
+      return;
+    }
+  }
   const bikeDistance = _isBrickRead
     ? (document.getElementById(`cdist-bike-${sessionId}`)?.value || "")
     : "";
@@ -3632,6 +3658,7 @@ function saveSessionCompletion(sessionId, type, dateStr, hasExercises) {
     ...(_cardioDistUnit && distance ? { distance_unit: _cardioDistUnit } : {}),
     ...(_isBrickRead && bikeDistance ? { bike_distance: bikeDistance } : {}),
     ...(_isBrickRead && runDistance  ? { run_distance:  runDistance  } : {}),
+    ...(actualRunDurationMin!==null ? { actualRunDurationMin } : {}),
     ...(wattsVal && { avgWatts: wattsVal }),
     ..._carryForward,
     completedSessionId: sessionId,

@@ -49,7 +49,8 @@
       const date=raw.date||raw.start_date_local?.slice(0,10)||raw.start_date?.slice(0,10);
       if(!validDate(date)) {reject('invalid_activity_date');continue;}
       if(date>today||(validDate(raw.receivedAt)&&raw.receivedAt>today)||(eventAt!==null&&eventAt>now)||(receivedAt!==null&&receivedAt>now)) {reject('future_or_not_yet_received');continue;}
-      const type=sportNames[String(raw.discipline||raw.type||raw.sport_type||'').toLowerCase()];
+      const rawType=String(raw.discipline||raw.type||raw.sport_type||'').toLowerCase();
+      const type=sportNames[rawType]||(rawType==='triathlon'&&raw.actualRunDurationMin!==undefined?'brick':null);
       if(!type) {reject('unsupported_discipline');continue;}
       const minuteValues=[raw.actualDurationMin,raw.durationMin,raw.duration_minutes];
       const secondValue=raw.actualDurationSeconds??raw.duration_seconds;
