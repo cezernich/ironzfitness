@@ -1,5 +1,7 @@
 # IronZ Code Review (2026-11-09)
 
+**Historical audit.** Findings and rollout/rebuild statements below describe the original review date unless explicitly noted. Use [FOUNDATION_PLAN.md](FOUNDATION_PLAN.md) for the current security recheck and the single delivery queue; do not execute an old rollout instruction as a current deployment request.
+
 Reviewed: `cezernich/ironzfitness` at commit `2590645` (last push May 26, 2026). About 114k lines of JS, 147 script tags, Supabase backend with 20 edge functions, Capacitor iOS shell.
 
 ## 1. How the app actually works today
@@ -17,7 +19,7 @@ Reviewed: `cezernich/ironzfitness` at commit `2590645` (last push May 26, 2026).
 
 ### P0: fix before anyone else uses the app
 
-> Status: #1 and #2 fixed by `supabase/migrations/20261109_secure_profiles.sql` (PR `claude/secure-profiles`), which also closes a third leak: anyone holding a live share link could read the sender's full profile. Covered by `tests/sql/profiles-security.sh` in CI. Must still be applied to the live database.
+> Status: #1 and #2 fixed by `supabase/migrations/20261109_secure_profiles.sql` (PR `claude/secure-profiles`), which also closes a third leak: anyone holding a live share link could read the sender's full profile. Covered by `tests/sql/profiles-security.sh` in CI. Original November 9 rollout status: not yet applied. See the current recheck linked above before taking action.
 
 1. **Any signed-in user can make themselves admin, premium, or a coach.** The `profiles` UPDATE policy is `USING (auth.uid() = id)` with no column restriction and no trigger guarding `role`, `subscription_status`, or `is_coach`. From the browser console: `supabaseClient.from('profiles').update({role:'admin'}).eq('id', myId)`. That unlocks the admin dashboard, every admin RLS policy, and bypasses the paywall. Fix: a `BEFORE UPDATE` trigger that rejects changes to those columns unless the caller is service_role or admin, or move them to a separate table users cannot write.
 2. **Every signed-in user can read every other user's profile row.** `inbox-migration.sql` adds `FOR SELECT TO authenticated USING (true)` on `profiles`. Since `20260430e`, that row includes `birthday` and `body_comp_goal`, plus email, name, role, and subscription status. Fix: drop that policy and replace it with a `SECURITY DEFINER` RPC that looks up one user by exact email and returns only id + display name (the migration's own comment suggests this).
@@ -52,7 +54,7 @@ Caveat: P0 #1 and #2 are read from the SQL in the repo. Confirm against the live
 
 ## 2a. Open security items: production status
 
-Verified against the live Supabase project (`ironz`, read-only queries) on 2026-11-09. Nothing below has been applied to production. Update this table when an item ships.
+**Historical baseline, verified 2026-11-09.** The table below is retained as the original audit record; do not use its rollout statuses as current facts. A read-only 2026-11-10 recheck found the profile guard installed and the two original broad SELECT policies absent, with residual access and other closure work still outstanding. Current evidence and exit requirements are in [FOUNDATION_PLAN.md](FOUNDATION_PLAN.md#security-baseline-read-only-recheck-on-2026-11-10). A merged PR or catalog entry alone is not production security sign-off.
 
 | # | Item | Fix in repo | Production | Owner action |
 |---|---|---|---|---|
