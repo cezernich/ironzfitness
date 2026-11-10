@@ -481,6 +481,12 @@ function getEffectiveOzForDate(dateStr) {
 // on a 2-hour ride that should have been ~44 oz).
 function _hydrationResolveDurationMin(w) {
   if (!w) return 0;
+  if(!w.isCompletion && !w.completedAt && w.source!=='strava'
+      && typeof resolveEffectivePrescription==='function') {
+    const restriction=w.date && typeof getDataForDate==='function' ? getDataForDate(w.date).restriction : null;
+    const candidate=WorkoutPrescription.normalizeEntry(w,restriction);
+    if(candidate.discipline && candidate.load)return resolveEffectivePrescription(candidate,restriction).duration || 0;
+  }
   const parseStrMin = (v) => {
     if (v == null) return 0;
     const n = parseFloat(v);
