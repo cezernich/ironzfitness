@@ -2004,3 +2004,7 @@ Apply beginner/advanced modifiers from the table above on top of these.
 ---
 
 **END OF DOCUMENT**
+
+### Schedule preview integrity
+
+Build Plan applies default session targets when seeding a weekly schedule. After the athlete edits that schedule, preview rendering must not add sessions or reapply those targets. The preview and saved weekly template must preserve explicit additions, removals, and rest days. Phase-specific session substitutions remain subject to the phase rules above.

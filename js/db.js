@@ -1330,6 +1330,27 @@ const DB = (() => {
     if (_refreshTimer) { clearTimeout(_refreshTimer); _refreshTimer = null; }
   }
 
+  // Keep restriction range persistence at the data boundary, preserving
+  // unrelated dates and validating the whole range before writing anything.
+  async function saveDayRestrictionRange(start, end, entry) {
+    const parse = value => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) throw new Error("Select valid restriction dates.");
+      const date = new Date(value + "T00:00:00Z");
+      if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) throw new Error("Select valid restriction dates.");
+      return date;
+    };
+    const first = parse(start), last = parse(end);
+    const days = Math.round((last - first) / 86400000);
+    if (days < 0 || days > 365) throw new Error("Through date must be on or after the start, within one year.");
+    const restrictions = JSON.parse(localStorage.getItem("dayRestrictions") || "{}");
+    for (let offset = 0; offset <= days; offset++) {
+      const date = new Date(first.getTime() + offset * 86400000).toISOString().slice(0, 10);
+      restrictions[date] = { ...entry };
+    }
+    localStorage.setItem("dayRestrictions", JSON.stringify(restrictions));
+    await flushKey("dayRestrictions");
+  }
+
   // ── Public API ────────────────────────────────────────────────────────────
 
   return {
@@ -1355,6 +1376,7 @@ const DB = (() => {
     syncEvents,
     syncGoals,
     syncKey,
+    saveDayRestrictionRange,
     flushKey,
     previewPlanBuild,
     savePlanBuild,

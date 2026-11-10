@@ -3983,15 +3983,8 @@
     const race = _state.currentRace;
     const hasRace = _state.trainingGoals.includes("race") && race && race.date;
 
-    // Re-run spec-target enforcement on every preview render so users
-    // who change goal / level after the schedule was first seeded still
-    // see the matrix-correct session count. Idempotent — it only ADDS
-    // missing sessions up to the matrix target, never removes.
-    // Previously a user who selected PR goal and Advanced level AFTER
-    // visiting the Weekly Schedule step saw a 5-session, 1-quality plan
-    // because the schedule was seeded under the old intermediate
-    // defaults and never re-enforced.
-    try { _enforceSpecTarget(); } catch (e) { try { console.warn("[IronZ] preview enforce failed:", e.message); } catch {} }
+    // Defaults are enforced when the schedule is seeded. Preview must be
+    // read-only: adding sessions here silently undoes explicit removals.
     // Strength-only users don't follow a race-phased arc, so the
     // base/build/peak/taper timeline is irrelevant — skip it.
     const sports = _state.selectedSports || [];
