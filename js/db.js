@@ -713,7 +713,7 @@ const DB = (() => {
       if (error) {
         const failure = new Error(error.code === '42501'
           ? 'Your account changed or permission was denied. Sign in to the original account and reload.'
-          : error.code === '40001'
+          : ['PT409', '40001'].includes(error.code)
           ? 'Training state changed on another device. Reload and review before trying again.'
           : 'Training state could not be saved. Please try again with the same request.');
         failure.code = error.code;

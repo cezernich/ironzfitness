@@ -49,7 +49,7 @@ function setup() {
   assert.equal(h.calls.at(-1).args.p_request_id, request.requestId);
   h.reply({ revision: 1, currentRevision: 3, requestId: request.requestId, replayed: true });
   assert.equal((await h.service.command(request)).needsReload, true, 'old acknowledgement is visibly stale');
-  h.fail({ code: '40001' });
+  h.fail({ code: 'PT409' });
   const count = h.calls.length;
   await assert.rejects(h.service.command(request), /another device/);
   assert.equal(h.calls.length, count + 1, 'conflict does not automatically retry against a newer revision');

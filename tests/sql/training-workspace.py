@@ -59,6 +59,7 @@ try:
     query(f"grant usage on schema auth to anon, authenticated; insert into auth.users values ('{UID_A}'),('{UID_B}');")
     migration = ROOT / "supabase/migrations/20261110040029_versioned_training_workspace.sql"
     query(migration.read_text())
+    query((ROOT / "supabase/migrations/20261110041921_fix_workspace_conflict_status.sql").read_text())
     check("new tables have RLS", query("select count(*) from pg_class where relname in ('training_workspaces','training_workspace_events') and relrowsecurity") == "2")
     query("select * from public.training_workspaces", role="anon", fail="permission denied")
     check("anonymous reads denied", True)
