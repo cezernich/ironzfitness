@@ -1908,9 +1908,8 @@ function _librarySessionSteps(lib) {
     });
   } else if (ms.type === "intervals" && ms.intervals) {
     const iv = ms.intervals;
-    const reps = Array.isArray(iv.reps_actual) ? Math.round((iv.reps_actual[0] + iv.reps_actual[1]) / 2)
-               : Array.isArray(iv.reps)        ? Math.round((iv.reps[0] + iv.reps[1]) / 2)
-               : (iv.reps || 1);
+    const savedReps = iv.reps_actual ?? iv.reps ?? 1;
+    const reps = Array.isArray(savedReps) ? Math.round((savedReps[0] + savedReps[1]) / 2) : Number(savedReps);
     const dur = _pickDur(iv.duration);
     const rest = _pickDur(iv.rest);
     steps.push({
@@ -1932,9 +1931,8 @@ function _librarySessionSteps(lib) {
     });
   } else if (ms.type === "mixed" && Array.isArray(ms.blocks)) {
     ms.blocks.forEach(b => {
-      const reps = Array.isArray(b.reps_actual) ? Math.round((b.reps_actual[0] + b.reps_actual[1]) / 2)
-                 : Array.isArray(b.reps)        ? Math.round((b.reps[0] + b.reps[1]) / 2)
-                 : (b.reps || null);
+      const savedReps = b.reps_actual ?? b.reps ?? 1;
+      const reps = Array.isArray(savedReps) ? Math.round((savedReps[0] + savedReps[1]) / 2) : Number(savedReps);
       const dur = _pickDur(b.duration_min_actual || b.duration_min || b.duration);
       const entry = {
         type: "main",
