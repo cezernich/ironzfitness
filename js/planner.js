@@ -1666,7 +1666,11 @@ const SESSION_VARIANTS = {
  * read .duration / .name / .steps continue to work unchanged.
  */
 function getSessionTemplate(discipline, load, weekNumber, dateStr) {
-  const base = (SESSION_DESCRIPTIONS[discipline] || {})[load];
+  const base = (SESSION_DESCRIPTIONS[discipline] || {})[load] ||
+    (load === "recovery" && ["run", "bike", "swim"].includes(discipline) ? {
+      duration: 25, name: "Recovery " + capitalize(discipline),
+      steps: [{ type: "main", duration: 25, zone: 1, label: "Easy recovery only — keep effort conversational, no pickups or strides" }],
+    } : null);
   if (!base) return null;
   const variants = (SESSION_VARIANTS[discipline] || {})[load];
   if (!Array.isArray(variants) || !variants.length) return base;
@@ -2147,6 +2151,28 @@ function checkARacePromotion() {
 // onboarding schedule is the source of truth and double-writing creates
 // duplicate sessions on the calendar.
 // Reject empty/malformed output and race-day-only placeholders before replacing a plan.
+// Library misses and distribution-added slots must carry their fallback
+// prescription in saved data, not rely on a calendar-only lookup.
+function _materializePlanPrescriptions(entries) {
+  entries.forEach(entry => {
+    if (!entry || ["race", "rest"].includes(entry.discipline) || entry.load === "rest") return;
+    const library = entry.libraryWorkout;
+    if (library && Number.isFinite(library.duration_min) && library.duration_min > 0) {
+      if (!Number.isFinite(entry.duration) || entry.duration <= 0) entry.duration = library.duration_min;
+      return;
+    }
+    const template = getSessionTemplate(entry.discipline, entry.load, entry.weekNumber, entry.date);
+    if (template && Number.isFinite(template.duration) && template.duration > 0 && Array.isArray(template.steps) && template.steps.length) {
+      entry.duration = Number.isFinite(entry.duration) && entry.duration > 0 ? entry.duration : template.duration;
+      entry.templateWorkout = JSON.parse(JSON.stringify(template));
+      entry.prescriptionSource = "built_in_template";
+    }
+    if (!Number.isFinite(entry.duration) || entry.duration <= 0) {
+      throw new Error(`A ${entry.discipline} session (${entry.load || "unspecified"}) has no duration. Your previous plan was retained; please try again.`);
+    }
+  });
+}
+
 function _validateGeneratedPlan(entries) {
   const dated = e => e && typeof e.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(e.date) &&
     !isNaN(new Date(e.date + "T00:00:00").getTime()) &&
@@ -2291,6 +2317,7 @@ function _buildRacePlanReplacement(race, options = {}) {
     }
   }
 
+  _materializePlanPrescriptions(newEntries);
   _validateGeneratedPlan(newEntries);
   const todayStr = new Date().toISOString().slice(0, 10);
   const schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
@@ -3989,7 +4016,7 @@ function _buildStrengthForPlan(weekNumber, phaseName) {
   }
 
   const labels = { full: "Full Body", push: "Push Day", pull: "Pull Day", legs: "Leg Day", upper: "Upper Body", lower: "Lower Body" };
-  return { name: labels[focus] || "Strength", exercises };
+  return { name: labels[focus] || "Strength", exercises, duration: Math.max(15, parseInt(setup.sessionLength, 10) || 45) };
 }
 
 if (typeof window !== "undefined") {
@@ -4501,10 +4528,12 @@ function _generateSingleRacePlan(race) {
         // split so adjacent strength days don't repeat the same template.
         let strengthExercises = null;
         let strengthName = null;
+        let strengthDuration = null;
         if (sessionEntry.discipline === "strength") {
           const built = _buildStrengthForPlan(wNum, phaseName);
           strengthExercises = built.exercises;
           strengthName = built.name;
+          strengthDuration = built.duration;
         }
 
         const baseEntry = {
@@ -4520,6 +4549,7 @@ function _generateSingleRacePlan(race) {
           ...(duration != null ? { duration } : {}),
         };
         if (strengthExercises && strengthExercises.length) {
+          baseEntry.duration = strengthDuration;
           baseEntry.type = "weightlifting";
           baseEntry.exercises = strengthExercises;
         }

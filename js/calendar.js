@@ -3920,13 +3920,13 @@ function getDayTotals(dateStr) {
       // total. Use the template's duration as the basis when it's set so
       // the two stay in sync.
       const effectLoad    = getEffectiveLoad(p.load, restriction);
-      const rawSession    = (typeof getSessionTemplate === "function"
+      const rawSession    = (effectLoad === p.load && p.templateWorkout) || (typeof getSessionTemplate === "function"
                               ? (getSessionTemplate(p.discipline, effectLoad, p.weekNumber, dateStr)
                                  || getSessionTemplate(p.discipline, p.load, p.weekNumber, dateStr))
                               : null)
                          || (SESSION_DESCRIPTIONS[p.discipline] || {})[effectLoad]
                          || (SESSION_DESCRIPTIONS[p.discipline] || {})[p.load];
-      const baseDur       = (rawSession && rawSession.duration) || p.duration;
+      const baseDur       = (p.templateWorkout && p.duration) || (rawSession && rawSession.duration) || p.duration;
       const targetDur     = getRestrictedDuration(baseDur, p.load, restriction);
       const scaledSession = rawSession ? scaleSessionDuration(rawSession, targetDur) : rawSession;
       if (scaledSession?.duration) totalMin += _parseDurMin(scaledSession.duration);
@@ -4583,7 +4583,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         // main_set (+warmup/cooldown) when one is attached.
         rawSession = _librarySessionSteps(p.libraryWorkout);
       } else {
-        rawSession = (typeof getSessionTemplate === "function"
+        rawSession = (effectLoad === p.load && p.templateWorkout) || (typeof getSessionTemplate === "function"
                        ? (getSessionTemplate(p.discipline, effectLoad, p.weekNumber, dateStr)
                           || getSessionTemplate(p.discipline, p.load, p.weekNumber, dateStr))
                        : null)
