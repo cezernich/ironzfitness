@@ -17392,6 +17392,31 @@ input.completion-ex-name:focus {
   line-height: 1.45;
 }
 
+.threshold-week-skip-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border, rgba(0,0,0,0.08));
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+.threshold-week-skip-notice span { flex: 1; }
+
+/* Training Zones: out-of-date flag */
+.zones-stale-dot { display: inline-flex; vertical-align: -2px; color: var(--color-warning, #b7791f); }
+.zones-stale-dot svg, .zones-stale-flag svg { width: 12px; height: 12px; }
+.zones-stale-flag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--color-warning, #b7791f);
+  font-weight: 500;
+}
+
 /* Test session card accent — matches isThresholdTest entries */
 .session-card.session-card--threshold-test {
   border-color: var(--color-accent, #6366f1);

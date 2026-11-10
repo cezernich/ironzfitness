@@ -295,7 +295,45 @@
     });
   }
 
+  // ─── Training Zones freshness flag ───────────────────────────────────────────
+  // Shown in Training > Training Zones. Flags a sport whose zones are older
+  // than ZONE_FLAG_WEEKS, or whose test was skipped in the most recent test
+  // week. plan = training plan entries; zonesSport = "running"|"biking"|"swimming".
+  const ZONE_FLAG_WEEKS = 8;
+  const ZONES_TO_STATUS = { running: "running", biking: "cycling", swimming: "swim" };
+  const ZONES_TO_DISC = { running: "run", biking: "bike", swimming: "swim" };
+  const TEST_TO_DISC = { SWIM_CSS: "swim", BIKE_FTP_20: "bike", RUN_5K_TT: "run" };
+  function zoneFreshness(zonesSport, plan, now) {
+    const statusSport = ZONES_TO_STATUS[zonesSport];
+    const disc = ZONES_TO_DISC[zonesSport];
+    if (!statusSport) return { flag: false };
+    const profile = _loadProfile();
+    const zones = _loadZones();
+    if (!_hasThreshold(statusSport, profile, zones)) return { flag: false };
+    const today = now || new Date();
+    const todayStr = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
+    const ageDays = _daysBetween(_lastUpdatedFor(statusSport, profile, zones), today);
+    const ageWeeks = isFinite(ageDays) ? Math.floor(ageDays / 7) : null;
+    const list = Array.isArray(plan) ? plan : [];
+    // Most recent test week that has started: did it skip this sport?
+    const pastSkips = list.filter(e => e && e.date <= todayStr && Array.isArray(e.thresholdTestsSkipped))
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+    const lastTestWeekDate = list.filter(e => e && e.isThresholdTest && e.date <= todayStr).map(e => e.date).sort().pop() || null;
+    const skippedRecently = pastSkips.length > 0
+      && (!lastTestWeekDate || pastSkips[0].date >= lastTestWeekDate || _daysBetween(pastSkips[0].date, new Date(lastTestWeekDate + "T00:00:00")) < 7)
+      && pastSkips[0].thresholdTestsSkipped.some(t => TEST_TO_DISC[t] === disc);
+    const nextTest = list.filter(e => e && e.isThresholdTest && e.discipline === disc && e.date >= todayStr)
+      .map(e => e.date).sort()[0] || null;
+    const old = ageWeeks != null && ageWeeks >= ZONE_FLAG_WEEKS;
+    if (!old && !skippedRecently) return { flag: false, ageWeeks, nextTest };
+    let text = ageWeeks != null ? `Not updated in ${ageWeeks} week${ageWeeks === 1 ? "" : "s"}.` : "Not updated recently.";
+    if (skippedRecently) text += " Your last test week had no room for this test.";
+    return { flag: true, ageWeeks, skippedRecently, nextTest, text };
+  }
+
   const api = {
+    zoneFreshness,
+    ZONE_FLAG_WEEKS,
     getStatus,
     buildBannerHtml,
     dismiss,

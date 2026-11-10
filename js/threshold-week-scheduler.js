@@ -426,7 +426,7 @@
     const skippedTypes = new Set();
     list.forEach(p => { if (p && p.isThresholdWeek && weekOf(p.date) === homeWeek && Array.isArray(p.thresholdTestsSkipped)) p.thresholdTestsSkipped.forEach(t => skippedTypes.add(t)); });
     const skipped = [...skippedTypes].map(t => ({ type: t, label: TEST_LABELS[t] || t, sport: TEST_SPORT[t] || "those" }));
-    return { kind: movedHere ? "moved_test" : "week", tests, skipped };
+    return { kind: movedHere ? "moved_test" : "week", homeWeek, tests, skipped };
   }
 
   // ─── Public surface ──────────────────────────────────────────────────────────
