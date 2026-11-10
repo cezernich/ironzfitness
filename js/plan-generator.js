@@ -12,7 +12,7 @@
 (function () {
   'use strict';
 
-  const PHILOSOPHY_VERSION = '1.4';
+  const PHILOSOPHY_VERSION = '2.5';
   const PLAN_VERSION = '1.0';
   const GENERATION_SOURCE = 'rules_engine';
 
@@ -22,49 +22,8 @@
   }
 
   function _readProfile() {
-    let stored = {};
-    try {
-      stored = JSON.parse(localStorage.getItem('profile') || '{}') || {};
-    } catch (e) {
-      stored = {};
-    }
-    let equipment = [];
-    try {
-      equipment = JSON.parse(localStorage.getItem('equipmentProfile') || '[]') || [];
-    } catch (e) {
-      equipment = [];
-    }
-    let latestCheckIn = null;
-    try {
-      latestCheckIn = JSON.parse(localStorage.getItem('latestCheckIn') || 'null');
-    } catch (e) {
-      latestCheckIn = null;
-    }
-    let longDays = null;
-    try {
-      longDays = JSON.parse(localStorage.getItem('longDays') || 'null');
-    } catch (e) {
-      longDays = null;
-    }
-    return {
-      age: parseInt(stored.age, 10) || 30,
-      weight: parseFloat(stored.weight) || 165,
-      height: parseFloat(stored.height) || 70,
-      gender: stored.gender || 'not_specified',
-      goal: stored.goal || 'general_fitness',  // v1.4 default
-      availableDaysPerWeek: parseInt(stored.availableDaysPerWeek, 10) || 4,
-      sessionLength: parseInt(stored.sessionLength, 10) || 60,
-      cssTime: stored.cssTime != null && stored.cssTime !== '' ? parseFloat(stored.cssTime) : null,
-      ftp: stored.ftp != null && stored.ftp !== '' ? parseFloat(stored.ftp) : null,
-      thresholdPace: stored.thresholdPace != null && stored.thresholdPace !== '' ? parseFloat(stored.thresholdPace) : null,
-      runVDOT: stored.runVDOT != null && stored.runVDOT !== '' ? parseFloat(stored.runVDOT) : null,
-      injuries: Array.isArray(stored.injuries) ? stored.injuries : [],
-      selectedSports: Array.isArray(stored.selectedSports) ? stored.selectedSports : [],
-      equipmentProfile: equipment,
-      latestCheckIn,
-      longDays,
-      weightUnit: stored.weightUnit || null,
-    };
+    if(typeof DB==='undefined'||!DB.captureAthleteInput) throw Error('Athlete input storage is unavailable.');
+    return DB.captureAthleteInput().profile;
   }
 
   function _buildConstraints(classification) {
@@ -74,7 +33,7 @@
       maxIntensitySessionsPerWeek: intensityCaps[level] || 2,
       noConsecutiveHardDays: level !== 'advanced',
       minRestDaysPerWeek: 1,
-      maxWeeklyVolumeIncreasePct: level === 'beginner' ? 10 : 15,
+      maxWeeklyVolumeIncreasePct: level === 'advanced' ? 15 : 10,
       maxLongRunPctOfWeekly: 30,
       strengthVolumeCapSetsPerMuscle: 4,
       deloadEveryNWeeks: level === 'advanced' ? 3 : 4,
@@ -109,6 +68,9 @@
       sportLevels: classification.sportLevels,
       riskBias: classification.riskBias,
       goal: classification.goal,
+      strengthRole: classification.strengthRole,
+      strengthGoal: classification.strengthGoal,
+      trainingGoals: classification.trainingGoals,
       sportProfile: classification.sportProfile,
       daysAvailable: classification.daysAvailable,
       preferredDays: classification.preferredDays,
@@ -127,9 +89,10 @@
 
   function generate(config) {
     const cfg = config || {};
-    const profile = cfg.profile || _readProfile();
-    const races = Array.isArray(cfg.races) ? cfg.races : [];
-    const startDate = cfg.startDate || new Date().toISOString().slice(0, 10);
+    const snapshot=cfg.snapshot || (cfg.profile ? window.AthleteInput.normalize(cfg) : DB.captureAthleteInput(cfg));
+    const profile=snapshot.profile;
+    const races=snapshot.races;
+    const startDate=snapshot.startDate;
 
     const classifier = requireDep('AthleteClassifier', window.AthleteClassifier);
     const arcBuilder = requireDep('ArcBuilder', window.ArcBuilder);

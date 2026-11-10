@@ -237,26 +237,8 @@ function classifyInjury(injuries) {
 }
 
 function deriveRecoveryState(profile) {
-  // Check latest check-in data
-  const checkIn = profile.latestCheckIn || getLatestCheckIn();
-  if (!checkIn) return 'good';
-
-  const sleep = checkIn.sleep_quality || checkIn.sleepQuality || '';
-  const energy = checkIn.energy_level || checkIn.energyLevel || '';
-  const soreness = checkIn.soreness_level || checkIn.sorenessLevel || '';
-
-  // Low: any critical signal
-  if (sleep === 'poor' || energy === 'low' || soreness === 'severe') return 'low';
-
-  // Count moderate signals
-  let moderateSignals = 0;
-  if (sleep === 'fair') moderateSignals++;
-  if (energy === 'moderate') moderateSignals++;
-  if (soreness === 'moderate') moderateSignals++;
-  if (moderateSignals >= 2) return 'low';
-  if (moderateSignals >= 1) return 'moderate';
-
-  return 'good';
+  return typeof window.AthleteInput!=='undefined'
+    ? window.AthleteInput.normalizeCheckIn(profile.latestCheckIn || getLatestCheckIn(),{asOf:profile.asOf}).recoveryState : 'unknown';
 }
 
 function deriveNutritionProfile(profile) {

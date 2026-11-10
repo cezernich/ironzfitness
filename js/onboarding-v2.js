@@ -5270,7 +5270,9 @@
       type: typeMap[r.type] || r.type || "other",
       date: r.date,
       priority: r.priority || "A",
-      level: "intermediate",
+      ...(r.level ? { level:r.level } : {}),
+      runGoal:r.runGoal || r.goal || null,
+      leadIn:r.leadIn || null,
     }));
   }
   function _goToTrainingTab() {

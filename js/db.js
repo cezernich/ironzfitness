@@ -687,6 +687,15 @@ const DB = (() => {
     }
   }
 
+  function captureAthleteInput(overrides={}) {
+    const keys=['profile','thresholds','trainingZones','selectedSports','trainingGoals','strengthRole','equipmentProfile','latestCheckIn','longDays','buildPlanTemplate','events','blockedPeriods'];
+    const values=Object.fromEntries(keys.map(key=>{
+      const raw=localStorage.getItem(key);
+      try { return [key,raw===null?undefined:key==='strengthRole'?raw:JSON.parse(raw)]; }
+      catch (_) { throw new Error('Saved athlete inputs need correction before generating a plan.'); }
+    }));
+    return window.AthleteInput.normalize({timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone,...values,...overrides});
+  }
   function cachePlanBuild(updates) {
     for (const [key, value] of Object.entries(updates)) {
       _lsSet(key, value);
@@ -1360,6 +1369,7 @@ const DB = (() => {
     savePlanBuild,
     planBuildNeedsReload: () => _planBuildReloadRequired,
     cachePlanBuild,
+    captureAthleteInput,
     replayPendingSyncs,
     refreshAllKeys,
     refreshKey,
