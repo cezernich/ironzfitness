@@ -35,7 +35,9 @@
       const references=[...new Set(refs)].sort();
       const reject=reason=>excluded.push({references,reason});
       if(!references.length) {reject('missing_identifier');continue;}
-      const explicitComplete=raw.completed===true||raw.isCompleted===true||raw.status==='completed';
+      // Match the app's actual completion receipt and provider adapter.
+      // A bare legacy completed:true can be stamped on planned workouts.
+      const explicitComplete=raw.isCompletion===true||raw.status==='completed'||source==='strava';
       const explicitPending=raw.completed===false||raw.isCompleted===false||['planned','pending','scheduled','cancelled'].includes(raw.status);
       if(explicitPending||!explicitComplete) {reject(explicitPending&&explicitComplete?'conflicting_completion':'not_confirmed_completed');continue;}
       if([raw.completedAt,raw.start_date,raw.startDate].some(value=>value!==undefined&&value!==null&&value!==''&&timestamp(value)===null&&!validDate(value))) {reject('invalid_event_time');continue;}
