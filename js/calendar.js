@@ -6438,8 +6438,6 @@ function openQuickEntry(dateStr) {
 
   const defaultDate = dateStr || getTodayString();
   document.getElementById("qe-date").value = defaultDate;
-  const restrictionEnd = document.getElementById("qe-restriction-end");
-  if (restrictionEnd) restrictionEnd.value = "";
   updateQERestrictionWarning(defaultDate);
 
   qeShowStep(0, null);
@@ -10569,7 +10567,7 @@ function saveQuickActivity() {
 }
 
 // ── Restriction save ──────────────────────────────────────────────────────────
-async function saveQuickRestriction() {
+function saveQuickRestriction() {
   const dateStr = document.getElementById("qe-date").value;
   if (!dateStr) { document.getElementById("qe-restriction-msg").textContent = "Please select a date."; return; }
   const type   = document.getElementById("qe-restriction-type").value;
@@ -10595,16 +10593,12 @@ async function saveQuickRestriction() {
     disciplines = picked;
   }
 
+  let restrictions = {};
+  try { restrictions = JSON.parse(localStorage.getItem("dayRestrictions")) || {}; } catch {}
   const entry = { type, note, action, createdAt: new Date().toISOString() };
   if (disciplines) entry.disciplines = disciplines;
-  const endDate = document.getElementById("qe-restriction-end")?.value || dateStr;
-  try {
-    await DB.saveDayRestrictionRange(dateStr, endDate, entry);
-  } catch (error) {
-    msg.style.color = "var(--color-danger)";
-    msg.textContent = error.message || "Unable to save restriction. Please try again.";
-    return;
-  }
+  restrictions[dateStr] = entry;
+  localStorage.setItem("dayRestrictions", JSON.stringify(restrictions)); if (typeof DB !== 'undefined') DB.syncKey('dayRestrictions');
 
   renderCalendar();
   if (selectedDate === dateStr) renderDayDetail(dateStr);
