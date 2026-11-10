@@ -86,27 +86,22 @@ Deno.serve(async (req) => {
     }
 
     // ── 2. Rate limiting ─────────────────────────────────────────────────
-    const today = new Date().toISOString().slice(0, 10);
-    const { data: usage } = await supabase
-      .from("ai_usage")
-      .select("request_count")
-      .eq("user_id", user.id)
-      .eq("usage_date", today)
-      .single();
-
-    const currentCount = usage?.request_count || 0;
-    if (currentCount >= MAX_REQUESTS_PER_DAY) {
+    const { data: reservedCount, error: quotaError } = await supabase.rpc(
+      "consume_ai_quota", { p_user_id: user.id }
+    );
+    // Fail closed: no paid call if quota storage is unavailable or malformed.
+    if (quotaError || !Number.isInteger(reservedCount) ||
+        (reservedCount !== -1 && (reservedCount < 1 || reservedCount > MAX_REQUESTS_PER_DAY))) {
+      return jsonResponse({ error: "Quota service unavailable" }, 503);
+    }
+    if (reservedCount === -1) {
       return jsonResponse({
         error: "Rate limit exceeded",
         message: `Limit of ${MAX_REQUESTS_PER_DAY} questions per day. Resets at midnight UTC.`,
         remaining: 0,
       }, 429);
     }
-
-    await supabase.from("ai_usage").upsert(
-      { user_id: user.id, usage_date: today, request_count: currentCount + 1 },
-      { onConflict: "user_id,usage_date" }
-    );
+    const currentCount = reservedCount - 1;
 
     // ── 3. Parse request ─────────────────────────────────────────────────
     const body = await req.json();
