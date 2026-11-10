@@ -2,6 +2,7 @@
 (function(root) {
   'use strict';
   const VERSION='athlete-input-v1';
+  const historyModule=typeof module!=='undefined'&&module.exports?require('./training-history.js'):null;
   const sports={running:'run',cycling:'bike',biking:'bike',swimming:'swim',weightlifting:'strength',lifting:'strength',walking:'walk',rowing:'row'};
   const races={fiveK:'5k',tenK:'10k',halfMarathon:'half-marathon',halfIronman:'half-ironman',sprint:'sprint-tri',olympic:'olympic-tri',century:'cycling',centuryRide:'cycling',granFondo:'cycling'};
   const days=['sun','mon','tue','wed','thu','fri','sat'];
@@ -111,8 +112,12 @@
     const unknown=['age','weight','height','availableDaysPerWeek','sessionLength','thresholdPace','ftp','cssTime'].filter(k=>profile[k]===null);
     const startDate=raw.startDate??primary?.preferences?.startDate??today;
     if(!date(startDate))throw Error('Choose a valid plan start date.');
+    const historyApi=root?.TrainingHistory||historyModule;
+    const records=raw.history??raw.workouts??[];
+    if(!historyApi)throw Error('Completed training evidence is unavailable. Check script load order.');
+    const historyEvidence=historyApi.normalize(records,{asOf:now.toISOString(),timeZone});
     return {version:VERSION,asOf:now.toISOString(),timeZone,startDate,profile,races:normalizedRaces,pastRaces,weeklyTemplate:clone(template),
-      unknown,source:'athlete_input',sourceInputs:{profile:clone(p),thresholds:clone(thresholds),trainingZones:clone(zones)},blockedPeriods:clone(raw.blockedPeriods||[]),history:clone(raw.history||[])};
+      unknown,source:'athlete_input',sourceInputs:{profile:clone(p),thresholds:clone(thresholds),trainingZones:clone(zones),history:clone(records)},blockedPeriods:clone(raw.blockedPeriods||[]),history:historyEvidence.activities,historyEvidence};
   }
   const api={VERSION,normalize,normalizeRace,normalizeCheckIn,number,pace,date,localDate};
   if(root)root.AthleteInput=api;if(typeof module!=='undefined')module.exports=api;
