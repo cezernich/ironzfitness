@@ -681,6 +681,10 @@ So: 5K / HM / Marathon × Advanced × PR with no strength selected all collapse 
 
 **Beginner exception:** No bricks in the first 2 weeks of Base. Start bricks in Base week 3 at the shortest duration (15 min bike + 10 min run).
 
+### Explicit Base brick slots
+
+An athlete-selected weekly brick slot is honored during Base as weekly easy transition practice, within the every-1–2-week frequency in §4a-ii. Intermediate/advanced prescriptions are 25 minutes easy bike plus 10 minutes easy run (Z1–Z2, 35 minutes total). Beginners use standalone easy cycling in Base weeks 1–2, then 15 minutes easy bike plus 10 minutes easy run. The live planner and Rule Engine share the Base prescription helper. Never select a generic 90-minute or higher-intensity brick from the library for a Base slot. Taper/race-week safety rules remain in force; a request for weekly bricks does not override recovery restrictions.
+
 **RACE WEEK — 4–5 sessions (triathlon example, Sunday race):**
 | Day | Session | Duration | Notes |
 |-----|---------|----------|-------|

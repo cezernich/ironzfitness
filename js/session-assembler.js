@@ -1695,8 +1695,37 @@
     return plan;
   }
 
+  // Master spec §4a-ii: explicit Base transition practice is short and easy.
+  // Shared with the live planner so a library miss cannot turn it into a
+  // 90-minute Build workout. Beginner weeks 1–2 remain standalone cycling.
+  function baseBrickAllowedOnDate(date, races) {
+    const when = new Date(date + 'T00:00:00Z').getTime();
+    return (races || []).every(race => {
+      if (!race || !race.date) return true;
+      const days = (new Date(race.date + 'T00:00:00Z').getTime() - when) / 86400000;
+      return days < 0 || days > 14;
+    });
+  }
+
+  function baseBrickPrescription(level, weekInBase) {
+    if (level === 'beginner' && weekInBase <= 2) return null;
+    const bike = level === 'beginner' ? 15 : 25;
+    const run = 10;
+    return {
+      workoutId: 'base-transition-practice', libraryName: 'Easy Base Brick',
+      sport: 'brick', phase: 'Base', sessionType: 'bike_to_run',
+      duration_min: bike + run,
+      main_set: { type: 'mixed', blocks: [
+        { duration_min: bike, zone: 'Z2', description: bike + ' min easy bike, Z1–Z2; start gently' },
+        { duration_min: run, zone: 'Z2', description: run + ' min easy run off the bike, Z1–Z2; no race-pace work' },
+      ] },
+    };
+  }
+
   window.SessionAssembler = {
     assembleWeeklyPlan,
+    baseBrickPrescription,
+    baseBrickAllowedOnDate,
     getWeeklyTimeBudget,
     insertKeySessions,
     applyIntensityConstraints,
