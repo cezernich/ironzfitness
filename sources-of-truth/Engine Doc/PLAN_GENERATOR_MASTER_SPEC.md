@@ -2004,3 +2004,7 @@ Apply beginner/advanced modifiers from the table above on top of these.
 ---
 
 **END OF DOCUMENT**
+
+### Schedule preview integrity
+
+Build Plan applies default session targets when seeding a weekly schedule. After the athlete edits that schedule, preview rendering must not add sessions or reapply those targets. The preview and saved weekly template must preserve explicit additions, removals, and rest days. When the race, goal, athlete level, or other schedule inputs change, regenerate untouched defaults at the schedule step. If the athlete has edited the schedule or is editing a saved plan, preserve it and offer the updated suggested session count with explicit Apply suggested schedule / Keep my schedule choices. Applying replaces the weekly template only by the athlete's choice. An explicitly emptied schedule remains empty. Phase-specific session substitutions remain subject to the phase rules above.

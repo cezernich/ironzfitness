@@ -604,6 +604,8 @@
     // Plan run starts clean. Flipped true by any chip add/remove/drag so
     // _saveLongDaysAndContinue knows to preserve (not wipe) user edits.
     _state._scheduleTouched = false;
+    _state._scheduleInputSignature = null;
+    _state._scheduleSuggestion = null;
     // Re-pre-fill strength setup from plan details on the next
     // visit to bp-v2-6 (one-shot flag so the user's manual tweaks
     // aren't clobbered mid-flow).
@@ -2692,6 +2694,82 @@
   const _BP_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
   const _BP_DAY_LABELS = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
 
+  function _scheduleInputsSignature() {
+    return JSON.stringify({
+      race: _state.currentRace, level: _deriveAthleteLevel(),
+      sports: _state.selectedSports, goals: _state.trainingGoals,
+      strength: _state.strengthSetup, longDays: _state.longDays,
+      days: _state.planDetails.daysPerWeek, length: _state.planDetails.sessionLength,
+    });
+  }
+
+  // Refresh defaults at the schedule boundary, never while rendering preview.
+  // Existing templates and explicit edits require the athlete's choice.
+  function _refreshScheduleDefaults() {
+    const signature = _scheduleInputsSignature();
+    const previous = _state._scheduleInputSignature;
+    const empty = _BP_DAYS.every(d => !(_state.schedule[d] || []).length);
+    if (empty && !_state._editingPlanId && !_state._scheduleTouched) {
+      _seedSchedule();
+      _state._scheduleSuggestion = null;
+      _state._scheduleInputSignature = _scheduleInputsSignature();
+      return;
+    }
+    if (!previous) {
+      _state._scheduleInputSignature = signature;
+      return;
+    }
+    if (signature === previous) return;
+    _state._scheduleSuggestion = null;
+    if (!_state._scheduleTouched && !_state._editingPlanId) {
+      _seedSchedule();
+    } else {
+      const schedule = _state.schedule;
+      const details = _state.planDetails;
+      try {
+        _state.schedule = {};
+        _state.planDetails = { ...details };
+        _seedSchedule();
+        _state._scheduleSuggestion = {
+          schedule: _state.schedule, days: _state.planDetails.daysPerWeek,
+        };
+      } finally {
+        _state.schedule = schedule;
+        _state.planDetails = details;
+      }
+    }
+    _state._scheduleInputSignature = _scheduleInputsSignature();
+  }
+
+  function _renderScheduleSuggestion() {
+    const suggestion = _state._scheduleSuggestion;
+    if (!suggestion) return "";
+    const count = _BP_DAYS.reduce((n, d) => n +
+      (suggestion.schedule[d] || []).filter(s => s !== "rest").length, 0);
+    return '<div role="status" class="ob-v2-section-label">Your plan inputs changed. Suggested: ' + count +
+      ' sessions per week. Applying replaces your weekly schedule.</div>' +
+      '<button type="button" onclick="OnboardingV2._applyScheduleSuggestion()">Apply suggested schedule</button>' +
+      '<button type="button" onclick="OnboardingV2._keepScheduleEdits()">Keep my schedule</button>';
+  }
+
+  function _applyScheduleSuggestion() {
+    const suggestion = _state._scheduleSuggestion;
+    if (!suggestion) return;
+    _state.schedule = suggestion.schedule;
+    _state.planDetails.daysPerWeek = suggestion.days;
+    _state._scheduleSuggestion = null;
+    _state._scheduleTouched = false;
+    _state._scheduleInputSignature = _scheduleInputsSignature();
+    _renderSchedule();
+    _renderPlanPreview();
+  }
+
+  function _keepScheduleEdits() {
+    _state._scheduleSuggestion = null;
+    _renderSchedule();
+    _renderPlanPreview();
+  }
+
   function _renderSchedule() {
     const grid = document.getElementById("bp-v2-schedule-grid");
     if (!grid) return;
@@ -2715,15 +2793,8 @@
     _BP_DAYS.forEach(d => {
       _state.schedule[d] = _state.schedule[d].filter(slotBelongsToSelectedSport);
     });
-    // Seed only on FIRST entry to bp-5 in a fresh build flow. Skip the
-    // seed entirely when editing an existing plan — even if the saved
-    // template was empty (older saves predate buildPlanTemplate), we
-    // shouldn't re-fill all 7 days with defaults; that overwrites the
-    // user's intent. Better to show an empty grid and let them build
-    // from scratch.
-    const allEmpty = _BP_DAYS.every(d => _state.schedule[d].length === 0);
     const isEditing = !!_state._editingPlanId;
-    if (allEmpty && !isEditing) _seedSchedule();
+    _refreshScheduleDefaults();
     // Sync the start-date input with state, seeding the default if unset.
     const dateInput = document.getElementById("bp-v2-start-date");
     if (dateInput) {
@@ -2739,7 +2810,7 @@
     // is written to localStorage during chip clicks.
     const cta = document.getElementById("bp-v2-schedule-cta");
     if (cta) cta.textContent = isEditing ? "Save Changes" : "Continue";
-    grid.innerHTML = _BP_DAYS.map(day => {
+    grid.innerHTML = _renderScheduleSuggestion() + _BP_DAYS.map(day => {
       const slots = _state.schedule[day] || [];
       const chipsHtml = slots.map((s, i) => {
         // For display, show the enriched label if the stored slot is
@@ -3668,6 +3739,7 @@
     _renderSchedule();
   }
   function _saveScheduleAndContinue() {
+    _refreshScheduleDefaults();
     // Editing an existing plan → commit straight to disk and exit.
     // Skipping the preview is the whole point of the edit flow: the
     // user already has a plan, they're tweaking the weekly pattern.
@@ -3983,15 +4055,8 @@
     const race = _state.currentRace;
     const hasRace = _state.trainingGoals.includes("race") && race && race.date;
 
-    // Re-run spec-target enforcement on every preview render so users
-    // who change goal / level after the schedule was first seeded still
-    // see the matrix-correct session count. Idempotent — it only ADDS
-    // missing sessions up to the matrix target, never removes.
-    // Previously a user who selected PR goal and Advanced level AFTER
-    // visiting the Weekly Schedule step saw a 5-session, 1-quality plan
-    // because the schedule was seeded under the old intermediate
-    // defaults and never re-enforced.
-    try { _enforceSpecTarget(); } catch (e) { try { console.warn("[IronZ] preview enforce failed:", e.message); } catch {} }
+    // Defaults are enforced when the schedule is seeded. Preview must be
+    // read-only: adding sessions here silently undoes explicit removals.
     // Strength-only users don't follow a race-phased arc, so the
     // base/build/peak/taper timeline is irrelevant — skip it.
     const sports = _state.selectedSports || [];
@@ -4095,6 +4160,7 @@
       : 'Plan Week 1';
     body.innerHTML =
       (showTimeline ? '<div class="ob-v2-preview-timeline">' + timelineHtml + '</div>' : "") +
+      _renderScheduleSuggestion() +
       '<div class="ob-v2-section-label">' + _escape(weekLabel) + '</div>' +
       '<div class="ob-v2-week-preview">' + weekHtml + '</div>' +
       _renderPlanPhilosophyBlock(enriched);
@@ -5329,7 +5395,7 @@
       _openAddSlotPicker, _pickAddSlot, _closeAddSlotPicker,
       _openSlotSubtypePicker, _pickSlotSubtype,
       _slotDragStart, _slotDragEnd, _slotDragOver, _slotDragLeave, _slotDrop,
-      _saveScheduleAndContinue,
+      _saveScheduleAndContinue, _applyScheduleSuggestion, _keepScheduleEdits,
       _renderPlanPreview, _confirmAndSavePlan, _mapRacesToLegacyEvents, _goToTrainingTab, _goToHomeTab, _renderBRaceReview, _goToBRaceInCalendar,
     });
   }
