@@ -20,14 +20,23 @@ trap '"${PSQL[@]}" -d postgres -c "DROP DATABASE IF EXISTS $DB" >/dev/null' EXIT
 
 "${PSQL[@]}" -d "$DB" -f tests/sql/mock_supabase.sql >/dev/null
 "${PSQL[@]}" -d "$DB" -c "INSERT INTO auth.users VALUES ('00000000-0000-0000-0000-00000000000f')" >/dev/null
+# Replay the exact filename discovery order used by the CLI, not a manually
+# chosen dependency order. Replaying twice also tests idempotence.
+MIGRATIONS=()
+while IFS= read -r migration; do MIGRATIONS+=("$migration"); done < <(node scripts/profile-migrations.js)
+[ "${#MIGRATIONS[@]}" -ge 3 ] || { echo "FAIL: final profile privacy migration missing"; exit 1; }
+if [ "${IRONZ_PROFILE_UPGRADE:-0}" = "1" ]; then
+  # Existing environments applied the two originals manually in chronological
+  # order. Only the new correction should be needed for their upgrade.
+  "${PSQL[@]}" -d "$DB" -f supabase/migrations/20261109_secure_profiles.sql >/dev/null 2>&1
+  "${PSQL[@]}" -d "$DB" -f supabase/migrations/20261109174117_restrict_coach_profile_reads.sql >/dev/null 2>&1
+  MIGRATIONS=("${MIGRATIONS[2]}")
+fi
 for _ in 1 2; do
-  "${PSQL[@]}" -d "$DB" -f supabase/migrations/20261109_secure_profiles.sql >/dev/null 2>&1 \
-    || { echo "FAIL: migration did not apply cleanly"; exit 1; }
-done
-
-for _ in 1 2; do
-  "${PSQL[@]}" -d "$DB" -f supabase/migrations/20261109174117_restrict_coach_profile_reads.sql >/dev/null 2>&1 \
-    || { echo "FAIL: coach privacy migration did not apply cleanly"; exit 1; }
+  for migration in "${MIGRATIONS[@]}"; do
+    "${PSQL[@]}" -d "$DB" -f "$migration" >/dev/null 2>&1 \
+      || { echo "FAIL: migration did not apply cleanly: $migration"; exit 1; }
+  done
 done
 
 uid() { echo "00000000-0000-0000-0000-00000000000$1"; }
