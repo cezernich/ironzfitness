@@ -81,20 +81,30 @@
     const cssTest400=timed(swim.css400min,swim.css400sec),cssTest200=timed(swim.css200min,swim.css200sec);
     const css=value=>typeof value==='string'&&value.includes(':')?(pace(value)===null?null:Math.round(pace(value)*60000)/1000):positive(value);
     const candidate=(value,stamp,source)=>({value,observedAt:stamp||null,source,quality:!stamp?'undated':!Number.isFinite(Date.parse(stamp))?'invalid':Date.parse(stamp)>now.getTime()?'future':'dated'});
-    const choose=(draft,zone,legacy,mode)=>{
-      if(raw.draft===true) return mode==='test'?candidate(null,null,'requested_test'):['future','invalid'].includes(draft.quality)?candidate(null,null,'unknown'):draft;
-      const choices=[zone,draft,legacy].filter(c=>c.value!==null&&c.value!==undefined&&!['future','invalid'].includes(c.quality));
+    const choose=(draft,zone,legacy,intent={})=>{
+      const mode=intent.mode;
+      if(mode==='clear') {
+        const boundary=intent._clearedAt||intent._updatedAt;
+        const newerZone=zone.value!=null&&!['future','invalid'].includes(zone.quality)&&zone.observedAt
+          && (!boundary||Date.parse(zone.observedAt)>Date.parse(boundary));
+        return raw.draft!==true&&newerZone?zone:candidate(null,null,'explicitly_cleared');
+      }
+      if(raw.draft===true&&mode!=='test')return ['future','invalid'].includes(draft.quality)?candidate(null,null,'unknown'):draft;
+      const choices=(mode==='test'?[zone,legacy]:[zone,draft,legacy]).filter(c=>c.value!==null&&c.value!==undefined&&!['future','invalid'].includes(c.quality));
       // Newest dated measurement wins. For undated legacy data retain the
       // existing Training Zones precedence; missing dates stay visible.
       choices.sort((a,b)=>(Date.parse(b.observedAt)||0)-(Date.parse(a.observedAt)||0));
-      return choices[0]||candidate(null,null,'unknown');
+      const chosen=choices[0]||candidate(null,null,'unknown');
+      const boundary=intent._requestedAt||intent._updatedAt;
+      const fulfilled=chosen.observedAt&&(!raw.draft||intent._requestedAt)&&(!boundary||Date.parse(chosen.observedAt)>Date.parse(boundary));
+      return mode==='test'&&!fulfilled?{...chosen,testRequested:true}:chosen;
     };
     const resolved={
-      runReference:choose(candidate(run.method==='race'&&run.raceDist&&run.raceTime?{referenceDist:run.raceDist,referenceTime:run.raceTime}:null,run._updatedAt,'wizard'),candidate(zones.running?.referenceDist&&zones.running?.referenceTime?{referenceDist:zones.running.referenceDist,referenceTime:zones.running.referenceTime}:null,zones.running?.lastUpdated||zones.running?.calculatedAt||p.thresholdPaceUpdated,'training_zones'),candidate(p.runReference||null,p.thresholdPaceUpdated,'profile'),run.mode),
-      vdot:choose(candidate(positive(run.vdot),run._updatedAt,'wizard'),candidate(positive(zones.running?.vdot),zones.running?.lastUpdated||zones.running?.calculatedAt||p.thresholdPaceUpdated,'training_zones'),candidate(positive(p.runVDOT),p.thresholdPaceUpdated,'profile'),run.mode),
-      run:choose(candidate(pace(run.threshPace??thresholds.running_threshold_pace),run._updatedAt,'wizard'),candidate(pace(zones.running?.thresholdPace),zones.running?.lastUpdated||zones.running?.calculatedAt||p.thresholdPaceUpdated,'training_zones'),candidate(pace(p.thresholdPace),p.thresholdPaceUpdated,'profile'),run.mode),
-      bike:choose(candidate(positive(bike.ftp??thresholds.cycling_ftp)??(bike.method==='20min-test'&&positive(bike.twentyMinWatts)?Math.round(Number(bike.twentyMinWatts)*0.95):null),bike._updatedAt,'wizard'),candidate(positive(zones.biking?.ftp),zones.biking?.lastUpdated||zones.biking?.calculatedAt||p.ftpUpdated,'training_zones'),candidate(positive(p.ftp),p.ftpUpdated,'profile'),bike.mode),
-      swim:choose(candidate(css(swim.cssPace??swim.css)??(cssTest400>cssTest200&&cssTest200>0?(cssTest400-cssTest200)/2:null),swim._updatedAt,'wizard'),candidate(css(zones.swimming?.tPaceSec??zones.swimming?.css??zones.swimming?.cssPace??zones.swimming?.tPaceStr),zones.swimming?.lastUpdated||zones.swimming?.calculatedAt||p.cssTimeUpdated,'training_zones'),candidate(positive(p.cssTime),p.cssTimeUpdated,'profile'),swim.mode)
+      runReference:choose(candidate(run.method==='race'&&run.raceDist&&run.raceTime?{referenceDist:run.raceDist,referenceTime:run.raceTime}:null,run._updatedAt,'wizard'),candidate(zones.running?.referenceDist&&zones.running?.referenceTime?{referenceDist:zones.running.referenceDist,referenceTime:zones.running.referenceTime}:null,zones.running?.lastUpdated||zones.running?.calculatedAt||p.thresholdPaceUpdated,'training_zones'),candidate(p.runReference||null,p.thresholdPaceUpdated,'profile'),run),
+      vdot:choose(candidate(positive(run.vdot),run._updatedAt,'wizard'),candidate(positive(zones.running?.vdot),zones.running?.lastUpdated||zones.running?.calculatedAt||p.thresholdPaceUpdated,'training_zones'),candidate(positive(p.runVDOT),p.thresholdPaceUpdated,'profile'),run),
+      run:choose(candidate(pace(run.threshPace??thresholds.running_threshold_pace),run._updatedAt,'wizard'),candidate(pace(zones.running?.thresholdPace),zones.running?.lastUpdated||zones.running?.calculatedAt||p.thresholdPaceUpdated,'training_zones'),candidate(pace(p.thresholdPace),p.thresholdPaceUpdated,'profile'),run),
+      bike:choose(candidate(positive(bike.ftp??thresholds.cycling_ftp)??(bike.method==='20min-test'&&positive(bike.twentyMinWatts)?Math.round(Number(bike.twentyMinWatts)*0.95):null),bike._updatedAt,'wizard'),candidate(positive(zones.biking?.ftp),zones.biking?.lastUpdated||zones.biking?.calculatedAt||p.ftpUpdated,'training_zones'),candidate(positive(p.ftp),p.ftpUpdated,'profile'),bike),
+      swim:choose(candidate(css(swim.cssPace??swim.css)??(cssTest400>cssTest200&&cssTest200>0?(cssTest400-cssTest200)/2:null),swim._updatedAt,'wizard'),candidate(css(zones.swimming?.tPaceSec??zones.swimming?.css??zones.swimming?.cssPace??zones.swimming?.tPaceStr),zones.swimming?.lastUpdated||zones.swimming?.calculatedAt||p.cssTimeUpdated,'training_zones'),candidate(positive(p.cssTime),p.cssTimeUpdated,'profile'),swim)
     };
     const trainingGoals=clone(raw.trainingGoals??p.trainingGoals??[]);
     const daysAvailable=preferredDays?preferredDays.length:number(primary?.preferences?.daysPerWeek??p.availableDaysPerWeek??p.daysAvailable??p.daysPerWeek);
