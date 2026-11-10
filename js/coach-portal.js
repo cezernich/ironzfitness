@@ -69,9 +69,7 @@
         return;
       }
 
-      const profilesRes = await client.from("profiles")
-        .select("id, full_name, email, gender, weight_lbs, age")
-        .in("id", clientIds);
+      const profilesRes = await client.rpc("profile_cards", { p_ids: clientIds });
 
       _clients = (profilesRes.data || []);
       _profilesById = {};
