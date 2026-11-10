@@ -66,6 +66,8 @@ Automatic review rejected pushing these updates to shared `codex/staging-environ
 
 ## Next concrete action
 
+Post-fix product backlog: [FEATURE_ROADMAP.md](FEATURE_ROADMAP.md) records twelve prioritized mobile features from the Intervals.icu review, including workout-time weather guidance. Documentation task branch `codex/mobile-feature-roadmap` is based on main `681e68c6adf74e34dbaa10720c77068c41a88a54` to exclude unrelated staging commits. This backlog does not supersede the implementation checkpoint or release gates above; revisit after the current fixes. No application behavior, migrations or deployments changed.
+
 Obtain Claude review of PR25 and existing privacy/staging candidates. Integrate pending collaboration/test-runner dependency through reviewed PRs and rerun final combined candidate. Then address issue26 separately after comparing existing audit distribution constraints. All existing quarantine, sync/intensity, security-review, secret-rotation, hosted-access and external/native gates remain held. No merge or production release authorized.
 
 Product/private-coaching boundaries remain as previously recorded; the working Madison project and personal health records were untouched.
