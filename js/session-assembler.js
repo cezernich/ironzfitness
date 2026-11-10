@@ -1716,8 +1716,8 @@
       sport: 'brick', phase: 'Base', sessionType: 'bike_to_run',
       duration_min: bike + run,
       main_set: { type: 'mixed', blocks: [
-        { duration_min: bike, zone: 'Z2', description: bike + ' min easy bike, Z1–Z2; start gently' },
-        { duration_min: run, zone: 'Z2', description: run + ' min easy run off the bike, Z1–Z2; no race-pace work' },
+        { discipline: 'bike', duration_min: bike, zone: 'Z2', description: bike + ' min easy bike, Z1–Z2; start gently' },
+        { discipline: 'run', duration_min: run, zone: 'Z2', description: run + ' min easy run off the bike, Z1–Z2; no race-pace work' },
       ] },
     };
   }

@@ -862,6 +862,14 @@ For weeks where the math forces a cluster (e.g., 3 days/week = 4 rest days must 
 
 ---
 
+### Prescription integrity at the calendar boundary
+
+A safety demotion to easy must discard the original library workout, edited intervals, and template snapshot before resolving an easy prescription. Changing a load badge or title while retaining threshold intervals is invalid. Demotion to rest must also discard those payloads.
+
+For endurance sessions, the saved positive duration is the prescribed duration. Calendar steps and completion suggestions must reconcile to that duration, including after a reduce restriction. Scale work and recovery intervals proportionally without rounding individual intervals to whole minutes or imposing a one-minute floor; repetitions stay unchanged. An injury/illness reduce restriction treats every non-rest load (including strides, tests, and openers) as easy, replaces endurance intervals with easy Z1 work, and suppresses loaded strength instructions in favor of a clearance reminder. Restrictions may never lengthen a short session. Removal restrictions take precedence over rendering.
+
+Mixed brick blocks carry an explicit `discipline` (`bike` or `run`). Each leg uses that sport's zones. For older mixed blocks without this field, the description may identify the leg; transition-based inference remains the final fallback.
+
 ## 5. STRENGTH ROLE — How strengthRole Modifies Strength Sessions
 
 The strengthRole (selected during onboarding for hybrid athletes) determines WHAT the strength sessions look like:

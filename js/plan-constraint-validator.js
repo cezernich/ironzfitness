@@ -102,6 +102,11 @@
   // marker and renames to an easy variant.
   function demoteToEasy(entry, reason) {
     entry.load = "easy";
+    // A demotion replaces the prescription, not just its label.
+    delete entry.libraryWorkout;
+    delete entry.aiSession;
+    delete entry.templateWorkout;
+    delete entry.prescriptionSource;
     if (entry.sessionName) {
       // Swap the leading "Threshold" / "Tempo" / "Long" label to "Easy"
       entry.sessionName = entry.sessionName
@@ -121,6 +126,10 @@
     entry.load = "rest";
     entry.sessionName = "Rest";
     entry.duration = 0;
+    delete entry.libraryWorkout;
+    delete entry.aiSession;
+    delete entry.templateWorkout;
+    delete entry.prescriptionSource;
     entry.keySession = false;
     if (!entry._demotions) entry._demotions = [];
     entry._demotions.push(reason);
