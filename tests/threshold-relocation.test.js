@@ -127,5 +127,36 @@ t("the moved test takes the whole day", () => {
   });
 });
 
+// No swim anywhere in the template: the CSS test can't be placed, so the
+// week's sessions carry a notice and the calendar explains it.
+const NOSWIM = { mon: ["run-easy"], tue: ["bike-interval"], wed: ["run-long"], thu: ["bike-endurance"], fri: ["run-easy"], sat: ["bike-long"], sun: [] };
+const noSwimPlan = build(NOSWIM);
+const TWn = load().ThresholdWeekScheduler;
+t("a test with no possible day is flagged on its week's sessions", () => {
+  assert.strictEqual(noSwimPlan.filter(e => e.thresholdTestType === "SWIM_CSS").length, 0);
+  const flagged = noSwimPlan.filter(e => Array.isArray(e.thresholdTestsSkipped));
+  assert.ok(flagged.length > 0, "no session carries the skipped-test notice");
+  flagged.forEach(e => assert.strictEqual(JSON.stringify(e.thresholdTestsSkipped), "[\"SWIM_CSS\"]"));
+});
+t("calendar notice lists the week's tests and the skipped one", () => {
+  const day = noSwimPlan.find(e => Array.isArray(e.thresholdTestsSkipped));
+  const n = TWn.describeThresholdWeek(noSwimPlan, day.date);
+  assert.strictEqual(n.kind, "week");
+  assert.strictEqual(JSON.stringify(n.skipped.map(s => s.type)), "[\"SWIM_CSS\"]");
+  assert.ok(n.tests.some(x => x.type === "BIKE_FTP_20") && n.tests.some(x => x.type === "RUN_5K_TT"));
+});
+t("calendar notice on a moved test says where it came from", () => {
+  const moved = tight.find(e => e.movedToNextWeek);
+  const n = TWn.describeThresholdWeek(tightPlan, moved.date);
+  assert.strictEqual(n.kind, "moved_test");
+  assert.ok(n.tests.some(x => x.movedToNextWeek && x.date === moved.date));
+  const home = TWn.describeThresholdWeek(tightPlan, tight.find(e => e.thresholdTestType === "BIKE_FTP_20").date);
+  assert.ok(home.tests.some(x => x.movedToNextWeek), "home week doesn't mention the moved test");
+});
+t("no notice outside threshold weeks", () => {
+  const plainDay = plan.find(e => !e.isThresholdWeek);
+  assert.strictEqual(TWn.describeThresholdWeek(plan, plainDay.date), null);
+});
+
 console.log(`\nthreshold relocation: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

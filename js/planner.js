@@ -2264,6 +2264,21 @@ function _relocateThresholdTests(entries, constraints) {
     if (spillDates.has(e.date) && e.discipline !== "race" && e.phase !== "Race") continue;
     out.push(e);
   }
+  // Tell the athlete on the calendar: stamp the week's remaining sessions
+  // with the tests that couldn't be scheduled (zones keep their last value).
+  const skippedByWeek = new Map();
+  for (const [t, d] of moves) if (!d) {
+    const m = TW.toDateStr(TW.mondayOf(t.date));
+    skippedByWeek.set(m, [...(skippedByWeek.get(m) || []), t.thresholdTestType || t.discipline]);
+  }
+  if (skippedByWeek.size) {
+    for (let i = 0; i < out.length; i++) {
+      const e = out[i];
+      if (!e.isThresholdWeek || e.isThresholdTest) continue;
+      const list = skippedByWeek.get(TW.toDateStr(TW.mondayOf(e.date)));
+      if (list) out[i] = { ...e, thresholdTestsSkipped: list.slice() };
+    }
+  }
   const dropped = [...moves.entries()].filter(([, d]) => !d).map(([t]) => t.thresholdTestType || t.discipline);
   if (dropped.length && typeof console !== "undefined") {
     // Zones for these sports stay at their last value until the next test week.

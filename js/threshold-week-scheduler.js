@@ -401,6 +401,34 @@
     return Math.max(15, Math.round(durationMin * f / 5) * 5);
   }
 
+  // ─── Calendar notice ─────────────────────────────────────────────────────────
+
+  const TEST_LABELS = { SWIM_CSS: "swim (CSS)", BIKE_FTP_20: "bike (FTP)", RUN_5K_TT: "run (5K)" };
+  const TEST_SPORT = { SWIM_CSS: "swim", BIKE_FTP_20: "bike", RUN_5K_TT: "run" };
+
+  // What the calendar should tell the athlete about the threshold week that
+  // contains dateStr. Pure: reads only the plan entries passed in.
+  // Returns null when dateStr isn't in a threshold week, else
+  // { kind: "week" | "moved_test", tests: [{type, label, date, movedToNextWeek}],
+  //   skipped: [{type, label, sport}] }.
+  function describeThresholdWeek(plan, dateStr) {
+    const list = Array.isArray(plan) ? plan : [];
+    const here = list.filter(p => p && p.date === dateStr && p.isThresholdWeek);
+    if (!here.length) return null;
+    const movedHere = here.find(p => p.isThresholdTest && p.movedToNextWeek);
+    const weekOf = d => toDateStr(mondayOf(d));
+    // A moved test belongs to the week it came from.
+    const homeWeek = movedHere ? weekOf(movedHere.relocatedFrom || movedHere.date) : weekOf(dateStr);
+    const tests = list
+      .filter(p => p && p.isThresholdTest && weekOf(p.movedToNextWeek ? (p.relocatedFrom || p.date) : p.date) === homeWeek)
+      .sort((a, b) => (a.date < b.date ? -1 : 1))
+      .map(p => ({ type: p.thresholdTestType, label: TEST_LABELS[p.thresholdTestType] || "test", date: p.date, movedToNextWeek: !!p.movedToNextWeek }));
+    const skippedTypes = new Set();
+    list.forEach(p => { if (p && p.isThresholdWeek && weekOf(p.date) === homeWeek && Array.isArray(p.thresholdTestsSkipped)) p.thresholdTestsSkipped.forEach(t => skippedTypes.add(t)); });
+    const skipped = [...skippedTypes].map(t => ({ type: t, label: TEST_LABELS[t] || t, sport: TEST_SPORT[t] || "those" }));
+    return { kind: movedHere ? "moved_test" : "week", tests, skipped };
+  }
+
   // ─── Public surface ──────────────────────────────────────────────────────────
 
   const api = {
@@ -442,6 +470,7 @@
     minTestGap,
     bestTestLayout,
     testsForWeek,
+    describeThresholdWeek,
   };
 
   if (typeof window !== "undefined") {

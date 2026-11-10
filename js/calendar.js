@@ -4414,17 +4414,10 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
   // Added 2026-04-09 (PHILOSOPHY_UPDATE_2026-04-09_threshold_weeks).
   try {
     const _planForBanner = typeof loadTrainingPlan === "function" ? loadTrainingPlan() : [];
-    const _twDay = _planForBanner.find(p => p.date === dateStr && p.isThresholdWeek);
-    if (_twDay) {
-      const _testDay = _planForBanner.find(p => p.isThresholdWeek && p.isThresholdTest && (function () {
-        // Same week as dateStr (Mon..Sun)
-        const TW = window.ThresholdWeekScheduler;
-        if (!TW) return false;
-        const a = TW.toDateStr(TW.mondayOf(dateStr));
-        const b = TW.toDateStr(TW.mondayOf(p.date));
-        return a === b;
-      })());
-      const _testDateLabel = _testDay ? formatDisplayDate(_testDay.date) : "Day 4 of this week";
+    const _TW = window.ThresholdWeekScheduler;
+    const _tw = _TW && typeof _TW.describeThresholdWeek === "function" ? _TW.describeThresholdWeek(_planForBanner, dateStr) : null;
+    if (_tw) {
+      const _esc = v => String(v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
       const _cadenceUsed = (function () {
         try {
           const ud = JSON.parse(localStorage.getItem("user_data") || "{}");
@@ -4432,14 +4425,31 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
           return Number(ud.threshold_week_cadence_override || pf.threshold_week_cadence_override) || 6;
         } catch { return 6; }
       })();
-      html += `
+      const _testList = _tw.tests.map(t =>
+        `${_esc(t.label)} on <b>${_esc(formatDisplayDate(t.date))}</b>${t.movedToNextWeek ? " (next week, so your legs recover between tests)" : ""}`).join("; ");
+      const _skipped = _tw.skipped.length
+        ? ` Your schedule had no room for the ${_tw.skipped.map(s => _esc(s.label)).join(" and ")} test this cycle, so those zones stay where they are until the next test week.`
+        : "";
+      if (_tw.kind === "moved_test") {
+        const _t = _tw.tests.find(t => t.movedToNextWeek && t.date === dateStr) || _tw.tests[0];
+        html += `
         <div class="threshold-week-banner">
-          <div class="threshold-week-banner-title">THRESHOLD WEEK — Reset &amp; Test</div>
+          <div class="threshold-week-banner-title">THRESHOLD TEST, moved from last week</div>
           <div class="threshold-week-banner-body">
-            Volume is down ~35%. ${_testDay ? `Test on <b>${_testDateLabel}</b>.` : "One test this week."}
-            The result will update your training zones for the next ${_cadenceUsed} weeks.
+            Your ${_esc(_t ? _t.label : "")} test moved here to give your legs time to recover from last week's tests.
+            The result will update your training zones.
           </div>
         </div>`;
+      } else {
+        html += `
+        <div class="threshold-week-banner">
+          <div class="threshold-week-banner-title">THRESHOLD WEEK: Reset &amp; Test</div>
+          <div class="threshold-week-banner-body">
+            Volume is down ~35%. ${_testList ? `Tests: ${_testList}.` : "No tests fit this week."}
+            The results will update your training zones for the next ${_cadenceUsed} weeks.${_skipped}
+          </div>
+        </div>`;
+      }
     }
   } catch (e) {
     console.warn("[IronZ] threshold-week banner render failed:", e.message);
