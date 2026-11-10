@@ -687,6 +687,9 @@ const DB = (() => {
     }
   }
 
+  function getRecoveryReport(asOf=new Date().toISOString()) {
+    return window.AthleteInput.normalizeCheckIn(_lsGet('latestCheckIn'),{asOf});
+  }
   function captureAthleteInput(overrides={}) {
     const keys=['profile','thresholds','trainingZones','selectedSports','trainingGoals','strengthRole','equipmentProfile','latestCheckIn','longDays','buildPlanTemplate','events','blockedPeriods'];
     const values=Object.fromEntries(keys.map(key=>{
@@ -1370,6 +1373,7 @@ const DB = (() => {
     planBuildNeedsReload: () => _planBuildReloadRequired,
     cachePlanBuild,
     captureAthleteInput,
+    getRecoveryReport,
     replayPendingSyncs,
     refreshAllKeys,
     refreshKey,

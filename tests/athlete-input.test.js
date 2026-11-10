@@ -69,3 +69,6 @@ assert.equal(I.normalizeCheckIn({sleepQuality:'poor',energyLevel:'high',soreness
 
 assert.equal(I.normalizeCheckIn({sleepQuality:2.5,energyLevel:2.5,soreness:2.5,observedAt:asOf},{asOf}).recoveryState,'unknown');
 assert.equal(normalize({trainingZones:{running:{vdot:60,lastUpdated:'2031-01-01'}}}).profile.runVDOT,null);
+
+const conflictReport=I.normalizeCheckIn({...report,sleepQuality:5},{asOf});assert.equal(I.normalizeCheckIn(JSON.parse(JSON.stringify(conflictReport)),{asOf}).recoveryState,'unknown','persisted intrinsic conflicts cannot turn into good recovery');
+(async()=>{const {setup}=require('./empty-plan-regression.test');const h=setup();vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../js/weekly-checkin.js'),'utf8'),h.context);h.node('confirm').dataset={value:'too-hard'};const stamp=new Date(Date.now()-86400000).toISOString();h.store.set('latestCheckIn',JSON.stringify({sleepQuality:5,energyLevel:5,soreness:1,observedAt:stamp}));await h.context.submitWeeklyCheckin();assert.equal(h.read('latestCheckIn').observedAt,stamp);assert.equal(h.store.get('currentRecoveryState'),'good');console.log('PASS: difficulty feedback preserves existing wellness observation time and values');})().catch(e=>{console.error(e);process.exitCode=1;});

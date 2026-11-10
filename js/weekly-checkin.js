@@ -180,9 +180,9 @@ async function submitWeeklyCheckin() {
   history.push(checkin);
   try {
     if(typeof DB==='undefined'||!DB.savePlanBuild) throw Error('Check-in saving is unavailable.');
-    // Difficulty alone does not establish recovery. Store unknown with the
-    // acknowledged UI history rather than manufacturing a wellness report.
-    const latestCheckIn=window.AthleteInput.normalizeCheckIn({observedAt:today.toISOString()});
+    // Difficulty does not replace wellness observations. Retain their actual
+    // observed time; absent/stale/conflicted reports remain unknown.
+    const latestCheckIn=DB.getRecoveryReport(today.toISOString());
     await DB.savePlanBuild({checkinHistory:history,latestCheckIn,currentRecoveryState:latestCheckIn.recoveryState});
     closeWeeklyCheckin();
   } catch(error) {
