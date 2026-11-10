@@ -37,7 +37,7 @@ Tests in `QUARANTINE` inside `scripts/run-tests.js` run but don't fail CI. Each 
 - `sources-of-truth/TRAINING_PHILOSOPHY.md` is retired. Do not reference or update it.
 - `sources-of-truth/README.md` is the map: which document is authoritative for **plan generation** vs **adaptive coaching**, the status of every file, and what code reads it. Check it before moving, renaming, or deleting anything in that folder (the live app fetches files from it by path).
 - Adaptive coaching (day-to-day changes, briefs, reviews) is specified in `docs/COACH_AGENT_SPEC.md`. It is a **draft** until merged; don't implement from it before then.
-- The `philosophy_modules` database table is live data read by the app and by `ask-ironz`. Don't sync, reconcile, or retire it except in its own tested PR.
+- The `philosophy_modules` database table is live data read by the app and by `ask-ironz`. It is frozen for new method edits, synchronization, reconciliation and new consumers. Preserve existing reads/fallbacks until migration. Security exceptions and eventual retirement each require their own tested PR; retirement waits until every consumer has moved. This repository rule does not itself disable database writes.
 
 ## 5. Current state and direction (Nov 2026)
 
@@ -48,6 +48,7 @@ Read `docs/CODE_REVIEW_2026-11-09.md` for the full picture. The short version:
   - `js/philosophy-planner.js` + `js/rules-engine.js` are legacy. Do not extend them.
 - **Coaching features are paused** (`js/coach-*.js`, `js/client-coach*.js`, `js/admin-coaches.js`, `supabase/functions/coach-*`). Don't build on them. Security fixes only.
 - Priorities, in order: security fixes > one plan engine > data layer off localStorage > Apple Health input > adaptive coaching.
+- `docs/FOUNDATION_PLAN.md` is the single delivery queue: verify/close security, approve the repo method contract, publish immutable method releases, adopt one Rule Engine, migrate Ask IronZ and retire module consumers, then settings/data and Health input before coaching. This delivery plan does not replace the master training spec or authorize production changes.
 
 ## 6. How agents work here
 

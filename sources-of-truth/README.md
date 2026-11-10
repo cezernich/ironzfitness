@@ -19,6 +19,8 @@ Rules:
 - Training logic changes in code update the matching authoritative doc in the same PR (AGENTS.md section 4).
 - **Personal coaching records stay private.** The owner's personal coaching agent keeps athlete-specific notes (health, numbers, schedule) outside this repo. Only **generalized method changes** come here, through a reviewed PR. Never auto-promote a personal adjustment into a rule for all athletes.
 
+Foundation delivery order and release gates: [`docs/FOUNDATION_PLAN.md`](../docs/FOUNDATION_PLAN.md). This is the execution queue, not another training-method authority. `philosophy_modules` is frozen for new method edits and consumers while existing runtime readers/fallbacks are preserved. A future `method_rules` registry is proposed, does not yet exist in production, and must not become a separately authored method. Retirement follows verified consumer migration in its own tested PR.
+
 ## 2. Status of everything else in this folder
 
 | Path | Status | Read by (code, scripts, tests) | Notes |
@@ -54,7 +56,7 @@ Changing which modules the database holds can change generated plans and Ask Iro
 3. Commit the regenerated `exercise-data.js` (repo root) with your source edits. `window.EXERCISE_DB` is the runtime source of truth.
 
 ### Philosophy modules → Supabase
-`node scripts/philosophy-sync.js` regenerates `modules_static.json` and uploads to the `philosophy_modules` table. **Don't run it against production** until the drift above is reconciled in a dedicated PR; it would change live plans.
+`node scripts/philosophy-sync.js` regenerates `modules_static.json` and uploads to the `philosophy_modules` table. **Frozen: do not run it against production for method updates.** Preserve the runtime data while consumers migrate, then retire this pipeline in the dedicated retirement PR. This is not a request to reconcile the module sets.
 
 ### Golden tests
 `scripts/test-golden.js` runs the legacy philosophy planner against `philosophy/golden_test_cases.json`. Runs in `npm test`.
