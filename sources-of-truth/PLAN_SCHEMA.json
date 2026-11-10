@@ -9,6 +9,31 @@
 
   "properties": {
 
+    "runLoadPolicy": {
+      "type": "object",
+      "description": "Completed-history run ceilings and forecast-only weekly assessments; does not authorize execution or medical clearance.",
+      "required": [
+        "limits",
+        "weeklyAssessments",
+        "forecastOnly"
+      ],
+      "properties": {
+        "limits": {
+          "type": "object"
+        },
+        "weeklyAssessments": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "forecastOnly": {
+          "const": true
+        }
+      }
+    },
+
+
     "planMetadata": {
       "type": "object",
       "description": "Generation metadata for traceability and versioning.",

@@ -37,7 +37,11 @@
       noConsecutiveHardDays: true,
       minRestDaysPerWeek: 1,
       maxWeeklyVolumeIncreasePct: level === 'advanced' ? 15 : 10,
-      maxLongRunPctOfWeekly: 30,
+      longRunConcentrationWarningPct: 50,
+      runGrowthBaseline: 'completed_previous_28_days',
+      maxLongRunIncreasePct: 10,
+      maxLongRunIncreaseMin: 15,
+      maxWeeklyRunIncreasePct: 10,
       strengthVolumeCapSetsPerMuscle: 4,
       deloadEveryNWeeks: level === 'advanced' ? 3 : 4,
     };
@@ -166,6 +170,17 @@
     validated.plan.planMetadata.generatedAt=snapshot.asOf;
     validated.plan.planMetadata.inputVersion=snapshot.version;
     validated.plan.planMetadata.readiness='shadow_only';
+    const runPolicy=requireDep('RunLoadPolicy',window.RunLoadPolicy);
+    const primaryRace=races.find(r=>r.priority==='A');
+    const limits=runPolicy.limits(snapshot.historyEvidence,{raceType:primaryRace?.raceType,blocked:(classification.injuries||[]).length>0||classification.recoveryState==='low'});
+    validated.plan.runLoadPolicy={limits,weeklyAssessments:validated.plan.weeklyPlan.map(week=>({
+      weekNumber:week.weekNumber,...runPolicy.assessWeek(week,limits),
+      executionStatus:'history_and_readiness_recheck_required',
+    })),forecastOnly:true};
+    // A generated future session is never promoted into completed evidence.
+    // Adoption remains blocked; an execution boundary must recheck these
+    // limits and effective pain/injury/readiness restrictions for that week.
+
     return validated.plan;
   }
 

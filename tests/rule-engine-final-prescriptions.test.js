@@ -1,13 +1,13 @@
 'use strict';
 const assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 const context={console,localStorage:{getItem:()=>null},Date,Math};context.window=context;vm.createContext(context);
-for(const file of ['training-history','athlete-input','training-zones','athlete-classifier','arc-builder','session-assembler','nutrition-calculator','hydration-calculator','plan-validator','rationale-builder','plan-generator'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../js/'+file+'.js'),'utf8'),context);
+for(const file of ['training-history','athlete-input','training-zones','athlete-classifier','arc-builder','session-assembler','nutrition-calculator','hydration-calculator','run-load-policy','plan-validator','rationale-builder','plan-generator'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../js/'+file+'.js'),'utf8'),context);
 const V=context.PlanValidator;
 for(const value of [null,undefined,{}, {weeklyPlan:[]}])assert.equal(V.validate(value,{}).allPassed,false,'absent plans are never valid');
 const progression={weeklyPlan:[{weekNumber:1,sessions:[{type:'bike',day:1,durationMin:100}]},{weekNumber:2,sessions:[{type:'bike',day:1,durationMin:115}]}]};
 V._checkVolumeIncreaseCap(progression,{level:'intermediate'},[]);assert.ok(progression.weeklyPlan[1].sessions[0].durationMin<=110);
 const proportion={weeklyPlan:[{weekNumber:1,sessions:[{type:'run',day:1,durationMin:40},{type:'run',priority:'long',day:3,durationMin:60}]}]};
-V._checkLongRunProportion(proportion,{},[]);const runs=proportion.weeklyPlan[0].sessions;assert.ok(runs[1].durationMin/runs.reduce((sum,s)=>sum+s.durationMin,0)<=.30);
+const concentrationFlags=[];V._checkLongRunProportion(proportion,{},concentrationFlags);assert.equal(proportion.weeklyPlan[0].sessions[1].durationMin,60);assert.ok(concentrationFlags.some(f=>f.action==='warning'));
 const demote={weeklyPlan:[{weekNumber:1,sessions:[{type:'run',day:1,keySession:true,durationMin:45},{type:'run',day:3,keySession:true,durationMin:45,intervals:[{effort:'Z5'}],generatedSession:{hard:true}}]}]};
 V._checkIntensityCap(demote,{level:'beginner'},[]);const easy=demote.weeklyPlan[0].sessions[1];assert.equal(easy.keySession,false);assert.equal(easy.intervals,undefined);assert.equal(easy.generatedSession,undefined);assert.equal(easy.phases[0].intensity,'z2');
 const make=type=>context.PlanGenerator.generate({asOf:'2030-01-01T12:00:00Z',startDate:'2030-01-07',profile:{age:34,weight:155,height:70,goal:'race_performance',selectedSports:type==='cycling'?['bike']:['run'],availableDaysPerWeek:5,sessionLength:60,thresholdPace:9,ftp:220,cssTime:125},races:[{raceType:type,date:'2030-06-09',priority:'A'}]});
