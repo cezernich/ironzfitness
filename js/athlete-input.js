@@ -35,7 +35,7 @@
     const values=aliases.map(keys=>keys.map(k=>raw[k]).find(v=>v!==undefined&&v!==null&&v!==''));
     const conflicts=aliases.some(keys=>{const found=keys.map(k=>raw[k]).filter(v=>v!==undefined&&v!==null&&v!=='');return found.some(v=>String(v)!==String(found[0]));});
     if(conflicts)quality='conflicting';
-    const validScore=v=>number(v)!==null&&number(v)>=1&&number(v)<=5;
+    const validScore=v=>Number.isInteger(number(v))&&number(v)>=1&&number(v)<=5;
     let recoveryState='unknown';
     if(quality==='current') {
       const explicit=raw.recoveryState;
@@ -89,6 +89,7 @@
       return choices[0]||candidate(null,null,'unknown');
     };
     const resolved={
+      vdot:choose(candidate(positive(run.vdot),run._updatedAt,'wizard'),candidate(positive(zones.running?.vdot),zones.running?.lastUpdated||zones.running?.calculatedAt||p.thresholdPaceUpdated,'training_zones'),candidate(positive(p.runVDOT),p.thresholdPaceUpdated,'profile'),run.mode),
       run:choose(candidate(pace(run.threshPace??thresholds.running_threshold_pace),run._updatedAt,'wizard'),candidate(pace(zones.running?.thresholdPace),zones.running?.lastUpdated||zones.running?.calculatedAt||p.thresholdPaceUpdated,'training_zones'),candidate(pace(p.thresholdPace),p.thresholdPaceUpdated,'profile'),run.mode),
       bike:choose(candidate(positive(bike.ftp??thresholds.cycling_ftp)??(bike.method==='20min-test'&&positive(bike.twentyMinWatts)?Math.round(Number(bike.twentyMinWatts)*0.95):null),bike._updatedAt,'wizard'),candidate(positive(zones.biking?.ftp),zones.biking?.lastUpdated||zones.biking?.calculatedAt||p.ftpUpdated,'training_zones'),candidate(positive(p.ftp),p.ftpUpdated,'profile'),bike.mode),
       swim:choose(candidate(css(swim.cssPace??swim.css)??(cssTest400>cssTest200&&cssTest200>0?(cssTest400-cssTest200)/2:null),swim._updatedAt,'wizard'),candidate(css(zones.swimming?.tPaceSec??zones.swimming?.css??zones.swimming?.cssPace??zones.swimming?.tPaceStr),zones.swimming?.lastUpdated||zones.swimming?.calculatedAt||p.cssTimeUpdated,'training_zones'),candidate(positive(p.cssTime),p.cssTimeUpdated,'profile'),swim.mode)
@@ -103,7 +104,7 @@
       goal:normalizedRaces.length?'race_performance':trainingGoals.some(goal=>['faster','speed'].includes(goal))?'speed_performance':trainingGoals.includes('endurance')?'endurance':trainingGoals.includes('weight')?'fat_loss':p.goal||'general_fitness',
       strengthGoal:trainingGoals.includes('stronger')?'get_stronger':p.strengthGoal||null,
       strengthRole:raw.strengthRole??p.strengthRole??null,thresholdPace:resolved.run.value,ftp:resolved.bike.value,cssTime:resolved.swim.value,
-      runVDOT:positive(zones.running?.vdot??p.runVDOT),thresholdSources:resolved,rawThresholds:clone(thresholds),
+      runVDOT:resolved.vdot.value,thresholdSources:resolved,rawThresholds:clone(thresholds),
       equipmentProfile:clone(raw.equipmentProfile??p.equipmentProfile??[]),latestCheckIn:normalizeCheckIn(raw.latestCheckIn??p.latestCheckIn,{asOf:now}),
       longDays:clone(raw.longDays??p.longDays??null),races:normalizedRaces};
     const unknown=['age','weight','height','availableDaysPerWeek','sessionLength','thresholdPace','ftp','cssTime'].filter(k=>profile[k]===null);
