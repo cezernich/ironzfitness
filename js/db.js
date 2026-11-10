@@ -1330,6 +1330,13 @@ const DB = (() => {
     if (_refreshTimer) { clearTimeout(_refreshTimer); _refreshTimer = null; }
   }
 
+  function invalidateLegacyRunningZones() {
+    // Tombstone rather than remove: old remote values must not migrate back
+    // over a newly replaced or explicitly cleared running benchmark.
+    localStorage.setItem("runningZones", "null");
+    syncKey("runningZones");
+  }
+
   // ── Public API ────────────────────────────────────────────────────────────
 
   return {
@@ -1355,6 +1362,7 @@ const DB = (() => {
     syncEvents,
     syncGoals,
     syncKey,
+    invalidateLegacyRunningZones,
     flushKey,
     previewPlanBuild,
     savePlanBuild,

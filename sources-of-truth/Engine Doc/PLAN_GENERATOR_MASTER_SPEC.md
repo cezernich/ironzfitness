@@ -265,6 +265,10 @@ If no equipment profile is set, assume full gym access (no filtering).
 
 Thresholds should be re-tested every 90 days. If stale (>90 days), show a subtle reminder on Add Session / Build Plan screens. Dismissable for 14 days, then reappears.
 
+### Benchmark replacement integrity
+
+Submitting a Build Plan benchmark replaces that sport's prior benchmark and all derived fields, rather than merging incompatible methods. A running race result recalculates running zones and VDOT from the entered distance/time. CSS saves regenerate swim zones from that CSS pace and synchronize CSS/T-pace fields without retaining a prior 400m result. Empty or test-mode benchmark submissions clear the prior sport benchmark; empty individual strength lifts clear those maxes while preserving explicitly submitted lifts. Other sports remain unchanged, previous benchmarks remain in history, and cleared inputs must not be marked as newly measured.
+
 ### 2m. Youth Athlete Modifiers (16–20)
 
 Applies on top of the 2a / 2b / 2c classification. The app gates at 16+; under-16 is not supported.
