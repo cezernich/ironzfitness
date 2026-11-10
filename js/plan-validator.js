@@ -101,7 +101,7 @@
     if (!week || !Array.isArray(week.sessions) || factor >= 1) return;
     for (const s of week.sessions) {
       if (!s || s.type === 'rest') continue;
-      s.durationMin = Math.max(15, Math.round((s.durationMin || 0) * factor));
+      s.durationMin = Math.max(0, Math.floor((s.durationMin || 0) * factor));
     }
     week.targetHours = Math.round(weekDuration(week) / 6) / 10;
   }
@@ -109,11 +109,11 @@
   function checkVolumeIncreaseCap(plan, classification, flags) {
     const plan_ = plan.weeklyPlan;
     if (!Array.isArray(plan_) || plan_.length < 2) return;
-    const cap = (classification && classification.level === 'beginner') ? 0.10 : 0.15;
+    const cap = (classification && classification.level === 'advanced') ? 0.15 : 0.10;
     for (let i = 1; i < plan_.length; i++) {
       const prev = plan_[i - 1];
       const curr = plan_[i];
-      if (curr.isDeload || prev.isDeload) continue;
+      if (curr.isDeload || prev.isDeload || prev.isPartial) continue;
       if (curr.phase === 'taper' || curr.phase === 'race-week') continue;
       const prevDur = weekDuration(prev);
       const currDur = weekDuration(curr);
@@ -125,6 +125,23 @@
         flag(flags, 'volume_increase_cap', 'auto-fixed',
           `Week ${curr.weekNumber} duration ${currDur}→${weekDuration(curr)}min (capped at +${Math.round(cap * 100)}% over week ${prev.weekNumber}).`);
       }
+    }
+  }
+
+  function checkKeystoneProgression(plan,classification,flags) {
+    const previous=new Map();
+    const cap=classification&&classification.level==='advanced'?0.15:0.10;
+    for(const week of plan.weeklyPlan||[]) {
+      if(week.isDeload||week.isPartial)continue;
+      const sessions=(week.sessions||[]).filter(s=>s.priority==='long'||s.type==='brick');
+      for(const session of sessions) {
+        const prior=previous.get(session.type);
+        if(prior!==undefined&&session.durationMin>Math.floor(prior*(1+cap))) {
+          const before=session.durationMin;session.durationMin=Math.floor(prior*(1+cap));
+          flag(flags,'keystone_progression','auto-fixed',`Week ${week.weekNumber}: ${session.type} long session ${before}→${session.durationMin}min.`);
+        }
+      }
+      for(const type of new Set(sessions.map(s=>s.type)))previous.set(type,Math.max(...sessions.filter(s=>s.type===type).map(s=>s.durationMin)));
     }
   }
 
@@ -148,7 +165,8 @@
     if (!Array.isArray(weeks)) return;
     for (const week of weeks) {
       const sessions = Array.isArray(week.sessions) ? week.sessions : (week.sessions = []);
-      const hasRest = sessions.some(s => s && s.type === 'rest');
+      const activeDays=new Set(sessions.filter(s=>s&&s.type!=='rest'&&s.durationMin>0).map(s=>s.day));
+      const hasRest=activeDays.size<7;
       if (hasRest) continue;
       // Find least-loaded day slot — prefer empty days 5-7, then any empty day,
       // then replace the shortest easy session.
@@ -172,13 +190,13 @@
       }
       // All 7 days occupied — replace the least-important easy session.
       const candidates = sessions
-        .filter(s => s && s.type !== 'rest' && s.priority !== 'long' && !s.keySession)
+        .filter(s => s && s.type !== 'rest' && s.priority !== 'long' && !s.keySession && !sessions.some(other=>other.day===s.day&&(other.keySession||other.priority==='long')))
         .sort((a, b) => (a.durationMin || 0) - (b.durationMin || 0));
-      const victim = candidates[0] || sessions.find(s => !s.keySession);
+      const victim = candidates[0];
       if (victim) {
         const victimDay = victim.day;
-        const idx = sessions.indexOf(victim);
-        sessions.splice(idx, 1, restDayTemplate(victimDay));
+        for(let i=sessions.length-1;i>=0;i--)if(sessions[i].day===victimDay)sessions.splice(i,1);
+        sessions.push(restDayTemplate(victimDay));
         sessions.sort((a, b) => a.day - b.day);
         flag(flags, 'rest_day_minimum', 'auto-fixed',
           `Week ${week.weekNumber}: replaced day-${victimDay} session with rest.`);
@@ -202,7 +220,7 @@
     if (Array.isArray(target.sessions)) {
       for (const s of target.sessions) {
         if (!s || s.type === 'rest') continue;
-        s.durationMin = Math.max(15, Math.round((s.durationMin || 30) * 0.55));
+        s.durationMin = Math.max(0, Math.floor((s.durationMin || 0) * 0.55));
         if (s.type === 'strength' && Array.isArray(s.exercises)) {
           s.exercises = s.exercises.map(e => ({ ...e, sets: Math.max(1, e.sets - 1) }));
         }
@@ -217,11 +235,16 @@
 
   function demoteSession(s) {
     s.keySession = false;
+    s.strengthStress='none';
+    for(const key of ['intervals','phases','steps','workoutId','generatedSession','aiSession','libraryWorkout','swimDetails','brickDetails','targetPace']) delete s[key];
     s.priority = 'aerobic';
     if (s.type === 'run') { s.subtype = 'easy'; s.sessionSubtype = 'easy'; s.targetZones = ['Z2']; }
     else if (s.type === 'bike') { s.subtype = 'z2_endurance'; s.sessionSubtype = 'z2_endurance'; s.targetZones = ['Z2']; }
-    else if (s.type === 'swim') { s.subtype = 'endurance'; s.sessionSubtype = 'endurance'; s.targetZones = ['Z2', 'Z3']; }
-    else { s.targetZones = ['Z2']; }
+    else if (s.type === 'swim') { s.subtype = 'technique'; s.sessionSubtype = 'technique'; s.targetZones = ['Z2']; }
+    else if(s.type==='brick') {s.subtype=s.sessionSubtype='easy_brick';s.targetZones=['Z2'];}
+    else {s.type='rest';s.subtype=s.sessionSubtype='rest';s.priority='rest';s.durationMin=0;s.targetZones=[];delete s.exercises;}
+    s.phases=s.type==='rest'?[]:[{phase:'main_set',duration_min:s.durationMin,intensity:'z2',instruction:'Easy effort only. No intervals or tests.'}];
+    s.description=s.type==='rest'?'Rest':s.durationMin+' min easy '+s.type+'. No intervals or tests.';
     s.rationale = (s.rationale || '') + ' (Demoted to Z2 by safety validator: intensity cap for level.)';
   }
 
@@ -232,7 +255,7 @@
     const cap = INTENSITY_CAP[level] || 2;
     for (const week of weeks) {
       const sessions = Array.isArray(week.sessions) ? week.sessions : [];
-      const keySessions = sessions.filter(s => s && s.keySession && s.type !== 'rest');
+      const keySessions = sessions.filter(s => s && s.keySession && s.type !== 'rest' && s.type!=='strength');
       if (keySessions.length <= cap) continue;
       // Keep first `cap` in day order; demote the rest.
       keySessions.sort((a, b) => (a.day || 0) - (b.day || 0));
@@ -247,46 +270,18 @@
 
   function checkNoConsecutiveHard(plan, classification, flags) {
     const level = (classification && classification.level) || 'intermediate';
-    if (level === 'advanced') return;
     const weeks = plan.weeklyPlan;
     if (!Array.isArray(weeks)) return;
-    for (const week of weeks) {
-      const sessions = Array.isArray(week.sessions) ? week.sessions : [];
-      const byDay = new Map();
-      sessions.forEach(s => byDay.set(s.day, s));
-      const hardDays = sessions
-        .filter(s => s && s.keySession && s.type !== 'rest')
-        .map(s => s.day)
-        .sort((a, b) => a - b);
-      for (let i = 1; i < hardDays.length; i++) {
-        if (hardDays[i] !== hardDays[i - 1] + 1) continue;
-        const moving = byDay.get(hardDays[i]);
-        if (!moving) continue;
-        const otherHard = new Set(hardDays.filter(d => d !== moving.day));
-        let target = null;
-        for (let d = 1; d <= 7; d++) {
-          if (byDay.has(d)) continue;
-          const adjacent = [...otherHard].some(hd => Math.abs(hd - d) <= 1);
-          if (!adjacent) { target = d; break; }
-        }
-        if (target != null) {
-          byDay.delete(moving.day);
-          moving.day = target;
-          byDay.set(target, moving);
-          hardDays[i] = target;
-          hardDays.sort((a, b) => a - b);
-          flag(flags, 'no_consecutive_hard', 'auto-fixed',
-            `Week ${week.weekNumber}: moved key session to day ${target} to break back-to-back intensity.`);
-        } else {
-          // No empty non-adjacent day — demote the later session instead.
-          demoteSession(moving);
-          flag(flags, 'no_consecutive_hard', 'auto-fixed',
-            `Week ${week.weekNumber}: demoted day-${moving.day} key session (no non-adjacent slot available).`);
-          hardDays.splice(i, 1);
-          i--;
-        }
+    let priorHardDay=null;
+    for(const week of weeks) {
+      const hardSessions=(week.sessions||[]).filter(s=>(s.keySession||s.strengthStress==='heavy')&&s.type!=='rest').sort((a,b)=>a.day-b.day);
+      for(const session of hardSessions) {
+        const day=(week.weekNumber-1)*7+session.day;
+        if(priorHardDay!==null&&day===priorHardDay+1) {
+          demoteSession(session);
+          flag(flags,'no_consecutive_hard','auto-fixed',`Week ${week.weekNumber} day ${session.day}: replaced actual hard prescription with easy work.`);
+        } else priorHardDay=day;
       }
-      sessions.sort((a, b) => a.day - b.day);
     }
   }
 
@@ -303,17 +298,13 @@
       if (totalRunMin <= 0) continue;
       const longRun = runs.find(s => s.priority === 'long' || s.subtype === 'long_run' || s.sessionSubtype === 'long_run');
       if (!longRun) continue;
-      const maxAllowed = Math.round(totalRunMin * maxPct);
-      // Long run must be <= 30% of total — but since the long run is part of
-      // the total, the true limit where LR/(others+LR) <= 0.30 means
-      // LR <= 0.30 * total  is slightly over; we enforce the simpler
-      // "LR <= 0.30 * total" with total BEFORE trimming to stay conservative.
-      if (longRun.durationMin > maxAllowed && maxAllowed >= 20) {
-        const before = longRun.durationMin;
-        longRun.durationMin = maxAllowed;
-        week.targetHours = Math.round(weekDuration(week) / 6) / 10;
-        flag(flags, 'long_run_proportion', 'auto-fixed',
-          `Week ${week.weekNumber}: capped long run ${before}→${maxAllowed}min (≤30% of ${totalRunMin}min weekly run volume).`);
+      const otherRunMin=totalRunMin-(longRun.durationMin||0);
+      const maxAllowed=Math.floor(otherRunMin*maxPct/(1-maxPct));
+      if(longRun.durationMin>maxAllowed) {
+        const before=longRun.durationMin;
+        longRun.durationMin=maxAllowed;
+      week.targetHours=Math.round(weekDuration(week)/6)/10;
+        flag(flags,'long_run_proportion','auto-fixed',`Week ${week.weekNumber}: long run ${before}→${maxAllowed}min against FINAL weekly run total.`);
       }
     }
   }
@@ -431,48 +422,10 @@
 
   function checkFatLossStrengthFloor(plan, classification, flags) {
     if (!classification || classification.goal !== 'fat_loss') return;
-    const weeks = plan.weeklyPlan;
-    if (!Array.isArray(weeks)) return;
-    for (const week of weeks) {
-      const sessions = Array.isArray(week.sessions) ? week.sessions : (week.sessions = []);
-      const strengthCount = sessions.filter(s => s && s.type === 'strength').length;
-      if (strengthCount >= 2) continue;
-      const needed = 2 - strengthCount;
-      let inserted = 0;
-      const occupied = new Map();
-      sessions.forEach(s => occupied.set(s.day, s));
-      // Prefer to replace the shortest easy session, else take an empty day.
-      for (let i = 0; i < needed; i++) {
-        // Find empty day first.
-        let placedDay = null;
-        for (let d = 1; d <= 7; d++) {
-          if (!occupied.has(d)) { placedDay = d; break; }
-        }
-        if (placedDay != null) {
-          const s = fullBodyStrengthTemplate(placedDay);
-          sessions.push(s);
-          occupied.set(placedDay, s);
-          inserted++;
-          continue;
-        }
-        // Replace lightest non-strength, non-key session.
-        const victims = sessions
-          .filter(s => s && s.type !== 'strength' && s.type !== 'rest' && !s.keySession)
-          .sort((a, b) => (a.durationMin || 0) - (b.durationMin || 0));
-        const victim = victims[0];
-        if (!victim) break;
-        const idx = sessions.indexOf(victim);
-        const replacement = fullBodyStrengthTemplate(victim.day);
-        sessions.splice(idx, 1, replacement);
-        occupied.set(victim.day, replacement);
-        inserted++;
-      }
-      if (inserted > 0) {
-        sessions.sort((a, b) => a.day - b.day);
-        flag(flags, 'fat_loss_strength_floor', 'auto-fixed',
-          `Week ${week.weekNumber}: inserted ${inserted} strength session(s) to meet the 2/week fat-loss minimum.`);
-      }
-    }
+    // Strength is recommended for this goal, but the validator must not
+    // invent empty exercises or open an excluded sport/day to meet a quota.
+    for(const week of plan.weeklyPlan||[])if(week.sessions.filter(s=>s.type==='strength'&&s.durationMin>0).length<2)
+      flag(flags,'fat_loss_strength_floor','recommendation',`Week ${week.weekNumber}: consider strength support if compatible with athlete preferences and recovery.`);
   }
 
   // ── v1.4 Rule 13: Hyrox weekly hour ceiling ──────────────────────────────
@@ -562,8 +515,20 @@
 
   function validate(plan, classification) {
     if (!plan || typeof plan !== 'object') {
-      return { plan, validationFlags: [], allPassed: true };
+      return { plan, validationFlags: [], errors:['A complete generated plan is required.'], allPassed: false };
     }
+    if(!plan.planMetadata||!plan.athleteProfile||!plan.arc||!plan.constraints||!plan.nutritionStrategy||!plan.hydrationStrategy||!plan.rationale||!classification||!(typeof plan.arc.startDate==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(plan.arc.startDate)&&!isNaN(Date.parse(plan.arc.startDate+'T00:00:00Z'))&&new Date(plan.arc.startDate+'T00:00:00Z').toISOString().slice(0,10)===plan.arc.startDate)||!Number.isInteger(plan.arc.totalWeeks)||!Array.isArray(plan.arc.phases))return {plan,validationFlags:[],errors:['Required generated-plan contract is incomplete.'],allPassed:false};
+    if(!Array.isArray(plan.weeklyPlan)||!plan.weeklyPlan.length||plan.weeklyPlan.some(w=>!w||!Array.isArray(w.sessions))) return {plan,validationFlags:[],errors:['A plan needs dated training weeks and sessions.'],allPassed:false};
+    if(plan.arc.totalWeeks!==plan.weeklyPlan.length||plan.weeklyPlan.some((week,index)=>week.weekNumber!==index+1))return {plan,validationFlags:[],errors:['Training week sequence does not match the arc.'],allPassed:false};
+    if(new Date(plan.arc.startDate+'T00:00:00Z').getUTCDay()!==1)return {plan,validationFlags:[],errors:['Training week anchor must be Monday.'],allPassed:false};
+    let nextWeek=1;
+    for(const phase of plan.arc.phases) {
+      if(!phase||!Number.isInteger(phase.startWeek)||phase.startWeek!==nextWeek||!Number.isInteger(phase.endWeek)||phase.endWeek<phase.startWeek||phase.endWeek>plan.arc.totalWeeks||!['pre-base','base','build','peak','taper','race-week','mesocycle'].includes(phase.phase))return {plan,validationFlags:[],errors:['Arc phase coverage is invalid.'],allPassed:false};
+      nextWeek=phase.endWeek+1;
+    }
+    if(nextWeek!==plan.arc.totalWeeks+1)return {plan,validationFlags:[],errors:['Arc phases must cover every training week.'],allPassed:false};
+    if(plan.weeklyPlan.some(week=>week.sessions.some(session=>!session||typeof session!=='object'||!Number.isInteger(session.day)||session.day<1||session.day>7||!Number.isInteger(session.durationMin)||session.durationMin<0)))return {plan,validationFlags:[],errors:['Session contract is invalid.'],allPassed:false};
+    if(plan.weeklyPlan.some(week=>!plan.arc.phases.some(phase=>week.weekNumber>=phase.startWeek&&week.weekNumber<=phase.endWeek&&week.phase===phase.phase)))return {plan,validationFlags:[],errors:['Weekly phases disagree with the arc.'],allPassed:false};
     const flags = Array.isArray(plan.validationFlags) ? plan.validationFlags : [];
     // Run checks in order
     checkCalorieFloor(plan, classification, flags);
@@ -572,6 +537,7 @@
     checkIntensityCap(plan, classification, flags);
     checkNoConsecutiveHard(plan, classification, flags);
     checkLongRunProportion(plan, classification, flags);
+    checkKeystoneProgression(plan,classification,flags);
     checkBeginnerComplexity(plan, classification, flags);
     checkRestDayMinimum(plan, classification, flags);
     checkDeloadInclusion(plan, classification, flags);
@@ -583,8 +549,69 @@
     checkProhibitedPhrases(plan, classification, flags);
     checkDisclaimer(plan, classification, flags);
 
+    // Later passes insert/remove sessions; enforce numerical caps again on
+    // final totals, then rebuild descriptions/details from final metadata.
+    checkKeystoneProgression(plan,classification,flags);
+    for(let index=0;index<plan.weeklyPlan.length;index++) {
+      const current=plan.weeklyPlan[index];
+      checkLongRunProportion({weeklyPlan:[current]},classification,flags);
+      checkKeystoneProgression({weeklyPlan:plan.weeklyPlan.slice(0,index+1)},classification,flags);
+      if(index)checkVolumeIncreaseCap({weeklyPlan:[plan.weeklyPlan[index-1],current]},classification,flags);
+      // Integer rounding may change a fraction during proportional scaling.
+      // Correct only this week before it becomes the next week's baseline.
+      checkLongRunProportion({weeklyPlan:[current]},classification,flags);
+    }
+    if(window.SessionAssembler && window.SessionAssembler.finalizePrescriptions) window.SessionAssembler.finalizePrescriptions(plan,classification);
+    const errors=[];
+    let previousWeek=null,previousHardDay=null;
+    const previousKeystone=new Map();
+    const cap=classification.level==='advanced'?0.15:0.10;
+    for(const week of plan.weeklyPlan) {
+      const active=(week.sessions||[]).filter(s=>s&&s.type!=='rest'&&s.durationMin>0);
+      if(new Set(active.map(s=>s.day)).size>6)errors.push('Every training week needs a true rest day.');
+      if(Number.isInteger(classification.daysAvailable)&&new Set(active.map(s=>s.day)).size>classification.daysAvailable)errors.push('Final plan exceeds available training days.');
+      if(Array.isArray(classification.preferredDays)&&active.some(s=>!classification.preferredDays.includes(s.day===7?0:s.day)))errors.push('Final plan uses an excluded weekday.');
+      if(Array.isArray(classification.selectedSports)&&classification.selectedSports.length&&active.some(s=>!classification.selectedSports.includes(s.type)&&!(s.type==='brick'&&classification.selectedSports.includes('bike')&&classification.selectedSports.includes('run'))))errors.push('Final plan includes an unselected sport.');
+      for(const session of active) {
+        const expected=new Date(Date.parse(plan.arc.startDate+'T00:00:00Z')+((week.weekNumber-1)*7+session.day-1)*86400000).toISOString().slice(0,10);
+        if(session.date!==expected||(plan.arc.requestedStartDate&&session.date<plan.arc.requestedStartDate))errors.push('Final session date disagrees with its weekday or start boundary.');
+      }
+      const enduranceHard=active.filter(s=>s.keySession&&s.type!=='strength');
+      const hard=active.filter(s=>s.keySession||s.strengthStress==='heavy');
+      const endurance=active.filter(s=>['run','bike','swim','brick'].includes(s.type));
+      const enduranceMinutes=endurance.reduce((sum,s)=>sum+s.durationMin,0);
+      const intensityMinutes=endurance.reduce((sum,s)=>sum+(s.phases||[]).filter(p=>['z3','z4','z5'].includes(p.intensity)).reduce((minutes,p)=>minutes+p.duration_min,0),0);
+      if(enduranceMinutes&&intensityMinutes/enduranceMinutes>(classification.goal==='speed_performance'?.30:.20)+.00001)errors.push('Final endurance intensity distribution exceeds policy.');
+      if(enduranceHard.length>(INTENSITY_CAP[classification.level]||2))errors.push('Final intensity count exceeds policy.');
+      for(const session of hard.slice().sort((a,b)=>a.day-b.day)) {const day=(week.weekNumber-1)*7+session.day;if(previousHardDay!==null&&day===previousHardDay+1)errors.push('Final plan has consecutive hard days.');previousHardDay=day;}
+      const runs=active.filter(s=>s.type==='run'),runTotal=runs.reduce((sum,s)=>sum+s.durationMin,0);
+      if(runs.some(s=>(s.priority==='long'||s.subtype==='long_run')&&s.durationMin>runTotal*.30+0.00001))errors.push('Final long-run proportion exceeds policy.');
+      if(previousWeek&&!previousWeek.isPartial&&!week.isDeload&&!previousWeek.isDeload&&!['taper','race-week'].includes(week.phase)&&weekDuration(previousWeek)>0&&weekDuration(week)>Math.round(weekDuration(previousWeek)*(1+cap)))errors.push('Final weekly progression exceeds policy.');
+      if(!week.isDeload&&!week.isPartial) {
+        const keystones=active.filter(s=>s.priority==='long'||s.type==='brick');
+        for(const session of keystones)if(previousKeystone.has(session.type)&&session.durationMin>Math.floor(previousKeystone.get(session.type)*(1+cap)))errors.push('Final keystone progression exceeds policy.');
+        for(const type of new Set(keystones.map(s=>s.type)))previousKeystone.set(type,Math.max(...keystones.filter(s=>s.type===type).map(s=>s.durationMin)));
+      }
+      previousWeek=week;
+      if(!Number.isInteger(week.weekNumber)||week.weekNumber<1)errors.push('Invalid training week.');
+      for(const session of week.sessions)if(!session||!['run','bike','swim','strength','brick','circuit','hiit','hyrox','yoga','cross-training','rest'].includes(session.type)||!Number.isInteger(session.day)||session.day<1||session.day>7||!Number.isInteger(session.durationMin)||session.durationMin<0||(session.type!=='rest'&&session.durationMin===0))errors.push('Invalid session day or duration.');
+      for(const session of endurance) {
+        const level=session.type==='swim'?classification.sportLevels?.swim:session.type==='bike'?classification.sportLevels?.cycling:session.type==='run'?classification.sportLevels?.running:null;
+        const ceiling=['beginner','novice'].includes(level)?3:['advanced','competitive'].includes(level)?5:4;
+        if((session.phases||[]).some(step=>Number(String(step.intensity).replace(/z/i,''))>ceiling))errors.push('Final prescription exceeds the discipline-specific zone ceiling.');
+      }
+      for(const session of active)if(!Array.isArray(session.phases)||session.phases.reduce((sum,step)=>sum+(step.duration_min||0),0)!==session.durationMin)errors.push('Final structured prescription disagrees with its duration.');
+      for(const session of active)if(session.type==='strength'&&(!Array.isArray(session.exercises)||!session.exercises.length))errors.push('Strength prescription has no selected exercises.');
+      for(const session of active)if(session.type==='brick'&&(!session.brickDetails||session.brickDetails.leg1DurationMin+session.brickDetails.leg2DurationMin!==session.durationMin))errors.push('Final brick prescription disagrees with its duration.');
+      week.targetHours=Math.round(weekDuration(week)/6)/10;
+      week.loadSummary={enduranceQualitySessions:enduranceHard.length,intensityMinutes,heavyStrengthSessions:active.filter(s=>s.strengthStress==='heavy').length,hardDays:new Set(hard.map(s=>s.day)).size};
+    }
+    const targets=plan.nutritionStrategy.dailyTargets;
+    if(!(plan.nutritionStrategy.status==='insufficient_data'&&!targets&&Array.isArray(plan.nutritionStrategy.missing)&&plan.nutritionStrategy.missing.length)&&(!targets||['calories','proteinG','carbsG','fatG'].some(key=>!Number.isFinite(targets[key])||targets[key]<0)||targets.calories<=0))errors.push('Nutrition targets are incomplete or invalid.');
+    if(!(plan.hydrationStrategy.status==='insufficient_data'&&plan.hydrationStrategy.dailyBaselineOz===undefined&&Array.isArray(plan.hydrationStrategy.missing)&&plan.hydrationStrategy.missing.length)&&(!Number.isFinite(plan.hydrationStrategy.dailyBaselineOz)||plan.hydrationStrategy.dailyBaselineOz<=0))errors.push('Hydration target is incomplete or invalid.');
+    if(!plan.weeklyPlan.some(w=>w.sessions.some(s=>s.type!=='rest'&&s.durationMin>0)))errors.push('No usable training sessions were generated.');
     plan.validationFlags = flags;
-    return { plan, validationFlags: flags, allPassed: flags.length === 0 };
+    return {plan,validationFlags:flags,errors,allPassed:errors.length===0};
   }
 
   window.PlanValidator = {
@@ -599,6 +626,7 @@
     _checkLongRunProportion: checkLongRunProportion,
     _checkBeginnerComplexity: checkBeginnerComplexity,
     _checkVolumeIncreaseCap: checkVolumeIncreaseCap,
+    _checkKeystoneProgression:checkKeystoneProgression,
     _checkProhibitedPhrases: checkProhibitedPhrases,
     _checkDisclaimer: checkDisclaimer,
     _checkFatLossStrengthFloor: checkFatLossStrengthFloor,

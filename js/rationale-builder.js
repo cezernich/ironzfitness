@@ -291,7 +291,7 @@
       out.push(`No run threshold set → running assumed ${sportLevels.running}.`);
     }
     if (!classification || !Array.isArray(classification.equipmentProfile) || classification.equipmentProfile.length === 0) {
-      out.push('No equipment profile — full gym assumed.');
+      out.push('Equipment not confirmed; only bodyweight selection is available. Confirm equipment before adding loaded work.');
     } else {
       out.push(`Equipment access: ${classification.equipmentAccess || 'configured'}.`);
     }

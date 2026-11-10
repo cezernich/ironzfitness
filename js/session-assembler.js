@@ -524,9 +524,11 @@
     }
 
     if (sportProfile === 'cycling') {
-      // Cycling-only race plans reuse running templates with bike sessions.
-      // (No dedicated cycling templates yet — conservative fallback.)
-      return null;
+      const easy={type:'bike',subtype:'z2_endurance',priority:'aerobic'};
+      const long={type:'bike',subtype:'long_ride',priority:'long'};
+      const quality={type:'bike',subtype:'sweet_spot',priority:'intensity'};
+      const template=phase==='taper'||phase==='race-week'?[easy,easy]:phase==='pre-base'?[easy,easy,easy]:phase==='base'?[easy,easy,long]:[easy,quality,easy,long];
+      return template.map(session=>({...session}));
     }
 
     return null;
@@ -660,9 +662,10 @@
   // fewer days via doubles.
   function capStrengthFrequency(template, phase, classification) {
     const sessions = template.map(s => ({ ...s }));
-    const strengthFreq = (classification && classification.goal === 'fat_loss')
+    let strengthFreq = (classification && classification.goal === 'fat_loss')
       ? Math.max(2, STRENGTH_FREQUENCY[phase] ?? 2)
       : (STRENGTH_FREQUENCY[phase] ?? 2);
+    if(classification.strengthRole==='minimal')strengthFreq=['peak','taper','race-week'].includes(phase)?0:1;
     let count = sessions.filter(s => s.type === 'strength').length;
     while (count > strengthFreq) {
       let removed = false;
@@ -685,7 +688,7 @@
   // If `preferredDays` (0=Sun…6=Sat) is provided, those take priority over
   // the hardcoded fallback — we honor the user's actual day selections.
   function selectTrainingDays(daysAvailable, longRunDay, longRideDay, preferredDays) {
-    const d = Math.max(2, Math.min(7, daysAvailable || 3));
+    const d = Math.max(1, Math.min(7, daysAvailable || 3));
     let base;
     if (Array.isArray(preferredDays) && preferredDays.length > 0) {
       // Convert 0=Sun…6=Sat → 1=Mon…7=Sun (Sunday goes to the end).
@@ -700,9 +703,11 @@
     else if (d === 5) base = [1, 2, 4, 6, 7];
     else if (d === 4) base = [1, 4, 6, 7];
     else if (d === 3) base = [2, 4, 7];
-    else base = [4, 7];
+    else if(d===2) base = [4, 7];
+    else base=[7];
 
-    const required = [longRunDay, longRideDay].filter(x => x >= 1 && x <= 7);
+    if(Array.isArray(preferredDays))return base; // Long-day wishes never open an excluded weekday.
+    const required = [...new Set([longRunDay, longRideDay].filter(x => x >= 1 && x <= 7))].slice(0,d);
     if (required.length === 0) return base;
 
     const set = new Set(base);
@@ -1067,7 +1072,9 @@
       else if (phase === 'race-week') d = Math.round(baseMin * 0.4);
       else if (phase === 'taper') d = Math.round(baseMin * 0.7);
       else d = Math.round(baseMin * 0.9);
-      s.durationMin = Math.max(15, Math.round(d * levelFactor));
+      const sportLevel=s.type==='swim'?classification.sportLevels?.swim:s.type==='bike'?classification.sportLevels?.cycling:s.type==='run'?classification.sportLevels?.running:level;
+      const factor=['beginner','novice'].includes(sportLevel)?(s.type==='swim'?.65:.75):['advanced','competitive'].includes(sportLevel)?(s.type==='swim'?1.20:1.15):1;
+      s.durationMin = Math.max(15, Math.round(d * factor));
     }
     return sessions;
   }
@@ -1101,6 +1108,7 @@
   // ── Zones, pace, description, rationale ──────────────────────────────────
 
   const SUBTYPE_METADATA = {
+    controlled_intervals:{zones:['Z3'],keySession:true,label:'Controlled Intervals'},
     easy:                { zones: ['Z1', 'Z2'], keySession: false, label: 'Easy' },
     long_run:            { zones: ['Z2'], keySession: false, label: 'Long Run' },
     long_ride:           { zones: ['Z2'], keySession: false, label: 'Long Ride' },
@@ -1220,8 +1228,8 @@
       };
     }
     if (session.type === 'brick') {
-      const bikeMin = Math.round((session.durationMin || 60) * 0.7);
-      const runMin = Math.max(10, (session.durationMin || 60) - bikeMin);
+      const bikeMin = Math.round(session.durationMin * 0.7);
+      const runMin = session.durationMin - bikeMin;
       session.brickDetails = { leg1Type: 'bike', leg1DurationMin: bikeMin, leg2Type: 'run', leg2DurationMin: runMin };
     }
 
@@ -1282,7 +1290,8 @@
     if (s.type === 'circuit' && s.subtype === 'hiit') {
       return 'Short HIIT circuit: 4–6 exercises, 40s work / 20s rest × 3–4 rounds.';
     }
-    if (s.type === 'brick') return `${Math.round(dur * 0.7)} min bike @ Z3 → ${Math.max(10, dur - Math.round(dur * 0.7))} min run @ race effort`;
+    if (s.type==='brick' && s.subtype==='easy_brick') return `${Math.round(dur*0.7)} min easy bike @ Z2 → ${dur-Math.round(dur*0.7)} min easy run @ Z2`;
+    if (s.type === 'brick') return `${Math.round(dur * 0.7)} min bike @ Z3 → ${(dur - Math.round(dur * 0.7))} min run @ race effort`;
     if (s.priority === 'intensity' && s.type === 'run') {
       if (s.subtype === 'intervals') return `15 min warm-up, 5×1K @ Z5 w/ 2–3 min jog recovery, 10 min cool-down (${dur} min total)`;
       return `15 min warm-up, ${Math.max(15, dur - 30)} min @ threshold, 10 min cool-down`;
@@ -1346,25 +1355,20 @@
     return typeof window !== 'undefined' && window.ExerciseDB && typeof window.ExerciseDB.pick === 'function';
   }
 
-  // Reads the user's logged workouts (the `workouts` localStorage key —
-  // populated when a session is marked complete) and returns the set of
-  // ExerciseDB ids the user touched in the last RECENT_LIFT_WINDOW_DAYS.
-  // Used to exclude the same compound from being scheduled on a session
-  // less than 48-72h away. Only completed sessions count — a planned-
-  // but-skipped lift shouldn't block today's slot.
-  function _getRecentlyDoneExerciseIds() {
-    if (typeof localStorage === 'undefined') return [];
+  // Exercise recency comes only from the explicit snapshot/as-of time.
+  // An unrelated device cache or the wall clock cannot change a replay.
+  function _getRecentlyDoneExerciseIds(classification) {
     if (!isExerciseDbAvailable()) return [];
-    let workoutsArr = [];
-    try { workoutsArr = JSON.parse(localStorage.getItem('workouts') || '[]') || []; } catch { return []; }
-    if (!Array.isArray(workoutsArr) || !workoutsArr.length) return [];
-    const cutoff = Date.now() - RECENT_LIFT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+    const workoutsArr=Array.isArray(classification && classification.completedHistory)?classification.completedHistory:[];
+    const asOf=Date.parse(classification && classification.asOf);
+    if(!Number.isFinite(asOf))return [];
+    const cutoff=asOf-RECENT_LIFT_WINDOW_DAYS*86400000;
     const ids = new Set();
     for (const w of workoutsArr) {
       const dateStr = w.date || w.timestamp;
       if (!dateStr) continue;
       const t = new Date(dateStr).getTime();
-      if (!isFinite(t) || t < cutoff) continue;
+      if (!isFinite(t) || t < cutoff || t>asOf) continue;
       const exs = Array.isArray(w.exercises) ? w.exercises : [];
       for (const ex of exs) {
         if (!ex || !ex.name) continue;
@@ -1375,13 +1379,13 @@
     return Array.from(ids);
   }
 
-  function pickSlot(slot, userEquip, picked) {
+  function pickSlot(slot, userEquip, picked, classification, session) {
     if (!isExerciseDbAvailable()) return null;
     // BUGFIX 04-27 §3: exclude lifts the user already completed in the
     // last 3 days so Monday's Push Day doesn't reprise Saturday's OHP.
     // If pickSlot returns null because every match was recent, the
     // caller's `if (!ex) continue` drops the slot — no forced duplicate.
-    const recentIds = _getRecentlyDoneExerciseIds();
+    const recentIds = _getRecentlyDoneExerciseIds(classification);
     const filters = {
       pattern: slot.pattern,
       tier: slot.tier,
@@ -1389,7 +1393,8 @@
       excludeIds: [...picked.map(p => p.id), ...recentIds],
     };
     if (slot.specificGoal) filters.specificGoal = slot.specificGoal;
-    const opts = {};
+    let seed=(Number(classification.variationSeed)||0)+Number(session.day||0)*31+Number(session.weekNumber||0)*131+picked.length*17;
+    const opts = {random:()=>{seed=(Math.imul(seed+1,1664525)+1013904223)>>>0;return seed/4294967296;}};
     if (slot.diverseFromSlot != null && picked[slot.diverseFromSlot]) {
       opts.diverseFrom = [picked[slot.diverseFromSlot]];
     }
@@ -1399,11 +1404,7 @@
       const relaxed = { ...filters, tier: undefined };
       result = window.ExerciseDB.pick(relaxed, 1, opts);
     }
-    if (!result || !result.length) {
-      // Relax equipment (last resort)
-      const relaxed = { ...filters, tier: undefined, equipment: undefined };
-      result = window.ExerciseDB.pick(relaxed, 1, opts);
-    }
+
     return result && result.length ? result[0] : null;
   }
 
@@ -1441,19 +1442,25 @@
     if (session.type !== 'strength' && session.type !== 'circuit' && session.type !== 'hiit') {
       return session;
     }
-    const subtype = session.subtype || 'full_body';
+    const role=classification.strengthRole || 'general';
+    const subtype=role==='race_performance'?'sport_specific':session.subtype || 'full_body';
     const template = STRENGTH_SLOT_TEMPLATES[subtype] || STRENGTH_SLOT_TEMPLATES.full_body;
-    const slots = trimExerciseSlots(template, classification);
-    const userEquip = Array.isArray(classification.equipmentProfile) ? classification.equipmentProfile : [];
+    let slots = trimExerciseSlots(template, classification);
+    if(role==='minimal')slots=slots.slice(0,3);
+    else if(role==='injury_prevention')slots=[{role:'core',pattern:'core',tier:['secondary','tertiary']},{role:'single-leg',pattern:'squat',tier:['secondary','tertiary']},{role:'upper-back',pattern:'horizontal-pull',tier:['secondary','tertiary']}];
+    const userEquip=role==='minimal'?['bodyweight']:role==='injury_prevention'?['bodyweight',...(classification.equipmentProfile||[]).filter(item=>item==='band')]:Array.isArray(classification.equipmentProfile)&&classification.equipmentProfile.length?classification.equipmentProfile:['bodyweight'];
 
     const picked = [];
     const exercises = [];
     for (const slot of slots) {
-      const ex = pickSlot(slot, userEquip, picked);
+      const ex = pickSlot(slot, userEquip, picked, classification, session);
       if (!ex) continue;
       picked.push(ex);
       const tier = ex.tier || (Array.isArray(slot.tier) ? slot.tier[0] : slot.tier) || 'secondary';
       const volume = assignSetsRepsRest(ex, tier, classification.level || 'intermediate');
+      if(role==='injury_prevention') {volume.sets=2;volume.reps='12-15';}
+      else if(role==='minimal') {volume.sets=2;volume.reps='8-12';}
+      else if((role==='race_performance'&&session.phase==='base')||classification.strengthGoal==='get_stronger') {volume.sets=3;volume.reps='3-6';}
       // Hyrox phase-specific volume shift (Philosophy §9.5): build/peak use
       // higher reps / shorter rest even when the slot template is "primary".
       if (subtype === 'hyrox_endurance') {
@@ -1477,6 +1484,8 @@
       });
     }
     session.exercises = exercises;
+    session.strengthRole=role;
+    session.strengthStress=role==='minimal'||role==='injury_prevention'?'light':(role==='race_performance'&&session.phase==='base')||classification.strengthGoal==='get_stronger'?'heavy':'moderate';
     return session;
   }
 
@@ -1486,7 +1495,7 @@
     // Reduce volume 40–60%, maintain intensity (TRAINING_PHILOSOPHY §12.3).
     for (const s of sessions) {
       if (s.type === 'rest' || s.subtype === 'active_recovery') continue;
-      s.durationMin = Math.max(15, Math.round((s.durationMin || 30) * 0.55));
+      s.durationMin = Math.max(0, Math.floor((s.durationMin || 0) * 0.55));
       if (s.type === 'strength' && Array.isArray(s.exercises)) {
         s.exercises = s.exercises.map(e => ({ ...e, sets: Math.max(1, e.sets - 1) }));
       }
@@ -1495,41 +1504,23 @@
   }
 
   function applyBRaceMicroTaper(sessions, weekNumber, arc) {
-    const window = weekOverlapsBRace(weekNumber, arc);
-    if (!window) return sessions;
-    const raceDate = parseIso(window.raceDate);
-    if (!raceDate) return sessions;
-    const weekRange = weekDateRange(weekNumber, arc);
-    if (!weekRange) return sessions;
-    // For each session, compute its date
-    for (const s of sessions) {
-      if (s.type === 'rest') continue;
-      const day = s.day || 1;
-      const sessDate = new Date(weekRange.start.getTime() + (day - 1) * MS_PER_DAY);
-      const diffDays = Math.round((sessDate - raceDate) / MS_PER_DAY);
-      if (diffDays >= -3 && diffDays < 0) {
-        // Pre-race taper: 3 days before race
-        if (s.type === 'run') {
-          s.durationMin = Math.max(15, Math.round((s.durationMin || 30) * 0.7));
-          if (s.priority === 'long') {
-            s.priority = 'aerobic';
-            s.subtype = 'easy';
-            s.keySession = false;
-          }
-        } else {
-          s.durationMin = Math.max(15, Math.round((s.durationMin || 30) * 0.8));
-        }
-        s.rationale = (s.rationale || '') + ' (B-race micro-taper: volume reduced).';
-      } else if (diffDays >= 0 && diffDays <= 3) {
-        // Post-race recovery: easy only
-        s.priority = 'aerobic';
-        if (s.type === 'run') s.subtype = 'easy';
-        else if (s.type === 'bike') s.subtype = 'z2_endurance';
-        else if (s.type === 'swim') s.subtype = 'technique';
-        s.keySession = false;
-        s.targetZones = ['Z1', 'Z2'];
-        s.durationMin = Math.max(15, Math.round((s.durationMin || 30) * 0.6));
-        s.rationale = 'Post-B-race recovery: easy session only.';
+    const range=weekDateRange(weekNumber,arc);
+    if(!range)return sessions;
+    for(const session of sessions) {
+      if(session.type==='rest')continue;
+      const date=new Date(range.start.getTime()+(session.day-1)*MS_PER_DAY);
+      const offsets=(arc.bRaceWindows||[]).map(window=>Math.round((date-parseIso(window.raceDate))/MS_PER_DAY)).filter(Number.isFinite);
+      if(!offsets.some(offset=>offset>=-3&&offset<=3))continue;
+      const raceDay=offsets.includes(0);
+      const recovering=offsets.some(offset=>offset>0&&offset<=3);
+      if(raceDay||!['run','bike','swim','brick'].includes(session.type)) {
+        session.type='rest';session.subtype=session.sessionSubtype='rest';session.priority='rest';session.durationMin=0;session.keySession=false;session.strengthStress='none';session.targetZones=[];delete session.exercises;
+        session.rationale=raceDay?'B-race day: no additional training prescribed. Event execution requires its separate reviewed prescription.':'B-race window: loaded and high-fatigue support work held.';
+      } else {
+        session.priority='aerobic';session.subtype=session.sessionSubtype=session.type==='run'?'easy':session.type==='bike'?'z2_endurance':session.type==='swim'?'technique':'easy_brick';
+        session.keySession=false;session.strengthStress='none';session.targetZones=['Z1','Z2'];
+        session.durationMin=Math.floor(session.durationMin*(recovering?.6:session.type==='run'?.7:.8));
+        session.rationale=recovering?'Post-B-race recovery: easy prescription only.':'B-race micro-taper: reduced easy work only.';
       }
     }
     return sessions;
@@ -1597,7 +1588,19 @@
     // Cap strength frequency per phase (§8.4) but keep full template otherwise
     // so §6.1 / §6.2 counts are preserved. Packing into fewer days happens
     // later in assignDays via 2-a-days.
-    return capStrengthFrequency(template, phase, classification);
+    const endurance=(classification.selectedSports||[]).filter(sport=>['run','bike','swim'].includes(sport));
+    let index=0;
+    const adapted=template.map(session=>{
+      if(session.type!=='cross-training'||!endurance.length)return session;
+      const type=endurance[index++%endurance.length];
+      return {...session,type,subtype:type==='run'?'easy':type==='bike'?'z2_endurance':'technique',priority:'aerobic'};
+    });
+    for(const sport of endurance) {
+      if(adapted.some(session=>session.type===sport))continue;
+      const donor=adapted.find(session=>session.priority==='aerobic'&&adapted.filter(other=>other.type===session.type).length>1);
+      if(donor) {donor.type=sport;donor.subtype=sport==='run'?'easy':sport==='bike'?'z2_endurance':'technique';}
+    }
+    return capStrengthFrequency(adapted, phase, classification);
   }
 
   function fillAerobicVolume(week, sessions, classification, arc) {
@@ -1612,45 +1615,28 @@
   // (v1.4): beginner athletes get full-rest days; intermediate and advanced
   // athletes get active-recovery days (Z1 only — easy spin, light yoga,
   // mobility work) instead of full rest.
-  function addRestDays(sessions, classification) {
-    const level = (classification && classification.level) || 'intermediate';
-    const useActiveRecovery = level !== 'beginner';
-    const occupied = new Set(sessions.map(s => s.day));
-    for (let d = 1; d <= 7; d++) {
-      if (occupied.has(d)) continue;
-      if (useActiveRecovery) {
-        sessions.push({
-          day: d,
-          type: 'cross-training',
-          subtype: 'active_recovery',
-          sessionSubtype: 'active_recovery',
-          priority: 'recovery',
-          durationMin: 20,
-          keySession: false,
-          targetZones: ['Z1'],
-          description: 'Active recovery: 20 min easy spin, yoga, or mobility work (Z1 only).',
-          warmUp: '',
-          coolDown: '',
-          rationale: 'Active recovery aids blood flow and adaptation without adding training stress. Advanced/intermediate athletes benefit more from light movement than full rest.',
-        });
-      } else {
-        sessions.push({
-          day: d,
-          type: 'rest',
-          subtype: 'rest',
-          sessionSubtype: 'rest',
-          priority: 'rest',
-          durationMin: 0,
-          keySession: false,
-          targetZones: [],
-          description: 'Full rest day — recovery is productive, not lazy.',
-          warmUp: '',
-          coolDown: '',
-          rationale: 'Rest day enables adaptation and protects against overtraining.',
-        });
-      }
-    }
+  function addRestDays(sessions) {
+    const occupied=new Set(sessions.map(session=>session.day));
+    for(let day=1;day<=7;day++)if(!occupied.has(day))sessions.push({day,type:'rest',subtype:'rest',sessionSubtype:'rest',priority:'rest',durationMin:0,keySession:false,targetZones:[],description:'Rest',rationale:'No training prescribed on this day.'});
     return sessions;
+  }
+
+  // A reviewed sport-by-day template is a hard constraint. Until a
+  // purpose-preserving template allocator exists, report incompatibility
+  // explicitly instead of pretending the union of its days is sufficient.
+  function checkTemplateCompatibility(sessions,classification) {
+    const template=classification.weeklyTemplate;
+    if(!template)return;
+    const names=['sun','mon','tue','wed','thu','fri','sat'];
+    const used=new Map();
+    for(const session of sessions.filter(s=>s.type!=='rest'&&s.durationMin>0)) {
+      const day=names[session.day===7?0:session.day];
+      const slots=(template[day]||[]).map(code=>String(code).split('-')[0]);
+      const allowed=slots.filter(code=>code===session.type||(session.type==='brick'&&code==='brick')).length;
+      const key=day+':'+session.type;
+      used.set(key,(used.get(key)||0)+1);
+      if(used.get(key)>allowed)throw Error('The engine cannot fit its '+session.type+' session into the reviewed '+day+' template. Review session placement; no plan was saved.');
+    }
   }
 
   function assembleWeek(weekNumber, arc, classification) {
@@ -1672,12 +1658,21 @@
     } else {
       sessions = enforceHourCeiling(sessions, arc.weeklyHoursCeiling);
     }
-    sessions = sessions.map(s => enrichSession(s, classification, phase));
+    if(Array.isArray(classification.selectedSports)&&classification.selectedSports.length) {
+      const selected=new Set(classification.selectedSports);
+      sessions=sessions.filter(s=>selected.has(s.type)||(s.type==='brick'&&selected.has('bike')&&selected.has('run')));
+    }
+    sessions = sessions.map(s => enrichSession({...s,weekNumber,phase}, classification, phase));
     sessions = sessions.map(s => selectExercisesForSession(s, classification));
     if (isDeload) sessions = applyDeloadModifier(sessions);
     sessions = applyBRaceMicroTaper(sessions, weekNumber, arc);
+    const range=weekDateRange(weekNumber,arc);
+    sessions=sessions.filter(session=>!arc.requestedStartDate||new Date(range.start.getTime()+(session.day-1)*MS_PER_DAY).toISOString().slice(0,10)>=arc.requestedStartDate);
+    week.isPartial=!!arc.requestedStartDate&&arc.requestedStartDate>range.start.toISOString().slice(0,10)&&weekNumber===1;
+    checkTemplateCompatibility(sessions,classification);
     sessions = addRestDays(sessions, classification);
     sessions.sort((a, b) => a.day - b.day);
+    for(const session of sessions)session.date=new Date(range.start.getTime()+(session.day-1)*MS_PER_DAY).toISOString().slice(0,10);
 
     week.sessions = sessions;
     week.targetHours = Math.round(sessions.reduce((acc, s) => acc + (s.durationMin || 0), 0) / 6) / 10;
@@ -1695,8 +1690,89 @@
     return plan;
   }
 
+  function finalizePrescriptions(plan,classification) {
+    for(const week of plan.weeklyPlan || []) {
+      const active=(week.sessions||[]).filter(session=>['run','bike','swim','brick'].includes(session.type)&&session.durationMin>0);
+      const total=active.reduce((sum,session)=>sum+session.durationMin,0);
+      const limit=Math.floor(total*(classification.goal==='speed_performance'?0.30:0.20));
+      let reserved=active.filter(session=>!session.keySession&&session.type==='run'&&/progression|mp_long|progressive/.test(session.subtype)).reduce((sum,session)=>sum+Math.floor((session.durationMin-Math.min(10,Math.floor(session.durationMin*.20))-Math.min(5,Math.floor(session.durationMin*.15)))*.20),0);
+      for(const session of active.filter(session=>session.type==='brick'&&session.subtype!=='easy_brick')) {
+        if(reserved+session.durationMin>limit) {session.subtype='easy_brick';session.priority='aerobic';session.keySession=false;}
+        else reserved+=session.durationMin;
+      }
+      const quality=active.filter(session=>session.type!=='brick'&&session.keySession);
+      const qualityShare=quality.length?Math.floor(Math.max(0,limit-reserved)/quality.length):0;
+      for(const session of week.sessions || []) {
+      // Only the current engine's final prescription is executable. Discard
+      // old imported/library bodies instead of hiding them under new labels.
+      for(const key of ['phases','steps','intervals','generatedSession','aiSession','libraryWorkout','workoutId','targetPace','brickDetails','swimDetails'])delete session[key];
+      if(session.type==='rest'||session.durationMin===0) {
+        session.type='rest';session.durationMin=0;session.keySession=false;
+        session.targetZones=[];session.description='Rest';delete session.exercises;delete session.targetPace;
+        continue;
+      }
+      enrichSession(session,classification,week.phase);
+      const duration=session.durationMin;
+      const phases=[];
+      const add=(phase,minutes,zone,discipline=session.type)=>{
+        if(minutes>0)phases.push({phase,duration_min:minutes,intensity:zone.toLowerCase(),discipline,instruction:`${minutes} min ${discipline} at ${zone}`});
+      };
+      const easyBrick=session.subtype==='easy_brick';
+      if(session.type==='brick') {
+        const bike=Math.round(duration*0.7),run=duration-bike;
+        const zone=easyBrick?'Z2':'Z3';
+        add('bike_leg',bike,zone,'bike');add('run_leg',run,zone,'run');
+        session.brickDetails={leg1Type:'bike',leg1DurationMin:bike,leg2Type:'run',leg2DurationMin:run};
+        session.targetZones=[zone];session.keySession=!easyBrick;
+      } else if(['run','bike','swim'].includes(session.type)) {
+        const warm=Math.min(10,Math.floor(duration*.20)),cool=Math.min(5,Math.floor(duration*.15));
+        const main=duration-warm-cool;
+        add('warmup',warm,'Z1');
+        if(session.keySession) {
+          const level=session.type==='swim'?classification.sportLevels?.swim:session.type==='bike'?classification.sportLevels?.cycling:classification.sportLevels?.running;
+          const ceiling=['beginner','novice'].includes(level)?3:['advanced','competitive'].includes(level)?5:4;
+          const requested=session.targetZones.includes('Z5')?5:4;
+          const zone='Z'+Math.min(requested,ceiling);
+          if(requested>ceiling)session.subtype=session.sessionSubtype='controlled_intervals';
+          const vo2=zone==='Z5'&&session.type==='run';
+          const recovery=vo2?2:1;
+          const reps=Math.min(2+((session.weekNumber||week.weekNumber)-1)%3,Math.floor((main+recovery)/(2+recovery)),Math.floor(qualityShare/2));
+          const work=reps>0?Math.min(vo2?3:8,Math.floor(qualityShare/reps),Math.floor((main-(reps-1)*recovery)/reps)):0;
+          if(work<2||reps<2)throw Error('The session budget cannot fit its quality purpose. Review duration or session placement.');
+          const filler=main-reps*work-(reps-1)*recovery;
+          add('easy',filler,'Z2');
+          for(let rep=0;rep<reps;rep++) {add('work',work,zone);if(rep<reps-1)add('recovery',recovery,'Z1');}
+          session.targetZones=['Z1','Z2',zone];
+        } else if(session.type==='run'&&/progression|mp_long|progressive/.test(session.subtype)) {
+          const steady=Math.floor(main*.20);add('easy',main-steady,'Z2');add('steady_finish',steady,'Z3');
+          session.targetZones=['Z1','Z2','Z3'];
+        } else {
+          add('main_set',main,session.subtype==='technique'?'Z1':'Z2');
+          session.targetZones=session.subtype==='technique'?['Z1']:['Z1','Z2'];
+        }
+        add('cooldown',cool,'Z1');
+        if(session.type==='swim')session.swimDetails={format:'time',unit:'minutes',totalDurationMin:duration};
+      } else if(['strength','hyrox','circuit','hiit'].includes(session.type)) {
+        add('session',duration,'Z1');
+        phases[0].instruction='Complete the listed sets and reps with the prescribed rests. Session duration is an estimate.';
+        session.durationKind='estimate';
+      } else add('main_set',duration,'Z1');
+      session.phases=phases;
+      const effort=phases.filter(step=>['work','main_set','steady_finish'].includes(step.phase)).map(step=>step.intensity.toUpperCase());
+      const target=session.type==='run'?runPaceTarget(classification,effort):session.type==='bike'?bikePowerTarget(classification,effort):session.type==='swim'?swimPaceTarget(classification,effort):null;
+      if(target)session.targetPace=target;
+      session.description=phases.map(step=>step.instruction).join('; ');
+      session.warmUp=phases.filter(step=>step.phase==='warmup').map(step=>step.instruction).join('; ');
+      session.coolDown=phases.filter(step=>step.phase==='cooldown').map(step=>step.instruction).join('; ');
+      session.prescriptionVersion='timed-rule-engine-v1';
+      }
+    }
+    return plan;
+  }
+
   window.SessionAssembler = {
     assembleWeeklyPlan,
+    finalizePrescriptions,
     getWeeklyTimeBudget,
     insertKeySessions,
     applyIntensityConstraints,
