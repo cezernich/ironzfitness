@@ -160,7 +160,7 @@
       for (const key of rotation) {
         const pool = (groups[key] || []).filter(e => !usedIds.has(e.id));
         if (!pool.length) continue;
-        const choice = _weightedPickByTier(pool);
+        const choice = _weightedPickByTier(pool,opts.random);
         if (choice) {
           picked.push(choice);
           usedIds.add(choice.id);
@@ -187,7 +187,7 @@
   // §UI enforcement: "tier === primary → weighted 2× more likely in
   // pick() for compound days"). Squares the weight so primary > secondary
   // > tertiary maintains a clear preference order.
-  function _weightedPickByTier(pool) {
+  function _weightedPickByTier(pool,random=Math.random) {
     if (!pool.length) return null;
     const weights = pool.map(ex => {
       switch (ex.tier) {
@@ -198,7 +198,7 @@
       }
     });
     const total = weights.reduce((a, b) => a + b, 0);
-    let r = Math.random() * total;
+    let r = random() * total;
     for (let i = 0; i < pool.length; i++) {
       r -= weights[i];
       if (r <= 0) return pool[i];

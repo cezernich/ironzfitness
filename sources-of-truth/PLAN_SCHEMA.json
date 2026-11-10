@@ -373,9 +373,12 @@
           "type": "integer",
           "description": "From TRAINING_PHILOSOPHY Section 4.3"
         },
+        "intensityBudgetScope": { "type": "string", "enum": ["endurance_quality_only"] },
+        "strengthBudgetPolicy": { "type": "string", "enum": ["phase_and_role_specific"] },
+        "sharedRecoveryIncludes": { "type": "array", "items": { "type": "string" } },
         "noConsecutiveHardDays": {
           "type": "boolean",
-          "description": "True unless athlete is advanced"
+          "description": "Shared spacing applies to endurance quality and heavy strength at every level"
         },
         "minRestDaysPerWeek": {
           "type": "integer",
@@ -404,6 +407,8 @@
       "type": "object",
       "description": "Nutrition targets from TRAINING_PHILOSOPHY Section 10.",
       "properties": {
+        "status": { "type": "string", "enum": ["insufficient_data"] },
+        "missing": { "type": "array", "items": { "type": "string" } },
         "dailyTargets": {
           "type": "object",
           "properties": {
@@ -434,6 +439,8 @@
       "type": "object",
       "description": "Hydration targets from TRAINING_PHILOSOPHY Section 11.",
       "properties": {
+        "status": { "type": "string", "enum": ["insufficient_data"] },
+        "missing": { "type": "array", "items": { "type": "string" } },
         "dailyBaselineOz": { "type": "integer" },
         "preSessionOz": { "type": "integer" },
         "duringSessionOzPerHour": { "type": "integer" },

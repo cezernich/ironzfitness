@@ -43,6 +43,10 @@ When the user presses "Generate & Schedule Plan," these inputs are available:
 | strengthSetup.split | onboarding | "upper_lower" or "full_body" etc. |
 | equipmentProfile | profile | ["barbell-rack", "dumbbells", "bench", "cable-machine", ...] |
 
+### Explicit scheduling constraints (issue26)
+
+A reviewed weekly template is a hard day-and-sport constraint throughout the arc, including lead-in, threshold and race weeks. Race-day entries are the explicit event exception. No training is scheduled before the selected start date. Distribution counts are targets, not permission to add sessions or sports absent from that template. Legacy automatic schedules may fill only available dates within the selected training-day cap. Preserve taper/recovery and never cram omitted volume into other dates. Calendar dates must remain local dates across time zones.
+
 ### Plan-build acceptance and failure contract (9 November 2026)
 
 - Translate onboarding race IDs `5k`, `10k` and `century` to the live planner's `fiveK`, `tenK` and `centuryRide`. Regeneration must also accept these supported IDs in older saved races. Unknown distances must not be silently replaced with a different event's training prescription.
@@ -982,6 +986,28 @@ When the user taps "+" to add a session, show a two-option toggle at the top of 
 
 ---
 
+### 6d. Unified target engine validation and final prescriptions
+
+The target Rule Engine remains in **shadow evaluation** until the full acceptance and staging gates pass. A generated candidate is not automatically an adoptable plan. Target metadata records input version, fixed as-of time and `readiness: shadow_only`; direct target adoption is disabled until trusted generation, full acceptance and an explicitly reviewed revision-safe adoption command exist. The presence of a DB persistence method is not permission to adopt a shadow candidate.
+
+Validation must reject missing/incomplete plan contracts, invalid session days/durations, non-finite targets and inconsistent arc/week sequence. An automatically corrected flag is not proof that final postconditions pass. Recheck final weekly totals, long-run share against the **final** denominator, per-discipline keystone progression, genuine rest days and actual structured prescription totals after every transformation. Integer scaling may shorten/remove work, never force a minimum duration above a cap. A deload is excluded as a progression reference, but cannot disable the following check: compare rebuilding volume with the last full non-deload planned week. This arithmetic reference is not evidence of tolerated completed load. Preserve the last approved plan/history on failure; restrictions still govern whether its work remains eligible.
+
+For the target engine, unscheduled days are full rest. Optional active recovery requires explicit future configuration; no unselected or excluded day becomes prescribed cross-training. A long-day wish cannot reopen a closed weekday. One available training day stays one; final postconditions recheck actual active day count, selected sports and excluded weekdays. Weeks are Monday anchored, carry explicit session dates and retain the athlete's requested start boundary separately. A partial first week contains no earlier training and is not treated as a full tolerated baseline for progression. Fat-loss strength guidance is a recommendation when the athlete did not choose compatible strength work; validators cannot fabricate exercises or add a closed sport/day to satisfy it. The target currently rejects incompatible per-day sport/slot templates with an explicit infeasibility message; it must not reduce them to a union of weekdays or silently discard required purposes. A purpose-preserving template allocator remains an activation gate. Explicit sports are respected, generic cardio placeholders resolve to selected disciplines, and secondary events cannot replace the primary race's sport identity.
+
+Cycling uses dedicated bike sessions, not a strength/running fallback. Pre-base is three easy bike slots; Base is two aerobic slots plus a long ride; Build/Peak use aerobic, quality and long-ride slots; taper/race week shorten to easy slots. Its initial phase proportions use the existing cycling distribution (30/35/20/10 percent plus race week5 percent). Until a separate distance-specific cycling ceiling is reviewed, use the existing endurance-goal hour ceiling as an upper bound, not a weekly target or an assertion of athlete capacity. Rolling mesocycle budgets may reduce work but cannot scale it upward to fill unused ceiling hours. Starting/progression doses still need actual tolerated-history or an explicit provisional-start decision. All these candidates still require history/feasibility and domain review before activation.
+
+Owner decision: endurance quality sessions and strength sessions have separate budgets. Heavy strength and quality endurance both enter shared hard-day spacing, including doubles and Sunday-to-Monday boundaries. The default target does not silently exempt advanced athletes from that combined check. Light injury-prevention/minimal support stays outside the endurance-quality budget. Role-specific exercise shape/reps follow section5; missing equipment never relaxes to unavailable equipment. Subjective athlete goals and roles survive classification. A missing valid exercise selection is an error, not an empty strength workout.
+
+Every overlapping B-race window is evaluated against actual calendar dates, independent of input order. Apply this protection after weakness emphasis and verify actual final phases so later transformations cannot add quality back. Three pre-race days and three post-race days contain reduced easy endurance only; loaded/support work is held. The race date has no additional training prescription. Event execution itself needs a separately reviewed event prescription and remains an activation gate; an ordinary easy session cannot impersonate the race. Deload scaling never increases a short session to a minimum.
+
+Final target prescriptions are rebuilt after duration/intensity adjustments. Old interval, generated-session and library bodies cannot remain executable underneath new metadata. Running/cycling/swimming use timed warm-up/main/recovery/cool-down steps that sum exactly to the final budget. Quality work rotates2–4 repetitions by week, constrained by the available work/recovery time and the weekly intensity budget; threshold-style work is capped at8 minutes per repetition and Z5 running work at3 minutes, with explicit recovery. Fewer than two usable repetitions or less than two minutes work cannot masquerade as the selected quality purpose: return infeasibility. These are transparent initial coaching defaults for independent/domain review, not universal safe doses.
+
+Per-sport prescription ceilings and dose modifiers use each discipline level, never the strongest overall sport. Classification reuses the current Training Zones age/sex tables with explicit demographics and eligible dated references; unknown demographics remain explicit rather than being read from another browser profile. Beginner/novice work is capped at Z3, intermediate at Z4, advanced/competitive at Z5; final numeric pace/power targets are regenerated or omitted when their measurements are unknown.
+
+A progressive long run has a timed steady finish (20 percent of its main portion), not a hard-coded distance that can exceed the whole session. Bricks have explicit bike/run durations (70/30 initial split), with an easy alternative when the weekly intensity budget cannot support the harder brick. Endurance phases respect the master80/20 distribution (up to70/30 for speed-performance). Strength has explicit exercises/sets/reps/rest with an estimated time budget rather than fictitious exact repetition timing. Time-based swimming does not invent a pool distance or unit; watch export still requires validated pool/export context.
+
+Unknown body facts produce an explicit insufficient-data nutrition/hydration section, never targets calculated from invented measurements. Rationale is regenerated from the final validated plan. Exercise choices use the explicit snapshot's history/as-of time and seed; unrelated browser state and wall-clock changes cannot change a replay. These repairs do not establish clinical clearance, recent tolerated starting load, provider correctness or production readiness.
+
 ## 7. TEST CASES — Verify Against These
 
 ### Test Case 1: Chase's Ironman Madison
@@ -1712,6 +1738,8 @@ Derived from weekly check-in data (sleep quality, energy level, soreness):
 | Low | Poor sleep, low energy, severe soreness | Reduce volume 30–40%, cap at Z3, consider extra rest day |
 
 ### 12b. Adaptation Rules
+
+For the unified target engine, the historical defaults below do not authorize automatic changes or injury-return clearance. Reviewed effective restrictions, completed-load evidence, explicit proposals and adoption gates take precedence. Return-to-training limits cannot be inferred from elapsed rest time or a generic percentage.
 
 - **2+ weeks "too hard" feedback:** Reduce volume 10–15%, add rest day
 - **2+ weeks "too easy" feedback:** Increase volume 5–10% or add intensity session

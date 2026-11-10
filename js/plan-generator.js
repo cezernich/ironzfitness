@@ -31,7 +31,10 @@
     const intensityCaps = { beginner: 1, intermediate: 2, advanced: 3 };
     return {
       maxIntensitySessionsPerWeek: intensityCaps[level] || 2,
-      noConsecutiveHardDays: level !== 'advanced',
+      intensityBudgetScope:'endurance_quality_only',
+      strengthBudgetPolicy:'phase_and_role_specific',
+      sharedRecoveryIncludes:['endurance_quality','heavy_strength'],
+      noConsecutiveHardDays: true,
       minRestDaysPerWeek: 1,
       maxWeeklyVolumeIncreasePct: level === 'advanced' ? 15 : 10,
       maxLongRunPctOfWeekly: 30,
@@ -52,9 +55,9 @@
   function _buildAdaptationRules() {
     return {
       tooHardResponse: 'Reduce volume by 10-15% and add an extra rest day. Revisit next weekly check-in.',
-      tooEasyResponse: 'Increase volume by 5-10% or add one additional key intensity session.',
+      tooEasyResponse: 'Review completion history and recovery before proposing a change. Athlete approval and all load limits remain required.',
       lowAdherenceResponse: 'Simplify the plan: reduce session count, shorten durations, and check motivation / competing demands.',
-      injuryReturnProtocol: 'Restart at 50% of previous volume, rebuild over 2-3 weeks, hold intensity cap at Z3 during return.',
+      injuryReturnProtocol: 'Hold restricted work until applicable restrictions and return status are established. Elapsed rest time is not clearance; return progression requires athlete-specific constraints.',
     };
   }
 
@@ -90,7 +93,10 @@
   function generate(config) {
     const cfg = config || {};
     const snapshot=cfg.snapshot || (cfg.profile ? window.AthleteInput.normalize(cfg) : DB.captureAthleteInput(cfg));
-    const profile=snapshot.profile;
+    const profile={...snapshot.profile,weeklyTemplate:snapshot.weeklyTemplate,variationSeed:cfg.variationSeed||0,completedHistory:snapshot.history||[]};
+    if(!Array.isArray(profile.selectedSports)||!profile.selectedSports.length)throw Error('Select the sports this plan should include.');
+    if(!Number.isInteger(profile.availableDaysPerWeek)||profile.availableDaysPerWeek<1)throw Error('Set your available training days before generating a plan.');
+    if(!Number.isFinite(profile.sessionLength)||profile.sessionLength<=0)throw Error('Set your preferred session duration before generating a plan.');
     const races=snapshot.races;
     const startDate=snapshot.startDate;
 
@@ -108,14 +114,21 @@
     // selectedSports (Philosophy §2.5 + §9.5).
     const profileForClassification = Object.assign({}, profile, { races });
     const classification = classifier.classify(profileForClassification);
-    const arc = arcBuilder.buildArc(classification, races, startDate);
+    // Calendar weekdays always refer to Monday-anchored weeks. Keep the
+    // requested boundary separately so a partial first week adds no early work.
+    const anchor=new Date(startDate+'T00:00:00Z');
+    anchor.setUTCDate(anchor.getUTCDate()-((anchor.getUTCDay()+6)%7));
+    const arc = arcBuilder.buildArc(classification, races, anchor.toISOString().slice(0,10));
+    arc.requestedStartDate=startDate;
 
     // 3. Weekly plan
     const weeklyPlan = assembler.assembleWeeklyPlan(classification, arc);
 
     // 4 + 5. Nutrition + hydration
-    const nutritionStrategy = nutrition.calculate(classification, profile);
-    const hydrationStrategy = hydration.calculate(profile);
+    const missingNutrition=['age','weight','height'].filter(key=>!Number.isFinite(profile[key])||profile[key]<=0);
+    if(!['male','female'].includes(profile.gender))missingNutrition.push('gender');
+    const nutritionStrategy=missingNutrition.length?{status:'insufficient_data',missing:missingNutrition}:nutrition.calculate(classification,profile);
+    const hydrationStrategy=Number.isFinite(profile.weight)&&profile.weight>0?hydration.calculate(profile):{status:'insufficient_data',missing:['weight']};
 
     // 6. Constraints + progression + adaptation
     const constraints = _buildConstraints(classification);
@@ -147,27 +160,19 @@
 
     // 9. Validate + auto-fix
     const validated = validator.validate(plan, classification);
+    if(!validated.allPassed) throw Error('Generated plan failed validation: '+validated.errors.join(' '));
+    validated.plan.rationale=rationale.build(classification,arc,validated.plan.weeklyPlan);
+    validated.plan.rationale.disclaimer=validator._DISCLAIMER;
+    validated.plan.planMetadata.generatedAt=snapshot.asOf;
+    validated.plan.planMetadata.inputVersion=snapshot.version;
+    validated.plan.planMetadata.readiness='shadow_only';
     return validated.plan;
   }
 
-  function storePlan(plan) {
-    if (!plan || typeof plan !== 'object') return false;
-    try {
-      localStorage.setItem('activePlan', JSON.stringify(plan));
-      localStorage.setItem('activePlanSource', (plan.planMetadata && plan.planMetadata.generationSource) || GENERATION_SOURCE);
-      localStorage.setItem('activePlanAt', new Date().toISOString());
-    } catch (e) {
-      console.warn('[IronZ] PlanGenerator.storePlan: localStorage write failed:', e && e.message);
-      return false;
-    }
-    try {
-      if (typeof window.DB !== 'undefined' && window.DB && typeof window.DB.syncKey === 'function') {
-        window.DB.syncKey('activePlan');
-      }
-    } catch (e) {
-      console.warn('[IronZ] PlanGenerator.storePlan: DB.syncKey failed:', e && e.message);
-    }
-    return true;
+  async function storePlan() {
+    // A persistence method becoming available is not activation approval.
+    // Adoption needs its own reviewed server validation and acceptance gates.
+    throw Error('The unified engine is in evaluation mode. Plan adoption is not enabled.');
   }
 
   window.PlanGenerator = {

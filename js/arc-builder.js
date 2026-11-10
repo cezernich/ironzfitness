@@ -13,6 +13,7 @@
 
   const PHASE_RATIOS = {
     triathlon: { base: 0.25, build: 0.30, peak: 0.25, taper: 0.15, raceWeek: 0.05 },
+    cycling:   { base:0.30,build:0.35,peak:0.20,taper:0.10,raceWeek:0.05 },
     running:   { base: 0.25, build: 0.35, peak: 0.20, taper: 0.15, raceWeek: 0.05 },
     // Philosophy §4.6 — Hyrox periodization
     hyrox:     { base: 0.30, build: 0.35, peak: 0.20, taper: 0.10, raceWeek: 0.05 },
@@ -102,6 +103,7 @@
   function sportProfileForRaceType(raceType) {
     if (TRI_RACE_TYPES.has(raceType)) return 'triathlon';
     if (HYROX_RACE_TYPES.has(raceType)) return 'hyrox';
+    if(raceType==='cycling') return 'cycling';
     return 'running';
   }
 
@@ -123,6 +125,7 @@
     const table = HOUR_CEILINGS[sport];
     const row = table && table[raceType];
     if (row && row[level] != null) return row[level];
+    if(sport==='cycling') return GOAL_HOUR_CEILINGS.endurance[level] || GOAL_HOUR_CEILINGS.endurance.intermediate;
     // Reasonable fallback: intermediate marathon
     return HOUR_CEILINGS.running.marathon.intermediate;
   }

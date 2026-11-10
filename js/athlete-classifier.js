@@ -130,6 +130,13 @@
   }
 
   function deriveSportProfile(profile, sportLevels) {
+    const primary=Array.isArray(profile.races)?profile.races.find(r=>r.priority==='A'):null;
+    if(primary) {
+      if(['sprint-tri','olympic-tri','half-ironman','ironman'].includes(primary.raceType))return 'triathlon';
+      if(['5k','10k','half-marathon','marathon','ultra'].includes(primary.raceType))return 'running';
+      if(primary.raceType==='cycling')return 'cycling';
+      if(primary.raceType==='hyrox')return 'hyrox';
+    }
     if (profile.sportProfile) return profile.sportProfile;
 
     const races = Array.isArray(profile.races) ? profile.races : [];
@@ -222,10 +229,13 @@
     const thresholdPace = pickNumber(p.thresholdPace, p.runThresholdPace);
     const runVDOT = pickNumber(p.runVDOT, p.vdot);
 
+    const zones=window.TrainingZones;
+    const demo={age,sex:gender}; // Explicit unknown sex prevents ambient profile reads.
+    const runReference=p.runReference||{};
     const sportLevels = {
-      swim: deriveSwimLevel(cssTime),
-      cycling: deriveCyclingLevel(ftp, weight),
-      running: deriveRunLevel(thresholdPace),
+      swim: zones?.classifySwim({swim_css:cssTime},demo)||deriveSwimLevel(cssTime),
+      cycling: zones?.classifyCycling({cycling_ftp:ftp},weight?weight/LBS_PER_KG:null,demo)||deriveCyclingLevel(ftp,weight),
+      running: zones?.classifyRunning({...runReference,vdot:runVDOT},demo)||deriveRunLevel(thresholdPace),
     };
 
     // sportProfile must be known before overallLevel (single-sport profiles
@@ -277,6 +287,11 @@
 
     return {
       age,
+      asOf: p.asOf,
+      variationSeed: p.variationSeed || 0,
+      completedHistory: Array.isArray(p.completedHistory)?p.completedHistory.slice():[],
+      selectedSports: Array.isArray(p.selectedSports)?p.selectedSports.slice():[],
+      weeklyTemplate:p.weeklyTemplate||null,
       ageGroup,
       level: overallLevel,
       sportLevels,
