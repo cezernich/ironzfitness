@@ -86,11 +86,8 @@
     try {
       // Profile (we already have it cached by coach-portal but re-fetch
       // for freshness in case the coach navigated directly).
-      const profileRes = await sb.from("profiles")
-        .select("id, full_name, email, gender, weight_lbs, age")
-        .eq("id", clientId)
-        .maybeSingle();
-      _client = profileRes?.data || { id: clientId };
+      const profileRes = await sb.rpc("profile_cards", { p_ids: [clientId] });
+      _client = profileRes?.data?.[0] || { id: clientId };
 
       // Pull every coach-readable data_key for this client in one go.
       // RLS filters silently — we just take what comes back. Also pull
