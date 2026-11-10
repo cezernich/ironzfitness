@@ -40,7 +40,7 @@ console.log('PASS: real race adapter, unit equivalence, preserved goals/roles, u
 const fresher=normalize({thresholds:{bike:{ftp:200,_updatedAt:'2029-01-01'},swim:{cssPace:140}},trainingZones:{biking:{ftp:300,lastUpdated:'2030-03-01'},swimming:{css:110,cssPace:110,lastUpdated:'2030-03-01'}}});
 assert.equal(fresher.profile.ftp,300);assert.equal(fresher.profile.cssTime,110);assert.equal(fresher.profile.thresholdSources.bike.source,'training_zones');
 assert.equal(normalize({draft:true,thresholds:{bike:{mode:'known',ftp:205}},trainingZones:{biking:{ftp:300}}}).profile.ftp,205);
-assert.equal(normalize({draft:true,thresholds:{bike:{mode:'test'}},trainingZones:{biking:{ftp:300}}}).profile.ftp,null);
+assert.equal(normalize({draft:true,thresholds:{bike:{mode:'test'}},trainingZones:{biking:{ftp:300}}}).profile.ftp,300);
 assert.equal(normalize({thresholds:{bike:{method:'20min-test',twentyMinWatts:200}}}).profile.ftp,190);
 assert.equal(normalize({thresholds:{swim:{method:'css-test',css400min:8,css400sec:0,css200min:3,css200sec:30}}}).profile.cssTime,135);
 assert.deepEqual(normalize({buildPlanTemplate:{mon:['rest'],tue:['run']}}).profile.preferredDays,[2]);
@@ -72,3 +72,12 @@ assert.equal(normalize({trainingZones:{running:{vdot:60,lastUpdated:'2031-01-01'
 
 const conflictReport=I.normalizeCheckIn({...report,sleepQuality:5},{asOf});assert.equal(I.normalizeCheckIn(JSON.parse(JSON.stringify(conflictReport)),{asOf}).recoveryState,'unknown','persisted intrinsic conflicts cannot turn into good recovery');
 (async()=>{const {setup}=require('./empty-plan-regression.test');const h=setup();vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../js/weekly-checkin.js'),'utf8'),h.context);h.node('confirm').dataset={value:'too-hard'};const stamp=new Date(Date.now()-86400000).toISOString();h.store.set('latestCheckIn',JSON.stringify({sleepQuality:5,energyLevel:5,soreness:1,observedAt:stamp}));await h.context.submitWeeklyCheckin();assert.equal(h.read('latestCheckIn').observedAt,stamp);assert.equal(h.store.get('currentRecoveryState'),'good');console.log('PASS: difficulty feedback preserves existing wellness observation time and values');})().catch(e=>{console.error(e);process.exitCode=1;});
+
+const pending=normalize({draft:true,thresholds:{bike:{mode:'test',_requestedAt:'2030-01-10T00:00:00Z'}},trainingZones:{biking:{ftp:250,lastUpdated:'2029-12-01T00:00:00Z'}}});
+assert.equal(pending.profile.ftp,250);assert.equal(pending.profile.thresholdSources.bike.observedAt,'2029-12-01T00:00:00Z');assert.equal(pending.profile.thresholdSources.bike.testRequested,true);
+assert.equal(normalize({draft:true,thresholds:{bike:{mode:'clear'}},trainingZones:{biking:{ftp:250}},profile:{ftp:260}}).profile.ftp,null,'explicit clear cannot revive a profile fallback');
+assert.equal(normalize({draft:true,thresholds:{bike:{mode:'test'}}}).profile.ftp,null,'test request never invents a missing benchmark');
+
+const fulfilled=normalize({thresholds:{bike:{mode:'test',_requestedAt:'2030-01-02T00:00:00Z'}},trainingZones:{biking:{ftp:255,lastUpdated:'2030-01-03T00:00:00Z'}}});assert.equal(fulfilled.profile.ftp,255);assert.equal(fulfilled.profile.thresholdSources.bike.testRequested,undefined);
+assert.equal(normalize({thresholds:{bike:{mode:'clear',_clearedAt:'2030-01-02T00:00:00Z'}},trainingZones:{biking:{ftp:255,lastUpdated:'2030-01-03T00:00:00Z'}}}).profile.ftp,255);
+assert.equal(normalize({thresholds:{bike:{mode:'clear',_clearedAt:'2030-01-02T00:00:00Z'}},trainingZones:{biking:{ftp:250,lastUpdated:'2030-01-01T00:00:00Z'}},profile:{ftp:260}}).profile.ftp,null);

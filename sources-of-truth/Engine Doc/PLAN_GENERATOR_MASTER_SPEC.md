@@ -265,6 +265,8 @@ If no equipment profile is set, assume full gym access (no filtering).
 
 Thresholds should be re-tested every 90 days. If stale (>90 days), show a subtle reminder on Add Session / Build Plan screens. Dismissable for 14 days, then reappears.
 
+Draft snapshots distinguish benchmark intent: Test me retains eligible last-known zone/profile measurements with their original observation date and a pending-test flag, never treating the request as a new measurement. Explicit clear returns unknown even when older zone/profile fallbacks still exist. Missing benchmarks remain unknown. Future/invalid dated measurements remain ineligible.
+
 ### 2m. Youth Athlete Modifiers (16–20)
 
 Applies on top of the 2a / 2b / 2c classification. The app gates at 16+; under-16 is not supported.
