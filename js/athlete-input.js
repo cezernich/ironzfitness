@@ -34,7 +34,7 @@
     const aliases=[['sleepQuality','sleep_quality','sleep'],['energyLevel','energy_level','energy'],['soreness','soreness_level','sorenessLevel']];
     const values=aliases.map(keys=>keys.map(k=>raw[k]).find(v=>v!==undefined&&v!==null&&v!==''));
     const conflicts=aliases.some(keys=>{const found=keys.map(k=>raw[k]).filter(v=>v!==undefined&&v!==null&&v!=='');return found.some(v=>String(v)!==String(found[0]));});
-    if(conflicts)quality='conflicting';
+    if(conflicts||['conflicting','invalid'].includes(raw.quality))quality=raw.quality==='invalid'?'invalid':'conflicting';
     const validScore=v=>Number.isInteger(number(v))&&number(v)>=1&&number(v)<=5;
     let recoveryState='unknown';
     if(quality==='current') {

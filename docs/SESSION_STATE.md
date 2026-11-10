@@ -2,6 +2,20 @@
 
 Updated 9 November 2026. This file supersedes older checkpoints. Read AGENTS.md, PRODUCT_DIRECTION.md (where present), this file and remote PR changes before continuing. History is retained in SESSION_LOG.md. Credentials and real athlete information stay outside this public repository.
 
+## Current implementation checkpoint — 9 November, late session
+
+Owner decision: strength and endurance quality have separate session budgets, with shared fatigue and spacing checks. Recorded in the target master section6d and product direction on the repair worktree.
+
+Refreshed main: `50ed969` (PR30/32 merged by other actors). PR36 Claude availability is `a3c47f3`; PR38 goal-preservation and PR40 triathlon picker are separate ongoing changes. Do not duplicate or push their branches.
+
+- Input PR39: `c2dbddb`, `codex/normalize-athlete-inputs`, checkout `/private/tmp/ironz-athlete-input-pr`. Latest input logic `5c871e6` independently reviewed at https://github.com/cezernich/ironzfitness/pull/39#pullrequestreview-5836504639 ; c2 only merges current main and preserves the module-guarded watchdog. Old review counts with three quarantines predate the main merge.
+- Draft target repair PR41: `47a998b`, `codex/final-engine-prescriptions`, checkout `/private/tmp/ironz-final-prescriptions`, stacked on PR39. Repairs final executable workout bodies, cycling, per-sport ceilings, deterministic exercise choices, unknown nutrition, true rest/load caps, shared strength/endurance recovery, explicit dates/partial first weeks, unavailable days/sports and overlapping B-race protections after weakness emphasis. Independent review https://github.com/cezernich/ironzfitness/pull/41#pullrequestreview-5836585924 . Both timezones pass 24 files, zero failures/quarantines, 175 syntax checks, zero heuristic secret hits. Software QA only; no qualified training-policy approval or full acceptance execution.
+- Versioned workspace WIP: `/private/tmp/ironz-training-state`, `codex/versioned-training-state`, based main50ed969. New CLI-created migration `20261110040029_versioned_training_workspace.sql`, owner-only read tables/private command helper/public invoker, CAS and idempotent immutable events; DB wrapper does not write cache. Local Postgres 21 role/concurrency/rollback checks pass; client test and full baseline npm23 files pass. Latest account-switch hardening still requires final rerun/review. Not committed/published/applied remotely at this checkpoint. Workspace is shadow-only, does not replace approved plans and does NOT fix the old user_data sync path.
+
+No new engine/workspace staging deployment or production mutation. Last verified hosted artifact remains app9316eb1 with the limitations below; its evidence cannot certify these new candidates. Real athlete comparison and actual training-plan creation remain NOT RUN. Target adoption is disabled. Remaining template allocation, race execution, recent tolerated baseline/feasibility, effective restrictions, adaptive decisions/permissions/memory and full acceptance/staging gates are listed in PR41 progress documentation.
+
+Next: finish independent workspace QA, add security CI and verify a reviewed migration in isolated staging; establish frozen server-input/shadow persistence and repair the remaining target allocation/feasibility/restriction gates before any adoption. Claude cross-agent review remains required. Disposable local Postgres is currently running at socket `/private/tmp/ironz-pg-test`, port55439, no TCP; stop at closeout. Check active worktrees before continuing; earlier integration notes below are historical, not the current active source.
+
 ## Unified engine implementation in progress
 
 The owner now explicitly authorized implementing the reviewed brain plan in full and routine engineering decisions; ask only when a material philosophy question needs owner input. This supersedes the prior documentation-only implementation scope, not the production release hold. Active checkout `/private/tmp/ironz-engine-contract`, branch `codex/unified-engine-contract`, based on verified integration e57727c plus brain spec e3dcdb5. No production merge/release or real plan generation.
