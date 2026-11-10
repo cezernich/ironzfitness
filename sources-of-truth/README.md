@@ -14,6 +14,7 @@ IronZ's method has two domains. Keep them separate.
 | Plan generation pipeline | In what order does the generator run? | `RULE_ENGINE_SPEC.md` | **Authoritative** |
 | Plan output contract | What shape is a generated plan? | `PLAN_SCHEMA.json` | **Authoritative** |
 | **Adaptive coaching** | How does the plan change day to day and week to week once the athlete is training? (readiness, grading, auto vs proposed changes, briefs, reviews, measured hydration) | `docs/COACH_AGENT_SPEC.md` | **Draft** (PR #17, open policy questions). Not authoritative until merged; will move into this folder after approval. |
+| Brain consolidation and acceptance | What must one engine prove, and how are alternative plans reviewed? | `docs/brain-review/BRAIN_REVIEW_AND_ACCEPTANCE_SPEC.md` and comparison protocol | **Draft acceptance proposal**. Does not replace the master spec, approve PR17 automation or enable runtime behavior. |
 
 Rules:
 - Training logic changes in code update the matching authoritative doc in the same PR (AGENTS.md section 4).

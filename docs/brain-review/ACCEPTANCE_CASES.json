@@ -1,0 +1,310 @@
+{
+  "title": "IronZ brain acceptance cases",
+  "version": "0.1-draft",
+  "status": "planned_not_executed",
+  "baseline": "main 681e68c; implementation PRs tracked separately",
+  "scope": "Synthetic public scenarios. Private reference evaluation follows separate owner-private protocol.",
+  "cases": [
+    {
+      "id": "A01",
+      "responsibility": "understand",
+      "name": "Goals survive adapters",
+      "given": "Synthetic athlete selects a faster running goal and a lead-in preference; traverse wizard/direct/import contracts. Include target profile adapter defaults, separate wizard storage keys and legacy/target race enum variants.",
+      "required_result": "Goal and lead-in preserved or unsupported choice explained; no silently stamped experience override. Missing body facts remain unknown; equivalent events normalize identically.",
+      "failure_severity": "major",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A02",
+      "responsibility": "understand",
+      "name": "Units and sport capacity",
+      "given": "Equivalent metric/imperial inputs; strong cyclist with novice running history. Vary present/unknown age and sex fields only under supported policy; include normalized legacy/target race enum variants.",
+      "required_result": "Same decisions after conversion; running load reflects running history, not overall highest sport label. Any age/sex-dependent behavior follows reviewed policy with traceability, not implicit engine disagreement.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A03",
+      "responsibility": "understand",
+      "name": "Unknown recovery",
+      "given": "Absent, malformed, partial and stale check-ins, including old field aliases.",
+      "required_result": "Explicit unknown/coverage; no good-recovery fallback, false green or wearable-driven increase.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A04",
+      "responsibility": "understand",
+      "name": "Conflicting and late observations",
+      "given": "Duplicate activities and incomplete wellness arrive in different orders.",
+      "required_result": "Idempotent normalized facts, provenance and late-data correction; unchanged facts give unchanged decisions.",
+      "failure_severity": "major",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A05",
+      "responsibility": "understand",
+      "name": "Reported restrictions",
+      "given": "Synthetic discipline-specific medical restriction plus pending/easy/unrestricted reports.",
+      "required_result": "Blocked work remains ineligible; elapsed time and athlete approval cannot invent clearance; conflicts hold.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A06",
+      "responsibility": "understand",
+      "name": "Athlete preferences",
+      "given": "Same endurance goal with support-strength, hybrid and primary-strength choices; all other inputs fixed.",
+      "required_result": "Role persists and affects plan within constraints; unsupported trade-off explained.",
+      "failure_severity": "major",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A07",
+      "responsibility": "build",
+      "name": "Availability and direct entry points",
+      "given": "Four selected days, running only, future start and facility closure; test every generation/edit path.",
+      "required_result": "All actual saved training respects days/sports/start/duration/facilities after all transformations.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A08",
+      "responsibility": "build",
+      "name": "Starting load provenance",
+      "given": "No recent history, zero-load week, older high peak and current low tolerated work.",
+      "required_result": "Explicit provisional start or missing-input hold; no imaginary historical baseline, division by zero or catch-up.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A09",
+      "responsibility": "build",
+      "name": "Season and secondary event",
+      "given": "Synthetic distant A race and nearer secondary hybrid event.",
+      "required_result": "A-race arc and taper preserved; secondary preparation replaces within budget; race priorities explicit.",
+      "failure_severity": "major",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A10",
+      "responsibility": "build",
+      "name": "Recovery and taper preservation",
+      "given": "Evaluate normal, shortened, interrupted and recovering arcs; compare percentage denominators. Include the target intermediate 100-to-115-minute progression and current-master-policy conflict.",
+      "required_result": "Reviewed sport/phase policy enforced on actual totals; no generic return percentage treated as clearance. Policy disagreement blocks activation; constants cannot silently override approved method. Assertions identify the approved policy ID/version and validate actual key-session steps as well as weekly totals.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A11",
+      "responsibility": "build",
+      "name": "Purposeful variation",
+      "given": "Repeat identical generation then advance to another training week.",
+      "required_result": "Reproducible fixed-seed output; variation preserves purpose, progression and comparable benchmarks.",
+      "failure_severity": "major",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A12",
+      "responsibility": "build",
+      "name": "Infeasible and unsupported inputs",
+      "given": "Impossible availability or unsupported event/goal produces no usable training.",
+      "required_result": "Explicit infeasibility and options; prior plan retained; no false success, invented capacity or surprise sport.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A13",
+      "responsibility": "build",
+      "name": "Structured prescription integrity",
+      "given": "Test running intervals, bike sets, swim units/rest steps, strength and brick sessions.",
+      "required_result": "Targets, caps, steps and displayed totals agree; component load counted correctly; final validation follows transforms.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A14",
+      "responsibility": "daily",
+      "name": "Executed version grading",
+      "given": "Session changed after athlete started; activity syncs against the older executed version.",
+      "required_result": "Grade against executed prescription; ambiguous match asks rather than guessing.",
+      "failure_severity": "major",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A15",
+      "responsibility": "daily",
+      "name": "Data quality and environment",
+      "given": "Missing HR, cadence lock suspicion, swim-distance discrepancy and heat change.",
+      "required_result": "Qualified or withheld grade; no claim of poor adherence or fitness diagnosis from insufficient evidence.",
+      "failure_severity": "major",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A16",
+      "responsibility": "daily",
+      "name": "Real reduction",
+      "given": "Recommend easier work for a structured hard session in each sport.",
+      "required_result": "New actual steps/targets/duration; no stale hard library/test/lifting payload under an easy label.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A17",
+      "responsibility": "daily",
+      "name": "Permission and independent controls",
+      "given": "Feedback on/off, coach on/off, mutation consent absent/revoked, explicit decline.",
+      "required_result": "Proposal-first; no unauthorized mutation/export; notification preference never grants plan-write permission.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A18",
+      "responsibility": "daily",
+      "name": "Stale and expired approval",
+      "given": "Approve a proposal after another plan revision, new restriction or proposal expiry.",
+      "required_result": "Reject stale commit and request current review; no overwritten plan or newly ineligible session.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A19",
+      "responsibility": "daily",
+      "name": "Unanswered proposal",
+      "given": "Session time passes without response; test both otherwise eligible plan and new hard restriction.",
+      "required_result": "Retain only last approved eligible prescription; ineligible original held, no unapproved substitute adopted.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A20",
+      "responsibility": "daily",
+      "name": "Wearable enthusiasm and uncertainty",
+      "given": "Favorable wearable trend alone; then disagreeing subjective recovery report.",
+      "required_result": "No automatic increase or manufactured risk percentage; explain evidence and propose supported options.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A21",
+      "responsibility": "weekly",
+      "name": "Missing activity is not missed work",
+      "given": "Late activity import and athlete-reported completed strength with no device file.",
+      "required_result": "Coverage and report provenance shown; no premature noncompliance; deduplicate later matching upload.",
+      "failure_severity": "major",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A22",
+      "responsibility": "weekly",
+      "name": "Honest improvement trend",
+      "given": "Comparable benchmark changes versus different weather, route or threshold version.",
+      "required_result": "Separate observed change from inference; no guaranteed improvement or causal certainty; preserve uncertainty.",
+      "failure_severity": "major",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A23",
+      "responsibility": "weekly",
+      "name": "Weekly draft and approvals",
+      "given": "Review creates next-week draft; athlete declines or never responds.",
+      "required_result": "Current plan/delivery unchanged, draft remains visible with reason and history; acceptance creates one version.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A24",
+      "responsibility": "weekly",
+      "name": "Missed work and recovery priority",
+      "given": "Several missed sessions, busy day and unresolved recovery need.",
+      "required_result": "No cramming/catch-up; constraints preserved; goal feasibility explained and next-week alternatives proposed.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A25",
+      "responsibility": "explain",
+      "name": "Grounded final explanation",
+      "given": "Validator moves/removes sessions after rationale generation; explanatory AI fails or invents a target.",
+      "required_result": "Explain final validated facts; deterministic fallback; fabricated wording never changes or overrides prescription.",
+      "failure_severity": "major",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A26",
+      "responsibility": "remember",
+      "name": "Atomic failures and identity switch",
+      "given": "Generation empty/throws, save rejected, cache fills late or account switches during request. Also report a new hard restriction while its save is rejected.",
+      "required_result": "No false success or partial replacement; prior plan preserved or acknowledged-server/reload state explicit; no account leak. Preserve immutable history, but visibly hold now-ineligible work, warn that restriction is unsaved, block local starts/exports and disclose incomplete cross-device propagation.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A27",
+      "responsibility": "remember",
+      "name": "Two devices and retries",
+      "given": "Stale browser writes, duplicate approval, job retry and simultaneous weekly approval.",
+      "required_result": "Expected revision and idempotency allow one commit; stale data cannot overwrite newer approved state.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A28",
+      "responsibility": "remember",
+      "name": "History and restriction reconciliation",
+      "given": "Edit/delete future workout, alter restriction, import updated plan and correct older observation.",
+      "required_result": "Manual changes/completed history preserved; no resurrected deletion, repeated halving or unrecorded rewritten decision.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "A29",
+      "responsibility": "explain",
+      "name": "Notification and delivery truth",
+      "given": "Timezone/DST change, quiet hours, channels off, retrying/failed calendar or watch export.",
+      "required_result": "Consent and local schedule honored, no duplicate delivery; external status accurate and separate from approved plan. Old copies made ineligible by a restriction show stale/do-not-follow and update/removal pending; no unverified remote recall claim.",
+      "failure_severity": "major",
+      "status": "planned",
+      "evidence": null,
+      "critical_when": "A stale destination prescription is made ineligible by a restriction, or notification/delivery discloses private data without authorization. Apply the global critical gate, not the generic delivery-major classification."
+    },
+    {
+      "id": "A30",
+      "responsibility": "remember",
+      "name": "Private data and instruction boundaries",
+      "given": "Other athlete requests records; imported workout note contains instructions; provider consent revoked.",
+      "required_result": "No cross-user access/health analytics/public fixture/unauthorized provider transfer; imported text cannot alter policy; revoked retrieval stops.",
+      "failure_severity": "critical",
+      "status": "planned",
+      "evidence": null
+    }
+  ]
+}
