@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const H=require('../js/training-history');
 const I=require('../js/athlete-input');
 const options={asOf:'2030-01-15T12:00:00.000Z',timeZone:'UTC'};
-const activity=(id,extra={})=>({id,date:'2030-01-10',type:'running',duration:'30',completed:true,source:'manual',...extra});
+const activity=(id,extra={})=>({id,date:'2030-01-10',type:'running',duration:'30',isCompletion:true,source:'manual',...extra});
 const empty=H.normalize([],options);
 assert.equal(empty.coverage,'no_eligible_records');
 assert.equal(empty.toleratedBaselineStatus,'not_established');
@@ -61,3 +61,8 @@ for(const extra of [{completedAt:'2030-01-16'},{startDate:'2030-01-16'},{complet
   assert.equal(captured.history.length,1,'actual DB capture uses workout log and does not count plan entries as completed history');
   console.log('PASS: real completed-history capture, identity links, source ordering, units, missing coverage and unresolved baseline');
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
+const appReceipt={id:'app-receipt',date:'2030-01-10',type:'running',duration:'42',completedSessionId:'session-plan-synthetic',completedAt:'2030-01-10T13:00:00Z',isCompletion:true};
+assert.equal(H.normalize([appReceipt],options).bySport.run.reportedMinutes,42,'Mark as Complete receipts count without legacy completion flags');
+assert.equal(H.normalize([{...appReceipt,id:'planned',isCompletion:undefined,completed:true}],options).activities.length,0,'legacy completed flag alone is not completion evidence');
+assert.equal(H.normalize([{...appReceipt,id:'provider',isCompletion:undefined,source:'strava'}],options).bySport.run.reportedMinutes,42,'Strava imports match the live calendar adapter');
