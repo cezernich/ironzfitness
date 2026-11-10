@@ -42,4 +42,5 @@ jobs:
       - name: Profiles security test
         run: |
           bash tests/sql/profiles-security.sh
+          bash tests/sql/ai-quota-security.sh
           IRONZ_PROFILE_UPGRADE=1 bash tests/sql/profiles-security.sh
