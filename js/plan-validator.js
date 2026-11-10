@@ -110,21 +110,20 @@
     const plan_ = plan.weeklyPlan;
     if (!Array.isArray(plan_) || plan_.length < 2) return;
     const cap = (classification && classification.level === 'advanced') ? 0.15 : 0.10;
-    for (let i = 1; i < plan_.length; i++) {
-      const prev = plan_[i - 1];
-      const curr = plan_[i];
-      if (curr.isDeload || prev.isDeload || prev.isPartial) continue;
-      if (curr.phase === 'taper' || curr.phase === 'race-week') continue;
-      const prevDur = weekDuration(prev);
-      const currDur = weekDuration(curr);
-      if (prevDur <= 0) continue;
-      const maxAllowed = Math.round(prevDur * (1 + cap));
-      if (currDur > maxAllowed) {
-        const factor = maxAllowed / currDur;
-        scaleWeek(curr, factor);
-        flag(flags, 'volume_increase_cap', 'auto-fixed',
-          `Week ${curr.weekNumber} duration ${currDur}→${weekDuration(curr)}min (capped at +${Math.round(cap * 100)}% over week ${prev.weekNumber}).`);
+    let reference=null;
+    for(const current of plan_) {
+      if(current.isPartial||current.isDeload)continue;
+      if(reference&&!['taper','race-week'].includes(current.phase)) {
+        const priorMinutes=weekDuration(reference),minutes=weekDuration(current);
+        if(priorMinutes>0) {
+          const maximum=Math.floor(priorMinutes*(1+cap));
+          if(minutes>maximum) {
+            scaleWeek(current,maximum/minutes);
+            flag(flags,'volume_increase_cap','auto-fixed',`Week ${current.weekNumber}: ${minutes}→${weekDuration(current)}min against last full non-deload week ${reference.weekNumber} (${priorMinutes}min). This is planned load, not measured tolerance.`);
+          }
+        }
       }
+      reference=current;
     }
   }
 
@@ -556,7 +555,7 @@
       const current=plan.weeklyPlan[index];
       checkLongRunProportion({weeklyPlan:[current]},classification,flags);
       checkKeystoneProgression({weeklyPlan:plan.weeklyPlan.slice(0,index+1)},classification,flags);
-      if(index)checkVolumeIncreaseCap({weeklyPlan:[plan.weeklyPlan[index-1],current]},classification,flags);
+      if(index)checkVolumeIncreaseCap({weeklyPlan:plan.weeklyPlan.slice(0,index+1)},classification,flags);
       // Integer rounding may change a fraction during proportional scaling.
       // Correct only this week before it becomes the next week's baseline.
       checkLongRunProportion({weeklyPlan:[current]},classification,flags);
@@ -568,6 +567,8 @@
     const cap=classification.level==='advanced'?0.15:0.10;
     for(const week of plan.weeklyPlan) {
       const active=(week.sessions||[]).filter(s=>s&&s.type!=='rest'&&s.durationMin>0);
+      if(Number.isFinite(plan.arc.weeklyHoursCeiling)&&weekDuration(week)>Math.floor(plan.arc.weeklyHoursCeiling*60))errors.push('Final weekly duration exceeds the arc ceiling.');
+      if(previousWeek&&!week.isDeload&&!week.isPartial&&weekDuration(previousWeek)===0&&weekDuration(week)>0)errors.push('Rebuilding from zero planned load requires a starting-load review.');
       if(new Set(active.map(s=>s.day)).size>6)errors.push('Every training week needs a true rest day.');
       if(Number.isInteger(classification.daysAvailable)&&new Set(active.map(s=>s.day)).size>classification.daysAvailable)errors.push('Final plan exceeds available training days.');
       if(Array.isArray(classification.preferredDays)&&active.some(s=>!classification.preferredDays.includes(s.day===7?0:s.day)))errors.push('Final plan uses an excluded weekday.');
@@ -589,13 +590,13 @@
       for(const session of hard.slice().sort((a,b)=>a.day-b.day)) {const day=(week.weekNumber-1)*7+session.day;if(previousHardDay!==null&&day===previousHardDay+1)errors.push('Final plan has consecutive hard days.');previousHardDay=day;}
       const runs=active.filter(s=>s.type==='run'),runTotal=runs.reduce((sum,s)=>sum+s.durationMin,0);
       if(runs.some(s=>(s.priority==='long'||s.subtype==='long_run')&&s.durationMin>runTotal*.30+0.00001))errors.push('Final long-run proportion exceeds policy.');
-      if(previousWeek&&!previousWeek.isPartial&&!week.isDeload&&!previousWeek.isDeload&&!['taper','race-week'].includes(week.phase)&&weekDuration(previousWeek)>0&&weekDuration(week)>Math.round(weekDuration(previousWeek)*(1+cap)))errors.push('Final weekly progression exceeds policy.');
+      if(previousWeek&&!week.isPartial&&!week.isDeload&&!['taper','race-week'].includes(week.phase)&&weekDuration(previousWeek)>0&&weekDuration(week)>Math.floor(weekDuration(previousWeek)*(1+cap)))errors.push('Final weekly progression exceeds policy.');
       if(!week.isDeload&&!week.isPartial) {
         const keystones=active.filter(s=>s.priority==='long'||s.type==='brick');
         for(const session of keystones)if(previousKeystone.has(session.type)&&session.durationMin>Math.floor(previousKeystone.get(session.type)*(1+cap)))errors.push('Final keystone progression exceeds policy.');
         for(const type of new Set(keystones.map(s=>s.type)))previousKeystone.set(type,Math.max(...keystones.filter(s=>s.type===type).map(s=>s.durationMin)));
       }
-      previousWeek=week;
+      if(!week.isDeload&&!week.isPartial)previousWeek=week;
       if(!Number.isInteger(week.weekNumber)||week.weekNumber<1)errors.push('Invalid training week.');
       for(const session of week.sessions)if(!session||!['run','bike','swim','strength','brick','circuit','hiit','hyrox','yoga','cross-training','rest'].includes(session.type)||!Number.isInteger(session.day)||session.day<1||session.day>7||!Number.isInteger(session.durationMin)||session.durationMin<0||(session.type!=='rest'&&session.durationMin===0))errors.push('Invalid session day or duration.');
       for(const session of endurance) {

@@ -68,3 +68,12 @@ const nullSession=JSON.parse(JSON.stringify(cycling));nullSession.weeklyPlan[0].
 
 const weakRecovery=context.PlanGenerator.generate({asOf:'2030-01-01T12:00:00Z',startDate:'2030-01-07',profile:{age:34,weight:155,height:70,selectedSports:['run','bike','swim'],availableDaysPerWeek:6,sessionLength:60,thresholdPace:6,ftp:220,cssTime:170},races:[{raceType:'ironman',date:'2030-06-09',priority:'A'},{raceType:'10k',date:'2030-01-07',priority:'B'}]});
 for(const session of weakRecovery.weeklyPlan[0].sessions.filter(s=>s.type!=='rest'&&s.date<='2030-01-10'))assert.ok(session.phases.every(p=>['z1','z2'].includes(p.intensity)),'weakness emphasis cannot upgrade B-race recovery work');
+
+const rebound={weeklyPlan:[{weekNumber:1,sessions:[{type:'bike',day:1,durationMin:100}]},{weekNumber:2,isDeload:true,sessions:[{type:'bike',day:1,durationMin:50}]},{weekNumber:3,sessions:[{type:'bike',day:1,durationMin:1000}]}]};
+V._checkVolumeIncreaseCap(rebound,{level:'intermediate'},[]);assert.ok(rebound.weeklyPlan[2].sessions[0].durationMin<=110,'deload rebound uses last full pre-cut planned week, never unlimited skip');
+
+const spareBudget=[{type:'bike',durationMin:30}];context.SessionAssembler.scaleSessionsToBudget(spareBudget,600);assert.equal(spareBudget[0].durationMin,30,'generic hour ceiling cannot inflate selected work into presumed tolerance');
+const tinyBudget=[{type:'bike',durationMin:30}];context.SessionAssembler.scaleSessionsToBudget(tinyBudget,5);assert.ok(tinyBudget[0].durationMin<=5,'minimum session duration never defeats a numerical cap');
+
+context.DB={commitEnginePlan:()=>{throw Error('shadow plan must never reach adoption');}};
+(async()=>{await assert.rejects(context.PlanGenerator.storePlan(cycling),/evaluation mode/);})().catch(error=>{console.error(error);process.exitCode=1;});

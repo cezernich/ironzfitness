@@ -169,9 +169,10 @@
     return validated.plan;
   }
 
-  async function storePlan(plan) {
-    if(typeof DB==='undefined'||!DB.commitEnginePlan)throw Error('The unified engine is in evaluation mode. Plan adoption is not enabled.');
-    return DB.commitEnginePlan(plan);
+  async function storePlan() {
+    // A persistence method becoming available is not activation approval.
+    // Adoption needs its own reviewed server validation and acceptance gates.
+    throw Error('The unified engine is in evaluation mode. Plan adoption is not enabled.');
   }
 
   window.PlanGenerator = {
