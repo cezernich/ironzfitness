@@ -54,6 +54,10 @@ When the user presses "Generate & Schedule Plan," these inputs are available:
 
 ---
 
+### Persisted fallback prescriptions
+
+A workout-library miss must not leave a name-only saved training entry. After distribution and constraint passes, resolve the existing built-in template for every non-rest, non-race fallback session, persist its positive duration and a detached snapshot of its steps as `templateWorkout`, and retain any already calculated positive session duration. Library-backed entries retain their parameterized library duration. If no positive duration can be resolved, reject replacement and keep the previous plan. Calendar rendering must not be the only place where fallback duration and steps exist.
+
 ## 2. CLASSIFY — Determine the Athlete's Profile
 
 ### 2a-0. Age-Graded Classification — Code Approach
