@@ -1085,22 +1085,20 @@
     const total = sessions.reduce((a, s) => a + (s.durationMin || 0), 0);
     if (total <= ceilingMin) return sessions;
     const scale = ceilingMin / total;
-    for (const s of sessions) s.durationMin = Math.max(15, Math.round(s.durationMin * scale));
+    for (const s of sessions) s.durationMin = Math.max(0, Math.floor(s.durationMin * scale));
     return sessions;
   }
 
-  // Two-way scale: adjust session durations up or down to hit targetMin.
-  // Used for mesocycle progression so weeks actually differ (Philosophy §4.9).
+  // A ceiling can shorten a candidate; it is never a reason to fill spare
+  // hours or enlarge a session without a reviewed starting-load basis.
   function scaleSessionsToBudget(sessions, targetMin) {
     if (!targetMin || targetMin <= 0) return sessions;
     const active = sessions.filter(s => s && s.type !== 'rest');
     const total = active.reduce((a, s) => a + (s.durationMin || 0), 0);
     if (total <= 0) return sessions;
-    const scale = targetMin / total;
-    // Don't scale extremely aggressively on a single session.
-    const clamped = Math.max(0.4, Math.min(1.6, scale));
+    const clamped = Math.min(1, targetMin / total);
     for (const s of active) {
-      s.durationMin = Math.max(15, Math.round((s.durationMin || 0) * clamped));
+      s.durationMin = Math.max(0, Math.floor((s.durationMin || 0) * clamped));
     }
     return sessions;
   }
@@ -1649,10 +1647,9 @@
     sessions = applyIntensityConstraints(sessions, classification);
     sessions = assignDurations(sessions, classification, arc, phase);
     if (phase === 'mesocycle') {
-      // For rolling mesocycles, scale sessions TO match the week's budget
-      // so weeks 1→2→3 progress +5-10% (Philosophy §4.9). Week 4 deload
-      // is handled by applyDeloadModifier separately — but we still honor
-      // the hour ceiling.
+      // For rolling mesocycles, the phase budget is an upper bound. Do not
+      // scale work upward merely because a generic ceiling has spare hours.
+      // Completed-load progression remains an activation gate.
       const weeklyMin = getWeeklyTimeBudget(weekNumber, arc, classification);
       sessions = scaleSessionsToBudget(sessions, weeklyMin);
     } else {
