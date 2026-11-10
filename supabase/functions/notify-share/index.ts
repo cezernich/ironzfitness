@@ -1,6 +1,7 @@
 // supabase/functions/notify-share/index.ts
 //
-// Called from the client after a successful shared_workouts INSERT.
+// Trusted backend callers only. Public shares do not persist an intended
+// recipient, so a client-supplied recipient cannot be authorized safely.
 // Sends a push notification to the recipient (if they have a device token).
 //
 // POST body: { recipient_user_id: string, sender_name: string, workout_name: string, share_token: string }
@@ -29,14 +30,14 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
 
-  const auth = req.headers.get("authorization") || "";
-  if (!auth.toLowerCase().startsWith("bearer ")) {
-    return jsonResponse({ error: "unauthorized" }, 401);
-  }
-
+  const token = /^Bearer\s+(\S+)$/i.exec(req.headers.get("authorization") || "")?.[1];
+  if (!token) return jsonResponse({ error: "unauthorized" }, 401);
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
     return jsonResponse({ error: "server_misconfigured" }, 500);
   }
+  // Never upgrade a user JWT into an arbitrary-recipient service-role push.
+  // Reopening client access requires a persisted, verified recipient relation.
+  if (token !== SERVICE_ROLE_KEY) return jsonResponse({ error: "forbidden" }, 403);
 
   let body: any;
   try { body = await req.json(); }
