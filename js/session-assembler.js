@@ -1665,7 +1665,7 @@
     sessions = sessions.map(s => enrichSession({...s,weekNumber,phase}, classification, phase));
     sessions = sessions.map(s => selectExercisesForSession(s, classification));
     if (isDeload) sessions = applyDeloadModifier(sessions);
-    sessions = applyBRaceMicroTaper(sessions, weekNumber, arc);
+
     const range=weekDateRange(weekNumber,arc);
     sessions=sessions.filter(session=>!arc.requestedStartDate||new Date(range.start.getTime()+(session.day-1)*MS_PER_DAY).toISOString().slice(0,10)>=arc.requestedStartDate);
     week.isPartial=!!arc.requestedStartDate&&arc.requestedStartDate>range.start.toISOString().slice(0,10)&&weekNumber===1;
@@ -1687,6 +1687,8 @@
       plan.push(assembleWeek(w, arc, classification));
     }
     applyWeaknessBias(plan, classification);
+    // Weakness emphasis must not reintroduce quality into a protected window.
+    for(const week of plan)applyBRaceMicroTaper(week.sessions,week.weekNumber,arc);
     return plan;
   }
 

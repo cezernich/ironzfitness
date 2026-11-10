@@ -65,3 +65,6 @@ const loaded=[{day:5,type:'strength',strengthStress:'heavy',durationMin:60,exerc
 const emptyPhases=JSON.parse(JSON.stringify(cycling));emptyPhases.arc.phases=[];assert.equal(V.validate(emptyPhases,cycling.athleteProfile).allPassed,false);
 const shifted=JSON.parse(JSON.stringify(cycling));shifted.arc.startDate='2030-01-08';for(const session of shifted.weeklyPlan.flatMap(w=>w.sessions))session.date=new Date(Date.parse(session.date+'T00:00:00Z')+86400000).toISOString().slice(0,10);assert.equal(V.validate(shifted,cycling.athleteProfile).allPassed,false);
 const nullSession=JSON.parse(JSON.stringify(cycling));nullSession.weeklyPlan[0].sessions.push(null);assert.equal(V.validate(nullSession,cycling.athleteProfile).allPassed,false);
+
+const weakRecovery=context.PlanGenerator.generate({asOf:'2030-01-01T12:00:00Z',startDate:'2030-01-07',profile:{age:34,weight:155,height:70,selectedSports:['run','bike','swim'],availableDaysPerWeek:6,sessionLength:60,thresholdPace:6,ftp:220,cssTime:170},races:[{raceType:'ironman',date:'2030-06-09',priority:'A'},{raceType:'10k',date:'2030-01-07',priority:'B'}]});
+for(const session of weakRecovery.weeklyPlan[0].sessions.filter(s=>s.type!=='rest'&&s.date<='2030-01-10'))assert.ok(session.phases.every(p=>['z1','z2'].includes(p.intensity)),'weakness emphasis cannot upgrade B-race recovery work');

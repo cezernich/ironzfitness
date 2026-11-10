@@ -575,6 +575,9 @@
       for(const session of active) {
         const expected=new Date(Date.parse(plan.arc.startDate+'T00:00:00Z')+((week.weekNumber-1)*7+session.day-1)*86400000).toISOString().slice(0,10);
         if(session.date!==expected||(plan.arc.requestedStartDate&&session.date<plan.arc.requestedStartDate))errors.push('Final session date disagrees with its weekday or start boundary.');
+        const bOffsets=(plan.arc.bRaceWindows||[]).map(window=>(Date.parse(session.date+'T00:00:00Z')-Date.parse(window.raceDate+'T00:00:00Z'))/86400000);
+        if(bOffsets.includes(0))errors.push('B-race day cannot contain additional training.');
+        if(bOffsets.some(offset=>offset>=-3&&offset<=3)&&(session.keySession||session.strengthStress==='heavy'||!['run','bike','swim','brick'].includes(session.type)||(session.phases||[]).some(step=>!['z1','z2'].includes(step.intensity))))errors.push('Final B-race window must contain only easy endurance.');
       }
       const enduranceHard=active.filter(s=>s.keySession&&s.type!=='strength');
       const hard=active.filter(s=>s.keySession||s.strengthStress==='heavy');
