@@ -531,7 +531,7 @@
     // clicks Edit and switches methods, both are already populated.
     if (zones.swimming) {
       const sw = zones.swimming;
-      const cssSec = Number(sw.tPaceSec) || parseInt(sw.cssPace, 10) || parseInt(sw.css, 10) || null;
+      const cssSec = Number(sw.cssPace) || Number(sw.css) || Number(sw.tPaceSec) || null;
       if (cssSec && cssSec > 0) {
         const base = { mode: "known", method: "pace", cssPace: String(Math.round(cssSec)) };
         // If we also have the reference 400m time, back-fill the
@@ -577,6 +577,7 @@
       const hasValues = Object.keys(p).some(k => k !== "mode" && k !== "_updatedAt" && p[k] != null && p[k] !== "");
       if (hasValues) {
         const prevTs = result[key] && result[key]._updatedAt;
+        if (prevTs && (!p._updatedAt || new Date(p._updatedAt) < new Date(prevTs))) return;
         result[key] = { ...(result[key] || {}), ...p };
         if (prevTs && !result[key]._updatedAt) result[key]._updatedAt = prevTs;
       }
@@ -1831,7 +1832,7 @@
         ]},
       ]},
       { id: "pace", label: "I know my CSS pace", fields: [
-        { id: "cssPace", label: "CSS pace (sec / 100m)", placeholder: "85", inputmode: "numeric" },
+        { id: "cssPace", label: "CSS pace (sec / 100m)", placeholder: "85", inputmode: "decimal" },
       ]},
       { id: "race", label: "Recent race result", fields: [
         { id: "raceDist", label: "Distance (meters)", placeholder: "1500", inputmode: "numeric" },
@@ -1998,7 +1999,7 @@
     let primary = "";
     let secondary = "";
     if (key === "swim") {
-      const css = parseInt(saved.cssPace, 10);
+      const css = Number(saved.cssPace);
       if (!css) return "";
       primary = "CSS " + _formatSeconds(css) + " /100m";
       if (saved.css400min || saved.css400sec) {
@@ -2178,12 +2179,17 @@
       }
     });
     _state.thresholds = result;
-    _lsSet("thresholds", result);
     // Round-trip any known values back into the app's Training Zones &
     // Strength Benchmarks so the two surfaces stay in sync. The existing
     // saveTrainingZonesData() stamps lastUpdated AND appends to
     // trainingZonesHistory so prior versions are retained with a date.
     _persistThresholdsToZones(result);
+    const zonesAfterSave = _lsGet("trainingZones", {}) || {};
+    const zoneSport = { run: "running", bike: "biking", swim: "swimming", strength: "strength" };
+    Object.keys(result).forEach(key => {
+      result[key]._updatedAt = (zonesAfterSave[zoneSport[key]] || {}).lastUpdated || new Date().toISOString();
+    });
+    _lsSet("thresholds", result);
     if (!_state.selectedSports.includes("strength")) {
       if (_shouldShowLongDays()) { goTo("bp-v2-4b"); _renderLongDayBlocks(); }
       else { goTo("bp-v2-5"); _renderSchedule(); }
@@ -2200,16 +2206,25 @@
     if (!thresholds || typeof saveTrainingZonesData !== "function") return;
     const nowIso = new Date().toISOString();
 
-    // Running — if user provided a threshold pace, sync it.
+    // Each submitted sport replaces its prior benchmark, including derived
+    // fields. Explicit test/cleared inputs invalidate the old benchmark.
+    const save = (sport, data) => saveTrainingZonesData(sport, data, { replace: true });
+    for (const [key, sport] of Object.entries({ run: "running", bike: "biking", swim: "swimming", strength: "strength" })) {
+      if (thresholds[key] && thresholds[key].mode !== "known") save(sport, null);
+    }
     const r = thresholds.run;
-    if (r && r.mode === "known" && r.threshPace) {
-      try {
-        saveTrainingZonesData("running", {
-          thresholdPace: r.threshPace,
-          calculatedAt: nowIso,
-          source: "build_plan_v2",
-        });
-      } catch (e) { console.warn("[OnboardingV2] sync running zones failed", e); }
+    if (r && r.mode === "known") {
+      if (r.method === "race" && r.raceDist && r.raceTime) {
+        const meters = { mile: 1609.344, "5k": 5000, "10k": 10000, halfMarathon: 21097.5, marathon: 42195 }[r.raceDist];
+        const parts = String(r.raceTime).split(":").map(Number);
+        const seconds = parts.reduce((total, n) => total * 60 + n, 0);
+        if (meters && parts.length >= 2 && parts.length <= 3 && parts.every(n => Number.isFinite(n) && n >= 0) && parts.slice(1).every(n => n < 60) && seconds > 0 && typeof computeRunningZones === "function") {
+          const computed = computeRunningZones(meters, seconds);
+          save("running", { ...computed, referenceDist: r.raceDist === "5k" ? "5K" : r.raceDist === "10k" ? "10K" : r.raceDist, referenceTime: r.raceTime, calculatedAt: nowIso, source: "build_plan_v2" });
+        } else save("running", null);
+      } else if (r.threshPace) {
+        save("running", { thresholdPace: r.threshPace, calculatedAt: nowIso, source: "build_plan_v2" });
+      } else save("running", null);
     }
 
     // Biking — resolve FTP from whatever method the user picked:
@@ -2232,14 +2247,14 @@
           if (typeof computeBikingZones === "function") zones = computeBikingZones(ftp).zones;
         } catch {}
         try {
-          saveTrainingZonesData("biking", {
+          save("biking", {
             ftp,
             zones,
             calculatedAt: nowIso,
             source: "build_plan_v2",
           });
         } catch (e) { console.warn("[OnboardingV2] sync biking zones failed", e); }
-      }
+      } else save("biking", null);
     }
 
     // Swimming — resolve CSS from whatever method the user picked:
@@ -2250,7 +2265,7 @@
     const s = thresholds.swim;
     if (s && s.mode === "known") {
       let css = null;
-      if (s.cssPace) css = parseInt(s.cssPace, 10);
+      if (s.cssPace) css = Number(s.cssPace);
       else if (s.method === "css-test") {
         const m400 = parseInt(s.css400min, 10) || 0;
         const s400 = parseInt(s.css400sec, 10) || 0;
@@ -2265,28 +2280,27 @@
       }
       if (css && css > 0) {
         try {
-          saveTrainingZonesData("swimming", {
+          const computed = typeof computeSwimmingZones === "function" ? computeSwimmingZones(css * 4) : {};
+          save("swimming", {
+            ...computed, tPaceSec: css, tPaceStr: _formatSeconds(css), referenceDist: "CSS /100m",
             css,
             cssPace: css,
             calculatedAt: nowIso,
             source: "build_plan_v2",
           });
         } catch (e) { console.warn("[OnboardingV2] sync swim zones failed", e); }
-      }
+      } else save("swimming", null);
     }
 
-    // Strength — 1RMs for squat/bench/deadlift.
+    // Empty lift fields clear prior maxes, including partial deletions.
     const st = thresholds.strength;
     if (st && st.mode === "known") {
       const data = { updatedAt: nowIso, source: "build_plan_v2" };
-      const parse = v => parseInt(v, 10);
-      if (st.squat) data.squat    = { weight: parse(st.squat), type: "1rm" };
-      if (st.bench) data.bench    = { weight: parse(st.bench), type: "1rm" };
-      if (st.dead)  data.deadlift = { weight: parse(st.dead),  type: "1rm" };
-      if (data.squat || data.bench || data.deadlift) {
-        try { saveTrainingZonesData("strength", data); }
-        catch (e) { console.warn("[OnboardingV2] sync strength zones failed", e); }
+      for (const [input, output] of [["squat", "squat"], ["bench", "bench"], ["dead", "deadlift"]]) {
+        const weight = Number(st[input]);
+        if (Number.isFinite(weight) && weight > 0) data[output] = { weight, type: "1rm" };
       }
+      save("strength", data.squat || data.bench || data.deadlift ? data : null);
     }
   }
   function _testMeForEverythingAndContinue() {

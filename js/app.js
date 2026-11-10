@@ -1771,7 +1771,7 @@ function loadTrainingZones(sport) {
   } catch { return null; }
 }
 
-function saveTrainingZonesData(sport, data) {
+function saveTrainingZonesData(sport, data, options = {}) {
   let all = {};
   try { all = JSON.parse(localStorage.getItem("trainingZones")) || {}; } catch {}
   const nowIso = new Date().toISOString();
@@ -1783,7 +1783,7 @@ function saveTrainingZonesData(sport, data) {
   // record until the next update, at which point it'll be archived.
   const previous = all[sport];
   if (previous && typeof previous === "object") {
-    const wasChanged = _zoneEntryMaterialDiff(previous, data);
+    const wasChanged = _zoneEntryMaterialDiff(previous, data || {});
     if (wasChanged) {
       const prevDate = previous.calculatedAt || previous.updatedAt || previous.lastUpdated || nowIso;
       _appendZoneHistoryAt(sport, previous, prevDate);
@@ -1795,8 +1795,9 @@ function saveTrainingZonesData(sport, data) {
   // fields the full Training Zones form set (referenceDist, vdot,
   // paceRange zones, etc). Spread existing first, new on top, then
   // stamp lastUpdated so the staleness banner respects the write.
-  const merged = Object.assign({}, previous || {}, data, { lastUpdated: nowIso });
-  all[sport] = merged;
+  if (options.replace && sport === "running" && typeof DB !== "undefined" && DB.invalidateLegacyRunningZones) DB.invalidateLegacyRunningZones();
+  if (options.replace && data === null) delete all[sport];
+  else all[sport] = Object.assign({}, options.replace ? {} : (previous || {}), data, { lastUpdated: nowIso });
   localStorage.setItem("trainingZones", JSON.stringify(all));
   // Flush to Supabase without the 2s debounce. Zones drive pacing
   // across every generator, so losing the most recent edit to a
@@ -1805,8 +1806,8 @@ function saveTrainingZonesData(sport, data) {
   // guarantee (the save button's onSave) can `await DB.flushKey` after
   // calling this function.
   if (typeof DB !== 'undefined') {
+    DB.syncKey('trainingZones');
     if (DB.flushKey) DB.flushKey('trainingZones');
-    else DB.syncKey('trainingZones');
   }
 
   // Mirror the stamp onto the profile's per-sport field so the reminder's
@@ -1820,11 +1821,11 @@ function saveTrainingZonesData(sport, data) {
       strength: "strengthThresholdUpdatedAt",
     }[sport];
     if (profileField) {
-      profile[profileField] = nowIso;
+      profile[profileField] = options.replace && data === null ? null : nowIso;
       localStorage.setItem("profile", JSON.stringify(profile));
       if (typeof DB !== 'undefined') {
+        DB.syncKey('profile');
         if (DB.flushKey) DB.flushKey('profile');
-        else DB.syncKey('profile');
       }
     }
   } catch {}
@@ -2209,7 +2210,7 @@ function renderZones() {
     : "";
 
   let refLine = "";
-  if (sport === "running")  refLine = `Based on ${stored.referenceDist} in ${stored.referenceTime} &nbsp;·&nbsp; VDOT ${stored.vdot}`;
+  if (sport === "running") refLine = stored.referenceTime ? `Based on ${stored.referenceDist} in ${stored.referenceTime} &nbsp;·&nbsp; VDOT ${stored.vdot}` : `Threshold pace: ${stored.thresholdPace || "Not set"} /mi`;
   if (sport === "biking")   refLine = `FTP: ${stored.ftp} W`;
   if (sport === "swimming") refLine = `T-Pace: ${stored.tPaceStr} /100m (from ${stored.referenceDist})`;
   if (dateLabel) refLine += ` &nbsp;·&nbsp; Updated ${dateLabel}`;
