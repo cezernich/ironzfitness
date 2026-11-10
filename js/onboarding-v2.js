@@ -3921,11 +3921,8 @@
       "bike-easy":     "Z2 Endurance",
       "swim-css":      "Technique",       // no intensity in Base
       "swim-endurance":"Endurance Swim",
-      // Brick is not a Base session per §6.1 (brick is introduced in Build).
-      // Rather than dropping the day to Rest — which reads as "the app forgot
-      // my preference" — substitute an aerobic bike session. Keeps the day
-      // productive and preserves the brick slot for Build/Peak.
-      "brick":         "Z2 Endurance",
+      // Short transition practice, not a Build/Peak race simulation.
+      "brick":         "Easy Brick (short; beginners from week 3)",
     },
     build: {
       "run-long":      "Long Run",

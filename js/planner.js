@@ -3785,16 +3785,30 @@ function _bDiscName(disc) {
  * @returns {Array} plan entries, same shape as before
  */
 function generateTrainingPlan(raceOrCalendar) {
-  // Dispatch: if the caller passed a race calendar, use the A race
-  // as the driver and apply B race windows after generation.
-  if (raceOrCalendar && raceOrCalendar.aRace && Array.isArray(raceOrCalendar.bRaces)) {
-    const calendar = raceOrCalendar;
-    const plan = _generateSingleRacePlan(calendar.aRace);
-    calendar.bRaces.forEach(bRace => insertBRaceWindow(plan, bRace, calendar.aRace));
-    return plan;
-  }
-  // Legacy path: single race object passed directly.
-  return _generateSingleRacePlan(raceOrCalendar);
+  const calendar = raceOrCalendar && raceOrCalendar.aRace && Array.isArray(raceOrCalendar.bRaces) ? raceOrCalendar : null;
+  const race = calendar ? calendar.aRace : raceOrCalendar;
+  const plan = _generateSingleRacePlan(race);
+  if (calendar) calendar.bRaces.forEach(bRace => insertBRaceWindow(plan, bRace, race));
+  const secondary = calendar ? calendar.bRaces :
+    (typeof loadEvents === "function" ? loadEvents().filter(e => e && String(e.priority || "A").toUpperCase() === "B") : []);
+  const races = [race, ...secondary];
+  plan.forEach(entry => {
+    if (entry.phase !== "Base" || entry.discipline !== "brick") return;
+    if (!window.SessionAssembler.baseBrickAllowedOnDate(entry.date, races)) {
+      // Drop the transition stress inside the race-protection window;
+      // preserve or reduce duration instead of growing a replacement ride.
+      const minutes = Math.min(35, Number(entry.duration) || 35);
+      entry.discipline = "bike";
+      entry.load = "easy";
+      entry.sessionName = "Easy Ride — pre-race brick replacement";
+      entry.duration = minutes;
+      entry.libraryWorkout = {
+        libraryName: entry.sessionName, sport: "bike", duration_min: minutes,
+        main_set: { type: "continuous", effort: { duration_min: minutes, zone: "Z1" }, description: "Easy standalone cycling; no run transition before the race" },
+      };
+    }
+  });
+  return plan;
 }
 
 /**
@@ -3870,7 +3884,7 @@ function buildPatternsFromPreferences(weeklyTemplate, phases, ctx) {
   // one is modulated for now). Strength is never "hard", so it's pass-through.
   //
   // Brick substitutions (§6.1):
-  //   Base   — no brick; substitute with easy bike (aerobic endurance)
+  //   Base   — short easy transition practice per master spec §4a-ii
   //   Build  — brick stays as brick (moderate)
   //   Peak   — brick at race intensity (hard)
   //   Taper  — no brick; substitute with easy bike opener
@@ -3878,7 +3892,7 @@ function buildPatternsFromPreferences(weeklyTemplate, phases, ctx) {
     if (!entry) return null;
     const { discipline, load } = entry;
     if (discipline === "brick") {
-      if (phaseName === "Base")  return { discipline: "bike", load: "easy" };
+      if (phaseName === "Base")  return { discipline: "brick", load: "easy" };
       if (phaseName === "Build") return { discipline: "brick", load: "moderate" };
       if (phaseName === "Peak")  return { discipline: "brick", load: "hard" };
       if (phaseName === "Taper") return { discipline: "bike", load: "easy" };
@@ -4080,6 +4094,12 @@ function _mapRaceDistance(raceType) {
 // no matching workout or the cache isn't loaded — the caller should fall
 // back to the built-in session templates.
 function _libraryWorkoutFor(opts) {
+  if (opts.discipline === "brick" && opts.phaseName === "Base") {
+    if (!window.SessionAssembler || !window.SessionAssembler.baseBrickPrescription) {
+      throw new Error("Base brick prescriptions are unavailable. Reload before generating a plan.");
+    }
+    return window.SessionAssembler.baseBrickPrescription(opts.level, opts.weekInPhase);
+  }
   if (typeof window === "undefined" || !window.WorkoutLibrary) return null;
   const {
     discipline, load, raceType, raceGoal, phaseName, level,
@@ -4515,6 +4535,10 @@ function _generateSingleRacePlan(race) {
       const _weekInPhase = phaseWeekCount + 1;
       const _isDeload = (_weekInPhase % 4 === 0);
       _patternSessionList.forEach((sessionEntry, sessionIdx) => {
+        // Beginner exception: first two Base weeks are easy cycling.
+        if (phaseName === "Base" && sessionEntry.discipline === "brick" && _libLevel === "beginner" && _weekInPhase <= 2) {
+          sessionEntry = { discipline: "bike", load: "easy" };
+        }
         const loadName  = LOAD_NAMES[sessionEntry.load] || capitalize(sessionEntry.load);
         const duration = (sessionEntry.discipline === "run" && runPatternKey)
           ? getRunSessionDuration(race.type, sessionEntry.load, phaseName, wNum, _effectiveTotalWeeks, runPatternKey)
@@ -4574,7 +4598,7 @@ function _generateSingleRacePlan(race) {
           raceType:            race.type,
           raceGoal:            _libRaceGoal,
           phaseName:           phaseName,
-          level:               _sessionLevel,
+          level:               phaseName === "Base" && sessionEntry.discipline === "brick" ? _libLevel : _sessionLevel,
           weekInPhase:         _weekInPhase,
           totalWeeksInPhase:   _phaseWeeks,
           isDeload:            _isDeload,
