@@ -687,6 +687,47 @@ const DB = (() => {
     }
   }
 
+  // Separate shadow workspace: authoritative server revisions, no cache or
+  // user_data projection writes, no offline-success fallback and no adoption.
+  const trainingWorkspace = {
+    async load() {
+      const expected = _expectedUid();
+      const uid = await _userId();
+      if (!uid || !_userContextOk(uid, expected)) throw new Error('Sign in again before loading training state.');
+      const { data, error } = await _client().from('training_workspaces').select('*').eq('user_id', uid).maybeSingle();
+      if (error) throw new Error('Training state could not be loaded. Please try again.');
+      if (await _userId() !== uid || !_userContextOk(uid, expected)) throw new Error('Your account changed. Reload training state.');
+      return data || { user_id: uid, revision: 0, input_revision: null, athlete_input: null, shadow_candidate: null, latest_decision: null };
+    },
+    async command({ expectedUserId, expectedRevision, requestId, command }) {
+      if (typeof expectedUserId !== 'string' || !expectedUserId || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0 ||
+          typeof requestId !== 'string' || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(requestId) ||
+          !command || typeof command !== 'object') throw new Error('A revision and stable request identifier are required.');
+      const capturedCommand = JSON.parse(JSON.stringify(command));
+      const expected = _expectedUid();
+      const uid = await _userId();
+      if (!uid || uid !== expectedUserId || !_userContextOk(uid, expected)) throw new Error('Sign in to the original account before changing training state.');
+      const { data, error } = await _client().rpc('apply_training_workspace_command', {
+        p_expected_user_id: expectedUserId, p_expected_revision: expectedRevision, p_request_id: requestId, p_command: capturedCommand,
+      });
+      if (error) {
+        const failure = new Error(error.code === '42501'
+          ? 'Your account changed or permission was denied. Sign in to the original account and reload.'
+          : error.code === '40001'
+          ? 'Training state changed on another device. Reload and review before trying again.'
+          : 'Training state could not be saved. Please try again with the same request.');
+        failure.code = error.code;
+        throw failure;
+      }
+      if (await _userId() !== uid || !_userContextOk(uid, expected)) throw new Error('Your account changed. Reload training state to check the result.');
+      if (!data || data.revision !== expectedRevision + 1 || !Number.isSafeInteger(data.currentRevision) || data.currentRevision < data.revision || typeof data.replayed !== 'boolean' || data.requestId !== requestId)
+        throw new Error('The save result could not be verified. Reload training state before continuing.');
+      // An acknowledged retry may refer to an older successful command. Never
+      // render its old snapshot as current or silently retry with a new revision.
+      return { ...data, needsReload: data.currentRevision !== data.revision };
+    },
+  };
+
   function cachePlanBuild(updates) {
     for (const [key, value] of Object.entries(updates)) {
       _lsSet(key, value);
@@ -1358,6 +1399,7 @@ const DB = (() => {
     flushKey,
     previewPlanBuild,
     savePlanBuild,
+    trainingWorkspace,
     planBuildNeedsReload: () => _planBuildReloadRequired,
     cachePlanBuild,
     replayPendingSyncs,

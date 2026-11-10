@@ -43,3 +43,4 @@ jobs:
         run: |
           bash tests/sql/profiles-security.sh
           IRONZ_PROFILE_UPGRADE=1 bash tests/sql/profiles-security.sh
+          python3 tests/sql/training-workspace.py
