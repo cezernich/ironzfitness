@@ -67,6 +67,8 @@ const RESTRICTION_LABELS = {
   time:       "Time Limited",
   discipline: "Discipline Unavailable",
   rest:       "Full Rest Day",
+  medical:    "Medical / Surgery",
+  return:     "Return to Training",
 };
 
 const RESTRICTION_ICONS = {
@@ -77,6 +79,8 @@ const RESTRICTION_ICONS = {
   time:       ICONS.clock,
   discipline: ICONS.ban,
   rest:       ICONS.moon,
+  medical:    ICONS.alertCircle,
+  return:     ICONS.clock,
 };
 
 const RESTRICTION_SUGGESTIONS = {
@@ -86,6 +90,8 @@ const RESTRICTION_SUGGESTIONS = {
   fatigue: "Deload — fewer sets, lighter weight, lower intensity.",
   travel:  "Hotel-friendly options: bodyweight circuits or an easy run.",
   time:    "Condense to ~30 min — keep key intervals, skip extra sets.",
+  medical: "Follow your clinician's instructions. No training unless you've been cleared.",
+  return:  "Easing back in: easy effort only, about half the usual duration. Stop if anything hurts.",
 };
 
 const EQUIPMENT_OPTIONS = [
@@ -899,7 +905,7 @@ function getDataForDate(dateStr) {
   try { event = (JSON.parse(localStorage.getItem("events")) || []).find(e => e.date === dateStr) || null; } catch {}
 
   let restriction = null;
-  try { restriction = (JSON.parse(localStorage.getItem("dayRestrictions")) || {})[dateStr] || null; } catch {}
+  try { restriction = getPlanDateRestriction(dateStr); } catch {}
 
   let equipmentRestriction = null;
   try { const _er = JSON.parse(localStorage.getItem("equipmentRestrictions")) || {}; equipmentRestriction = _er[dateStr] || _er["permanent"] || null; } catch {}
@@ -5519,6 +5525,17 @@ function renderNutritionProgressBars(dateStr) {
 
 // ─── Meal plan renderer (called on load + after every slider adjustment) ──────
 
+function getPlanDateRestriction(dateStr) {
+  const legacy=(JSON.parse(localStorage.getItem("dayRestrictions") || "{}"))[dateStr] || null;
+  if(typeof PlanRestrictions === "undefined" || dateStr < getTodayString()) return legacy;
+  const states=PlanRestrictions.read().map(block=>({block,state:PlanRestrictions.status(block,dateStr)})).filter(item=>item.state);
+  const hard=states.find(item=>item.state==="off" || item.state==="pending");
+  if(hard) return {type:hard.block.type,action:"remove",note:hard.state==="pending"?"Training paused until return is confirmed.":"Planned time off. No training.",blockId:hard.block.id};
+  if(legacy && legacy.action==="remove") return legacy;
+  if(states.length) return {type:"return",action:"prescription",note:"Easy return prescription. Follow reported restrictions."};
+  return legacy;
+}
+
 function getEffectiveLoad(load, restriction) {
   if (!restriction) return load;
   if (restriction.action === "remove") return "rest";
@@ -5527,6 +5544,8 @@ function getEffectiveLoad(load, restriction) {
     case "rest":    return "rest";
     case "injury":
     case "sick":    return (load === "hard" || load === "long" || load === "moderate") ? "easy" : load;
+    case "medical":
+    case "return":  return load === "rest" ? "rest" : "easy"; // issue #27: easy only, incl. strides
     case "fatigue": return (load === "hard" || load === "long") ? "moderate" : (load === "moderate" ? "easy" : load);
     case "time":    return (load === "hard" || load === "long") ? "moderate" : load;
     default:        return load;
@@ -5536,6 +5555,8 @@ function getEffectiveLoad(load, restriction) {
 /** Returns a shortened duration when a "reduce" restriction is active. */
 function getRestrictedDuration(duration, originalLoad, restriction) {
   if (!duration || !restriction || restriction.action !== "reduce") return duration;
+  // Return-to-training ramp (issue #27, master spec 12e): about half duration.
+  if (restriction.type === "return" || restriction.type === "medical") return Math.max(15, Math.round(duration * 0.5));
   const multipliers = { long: 0.60, hard: 0.65, moderate: 0.70, strides: 0.75, easy: 0.65 };
   return Math.max(15, Math.round(duration * (multipliers[originalLoad] || 0.70)));
 }
@@ -6040,7 +6061,7 @@ function renderMealPlan(dateStr) {
   const planEntry   = loadTrainingPlan().find(e => e.date === dateStr);
   const baseLoad    = planEntry ? planEntry.load : "rest";
   let   restriction = null;
-  try { restriction = (JSON.parse(localStorage.getItem("dayRestrictions")) || {})[dateStr] || null; } catch {}
+  try { restriction = getPlanDateRestriction(dateStr); } catch {}
   const load = getEffectiveLoad(baseLoad, restriction);
 
   // Determine workout type for macro targeting
@@ -6373,6 +6394,7 @@ function onCellDrop(event, targetDate) {
 let _qeDateStr = null;
 
 function updateQERestrictionWarning(dateStr) {
+  if (typeof onRestrictionRangeChange === "function") onRestrictionRangeChange();
   const warn = document.getElementById("qe-restriction-warning");
   if (!warn) return;
   let restrictions = {};
@@ -6562,7 +6584,10 @@ function qeShowStep(step, subType) {
     else if (subType === "hiit")         document.getElementById("qe-step-1-hiit").style.display        = "";
     else if (subType === "hyrox")        { document.getElementById("qe-step-1-hyrox").style.display     = ""; _initHyroxBuilder(); }
     else if (subType === "sauna")        document.getElementById("qe-step-1-sauna").style.display       = "";
-    else if (subType === "restriction")  document.getElementById("qe-step-1-restriction").style.display = "";
+    else if (subType === "restriction") {
+      document.getElementById("qe-step-1-restriction").style.display = "";
+      _resetRestrictionRange();
+    }
     else if (subType === "equipment")    document.getElementById("qe-step-1-equipment").style.display   = "";
     else if (subType === "other")        document.getElementById("qe-step-1-other").style.display       = "";
     else {
@@ -10567,13 +10592,18 @@ function saveQuickActivity() {
 }
 
 // ── Restriction save ──────────────────────────────────────────────────────────
-function saveQuickRestriction() {
+async function saveQuickRestriction() {
   const dateStr = document.getElementById("qe-date").value;
-  if (!dateStr) { document.getElementById("qe-restriction-msg").textContent = "Please select a date."; return; }
+  const msg     = document.getElementById("qe-restriction-msg");
+  if (!dateStr) { msg.textContent = "Please select a date."; return; }
   const type   = document.getElementById("qe-restriction-type").value;
   const note   = document.getElementById("qe-restriction-note").value.trim();
   const action = document.querySelector('input[name="qe-session-action"]:checked')?.value || "reduce";
-  const msg    = document.getElementById("qe-restriction-msg");
+  const endEl  = document.getElementById("qe-restriction-end");
+  const endStr = (endEl && endEl.value) || dateStr;
+  const rampEl = document.getElementById("qe-restriction-ramp");
+  const rampRow = document.getElementById("qe-restriction-ramp-row");
+  const ramp = !!(rampEl && rampEl.checked && rampRow && rampRow.style.display !== "none");
 
   // Swap-discipline action: "I can't swim today, swap it for
   // something I can do". We store the blocked disciplines alongside
@@ -10583,29 +10613,76 @@ function saveQuickRestriction() {
   // several sports are unavailable at once.
   let disciplines = null;
   if (action === "swap") {
-    const picked = Array.from(document.querySelectorAll("#qe-restriction-disc-row input[type=checkbox]:checked"))
+    disciplines = Array.from(document.querySelectorAll("#qe-restriction-disc-row input[type=checkbox]:checked"))
       .map(el => el.value);
-    if (picked.length === 0) {
-      msg.style.color = "var(--color-danger)";
-      msg.textContent = "Pick at least one discipline to swap.";
-      return;
-    }
-    disciplines = picked;
   }
 
-  let restrictions = {};
-  try { restrictions = JSON.parse(localStorage.getItem("dayRestrictions")) || {}; } catch {}
-  const entry = { type, note, action, createdAt: new Date().toISOString() };
-  if (disciplines) entry.disciplines = disciplines;
-  restrictions[dateStr] = entry;
-  localStorage.setItem("dayRestrictions", JSON.stringify(restrictions)); if (typeof DB !== 'undefined') DB.syncKey('dayRestrictions');
+  // Ranges and the return-to-training ramp (issue #27) are built by the
+  // pure DayRestrictions helper so the rules are unit-tested.
+  let built;
+  try {
+    built = DayRestrictions.buildRestrictions({ start: dateStr, end: endStr, type, action, note, disciplines, ramp });
+  } catch (e) {
+    msg.style.color = "var(--color-danger)";
+    msg.textContent = e.message;
+    return;
+  }
+
+  let savedBlock=null;
+  try {
+    if(action === "remove" || ["medical","injury","sick"].includes(type)) {
+      const kind=["medical","injury","sick","travel","rest"].includes(type)?type:"other";
+      const block=PlanRestrictions.normalize([{type:kind,startDate:dateStr,endDate:endStr,
+        clearance:document.getElementById("qe-return-clearance").value}])[0];
+      savedBlock=block;
+      const previous=PlanRestrictions.read();
+      await DB.savePlanRestrictions(previous.filter(item=>item.id!==block.id).concat(block));
+    } else {
+      const restrictions=JSON.parse(localStorage.getItem("dayRestrictions") || "{}");
+      await DB.savePlanBuild({dayRestrictions:DayRestrictions.mergeRestrictions(restrictions,built.entries)});
+    }
+  } catch(problem) { msg.style.color="var(--color-danger)";msg.textContent=problem.message;return; }
 
   renderCalendar();
   if (selectedDate === dateStr) renderDayDetail(dateStr);
 
   msg.style.color = "var(--color-success)";
-  msg.textContent = "Restriction saved!";
-  setTimeout(() => closeQuickEntry(), 700);
+  msg.textContent = savedBlock
+    ? (savedBlock.clearance==="pending" && ["medical","injury","sick"].includes(savedBlock.type)
+      ? "Time off saved. Later training is paused until return is confirmed."
+      : "Time off and return prescriptions saved.")
+    : "Restriction saved.";
+  setTimeout(() => closeQuickEntry(), 900);
+}
+
+// Range + ramp controls (issue #27). The ramp option appears for medical,
+// injury, and sick blocks; it's checked by default for blocks of 5+ days.
+function _resetRestrictionRange() {
+  const endEl = document.getElementById("qe-restriction-end");
+  if (endEl) endEl.value = "";
+  const rampEl = document.getElementById("qe-restriction-ramp");
+  if (rampEl) { rampEl.checked = false; delete rampEl.dataset.touched; }
+  const date=document.getElementById("qe-date").value;
+  const existing=typeof PlanRestrictions!=="undefined" && PlanRestrictions.read().find(block=>date>=block.startDate&&date<=block.endDate);
+  const clearance=document.getElementById("qe-return-clearance");
+  if(clearance) clearance.value=existing ? existing.clearance : "pending";
+  if(existing) {
+    document.getElementById("qe-date").value=existing.startDate;
+    document.getElementById("qe-restriction-end").value=existing.endDate;
+    document.getElementById("qe-restriction-type").value=existing.type;
+    const remove=document.querySelector('input[name="qe-session-action"][value="remove"]');
+    if(remove) remove.checked=true;
+  }
+  onRestrictionRangeChange();
+}
+
+function onRestrictionRangeChange() {
+  const type=document.getElementById("qe-restriction-type").value;
+  const recovery=["medical","injury","sick"].includes(type);
+  const clearanceRow=document.getElementById("qe-return-clearance-row");
+  if(clearanceRow) clearanceRow.style.display=recovery?"":"none";
+  const actionRow=document.getElementById("qe-restriction-action-row");
+  if(actionRow) actionRow.style.display=recovery?"none":"";
 }
 
 // Show/hide the discipline picker based on the Session Action radio.
@@ -10623,7 +10700,14 @@ function onRestrictionTypeChange() { onRestrictionActionChange(); }
 function toggleQEGenerate() {}
 function switchQETab() {}
 
-function removeRestriction(dateStr) {
+async function removeRestriction(dateStr) {
+  const blocks=typeof PlanRestrictions!=="undefined"?PlanRestrictions.read():[];
+  const block=blocks.find(item=>PlanRestrictions.status(item,dateStr));
+  if(block) {
+    try { await DB.savePlanRestrictions(blocks.filter(item=>item.id!==block.id)); }
+    catch(error) { alert(error.message);return; }
+    renderCalendar();renderDayDetail(dateStr);return;
+  }
   let restrictions = {};
   try { restrictions = JSON.parse(localStorage.getItem("dayRestrictions")) || {}; } catch {}
   delete restrictions[dateStr];

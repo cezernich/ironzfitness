@@ -43,6 +43,10 @@ When the user presses "Generate & Schedule Plan," these inputs are available:
 | strengthSetup.split | onboarding | "upper_lower" or "full_body" etc. |
 | equipmentProfile | profile | ["barbell-rack", "dumbbells", "bench", "cable-machine", ...] |
 
+### Explicit scheduling constraints (issue26)
+
+A reviewed weekly template is a hard day-and-sport constraint throughout the arc, including lead-in, threshold and race weeks. Race-day entries are the explicit event exception. No training is scheduled before the selected start date. Distribution counts are targets, not permission to add sessions or sports absent from that template. Legacy automatic schedules may fill only available dates within the selected training-day cap. Preserve taper/recovery and never cram omitted volume into other dates. Calendar dates must remain local dates across time zones.
+
 ### Plan-build acceptance and failure contract (9 November 2026)
 
 - Translate onboarding race IDs `5k`, `10k` and `century` to the live planner's `fiveK`, `tenK` and `centuryRide`. Regeneration must also accept these supported IDs in older saved races. Unknown distances must not be silently replaced with a different event's training prescription.
@@ -1723,6 +1727,22 @@ Derived from weekly check-in data (sleep quality, energy level, soreness):
 | Frequency | Maintain or slightly reduce |
 | Duration | Shorter sessions |
 | Strength | Reduce sets, maintain or slightly reduce weight |
+
+### 12e. Unavailable Days and Return to Training (issue #27)
+
+Time off is a hard prescription constraint. New blocked periods are accepted in Build Plan and calendar quick entry as `blockedPeriods`: `{id,type,startDate,endDate,clearance,source:"athlete_report"}`. Dates are inclusive calendar dates. Reasons: medical, injury, sick, travel, rest, other. Persist through the DB layer together with both affected plan arrays in one checked save; a failed save preserves the prior blocks and plan and shows an error.
+
+`PlanRestrictions` is shared by the live generator, its post-distribution save path, non-race materialization and Rule Engine output. Blocked sessions are removed from the saved prescription, not hidden under a calendar label. Completed/past history is retained. Availability constraints and phase dates remain intact; missed work is never crammed into other days and taper/deload is never increased.
+
+For every medical/injury/illness block, reported return status is explicit: `pending` holds all later sessions until changed, `easy` permits easy endurance only, `full` reports that restrictions have been lifted. A short block never overrides a pending/easy status. These are athlete reports, not independently verified medical clearance. Elapsed time alone cannot grant clearance; app defaults are not a procedure-specific rehabilitation protocol.
+
+For medical blocks of any length and injury/illness blocks of five or more days, a cleared return starts with seven days of easy endurance only, at no more than half the scheduled pre-block seven-day volume. That baseline is **planned volume**, not measured fitness or completed training; it cannot establish readiness. Missing baseline produces no automatically invented load. Subsequent consecutive seven-day budgets grow by at most ten percent of retained previous volume, without increasing the original phase prescription. This is a conservative scheduling ceiling, not a promise that a given load is medically appropriate. Clinician limits take precedence.
+
+Every reduced return prescription is rebuilt with actual easy phases/zones/duration. It retains no hard workout-library ID, threshold-test marker, intervals, generated payload or lifting exercises. Unsupported disciplines, including strength, are omitted while rebuilding rather than relabeled as endurance. Easy-only status continues after the first week. Full status may resume the original prescription only as volume ceilings permit. The unrestricted source and the last applied snapshot are retained through the DB layer so repeated restriction edits do not repeatedly halve workouts; subsequent athlete edits and deletions must survive reconciliation. Removing a block may restore future source sessions, never overwrite completed history.
+
+The preview must explain that time off changes the sample week and warn when a period/return hold overlaps a target race. Save completion must say when training remains paused, not promise workouts in week one.
+
+Legacy single-day reduce/swap behavior and old display-only restrictions require separate migration/verification before declaring all historical medical restrictions prescription-safe. No wearable/AI signal can remove a pending restriction. Long blocks do not shift phase dates automatically; race feasibility must be reassessed with the athlete.
 
 ### 12d. Plateau Prevention
 

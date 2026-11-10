@@ -445,7 +445,7 @@ const DB = (() => {
     'workouts', 'workoutSchedule', 'trainingPlan', 'events',
     'profile', 'meals', 'goals',
     // Training state
-    'dayRestrictions', 'completedSessions', 'workoutRatings',
+    'dayRestrictions', 'blockedPeriods', 'planRestrictionSource', 'completedSessions', 'workoutRatings',
     'importedPlans', 'personalRecords', 'nutritionAdjustments',
     'foodPreferences', 'equipmentRestrictions', 'trainingZones',
     'trainingZonesHistory', 'trainingPreferences', 'trainingNotes',
@@ -685,6 +685,31 @@ const DB = (() => {
     } finally {
       if (!_planBuildReloadRequired) keys.forEach(key => _planBuildKeys.delete(key));
     }
+  }
+
+  function getBlockedPeriods() { return JSON.parse(localStorage.getItem('blockedPeriods') || '[]'); }
+  function getPlanRestrictionSource() {
+    const read=key=>JSON.parse(localStorage.getItem(key)||'null');
+    const current={trainingPlan:read('trainingPlan')||[],workoutSchedule:read('workoutSchedule')||[]};
+    const saved=getBlockedPeriods().length && read('planRestrictionSource');
+    if(!saved) return current;
+    const date=new Date();
+    const today=date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');
+    return Object.fromEntries(['trainingPlan','workoutSchedule'].map(key=>[key,
+      window.PlanRestrictions.reconcileSource(saved[key],current[key],saved.applied && saved.applied[key],today)]));
+  }
+  function prepareRestrictedPlan(source,blockedPeriods=getBlockedPeriods()) {
+    const date=new Date();
+    const today=date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');
+    const applied=Object.fromEntries(['trainingPlan','workoutSchedule'].map(key=>[key,window.PlanRestrictions.apply(source[key]||[],blockedPeriods,{today})]));
+    return {...applied,planRestrictionSource:{...source,applied}};
+  }
+  async function savePlanRestrictions(blockedPeriods) {
+    if (!window.PlanRestrictions) throw new Error('Plan restriction tools are unavailable.');
+    const blocks=window.PlanRestrictions.normalize(blockedPeriods);
+    const updates={blockedPeriods:blocks,...prepareRestrictedPlan(getPlanRestrictionSource(),blocks)};
+    await savePlanBuild(updates);
+    return updates;
   }
 
   function cachePlanBuild(updates) {
@@ -1358,6 +1383,10 @@ const DB = (() => {
     flushKey,
     previewPlanBuild,
     savePlanBuild,
+    savePlanRestrictions,
+    getBlockedPeriods,
+    getPlanRestrictionSource,
+    prepareRestrictedPlan,
     planBuildNeedsReload: () => _planBuildReloadRequired,
     cachePlanBuild,
     replayPendingSyncs,
