@@ -43,4 +43,5 @@ jobs:
         run: |
           bash tests/sql/profiles-security.sh
           bash tests/sql/ai-quota-security.sh
+          bash tests/sql/maintenance-rpc-security.sh
           IRONZ_PROFILE_UPGRADE=1 bash tests/sql/profiles-security.sh
