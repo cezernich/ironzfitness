@@ -10640,6 +10640,8 @@ function _resetRestrictionRange() {
   if (endEl) endEl.value = "";
   const rampEl = document.getElementById("qe-restriction-ramp");
   if (rampEl) { rampEl.checked = false; delete rampEl.dataset.touched; }
+  const actionRow = document.getElementById("qe-restriction-action-row");
+  if (actionRow) delete actionRow.dataset.touched;
   onRestrictionRangeChange();
 }
 
@@ -10651,6 +10653,12 @@ function onRestrictionRangeChange() {
   const end = document.getElementById("qe-restriction-end").value || start;
   const eligible = ["medical", "injury", "sick"].includes(type);
   row.style.display = eligible ? "" : "none";
+  // Medical / no-training blocks default to removing sessions (review on #29).
+  if (type === "medical") {
+    const removeEl = document.querySelector('input[name="qe-session-action"][value="remove"]');
+    const actionTouched = document.getElementById("qe-restriction-action-row")?.dataset.touched;
+    if (removeEl && !actionTouched) { removeEl.checked = true; onRestrictionActionChange(); }
+  }
   const rampEl = document.getElementById("qe-restriction-ramp");
   if (eligible && rampEl && !rampEl.dataset.touched) {
     rampEl.checked = DayRestrictions.rampRecommended(type, start, end);
@@ -10664,7 +10672,8 @@ function onRestrictionRangeChange() {
 // Show/hide the discipline picker based on the Session Action radio.
 // "Swap" surfaces the picker so the user can mark which sports are
 // blocked; Reduce / Remove hide the picker.
-function onRestrictionActionChange() {
+function onRestrictionActionChange(ev) {
+  if (ev && ev.isTrusted) { const r = document.getElementById("qe-restriction-action-row"); if (r) r.dataset.touched = "1"; }
   const action = document.querySelector('input[name="qe-session-action"]:checked')?.value || "reduce";
   const row = document.getElementById("qe-restriction-disc-row");
   if (!row) return;
