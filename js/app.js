@@ -2124,8 +2124,17 @@ function renderZones() {
   const sport = _activeZonesSport;
   const sportLabels = { running: "Running", biking: "Biking", swimming: "Swimming", strength: "Strength" };
 
+  // Flag sports whose zones are out of date (old, or test skipped last cycle).
+  const _zonesPlan = typeof loadTrainingPlan === "function" ? (loadTrainingPlan() || []) : [];
+  const _fresh = {};
+  ["running", "biking", "swimming"].forEach(s => {
+    try { _fresh[s] = window.ThresholdReminders && window.ThresholdReminders.zoneFreshness
+      ? window.ThresholdReminders.zoneFreshness(s, _zonesPlan) : { flag: false }; }
+    catch { _fresh[s] = { flag: false }; }
+  });
+  const _flagIcon = (typeof ICONS !== "undefined" && ICONS.flag) || "";
   const tabs = ["running", "biking", "swimming", "strength"].map(s => `
-    <button class="zones-tab ${sport === s ? "is-active" : ""}" onclick="selectZonesSport('${s}')">${sportLabels[s]}</button>
+    <button class="zones-tab ${sport === s ? "is-active" : ""}" onclick="selectZonesSport('${s}')">${sportLabels[s]}${_fresh[s] && _fresh[s].flag ? ` <span class="zones-stale-dot" title="Zones out of date" aria-label="Zones out of date">${_flagIcon}</span>` : ""}</button>
   `).join("");
 
   // ── Strength tab ────────────────────────────────────────────────────────────
@@ -2213,6 +2222,13 @@ function renderZones() {
   if (sport === "biking")   refLine = `FTP: ${stored.ftp} W`;
   if (sport === "swimming") refLine = `T-Pace: ${stored.tPaceStr} /100m (from ${stored.referenceDist})`;
   if (dateLabel) refLine += ` &nbsp;·&nbsp; Updated ${dateLabel}`;
+  const _f = _fresh[sport];
+  if (_f && _f.flag) {
+    const _next = _f.nextTest
+      ? ` Next test: ${new Date(_f.nextTest + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}.`
+      : " Log a recent test result to refresh them.";
+    refLine += `<div class="zones-stale-flag">${_flagIcon} ${_f.text}${_next}</div>`;
+  }
 
   el.innerHTML = `
     <div class="zones-tabs">${tabs}</div>

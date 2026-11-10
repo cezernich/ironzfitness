@@ -2172,13 +2172,158 @@ function _regeneratePlanForRace(race, options = {}) {
   }
 }
 
+// Explicit weekday/sport choices are hard constraints, including race/test
+// weeks. Distribution targets must never silently expand a reviewed template.
+function _raceSchedulingConstraints(race) {
+  const prefs = race.preferences || {};
+  const template = prefs.weeklyTemplate;
+  const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  const blocked = new Set(race.unavailableDays || prefs.unavailableDays || []);
+  const today = new Date();
+  const localToday = today.getFullYear() + "-" + String(today.getMonth()+1).padStart(2,"0") + "-" + String(today.getDate()).padStart(2,"0");
+  const minDate = prefs.startDate && prefs.startDate > localToday ? prefs.startDate : localToday;
+  const canSchedule = (date, discipline) => {
+    if (date < minDate || date > race.date) return false;
+    const dow = new Date(date + "T00:00:00Z").getUTCDay();
+    if (blocked.has(dow)) return false;
+    if (!template) return true;
+    const slots = template[dayNames[dow]] || [];
+    return slots.some(code => String(code).split("-")[0] === discipline);
+  };
+  return { daysPerWeek: race.daysPerWeek || prefs.daysPerWeek, canSchedule, explicitTemplate: !!template, raceDate: race.date };
+}
+
+// Threshold-week tests start on default weekdays (Tue FTP, Thu CSS, Sat 5K)
+// only when the athlete has no template. Otherwise each test moves, within
+// its Mon-Sun week, to a day the athlete trains that sport, with the spacing
+// rules in ThresholdWeekScheduler.minTestGap (bike and run tests two full
+// days apart; anything else one easy day apart). Weeks that can't hold their
+// tests are postponed at scheduling time (listThresholdWeeksForPlan). If a
+// single test still can't fit, it moves to the earliest valid day next week;
+// only when that fails is it dropped (logged; zones stay at last value).
+function _relocateThresholdTests(entries, constraints) {
+  if (!constraints || typeof constraints.canSchedule !== "function") return entries;
+  const TW = (typeof window !== "undefined" && window.ThresholdWeekScheduler) || null;
+  if (!TW || typeof TW.bestTestLayout !== "function") return entries;
+  const isTest = e => e && e.isThresholdTest && e.discipline !== "race";
+  const weeks = new Map();
+  entries.forEach(e => { if (isTest(e)) {
+    const m = TW.toDateStr(TW.mondayOf(e.date));
+    if (!weeks.has(m)) weeks.set(m, []);
+    weeks.get(m).push(e);
+  }});
+  if (!weeks.size) return entries;
+
+  const gap = (a, b) => Math.abs(TW.diffDays(new Date(a + "T00:00:00"), new Date(b + "T00:00:00")));
+  const moves = new Map(); // test entry -> new date (or null = no valid day)
+  const spilled = new Set();
+  for (const [monday, tests] of weeks) {
+    let chosen = TW.bestTestLayout(monday, tests, constraints.canSchedule);
+    if (!chosen) {
+      // Postponement already ran out: keep as many tests as spacing allows.
+      chosen = [];
+      tests.forEach((t, i) => {
+        const days = [0,1,2,3,4,5,6].map(k => TW.toDateStr(TW.addDays(TW.mondayOf(monday), k)));
+        const d = days
+          .filter(x => constraints.canSchedule(x, t.discipline))
+          .filter(x => chosen.every((c, j) => !c || gap(c, x) >= TW.minTestGap(tests[j].discipline, t.discipline)))
+          .sort((x, y) => gap(x, t.date) - gap(y, t.date))[0] || null;
+        chosen.push(d);
+      });
+    }
+    // A test that can't fit this week moves to the earliest day next week
+    // where the athlete trains that sport, still spaced from this week's
+    // tests and outside the 30-day pre-race window (owner rule, 9 Nov).
+    tests.forEach((t, i) => {
+      if (chosen[i]) return;
+      const nextMon = TW.toDateStr(TW.addDays(TW.mondayOf(monday), 7));
+      const spill = [0,1,2,3,4,5,6].map(k => TW.toDateStr(TW.addDays(new Date(nextMon + "T00:00:00"), k)))
+        .filter(x => constraints.canSchedule(x, t.discipline))
+        .filter(x => !constraints.raceDate || gap(x, constraints.raceDate) > 30)
+        .find(x => chosen.every((c, j) => !c || gap(c, x) >= TW.minTestGap(tests[j].discipline, t.discipline)));
+      if (spill) { chosen[i] = spill; spilled.add(t); }
+    });
+    tests.forEach((t, i) => moves.set(t, chosen[i]));
+  }
+
+  const testTargets = new Set([...moves.values()].filter(Boolean));
+  const spillDates = new Set([...spilled].map(t => moves.get(t)));
+  const out = [];
+  for (const e of entries) {
+    if (isTest(e)) {
+      const to = moves.get(e);
+      if (!to) continue; // no valid day this week; reported below
+      const moved = to === e.date ? e : { ...e, date: to, relocatedFrom: e.date };
+      if (spilled.has(e)) moved.movedToNextWeek = true;
+      out.push(moved);
+      continue;
+    }
+    // A test takes the whole day: inside its threshold week, and on the
+    // next-week day a spilled test lands on.
+    if (e.isThresholdWeek && testTargets.has(e.date)) continue;
+    if (spillDates.has(e.date) && e.discipline !== "race" && e.phase !== "Race") continue;
+    out.push(e);
+  }
+  // Tell the athlete on the calendar: stamp the week's remaining sessions
+  // with the tests that couldn't be scheduled (zones keep their last value).
+  const skippedByWeek = new Map();
+  for (const [t, d] of moves) if (!d) {
+    const m = TW.toDateStr(TW.mondayOf(t.date));
+    skippedByWeek.set(m, [...(skippedByWeek.get(m) || []), t.thresholdTestType || t.discipline]);
+  }
+  if (skippedByWeek.size) {
+    for (let i = 0; i < out.length; i++) {
+      const e = out[i];
+      if (!e.isThresholdWeek || e.isThresholdTest) continue;
+      const list = skippedByWeek.get(TW.toDateStr(TW.mondayOf(e.date)));
+      if (list) out[i] = { ...e, thresholdTestsSkipped: list.slice() };
+    }
+  }
+  const dropped = [...moves.entries()].filter(([, d]) => !d).map(([t]) => t.thresholdTestType || t.discipline);
+  if (dropped.length && typeof console !== "undefined") {
+    // Zones for these sports stay at their last value until the next test week.
+    console.warn("[IronZ][plan-gen] threshold tests with no schedulable day were omitted (zones not refreshed):", dropped);
+  }
+  return out;
+}
+
+function _honorRaceSchedule(entries, constraints) {
+  entries = _relocateThresholdTests(entries, constraints);
+  const available = entries.filter(entry => entry.discipline === "race" || entry.phase === "Race" ||
+    constraints.canSchedule(entry.date, entry.discipline));
+  const cap = Number(constraints.daysPerWeek);
+  if (constraints.explicitTemplate || !Number.isInteger(cap) || cap < 1 || cap > 7) return available;
+  const byWeek = new Map();
+  const isRace = entry => entry.discipline === "race" || entry.phase === "Race";
+  for (const entry of available) {
+    if (isRace(entry) || entry.load === "rest") continue;
+    const date = new Date(entry.date + "T00:00:00Z");
+    date.setUTCDate(date.getUTCDate() - (date.getUTCDay()+6)%7);
+    const monday = date.toISOString().slice(0,10);
+    if (!byWeek.has(monday)) byWeek.set(monday,new Map());
+    const rank = { long:4, hard:3, test:3, moderate:2, race_week_openers:2 }[entry.load] || 1;
+    const days = byWeek.get(monday);
+    days.set(entry.date,Math.max(days.get(entry.date)||0,rank));
+  }
+  const omitted = new Set();
+  for (const days of byWeek.values()) {
+    [...days].sort((a,b)=>b[1]-a[1] || a[0].localeCompare(b[0])).slice(cap).forEach(([date])=>omitted.add(date));
+  }
+  // Omit excess default days, including race/test overrides; never cram their
+  // volume into retained sessions. Explicit template days are not carved.
+  return available.filter(entry=>isRace(entry) || !omitted.has(entry.date));
+}
+
 function _buildRacePlanReplacement(race, options = {}) {
   if (!race || typeof generateTrainingPlan !== "function") throw new Error("Plan generation is unavailable.");
 
   if (typeof window.isPlanFrozen === "function" && window.isPlanFrozen()) {
     throw new Error("Plan generation is paused while your coach manages your schedule.");
   }
-  const newEntries = generateTrainingPlan(race);
+  const generated = generateTrainingPlan(race);
+  _validateGeneratedPlan(generated);
+  const scheduling = _raceSchedulingConstraints(race);
+  let newEntries = _honorRaceSchedule(generated, scheduling);
   _validateGeneratedPlan(newEntries);
 
   // Determine the athlete's level once so both the distribution
@@ -2237,7 +2382,7 @@ function _buildRacePlanReplacement(race, options = {}) {
         if (_preByWeek[wk].counts[d] != null) _preByWeek[wk].counts[d]++;
       });
 
-      const summary = window.PlanSessionDistribution.applySessionDistribution(newEntries, race && race.type, _level);
+      const summary = window.PlanSessionDistribution.applySessionDistribution(newEntries, race && race.type, _level, scheduling);
 
       // Snapshot AFTER so the diff per week is visible in devtools.
       const _postByWeek = {};
@@ -2291,8 +2436,9 @@ function _buildRacePlanReplacement(race, options = {}) {
     }
   }
 
+  newEntries = _honorRaceSchedule(newEntries, scheduling);
   _validateGeneratedPlan(newEntries);
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = _planLocalYmd(new Date());
   const schedule = JSON.parse(localStorage.getItem("workoutSchedule") || "[]");
   const keptSchedule = schedule.filter(e => e && (e.date < todayStr || String(e.raceId) !== String(race.id)));
   const existingPlan = loadTrainingPlan().filter(e => String(e.raceId) !== String(race.id));
@@ -3764,10 +3910,11 @@ function generateTrainingPlan(raceOrCalendar) {
     const calendar = raceOrCalendar;
     const plan = _generateSingleRacePlan(calendar.aRace);
     calendar.bRaces.forEach(bRace => insertBRaceWindow(plan, bRace, calendar.aRace));
-    return plan;
+    return _honorRaceSchedule(plan,_raceSchedulingConstraints(calendar.aRace));
   }
-  // Legacy path: single race object passed directly.
-  return _generateSingleRacePlan(raceOrCalendar);
+  // Shared boundary covers wizard, race edit/save, survey and self-healing.
+  const plan = _generateSingleRacePlan(raceOrCalendar);
+  return raceOrCalendar ? _honorRaceSchedule(plan,_raceSchedulingConstraints(raceOrCalendar)) : plan;
 }
 
 /**
@@ -4179,7 +4326,7 @@ function _generateSingleRacePlan(race) {
   startDate.setDate(startDate.getDate() - _effectiveTotalWeeks * 7);
 
   const plan = [];
-  const todayStr = _today.toISOString().slice(0, 10);
+  const todayStr = _planLocalYmd(_today);
 
   // ── WEEKLY PATTERN ────────────────────────────────────────────────────────
   // Priority: race.preferences.weeklyTemplate > WEEKLY_PATTERNS[raceType].
@@ -4221,7 +4368,7 @@ function _generateSingleRacePlan(race) {
     const prePlanDows = runPatternKey === "beginner" ? [2, 6] : [2, 4, 6]; // Tue+Sat or Tue+Thu+Sat
     const preCursor = new Date(todayDate);
     while (preCursor < startDate) {
-      const dateStr = preCursor.toISOString().slice(0, 10);
+      const dateStr = _planLocalYmd(preCursor);
       const dow = preCursor.getDay();
       if (prePlanDows.includes(dow) && dateStr >= todayStr) {
         const table = (RUN_DURATION_TABLES[race.type] || {})[runPatternKey] || {};
@@ -4350,8 +4497,12 @@ function _generateSingleRacePlan(race) {
     });
     const _lastThresh = _userData.last_threshold_week_date || null;
     if (typeof window !== "undefined" && window.ThresholdWeekScheduler) {
+      // A week whose tests can't fit the athlete's schedule slides forward.
+      const _twSched = _raceSchedulingConstraints(race);
+      const _twFeasible = monday => !!window.ThresholdWeekScheduler.bestTestLayout(
+        monday, window.ThresholdWeekScheduler.testsForWeek(monday, _twSportProfile), _twSched.canSchedule);
       _scheduledThresholdWeeks = window.ThresholdWeekScheduler.listThresholdWeeksForPlan(
-        _profileForScheduling, startDate, raceDate, _lastThresh
+        _profileForScheduling, startDate, raceDate, _lastThresh, _twFeasible
       );
     }
 
@@ -4384,7 +4535,7 @@ function _generateSingleRacePlan(race) {
   const cursor = new Date(startDate);
 
   while (cursor < raceDate) {
-    const dateStr = cursor.toISOString().slice(0, 10);
+    const dateStr = _planLocalYmd(cursor);
     const dow = cursor.getDay(); // 0=Sun … 6=Sat
 
     // Advance phase if needed

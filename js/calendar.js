@@ -4414,17 +4414,10 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
   // Added 2026-04-09 (PHILOSOPHY_UPDATE_2026-04-09_threshold_weeks).
   try {
     const _planForBanner = typeof loadTrainingPlan === "function" ? loadTrainingPlan() : [];
-    const _twDay = _planForBanner.find(p => p.date === dateStr && p.isThresholdWeek);
-    if (_twDay) {
-      const _testDay = _planForBanner.find(p => p.isThresholdWeek && p.isThresholdTest && (function () {
-        // Same week as dateStr (Mon..Sun)
-        const TW = window.ThresholdWeekScheduler;
-        if (!TW) return false;
-        const a = TW.toDateStr(TW.mondayOf(dateStr));
-        const b = TW.toDateStr(TW.mondayOf(p.date));
-        return a === b;
-      })());
-      const _testDateLabel = _testDay ? formatDisplayDate(_testDay.date) : "Day 4 of this week";
+    const _TW = window.ThresholdWeekScheduler;
+    const _tw = _TW && typeof _TW.describeThresholdWeek === "function" ? _TW.describeThresholdWeek(_planForBanner, dateStr) : null;
+    if (_tw) {
+      const _esc = v => String(v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
       const _cadenceUsed = (function () {
         try {
           const ud = JSON.parse(localStorage.getItem("user_data") || "{}");
@@ -4432,14 +4425,37 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
           return Number(ud.threshold_week_cadence_override || pf.threshold_week_cadence_override) || 6;
         } catch { return 6; }
       })();
-      html += `
+      const _testList = _tw.tests.map(t =>
+        `${_esc(t.label)} on <b>${_esc(formatDisplayDate(t.date))}</b>${t.movedToNextWeek ? " (next week, so your legs recover between tests)" : ""}`).join("; ");
+      const _noticeId = _tw.homeWeek + ":" + _tw.skipped.map(s => s.type).sort().join(",");
+      const _skipped = _tw.skipped.length && !_isThresholdNoticeDismissed(_noticeId)
+        ? `<div class="threshold-week-skip-notice" data-threshold-notice="${_esc(_noticeId)}">
+            <span>Your schedule had no room for the ${_tw.skipped.map(s => _esc(s.label)).join(" and ")} test this cycle, so those zones stay where they are until the next test week.</span>
+            <button type="button" class="rating-smart-alert-dismiss" aria-label="Dismiss" title="Dismiss"
+                    onclick="dismissThresholdNotice('${_esc(_noticeId)}')">×</button>
+          </div>`
+        : "";
+      if (_tw.kind === "moved_test") {
+        const _t = _tw.tests.find(t => t.movedToNextWeek && t.date === dateStr) || _tw.tests[0];
+        html += `
         <div class="threshold-week-banner">
-          <div class="threshold-week-banner-title">THRESHOLD WEEK — Reset &amp; Test</div>
+          <div class="threshold-week-banner-title">THRESHOLD TEST, moved from last week</div>
           <div class="threshold-week-banner-body">
-            Volume is down ~35%. ${_testDay ? `Test on <b>${_testDateLabel}</b>.` : "One test this week."}
-            The result will update your training zones for the next ${_cadenceUsed} weeks.
+            Your ${_esc(_t ? _t.label : "")} test moved here to give your legs time to recover from last week's tests.
+            The result will update your training zones.
           </div>
         </div>`;
+      } else {
+        html += `
+        <div class="threshold-week-banner">
+          <div class="threshold-week-banner-title">THRESHOLD WEEK: Reset &amp; Test</div>
+          <div class="threshold-week-banner-body">
+            Volume is down ~35%. ${_testList ? `Tests: ${_testList}.` : "No tests fit this week."}
+            The results will update your training zones for the next ${_cadenceUsed} weeks.
+          </div>
+          ${_skipped}
+        </div>`;
+      }
     }
   } catch (e) {
     console.warn("[IronZ] threshold-week banner render failed:", e.message);
@@ -11390,6 +11406,26 @@ if (typeof window !== "undefined") {
 function _ratingAlertDismissKey(dateStr) {
   return `ratingAlertDismissed_${dateStr}`;
 }
+// Skipped-test notices on the threshold-week banner. Once dismissed they
+// never come back (synced via db.js so other devices agree).
+function _loadThresholdNoticesDismissed() {
+  try { return JSON.parse(localStorage.getItem("thresholdNoticesDismissed") || "[]") || []; }
+  catch { return []; }
+}
+function _isThresholdNoticeDismissed(id) {
+  return _loadThresholdNoticesDismissed().includes(id);
+}
+function dismissThresholdNotice(id) {
+  const list = _loadThresholdNoticesDismissed();
+  if (!list.includes(id)) list.push(id);
+  try { localStorage.setItem("thresholdNoticesDismissed", JSON.stringify(list.slice(-100))); } catch {}
+  try { if (window.DB && typeof window.DB.syncKey === "function") window.DB.syncKey("thresholdNoticesDismissed"); } catch {}
+  document.querySelectorAll("[data-threshold-notice]").forEach(el => {
+    if (el.getAttribute("data-threshold-notice") === id && el.parentElement) el.parentElement.removeChild(el);
+  });
+}
+if (typeof window !== "undefined") window.dismissThresholdNotice = dismissThresholdNotice;
+
 function _isRatingAlertDismissed(dateStr) {
   try { return localStorage.getItem(_ratingAlertDismissKey(dateStr)) === "1"; }
   catch { return false; }

@@ -465,6 +465,7 @@ const DB = (() => {
     'currentRecoveryState', 'latestCheckIn',
     // Preferences
     'notifSettings', 'theme', 'userLevel', 'coachingDismissed',
+    'thresholdNoticesDismissed',
     'coachingInsightsEnabled', 'fuelingEnabled', 'addSessionWarningsDisabled',
     // Onboarding v2 / Build Plan inputs (spec §5.1)
     // These capture the user's answers from the onboarding survey and

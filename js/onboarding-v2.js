@@ -4227,6 +4227,8 @@
       const _prefsForRace = {
         weeklyTemplate: _enrichedForRace,
         daysPerWeek: _activeDaysPerWeek || undefined,
+        unavailableDays: [0,1,2,3,4,5,6].filter(d => !activeDows.includes(d)),
+        startDate: _state.planDetails.startDate || undefined,
         sessionLengthMin: parseInt(_state.planDetails.sessionLength, 10) || undefined,
         longDay: (_longDayIdx !== null && _longDayIdx !== undefined) ? _longDayIdx : undefined,
         source: "onboarding_v2",
@@ -4462,7 +4464,7 @@
           const d = new Date(weekMonday);
           d.setDate(weekMonday.getDate() + w * 7 + idx);
           if (d < start) return; // first week is partial when start is mid-week
-          const dateStr = d.toISOString().slice(0, 10);
+          const dateStr = _planLocalYmd(d);
           if (raceDateSet.has(dateStr)) return; // race day — skip training session
           const session = _buildSessionForSport(enrichedCode, dateStr, sessionLen, w + 1, planId, counter++, phaseKey);
           if (session) {
