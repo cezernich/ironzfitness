@@ -6,16 +6,10 @@
  * This data feeds back into philosophy refinement.
  */
 async function recordWeeklyCheckIn(checkInData) {
-  const profile = getProfileForPhilosophy ? getProfileForPhilosophy() : {};
-
-  // Store latest check-in locally for recovery state derivation
-  const checkIn = {
-    sleep_quality: checkInData.sleep || checkInData.sleepQuality,
-    energy_level: checkInData.energy || checkInData.energyLevel,
-    soreness_level: checkInData.soreness || checkInData.sorenessLevel,
-    timestamp: new Date().toISOString()
-  };
-  localStorage.setItem('latestCheckIn', JSON.stringify(checkIn));
+  const profile = typeof getProfileForPhilosophy==='function' ? getProfileForPhilosophy() : {};
+  const checkIn=window.AthleteInput.normalizeCheckIn({...checkInData,timestamp:checkInData.observedAt || checkInData.timestamp || new Date().toISOString()});
+  if(typeof DB==='undefined'||!DB.savePlanBuild) throw Error('Check-in saving is unavailable.');
+  await DB.savePlanBuild({latestCheckIn:checkIn,currentRecoveryState:checkIn.recoveryState});
 
   // Store in Supabase
   try {
@@ -34,18 +28,16 @@ async function recordWeeklyCheckIn(checkInData) {
       sessions_planned: checkInData.planned || null,
       sessions_completed: checkInData.completed || null,
       difficulty_rating: checkInData.difficulty || null,
-      energy_level: checkIn.energy_level,
-      sleep_quality: checkIn.sleep_quality,
-      soreness_level: checkIn.soreness_level,
+      energy_level: checkIn.energyLevel,
+      sleep_quality: checkIn.sleepQuality,
+      soreness_level: checkIn.soreness,
       notes: checkInData.notes || null
     });
 
     console.log('[IronZ] Weekly check-in recorded');
 
     // Update recovery state based on check-in
-    const classification = classifyUser(profile);
-    const newRecoveryState = classification.recoveryState;
-    localStorage.setItem('currentRecoveryState', newRecoveryState);
+    // Canonical recovery is already committed with the acknowledged check-in.
 
   } catch (e) {
     console.warn('[IronZ] Failed to record check-in:', e.message);

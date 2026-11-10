@@ -163,7 +163,7 @@ function selectCheckinFeedback(btn) {
   btn.classList.add("selected");
 }
 
-function submitWeeklyCheckin() {
+async function submitWeeklyCheckin() {
   const feedback = document.querySelector(".wc-feedback-btn.selected")?.dataset.value || "just-right";
   const today = new Date();
   const weekKey = getWeekKey(today);
@@ -178,9 +178,18 @@ function submitWeeklyCheckin() {
 
   const history = getCheckinHistory();
   history.push(checkin);
-  saveCheckinHistory(history);
-
-  closeWeeklyCheckin();
+  try {
+    if(typeof DB==='undefined'||!DB.savePlanBuild) throw Error('Check-in saving is unavailable.');
+    // Difficulty does not replace wellness observations. Retain their actual
+    // observed time; absent/stale/conflicted reports remain unknown.
+    const latestCheckIn=DB.getRecoveryReport(today.toISOString());
+    await DB.savePlanBuild({checkinHistory:history,latestCheckIn,currentRecoveryState:latestCheckIn.recoveryState});
+    closeWeeklyCheckin();
+  } catch(error) {
+    let notice=document.getElementById('weekly-checkin-error');
+    if(!notice) { notice=document.createElement('p');notice.id='weekly-checkin-error';notice.setAttribute('role','alert');document.getElementById('weekly-checkin-overlay')?.appendChild(notice); }
+    notice.textContent=error.message || 'Your check-in could not be saved. Try again.';
+  }
 }
 
 function closeWeeklyCheckin() {
