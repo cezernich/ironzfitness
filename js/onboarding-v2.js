@@ -1243,7 +1243,14 @@
     if (sub) sub.textContent = subtitle;
   }
 
-  function _toggleGoal(btn) { if (btn) btn.classList.toggle("is-selected"); }
+  function _toggleGoal(btn) {
+    if (!btn) return;
+    btn.classList.toggle("is-selected");
+    // Adding strength rebuilds these cards before Continue saves them.
+    // Keep the draft current so that rebuild preserves selections and removals.
+    _state.trainingGoals = Array.from(document.querySelectorAll("#bp-v2-2 [data-goal].is-selected"))
+      .map(el => el.getAttribute("data-goal"));
+  }
 
   // Radio semantics — only one role can be selected.
   function _toggleStrengthRole(btn) {
