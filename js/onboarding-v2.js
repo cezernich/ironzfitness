@@ -574,6 +574,13 @@
     Object.keys(prior || {}).forEach(key => {
       const p = prior[key];
       if (!p || typeof p !== "object") return;
+      if(p.mode==='test') {
+        const measuredAt=result[key]?._updatedAt;
+        const boundary=p._requestedAt||p._updatedAt;
+        if(!measuredAt||(boundary&&new Date(measuredAt)<=new Date(boundary)))
+          result[key]={...(result[key]||{}),...p,mode:'test'};
+        return;
+      }
       const hasValues = Object.keys(p).some(k => k !== "mode" && k !== "_updatedAt" && p[k] != null && p[k] !== "");
       if (hasValues) {
         const prevTs = result[key] && result[key]._updatedAt;
@@ -1932,7 +1939,15 @@
   // The underlying form stays in the DOM (hidden), so _saveThresholds-
   // AndContinue can still read its pre-filled values on submit.
   function _applyCollapsedState(section, key, saved) {
-    if (!section || !saved || !_isRecent(saved._updatedAt)) return;
+    if(!section||!saved)return;
+    if(saved.mode==='test') {
+      const button=section.querySelector('.ob-v2-test-me');
+      if(button){button.classList.add('is-active');button.textContent='Testing';}
+      const body=section.querySelector('[data-threshold-body="'+key+'"]');
+      if(body)body.style.display='none';
+      return;
+    }
+    if(!_isRecent(saved._updatedAt))return;
     const body = section.querySelector('[data-threshold-body="' + key + '"]');
     if (!body) return;
     const summaryHtml = _thresholdSummaryHtml(key, saved);
@@ -1972,7 +1987,7 @@
     const then = new Date(iso).getTime();
     if (!then || isNaN(then)) return false;
     const windowDays = typeof days === "number" ? days : 90;
-    return (Date.now() - then) <= windowDays * 24 * 60 * 60 * 1000;
+    return Date.now() >= then && (Date.now() - then) <= windowDays * 24 * 60 * 60 * 1000;
   }
 
   function _formatUpdatedDate(iso) {
@@ -2056,6 +2071,7 @@
         '<span class="ob-v2-threshold-icon" data-ob-icon="' + iconKey + '"></span>' +
         '<span class="ob-v2-threshold-name">' + _escape(label) + '</span>' +
         '<button type="button" class="ob-v2-test-me" data-threshold-key="' + key + '" onclick="OnboardingV2._toggleTestMe(this)">Test me</button>' +
+        '<button type="button" data-threshold-key="' + key + '" onclick="OnboardingV2._clearThreshold(this)">Clear saved value</button>' +
       '</div>' +
       '<div class="ob-v2-threshold-body" data-threshold-body="' + key + '">' +
         '<div class="ob-v2-form-group">' +
@@ -2086,6 +2102,7 @@
         '<span class="ob-v2-threshold-icon" data-ob-icon="weights"></span>' +
         '<span class="ob-v2-threshold-name">Strength</span>' +
         '<button type="button" class="ob-v2-test-me" data-threshold-key="strength" onclick="OnboardingV2._toggleTestMe(this)">Test me</button>' +
+        '<button type="button" data-threshold-key="strength" onclick="OnboardingV2._clearThreshold(this)">Clear saved maxes</button>' +
       '</div>' +
       '<div class="ob-v2-threshold-body" data-threshold-body="strength">' +
         '<div class="ob-v2-threshold-inputs" data-threshold-inputs="strength">' + inputs + '</div>' +
@@ -2145,6 +2162,18 @@
     });
   }
 
+  function _clearThreshold(btn) {
+    const key=btn.getAttribute('data-threshold-key');
+    const section=document.querySelector('[data-threshold="'+key+'"]');
+    if(!section)return;
+    if(section.classList.contains('is-confirmed'))_editThreshold(key);
+    section.setAttribute('data-clear-benchmark','true');
+    section.querySelectorAll('[data-threshold-input]').forEach(input=>{input.value='';});
+    const test=section.querySelector('.ob-v2-test-me');
+    if(test){test.classList.remove('is-active');test.textContent='Test me';}
+    btn.textContent='Will clear on Continue';
+  }
+
   function _toggleTestMe(btn) {
     if (!btn) return;
     const key = btn.getAttribute("data-threshold-key");
@@ -2158,12 +2187,17 @@
     btn.textContent = isOn ? "Testing" : "Test me";
   }
 
+  function _testThresholdRequest(key) {
+    const prior=_state.thresholds&&_state.thresholds[key];
+    return {mode:'test',_requestedAt:prior?.mode==='test'&&prior._requestedAt||new Date().toISOString()};
+  }
+
   function _saveThresholdsAndContinue() {
     const result = {};
     document.querySelectorAll("#bp-v2-thresholds-container [data-threshold]").forEach(section => {
       const key = section.getAttribute("data-threshold");
       const testBtn = section.querySelector(".ob-v2-test-me");
-      if (testBtn && testBtn.classList.contains("is-active")) { result[key] = { mode: "test" }; return; }
+      if (testBtn && testBtn.classList.contains("is-active")) { result[key] = _testThresholdRequest(key); return; }
       const vals = {};
       section.querySelectorAll("[data-threshold-input]").forEach(input => {
         const id = input.getAttribute("data-threshold-input");
@@ -2175,9 +2209,11 @@
       if (Object.keys(vals).length) {
         result[key] = Object.assign({ mode: "known" }, method ? { method } : {}, vals);
       } else {
-        result[key] = { mode: "test" };
+        result[key] = section.getAttribute("data-clear-benchmark") === "true" ? {mode:"clear"} : _testThresholdRequest(key);
       }
     });
+    const inputError=_thresholdSubmissionError(result);
+    if(inputError){if(typeof showToast==='function')showToast(inputError,'error');else alert(inputError);return;}
     _state.thresholds = result;
     // Round-trip any known values back into the app's Training Zones &
     // Strength Benchmarks so the two surfaces stay in sync. The existing
@@ -2187,7 +2223,8 @@
     const zonesAfterSave = _lsGet("trainingZones", {}) || {};
     const zoneSport = { run: "running", bike: "biking", swim: "swimming", strength: "strength" };
     Object.keys(result).forEach(key => {
-      result[key]._updatedAt = (zonesAfterSave[zoneSport[key]] || {}).lastUpdated || new Date().toISOString();
+      const savedAt=(zonesAfterSave[zoneSport[key]] || {}).lastUpdated;
+      if(savedAt)result[key]._updatedAt=savedAt;
     });
     _lsSet("thresholds", result);
     if (!_state.selectedSports.includes("strength")) {
@@ -2202,15 +2239,34 @@
   // Writes any threshold values the user entered in bp-v2-4 back into
   // localStorage.trainingZones via the app's saveTrainingZonesData()
   // helper. History retention + lastUpdated stamping happen there.
+  function _thresholdSubmissionError(values) {
+    const positive=value=>Number.isFinite(Number(value))&&Number(value)>0;
+    const time=value=>{const parts=String(value||'').split(':').map(Number);return parts.length>=2&&parts.length<=3&&parts.every(n=>Number.isFinite(n)&&n>=0)&&parts.slice(1).every(n=>n<60)&&parts.reduce((n,v)=>n*60+v,0)>0;};
+    const run=values.run;
+    if(run?.mode==='known'&&!(run.method==='race'?['mile','5k','10k','halfMarathon','marathon'].includes(run.raceDist)&&time(run.raceTime):positive(run.threshPace)||time(run.threshPace)))return 'Enter a valid running result or choose Test me. Your saved benchmark will be retained.';
+    const bike=values.bike;
+    if(bike?.mode==='known'&&!positive(bike.ftp)&&!positive(bike.twentyMinWatts)&&!positive(bike.raceWatts))return 'Enter FTP or measured bike power, or choose Test me. Race time alone cannot determine FTP.';
+    const swim=values.swim;
+    if(swim?.mode==='known') {
+      const seconds=(m,s)=>{const min=Number(m||0),sec=Number(s||0);return Number.isInteger(min)&&min>=0&&Number.isInteger(sec)&&sec>=0&&sec<60?min*60+sec:NaN;};
+      const a=seconds(swim.css400min,swim.css400sec),b=seconds(swim.css200min,swim.css200sec);
+      if(!positive(swim.cssPace)&&!(swim.method==='css-test'&&a>b&&b>0))return 'Enter CSS pace or valid400/200 times, or choose Test me. Your saved benchmark will be retained.';
+    }
+    const strength=values.strength;
+    if(strength?.mode==='known'&&['squat','bench','dead'].some(k=>strength[k]!=null&&strength[k]!==''&&!positive(strength[k])))return 'Enter positive strength maxes, leave individual lifts blank to clear them, or choose Test me.';
+    return null;
+  }
+
   function _persistThresholdsToZones(thresholds) {
     if (!thresholds || typeof saveTrainingZonesData !== "function") return;
+    const inputError=_thresholdSubmissionError(thresholds);if(inputError)throw new Error(inputError);
     const nowIso = new Date().toISOString();
 
     // Each submitted sport replaces its prior benchmark, including derived
-    // fields. Explicit test/cleared inputs invalidate the old benchmark.
+    // fields. Test requests retain the prior dated benchmark; clearing is explicit.
     const save = (sport, data) => saveTrainingZonesData(sport, data, { replace: true });
     for (const [key, sport] of Object.entries({ run: "running", bike: "biking", swim: "swimming", strength: "strength" })) {
-      if (thresholds[key] && thresholds[key].mode !== "known") save(sport, null);
+      if (thresholds[key] && thresholds[key].mode === "clear") save(sport, null);
     }
     const r = thresholds.run;
     if (r && r.mode === "known") {
@@ -2221,10 +2277,10 @@
         if (meters && parts.length >= 2 && parts.length <= 3 && parts.every(n => Number.isFinite(n) && n >= 0) && parts.slice(1).every(n => n < 60) && seconds > 0 && typeof computeRunningZones === "function") {
           const computed = computeRunningZones(meters, seconds);
           save("running", { ...computed, referenceDist: r.raceDist === "5k" ? "5K" : r.raceDist === "10k" ? "10K" : r.raceDist, referenceTime: r.raceTime, calculatedAt: nowIso, source: "build_plan_v2" });
-        } else save("running", null);
+        }
       } else if (r.threshPace) {
         save("running", { thresholdPace: r.threshPace, calculatedAt: nowIso, source: "build_plan_v2" });
-      } else save("running", null);
+      }
     }
 
     // Biking — resolve FTP from whatever method the user picked:
@@ -2254,7 +2310,7 @@
             source: "build_plan_v2",
           });
         } catch (e) { console.warn("[OnboardingV2] sync biking zones failed", e); }
-      } else save("biking", null);
+      }
     }
 
     // Swimming — resolve CSS from whatever method the user picked:
@@ -2289,7 +2345,7 @@
             source: "build_plan_v2",
           });
         } catch (e) { console.warn("[OnboardingV2] sync swim zones failed", e); }
-      } else save("swimming", null);
+      }
     }
 
     // Empty lift fields clear prior maxes, including partial deletions.
@@ -5397,7 +5453,7 @@
       _toggleGoal, _toggleStrengthRole, _addStrengthFromRecommendation, _saveGoalsAndContinue, _renderGoalCards,
       _updateRaceTypes, _updateWeeksCallout, _selectRaceGoal, _selectRacePriority, _applyRacePrioritySection, _applyRaceCategoryDefault, _selectLeadInPhase, _adjustLeadIn, _saveRaceAndContinue,
       _selectPlanOption, _setCustomDuration, _adjustDaysPerWeek, _setStartDate, _saveNoraceAndContinue,
-      _renderThresholdSections, _toggleTestMe, _changeThresholdMethod, _saveThresholdsAndContinue, _testMeForEverythingAndContinue, _editThreshold,
+      _renderThresholdSections, _toggleTestMe, _clearThreshold, _changeThresholdMethod, _saveThresholdsAndContinue, _testMeForEverythingAndContinue, _editThreshold,
       _adjustStrengthCount, _applyStrengthCountSideEffects, _selectSplit, _toggleMuscle,
       _renderCustomDayList, _toggleMuscleForDay,
       _selectStrLength, _selectStrDuration, _selectStrRefresh, _setCustomRefresh, _saveStrengthAndContinue,
