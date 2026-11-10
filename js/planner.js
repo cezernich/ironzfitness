@@ -2170,6 +2170,8 @@ function _materializePlanPrescriptions(entries) {
     if (!Number.isFinite(entry.duration) || entry.duration <= 0) {
       throw new Error(`A ${entry.discipline} session (${entry.load || "unspecified"}) has no duration. Your previous plan was retained; please try again.`);
     }
+    if(typeof window!=='undefined'&&window.PlanConstraintValidator?.materializeDemotion)
+      window.PlanConstraintValidator.materializeDemotion(entry);
   });
 }
 
@@ -2302,6 +2304,8 @@ function _buildRacePlanReplacement(race, options = {}) {
     }
   }
 
+  _materializePlanPrescriptions(newEntries); // Inspect fallback content before counting quality.
+
   // Rule Engine Step 5 — apply global intensity constraints (§4.3):
   // no consecutive hard days for non-advanced, cap intensity sessions
   // per week, ensure ≥1 rest day/week. Runs AFTER the distribution
@@ -2309,11 +2313,12 @@ function _buildRacePlanReplacement(race, options = {}) {
   if (newEntries.length && typeof window !== "undefined" && window.PlanConstraintValidator) {
     try {
       const result = window.PlanConstraintValidator.validateAndFixPlan(newEntries, _level);
+      if(result.unresolved)throw new Error('This race calendar needs review before a training plan can be saved. Your previous plan was retained.');
       if (result.flags && result.flags.length) {
         console.log("[IronZ] constraint validator adjusted", result.flags.length, "sessions across", result.weeksChecked, "weeks");
       }
     } catch (e) {
-      console.warn("[IronZ] constraint validator failed:", e && e.message);
+      throw e; // Never save an unvalidated replacement after a safety failure.
     }
   }
 
