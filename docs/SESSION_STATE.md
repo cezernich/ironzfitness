@@ -1,71 +1,63 @@
 # Iron Z current session state
 
-Updated 9 November 2026. Read this file, `AGENTS.md`, and the latest remote PRs before continuing. This is the current handoff; append completed session summaries to `SESSION_LOG.md`.
+Updated 9 November 2026. This file supersedes older checkpoints. Read AGENTS.md, PRODUCT_DIRECTION.md (where present), this file and remote PR changes before continuing. History is retained in SESSION_LOG.md. Credentials and real athlete information stay outside this public repository.
 
-## Objective and release constraint
+## Brain review and acceptance milestone
 
-Finish isolated staging with synthetic users, test candidate fixes there, coordinate with Claude, and release nothing to real users until validation and independent review are complete. Chase authorized staging-only account creation and testing. Production data and provider secrets must not be copied into staging.
+Review PR: https://github.com/cezernich/ironzfitness/pull/34 . Specification revision `0e05d08`; independent design review: https://github.com/cezernich/ironzfitness/pull/34#pullrequestreview-5835978027 . No blocking documentation finding; review is not runtime/clinical/release approval. Claude review requested in PR34 and coordinated on PR17. Closeout-only revisions do not change the reviewed brain method.
 
-## Environments
+Current task: the owner requested the brain review, method gap analysis and acceptance/consolidation plan. The existing private coaching plan is one comparator, not a gold standard. Active branch `codex/brain-review-acceptance`, checkout `/private/tmp/ironz-brain-review`, base main `681e68c`.
 
-- Production: `https://ironz.fit`, Supabase `dagdpdcwqdlibxbitdgr`. No production migration or application release has been performed by Codex.
-- Staging: Supabase `yhchfxjzxhinreklnxbi` in the existing Ironz organization, us-east-2, approved at a $0/month project quote.
-- Private preview: `https://ironz-staging.chase-zernich.chatgpt.site`, project `appgprj_6af1feeafc008191abb0f79038aaa874`. Deployment `appgdep_6af2079f413c81919513fca26cc97389` succeeded, owner-private. The outer ChatGPT sign-in returned an error during QA; do not count hosted authenticated access as passing.
-- Staging has a schema-only copy of production public definitions: 48 tables, 29 original functions, 147 original policies. No athlete rows were copied. Reference philosophy modules come from the repository.
-- Four synthetic Auth accounts exist: athlete-a, athlete-b, coach, administrator. Generated passwords live only in the owner-only local credentials file specified by `IRONZ_STAGING_CREDENTIALS`. Never commit credentials or tokens.
+Deliverables: `docs/brain-review/BRAIN_REVIEW_AND_ACCEPTANCE_SPEC.md`, `PLAN_COMPARISON_PROTOCOL.md`, `ACCEPTANCE_CASES.json` (30 planned, NOT executed implementation cases), and clarified `docs/PRODUCT_DIRECTION.md`. Private method/coverage findings are saved owner-only outside the repository; no personal records or actual plan comparison are in this public PR. The Madison project is untouched.
 
-## Branch and review coordination
+Independent QA checked source claims and the design. Confirmed target activation blockers include goal/experience/strength-role/input losses, unknown-to-good recovery, incompatible input enums and target/master progression mismatch. Documents require shadow generation, actual structured-prescription validation, proposal-first permissions, revision-safe state and independent comparison of both plans. Neither plan is treated as ground truth. No numerical clinical policy is validated or activated.
 
-- `claude/agent-collab-setup`, PR 12: shared instructions/test runner; three behavior suites remain quarantined.
-- `codex/review-handoff`, PR 13: original audit supplement and release workflow.
-- `claude/secure-profiles`, draft PR 14: profile privilege guard, broad-read removal, narrow RPCs. Original candidate is `a683117`.
-- `codex/repair-client-build`, PR 15: repaired client packaging, locally and remotely passing build check.
-- `claude/remove-strava-secret`, PR 16: source cleanup/secret scan; source removal is not provider rotation.
-- `codex/coach-profile-privacy`, PR 18: focused correction to the privacy hole in PR 14. Removes client-to-coach whole-row reads, uses narrow coach cards, adds negative SQL coverage.
-- `codex/staging-environment`: integration candidate assembled from the setup branch, build repair, PR 14 candidate, and PR 18 fix. Do not merge it as a shortcut around independent review of its component changes.
+Document validation: 30 unique sequential scenario IDs, all planned/null evidence; relative links resolve; diff whitespace check passes. Required baseline npm check: 21 files, zero enforced failures, THREE existing quarantines, 170 syntax checks and zero heuristic secret hits. This documentation branch does not include PR32's runtime repairs; its baseline results must not be called a new zero-quarantine runtime pass. Prior separately verified integrated candidate below remains distinct.
 
-## Verified findings and validation in progress
+Latest Claude29 is `382b169`, now described as calendar groundwork with prescription work in33. No source code, database, staging deployment, production release, provider authorization or real plan generation changed in this task. First implementation after policy review: normalize/preserve athlete inputs and check-ins, then contract/state work and target-engine shadow comparison. Independent full plan-versus-plan evaluation remains NOT RUN. Cross-agent Claude PR review and existing production holds remain required.
 
-Live production catalog checks confirmed broad profile reads and editable privilege columns without a privilege-guard trigger. The managed migration ledger does not capture the many manual schema changes. Production remains unchanged.
+## Prior implementation outcome
 
-The original security candidate passed 24 API checks and failed the coach-private-profile check. After PR 18's correction and an Auth-provider configuration correction, the final staging API suite passes 32 checks, including public-signup denial and disposable self-deletion. Both GitHub checks on PR 18 pass. The staging integration's client-build, db-security and test jobs pass, with three existing behavior suites explicitly quarantined. The required staging-release job intentionally fails because release blockers remain.
+The user's requested migration-order, availability scheduling and test repairs are implemented in separate PRs and verified as a combined staging candidate. No production release/merge was performed by Codex. Claude independent review is requested and still pending; do not mark production approved or create the real athlete plan yet.
 
-Browser QA used the identical deployed artifact locally against real staging after the outer hosted identity error. Sign-in, meal/hydration entry, reload persistence, narrow coach card and account-switch isolation passed. The 5K plan wizard reported success but saved zero sessions: release-blocking issue 20. See `docs/staging/browser-qa-2026-11-09.md` and `STAGING_RUNBOOK.md`.
+- PR30: https://github.com/cezernich/ironzfitness/pull/30 , `9bb444b`, `codex/fix-profile-migration-order`. New final corrective migration; historical files unchanged. Fresh actual lexical replay and chronological upgrade each pass 20 SQL checks. Independent review: https://github.com/cezernich/ironzfitness/pull/30#pullrequestreview-5833669261 .
+- PR31: https://github.com/cezernich/ironzfitness/pull/31 , `907b4ee`, `codex/fix-plan-availability`. Explicit days, sports, start date and legacy day cap hold across generator/arc entry points. Independent review: https://github.com/cezernich/ironzfitness/pull/31#pullrequestreview-5833798761 .
+- PR32: https://github.com/cezernich/ironzfitness/pull/32 , `7e7e0ac`, `codex/repair-training-regressions`. Three quarantines repaired and removed; production week-zero, calendar-date and actual threshold-test date bugs corrected. Full suites pass in Chicago and Pacific/Kiritimati: 21 files, ZERO failures/quarantines, 170 syntax checks. Latest review resolves prior timezone finding: https://github.com/cezernich/ironzfitness/pull/32#pullrequestreview-5833977750 . All three PRs have passing test/client-build/db-security CI.
 
-Staging packaging substitutes only the isolated backend/public key, disables production Sentry and live Stripe links, adds a visible staging banner/noindex and restricts network connections to staging. Original production client configuration is unchanged. Provider credentials and background notification jobs must remain absent until separately configured for testing.
+## Exact staging evidence
 
-## Release blockers
+Combined app `9316eb1`, main base `681e68c6adf74e34dbaa10720c77068c41a88a54`, branch `codex/verify-training-fixes`, checkout `/private/tmp/ironz-verified-staging`. Branch now `e57727c` adds evidence and an explicit held release-readiness workflow only; deployed app files remain the tested `9316eb1` build. Do not merge this integration as a shortcut around component review.
 
-- Complete the remaining browser/native/integration scenarios; sampled core flows and the failed race-plan scenario are recorded.
-- Complete review/integration of staging-tested PR25, resolve issue26 scheduling discrepancy, and verify hosted ChatGPT sign-in access.
-- Get Claude's independent review of Codex changes and address review findings.
-- Resolve the three quarantined training behavior suites against the canonical spec; do not silently relabel them as passing.
-- Verify Strava secret rotation with the provider; deleting the committed value alone is insufficient.
-- Fix and regression-test destructive stale-device synchronization and misleading workout-intensity adjustments before relying on them with real athletes.
-- Keep AI, wearable authorization, email, payments, and device push explicitly disabled/unverified until isolated credentials and provider test arrangements exist. Do not claim a disabled path is an end-to-end integration pass.
+Both timezone full suites pass: 22 files, ZERO failures/quarantines. Source-only syntax 173 files; after packaging, the runner also scans 144 generated copies (317 total), zero errors. Secret heuristic zero hits. Independent QA verified component ancestry, conflict resolution, both suites, fresh SQL/upgrade, builds and read-only staging catalog. Browser/API results below were performed by the primary agent; the QA agent did not independently repeat the browser.
 
-## Session closeout protocol
+- Isolated Supabase: `yhchfxjzxhinreklnxbi`, existing Ironz org, approved $0/month project. Synthetic accounts only (athlete-a, athlete-b, coach, admin); no production athlete rows/provider secrets copied.
+- Applied staging-only migration `20261109224651_enforce_final_profile_privacy`; repository sequence `20261110221358_enforce_final_profile_privacy.sql`. Managed tool uses application-time ledger alias. Earlier expired confirmation applied nothing. Catalog confirms client-to-coach whole-row policy absent. All 32 real staging Auth/Data API assertions pass after correction.
+- Actual browser wizard against real staging saves 50 running sessions: Tue/Wed/Thu/Sat only, none before synthetic chosen Nov17 start, no injected strength. Reloaded calendar retains four sessions in first scheduled week. Unsupported Ultra replacement stays in preview with persistent error/retry and no success. Server fingerprints of all five plan/input keys are unchanged; previous plan retained.
+- Private staging https://ironz-staging.chase-zernich.chatgpt.site deployed successfully. Hosted source `22a194523459b9dbe095c590eaf912966cb6f430`; version `appgprj_6af1feeafc008191abb0f79038aaa874~appgver_96ee1487e54881918bab2856f306a85a`; deployment `appgdep_6af24f6e54d48191b73d85e3011ca091`.
+- Hosted outer ChatGPT authentication requires owner password reauthentication. No password requested/entered and no access weakening. Browser app QA used the identical built artifact locally with the real staging backend. Hosted authenticated app access is NOT certified.
+- `npm run release:check` now exists on integration and intentionally fails for the remaining gates. This is a deliberate release hold, not a passing release check. Main protection currently requires only `test`; the older assumption that staging-release is required is stale. Owner must not interpret that single green check as release clearance.
 
-After each meaningful milestone, about every 30 minutes during long work, and before ending a session: update this state; append a dated entry to `SESSION_LOG.md`; record code revisions, migrations per environment, tests/pass/fail/disabled status, review links, and the next concrete action. Preserve unresolved issues. Read the files again next session and refresh remote state before assuming they are current. Store no credentials, real athlete records, or private health data here.
+Full evidence: `codex/verify-training-fixes:docs/staging/repair-verification-2026-11-09.md`. Claude requests and evidence posted on PR30/31/32 comments 6753763198 / 6753763472 / 6753763780 respectively.
 
-## Issue20 implementation checkpoint — 9 November 2026
+## Separate held recovery work
 
-PR25: https://github.com/cezernich/ironzfitness/pull/25 . Code/tests `1bb93f0`; detailed evidence-only revision `d136001`. Focused branch `codex/fix-empty-training-plan`, checkout `/private/tmp/ironz-empty-plan`. Reviewed latest Claude PRs21–24 and existing audit fixes before implementation. Reused supported aliases without broad unrelated training changes.
+Claude PR29 at `1330f46` supplies blocked-period UI groundwork. Review found display-only prescriptions and automatic return assumptions. Codex did not edit/push Claude's branch.
 
-Independent QA reproduced the original failure, added account-transition and older-write regressions, and posted a COMMENT review with no blocking findings: https://github.com/cezernich/ironzfitness/pull/25#pullrequestreview-5832207687 . Claude review requested on PR25; pending. PR12 supplies the test runner; untouched main's placeholder npm-test is not passing.
+Draft PR33: https://github.com/cezernich/ironzfitness/pull/33 , `d27a191`, `codex/fix-blocked-plan-prescriptions`, checkout `/private/tmp/ironz-blocked-prescriptions`. Shared prescription policy, explicit pending/easy/full athlete-reported return status, wizard input and atomic DB save/source reconciliation. Both timezone suites pass 24 files, zero failures/quarantines, 175 syntax checks. Tests cover source edits/deletions, repeated edits, save failure, actual easy payloads, no fabricated strength and truthful paused copy. Earlier QA findings received corrections, but final review/complete staging is NOT done. This draft is NOT in the hosted or verified staging candidate.
 
-Staging integration branch `codex/qa-empty-plan-staging`, checkout `/private/tmp/ironz-empty-plan-staging`, final application `4c1b548`. Integration tests:20files,0enforced failures,3existing quarantines;171syntax checks,0errors. Focused regression passes; original source fails it. Existing master-spec suite22passed,0failed. Backend rejection and account-transition cases use controlled fake API.
+Before PR33 ready: verify/fix source restoration across direct race save/edit/self-heal; migrate/reconcile historical display-only restrictions; stage calendar/wizard save/reload/status-edit/backend-failure/no-baseline/race-overlap scenarios; review procedure-specific limits. Planned volume is not measured fitness or medical clearance. Do not use elapsed time or a minimum rest week as clearance. No private athlete plan has been imported/generated.
 
-Actual staging browser5K path saved84dated entries at `fce4cf8`, server canonicalfiveK confirmed, calendar populated and survived reload. Final `4c1b548` unsupported Ultra A-race replacement stayed on preview with persistent accessible error/no success, retry enabled; server fingerprints of trainingPlan/workoutSchedule/events/raceEvents/buildPlanTemplate unchanged. Prior84entries retained. Browser used exact built artifact locally against real staging. Hosted outer ChatGPT sign-in remains unverified.
+## Production and remaining gates
 
-Private preview deployment succeeded: source `a0c76241e2b46d6095bac16f60861f2b75b3f5cc`, deployment `appgdep_6af22c0082f08191addc2da6d4dd4720`, version `appgprj_6af1feeafc008191abb0f79038aaa874~appgver_e18681ad0ee081919f7ac2c4cbc651a2`. Existing owner-only audience retained. No database migrations, production writes, merges or releases. External providers remain disabled/unverified. Release check intentionally fails.
+Production: https://ironz.fit , Supabase `dagdpdcwqdlibxbitdgr`. Other actors merged prior setup/security/build/empty-plan PRs. Latest fetched main `681e68c`. Read-only catalog now confirms profile privilege guard present and broad/client-to-coach reads absent; production managed security alias `20261109205427` name `20261109_secure_profiles`. Codex made no production mutations. Do not blindly replay historical base migrations or repair production ledger history.
 
-New release blocker issue26: https://github.com/cezernich/ironzfitness/issues/26 . Saved race plan adds workouts on excluded days and strength absent from running preview. Nonempty generation does not certify the prescription. See ISSUE_20_QA.md for exact evidence and limits.
+Still held: Claude cross-agent review; issue27/recovery prescription draft; destructive stale-device synchronization and historical label-only intensity restrictions; provider secret-rotation verification; hosted owner authentication and native/offline/provider scenarios. AI/wearable/email/push/payment staging adapters remain disabled and explicitly unverified. Wider RPC/search-path/password advisor warnings remain outside the narrow profile repair; no claim of complete database security.
 
-Automatic review rejected pushing these updates to shared `codex/staging-environment` because it could contaminate another workstream. These handoff files are therefore committed on the focused issue20 branch instead. The shared checkout remains unchanged; next session must select this branch/read this checkpoint rather than treating its old handoff as current.
+## Next actions and continuity
 
-## Next concrete action
+1. Claude reviews exact PR30/31/32 heads and the combined evidence, and resolves findings before Chase merges. Refresh main/PR state first; other actors may update it.
+2. Complete independent review and remaining implementation/real staging QA of draft PR33, keeping it separate from the already verified three-fix candidate.
+3. Resolve the retained sync/intensity/provider/native gates, verify owner-private hosted access, then record a new exact integrated release candidate and explicit readiness decision. Do not release on an old snapshot.
+4. Only after those gates, use the real athlete account and private handover to build/review the athlete-specific plan. Keep private health data out of public fixtures/docs.
 
-Obtain Claude review of PR25 and existing privacy/staging candidates. Integrate pending collaboration/test-runner dependency through reviewed PRs and rerun final combined candidate. Then address issue26 separately after comparing existing audit distribution constraints. All existing quarantine, sync/intensity, security-review, secret-rotation, hosted-access and external/native gates remain held. No merge or production release authorized.
-
-Product/private-coaching boundaries remain as previously recorded; the working Madison project and personal health records were untouched.
+After each milestone (~30 minutes on long work) and before ending, refresh this state, append dated results/next steps to SESSION_LOG.md, record exact heads/migrations/limits, and stop owned local services. Synthetic staging data is retained for reproducible QA. Temporary local preview/Postgres services are stopped at closeout; no persistent database service was installed/enabled.
