@@ -56,6 +56,11 @@ serve(async (req: Request) => {
     return jsonResponse({ error: "server_misconfigured" }, 500);
   }
 
+  // These jobs scan multiple users and must only run from trusted schedulers.
+  const token = /^Bearer\s+(\S+)$/i.exec(req.headers.get("authorization") || "")?.[1];
+  if (!token) return jsonResponse({ error: "unauthorized" }, 401);
+  if (token !== SERVICE_ROLE_KEY) return jsonResponse({ error: "forbidden" }, 403);
+
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
   const now = new Date();
   const todayStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
