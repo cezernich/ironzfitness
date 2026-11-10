@@ -37,7 +37,7 @@ PR25: https://github.com/cezernich/ironzfitness/pull/25 . Code/tests `1bb93f0`; 
 
 Independent QA reproduced the original failure, added account-transition and older-write regressions, and posted a COMMENT review with no blocking findings: https://github.com/cezernich/ironzfitness/pull/25#pullrequestreview-5832207687 . Claude review requested on PR25; pending. PR12 supplies the test runner; untouched main's placeholder npm-test is not passing.
 
-Staging integration branch `codex/qa-empty-plan-staging`, checkout `/private/tmp/ironz-empty-plan-staging`, final application `4c1b548`. Integration tests:20files,0enforced failures,3existing quarantines;171syntax checks,0errors. Focused regression passes; original source fails it. Existing master-spec suite22passed,0failed. Backend rejection and account-transition cases use controlled fake API.
+Staging integration branch `codex/qa-empty-plan-staging`, checkout `/private/tmp/ironz-empty-plan-staging`, final application `4c1b548`. Integration tests:20files,0 enforced failures,3 existing quarantines;171syntax checks,0 errors. Focused regression passes; original source fails it. Existing master-spec suite22passed,0failed. Backend rejection and account-transition cases use controlled fake API.
 
 Actual staging browser5K path saved84dated entries at `fce4cf8`, server canonicalfiveK confirmed, calendar populated and survived reload. Final `4c1b548` unsupported Ultra A-race replacement stayed on preview with persistent accessible error/no success, retry enabled; server fingerprints of trainingPlan/workoutSchedule/events/raceEvents/buildPlanTemplate unchanged. Prior84entries retained. Browser used exact built artifact locally against real staging. Hosted outer ChatGPT sign-in remains unverified.
 
@@ -50,3 +50,51 @@ Automatic review rejected pushing these updates to shared `codex/staging-environ
 Implemented canonical supported race IDs, validated generation before replacement, checked atomic user_data save before success, temporary draft inputs, deferred A-race demotion, persistent inline errors/retry, duplicate-click prevention, old-write ordering and account-transition protection. Master spec acceptance contract updated. Independent QA identified and verified corrections for threshold vocabulary and unguarded legacy callers as well as account/write races. No PR merged.
 
 Next actions and remaining release blockers are retained in SESSION_STATE.md and ISSUE_20_QA.md. Synthetic plan retained for follow-up; owned local preview server will be stopped at teardown.
+
+## 9 November 2026 all-PR and production review closeout
+
+Reviewed 14 open PRs with independent QA; posted COMMENT reviews, not approvals. Production Pages/main remains `2590645` from 26 May 2026, original profile policies/guard absence confirmed read-only. Advisor warnings sampled and recorded without querying athlete records or changing production. New P0:PR14/18 actual migration discovery order can reopen whole-row coach access; both reviewed/blocked. New PR25 P1 cases (late cache after server acknowledgement, supported non-race disciplines) reproduced and fixed at `6a098ff`, regressions independently pass. Latest Claude PR14 fixture cleanup `11cf48b` included.
+
+Combined local rehearsal `db003f2` passes22files/0 enforcedfailures/3 existingquarantines/173 syntax/0 errors; secret heuristic0hits; client 169 files/stagingbuild pass. Actual-order SQL replay and latest PR25 staging browser remain unverified; release check correctly fails. Existing hosted stage remains `4c1b548`; no new deployment.
+
+PR_RELEASE_REVIEW_2026-11-09.md records every PR disposition, dependencies, reviews, tests and release path. Private athlete handover read as reference, kept out of repo and accounts. No personal plan creation, main merge, production migration or release. Next: migration-order reconciliation/regression, refreshed protected integration, latest PR25 staging, issue26 and remaining training/sync/intensity gates.
+
+Final inventory also found Claude's newly opened issue27 for blocked-date/return-ramp support. Added as a separate first-real-athlete acceptance blocker; no individual medical data or numerical return prescription was copied into this handoff.
+
+Independent QA also reviewed PR28 documentation/privacy, with no blocking finding. Clarified initial versus current hosted staging pointer and that the14-PR inventory is the review-start snapshot.
+
+## 9 November 2026 implementation milestone
+
+
+This checkpoint supersedes older production and quarantine status below. User authorized migration-order, scheduling and failing-test repairs, Claude coordination and staging verification before a production update.
+
+- Other actors merged the prior setup/security/build/empty-plan changes. Latest fetched main is `681e68c6adf74e34dbaa10720c77068c41a88a54`. Production catalog now has `profiles_guard_privileged` and no broad/client-to-coach profile SELECT policy. Codex did not perform those production changes. Only `test` is currently required by branch protection; do not assume the older staging-release requirement still applies.
+- PR30 (`codex/fix-profile-migration-order`, `9bb444b`) adds a final corrective migration without editing historical files. Actual lexical discovery order and chronological upgrade both pass 20 database assertions locally; omission mutation fails. Independent QA review: https://github.com/cezernich/ironzfitness/pull/30#pullrequestreview-5833669261 .
+- Staging-only corrective migration successfully applied through Supabase: `20261109224651_enforce_final_profile_privacy`. It corresponds to repository sequence `20261110221358_enforce_final_profile_privacy.sql`; managed tool uses application time for its ledger. Verified catalog has no client-to-coach whole-row policy. Earlier expired confirmation did not apply anything. Production ledger/history untouched.
+- PR31 (`codex/fix-plan-availability`, `907b4ee`) enforces selected sports, weekdays, start date and legacy day cap across the arc and direct/calendar regeneration. Chicago and UTC+14 regressions pass. Independent QA: https://github.com/cezernich/ironzfitness/pull/31#pullrequestreview-5833798761 .
+- PR32 (`codex/repair-training-regressions`, `7e7e0ac`) repairs the three quarantined training suites and associated production date/week/test-placement bugs. Full npm test passes in Chicago and Pacific/Kiritimati: 21 files, zero failures, ZERO quarantines, 170 syntax checks, zero credential-scan hits. Latest timezone fixture/watchdog follow-up awaits independent QA. No tests were newly quarantined.
+- Claude PR29 (`1330f46`) is useful blocked-period UI groundwork, but review identified display-only prescription and automatic-clearance problems. Hold comment posted. Separate own worktree `/private/tmp/ironz-blocked-prescriptions` implements shared prescription-level policy plus atomic DB persistence and wizard input; unfinished/uncommitted, NOT staging certified. Do not push Claude's branch.
+- Hosted staging remains the OLD `4c1b548` artifact. Fresh combined app/browser staging verification and Claude review are still required. No current changes have been merged or deployed to production by Codex. Provider/native/hosted-auth and broader stale-device/intensity blockers remain open. No private athlete plan has been imported or generated.
+- Local disposable Postgres 16 runs on UNIX socket `/private/tmp/ironz-pg-test`, port 55439; stop owned server at session teardown. It contains synthetic fixtures only. Do not confuse local SQL passes with remote staging API/browser passes.
+
+Next: finish/review prescription restrictions, combine focused fixes on an isolated staging candidate, rerun 32 real staging API checks after migration, verify complete browser build/save/reload/failure and availability/recovery flows, update exact evidence and request Claude review. Never release merely because the narrow test suite is green.
+
+## 9 November 2026 targeted-repair closeout
+
+Implemented separate PR30 migration-order (`9bb444b`), PR31 availability (`907b4ee`), PR32 training regression/quarantine repairs (`7e7e0ac`). All focused CI jobs pass. Independent QA reviews attached; Claude cross-agent reviews requested with exact staging evidence, pending. No production merges/mutations by Codex. Other actors' main/security updates were refreshed read-only and distinguished from our work.
+
+Combined application `9316eb1` on `codex/verify-training-fixes` passes 22 files/zero failures/zero quarantines in Chicago and UTC+14, fresh and upgrade SQL 20 assertions each, 32 real staging API checks after applied staging migration `20261109224651_enforce_final_profile_privacy` (repo sequence20261110221358). Actual staging browser saves50runs on exactly Tue/Wed/Thu/Sat after synthetic chosen start, no strength, survivesreload. Failed unsupportedUltra replacement retains allfive serverplan/input values byte-for-byte, staysinpreview/error/retry, nosuccess. Independent QA separately verified suites, builds, componentintegration andstagecatalog, not browserrepetition.
+
+Owner-private hosted source `22a194523459b9dbe095c590eaf912966cb6f430`, deployment `appgdep_6af24f6e54d48191b73d85e3011ca091` succeeded; appsource9316eb1. Hosted outerauth nowrequiresownerpassword, soactualappbrowserQA usedidenticalartifactlocally againstrealstage; noauthweakening. Integrationhead `e57727c` retains evidence andexplicitrelease:checkworkflow; checkintentionallyfailsremaininggates.
+
+New draftPR33 (`d27a191`) safelyretains separateprescription-level timeoff work, specsandtests; bothTZ24files0fail0quarantine175syntax. Notstaged/notapproved; direct-sourcepaths, historicrestrictionreconciliation andbrowserQA remain. Claude29notedited. Allrealathleteinformationremainsprivate; norealplancreated.
+
+Current SESSION_STATE.md is rewritten to remove stale production/quarantine/hosted pointers; earlierreviewreport is marked historical. Next: Claude review focusedPRs; finish33and retainedsync/intensity/provider/nativegates; new integratedreadinessdecision beforeprod/realplan. Localtestservicesstoppedatcloseout; syntheticstagefixturesretained.
+
+## 9 November 2026 brain review and acceptance closeout
+
+Owner authorized a method review, gap analysis, acceptance spec and independent comparison design. The existing private coaching plan is explicitly a test case, not an oracle or universal standard. Reviewed main681e68c, adaptive-coach draft17/fa0367d and latestClaude29/382b169, plus priorverifiedfixheads. Created a separate documentation branch with a brain review/spec, 30 planned acceptance cases, neutral independent comparison protocol, product direction clarification and source-map entry. No runtime behavior or active clinical/training constants changed.
+
+Independent QA reproduced mapper/recovery/target-policy gaps and reviewed document links, case coverage, privacy, no-oracle framing, safety-hold versus history retention, stale watch handling and evidence applicability. Findings were incorporated. Science register uses bounded primary research/consensus sources and distinguishes coaching defaults from proven claims. Private handover review remains owner-only outside repo; no real plan generated/imported, no Madison project edit, no provider/DB/deployment/production mutation.
+
+Checks: 30 unique planned/null-evidence cases; document links/whitespace pass. Baseline main npmtest21files/0enforcedfailures/3existingquarantines/170syntax/secret0. PR32 separate runtime repairs stillholdthezero-quarantine validation; not imported into thisdocsPR. Next: owner/Claude policy review, normalized input/check-in/state contracts, shadow target generation, cohort evaluation and then a private independent plan-versus-plan pilot under the protocol. Priorreleaseholdsremain.
