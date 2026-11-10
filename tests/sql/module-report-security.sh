@@ -14,7 +14,7 @@ CREATE SCHEMA auth;
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS \$\$ SELECT (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid \$\$;
 CREATE TABLE public.profiles(id uuid PRIMARY KEY,role text);
 INSERT INTO public.profiles VALUES ('00000000-0000-0000-0000-000000000001','user'),('00000000-0000-0000-0000-000000000002','admin');
-CREATE FUNCTION public.is_admin() RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS \$\$ SELECT EXISTS(SELECT 1 FROM public.profiles WHERE id=auth.uid() AND role='admin') \$\$;
+CREATE FUNCTION public.is_admin() RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS \$\$ SELECT EXISTS(SELECT 1 FROM profiles WHERE id=auth.uid() AND role='admin') \$\$;
 CREATE TABLE public.generated_plans(id uuid PRIMARY KEY,philosophy_module_ids text[]);
 CREATE TABLE public.user_outcomes(plan_id uuid,difficulty_rating text,sessions_planned integer,sessions_completed integer,energy_level text);
 INSERT INTO public.generated_plans VALUES ('00000000-0000-0000-0000-000000000011',ARRAY['synthetic-module']),('00000000-0000-0000-0000-000000000012',ARRAY['synthetic-module']);
@@ -27,6 +27,8 @@ if q 'SET ROLE anon; SELECT * FROM public.module_effectiveness_report();' >/dev/
 for claims in '{"sub":"00000000-0000-0000-0000-000000000001","role":"authenticated"}' '{"sub":"00000000-0000-0000-0000-000000000001","role":"service_role","user_metadata":{"role":"admin"}}' '{}'; do
  if q "SET ROLE authenticated; SET request.jwt.claims='$claims'; SELECT * FROM public.module_effectiveness_report();" >/dev/null 2>&1;then echo 'FAIL: ordinary user/spoofed metadata read report';exit 1;fi
 done
+# A temporary table cannot impersonate the protected admin registry.
+if q "SET ROLE authenticated; SET request.jwt.claims='{\"sub\":\"00000000-0000-0000-0000-000000000001\"}'; CREATE TEMP TABLE profiles(id uuid,role text); INSERT INTO profiles VALUES ('00000000-0000-0000-0000-000000000001','admin'); SELECT * FROM public.module_effectiveness_report();" >/dev/null 2>&1; then echo 'FAIL: temp profile spoof granted admin report';exit 1;fi
 report_query="SELECT module_id||'|'||plan_count||'|'||round(avg_difficulty_score,2)||'|'||round(avg_completion_rate,2)||'|'||round(avg_energy,2) FROM public.module_effectiveness_report()"
 [[ $(q "SET ROLE authenticated; SET request.jwt.claims='{\"sub\":\"00000000-0000-0000-0000-000000000002\",\"role\":\"authenticated\"}'; $report_query") == 'synthetic-module|2|0.50|0.75|0.50' ]]
 [[ $(q "SET ROLE service_role; $report_query") == 'synthetic-module|2|0.50|0.75|0.50' ]]

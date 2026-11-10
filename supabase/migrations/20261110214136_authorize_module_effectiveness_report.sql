@@ -1,5 +1,8 @@
 -- This report aggregates cross-user outcomes: allow admin analytics and trusted backend only.
 BEGIN;
+-- This helper uses unqualified profiles in older installs. Pin its own path
+-- so it remains correct when called from this report's empty search path.
+ALTER FUNCTION public.is_admin() SET search_path = public, pg_temp;
 CREATE OR REPLACE FUNCTION public.module_effectiveness_report()
 RETURNS TABLE (
   module_id text,
