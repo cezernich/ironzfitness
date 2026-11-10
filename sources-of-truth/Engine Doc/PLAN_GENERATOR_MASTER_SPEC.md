@@ -1737,6 +1737,12 @@ Derived from weekly check-in data (sleep quality, energy level, soreness):
 | Moderate | Fair sleep, moderate energy, moderate soreness | Reduce intensity 10%, add extra warm-up |
 | Low | Poor sleep, low energy, severe soreness | Reduce volume 30–40%, cap at Z3, consider extra rest day |
 
+### 12a.1 Completed-training evidence contract
+
+The target snapshot carries a separate `training-history-v1` evidence report, not a tolerated-load prescription. Capture only the completed-workout log, never the planned schedule. Explicit completion, identity, date, discipline and positive reported duration are required. Planned/pending/conflicting/future/not-yet-received records are excluded with reason codes. Preserve raw source records; numeric distance without a declared unit remains unknown. Known distances and minutes stay separate. A default28-day reporting window is a query window, not a validated readiness or progression window.
+
+Deduplicate only explicit provider/local identity links. Different source order cannot change results; conflicting linked records require correction rather than selecting a convenient value. Similar-looking sessions are not proof of identity. Missing workout days are missing coverage, not confirmed rest. Record-only coverage and reported completion never establish injury tolerance, medical clearance, adherence completeness or a recent tolerated starting dose. The baseline status remains `not_established` until a separately reviewed process establishes it. No generation-dose policy changes are authorized by this evidence adapter.
+
 ### 12b. Adaptation Rules
 
 For the unified target engine, the historical defaults below do not authorize automatic changes or injury-return clearance. Reviewed effective restrictions, completed-load evidence, explicit proposals and adoption gates take precedence. Return-to-training limits cannot be inferred from elapsed rest time or a generic percentage.

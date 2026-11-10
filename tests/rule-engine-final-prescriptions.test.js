@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 const context={console,localStorage:{getItem:()=>null},Date,Math};context.window=context;vm.createContext(context);
-for(const file of ['athlete-input','training-zones','athlete-classifier','arc-builder','session-assembler','nutrition-calculator','hydration-calculator','plan-validator','rationale-builder','plan-generator'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../js/'+file+'.js'),'utf8'),context);
+for(const file of ['training-history','athlete-input','training-zones','athlete-classifier','arc-builder','session-assembler','nutrition-calculator','hydration-calculator','plan-validator','rationale-builder','plan-generator'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../js/'+file+'.js'),'utf8'),context);
 const V=context.PlanValidator;
 for(const value of [null,undefined,{}, {weeklyPlan:[]}])assert.equal(V.validate(value,{}).allPassed,false,'absent plans are never valid');
 const progression={weeklyPlan:[{weekNumber:1,sessions:[{type:'bike',day:1,durationMin:100}]},{weekNumber:2,sessions:[{type:'bike',day:1,durationMin:115}]}]};

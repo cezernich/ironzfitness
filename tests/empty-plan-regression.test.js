@@ -35,7 +35,7 @@ function setup() {
       for (const row of Array.isArray(rows) ? rows : [rows]) remote.set(row.data_key, JSON.stringify(row.data_value));
       return { error: null };
     } }; } };
-  for (const file of ['js/athlete-input.js', 'js/db.js', 'js/planner.js', 'js/onboarding-v2.js']) vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'), context, { filename: file });
+  for (const file of ['js/training-history.js', 'js/athlete-input.js', 'js/db.js', 'js/planner.js', 'js/onboarding-v2.js']) vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'), context, { filename: file });
   const DB = vm.runInContext('DB',context), ob = context.OnboardingV2;
   const read = k => JSON.parse(store.get(k) || 'null');
   store.set('ironz_last_user_id','synthetic-a');

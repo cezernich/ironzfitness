@@ -691,7 +691,7 @@ const DB = (() => {
     return window.AthleteInput.normalizeCheckIn(_lsGet('latestCheckIn'),{asOf});
   }
   function captureAthleteInput(overrides={}) {
-    const keys=['profile','thresholds','trainingZones','selectedSports','trainingGoals','strengthRole','equipmentProfile','latestCheckIn','longDays','buildPlanTemplate','events','blockedPeriods'];
+    const keys=['profile','thresholds','trainingZones','selectedSports','trainingGoals','strengthRole','equipmentProfile','latestCheckIn','longDays','buildPlanTemplate','events','blockedPeriods','workouts'];
     const values=Object.fromEntries(keys.map(key=>{
       const raw=localStorage.getItem(key);
       try { return [key,raw===null?undefined:key==='strengthRole'?raw:JSON.parse(raw)]; }
