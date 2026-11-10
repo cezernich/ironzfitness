@@ -11,7 +11,7 @@ validator.validateAndFixPlan(plan,'beginner');
 assert.strictEqual(plan[1].load,'easy');
 for(const k of ['libraryWorkout','aiSession','templateWorkout']) assert.strictEqual(plan[1][k],undefined,'demotion must remove '+k);
 const source = fs.readFileSync(require.resolve('../js/calendar.js'),'utf8');
-const c={console,Math,Number,JSON,localStorage:{getItem:k=>k==='trainingZones'?JSON.stringify({biking:{zones:{z2:{wattRange:'150–190 W'}}},running:{zones:{z2:{paceRange:'8:00–9:00 /mi'}}}}):null},SESSION_TYPE_LABELS:{main:'MAIN SET'}};
+const c={WorkoutPrescription:require('../js/workout-prescription'),console,Math,Number,JSON,localStorage:{getItem:k=>k==='trainingZones'?JSON.stringify({biking:{zones:{z2:{wattRange:'150–190 W'}}},running:{zones:{z2:{paceRange:'8:00–9:00 /mi'}}}}):null},SESSION_TYPE_LABELS:{main:'MAIN SET'}};
 vm.createContext(c);
 for(const [a,b] of [['function scaleSessionDuration(', '// Convert a library workout'],['function _librarySessionSteps(', 'if (typeof window'],['function buildStepsList(', 'function build']]) {
  const start=source.indexOf(a);let end=source.indexOf(b,start+a.length); if(a==='function buildStepsList(') end=source.indexOf('\nfunction ',start+1);

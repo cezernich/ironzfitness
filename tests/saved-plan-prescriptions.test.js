@@ -24,16 +24,11 @@ assert.throws(()=>c._materializePlanPrescriptions([{discipline:'unsupported',loa
 const recovery = [{discipline:'run',load:'recovery'}]; c._materializePlanPrescriptions(recovery); assert.strictEqual(recovery[0].duration,25); assert(recovery[0].templateWorkout.steps.every(s=>s.zone===1));
 console.log('Saved fallback durations, detached prescriptions, library durations, and rejection verified');
 
-// The calendar must resolve a saved snapshot even if template defaults change.
-const calendar=fs.readFileSync(require.resolve('../js/calendar.js'),'utf8');
-const start=calendar.indexOf('      const effectLoad    =',calendar.indexOf('function getDayTotals('));
-const end=calendar.indexOf('      const targetDur',start);
-const resolveSource=calendar.slice(start,end);
-c.p={discipline:'swim',load:'moderate',duration:28,templateWorkout:{duration:45,steps:[{duration:45,zone:2,label:'saved'}]}};
-c.restriction=null;c.dateStr='2028-05-01';c.getEffectiveLoad=()=> 'moderate';
-c.getSessionTemplate=()=>({duration:99,steps:[{duration:99,zone:4,label:'changed'}]});
-let resolved=vm.runInContext('(function(){'+resolveSource+'return {rawSession,baseDur};})()',c);
-assert.strictEqual(resolved.rawSession.steps[0].label,'saved');assert.strictEqual(resolved.baseDur,28);
-c.getEffectiveLoad=()=> 'easy';
-resolved=vm.runInContext('(function(){'+resolveSource+'return {rawSession,baseDur};})()',c);
-assert.strictEqual(resolved.rawSession.steps[0].label,'changed','restriction can resolve an easier template');
+// Saved snapshots remain canonical even when template defaults change.
+const P=require('../js/workout-prescription');
+const entry={discipline:'swim',load:'moderate',duration:28,templateWorkout:{duration:45,steps:[{duration:45,zone:2,label:'saved'}]}};
+const services={template:()=>({duration:99,steps:[{duration:99,zone:4,label:'changed'}]})};
+const resolved=P.resolve(entry,null,services);
+assert.strictEqual(resolved.session.steps[0].label,'saved');assert.strictEqual(resolved.duration,28);assert.strictEqual(resolved.session.steps[0].duration,28);
+const reduced=P.resolve(entry,{type:'injury',action:'reduce'},services);
+assert(reduced.session.steps.every(s=>s.zone===1));assert(reduced.duration<28);

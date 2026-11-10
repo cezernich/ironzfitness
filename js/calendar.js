@@ -449,28 +449,11 @@ const _CAL_V2_CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke-linecap="
 // week-view collection + day-detail render so a "no swim today"
 // restriction leaves the bike and run sessions intact.
 function _calV2IsSessionDisciplineRestricted(session, restriction) {
-  if (!session || !restriction) return false;
-  if (!Array.isArray(restriction.disciplines) || restriction.disciplines.length === 0) return false;
-  const raw = String(session.discipline || session.type || "").toLowerCase();
-  return restriction.disciplines.some(d => {
-    const r = String(d).toLowerCase();
-    if (r === raw) return true;
-    if (r === "swim" && (raw === "swimming")) return true;
-    if (r === "bike" && (raw === "cycling" || raw === "brick")) return true;
-    if (r === "run"  && (raw === "running")) return true;
-    if (r === "strength" && (raw === "weightlifting" || raw === "hyrox")) return true;
-    // Add-Running-Session enriched types all resolve to run
-    if (r === "run" && /^(long_run|tempo_threshold|track_workout|speed_work|hills|easy_recovery|endurance|fun_social)$/.test(raw)) return true;
-    return false;
-  });
+  return !!(session && Array.isArray(restriction?.disciplines)
+    && restriction.disciplines.length && WorkoutPrescription.isRemoved(session,restriction));
 }
 
-// Rest-flag detector: threshold-week plans (and some other flows)
-// emit plan entries with load:"rest" / discipline:"rest" / type:"rest"
-// as placeholders for a rest day. These aren't real sessions, so
-// they shouldn't render as workout circles or intensity dots — a
-// day with only a rest entry should just show "REST" like an empty
-// day, not a strength icon.
+// Rest placeholders are not training sessions or workout circles.
 function _calV2IsRestEntry(e) {
   if (!e) return false;
   const load = String(e.load || "").toLowerCase();
@@ -1856,21 +1839,17 @@ function buildIntensityStrip(session, cardId, discipline) {
  * Used to apply progressive run durations stored on plan entries.
  */
 function scaleSessionDuration(session, targetDuration) {
-  if (session && targetDuration === 0) return { ...session, duration: 0, steps: [] };
-  if (!targetDuration || !session || !Array.isArray(session.steps)) return session;
-  const actual = session.steps.reduce((sum, step) => sum +
-    Number(step.duration || 0) * (step.reps || 1) + Number(step.rest || 0) * Math.max(0, (step.reps || 1) - 1), 0);
-  if (!(actual > 0)) return session;
-  const scale = targetDuration / actual;
-  return {
-    ...session,
-    duration: targetDuration,
-    steps: session.steps.map(s => ({
-      ...s,
-      duration: s.duration * scale,
-      ...(s.rest != null ? { rest: s.rest * scale } : {}),
-    })),
-  };
+  return WorkoutPrescription.scale(session, targetDuration);
+}
+
+// All cards, totals and exports resolve the same effective prescription.
+function resolveEffectivePrescription(entry, restriction) {
+  return WorkoutPrescription.resolve(entry, restriction, {
+    fromLibrary: _librarySessionSteps,
+    template: (discipline, load, week, date) => (typeof getSessionTemplate === 'function'
+      ? getSessionTemplate(discipline, load, week, date) : null)
+      || (SESSION_DESCRIPTIONS[discipline] || {})[load] || null,
+  });
 }
 
 // Convert a library workout (warmup / main_set / cooldown) into the
@@ -2025,7 +2004,7 @@ function buildStepsList(session, discipline) {
 
   // For brick sessions, infer bike-vs-run discipline from position around the
   // T1 transition marker so each step can be tagged with a colored chip.
-  const isBrick = discipline === "brick";
+  const isBrick = discipline === "brick" && !session.suppressBrickLegTags;
   let _seenT1 = false;
   return session.steps.map(step => {
     const isT1      = step.note === "T1";
@@ -2062,7 +2041,7 @@ function buildStepsList(session, discipline) {
     }
     // For brick run segments, show pace from the running zones rather than
     // the bike-watts label that the outer `zones` lookup returns.
-    let zData = zones ? zones[`z${step.zone}`] : null;
+    let zData = !session.suppressTargets && zones ? zones[`z${step.zone}`] : null;
     if (brickDisc === "run") {
       zData = null; // Missing run benchmarks must never fall back to bike watts.
       try {
@@ -2635,7 +2614,15 @@ function _ovflDeleteItem(onclickExpr) {
 // that handler runs in the capture phase and calls stopPropagation,
 // which would prevent our onclick from firing and leave the overflow
 // menu stuck open behind the share sheet.
+function effectiveShareEntry(entry) {
+  const restriction=entry?.date?getDataForDate(entry.date).restriction:null;
+  entry=WorkoutPrescription.normalizeEntry(entry,restriction);
+  if(!entry?.discipline||!entry.load||entry.isCompletion||entry.completedAt||entry.source==='strava')return entry;
+  return WorkoutPrescription.snapshot(entry,resolveEffectivePrescription(entry,restriction));
+}
+
 function _ovflShareItem(entry) {
+  entry = effectiveShareEntry(entry);
   if (!entry) return "";
   try {
     const cacheKey = "cal" + (++_calShareSeq);
@@ -2655,6 +2642,7 @@ function _ovflShareItem(entry) {
 // Saved Workouts tab. Available on every workout card type so coaches +
 // users can both stash plans they want to reuse.
 function _ovflSaveToLibraryItem(entry) {
+  entry = effectiveShareEntry(entry);
   if (!entry) return "";
   try {
     const cacheKey = "cal" + (++_calShareSeq);
@@ -3896,7 +3884,6 @@ function _estimateRunKm(effortKey, durationMin) {
 function getDayTotals(dateStr) {
   const data = getDataForDate(dateStr);
   const restriction = data.restriction;
-  const sessionRemoved = restriction && (restriction.action === "remove" || getEffectiveLoad("easy", restriction) === "rest");
   let totalMin = 0, totalKm = 0;
   const sportKm = {};   // { run, bike, swim } → km
   const _addKm = (sport, km) => {
@@ -3907,7 +3894,6 @@ function getDayTotals(dateStr) {
     if (key) sportKm[key] = (sportKm[key] || 0) + km;
     totalKm += km;
   };
-  if (sessionRemoved) return { totalMin, totalKm, sportKm };
 
   if (data.planEntry) {
     const p = data.planEntry;
@@ -3919,32 +3905,17 @@ function getDayTotals(dateStr) {
     if (actual > 0) {
       totalMin += actual;
     } else {
-      // BUGFIX: card badge reads getRestrictedDuration(session.duration, ...)
-      // where session is the looked-up template. Day total used to read
-      // p.duration directly — a brick template with session.duration:120
-      // and p.duration:117 (sessionLen × 1.3) split the badge from the
-      // total. Use the template's duration as the basis when it's set so
-      // the two stay in sync.
-      const effectLoad    = getEffectiveLoad(p.load, restriction);
-      const rawSession    = (effectLoad === p.load && p.templateWorkout) || (typeof getSessionTemplate === "function"
-                              ? (getSessionTemplate(p.discipline, effectLoad, p.weekNumber, dateStr)
-                                 || getSessionTemplate(p.discipline, p.load, p.weekNumber, dateStr))
-                              : null)
-                         || (SESSION_DESCRIPTIONS[p.discipline] || {})[effectLoad]
-                         || (SESSION_DESCRIPTIONS[p.discipline] || {})[p.load];
-      const baseDur       = p.duration || (rawSession && rawSession.duration);
-      const targetDur     = getRestrictedDuration(baseDur, p.load, restriction);
-      const scaledSession = rawSession ? scaleSessionDuration(rawSession, targetDur) : rawSession;
-      if (scaledSession?.duration) totalMin += _parseDurMin(scaledSession.duration);
-      else if (targetDur)          totalMin += _parseDurMin(targetDur);
+      totalMin += resolveEffectivePrescription(p, restriction).duration || 0;
     }
   }
 
-  data.scheduledWorkouts.forEach(w => {
+  data.scheduledWorkouts.forEach(original => {
+    const w=WorkoutPrescription.normalizeEntry(original,restriction);
     // Actual logged duration (from completion) wins over any estimate.
     // scheduled workouts use session id `session-sw-${w.id}`.
     const actual = _parseDurMin(String(_getCompletionDuration(`session-sw-${w.id}`) || ""));
     if (actual > 0) { totalMin += actual; return; }
+    if(WorkoutPrescription.isRemoved(w,restriction))return;
 
     // For sessions backed by a discipline+load template, the card badge
     // reads the TEMPLATE's duration (e.g. brick.moderate → 120 min). The
@@ -3954,11 +3925,8 @@ function getDayTotals(dateStr) {
     // heuristic missed. Mirror the planEntry path (above) and prefer the
     // template's duration when one exists so badge + day total reconcile.
     if (w.discipline && w.load) {
-      const session = (typeof getSessionTemplate === "function"
-                        ? getSessionTemplate(w.discipline, w.load, w.weekNumber, w.date)
-                        : null)
-                    || (SESSION_DESCRIPTIONS[w.discipline] || {})[w.load];
-      if (session?.duration) { totalMin += _parseDurMin(session.duration); return; }
+      totalMin += resolveEffectivePrescription(w, restriction).duration || 0;
+      return;
     }
 
     // Strength sessions: the card badge prefers the computed estimate
@@ -4373,6 +4341,16 @@ async function renderDayDetail(dateStr) {
   }
 }
 
+// Historical completion cards remain visible when future prescriptions are blocked.
+function buildLoggedWorkoutsForDay(data,dateStr) {
+  return data.loggedWorkouts.map(w=>{
+    const actual=w.isCompletion===true||w.source==='strava'||!!w.completedAt
+      || isSessionComplete(`session-log-${w.id}`);
+    if(!actual&&WorkoutPrescription.isRemoved(w,data.restriction))return '';
+    return buildLoggedWorkoutCard(w,dateStr,actual?null:data.restriction);
+  }).join('');
+}
+
 function _renderDayDetailInner(dateStr, content, preloadedData) {
   const data        = preloadedData || getDataForDate(dateStr);
   const displayDate = formatDisplayDate(dateStr);
@@ -4526,12 +4504,11 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
   // today" — don't render a session card for them and don't count
   // them toward allSessionsCount, otherwise the day detail shows a
   // strength-icon card labeled "Rest" on every threshold rest day.
-  const planEntryIsRest = data.planEntry && (_calV2IsRestEntry(data.planEntry)
-    || (data.restriction?.type === "rest" && data.restriction.action === "reduce"));
+  const planEntryIsRest = data.planEntry && WorkoutPrescription.isRemoved(data.planEntry,data.restriction);
   const planEntryIsDiscRestricted = data.planEntry && _calV2IsSessionDisciplineRestricted(data.planEntry, data.restriction);
   const effectivePlanEntry = (planEntryIsRest || planEntryIsDiscRestricted) ? null : data.planEntry;
-  const nonRestScheduled = data.scheduledWorkouts.filter(w =>
-    !_calV2IsRestEntry(w) && !(data.restriction?.type === "rest" && data.restriction.action === "reduce") && !_calV2IsSessionDisciplineRestricted(w, data.restriction)
+  const nonRestScheduled = data.scheduledWorkouts.map(w => WorkoutPrescription.normalizeEntry(w,data.restriction)).filter(w =>
+    !_calV2IsRestEntry(w) && !WorkoutPrescription.isRemoved(w,data.restriction) && !_calV2IsSessionDisciplineRestricted(w, data.restriction)
   );
   const allSessionsCount = (effectivePlanEntry ? 1 : 0) + nonRestScheduled.length + data.loggedWorkouts.length;
 
@@ -4556,60 +4533,11 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
       const icon        = DISCIPLINE_ICONS[p.discipline] || ICONS.weights;
       const color       = DISCIPLINE_COLORS[p.discipline] || "var(--color-accent)";
       const cardId      = `session-plan-${dateStr}-${p.raceId}`;
-      const sessionRestriction = Array.isArray(data.restriction?.disciplines)
-        && !_calV2IsSessionDisciplineRestricted(p, data.restriction) ? null : data.restriction;
-      const effectLoad     = getEffectiveLoad(p.load, sessionRestriction);
-      const targetDuration = getRestrictedDuration(p.duration, p.load, sessionRestriction);
-      const isReduced      = effectLoad !== p.load || targetDuration !== p.duration;
-      // Use edited overrides if present on the plan entry, otherwise fall back to SESSION_DESCRIPTIONS
-      let rawSession;
-      if (p.aiSession) {
-        // Plan entry was edited — build a session object from the saved intervals
-        const _ivs = p.aiSession.intervals || [];
-        const _steps = _ivs.map((iv, idx) => {
-          let zone = iv.effort || "Z2";
-          if (typeof zone === 'string' && zone.startsWith("Z")) zone = parseInt(zone.slice(1)) || 2;
-          const type = iv.type || (idx === 0 ? "warmup" : idx === _ivs.length - 1 ? "cooldown" : "main");
-          const step = { type, label: iv.name, duration: parseInt(iv.duration) || 0, zone };
-          if (iv.reps && iv.reps > 1) { step.reps = iv.reps; }
-          if (iv.restDuration) { step.rest = parseInt(iv.restDuration) || 0; }
-          return step;
-        });
-        const _totalMin = _steps.reduce((s, st) => s + (st.duration * (st.reps || 1)) + ((st.rest || 0) * Math.max(0, (st.reps || 1) - 1)), 0);
-        rawSession = {
-          name: p.aiSession.title || p.sessionName,
-          duration: targetDuration || p.duration || _totalMin,
-          steps: _steps,
-        };
-      } else if (p.libraryWorkout && p.libraryWorkout.main_set
-                 && p.discipline !== "strength"
-                 && _librarySessionSteps(p.libraryWorkout)) {
-        // The plan pulled a parameterized workout from the library but the
-        // renderer was still reading SESSION_DESCRIPTIONS / SESSION_VARIANTS,
-        // so a title like "Long Run with Race-Pace Finish" rendered with the
-        // generic "Z2 throughout" main set and the race-pace block silently
-        // disappeared. Build the session steps from the library's actual
-        // main_set (+warmup/cooldown) when one is attached.
-        rawSession = _librarySessionSteps(p.libraryWorkout);
-      } else {
-        rawSession = (effectLoad === p.load && p.templateWorkout) || (typeof getSessionTemplate === "function"
-                       ? (getSessionTemplate(p.discipline, effectLoad, p.weekNumber, dateStr)
-                          || getSessionTemplate(p.discipline, p.load, p.weekNumber, dateStr))
-                       : null)
-                  || (SESSION_DESCRIPTIONS[p.discipline] || {})[effectLoad]
-                  || (SESSION_DESCRIPTIONS[p.discipline] || {})[p.load];
-      }
-      // Restrictions apply to the actual prescription, including library and
-      // edited workouts. An easy restriction cannot retain threshold intervals.
-      if (effectLoad === "easy" && (isReduced || sessionRestriction?.action === "reduce")
-          && (p.discipline !== "strength" || ["injury", "sick"].includes(sessionRestriction?.type))) {
-        rawSession = { name: "Easy session", duration: targetDuration,
-          steps: [{ type: "main", duration: targetDuration, zone: 1,
-            label: p.discipline === "strength"
-              ? "Recovery only: no loaded lifting prescribed; follow your activity clearance"
-              : "Easy effort throughout; follow your return-to-training clearance" }] };
-      }
-      const session = rawSession ? scaleSessionDuration(rawSession, targetDuration) : rawSession;
+      const resolved = resolveEffectivePrescription(p, data.restriction);
+      const effectLoad = resolved.load;
+      const targetDuration = resolved.duration;
+      const isReduced = effectLoad !== p.load || targetDuration !== p.duration;
+      const session = resolved.session;
       const intensLabel = getIntensityLabel(effectLoad);
       const intensClass = getIntensityClass(effectLoad);
 
@@ -4642,7 +4570,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
             <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
               ${_planLeadCheck}<span class="session-icon" style="color:${color}">${icon}</span>
               <div class="session-meta">
-                <div class="session-name">${p.sessionName}${_planDoneIndicator}</div>
+                <div class="session-name">${escHtml(session?.name || p.sessionName || "Workout")}${_planDoneIndicator}</div>
                 <div class="session-phase">${p.phase} · Week ${p.weekNumber}</div>
               </div>
               <div class="session-header-right">
@@ -4695,7 +4623,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
             <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
               ${_planLeadCheck}<span class="session-icon" style="color:${color}">${icon}</span>
               <div class="session-meta">
-                <div class="session-name">${p.sessionName}${_planDoneIndicator}</div>
+                <div class="session-name">${escHtml(session?.name || p.sessionName || "Workout")}${_planDoneIndicator}</div>
                 <div class="session-phase">${p.phase} · Week ${p.weekNumber}</div>
               </div>
               <div class="session-header-right">
@@ -4724,7 +4652,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
             <div class="session-card-header session-card-toggle" onclick="toggleSection('${cardId}')">
               ${_planLeadCheck}<span class="session-icon" style="color:${color}">${icon}</span>
               <div class="session-meta">
-                <div class="session-name">${p.sessionName}${_planDoneIndicator}</div>
+                <div class="session-name">${escHtml(session?.name || p.sessionName || "Workout")}${_planDoneIndicator}</div>
                 <div class="session-phase">${p.phase} · Week ${p.weekNumber}</div>
               </div>
               <div class="session-header-right">
@@ -4748,68 +4676,15 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
 
       // Rich rendering for sessions with discipline + load (running philosophy)
       if (w.discipline && w.load) {
-        const effectLoad     = getEffectiveLoad(w.load, data.restriction);
-        // Always look up the template — used as the source of truth for the
-        // session's intended total duration (the badge), and as a fallback
-        // for any rest period the legacy editor seed silently dropped.
-        const _tpl = (typeof getSessionTemplate === "function"
-                       ? getSessionTemplate(w.discipline, effectLoad, w.weekNumber, dateStr)
-                       : null)
-                  || (SESSION_DESCRIPTIONS[w.discipline] || {})[effectLoad];
-        // If the user edited this session in the workout editor, the saved
-        // aiSession.intervals are the source of truth for *zone* and *label*
-        // — but we still keep the template's duration so the badge stays at
-        // the planner's intended target instead of dropping to whatever the
-        // edited steps happen to sum to.
-        let session;
-        if (w.aiSession && Array.isArray(w.aiSession.intervals) && w.aiSession.intervals.length) {
-          const _ivs = w.aiSession.intervals;
-          const _tplSteps = (_tpl && Array.isArray(_tpl.steps)) ? _tpl.steps : [];
-          const _steps = _ivs.map((iv, idx) => {
-            let zone = iv.effort || "Z2";
-            if (typeof zone === 'string' && zone.startsWith("Z")) zone = parseInt(zone.slice(1)) || 2;
-            const type = iv.type || (idx === 0 ? "warmup" : idx === _ivs.length - 1 ? "cooldown" : "main");
-            // Render-time migration of stale brick-run labels: an earlier
-            // version of the moderate-brick template had "cadence 85+"
-            // (cycling RPM mistakenly carbon-copied onto the run leg).
-            // Edits saved against that template froze the wrong text into
-            // aiSession.intervals; rewrite it here so the card displays
-            // the corrected running-cadence target.
-            const _label = (iv.name || "").replace(/cadence\s+85\+?(?!\s*spm)/g, "cadence 170+ spm");
-            const step = { type, label: _label, duration: parseInt(iv.duration) || 0, zone };
-            // Recover the brick T1 marker from the interval name — the
-            // editor seed doesn't preserve `note`, so detect it from the
-            // "T1 …" label so buildStepsList still tags transitions.
-            if (/^\s*T1\b/i.test(step.label)) step.note = "T1";
-            if (iv.reps && iv.reps > 1) step.reps = iv.reps;
-            if (iv.restDuration) {
-              step.rest = parseInt(iv.restDuration) || 0;
-            } else if (step.reps && step.reps > 1 && _tplSteps[idx] && typeof _tplSteps[idx].rest === "number") {
-              // Self-heal: the legacy editor seed dropped step.rest because
-              // it read step.restDuration (which doesn't exist on templates).
-              // Fall back to the template's rest so the bike main set still
-              // renders "2 × 25 min (5 min rest)" instead of swallowing the
-              // rest period.
-              step.rest = _tplSteps[idx].rest;
-            }
-            return step;
-          });
-          const _totalMin = _steps.reduce((s, st) => s + (st.duration * (st.reps || 1)) + ((st.rest || 0) * Math.max(0, (st.reps || 1) - 1)), 0);
-          const _tplDur = _tpl && typeof _tpl.duration === "number" ? _tpl.duration : null;
-          session = {
-            name: w.aiSession.title || w.sessionName || "",
-            duration: _tplDur != null ? _tplDur : _totalMin,
-            steps: _steps,
-            _fromEdit: true,
-          };
-        } else {
-          session = _tpl;
-        }
-        const intensLabel    = getIntensityLabel(effectLoad);
-        const intensClass    = getIntensityClass(effectLoad);
+        const resolved = resolveEffectivePrescription(w, data.restriction);
+        if(resolved.removed)return;
+        const effectLoad = resolved.load;
+        const session = resolved.session;
+        const intensLabel = getIntensityLabel(effectLoad);
+        const intensClass = getIntensityClass(effectLoad);
         if (session) {
-          const targetDuration = getRestrictedDuration(session.duration, w.load, data.restriction);
-          const isReduced      = effectLoad !== w.load || targetDuration !== session.duration;
+          const targetDuration = resolved.duration;
+          const isReduced = effectLoad !== w.load || targetDuration !== w.duration;
           // Override swim → "swimming" so _buildDistanceField hits the
           // m/yd toggle instead of the discipline map's "triathlon"
           // → mi/km fallback. See _planCompType comment above.
@@ -4853,7 +4728,7 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
                 </div>
               </div>
               ${buildIntensityStrip(session, cardId, w.discipline)}
-              <div class="card-body">${_buildCoachNotesBlock(w)}${buildStepsList(session, w.discipline)}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(session.duration, session.name, { load: w.load || effectLoad, discipline: w.discipline }) : ""}${buildWorkoutExplanation(session, dateStr, w.discipline, effectLoad, w.sessionName, w)}${_swMovePanel}${_swCompletion}</div>
+              <div class="card-body">${_buildCoachNotesBlock(w)}${buildStepsList(session, w.discipline)}${typeof renderFuelingPlanHTML === "function" ? renderFuelingPlanHTML(session.duration, session.name, { load: effectLoad, discipline: w.discipline }) : ""}${buildWorkoutExplanation(session, dateStr, w.discipline, effectLoad, w.sessionName, w)}${_swMovePanel}${_swCompletion}</div>
             </div>`;
           return;
         }
@@ -5185,16 +5060,13 @@ function _renderDayDetailInner(dateStr, content, preloadedData) {
         </div>`;
     });
 
-    // Manually-added sessions (same position as everything else)
-    data.loggedWorkouts.forEach(w => {
-      html += buildLoggedWorkoutCard(w, dateStr, data.restriction);
-    });
-
     // Rest day — only if truly nothing planned
     if (allSessionsCount === 0) {
       html += `<div class="rest-day-badge">${ICONS.moon} Rest Day</div>`;
     }
   }
+
+  html += buildLoggedWorkoutsForDay(data,dateStr);
 
   // Restriction suggestion note (only for "reduce", not "remove")
   if (data.restriction && data.restriction.action !== "remove" && allSessionsCount > 0) {
@@ -5530,25 +5402,10 @@ function renderNutritionProgressBars(dateStr) {
 // ─── Meal plan renderer (called on load + after every slider adjustment) ──────
 
 function getEffectiveLoad(load, restriction) {
-  if (!restriction) return load;
-  if (restriction.action === "remove") return "rest";
-  if (restriction.action !== "reduce") return load;
-  switch (restriction.type) {
-    case "rest":    return "rest";
-    case "injury":
-    case "sick":    return load === "rest" ? "rest" : "easy";
-    case "fatigue": return (load === "hard" || load === "long") ? "moderate" : (load === "moderate" ? "easy" : load);
-    case "time":    return (load === "hard" || load === "long") ? "moderate" : load;
-    default:        return load;
-  }
+  return WorkoutPrescription.effectiveLoad(load, restriction);
 }
-
-/** Returns a shortened duration when a "reduce" restriction is active. */
 function getRestrictedDuration(duration, originalLoad, restriction) {
-  if (!duration || !restriction || restriction.action !== "reduce") return duration;
-  const multipliers = { long: 0.60, hard: 0.65, moderate: 0.70, strides: 0.75, easy: 0.65 };
-  if (getEffectiveLoad(originalLoad, restriction) === "rest") return 0;
-  return Math.min(duration, Math.max(15, Math.round(duration * (multipliers[originalLoad] || 0.70))));
+  return WorkoutPrescription.restrictedDuration(duration, originalLoad, restriction);
 }
 
 /**
