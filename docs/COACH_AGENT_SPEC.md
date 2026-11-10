@@ -1,6 +1,6 @@
 # IronZ Adaptive Coach: Spec v0.3 (draft for review)
 
-Status: **draft, nothing built.** v0.2 adds Chase's decisions and the research behind the auto-adjust limits (section 14). v0.3 adds measured hydration, sweat tests, and fueling prescriptions (section 15). Written 2026-11-09 by Claude for review by Codex and approval by Chase. No app code changes until this is approved.
+Status: **draft, nothing built.** Owner scope checkpoint (2026-11-10): adaptive coaching remains paused. This document is not implementation approval; the current planner acts only on explicit athlete/clinician restrictions.  v0.2 adds Chase's decisions and the research behind the auto-adjust limits (section 14). v0.3 adds measured hydration, sweat tests, and fueling prescriptions (section 15). Written 2026-11-09 by Claude for review by Codex and approval by Chase. No app code changes until this is approved.
 
 Source: a working personal coaching agent the owner has run daily since Oct 2026 (Claude + Strava + Intervals.icu wellness synced from Garmin + calendar). This doc keeps that agent's **method only**. Personal data (health history, current numbers, schedule, locations, account IDs, connector URLs) is deliberately excluded because this repo is public. Do not add it.
 
@@ -235,7 +235,7 @@ Privacy: wellness data is used only to coach the athlete it belongs to, never sh
 ## 9. Guardrails (always override the push)
 
 From the agent, and they mostly match the master spec:
-- Run volume up no more than about 10% a week; long run no more than about 30% of weekly run volume.
+- Use the master spec’s completed-history run-growth ceilings and concentration warnings; see the superseding scope decision in 16.
 - Total hours up no more than 10 to 15% a week, except after a recovery week.
 - Every 4th week is a recovery week.
 - Quality sessions: max 2 a week in base, 3 in build. No back-to-back hard days.
@@ -424,6 +424,26 @@ For sessions over 75 min, and for the day before a long or key session:
 - Update master spec 11e when built (spec sync rule).
 
 Sources: 150% replacement with sodium is the standard rehydration finding (Shirreffs and Maughan; [Maughan, Dairy Council talk](https://www.dairycouncil.co.uk/assets/files/sports-nutrition/2011/Prof-Ron-Maughan---Milk-and-Rehydration-BELFAST-Nov-11.pdf); [GSSI practical guide](https://positivecoach.org/wp-content/uploads/understanding-electrolytes-hydration.pdf)); sodium reduces urine loss after rehydration ([Merson et al. 2008](https://springerlink.bibliotecabuap.elogim.com/content/pdf/10.1007/s00421-008-0748-0.pdf)).
+
+---
+
+## 16. Deferred readiness and calendar decisions (owner scope checkpoint)
+
+**Spec only. Do not implement in the planner or treat these proposals as medical rules.** Reopen adaptive coaching separately after reliable wellness ingestion (including the Apple Health input work), domain review, approval of this spec, and reviewed data-quality/consent behavior. Missing data must remain unknown; a manually entered number or absent data is not a reliable automatic-readiness feed.
+
+The following remain candidate rules for that later review, preserving the proposals in 5a:
+
+- Resting HR at least 5 bpm above the athlete's own established baseline for three days.
+- HRV well below the athlete's own normal range for several days; the exact sustained-trigger definition and baseline method need review, rather than a guessed population cutoff.
+- Sleep below 6.5 hours on two or more nights.
+- Athlete-reported pain above 3/10 persisting 48 hours, plus the sharp/gait-changing pain reporting safeguards already proposed in 5a.
+- Reported illness symptoms below the neck as a candidate escalation input. The app must not diagnose illness or infer medical clearance from symptom resolution.
+
+These are proposals to review, not clinically validated decision thresholds or permission for an automatic session change. Explicit dated athlete reports and clinician restrictions are planner inputs now: remove the stated sports/exercises over the stated dates and respect the recorded return conditions. Do not infer a different restriction, clearance or sport substitution from wearable readings. The shared Rule Engine-owned restriction boundary serves either engine; live planner calls are adapters, not another rule implementation.
+
+The calendar-aware offer to take a light day and a seventh-day readiness switch remain written proposals only. They depend on reliable availability, completed history and wellness. A future optional seventh-day session would be capped 30–45 min Z1, non-impact, never a run; it would not count as a missed key session or a streak failure. Recovery/return restrictions and reviewed readiness rules would take precedence. None of this changes the current planner's recovery-day policy.
+
+The former 30% long-run proportion guardrail in 9 is superseded by the owner's completed-history policy in the master plan spec: recent completed running anchors growth, brick run minutes count weekly but not as a standalone long-run anchor, and concentration is a warning. Adaptive coaching must not reintroduce the retired hard percentage cap.
 
 ---
 
