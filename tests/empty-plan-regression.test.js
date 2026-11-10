@@ -5,7 +5,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const root = process.env.IRONZ_TEST_SOURCE || path.resolve(__dirname, '..');
+let qaCase=0;
+const watchdog=setTimeout(()=>{console.error("FAIL: async regression did not complete, case"+qaCase);process.exit(1);},10000);
 function setup() {
+  qaCase++;
   const store = new Map(), remote = new Map(), alerts = [], writes = [];
   let rejectSave = false, quotaKey = null, savingGate = null, authUid = 'synthetic-a';
   const nodes = new Map();
@@ -161,5 +164,6 @@ async function until(check, message) {
     assert.equal(h.remote.get('trainingPlan'),h.store.get('trainingPlan'),'late old write cannot overwrite replacement');
     assert.ok(h.read('trainingPlan').length>20);
   }
+  clearTimeout(watchdog);
   console.log('PASS: onboarding aliases, generation failures, prior-plan preservation, checked persistence, double-click and non-race flows');
 })().catch(e=>{console.error(e);process.exitCode=1;});

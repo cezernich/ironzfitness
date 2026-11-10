@@ -10,7 +10,7 @@
 
   const MS_PER_DAY = 24 * 60 * 60 * 1000;
   const RACE_PREP_WINDOW_DAYS = 56; // 8 weeks
-  const RACE_TAPER_WINDOW_DAYS = 14; // hard constraint: never inside this window
+  const RACE_TAPER_WINDOW_DAYS = 30; // hard constraint: never inside this window
   const MIN_BUILD_WEEKS_BETWEEN = 3;
 
   const PHASE_DEFAULT_CADENCE = {
@@ -28,7 +28,7 @@
   }
 
   function toDateStr(d) {
-    return d.toISOString().slice(0, 10);
+    return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
   }
 
   function addDays(d, days) {
@@ -91,8 +91,8 @@
   // ─── Race window guard ───────────────────────────────────────────────────────
 
   /**
-   * If a candidate threshold week would land within 14 days of a goal A race, push it
-   * back to before the window (or return null if there's no room).
+   * If a candidate threshold week would land inside30days of an A race, omit it. Never move a test earlier
+   * merely to squeeze it in before a race.
    */
   function applyRaceWindowGuard(candidateMonday, raceDate) {
     if (!raceDate) return candidateMonday;
@@ -107,9 +107,7 @@
     if (candidateMonday > race) {
       return candidateMonday; // after the race entirely, fine
     }
-    // Push back so the threshold week ends strictly before the forbidden window starts.
-    const pushedMonday = mondayOf(addDays(earliestForbidden, -7));
-    return pushedMonday;
+    return null; // Drop the scheduled week; retain last-known thresholds.
   }
 
   // ─── Min-build-between guard ─────────────────────────────────────────────────
@@ -151,11 +149,17 @@
 
     candidate = applyMinBuildGuard(candidate, lastThresholdWeekDate);
 
-    const raceDate = userProfile && userProfile.goal_race_date
-      ? toDate(userProfile.goal_race_date)
-      : null;
-
-    const guarded = applyRaceWindowGuard(candidate, raceDate);
+    const events = Array.isArray(userProfile && userProfile.races) ? userProfile.races : [];
+    const aRaces = events.filter(event => event && String(event.priority || "A").toUpperCase()==="A").map(event=>event.date);
+    if (userProfile && userProfile.goal_race_date && String(userProfile.goal_race_priority || "A").toUpperCase()==="A") {
+      aRaces.push(userProfile.goal_race_date);
+    }
+    let guarded = candidate;
+    for (const date of aRaces) {
+      guarded = applyRaceWindowGuard(candidate, date);
+      if (!guarded) return { thresholdWeekStartDate:null,cadenceUsed:cadence,phase,reason:"no_slot_before_race" };
+    }
+    const raceDate = aRaces.length ? toDate(aRaces[0]) : null;
 
     // If guarded was pushed back so far it's before lastThresholdWeekDate + min build,
     // there is no valid slot before the race.

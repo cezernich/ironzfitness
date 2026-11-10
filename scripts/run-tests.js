@@ -15,14 +15,7 @@ const path = require("path");
 
 const ROOT = path.join(__dirname, "..");
 
-const QUARANTINE = {
-  "tests/diversification-tests.js":
-    "4 swim-set text expectations drifted from generator output (pre-Nov 2026). Decide: fix generator or update expectations.",
-  "tests/run-session-types-tests.js":
-    "12 run-session expectations (cruise intervals, track rotation, long-run cap) drifted from generator. Needs a spec decision.",
-  "tests/threshold-week-tests.js":
-    "2 test-day placement expectations (CSS Thu, FTP Fri/Sat) drifted from scheduler.",
-};
+const QUARANTINE = {}; // All three original behavioral suites are now enforced.
 
 const tests = fs
   .readdirSync(path.join(ROOT, "tests"))

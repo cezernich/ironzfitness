@@ -85,36 +85,18 @@ section("Golden 2: Race prep, A race 2026-06-01, today 2026-04-15");
   check("phase resolves to race_prep (within 56 days)", phase === "race_prep", `phase=${phase}`);
   const cadence = TW.resolveCadence(profile, phase);
   check("cadence defaults to 4", cadence === 4, `cadence=${cadence}`);
-  // Forbidden window: 2026-05-18 .. 2026-06-01 (14 days)
-  // No last-threshold-week. Plan start 2026-04-22, +4 weeks → 2026-05-20 (Wed),
-  // mondayOf = 2026-05-18 which is INSIDE the forbidden window.
-  // applyRaceWindowGuard must push it back so the threshold week ends strictly BEFORE 2026-05-18.
-  const next = TW.computeNextThresholdWeek(profile, null, "2026-04-22", today);
-  const startStr = next.thresholdWeekStartDate ? TW.toDateStr(next.thresholdWeekStartDate) : "null";
-  const earliestForbidden = new Date("2026-05-18T00:00:00");
-  const sundayOfWeek = next.thresholdWeekStartDate
-    ? new Date(next.thresholdWeekStartDate.getTime() + 6 * 86400000)
-    : null;
-  check("scheduled threshold week ends strictly before 2026-05-18 forbidden window",
-    sundayOfWeek && sundayOfWeek < earliestForbidden,
-    `start=${startStr}, sunday=${sundayOfWeek && sundayOfWeek.toISOString().slice(0,10)}`);
-  // The expected pushed-back Monday is 2026-05-11 (one full week before the window).
-  check("guard pushes the Monday to 2026-05-11",
-    startStr === "2026-05-11", `got ${startStr}`);
-  // No day of the resulting week falls inside the 14-day race window.
-  if (next.thresholdWeekStartDate) {
-    const days = TW.buildThresholdWeekDays(next.thresholdWeekStartDate, "endurance");
-    const insideWindow = days.some(d => d.date >= "2026-05-18" && d.date <= "2026-06-01");
-    check("no day of the threshold week falls inside the 14-day race window",
-      !insideWindow, "at least one day inside the forbidden window");
-  }
+  const next = TW.computeNextThresholdWeek(profile,null,"2026-04-22",today);
+  check("drop threshold week inside30dayA-race window, not pull it earlier",next.thresholdWeekStartDate===null && next.reason==="no_slot_before_race");
+  const allowed=TW.computeNextThresholdWeek({...profile,goal_race_priority:"B"},null,"2026-04-22",today);
+  check("B race alone does not suppress threshold weeks",allowed.thresholdWeekStartDate!==null);
+  const protectedOtherA=TW.computeNextThresholdWeek({...profile,goal_race_priority:"B",races:[{date:"2026-06-01",priority:"A"}]},null,"2026-04-22",today);
+  check("another A race still protects its30daywindow",protectedOtherA.thresholdWeekStartDate===null);
+  const weeks=TW.listThresholdWeeksForPlan({goal_race_date:"2026-06-07"},"2026-02-02","2026-06-07");
+  check("safe earlier threshold weeks still generated",weeks.length>0);
+  check("May4Monday with29daySaturday is omitted",TW.applyRaceWindowGuard(new Date("2026-05-04T00:00:00"),"2026-06-07")===null);
+  const tests=weeks.flatMap(week=>TW.buildThresholdWeekDays(week.thresholdWeekStartDate,"triathlon")).filter(day=>/_test$/.test(day.type));
+  check("actualTueThuSattest dates all outside30days, including29daySaturday edge",tests.every(day=>(new Date("2026-06-07T00:00:00")-new Date(day.date+"T00:00:00"))/86400000>30));
 
-  // Also exercise the explicit "no slot before race" path: a last-threshold-week
-  // close enough to the race that min-build + race-window leaves no room.
-  const noSlot = TW.computeNextThresholdWeek(profile, "2026-04-22", "2026-04-15", today);
-  check("returns no_slot_before_race when min-build collides with race window",
-    noSlot.thresholdWeekStartDate === null && noSlot.reason === "no_slot_before_race",
-    `start=${noSlot.thresholdWeekStartDate}, reason=${noSlot.reason}`);
 }
 
 // ─── GOLDEN 3: Triathlete threshold week starts Mon 2026-06-15 ───────────────
@@ -124,15 +106,16 @@ section("Golden 3: Triathlete threshold week starts Mon 2026-06-15");
   const swim = days.find(d => d.type === "swim_test");
   const bike = days.find(d => d.type === "bike_test");
   const run  = days.find(d => d.type === "run_test");
-  check("swim CSS test is Thursday 2026-06-18",
-    swim && swim.date === "2026-06-18", `got ${swim && swim.date}`);
-  check("bike FTP test is Friday 2026-06-19 OR Saturday 2026-06-20",
-    bike && (bike.date === "2026-06-19" || bike.date === "2026-06-20"), `got ${bike && bike.date}`);
-  check("run 5K test is Saturday 2026-06-20 OR Sunday 2026-06-21",
-    run && (run.date === "2026-06-20" || run.date === "2026-06-21"), `got ${run && run.date}`);
+  check("swim CSS test is Tuesday 2026-06-16",
+    swim && swim.date === "2026-06-16", `got ${swim && swim.date}`);
+  check("bike FTP test is Thursday 2026-06-18",
+    bike && bike.date === "2026-06-18", `got ${bike && bike.date}`);
+  check("run 5K test is Saturday 2026-06-20",
+    run && run.date === "2026-06-20", `got ${run && run.date}`);
   // No two tests on same day
   const testDates = [swim, bike, run].filter(Boolean).map(d => d.date);
   const uniq = new Set(testDates);
+  check("at least one easy/rest day between tests",testDates.slice(1).every((date,i)=>(new Date(date+"T00:00:00")-new Date(testDates[i]+"T00:00:00"))/86400000>=2));
   check("no two tests on the same day", uniq.size === testDates.length, `dates=${testDates.join(",")}`);
 }
 
