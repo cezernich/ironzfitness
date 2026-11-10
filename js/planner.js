@@ -2190,7 +2190,7 @@ function _raceSchedulingConstraints(race) {
     const slots = template[dayNames[dow]] || [];
     return slots.some(code => String(code).split("-")[0] === discipline);
   };
-  return { daysPerWeek: race.daysPerWeek || prefs.daysPerWeek, canSchedule, explicitTemplate: !!template };
+  return { daysPerWeek: race.daysPerWeek || prefs.daysPerWeek, canSchedule, explicitTemplate: !!template, raceDate: race.date };
 }
 
 // Threshold-week tests start on default weekdays (Tue FTP, Thu CSS, Sat 5K)
@@ -2198,8 +2198,9 @@ function _raceSchedulingConstraints(race) {
 // its Mon-Sun week, to a day the athlete trains that sport, with the spacing
 // rules in ThresholdWeekScheduler.minTestGap (bike and run tests two full
 // days apart; anything else one easy day apart). Weeks that can't hold their
-// tests are postponed at scheduling time (listThresholdWeeksForPlan), so a
-// test is dropped here only after postponement ran out, and that is logged.
+// tests are postponed at scheduling time (listThresholdWeeksForPlan). If a
+// single test still can't fit, it moves to the earliest valid day next week;
+// only when that fails is it dropped (logged; zones stay at last value).
 function _relocateThresholdTests(entries, constraints) {
   if (!constraints || typeof constraints.canSchedule !== "function") return entries;
   const TW = (typeof window !== "undefined" && window.ThresholdWeekScheduler) || null;
@@ -2215,6 +2216,7 @@ function _relocateThresholdTests(entries, constraints) {
 
   const gap = (a, b) => Math.abs(TW.diffDays(new Date(a + "T00:00:00"), new Date(b + "T00:00:00")));
   const moves = new Map(); // test entry -> new date (or null = no valid day)
+  const spilled = new Set();
   for (const [monday, tests] of weeks) {
     let chosen = TW.bestTestLayout(monday, tests, constraints.canSchedule);
     if (!chosen) {
@@ -2229,25 +2231,43 @@ function _relocateThresholdTests(entries, constraints) {
         chosen.push(d);
       });
     }
+    // A test that can't fit this week moves to the earliest day next week
+    // where the athlete trains that sport, still spaced from this week's
+    // tests and outside the 30-day pre-race window (owner rule, 9 Nov).
+    tests.forEach((t, i) => {
+      if (chosen[i]) return;
+      const nextMon = TW.toDateStr(TW.addDays(TW.mondayOf(monday), 7));
+      const spill = [0,1,2,3,4,5,6].map(k => TW.toDateStr(TW.addDays(new Date(nextMon + "T00:00:00"), k)))
+        .filter(x => constraints.canSchedule(x, t.discipline))
+        .filter(x => !constraints.raceDate || gap(x, constraints.raceDate) > 30)
+        .find(x => chosen.every((c, j) => !c || gap(c, x) >= TW.minTestGap(tests[j].discipline, t.discipline)));
+      if (spill) { chosen[i] = spill; spilled.add(t); }
+    });
     tests.forEach((t, i) => moves.set(t, chosen[i]));
   }
 
   const testTargets = new Set([...moves.values()].filter(Boolean));
+  const spillDates = new Set([...spilled].map(t => moves.get(t)));
   const out = [];
   for (const e of entries) {
     if (isTest(e)) {
       const to = moves.get(e);
       if (!to) continue; // no valid day this week; reported below
-      out.push(to === e.date ? e : { ...e, date: to, relocatedFrom: e.date });
+      const moved = to === e.date ? e : { ...e, date: to, relocatedFrom: e.date };
+      if (spilled.has(e)) moved.movedToNextWeek = true;
+      out.push(moved);
       continue;
     }
-    // A test takes the whole day inside its threshold week.
+    // A test takes the whole day: inside its threshold week, and on the
+    // next-week day a spilled test lands on.
     if (e.isThresholdWeek && testTargets.has(e.date)) continue;
+    if (spillDates.has(e.date) && e.discipline !== "race" && e.phase !== "Race") continue;
     out.push(e);
   }
   const dropped = [...moves.entries()].filter(([, d]) => !d).map(([t]) => t.thresholdTestType || t.discipline);
   if (dropped.length && typeof console !== "undefined") {
-    console.warn("[IronZ][plan-gen] threshold tests with no schedulable day were omitted:", dropped);
+    // Zones for these sports stay at their last value until the next test week.
+    console.warn("[IronZ][plan-gen] threshold tests with no schedulable day were omitted (zones not refreshed):", dropped);
   }
   return out;
 }

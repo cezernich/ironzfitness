@@ -105,16 +105,26 @@ t("without a template, tests stay on Tue FTP / Thu CSS / Sat 5K", () => {
   plain.forEach(e => assert.ok(!e.relocatedFrom, "moved without a reason"));
 });
 
-// Template that can never fit both leg tests legally (bike only Thu, run only Sat).
+// Template that can never fit both leg tests in one week (bike only Thu, run only Sat).
 const TIGHT = { mon: ["swim-css"], tue: [], wed: ["swim-endurance"], thu: ["bike-long"], fri: [], sat: ["run-long"], sun: [] };
-const tight = build(TIGHT).filter(e => e.isThresholdTest);
-t("when spacing is impossible, a leg test is skipped rather than FTP Thu then 5K Sat", () => {
-  const wk = new Map();
-  tight.forEach(e => { const m = mondayOf(e.date); wk.set(m, [...(wk.get(m) || []), e]); });
-  for (const [, w] of wk) {
-    const legs = w.filter(e => e.discipline === "bike" || e.discipline === "run");
-    assert.ok(legs.length <= 1, `both leg tests kept: ${legs.map(e => e.date)}`);
-  }
+const tightPlan = build(TIGHT);
+const tight = tightPlan.filter(e => e.isThresholdTest);
+t("a test that can't fit its week moves to next week instead of being dropped", () => {
+  const ftp = tight.filter(e => e.thresholdTestType === "BIKE_FTP_20");
+  const tt = tight.filter(e => e.thresholdTestType === "RUN_5K_TT");
+  assert.ok(ftp.length >= 1 && tt.length === ftp.length, `FTP ${ftp.length} vs 5K ${tt.length}`);
+  tt.forEach(e => assert.ok(e.movedToNextWeek, `5K ${e.date} not marked as moved`));
+});
+t("the moved test keeps leg-test spacing and lands on a day the athlete runs", () => {
+  for (const e of tight) for (const f of tight) if (e !== f && days(e.date, f.date) < 7)
+    assert.ok(days(e.date, f.date) >= load().ThresholdWeekScheduler.minTestGap(e.discipline, f.discipline), `${e.date} vs ${f.date}`);
+  tight.forEach(e => assert.ok((TIGHT[dow(e.date)] || []).some(c => c.split("-")[0] === e.discipline), `${e.thresholdTestType} on ${dow(e.date)}`));
+});
+t("the moved test takes the whole day", () => {
+  tight.filter(e => e.movedToNextWeek).forEach(e => {
+    const other = tightPlan.filter(x => x.date === e.date && x !== e);
+    assert.strictEqual(other.length, 0, `${e.date} also has ${other.map(x => x.sessionName)}`);
+  });
 });
 
 console.log(`\nthreshold relocation: ${passed} passed, ${failed} failed`);
