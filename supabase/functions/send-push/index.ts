@@ -89,18 +89,21 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
 
-  // Auth check — require a valid bearer token
-  const auth = req.headers.get("authorization") || "";
-  if (!auth.toLowerCase().startsWith("bearer ")) {
-    return jsonResponse({ error: "unauthorized" }, 401);
-  }
+  const token = /^Bearer\s+(\S+)$/i.exec(req.headers.get("authorization") || "")?.[1];
+  if (!token) return jsonResponse({ error: "unauthorized" }, 401);
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return jsonResponse({ error: "server_misconfigured" }, 500);
 
-  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-    return jsonResponse({ error: "server_misconfigured" }, 500);
-  }
-
-  if (!APNS_KEY || !APNS_KEY_ID || !APNS_TEAM_ID) {
-    return jsonResponse({ success: false, reason: "apns_not_configured" }, 500);
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+  const trustedService = token === SERVICE_ROLE_KEY;
+  let callerId: string | null = null;
+  if (!trustedService) {
+    try {
+      const { data, error } = await admin.auth.getUser(token);
+      if (error || !data?.user?.id) return jsonResponse({ error: "unauthorized" }, 401);
+      callerId = data.user.id;
+    } catch {
+      return jsonResponse({ error: "unauthorized" }, 401);
+    }
   }
 
   let body: any;
@@ -111,12 +114,16 @@ serve(async (req: Request) => {
   }
 
   const { user_id, title, body: msgBody, data } = body || {};
-  if (!user_id || !title || !msgBody) {
+  if (typeof user_id !== "string" || !user_id || typeof title !== "string" || !title || typeof msgBody !== "string" || !msgBody) {
     return jsonResponse({ error: "missing_fields", required: ["user_id", "title", "body"] }, 400);
   }
 
-  // Service role client — bypasses RLS to read push_tokens
-  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+  // User JWTs may target only their owner. Scheduler/share functions use
+  // the exact server credential; a decoded role claim is never sufficient.
+  if (!trustedService && callerId !== user_id) return jsonResponse({ error: "forbidden" }, 403);
+  if (!APNS_KEY || !APNS_KEY_ID || !APNS_TEAM_ID) {
+    return jsonResponse({ success: false, reason: "apns_not_configured" }, 500);
+  }
 
   // Look up the most recent device token for this user
   const { data: tokenRow, error: tokenErr } = await admin
