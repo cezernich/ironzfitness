@@ -79,6 +79,8 @@ serve(async (req: Request) => {
     .from("shared_workouts")
     .select("share_token, sender_user_id, variant_id, sport_id, session_type_id")
     .eq("share_token", share_token)
+    .is("revoked_at", null)
+    .gt("expires_at", new Date().toISOString())
     .maybeSingle();
 
   if (error || !share) {
@@ -87,10 +89,30 @@ serve(async (req: Request) => {
     });
   }
 
+  // A public link is not a receiver relationship. Require an actual,
+  // non-dismissed import owned by the verified caller before side effects.
+  const { data: imported, error: importError } = await adminClient
+    .from("workout_share_imports")
+    .select("id")
+    .eq("share_token", share_token)
+    .eq("receiver_user_id", receiverUserId)
+    .neq("action", "dismissed")
+    .maybeSingle();
+  if (importError) {
+    return new Response(JSON.stringify({ error: "import_lookup_failed" }), {
+      status: 503, headers: { ...CORS, "content-type": "application/json" },
+    });
+  }
+  if (!imported) {
+    return new Response(JSON.stringify({ error: "import_required" }), {
+      status: 403, headers: { ...CORS, "content-type": "application/json" },
+    });
+  }
+
   // 24h dedupe — check workout_share_imports for an existing completion in the
   // last 24 hours from the same receiver on the same share token.
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { data: recent } = await adminClient
+  const { data: recent, error: recentError } = await adminClient
     .from("workout_share_imports")
     .select("id, completed_at")
     .eq("share_token", share_token)
@@ -98,6 +120,11 @@ serve(async (req: Request) => {
     .gte("completed_at", since)
     .limit(1);
 
+  if (recentError) {
+    return new Response(JSON.stringify({ error: "completion_lookup_failed" }), {
+      status: 503, headers: { ...CORS, "content-type": "application/json" },
+    });
+  }
   if (recent && recent.length > 0) {
     return new Response(JSON.stringify({ ok: true, deduped: true }), {
       status: 200, headers: { ...CORS, "content-type": "application/json" },
@@ -105,14 +132,23 @@ serve(async (req: Request) => {
   }
 
   // Update the import row to record completion.
-  await adminClient
+  const { data: updated, error: updateError } = await adminClient
     .from("workout_share_imports")
     .update({
       completed_at: new Date().toISOString(),
       completion_delta_percent: receiver_delta_percent != null ? Number(receiver_delta_percent) : null,
     })
+    .eq("id", imported.id)
     .eq("share_token", share_token)
-    .eq("receiver_user_id", receiverUserId);
+    .eq("receiver_user_id", receiverUserId)
+    .neq("action", "dismissed")
+    .select("id")
+    .maybeSingle();
+  if (updateError || !updated) {
+    return new Response(JSON.stringify({ error: "completion_not_recorded" }), {
+      status: 503, headers: { ...CORS, "content-type": "application/json" },
+    });
+  }
 
   // Bump completion_count on the share row.
   await adminClient.rpc("increment_share_completion", { token_arg: share_token }).then(
