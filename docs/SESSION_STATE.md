@@ -2,6 +2,12 @@
 
 Updated 9 November 2026. This file supersedes older checkpoints. Read AGENTS.md, PRODUCT_DIRECTION.md (where present), this file and remote PR changes before continuing. History is retained in SESSION_LOG.md. Credentials and real athlete information stay outside this public repository.
 
+## Unified engine implementation in progress
+
+The owner now explicitly authorized implementing the reviewed brain plan in full and routine engineering decisions; ask only when a material philosophy question needs owner input. This supersedes the prior documentation-only implementation scope, not the production release hold. Active checkout `/private/tmp/ironz-engine-contract`, branch `codex/unified-engine-contract`, based on verified integration e57727c plus brain spec e3dcdb5. No production merge/release or real plan generation.
+
+First change: canonical athlete inputs/recovery, real wizard input preservation, dated source selection and actual weekly-form acknowledged persistence. Current source tests pass; independent QA is checking the latest repairs. See `docs/brain-review/IMPLEMENTATION_PROGRESS.md`. Full 30-case acceptance is not executed and the target engine remains inactive. Next: publish a focused input-contract PR, repair actual target prescriptions/validation/cohort failures, establish revision-safe state, shadow evaluate, add proposed daily/weekly decisions and then stage complete flows. Keep recording milestones without treating the first slice as full completion.
+
 ## Brain review and acceptance milestone
 
 Review PR: https://github.com/cezernich/ironzfitness/pull/34 . Specification revision `0e05d08`; independent design review: https://github.com/cezernich/ironzfitness/pull/34#pullrequestreview-5835978027 . No blocking documentation finding; review is not runtime/clinical/release approval. Claude review requested in PR34 and coordinated on PR17. Closeout-only revisions do not change the reviewed brain method.
