@@ -1707,6 +1707,12 @@ Sodium guidance surfaces as a second line on the hydration card whenever a race-
 
 ---
 
+### In-session carbohydrate ceiling integrity
+
+The shared Rule Engine `FuelingPolicy` caps the live card's carbohydrate rate by explicitly entered practiced intake, not body-mass scaling. Unknown practice level uses a conservative 60 g/hr ceiling marked unconfirmed, with a reminder to enter already-practiced intake and not jump to the ceiling. This default is not evidence of gut tolerance. Automatic recommendations never exceed90g/hr; an explicitly entered higher practiced ceiling (up to120g/hr) only permits a separate explicit target override. Overrides cannot bypass the practiced ceiling. Invalid/blank practice input does not become confirmed tolerance. No automatic gut-training progression is inferred from time, a planned session or a future goal.
+
+This is a rate-cap bug fix, not a personalized fluid/sodium/heat protocol. The standard automatic upper band follows [Australian Institute of Sport sports-drink guidance](https://www.ausport.gov.au/ais/nutrition/supplements/group_a/sports-foods2/sports-drink/how-and-when-do-i-use-it) for prolonged exercise (up to90g/hr). Product-specific higher overrides require practiced intake entered by the athlete. Fueling preferences read/write through `db.js` and retain the existing sync key.
+
 ## 12. RECOVERY & ADAPTATION
 
 ### 12a. Recovery State Classification

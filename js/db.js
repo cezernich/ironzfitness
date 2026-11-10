@@ -1337,10 +1337,16 @@ const DB = (() => {
     syncKey("runningZones");
   }
 
+  const fuelingPreferences={
+    getCached:()=>_lsGet('fuelingPrefs')||{},
+    save:prefs=>{localStorage.setItem('fuelingPrefs',JSON.stringify(prefs));syncKey('fuelingPrefs');},
+  };
+
   // ── Public API ────────────────────────────────────────────────────────────
 
   return {
     profile,
+    fuelingPreferences,
     workouts,
     workoutExercises,
     workoutSegments,

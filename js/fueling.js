@@ -57,29 +57,11 @@ const FUEL_SOURCES = [
  * Returns user's fueling preferences from localStorage.
  */
 function getUserFuelingPrefs() {
-  try {
-    return JSON.parse(localStorage.getItem("fuelingPrefs")) || {};
-  } catch { return {}; }
+  return typeof DB!=='undefined'&&DB.fuelingPreferences?DB.fuelingPreferences.getCached():{};
 }
-
 function saveUserFuelingPrefs(prefs) {
-  localStorage.setItem("fuelingPrefs", JSON.stringify(prefs)); if (typeof DB !== 'undefined') DB.syncKey('fuelingPrefs');
-}
-
-// Weight-based scaling factor. Reference athlete is 70 kg (~154 lbs).
-// A 90 kg athlete burns more absolute carbs; a 55 kg athlete less.
-// We clamp the factor between 0.75 and 1.3 so the number stays in
-// the gut-tolerable range (current science caps around 90-100 g/hr
-// for well-trained athletes).
-function _fuelingWeightFactor() {
-  try {
-    const profile = JSON.parse(localStorage.getItem("profile") || "{}") || {};
-    const lbs = parseFloat(profile.weight || profile.weight_lbs);
-    if (!lbs || lbs <= 0) return 1.0;
-    const kg = lbs * 0.453592;
-    const factor = kg / 70;
-    return Math.max(0.75, Math.min(1.3, factor));
-  } catch { return 1.0; }
+  if(typeof DB==='undefined'||!DB.fuelingPreferences)throw Error('Fueling preferences are unavailable. Reload and try again.');
+  DB.fuelingPreferences.save(prefs);
 }
 
 // Intensity scaling factor. Easy / recovery days need less fueling;
@@ -112,37 +94,48 @@ function generateFuelingPlan(durationMinutes, sessionCtx) {
   // Compute automatic carbs/hour from the duration band, then scale
   // by athlete weight and session intensity unless the user has
   // explicitly overridden it via prefs.carbsPerHour.
-  const weightFactor = _fuelingWeightFactor();
+  const weightFactor = 1; // Carbohydrate absorption is not scaled by body mass.
   const intensityFactor = _fuelingIntensityFactor(sessionCtx && sessionCtx.load);
-  const autoCarbsHour = Math.round(rule.carbsPerHour * weightFactor * intensityFactor);
+  const requestedAuto = Math.round(rule.carbsPerHour * intensityFactor);
+  const autoCarbsHour = FuelingPolicy.limit(requestedAuto,{practicedCarbsPerHour:prefs.practicedCarbsPerHour}).carbsPerHour;
 
   // User hard override takes priority; otherwise use the scaled value.
-  const carbsPerHour = prefs.carbsPerHour || autoCarbsHour;
+  const override=Number(prefs.carbsPerHour)>0;
+  const limited=FuelingPolicy.limit(override?Number(prefs.carbsPerHour):requestedAuto,{
+    practicedCarbsPerHour:prefs.practicedCarbsPerHour,explicitOverride:override,
+  });
+  const carbsPerHour = limited.carbsPerHour;
   const fuelSourceId = prefs.fuelSource || "gel";
   const fuelSource = FUEL_SOURCES.find(s => s.id === fuelSourceId) || FUEL_SOURCES[0];
   const carbsPerServing = prefs.customCarbsPerServing || fuelSource.carbs;
 
-  // Calculate intervals based on carbs needed per hour and carbs per serving
-  const servingsPerHour = carbsPerHour / carbsPerServing;
-  const intervalMinutes = Math.max(8, Math.round(60 / servingsPerHour));
-  const startMinute = prefs.startMinute || rule.startMinute;
-
-  const fuelTimes = [];
-  const count = Math.ceil((durMin - startMinute) / intervalMinutes);
-  for (let i = 0; i < count && i < 20; i++) {
-    fuelTimes.push(startMinute + (i * intervalMinutes));
+  // Spread portions every20min; a whole serving may exceed a low gut cap.
+  const intervalMinutes=20;
+  const startMinute=Number(prefs.startMinute)>0?Number(prefs.startMinute):rule.startMinute;
+  const count=Math.max(0,Math.ceil((durMin-startMinute)/intervalMinutes));
+  if(!Number.isFinite(count)||count>256)return null;
+  const portionCarbs=Math.floor(carbsPerHour/3*10)/10;
+  const targetCarbs=Math.floor(carbsPerHour*durMin/60);
+  const items=[];let remaining=targetCarbs;
+  for(let i=0;i<count&&remaining>=.1;i++) {
+    const carbs=Math.min(portionCarbs,Math.floor(remaining*10+1e-8)/10);
+    items.push({minute:startMinute+i*intervalMinutes,carbs,servings:carbs/carbsPerServing,source:fuelSource});
+    remaining-=carbs;
   }
 
   return {
-    totalCarbs: Math.round((carbsPerHour * durMin) / 60),
+    totalCarbs: Math.round(items.reduce((sum,item)=>sum+item.carbs,0)*10)/10,
+    targetCarbs,
     carbsPerHour,
     autoCarbsHour,
     weightFactor,
     intensityFactor,
-    isOverride: !!prefs.carbsPerHour,
-    items: fuelTimes.map(t => ({ minute: t, carbs: carbsPerServing, source: fuelSource })),
+    isOverride: override,
+    gutCap: limited.gutCap,
+    practiceLevelConfirmed: limited.practiceLevelConfirmed,
+    items,
     hydrationOz: durMin > 60 ? `${Math.round(durMin / 60 * 20)}-${Math.round(durMin / 60 * 24)} oz` : "Sip water as needed",
-    note: rule.note,
+    note: `${carbsPerHour}g/hr target, within the ${limited.gutCap}g/hr ceiling. ` + (!limited.practiceLevelConfirmed ? "Confirm the intake you have already practiced; do not jump to this ceiling." : "Stay within your practiced intake."),
     needsSodium: durMin >= 90,
     fuelSource,
     carbsPerServing,
@@ -173,20 +166,14 @@ function renderFuelingPlanHTML(durationMinutes, sessionName, sessionCtx) {
   if (!plan) return "";
 
   const itemList = plan.items.map((item, i) =>
-    `<div class="fueling-item"><span class="fueling-item-icon">${FUEL_ICON_SVG}</span> Min ${item.minute}: ${item.source.name} #${i + 1} (${item.carbs}g carbs)</div>`
+    `<div class="fueling-item"><span class="fueling-item-icon">${FUEL_ICON_SVG}</span> Min ${item.minute}: ${Number(item.servings.toFixed(2))} serving of ${item.source.name} (${item.carbs}g carbs)</div>`
   ).join("");
 
   const sodiumNote = plan.needsSodium
     ? `<div class="fueling-item fueling-sodium">Sodium: ${FUELING_DEFAULTS.hydration.sodium}</div>`
     : "";
 
-  // Show a tiny breakdown so users see why the number is what it is:
-  // weight factor + intensity factor applied to the duration-band base.
-  // Also surfaces the current gel size so the user can sanity-check it
-  // and tap Customize if it's wrong.
-  const factorsBadge = plan.isOverride
-    ? `<span class="fueling-factors-badge">User override</span>`
-    : `<span class="fueling-factors-badge">Weight ×${plan.weightFactor.toFixed(2)} · Intensity ×${plan.intensityFactor.toFixed(2)}</span>`;
+  const factorsBadge = `<span class="fueling-factors-badge">${plan.isOverride?'User target · ':''}Ceiling ${plan.gutCap}g/hr${plan.practiceLevelConfirmed?' practiced':' (unconfirmed default)'}</span>`;
   const gelLine = `Using ${plan.fuelSource.name} at ${plan.carbsPerServing}g carbs each`;
 
   const id = "fueling-" + Math.random().toString(36).slice(2, 8);
@@ -198,7 +185,7 @@ function renderFuelingPlanHTML(durationMinutes, sessionName, sessionCtx) {
         <span class="chevron-why">&#9662;</span>
       </button>
       <div class="fueling-plan-body" id="${id}">
-        <div class="fueling-summary">~${plan.totalCarbs}g carbs needed (${plan.carbsPerHour}g/hr) | ${plan.hydrationOz} water</div>
+        <div class="fueling-summary">~${plan.totalCarbs}g carbs scheduled (${plan.carbsPerHour}g/hr target) | ${plan.hydrationOz} water</div>
         <div class="fueling-factors">${factorsBadge}</div>
         <div class="fueling-note">${plan.note}</div>
         <div class="fueling-gel-line">${gelLine} <button class="fueling-gel-change" onclick="openFuelingPrefs()">change</button></div>
@@ -251,6 +238,12 @@ function openFuelingPrefs() {
         <input type="number" id="fuel-pref-carbs-hr" placeholder="auto (based on duration)" min="10" max="120" value="${prefs.carbsPerHour || ""}" />
       </div>
 
+      <div class="form-row" style="margin-bottom:12px">
+        <label>Practiced carbs/hour ceiling</label>
+        <input type="number" id="fuel-pref-practiced" placeholder="60 until confirmed" min="10" max="120" value="${prefs.practicedCarbsPerHour || ""}" />
+        <p class="hint">Enter an intake you have already practiced comfortably, not a future goal. Automatic targets stay at or below 90 g/hr.</p>
+      </div>
+
       <div class="form-row" style="margin-bottom:16px">
         <label>Start fueling at minute</label>
         <input type="number" id="fuel-pref-start" placeholder="auto" min="5" max="60" value="${prefs.startMinute || ""}" />
@@ -281,13 +274,24 @@ function _saveFuelingPrefs() {
   const carbsPer = parseInt(document.getElementById("fuel-pref-carbs-per")?.value);
   const carbsHr = parseInt(document.getElementById("fuel-pref-carbs-hr")?.value);
   const start = parseInt(document.getElementById("fuel-pref-start")?.value);
+  const practicedRaw=document.getElementById("fuel-pref-practiced")?.value||"";
+  const practiced=Number(practicedRaw);
+  if(practicedRaw.trim()&&(!Number.isFinite(practiced)||practiced<10||practiced>120)) {
+    if(typeof showToast==='function')showToast('Enter practiced intake between 10 and 120 g/hr.','error');
+    return;
+  }
+  if(practicedRaw.trim())prefs.practicedCarbsPerHour=practiced;
 
   if (source && source !== "gel") prefs.fuelSource = source;
   if (carbsPer > 0) prefs.customCarbsPerServing = carbsPer;
   if (carbsHr > 0) prefs.carbsPerHour = carbsHr;
   if (start > 0) prefs.startMinute = start;
 
-  saveUserFuelingPrefs(prefs);
+  try { saveUserFuelingPrefs(prefs); }
+  catch(error) {
+    if(typeof showToast==='function')showToast('Fueling preferences could not be saved. Check device storage and try again.','error');
+    return;
+  }
   document.getElementById("fueling-prefs-overlay")?.remove();
 
   // Refresh calendar to update fueling plans
