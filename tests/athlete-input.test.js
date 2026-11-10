@@ -66,3 +66,6 @@ assert.equal(normalize({trainingZones:{biking:{ftp:300,lastUpdated:'invalid'}}})
 const originalRaceSource={running:{referenceDist:'5k',referenceTime:'23:00',vdot:42}};assert.deepEqual(normalize({trainingZones:originalRaceSource}).sourceInputs.trainingZones,originalRaceSource);
 assert.equal(I.normalizeCheckIn({sleepQuality:1,energyLevel:5,soreness:1,observedAt:asOf},{asOf}).recoveryState,'low');
 assert.equal(I.normalizeCheckIn({sleepQuality:'poor',energyLevel:'high',soreness:'mild',observedAt:asOf},{asOf}).recoveryState,'low');
+
+assert.equal(I.normalizeCheckIn({sleepQuality:2.5,energyLevel:2.5,soreness:2.5,observedAt:asOf},{asOf}).recoveryState,'unknown');
+assert.equal(normalize({trainingZones:{running:{vdot:60,lastUpdated:'2031-01-01'}}}).profile.runVDOT,null);
