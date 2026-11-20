@@ -2015,6 +2015,122 @@ Apply beginner/advanced modifiers from the table above on top of these.
 
 ---
 
+## Appendix G Isolated planner preview
+
+Added 2026-11-20. This appendix governs only `PlanGenerator.generatePreview`
+in `js/planner-preview.js`, exercised by `planner-lab.html`. These are explicitly
+provisional workbench policies approved for scenario exploration, not published
+production training rules. Existing generation paths and philosophy_modules are
+unchanged. The preview is not PLAN_SCHEMA.json output and must not be passed to
+storePlan or a live-plan writer. It is the first pure preview slice of the target
+Rule Engine; consolidate it with the existing classifier/arc/assembler before any
+production cutover rather than maintaining another production generator.
+
+### Scope and inputs
+
+One full-distance triathlon week; caller supplies base/build/recovery/taper,
+weeks to race, normal/lighter/pause recovery, excluded sports, seven daily minute
+limits, representative completed weekly minutes per sport, successful long ride
+and run minutes, demonstrated bike quality minutes, and desired maintenance
+strength frequency (0–2, default 1). The fictional presets are examples, never
+athlete defaults. No health, body-size, equipment, threshold or training capacity
+is inferred from missing fields. A long-session history of zero means insufficient
+duration evidence for that sport; withhold bike/run work and explain the gap.
+No automatic injury substitutions or return-to-training protocol is implemented.
+
+Raw 400 m and 200 m swim times are seconds, with 400 m longer than twice 200 m
+for this supported protocol. Both may be absent, but not just one. CSS seconds
+per 100 m = (T400 − T200)/2. Twenty-minute bike watts × multiplier (default .95)
+produces estimated FTP rounded to watts. Preserve raw inputs. Optional 5K seconds
+provide a reference pace only, not easy or Ironman pace. Missing benchmarks use
+effort targets. Numeric inputs must be finite, nonnegative and within API limits;
+malformed inputs fail visibly rather than substituting defaults.
+
+### Draft rule settings
+
+Editable values: FTP multiplier .95 (allowed .85–1); long growth .05 (0–.05);
+easy bike low .60 (.50–.70), high .68 (.55–.75), ordered low ≤ high; controlled
+bike quality .90 (.80–.95). Bounds are workbench controls, not physiological
+claims. Unknown rule keys are rejected. Do not publish these values to live rules.
+
+### Weekly dose and placement
+
+Each sport's completed weekly minutes is its independent budget. No automatic
+weekly volume increase. Taper multiplies every sport budget and long duration by
+.60; recovery phase or lighter recovery by .70 (do not stack); pause by zero.
+Within three weeks to race, base/build becomes taper. No quality in reduced weeks.
+This one-week model does not create an arc, deload cycle or forecast future gains.
+
+Reserve one full rest day at the lowest availability, Monday-first ties. Maximum
+two sessions/day. Minimum session minutes: swim 20, bike 25, run 15, strength 20.
+Choose long bike/run slots jointly, at least two calendar days apart, maximizing
+allocated long minutes with one-point preference bonuses for Saturday bike and
+Thursday run; stable calendar order resolves ties. Each long session is bounded
+by history × reduction factor, its sport budget, and daily availability. In a normal
+week bike may grow by at most the long-growth setting; run holds while bike grows.
+When no bike long is eligible, run may grow by that setting instead. If no feasible
+pair exists, omit long sessions and flag the gap rather than force a conflict.
+
+Build may include one controlled bike interval session only with eligible bike
+history and at least 12 demonstrated quality minutes. Require a free day at least
+two calendar days from either long session, at least 45 available/budgeted minutes,
+Tuesday-first ties. Duration up to 60 minutes. Work = min(demonstrated quality,
+24, duration − 20), rounded down to a multiple of three. Three equal repetitions,
+two three-minute easy recoveries, ten-minute warm-up and remaining easy cool-down.
+No claim is made that prior intensity or interval structure is known: the generated
+structure and editable power fraction are provisional and need review before live use.
+
+Reserve requested strength sessions before easy fillers, using Thursday/Sunday/
+Tuesday/Friday/Wednesday/Saturday/Monday preference order. Avoid strength on or
+the day before a long session. Divide remaining strength budget across remaining
+requested sessions, at most 45 min each. Prescribe familiar bodyweight maintenance,
+up to two sets of 6–10, 60–90 sec rest and three repetitions in reserve; row only
+with available equipment, skip unfamiliar movements. This is not a lifting program.
+
+Fill at most three rounds of swim/bike/run, at most 50 minutes per filler; easy
+runs also capped at successful long-run duration × factor. Never add a duplicate
+sport to a day. Do not pair running with a quality or long bike: brick history is
+not represented. Fixed day preferences are in the pure module and are part of
+this preview version, not an optimizer guarantee. Unallocated minutes remain
+unallocated and are displayed. No proportional compression or catch-up sessions.
+
+Swim uses five-minute easy warm-up/cool-down where duration allows; remaining
+time repeats relaxed 100 m with 20 sec rest, finishing with easy swimming. CSS
++10 to +15 sec/100 m is an effort-subordinate guide. Bike easy uses configured
+FTP fractions; run uses conversational effort. Quality dose is not increased along
+with the long bike, but matching historical interval structure/intensity remains a
+known input gap. Do not claim this preview validates total physiological stress.
+
+### Race sensitivity scenarios
+
+Use 3,800 m / 180 km / 42.2 km. Swim explores CSS +5 to +15 seconds/100 m.
+Bike explores explicit comparable outdoor speed ±5%; no speed inferred from FTP,
+body mass, indoor speed or course simulation. Run explores explicit sustained
+triathlon run pace through 10% slower. No marathon from 5K. Total requires all
+three and adds 12–18 transition minutes. These are unvalidated sensitivity bands,
+not prediction intervals, Wisconsin forecasts or proof of readiness. No weather,
+course, bike/run coupling or open-water adjustment is implemented. Race scenarios
+do not yet govern session doses; this first slice isolates capacity-aware weekly
+allocation. Inputs are
+asserted by the scenario author; the tool does not verify comparability.
+
+### Output and isolation
+
+Return normalized athlete inputs, exact resolved draft rules, engine and draft
+rulebook versions, fitness, scenarios and assumptions, seven days with session
+blocks and rationales, sport totals/budgets, warnings and checks. Output is clock-
+independent and reproducible for identical inputs. Validate daily minute limits,
+two-session cap, exclusions, sport budgets and block arithmetic before returning.
+These checks are structural, not a clinical or comprehensive training clearance.
+
+The standalone page loads only the existing plan-generator entry-point file,
+preview companion and lab UI, not auth, DB, analytics or app boot. No network
+requests beyond static assets, account reads, storage or live writes. Explicit
+JSON export/import saves/restores athlete inputs, draft settings and results locally;
+refresh without export loses edits. Full rulebook publishing, backend execution,
+durability inference, execution-based adaptation and multiweek generation remain
+future work. `index.html` does not load the companion or link the lab.
+
 **END OF DOCUMENT**
 
 ### Schedule preview integrity
