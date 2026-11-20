@@ -15,7 +15,7 @@ test('deterministic, pure and versioned for all fictional athletes', () => {
     assert.equal(JSON.stringify(a), before);
     assert.equal(one.metadata.mode, 'preview-only');
     assert.equal(one.totalMinutes, Object.values(one.totals).reduce((s, n) => s + n, 0));
-    assert(one.days.some(d => !d.sessions.length));
+    assert(one.days.every(d => d.sessions.length));
     one.days.forEach(d => {
       assert(d.sessions.length <= 2);
       assert(d.sessions.reduce((s, w) => s + w.minutes, 0) <= d.available);
@@ -46,6 +46,26 @@ test('pause and exclusions cannot be overridden by growth', () => {
   const a = clone(api.presets[0]); a.recovery = 'pause'; assert.equal(api.generate(a).totalMinutes, 0);
   a.recovery = 'normal'; a.excludedSports = ['run', 'bike'];
   assert(sessions(api.generate(a)).every(s => s.sport !== 'run' && s.sport !== 'bike'));
+});
+test('seven days default, optional full rest, no extra sport budget', () => {
+  api.presets.forEach(athlete => {
+    const a = clone(athlete);
+    delete a.trainingDays;
+    const seven = api.generate(a);
+    assert.equal(seven.inputs.trainingDays, 7);
+    assert.equal(seven.days.filter(d => d.sessions.length).length, 7);
+    assert.equal(seven.days[0].sessions.length, 1);
+    assert.equal(seven.days[0].sessions[0].kind, 'recovery');
+    assert(seven.days[0].sessions[0].minutes <= 25);
+    a.trainingDays = 6;
+    const six = api.generate(a);
+    assert.equal(six.days[0].sessions.length, 0);
+    assert.deepStrictEqual(seven.budgets, six.budgets);
+    a.trainingDays = 7; a.availability[0] = 0;
+    assert.equal(api.generate(a).days[0].sessions.length, 0);
+    a.recovery = 'pause'; assert.equal(api.generate(a).totalMinutes, 0);
+    a.trainingDays = 6.5; assert.throws(() => api.generate(a));
+  });
 });
 test('recovery and near-race taper reduce sport budgets and remove quality', () => {
   ['recovery', 'taper'].forEach(phase => {

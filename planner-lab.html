@@ -21,7 +21,7 @@
           <fieldset><legend>Activities to exclude</legend><div id="exclusions" class="checks"></div></fieldset>
         </section>
         <section class="panel"><h2>2. Fitness and training</h2><p class="hint">Test times are seconds. Benchmarks are optional. Recent minutes describe a representative completed week, not desired training.</p><div id="fitness-fields" class="fields"></div><h3>Recent weekly minutes</h3><div id="recent-fields" class="fields"></div><h3>Successful session history</h3><div id="history-fields" class="fields"></div></section>
-        <section class="panel"><h2>3. Available time</h2><p class="hint">Maximum minutes each day. One full rest day is preserved; unused time is expected.</p><div id="availability-fields" class="fields"></div></section>
+        <section class="panel"><h2>3. Available time</h2><label>Training-day preference<select id="trainingDays"><option value="7">7 days including a light recovery day</option><option value="6">6 days with a full rest day</option></select></label><p class="hint">Seven days is the default preference, within existing weekly minutes. Zero availability still means no training. Recovery and restrictions take priority.</p><div id="availability-fields" class="fields"></div></section>
         <section class="panel"><h2>4. Draft rules</h2><p class="hint">Use fractions: 0.95 means 95%, and 0.05 means 5%. These settings affect this preview only. FTP conversion changes targets, not training capacity.</p><div id="rule-fields" class="fields"></div><button type="button" id="reset-rules" class="secondary">Reset rules</button></section>
         <section class="panel"><h2>Optional race context</h2><p class="hint">Leave unknown values empty. These inputs explore duration; they are not inferred from FTP or a 5K.</p><div id="race-fields" class="fields"></div></section>
         <div class="actions"><button type="submit">Generate preview <span aria-hidden="true">→</span></button><button type="button" id="export" class="secondary">Export scenario</button><label class="import">Import scenario<input type="file" id="import" accept="application/json,.json"></label></div>
@@ -29,6 +29,6 @@
       <section class="results" aria-label="Generated plan"><div id="status" role="status" aria-live="polite"></div><div id="output"></div></section>
     </div>
   </main>
-  <footer>Draft preview 0.1 · Full-distance triathlon · No accounts, network calls, or saved live plans</footer>
+  <footer>Draft preview 0.2 · Full-distance triathlon · No accounts, network calls, or saved live plans</footer>
 </body>
 </html>

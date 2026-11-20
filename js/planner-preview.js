@@ -4,7 +4,7 @@
  */
 (function (root) {
   'use strict';
-  const VERSION = 'preview-0.1';
+  const VERSION = 'preview-0.2';
   const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   const SPORTS = ['swim', 'bike', 'run', 'strength'];
   const DEFAULT_RULES = Object.freeze({ ftpMultiplier: 0.95, longGrowth: 0.05,
@@ -33,6 +33,8 @@
     if (!['base', 'build', 'recovery', 'taper'].includes(a.phase)) throw new Error('Choose a supported phase.');
     number(a.weeksToRace, 'Weeks to race', 1, 104);
     if (!['normal', 'lighter', 'pause'].includes(a.recovery)) throw new Error('Choose a recovery state.');
+    a.trainingDays = a.trainingDays == null ? 7 : number(a.trainingDays, 'Training-day preference', 6, 7);
+    if (!Number.isInteger(a.trainingDays)) throw new Error('Choose six or seven training days.');
     if (!Array.isArray(a.excludedSports) || a.excludedSports.some(s => !SPORTS.includes(s))) throw new Error('Invalid activity exclusions.');
     if (!Array.isArray(a.availability) || a.availability.length !== 7) throw new Error('Provide seven daily availability limits.');
     a.availability.forEach((v, i) => number(v, DAYS[i] + ' availability', 0, 720));
@@ -73,6 +75,10 @@
     let blocks = [];
     if (sport === 'strength') {
       blocks = [{ minutes, instruction: 'Familiar bodyweight maintenance only: squat, hip hinge, incline push-up, row only if equipment is available, and calf raise. Up to 2 sets of 6–10 each, 60–90 sec rest, leave 3 reps in reserve. Skip unfamiliar movements; stop when time is up.' }];
+    } else if (kind === 'recovery') {
+      blocks = [{ minutes, instruction: sport === 'bike' && fitness.ftp ?
+        'Very easy recovery spin, below ' + Math.round(fitness.ftp * 0.55) + ' W. Relaxed effort; shorten or stop if not recovering.' :
+        'Very easy relaxed swimming with rests as needed. No pace target or intervals; shorten or stop if not recovering.' }];
     } else if (sport === 'bike' && kind === 'quality') {
       const work = Math.floor(Math.min(qualityMinutes, 24, minutes - 20) / 3) * 3;
       const rep = work / 3;
@@ -107,11 +113,14 @@
     const remaining = Object.assign({}, budgets);
     const minimum = { swim: 20, bike: 25, run: 15, strength: 20 };
     const used = day => day.sessions.reduce((sum, s) => sum + s.minutes, 0);
-    // Preserve a full rest day, choosing the smallest availability (Monday wins ties).
-    const rest = a.availability.indexOf(Math.min(...a.availability));
+    // Seven-day preference substitutes a light recovery day, never extra volume.
+    const lightDay = a.availability.indexOf(Math.min(...a.availability));
+    const rest = a.trainingDays === 6 ? lightDay : -1;
+    const recoveryDay = a.trainingDays === 7 ? lightDay : -1;
     function place(dayIndex, sport, kind, wanted) {
       const day = days[dayIndex];
       if (dayIndex === rest || day.sessions.length >= 2 || day.sessions.some(s => s.sport === sport)) return false;
+      if (dayIndex === recoveryDay && (kind !== 'recovery' || day.sessions.length)) return false;
       const minutes = Math.floor(Math.min(wanted, remaining[sport], day.available - used(day)));
       if (minutes < minimum[sport]) return false;
       const session = prescription(sport, kind, minutes, fitness, r, a.qualityMinutes);
@@ -131,8 +140,8 @@
     // Progress one long-session dimension only: run holds while bike grows.
     const wantedRun = Math.floor(a.longRun * factor * (1 + (hasBike ? 0 : growth)));
     const pairs = [];
-    const bikeOptions = hasBike ? order(5).filter(i => i !== rest) : [-1];
-    const runOptions = hasRun ? order(3).filter(i => i !== rest) : [-1];
+    const bikeOptions = hasBike ? order(5).filter(i => i !== rest && i !== recoveryDay) : [-1];
+    const runOptions = hasRun ? order(3).filter(i => i !== rest && i !== recoveryDay) : [-1];
     bikeOptions.forEach(b => runOptions.forEach(u => {
       if (b >= 0 && u >= 0 && Math.abs(b - u) < 2) return;
       const bm = b < 0 ? 0 : Math.min(wantedBike, budgets.bike, a.availability[b]);
@@ -147,16 +156,21 @@
       if (p.u >= 0) place(p.u, 'run', 'long', wantedRun);
     } else if (hasBike || hasRun) warnings.push('No feasible separated long-session pair: long sessions omitted. Change availability or review priorities.');
     if (hasBike && factor === 1 && phase === 'build' && a.qualityMinutes >= 12 && !a.excludedSports.includes('bike')) {
-      const day = order(1).find(i => i !== rest && remaining.bike >= 45 && a.availability[i] - used(days[i]) >= 45 &&
+      const day = order(1).find(i => i !== rest && i !== recoveryDay && remaining.bike >= 45 && a.availability[i] - used(days[i]) >= 45 &&
         days[i].sessions.length < 2 && !days[i].sessions.length &&
         !days.some((d, j) => Math.abs(i - j) <= 1 && d.sessions.some(s => s.kind === 'long')));
       if (day != null) place(day, 'bike', 'quality', 60);
     }
     // Round-robin sport fills, deterministic day preferences, at most two per day.
     const preferences = { swim: [1, 3, 6, 4, 2, 5, 0], bike: [4, 1, 6, 3, 2, 5, 0], run: [4, 6, 1, 3, 2, 5, 0], strength: [3, 6, 1, 4, 2, 5, 0] };
+    if (recoveryDay >= 0) {
+      // Reserve from existing sport minutes before filling; never prescribe a
+      // new activity solely to manufacture a seventh day.
+      if (!place(recoveryDay, 'swim', 'recovery', 20) && hasBike) place(recoveryDay, 'bike', 'recovery', 25);
+    }
     // Reserve explicitly requested maintenance strength before easy fillers.
     for (let n = 0; n < a.strengthSessions; n++) {
-      const candidate = preferences.strength.find(i => i !== rest && days[i].sessions.length < 2 &&
+      const candidate = preferences.strength.find(i => i !== rest && i !== recoveryDay && days[i].sessions.length < 2 &&
         !days[i].sessions.some(s => s.sport === 'strength') && a.availability[i] - used(days[i]) >= minimum.strength &&
         !days.some((d, j) => (j === i || j === i + 1) && d.sessions.some(s => s.kind === 'long')));
       if (candidate != null) place(candidate, 'strength', 'maintenance', Math.min(45, Math.ceil(remaining.strength / (a.strengthSessions - n))));
@@ -165,7 +179,7 @@
       SPORTS.forEach(sport => {
         if (sport === 'strength') return;
         if (sport === 'bike' && !hasBike || sport === 'run' && !hasRun) return;
-        const candidate = preferences[sport].find(i => i !== rest && days[i].sessions.length < 2 &&
+        const candidate = preferences[sport].slice().sort((x, y) => days[x].sessions.length - days[y].sessions.length).find(i => i !== rest && i !== recoveryDay && days[i].sessions.length < 2 &&
           !days[i].sessions.some(s => s.sport === sport) &&
           a.availability[i] - used(days[i]) >= minimum[sport] &&
           !(sport === 'strength' && days.some((d, j) => (j === i || j === i + 1) && d.sessions.some(s => s.kind === 'long'))) &&
@@ -178,6 +192,7 @@
     if (!hasBike && budgets.bike) warnings.push('Bike session-duration history missing: bike prescriptions withheld.');
     if (!hasRun && budgets.run) warnings.push('Run session-duration history missing: run prescriptions withheld.');
     if (a.recovery === 'pause') warnings.push('Training paused: no sessions prescribed.');
+    if (a.trainingDays === 7 && days.some(d => !d.sessions.length)) warnings.push('Seven training days are preferred, not forced: availability, recovery, activity eligibility or available workload left days empty.');
     if (a.excludedSports.length) warnings.push('Excluded activities are omitted; no automatic injury substitution.');
     warnings.push('One-week preview only. Phase is explicit; no automatic multiweek arc, clinical return plan, nutrition or hydration prescription.');
     warnings.push('Race scenarios do not yet determine workout doses. Current training history governs this first preview.');
@@ -192,11 +207,11 @@
     });
     SPORTS.forEach(s => { if (totals[s] > budgets[s]) checks.push('Sport budget exceeded: ' + s); });
     if (checks.length) throw new Error(checks.join(' '));
-    return { metadata: { engineVersion: VERSION, rulebookVersion: 'draft-preview-0.1', mode: 'preview-only' },
+    return { metadata: { engineVersion: VERSION, rulebookVersion: 'draft-preview-0.2', mode: 'preview-only' },
       inputs: a, rules: r, phase, fitness, raceScenarios: demands(a, fitness), days, totals,
       totalMinutes: Object.values(totals).reduce((sum, v) => sum + v, 0), budgets, warnings,
       decisions: ['Recent minutes bound each sport independently; unused availability is not a training target.',
-        'One full rest day and at most two sessions per day.',
+        a.trainingDays === 7 ? 'Seven days preferred, including one very light recovery day within existing sport budgets.' : 'Athlete chose six training days with one full rest day.',
         'Long bike and run placed jointly, two calendar days apart; run holds while bike duration progresses.',
         'Quality work requires demonstrated quality minutes and build phase; no wearable-based increase.',
         'Draft rules and athlete inputs are included for reproducibility.'],
@@ -211,7 +226,8 @@
       swim400: 520, swim200: 250, bike20: 300, run5k: 1440, outdoorSpeed: 27, sustainedRunPace: null, availability: [0, 100, 60, 100, 70, 200, 70] },
     { name: 'Drew — experienced and faster', recent: { swim: 170, bike: 450, run: 245, strength: 35 }, longBike: 300, longRun: 120, qualityMinutes: 36,
       swim400: 370, swim200: 180, bike20: 320, run5k: 1140, outdoorSpeed: 31, sustainedRunPace: 315, availability: [0, 140, 140, 110, 120, 360, 120] }
-  ].map(a => Object.assign({ phase: 'build', weeksToRace: 20, recovery: 'normal', excludedSports: [] }, a));
+  ].map(a => Object.assign({ phase: 'build', weeksToRace: 20, recovery: 'normal', excludedSports: [], trainingDays: 7 }, a,
+    { availability: [30].concat(a.availability.slice(1)) }));
   const api = Object.freeze({ generate, defaults: DEFAULT_RULES, presets, version: VERSION });
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) { root.PlanGenerator = root.PlanGenerator || {}; root.PlanGenerator.generatePreview = generate; root.PlannerPreview = api; }

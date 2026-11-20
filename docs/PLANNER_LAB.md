@@ -1,6 +1,6 @@
 # Planner lab
 
-An isolated first implementation of the fitness-to-demand planning proposal.
+Preview 0.2 is an isolated first implementation of the fitness-to-demand planning proposal.
 Start a local static server from the repository root:
 
 ```sh
@@ -9,6 +9,9 @@ python3 -m http.server 8765 --bind 127.0.0.1
 
 Open http://127.0.0.1:8765/planner-lab.html. Select Alex, Blake, Casey or Drew;
 edit recent training, tests, availability and draft rules; click Generate preview.
+Seven training days is the default, with one very light recovery day. Choose six
+under Training-day preference for a full rest day. Weekly sport budgets are the
+same in both modes; zero availability, pause and exclusions still take priority.
 The page shows all seven days, blocks, targets, totals, reasons and unallocated
 minutes. Exclude an activity or pause training to inspect precedence. Change FTP
 conversion from .95 to .90: power changes without increasing capacity. Near-race,

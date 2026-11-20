@@ -2061,8 +2061,13 @@ weekly volume increase. Taper multiplies every sport budget and long duration by
 Within three weeks to race, base/build becomes taper. No quality in reduced weeks.
 This one-week model does not create an arc, deload cycle or forecast future gains.
 
-Reserve one full rest day at the lowest availability, Monday-first ties. Maximum
-two sessions/day. Minimum session minutes: swim 20, bike 25, run 15, strength 20.
+Owner revision 2026-11-20 for preview 0.2: trainingDays defaults to 7; the
+athlete may choose 6. This explicit preview policy supersedes the full-rest
+default for this lab only. Seven is a preference, never a requirement overriding
+recovery, restrictions, capacity or zero availability. Use the lowest-availability
+day (Monday-first ties) as a very light recovery day, or as full rest when six
+days is selected. Exclude that day from long, quality, strength and normal easy
+placement. Maximum two sessions/day elsewhere; at most one on the recovery day. Minimum session minutes: swim 20, bike 25, run 15, strength 20.
 Choose long bike/run slots jointly, at least two calendar days apart, maximizing
 allocated long minutes with one-point preference bonuses for Saturday bike and
 Thursday run; stable calendar order resolves ties. Each long session is bounded
@@ -2087,11 +2092,19 @@ requested sessions, at most 45 min each. Prescribe familiar bodyweight maintenan
 up to two sets of 6–10, 60–90 sec rest and three repetitions in reserve; row only
 with available equipment, skip unfamiliar movements. This is not a lifting program.
 
+For seven days, reserve 20 minutes of very easy swimming from the existing swim
+budget, or 25 minutes of very easy cycling when swimming cannot fit and bike
+history is eligible. Recovery swimming has no pace target; recovery cycling stays
+below 55% FTP or very easy effort. No new sport or additional sport budget is
+created to fill the seventh day. If neither fits, leave it empty and explain.
+Fictional presets offer 30 Monday minutes; an athlete-entered zero is respected.
+
 Fill at most three rounds of swim/bike/run, at most 50 minutes per filler; easy
 runs also capped at successful long-run duration × factor. Never add a duplicate
 sport to a day. Do not pair running with a quality or long bike: brick history is
-not represented. Fixed day preferences are in the pure module and are part of
-this preview version, not an optimizer guarantee. Unallocated minutes remain
+not represented. Prefer days with fewer sessions before applying the fixed day preferences in
+the pure module. Stable preference order breaks ties. This is not an optimizer
+guarantee. Unallocated minutes remain
 unallocated and are displayed. No proportional compression or catch-up sessions.
 
 Swim uses five-minute easy warm-up/cool-down where duration allows; remaining

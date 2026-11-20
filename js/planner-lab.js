@@ -37,7 +37,7 @@
   const pace = seconds => Math.floor(seconds / 60) + ':' + String(Math.round(seconds % 60)).padStart(2, '0');
   let last = null;
   function collect() {
-    const athlete = { name: $('name').value, phase: $('phase').value, weeksToRace: read('weeksToRace'), recovery: $('recovery').value,
+    const athlete = { name: $('name').value, phase: $('phase').value, weeksToRace: read('weeksToRace'), recovery: $('recovery').value, trainingDays: read('trainingDays'),
       excludedSports: sports.filter(s => $('exclude-' + s).checked), recent: {}, availability: days.map((_, i) => read('day-' + i)) };
     ['fitness-fields', 'history-fields', 'race-fields'].forEach(parent => fields[parent].forEach(([id]) => { athlete[id] = read(id); }));
     sports.forEach(s => { athlete.recent[s] = read('recent-' + s); });
@@ -46,6 +46,7 @@
   }
   function populate(athlete, rules) {
     $('name').value = athlete.name || 'Imported scenario';
+    $('trainingDays').value = athlete.trainingDays == null ? 7 : athlete.trainingDays;
     ['phase', 'weeksToRace', 'recovery'].forEach(id => { $(id).value = athlete[id]; });
     ['fitness-fields', 'history-fields', 'race-fields'].forEach(parent => fields[parent].forEach(([id]) => { $(id).value = athlete[id] == null ? (id === 'strengthSessions' ? 1 : '') : athlete[id]; }));
     sports.forEach(s => { $('recent-' + s).value = athlete.recent[s]; $('exclude-' + s).checked = athlete.excludedSports.includes(s); });
