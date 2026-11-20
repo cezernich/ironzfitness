@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>IronZ — Planner lab</title>
+  <link rel="stylesheet" href="planner-lab.css">
+  <script defer src="js/plan-generator.js"></script>
+  <script defer src="js/planner-preview.js"></script>
+  <script defer src="js/planner-lab.js"></script>
+</head>
+<body>
+  <header><a href="planner-lab.html" aria-label="IronZ planner lab">IRON<span>Z</span> <small>PLANNER LAB</small></a><span class="badge">ISOLATED PREVIEW</span></header>
+  <main>
+    <section class="intro"><p class="eyebrow">TRAINING LOGIC YOU CAN INSPECT</p><h1>Different athletes.<br>Different weeks.</h1><p>Change an athlete, adjust a draft rule, and see the week take shape. This lab never reads or changes live plans.</p></section>
+    <div class="layout">
+      <form id="controls">
+        <section class="panel"><h2>1. Choose an athlete</h2><label>Fictional starting point<select id="preset"></select></label><p class="hint">All four are preparing for a full-distance triathlon. Changes stay in this tab unless you export them.</p>
+          <label>Scenario name<input id="name" maxlength="100"></label>
+          <div class="fields"><label>Weeks to race<input id="weeksToRace" type="number" min="1" max="104" required></label><label>Planning phase<select id="phase"><option value="base">Base</option><option value="build">Build</option><option value="recovery">Recovery</option><option value="taper">Taper</option></select></label></div>
+          <label>Recovery<select id="recovery"><option value="normal">Normal</option><option value="lighter">Needs a lighter week</option><option value="pause">Pause training</option></select></label>
+          <fieldset><legend>Activities to exclude</legend><div id="exclusions" class="checks"></div></fieldset>
+        </section>
+        <section class="panel"><h2>2. Fitness and training</h2><p class="hint">Test times are seconds. Benchmarks are optional. Recent minutes describe a representative completed week, not desired training.</p><div id="fitness-fields" class="fields"></div><h3>Recent weekly minutes</h3><div id="recent-fields" class="fields"></div><h3>Successful session history</h3><div id="history-fields" class="fields"></div></section>
+        <section class="panel"><h2>3. Available time</h2><label>Training-day preference<select id="trainingDays"><option value="7">7 days including a light recovery day</option><option value="6">6 days with a full rest day</option></select></label><p class="hint">Seven days is the default preference, within existing weekly minutes. Zero availability still means no training. Recovery and restrictions take priority.</p><div id="availability-fields" class="fields"></div></section>
+        <section class="panel"><h2>4. Draft rules</h2><p class="hint">Use fractions: 0.95 means 95%, and 0.05 means 5%. These settings affect this preview only. FTP conversion changes targets, not training capacity.</p><div id="rule-fields" class="fields"></div><button type="button" id="reset-rules" class="secondary">Reset rules</button></section>
+        <section class="panel"><h2>Optional race context</h2><p class="hint">Leave unknown values empty. These inputs explore duration; they are not inferred from FTP or a 5K.</p><div id="race-fields" class="fields"></div></section>
+        <div class="actions"><button type="submit">Generate preview <span aria-hidden="true">→</span></button><button type="button" id="export" class="secondary">Export scenario</button><label class="import">Import scenario<input type="file" id="import" accept="application/json,.json"></label></div>
+      </form>
+      <section class="results" aria-label="Generated plan"><div id="status" role="status" aria-live="polite"></div><div id="output"></div></section>
+    </div>
+  </main>
+  <footer>Draft preview 0.2 · Full-distance triathlon · No accounts, network calls, or saved live plans</footer>
+</body>
+</html>

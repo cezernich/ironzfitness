@@ -11,6 +11,13 @@
 
 ## 1. Design Principle
 
+**Isolated preview (2026-11-20):** `PlanGenerator.generatePreview`, loaded only
+by `planner-lab.html`, implements a pure one-week capacity-aware prototype under
+master spec Appendix G. It takes explicit inputs and draft settings and returns
+a preview-specific contract. It does not call this document's production pipeline,
+read accounts, store plans, or conform to PLAN_SCHEMA.json. Consolidate it into
+the target pipeline before a production cutover; do not wire the lab into live plans.
+
 The rule engine generates training plans **deterministically** — no AI call needed for standard plans. It reads the athlete's profile, classifies them, selects the right constraints and session templates from TRAINING_PHILOSOPHY.md, and assembles a plan that conforms to PLAN_SCHEMA.json.
 
 AI (Claude) is only called for freeform "Ask IronZ" requests, and even then the philosophy modules constrain the AI's output.
